@@ -244,7 +244,7 @@ let symbol_of_ty (ty : ty) =
   | Tvar    _      -> "x"
   | Ttuple  _      -> "x"
   | Tfun    _      -> "f"
-  | Trec _         -> "r" (* ??? *)
+  | Trec    _      -> "x"
   | Tconstr (p, _) ->
       let x = EcPath.basename p in
       let rec doit i =

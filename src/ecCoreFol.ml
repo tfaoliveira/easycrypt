@@ -564,7 +564,7 @@ let f_quant q b f =
 
     mk_form (Fquant (q, b, f)) ty
 
-let f_proj   f  i  ty = mk_form (Fproj(f, i)) ty
+let f_proj   f  i  ty = mk_form (Fproj (f, i)) ty
 let f_if     f1 f2 f3 = mk_form (Fif (f1, f2, f3)) f2.f_ty
 let f_match  b  fs ty = mk_form (Fmatch (b, fs, ty)) ty
 let f_let    q  f1 f2 = mk_form (Flet (q, f1, f2)) f2.f_ty (* FIXME rename binding *)

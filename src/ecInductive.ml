@@ -113,6 +113,7 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
         let x = fresh_id_of_ty ty1 in
           scheme1 p (pred, FL.f_app fac [FL.f_local x ty1] ty2) ty2
           |> omap (FL.f_forall [x, FL.GTty ty1])
+
     | Trec fds -> assert false
 
   and schemec mode (targs, p) pred (ctor, tys) =

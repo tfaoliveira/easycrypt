@@ -383,22 +383,6 @@ let rec pp_list sep pp fmt xs =
     | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
 
 (* -------------------------------------------------------------------- *)
-
-let pp_map sep pp fmt fds =
-  Format.fprintf fmt "{< ";
-  let rec pp_rec fds=
-    match Msym.is_empty fds with
-    |true   -> ()
-    |false  -> let (x,t) = Msym.choose fds in
-               let fds' = (Msym.remove x fds) in
-               pp_symbol fmt x; Format.fprintf fmt ": "; pp fmt t;
-               if Msym.is_empty fds' then Format.fprintf fmt " >}"
-                                     else Format.fprintf fmt sep;
-                                          pp_rec fds'
-  in pp_rec fds
-
-
-(* -------------------------------------------------------------------- *)
 let pp_option pp fmt x =
   match x with None -> () | Some x -> pp fmt x
 
@@ -729,15 +713,18 @@ let rec pp_type_r ppe outer fmt ty =
           (pp_type_r ppe (t_prio_fun, `Right)) t2
       in
       maybe_paren_nosc outer t_prio_fun pp fmt (t1, t2)
-  | Trec fds ->
-     (*let pp fmt fds =
-       let pp_f fmt =
-         Format.fprintf fmt "%a"
-         pp_symbol
-         (*(pp_type_r ppe (t_prio_tpl, `Left))*)
-       in*)let pp fmt fds =
-       pp_map " ; " (pp_type_r ppe (t_prio_tpl, `Left)) fmt fds
-     in maybe_paren_nosc outer t_prio_name pp fmt fds
+
+  | Trec fds -> begin
+      let pp fmt fds =
+        let pp_field fmt (name, x) =
+          Format.fprintf fmt "%a = %a"
+            pp_symbol name (pp_type_r ppe (t_prio_tpl, `Left)) x in
+
+           Format.fprintf fmt "{<@[%a@]>}"
+             (pp_list ";@ " pp_field) (Msym.bindings fds)
+
+      in maybe_paren_nosc outer t_prio_name pp fmt fds
+    end
 
 let pp_type ppe fmt ty =
   pp_type_r ppe (min_op_prec, `NonAssoc) fmt ty
