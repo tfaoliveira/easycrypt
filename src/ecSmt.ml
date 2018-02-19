@@ -8,6 +8,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcMaps
+open EcSymbols
 open EcIdent
 open EcPath
 open EcTypes
@@ -62,6 +63,80 @@ and w3op_fo = [
 type w3absmod = {
   w3am_ty : WTy.ty;
 }
+
+(* -------------------------------------------------------------------- *)
+module Why3Recs : sig
+  type w3recs
+
+  type fields    = ty Msym.t
+  type genfields = ident list * fields
+
+  val find : EcEnv.env -> genfields -> w3recs
+    -> (genfields * ty Mid.t) option
+end = struct
+  module Hfds = EcMaps.EHashtbl.Make(struct
+    type t = Ssym.t
+
+    let equal   = Ssym.equal
+    let compare = Ssym.compare
+
+    let hash fds =
+      let module E = struct exception Done of int end in
+
+      try
+        snd (Ssym.fold (fun x (i, h) ->
+            if i < 9 then
+              (i+1, Why3.Hashcons.combine (sym_hash x) h)
+            else raise (E.Done h))
+          fds (0, Hashtbl.hash []))
+
+      with E.Done h -> h
+  end)
+
+  type fields    = ty Msym.t
+  type genfields = ident list * fields
+
+  type w3recs = (ident list * fields) list Hfds.t
+
+  let find env ((tv, tyfds) : genfields) (recs : w3recs) =
+    let ty = ttuple (Msym.values tyfds) in
+
+    let check1 (tv', tyfds') =
+      let module E = struct exception Failure end in
+
+      try
+        if List.length tv <> List.length tv' then
+          raise E.Failure;
+        (* FIXME: check that tv && tv' are disjoint *)
+        (* FIXME: check that the function does not exist or create it *)
+        let subst =
+          List.fold_left2
+            (fun s v1 v2 -> Mid.add v1 (tvar v2) s)
+            Mid.empty tv tv' in
+
+        let ty  = Tvar.subst subst ty in
+        let ty' = ttuple (Msym.values tyfds') in
+
+        if not (EcReduction.EqTest.for_type env ty ty') then
+          raise E.Failure;
+
+        Some ((tv', tyfds'), subst)
+
+      with E.Failure -> None in
+
+    let fds =
+      Stream.fold
+        (fun (x, _) fds -> Ssym.add x fds)
+        (Msym.to_stream tyfds) Ssym.empty in
+
+    let myrecs = Hfds.find_def recs [] fds in
+
+    try  Some (List.find_map check1 myrecs)
+    with Not_found -> None
+
+end
+
+type w3recs = Why3Recs.w3recs
 
 (* -------------------------------------------------------------------- *)
 type tenv = {
@@ -333,12 +408,17 @@ let mk_tglob genv mp =
 (* -------------------------------------------------------------------- *)
 let rec trans_ty ((genv, lenv) as env) ty =
   match ty.ty_node with
-  | Tglob   mp ->
-    trans_tglob env mp
-  | Tunivar _ -> assert false
-  | Tvar    x -> trans_tv lenv x
+  | Tglob mp ->
+      trans_tglob env mp
 
-  | Ttuple  ts-> wty_tuple genv (trans_tys env ts)
+  | Tunivar _ ->
+      assert false
+
+  | Tvar x ->
+      trans_tv lenv x
+
+  | Ttuple  ts->
+      wty_tuple genv (trans_tys env ts)
 
   | Tconstr (p, tys) ->
       let id = trans_pty genv p in
@@ -346,6 +426,9 @@ let rec trans_ty ((genv, lenv) as env) ty =
 
   | Tfun (t1, t2) ->
       WTy.ty_func (trans_ty env t1) (trans_ty env t2)
+
+  | Trec fields ->
+      assert false
 
 and trans_tglob ((genv, _lenv) as env) mp =
   let ty = NormMp.norm_tglob genv.te_env mp in
