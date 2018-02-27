@@ -70,16 +70,16 @@ module Why3Recs : sig
 
   type fields    = ty Msym.t
   type genfields = ident list * fields
+  type w3rec     = ident list * fields * WTy.tysymbol
 
   val create :
     unit -> w3recs
 
-  val find :
-    EcEnv.env -> genfields -> w3recs -> ((ident list * fields * WTy.tysymbol) * ty Mid.t) option
-
   val add :
-    w3recs -> (EcIdent.ident list * fields * WTy.tysymbol) -> unit
+    w3recs -> w3rec -> unit
 
+  val find :
+    EcEnv.env -> genfields -> w3recs -> WTy.tysymbol option
 end = struct
   module Hfds = EcMaps.EHashtbl.Make(struct
     type t = Ssym.t
@@ -102,6 +102,7 @@ end = struct
 
   type fields    = ty Msym.t
   type genfields = ident list * fields
+  type w3rec     = ident list * fields * WTy.tysymbol
 
   type w3recs = (ident list * fields * WTy.tysymbol) list Hfds.t
 
@@ -121,28 +122,22 @@ end = struct
       try
         if List.length tv <> List.length tv' then
           raise E.Failure;
-        (* FIXME: check that tv && tv' are disjoint *)
 
+        (* FIXME: check that tv && tv' are disjoint *)
         (* FIXME: check that the function does not exist or create it *)
         let subst =
           List.fold_left2
             (fun s v1 v2 -> Mid.add v1 (tvar v2) s)
-            Mid.empty tv tv' in
-        let subst' =
-          List.fold_left2
-            (fun s v1 v2 -> Mid.add v1 (tvar v2) s)
             Mid.empty tv' tv in
 
-        let ty  = Tvar.subst subst ty in
-        let ty' = ttuple (Msym.values tyfds') in
+        let ty' = Tvar.subst subst (ttuple (Msym.values tyfds')) in
 
         if not (EcReduction.EqTest.for_type env ty ty') then
           raise E.Failure;
 
-        Some ((tv', tyfds', wty), subst')
+        Some wty
 
       with E.Failure -> None in
-
 
     let fds =
       Stream.fold
@@ -453,35 +448,34 @@ let rec trans_ty ((genv, lenv) as env) ty =
      let fvs = Sid.big_union (List.map Tvar.fv (Msym.values fields))in
      let fvs = Sid.elements fvs in
      let tvs = List.map (fun x -> (x, Sp.empty)) fvs in
-     let lenv2, tparams = lenv_of_tparams tvs in
 
-     let (_, _, pid), subst =
-       match Why3Recs.find genv.te_env (fvs,fields) genv.te_recs with
+     let wty =
+       match Why3Recs.find genv.te_env (fvs, fields) genv.te_recs with
 
        | None ->
+          let lenv2, tparams = lenv_of_tparams tvs in
+
           let keys = Msym.keys fields in
           let sid  = String.concat "_" keys in
           let pid  = str_p sid in
           let wty  = WTy.create_tysymbol pid tparams None in
 
           let wcid  = str_p (Printf.sprintf "%s_ctor" sid) in
-          let wctys1 = trans_tys (genv, lenv2) (Msym.values fields) in
-          let wctys = List.map (trans_ty (genv,lenv2)) (Msym.values fields) in
+          let wctys = trans_tys (genv, lenv2) (Msym.values fields) in
           let wdom  = WTy.ty_app wty (List.map WTy.ty_var tparams) in
           let wcls  = WTerm.create_lsymbol ~constr:1 wcid wctys (Some wdom) in
-          let dcl   = WDecl.create_data_decl [wty, [wcls, []]] in
+          let dtors = List.init (List.length keys) (fun _ -> None) in
+          let dcl   = WDecl.create_data_decl [wty, [wcls, dtors]] in
 
           genv.te_task <- WTask.add_decl genv.te_task dcl;
           Why3Recs.add genv.te_recs (fvs, fields, wty);
-          ((fvs, fields, wty), Mid.empty)
+          wty
 
-       | Some x-> x
+       | Some x -> x
 
      in
 
-     let tys = List.map (Tvar.subst subst) (Msym.values fields) in
-     let tyl = trans_tys (genv, lenv2) tys in
-     WTy.ty_app pid []
+     WTy.ty_app wty (List.map (trans_tv lenv |- fst) tvs)
 
 and trans_tglob ((genv, _lenv) as env) mp =
   let ty = NormMp.norm_tglob genv.te_env mp in
