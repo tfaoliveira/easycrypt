@@ -62,6 +62,7 @@ and f_node =
   | Fapp    of form * form list
   | Ftuple  of form list
   | Fproj   of form * int
+  | Ffield  of form * EcSymbols.symbol
   | FhoareF of hoareF (* $hr / $hr *)
   | FhoareS of hoareS
 
@@ -395,7 +396,9 @@ module Hsform = Why3.Hashcons.Make (struct
     | Ftuple args ->
         Why3.Hashcons.combine_list f_hash 0 args
     | Fproj(f,i) ->
-        Why3.Hashcons.combine (f_hash f) i
+       Why3.Hashcons.combine (f_hash f) i
+    | Ffield(f,s) ->
+       Why3.Hashcons.combine (f_hash f) (EcSymbols.sym_hash s)
 
     | FhoareF   hf  -> hf_hash hf
     | FhoareS   hs  -> hs_hash hs
@@ -422,6 +425,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fapp (f, args)     -> union f_fv (f :: args)
     | Ftuple args        -> union f_fv args
     | Fproj(e, _)        -> f_fv e
+    | Ffield(e,_)        -> f_fv e
     | Fif (f1, f2, f3)   -> union f_fv [f1; f2; f3]
     | Fmatch (b, fs, ty) -> fv_union ty.ty_fv (union f_fv (b :: fs))
 
@@ -565,6 +569,7 @@ let f_quant q b f =
     mk_form (Fquant (q, b, f)) ty
 
 let f_proj   f  i  ty = mk_form (Fproj (f, i)) ty
+let f_field f  s  ty = mk_form (Ffield (f, s)) ty
 let f_if     f1 f2 f3 = mk_form (Fif (f1, f2, f3)) f2.f_ty
 let f_match  b  fs ty = mk_form (Fmatch (b, fs, ty)) ty
 let f_let    q  f1 f2 = mk_form (Flet (q, f1, f2)) f2.f_ty (* FIXME rename binding *)
@@ -704,6 +709,7 @@ module FSmart = struct
   type a_tuple = form list
   type a_app   = form * form list * ty
   type a_proj  = form * ty
+  type a_field = form * ty
   type a_glob  = EcPath.mpath * memory
 
   let f_local (fp, (x, ty)) (x', ty') =
@@ -758,6 +764,11 @@ module FSmart = struct
     if   f == f' && ty == ty'
     then fp
     else f_proj f' i ty'
+
+  let f_field (fp, (f, ty)) (f', ty') s =
+    if  f == f' && ty == ty'
+    then fp
+    else f_field f' s ty'
 
   let f_equivF (fp, ef) ef' =
     if eqf_equal ef ef' then fp else mk_form (FequivF ef') fp.f_ty
@@ -841,7 +852,12 @@ let f_map gt g fp =
   | Fproj (f, i) ->
       let f'  = g f in
       let ty' = gt fp.f_ty in
-        FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
+      FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
+
+  | Ffield (f, s) ->
+      let f' = g f in
+      let ty' = gt fp.f_ty in
+      FSmart.f_field (fp, (f, fp.f_ty)) (f', ty') s
 
   | FhoareF hf ->
       let pr' = g hf.hf_pr in
@@ -909,6 +925,7 @@ let f_iter g f =
   | Fapp     (e, es)      -> List.iter g (e :: es)
   | Ftuple   es           -> List.iter g es
   | Fproj    (e, _)       -> g e
+  | Ffield   (e, _)       -> g e
 
   | FhoareF   hf  -> g hf.hf_pr; g hf.hf_po
   | FhoareS   hs  -> g hs.hs_pr; g hs.hs_po
@@ -935,6 +952,7 @@ let form_exists g f =
   | Fapp     (e, es)      -> List.exists g (e :: es)
   | Ftuple   es           -> List.exists g es
   | Fproj    (e, _)       -> g e
+  | Ffield   (e, _)       -> g e
 
   | FhoareF   hf  -> g hf.hf_pr   || g hf.hf_po
   | FhoareS   hs  -> g hs.hs_pr   || g hs.hs_po
@@ -961,6 +979,7 @@ let form_forall g f =
   | Fapp     (e, es)      -> List.for_all g (e :: es)
   | Ftuple   es           -> List.for_all g es
   | Fproj    (e, _)       -> g e
+  | Ffield   (e, _)       -> g e
 
   | FhoareF   hf  -> g hf.hf_pr   && g hf.hf_po
   | FhoareS   hs  -> g hs.hs_pr   && g hs.hs_po
@@ -1242,6 +1261,9 @@ let rec form_of_expr mem (e : expr) =
 
   | Eproj (e1, i) ->
      f_proj (form_of_expr mem e1) i e.e_ty
+
+  | Efield (e1, s) ->
+     f_field (form_of_expr mem e1) s e.e_ty
 
   | Eif (e1, e2, e3) ->
      let e1 = form_of_expr mem e1 in

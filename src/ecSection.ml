@@ -69,6 +69,7 @@ let rec on_mpath_ty cb (ty : ty) =
   | Ttuple tys       -> List.iter (on_mpath_ty cb) tys
   | Tconstr (_, tys) -> List.iter (on_mpath_ty cb) tys
   | Tfun (ty1, ty2)  -> List.iter (on_mpath_ty cb) [ty1; ty2]
+  | Trec fields      -> MSym.iter (fun _ x -> on_mpath_ty cb x) fields
 
 let on_mpath_pv cb (pv : prog_var)=
   cb pv.pv_name.x_top
@@ -101,6 +102,7 @@ let rec on_mpath_expr cb (e : expr) =
     | Eif    (c, e1, e2)  -> List.iter cbrec [c; e1; e2]
     | Ematch (e, es, ty)  -> on_mpath_ty cb ty; List.iter cbrec (e :: es)
     | Eproj  (e, _)       -> cbrec e
+    | Efield (e, _)       -> cbrec e
 
   in on_mpath_ty cb e.e_ty; fornode ()
 
@@ -188,6 +190,7 @@ let rec on_mpath_form cb (f : EcFol.form) =
     | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
     | EcFol.Ftuple    fs           -> List.iter cbrec fs
     | EcFol.Fproj     (f, _)       -> cbrec f
+    | EcFol.Ffield    (f, _)       -> cbrec f
     | EcFol.Fpvar     (pv, _)      -> on_mpath_pv  cb pv
     | EcFol.Fglob     (mp, _)      -> cb mp
     | EcFol.FhoareF   hf           -> on_mpath_hf  cb hf

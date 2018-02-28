@@ -1211,7 +1211,14 @@ let transexp (env : EcEnv.env) mode ue e =
           trans_record env ue (transexp env) (loc, fields) in
         let ctor = e_op ctor rtvi (toarrow (List.map snd fields) reccty) in
         let ctor = e_app ctor (List.map fst fields) reccty in
-          ctor, reccty
+        ctor, reccty
+
+    | PEDrecord fields  ->
+       let (ctor, fields, (rtvi, reccty)) =
+         trans_record env ue (transexp env) (loc, fields) in
+       let ctor = e_op ctor rtvi (toarrow (List.map snd fields) reccty) in
+       let ctor = e_app ctor (List.map fst fields) reccty in
+       ctor, reccty
 
 
 
@@ -2291,7 +2298,16 @@ let trans_form_or_pattern env (ps, ue) pf tt =
             (f.pl_loc, fields) in
         let ctor = f_op ctor rtvi (toarrow (List.map snd fields) reccty) in
         let ctor = f_app ctor (List.map fst fields) reccty in
-          ctor
+        ctor
+
+    | PFDrecord fields ->
+       let (ctor, fields, (rtvi, reccty)) =
+         trans_record env ue
+           (fun f -> let f = transf env f in (f, f.f_ty))
+           (f.pl_loc, fields) in
+       let ctor = f_op ctor rtvi (toarrow (List.map snd fields) reccty) in
+       let ctor = f_app ctor (List.map fst fields) reccty in
+       ctor
 
     | PFproj (subf, x) -> begin
       let subf = transf env subf in

@@ -329,6 +329,7 @@ let wproj_tuple genv arg i =
   let fs = Tuples.proj (n,i) in
   WTerm.t_app_infer fs [arg]
 
+
 (* -------------------------------------------------------------------- *)
 let trans_tv lenv id = oget (Mid.find_opt id lenv.le_tv)
 
@@ -726,6 +727,8 @@ let rec trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
   | Ftuple args   -> wt_tuple genv (List.map (trans_form_b env) args)
 
   | Fproj (tfp,i) -> wproj_tuple genv (trans_form env tfp) i
+
+  | Ffield (f,s)  -> assert false
 
   | Fpvar(pv,mem) -> trans_pvar env pv fp.f_ty mem
 
@@ -1336,6 +1339,7 @@ module Frequency = struct
       | Fapp     (e, es)      -> List.iter doit (e :: es)
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
+      | Ffield   (e, _)       -> doit e
 
       | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
       | FequivF _ | FequivS _ | FeagerF _  -> ()

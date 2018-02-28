@@ -61,6 +61,7 @@ and f_node =
   | Fapp    of form * form list
   | Ftuple  of form list
   | Fproj   of form * int
+  | Ffield  of form * EcSymbols.symbol
 
   | FhoareF of hoareF (* $hr / $hr *)
   | FhoareS of hoareS (* $hr  / $hr   *)
@@ -178,6 +179,7 @@ val f_op     : path -> EcTypes.ty list -> EcTypes.ty -> form
 val f_app    : form -> form list -> EcTypes.ty -> form
 val f_tuple  : form list -> form
 val f_proj   : form -> int -> EcTypes.ty -> form
+val f_field  : form -> EcSymbols.symbol -> EcTypes.ty -> form
 val f_if     : form -> form -> form -> form
 val f_let    : EcTypes.lpattern -> form -> form -> form
 val f_let1   : EcIdent.t -> form -> form -> form
@@ -281,6 +283,7 @@ module FSmart : sig
   type a_tuple  = form list
   type a_app    = form * form list * ty
   type a_proj   = form * ty
+  type a_field  = form * ty
   type a_glob   = mpath * memory
 
   val f_local    : (form * a_local  ) -> a_local   -> form
@@ -293,6 +296,7 @@ module FSmart : sig
   val f_tuple    : (form * a_tuple  ) -> a_tuple   -> form
   val f_app      : (form * a_app    ) -> a_app     -> form
   val f_proj     : (form * a_proj   ) -> a_proj    -> int -> form
+  val f_field    : (form * a_field  ) -> a_field   -> EcSymbols.symbol -> form
   val f_glob     : (form * a_glob   ) -> a_glob    -> form
   val f_hoareF   : (form * hoareF   ) -> hoareF    -> form
   val f_hoareS   : (form * hoareS   ) -> hoareS    -> form
@@ -301,7 +305,7 @@ module FSmart : sig
   val f_equivF   : (form * equivF   ) -> equivF    -> form
   val f_equivS   : (form * equivS   ) -> equivS    -> form
   val f_eagerF   : (form * eagerF   ) -> eagerF    -> form
-  val f_pr       : (form * pr       ) -> pr       -> form
+  val f_pr       : (form * pr       ) -> pr        -> form
 end
 
 (* -------------------------------------------------------------------- *)

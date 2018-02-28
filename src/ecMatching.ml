@@ -844,7 +844,10 @@ module FPosition = struct
               FSmart.f_tuple (fp, fs) fs'
 
           | Fproj (f, i) ->
-              FSmart.f_proj (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) i
+             FSmart.f_proj (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) i
+
+          | Ffield (f, s) ->
+             FSmart.f_field (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) s
 
           | Flet (lv, f1, f2) ->
               let (f1', f2') = as_seq2 (doit p [f1; f2]) in
