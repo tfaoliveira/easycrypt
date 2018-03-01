@@ -519,47 +519,6 @@ let get_e_projarg ppe e i =
 
 
 (* -------------------------------------------------------------------- *)
-exception NoFieldArg
-
-let get_fieldarg_for_var mkvar ppe x (s : EcSymbols.symbol) =
-  if not (is_loc x) then
-    raise NoFieldArg;
-  if EcPath.basename x.pv_name.EcPath.x_sub <> "arg" then
-    raise NoFieldArg;
-
-  let x = x.pv_name in
-  let f =
-      EcPath.xpath
-        x.EcPath.x_top
-        (oget (EcPath.prefix x.EcPath.x_sub)) in
-  let fd = EcEnv.Fun.by_xpath f ppe.PPEnv.ppe_env in
-
-  match fd.f_sig.fs_anames with
-  | Some [_] -> raise NoFieldArg
-  | Some ((_ :: _ :: _) as vs) when List.exists (fun x -> x.v_name == s) vs ->
-     let i = List.find (fun x -> x.v_name == s) vs in
-      (mkvar f i)
-  | _ -> raise NoFieldArg
-
-let get_f_fieldarg ppe e s =
-  match e.f_node with
-  | Fpvar (x, m) ->
-      get_fieldarg_for_var
-        (fun f v -> f_pvar (pv_loc f v.v_name) v.v_type m)
-        ppe x s
-
-  | _ -> raise NoFieldArg
-
-let get_e_fieldarg ppe e s =
-  match e.e_node with
-  | Evar x ->
-      get_fieldarg_for_var
-        (fun f v -> e_var (pv_loc f v.v_name) v.v_type)
-        ppe x s
-
-  | _ -> raise NoFieldArg
-
-(* -------------------------------------------------------------------- *)
 let pp_modtype1 (ppe : PPEnv.t) fmt mty =
   EcSymbols.pp_msymbol fmt (PPEnv.modtype_symb ppe mty)
 
@@ -1580,13 +1539,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         pp_proji ppe pp_form_r (fst outer) fmt (e1,i)
     end
 
-  | Ffield (e1, s) -> begin
-      try
-        let v = get_f_fieldarg ppe e1 s in
-        pp_form_core_r ppe outer fmt v
-          with NoFieldArg ->
-        pp_fields ppe pp_form_r (fst outer) fmt (e1, s)
-        end
+  | Ffield (e, s) ->
+     pp_fields ppe pp_form_r (fst outer) fmt (e, s)
 
   | FhoareF hf ->
       let ppe =
