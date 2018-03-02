@@ -702,6 +702,17 @@ module Buffer = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module Stream = struct
+  include Stream
+
+  let fold (f : 'a -> 'b -> 'b) (io : 'a Stream.t) (x : 'b) =
+    let rec doit x =
+      try  doit (f (Stream.next io) x)
+      with Stream.Failure -> x
+    in doit x
+end
+
+(* -------------------------------------------------------------------- *)
 module Os = struct
   let getenv (name : string) =
     try Some (Sys.getenv name) with Not_found -> None

@@ -244,7 +244,7 @@ let symbol_of_ty (ty : ty) =
   | Tvar    _      -> "x"
   | Ttuple  _      -> "x"
   | Tfun    _      -> "f"
-  | Trec _         -> "r" (* ??? *)
+  | Trec    _      -> "x"
   | Tconstr (p, _) ->
       let x = EcPath.basename p in
       let rec doit i =
@@ -495,17 +495,18 @@ type expr = {
 }
 
 and expr_node =
-  | Eint   of BI.zint                      (* int. literal          *)
-  | Elocal of EcIdent.t                    (* let-variables         *)
-  | Evar   of prog_var                     (* module variable       *)
-  | Eop    of EcPath.path * ty list        (* op apply to type args *)
-  | Eapp   of expr * expr list             (* op. application       *)
-  | Equant of equantif * ebindings * expr  (* fun/forall/exists     *)
-  | Elet   of lpattern * expr * expr       (* let binding           *)
-  | Etuple of expr list                    (* tuple constructor     *)
-  | Eif    of expr * expr * expr           (* _ ? _ : _             *)
-  | Ematch of expr * expr list * ty        (* match _ with _        *)
-  | Eproj  of expr * int                   (* projection of a tuple *)
+  | Eint   of BI.zint                      (* int. literal           *)
+  | Elocal of EcIdent.t                    (* let-variables          *)
+  | Evar   of prog_var                     (* module variable        *)
+  | Eop    of EcPath.path * ty list        (* op apply to type args  *)
+  | Eapp   of expr * expr list             (* op. application        *)
+  | Equant of equantif * ebindings * expr  (* fun/forall/exists      *)
+  | Elet   of lpattern * expr * expr       (* let binding            *)
+  | Etuple of expr list                    (* tuple constructor      *)
+  | Eif    of expr * expr * expr           (* _ ? _ : _              *)
+  | Ematch of expr * expr list * ty        (* match _ with _         *)
+  | Eproj  of expr * int                   (* projection of a tuple  *)
+  | Efield of expr * symbol                (* projection of a record *)
 
 and equantif  = [ `ELambda | `EForall | `EExists ]
 and ebinding  = EcIdent.t * ty
@@ -552,6 +553,7 @@ let fv_node e =
   | Ematch (e, es, _) -> union e_fv (e :: es)
   | Equant (_, b, e)  -> List.fold_left (fun s (id, _) -> Mid.remove id s) (e_fv e) b
   | Eproj (e, _)      -> e_fv e
+  | Efield (e, _)     -> e_fv e
 
 (* -------------------------------------------------------------------- *)
 let qt_equal : equantif -> equantif -> bool = (==)
@@ -597,7 +599,10 @@ module Hexpr = Why3.Hashcons.Make (struct
         qt_equal q1 q2 && e_equal e1 e2 && b_equal b1 b2
 
     | Eproj(e1, i1), Eproj(e2, i2) ->
-        i1 = i2 && e_equal e1 e2
+       i1 = i2 && e_equal e1 e2
+
+    | Efield(e1, s1), Efield(e2,s2) ->
+       s1 = s2 && e_equal e1 e2
 
     | _, _ -> false
 
@@ -644,7 +649,10 @@ module Hexpr = Why3.Hashcons.Make (struct
         Why3.Hashcons.combine2 (qt_hash q) (e_hash e) (b_hash b)
 
     | Eproj (e, i) ->
-        Why3.Hashcons.combine (e_hash e) i
+       Why3.Hashcons.combine (e_hash e) i
+
+    |Efield (e, s) ->
+      Why3.Hashcons.combine (e_hash e) (EcSymbols.sym_hash s)
 
   let tag n e =
     let fv = fv_union (fv_node e.e_node) e.e_ty.ty_fv in
@@ -670,7 +678,7 @@ let e_tuple = fun es ->
 let e_if    = fun c e1 e2 -> mk_expr (Eif (c, e1, e2)) e2.e_ty
 let e_match = fun e es ty -> mk_expr (Ematch (e, es, ty)) ty
 let e_proj  = fun e i ty -> mk_expr (Eproj(e,i)) ty
-
+let e_field = fun e s ty -> mk_expr (Efield(e,s)) ty
 let e_quantif q b e =
   if List.is_empty b then e else
 
@@ -760,6 +768,11 @@ module ExprSmart = struct
     if   q == q' && b == b' && body == body'
     then e
     else e_quantif q' b' body'
+
+  let e_field (e, e1, s) (e1', ty') =
+    if e1 == e1' && e.e_ty == ty'
+    then e
+    else e_field e1' s ty'
 end
 
 let e_map fty fe e =
@@ -811,6 +824,11 @@ let e_map fty fe e =
       let bd' = fe bd in
       ExprSmart.e_quant (e, (q, b, bd)) (q, b', bd')
 
+  |Efield (e1, s) ->
+    let e' = fe e1 in
+    let ty = fty e.e_ty in
+    ExprSmart.e_field (e, e1, s) (e', ty)
+
 let rec e_fold fe state e =
   match e.e_node with
   | Eint _                -> state
@@ -824,6 +842,7 @@ let rec e_fold fe state e =
   | Eif (e1, e2, e3)      -> List.fold_left fe state [e1; e2; e3]
   | Ematch (e, es, _)     -> List.fold_left fe state (e :: es)
   | Equant (_, _, e1)     -> fe state e1
+  | Efield (e, _)         -> fe state e
 
 module MSHe = EcMaps.MakeMSH(struct type t = expr let tag e = e.e_tag end)
 module Me = MSHe.M

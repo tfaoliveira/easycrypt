@@ -227,6 +227,13 @@ module Buffer : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module Stream : sig
+  include module type of Stream with type 'a t = 'a Stream.t
+
+  val fold : ('a -> 'b -> 'b) -> 'a Stream.t -> 'b -> 'b
+end
+
+(* -------------------------------------------------------------------- *)
 module List : sig
   include module type of BatList
 

@@ -1211,7 +1211,14 @@ let transexp (env : EcEnv.env) mode ue e =
           trans_record env ue (transexp env) (loc, fields) in
         let ctor = e_op ctor rtvi (toarrow (List.map snd fields) reccty) in
         let ctor = e_app ctor (List.map fst fields) reccty in
-          ctor, reccty
+        ctor, reccty
+
+    | PEDrecord fields  ->
+       let (ctor, fields, (rtvi, reccty)) =
+         trans_record env ue (transexp env) (loc, fields) in
+       let ctor = e_op ctor rtvi (toarrow (List.map snd fields) reccty) in
+       let ctor = e_app ctor (List.map fst fields) reccty in
+       ctor, reccty
 
 
 
@@ -2291,57 +2298,76 @@ let trans_form_or_pattern env (ps, ue) pf tt =
             (f.pl_loc, fields) in
         let ctor = f_op ctor rtvi (toarrow (List.map snd fields) reccty) in
         let ctor = f_app ctor (List.map fst fields) reccty in
-          ctor
+        ctor
+
+    | PFDrecord fields ->
+       let (ctor, fields, (rtvi, reccty)) =
+         trans_record env ue
+           (fun f -> let f = transf env f in (f, f.f_ty))
+           (f.pl_loc, fields) in
+       let ctor = f_op ctor rtvi (toarrow (List.map snd fields) reccty) in
+       let ctor = f_app ctor (List.map fst fields) reccty in
+       ctor
 
     | PFproj (subf, x) -> begin
-      let subf = transf env subf in
+        let subf = transf env subf in
+        match subf.f_node with
+        | Flocal _ when (fst (unloc x)= []) ->
+           begin
+             let xs = snd (unloc x) in
+             let ty   = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
+             match (EcEnv.ty_hnorm ty env).ty_node with
+             | Trec fields when Msym.exists (fun k _ -> k=xs) fields ->
+                f_field subf xs (Msym.find xs fields)
+             | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
+           end
+        | _ -> begin
+            match select_proj env opsc (unloc x) ue None subf.f_ty with
+            | [] ->
+               let ty = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
+               let lf =
+                 let mp =
+                   match ty.ty_node with
+                   | Tglob mp -> mp
+                   | _ -> tyerror x.pl_loc env (UnknownProj (unloc x)) in
 
-      match select_proj env opsc (unloc x) ue None subf.f_ty with
-      | [] ->
-        let ty = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
-        let lf =
-          let mp =
-            match ty.ty_node with
-            | Tglob mp -> mp
-            | _ -> tyerror x.pl_loc env (UnknownProj (unloc x)) in
+                 match NormMp.norm_glob env EcFol.mhr mp with
+                 | { f_node = Ftuple xs } -> xs
+                 | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
+               in
 
-          match NormMp.norm_glob env EcFol.mhr mp with
-          | { f_node = Ftuple xs } -> xs
-          | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
-        in
-
-        let (vx, ty) =
-          match EcEnv.Var.lookup_progvar_opt ~side:EcFol.mhr (unloc x) env with
-          | None ->
-              tyerror x.pl_loc env (UnknownVarOrOp (unloc x, []))
-          | Some (`Var x, ty) ->
-              (NormMp.norm_pvar env x, ty)
-          | Some (_, _) ->
+               let (vx, ty) =
+                 match EcEnv.Var.lookup_progvar_opt ~side:EcFol.mhr (unloc x) env with
+                 | None ->
+                    tyerror x.pl_loc env (UnknownVarOrOp (unloc x, []))
+                 | Some (`Var x, ty) ->
+                    (NormMp.norm_pvar env x, ty)
+                 | Some (_, _) ->
               tyerror x.pl_loc env (UnknownVarOrOp (unloc x, [])) in
 
-        let find = function
-          | { f_node = Fpvar (x, _) } ->
-              EcTypes.pv_equal vx (NormMp.norm_pvar env x)
-          | _ -> false in
+               let find = function
+                 | { f_node = Fpvar (x, _) } ->
+                    EcTypes.pv_equal vx (NormMp.norm_pvar env x)
+                 | _ -> false in
 
-        let i =
-          match List.oindex find lf with
-          | None   -> tyerror x.pl_loc env (UnknownProj (unloc x))
-          | Some i -> i
+               let i =
+                 match List.oindex find lf with
+                 | None   -> tyerror x.pl_loc env (UnknownProj (unloc x))
+                 | Some i -> i
 
-        in f_proj subf i ty
+               in f_proj subf i ty
 
-      | _ :: _ :: _ ->
-          tyerror x.pl_loc env (AmbiguousProj (unloc x))
+            | _ :: _ :: _ ->
+               tyerror x.pl_loc env (AmbiguousProj (unloc x))
 
-      | [(op, tvi), pty, subue] ->
-        EcUnify.UniEnv.restore ~src:subue ~dst:ue;
-        let rty = EcUnify.UniEnv.fresh ue in
-        (try  EcUnify.unify env ue (tfun subf.f_ty rty) pty
-         with EcUnify.UnificationFailure _ -> assert false);
-        f_app (f_op op tvi pty) [subf] rty
-    end
-
+            | [(op, tvi), pty, subue] ->
+               EcUnify.UniEnv.restore ~src:subue ~dst:ue;
+               let rty = EcUnify.UniEnv.fresh ue in
+               (try  EcUnify.unify env ue (tfun subf.f_ty rty) pty
+                with EcUnify.UnificationFailure _ -> assert false);
+               f_app (f_op op tvi pty) [subf] rty
+          end
+      end
     | PFproji (psubf, i) -> begin
       let subf = transf env psubf in
       let ty   = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in

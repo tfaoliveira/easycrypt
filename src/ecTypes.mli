@@ -164,17 +164,18 @@ type expr = private {
 }
 
 and expr_node =
-  | Eint   of zint                         (* int. literal          *)
-  | Elocal of EcIdent.t                    (* let-variables         *)
-  | Evar   of prog_var                     (* module variable       *)
-  | Eop    of EcPath.path * ty list        (* op apply to type args *)
-  | Eapp   of expr * expr list             (* op. application       *)
-  | Equant of equantif * ebindings * expr  (* fun/forall/exists     *)
-  | Elet   of lpattern * expr * expr       (* let binding           *)
-  | Etuple of expr list                    (* tuple constructor     *)
-  | Eif    of expr * expr * expr           (* _ ? _ : _             *)
-  | Ematch of expr * expr list * ty        (* match _ with _        *)
-  | Eproj  of expr * int                   (* projection of a tuple *)
+  | Eint   of zint                         (* int. literal           *)
+  | Elocal of EcIdent.t                    (* let-variables          *)
+  | Evar   of prog_var                     (* module variable        *)
+  | Eop    of EcPath.path * ty list        (* op apply to type args  *)
+  | Eapp   of expr * expr list             (* op. application        *)
+  | Equant of equantif * ebindings * expr  (* fun/forall/exists      *)
+  | Elet   of lpattern * expr * expr       (* let binding            *)
+  | Etuple of expr list                    (* tuple constructor      *)
+  | Eif    of expr * expr * expr           (* _ ? _ : _              *)
+  | Ematch of expr * expr list * ty        (* match _ with _         *)
+  | Eproj  of expr * int                   (* projection of a tuple  *)
+  | Efield of expr * symbol                (* projection of a record *)
 
 and equantif  = [ `ELambda | `EForall | `EExists ]
 and ebinding  = EcIdent.t * ty
@@ -208,6 +209,7 @@ val e_quantif  : equantif -> ebindings -> expr -> expr
 val e_forall   : ebindings -> expr -> expr
 val e_exists   : ebindings -> expr -> expr
 val e_proj     : expr -> int -> ty -> expr
+val e_field    : expr -> EcSymbols.symbol -> ty -> expr
 
 val is_local     : expr -> bool
 val is_var       : expr -> bool

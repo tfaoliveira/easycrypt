@@ -8,6 +8,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcMaps
+open EcSymbols
 open EcIdent
 open EcPath
 open EcTypes
@@ -64,6 +65,95 @@ type w3absmod = {
 }
 
 (* -------------------------------------------------------------------- *)
+module Why3Recs : sig
+  type w3recs
+
+  type fields    = ty Msym.t
+  type genfields = ident list * fields
+  type w3rec     = ident list * fields * WTy.tysymbol
+
+  val create :
+    unit -> w3recs
+
+  val add :
+    w3recs -> w3rec -> unit
+
+  val find :
+    EcEnv.env -> genfields -> w3recs -> WTy.tysymbol option
+end = struct
+  module Hfds = EcMaps.EHashtbl.Make(struct
+    type t = Ssym.t
+
+    let equal   = Ssym.equal
+    let compare = Ssym.compare
+
+    let hash fds =
+      let module E = struct exception Done of int end in
+
+      try
+        snd (Ssym.fold (fun x (i, h) ->
+            if i < 9 then
+              (i+1, Why3.Hashcons.combine (sym_hash x) h)
+            else raise (E.Done h))
+          fds (0, Hashtbl.hash []))
+
+      with E.Done h -> h
+  end)
+
+  type fields    = ty Msym.t
+  type genfields = ident list * fields
+  type w3rec     = ident list * fields * WTy.tysymbol
+
+  type w3recs = (ident list * fields * WTy.tysymbol) list Hfds.t
+
+  let create () =
+    Hfds.create 0
+
+  let add (recs : w3recs) ((_, fds, _) as bd) =
+    let key = Ssym.of_list (Msym.keys fds) in
+    Hfds.replace recs key (bd :: Hfds.find_def recs [] key)
+
+  let find env ((tv, tyfds) : genfields) (recs : w3recs) =
+    let ty = ttuple (Msym.values tyfds) in
+
+    let check1 (tv', tyfds', wty) =
+      let module E = struct exception Failure end in
+
+      try
+        if List.length tv <> List.length tv' then
+          raise E.Failure;
+
+        (* FIXME: check that tv && tv' are disjoint *)
+        (* FIXME: check that the function does not exist or create it *)
+        let subst =
+          List.fold_left2
+            (fun s v1 v2 -> Mid.add v1 (tvar v2) s)
+            Mid.empty tv' tv in
+
+        let ty' = Tvar.subst subst (ttuple (Msym.values tyfds')) in
+
+        if not (EcReduction.EqTest.for_type env ty ty') then
+          raise E.Failure;
+
+        Some wty
+
+      with E.Failure -> None in
+
+    let fds =
+      Stream.fold
+        (fun (x, _) fds -> Ssym.add x fds)
+        (Msym.to_stream tyfds) Ssym.empty in
+
+    let myrecs = Hfds.find_def recs [] fds in
+
+    try  Some (List.find_map check1 myrecs)
+    with Not_found -> None
+
+end
+
+type w3recs = Why3Recs.w3recs
+
+(* -------------------------------------------------------------------- *)
 type tenv = {
   (*---*) te_env        : EcEnv.env;
   mutable te_task       : WTask.task;
@@ -72,11 +162,12 @@ type tenv = {
   (*---*) te_ty         : w3ty Hp.t;
   (*---*) te_op         : w3op Hp.t;
   (*---*) te_lc         : w3op Hid.t;
+  (*---*) te_recs       : w3recs;
   mutable te_lam        : WTerm.term Mta.t;
   (*---*) te_gen        : WTerm.term Hf.t;
   (*---*) te_xpath      : WTerm.lsymbol Hx.t; (* proc and var *)
   (*---*) te_absmod     : w3absmod Hid.t;     (* abstract module *)
-}
+  }
 
 let empty_tenv env task known_ty known =
   { te_env        = env;
@@ -86,6 +177,7 @@ let empty_tenv env task known_ty known =
     te_ty         = Hp.create 0;
     te_op         = Hp.create 0;
     te_lc         = Hid.create 0;
+    te_recs       = Why3Recs.create ();
     te_lam        = Mta.empty;
     te_gen        = Hf.create 0;
     te_xpath      = Hx.create 0;
@@ -237,6 +329,7 @@ let wproj_tuple genv arg i =
   let fs = Tuples.proj (n,i) in
   WTerm.t_app_infer fs [arg]
 
+
 (* -------------------------------------------------------------------- *)
 let trans_tv lenv id = oget (Mid.find_opt id lenv.le_tv)
 
@@ -333,12 +426,17 @@ let mk_tglob genv mp =
 (* -------------------------------------------------------------------- *)
 let rec trans_ty ((genv, lenv) as env) ty =
   match ty.ty_node with
-  | Tglob   mp ->
-    trans_tglob env mp
-  | Tunivar _ -> assert false
-  | Tvar    x -> trans_tv lenv x
+  | Tglob mp ->
+      trans_tglob env mp
 
-  | Ttuple  ts-> wty_tuple genv (trans_tys env ts)
+  | Tunivar _ ->
+      assert false
+
+  | Tvar x ->
+      trans_tv lenv x
+
+  | Ttuple  ts->
+      wty_tuple genv (trans_tys env ts)
 
   | Tconstr (p, tys) ->
       let id = trans_pty genv p in
@@ -346,6 +444,39 @@ let rec trans_ty ((genv, lenv) as env) ty =
 
   | Tfun (t1, t2) ->
       WTy.ty_func (trans_ty env t1) (trans_ty env t2)
+
+  | Trec fields ->
+     let fvs = Sid.big_union (List.map Tvar.fv (Msym.values fields))in
+     let fvs = Sid.elements fvs in
+     let tvs = List.map (fun x -> (x, Sp.empty)) fvs in
+
+     let wty =
+       match Why3Recs.find genv.te_env (fvs, fields) genv.te_recs with
+
+       | None ->
+          let lenv2, tparams = lenv_of_tparams tvs in
+
+          let keys = Msym.keys fields in
+          let sid  = String.concat "_" keys in
+          let pid  = str_p sid in
+          let wty  = WTy.create_tysymbol pid tparams None in
+
+          let wcid  = str_p (Printf.sprintf "%s_ctor" sid) in
+          let wctys = trans_tys (genv, lenv2) (Msym.values fields) in
+          let wdom  = WTy.ty_app wty (List.map WTy.ty_var tparams) in
+          let wcls  = WTerm.create_lsymbol ~constr:1 wcid wctys (Some wdom) in
+          let dtors = List.init (List.length keys) (fun _ -> None) in
+          let dcl   = WDecl.create_data_decl [wty, [wcls, dtors]] in
+
+          genv.te_task <- WTask.add_decl genv.te_task dcl;
+          Why3Recs.add genv.te_recs (fvs, fields, wty);
+          wty
+
+       | Some x -> x
+
+     in
+
+     WTy.ty_app wty (List.map (trans_tv lenv |- fst) tvs)
 
 and trans_tglob ((genv, _lenv) as env) mp =
   let ty = NormMp.norm_tglob genv.te_env mp in
@@ -596,6 +727,8 @@ let rec trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
   | Ftuple args   -> wt_tuple genv (List.map (trans_form_b env) args)
 
   | Fproj (tfp,i) -> wproj_tuple genv (trans_form env tfp) i
+
+  | Ffield (f,s)  -> assert false
 
   | Fpvar(pv,mem) -> trans_pvar env pv fp.f_ty mem
 
@@ -1206,6 +1339,7 @@ module Frequency = struct
       | Fapp     (e, es)      -> List.iter doit (e :: es)
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
+      | Ffield   (e, _)       -> doit e
 
       | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
       | FequivF _ | FequivS _ | FeagerF _  -> ()
