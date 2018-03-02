@@ -113,7 +113,14 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
         let x = fresh_id_of_ty ty1 in
           scheme1 p (pred, FL.f_app fac [FL.f_local x ty1] ty2) ty2
           |> omap (FL.f_forall [x, FL.GTty ty1])
-    | Trec fds -> assert false
+
+    | Trec fds -> begin
+        let xs  = Msym.bindings fds in
+        let sc1 = fun (k,x) -> scheme1 p (pred, FL.f_proj fac k x) x in
+        match List.pmap sc1 xs with
+        | []  -> None
+        | scs -> Some (FL.f_ands scs)
+      end
 
   and schemec mode (targs, p) pred (ctor, tys) =
     let indty = tconstr p (List.map tvar targs) in
