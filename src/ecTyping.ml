@@ -117,6 +117,8 @@ and tyerror =
 | UnknownScope           of qsymbol
 | RecordTypeError        of rcerror
 
+
+
 exception TyError of EcLocation.t * EcEnv.env * tyerror
 
 let tyerror loc env e = raise (TyError (loc, env, e))
@@ -2311,61 +2313,61 @@ let trans_form_or_pattern env (ps, ue) pf tt =
 
     | PFproj (subf, x) -> begin
         let subf = transf env subf in
-        match subf.f_node with
-        | Flocal _ when (fst (unloc x)= []) ->
-           begin
-             let xs = snd (unloc x) in
-             let ty   = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
-             match (EcEnv.ty_hnorm ty env).ty_node with
-             | Trec fields when Msym.exists (fun k _ -> k=xs) fields ->
-                f_field subf xs (Msym.find xs fields)
-             | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
-           end
-        | _ -> begin
-            match select_proj env opsc (unloc x) ue None subf.f_ty with
-            | [] ->
-               let ty = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
-               let lf =
-                 let mp =
-                   match ty.ty_node with
-                   | Tglob mp -> mp
-                   | _ -> tyerror x.pl_loc env (UnknownProj (unloc x)) in
+        try
+          match select_proj env opsc (unloc x) ue None subf.f_ty with
+          | [] ->
+             let ty = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
+             let lf =
+               let mp =
+                 match ty.ty_node with
+                 | Tglob mp -> mp
+                 | _ -> tyerror x.pl_loc env (UnknownProj (unloc x)) in
 
-                 match NormMp.norm_glob env EcFol.mhr mp with
-                 | { f_node = Ftuple xs } -> xs
-                 | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
-               in
+               match NormMp.norm_glob env EcFol.mhr mp with
+               | { f_node = Ftuple xs } -> xs
+               | _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
+             in
 
-               let (vx, ty) =
-                 match EcEnv.Var.lookup_progvar_opt ~side:EcFol.mhr (unloc x) env with
-                 | None ->
-                    tyerror x.pl_loc env (UnknownVarOrOp (unloc x, []))
-                 | Some (`Var x, ty) ->
-                    (NormMp.norm_pvar env x, ty)
-                 | Some (_, _) ->
-              tyerror x.pl_loc env (UnknownVarOrOp (unloc x, [])) in
+             let (vx, ty) =
+               match EcEnv.Var.lookup_progvar_opt ~side:EcFol.mhr (unloc x) env with
+               | None ->
+                  tyerror x.pl_loc env (UnknownVarOrOp (unloc x, []))
+               | Some (`Var x, ty) ->
+                  (NormMp.norm_pvar env x, ty)
+               | Some (_, _) ->
+                  tyerror x.pl_loc env (UnknownVarOrOp (unloc x, [])) in
 
-               let find = function
-                 | { f_node = Fpvar (x, _) } ->
-                    EcTypes.pv_equal vx (NormMp.norm_pvar env x)
-                 | _ -> false in
+             let find = function
+               | { f_node = Fpvar (x, _) } ->
+                  EcTypes.pv_equal vx (NormMp.norm_pvar env x)
+               | _ -> false in
 
-               let i =
-                 match List.oindex find lf with
-                 | None   -> tyerror x.pl_loc env (UnknownProj (unloc x))
-                 | Some i -> i
+             let i =
+               match List.oindex find lf with
+               | None   -> tyerror x.pl_loc env (UnknownProj (unloc x))
+               | Some i -> i
 
-               in f_proj subf i ty
+             in f_proj subf i ty
 
-            | _ :: _ :: _ ->
-               tyerror x.pl_loc env (AmbiguousProj (unloc x))
+          | _ :: _ :: _ ->
+             tyerror x.pl_loc env (AmbiguousProj (unloc x))
 
-            | [(op, tvi), pty, subue] ->
-               EcUnify.UniEnv.restore ~src:subue ~dst:ue;
-               let rty = EcUnify.UniEnv.fresh ue in
-               (try  EcUnify.unify env ue (tfun subf.f_ty rty) pty
-                with EcUnify.UnificationFailure _ -> assert false);
-               f_app (f_op op tvi pty) [subf] rty
+          | [(op, tvi), pty, subue] ->
+             EcUnify.UniEnv.restore ~src:subue ~dst:ue;
+             let rty = EcUnify.UniEnv.fresh ue in
+             (try  EcUnify.unify env ue (tfun subf.f_ty rty) pty
+              with EcUnify.UnificationFailure _ -> assert false);
+             f_app (f_op op tvi pty) [subf] rty
+        with
+        | _ as e-> begin
+            let xs = snd (unloc x) in
+            let ty   = Tuni.offun (EcUnify.UniEnv.assubst ue) subf.f_ty in
+            let ty = EcEnv.ty_hnorm ty env in
+                match (EcEnv.ty_hnorm ty env).ty_node with
+                | Trec fields when Msym.exists (fun k _ -> k=xs) fields ->
+                   f_field subf xs (Msym.find xs fields)
+                | Trec _ -> tyerror x.pl_loc env (UnknownProj (unloc x))
+                | _ -> raise e
           end
       end
     | PFproji (psubf, i) -> begin

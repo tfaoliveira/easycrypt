@@ -69,8 +69,9 @@ module Why3Recs : sig
   type w3recs
 
   type fields    = ty Msym.t
+
   type genfields = ident list * fields
-  type w3rec     = ident list * fields * WTy.tysymbol
+  type w3rec     = {ids : ident list; fds : fields; tys :  WTy.tysymbol; wproj : WTerm.lsymbol option list}
 
   val create :
     unit -> w3recs
@@ -102,14 +103,15 @@ end = struct
 
   type fields    = ty Msym.t
   type genfields = ident list * fields
-  type w3rec     = ident list * fields * WTy.tysymbol
+  type w3rec     = {ids : ident list; fds : fields; tys :  WTy.tysymbol; wproj : WTerm.lsymbol option list}
 
-  type w3recs = (ident list * fields * WTy.tysymbol) list Hfds.t
+  type w3recs = w3rec list Hfds.t
 
   let create () =
     Hfds.create 0
 
-  let add (recs : w3recs) ((_, fds, _) as bd) =
+  let add (recs : w3recs) bd =
+    let fds = bd.fds in
     let key = Ssym.of_list (Msym.keys fds) in
     Hfds.replace recs key (bd :: Hfds.find_def recs [] key)
 
@@ -145,7 +147,7 @@ end = struct
         (Msym.to_stream tyfds) Ssym.empty in
 
     let myrecs = Hfds.find_def recs [] fds in
-
+    let myrecs = List.map (fun a -> (a.ids, a.fds, a.tys)) myrecs in
     try  Some (List.find_map check1 myrecs)
     with Not_found -> None
 
@@ -329,6 +331,19 @@ let wproj_tuple genv arg i =
   let fs = Tuples.proj (n,i) in
   WTerm.t_app_infer fs [arg]
 
+(* -------------------------------------------------------------------- *)
+
+let wproj_recs genv arg s =
+  let wty  = oget (arg.WTerm.t_ty) in
+    match wty.WTy.ty_node with
+    | WTy.Tyapp (c, targs) ->
+       (*let rc = Why3Recs.find genv.te_env (_,_) genv.te_recs in*)
+
+       Format.printf "\n Failed at wproj_recs \n %!";
+       assert false
+    | _ -> assert false in
+assert false
+
 
 (* -------------------------------------------------------------------- *)
 let trans_tv lenv id = oget (Mid.find_opt id lenv.le_tv)
@@ -465,11 +480,20 @@ let rec trans_ty ((genv, lenv) as env) ty =
           let wctys = trans_tys (genv, lenv2) (Msym.values fields) in
           let wdom  = WTy.ty_app wty (List.map WTy.ty_var tparams) in
           let wcls  = WTerm.create_lsymbol ~constr:1 wcid wctys (Some wdom) in
-          let dtors = List.init (List.length keys) (fun _ -> None) in
-          let dcl   = WDecl.create_data_decl [wty, [wcls, dtors]] in
+
+          let for_field (fname, fty) =
+            let wfty  = trans_ty (genv, lenv) fty in
+            let wcls  = WTerm.create_lsymbol (str_p fname) [wdom] (Some wfty) in
+           Some wcls
+          in
+
+          let rc = Msym.fold (fun k x l -> (k,x)::l) fields [] in
+          let wproj = List.map for_field rc in
+          let dcl   = WDecl.create_data_decl [wty, [wcls, wproj]] in
 
           genv.te_task <- WTask.add_decl genv.te_task dcl;
-          Why3Recs.add genv.te_recs (fvs, fields, wty);
+          let (w3r : Why3Recs.w3rec) = { ids = fvs; fds = fields; tys = wty; wproj = wproj} in
+          Why3Recs.add genv.te_recs w3r;
           wty
 
        | Some x -> x
@@ -728,7 +752,7 @@ let rec trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
 
   | Fproj (tfp,i) -> wproj_tuple genv (trans_form env tfp) i
 
-  | Ffield (f,s)  -> assert false
+  | Ffield (f,s)  -> wproj_recs genv (trans_form env f) s
 
   | Fpvar(pv,mem) -> trans_pvar env pv fp.f_ty mem
 
