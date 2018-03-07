@@ -74,7 +74,7 @@ module Why3Recs : sig
   type w3rec     = {
     w3r_fvs   : ident list;
     w3r_fds   : fields;
-    w3r_tys   : WTy.tysymbol;
+    w3r_name   : WTy.tysymbol;
     w3r_wproj : WTerm.lsymbol Msym.t;
   }
 
@@ -111,7 +111,7 @@ end = struct
   type w3rec     = {
     w3r_fvs   : ident list;
     w3r_fds   : fields;
-    w3r_tys   : WTy.tysymbol;
+    w3r_name   : WTy.tysymbol;
     w3r_wproj : WTerm.lsymbol Msym.t;
   }
 
@@ -346,8 +346,8 @@ let wproj_recs genv fds arg fname =
   let recs  = genv.te_recs in
   let fvs   = Sid.big_union (List.map Tvar.fv (Msym.values fds))in
   let fvs   = Sid.elements fvs in
-  let rcty  = oget (Why3Recs.find genv.te_env (fvs,fds) recs) in
-  let wproj = oget (Msym.find_opt fname rcty.Why3Recs.w3r_wproj) in
+  let wrec  = oget (Why3Recs.find genv.te_env (fvs,fds) recs) in
+  let wproj = oget (Msym.find_opt fname wrec.Why3Recs.w3r_wproj) in
   WTerm.t_app_infer wproj [arg]
 
 (* -------------------------------------------------------------------- *)
@@ -499,13 +499,13 @@ let rec trans_ty ((genv, lenv) as env) ty =
           let w3r = Why3Recs.{
             w3r_fvs   = fvs;
             w3r_fds   = fields;
-            w3r_tys   = wty;
+            w3r_name  = wty;
             w3r_wproj = wproj;
           } in
 
           Why3Recs.add genv.te_recs w3r; wty
 
-       | Some x -> x.Why3Recs.w3r_tys
+       | Some x -> x.Why3Recs.w3r_name
 
      in
 
@@ -762,13 +762,13 @@ let rec trans_form
 
   | Fproj (tfp,i) -> wproj_tuple genv (trans_form env tfp) i
 
-  | Ffield (f,s)  ->
+  | Ffield (f,fname)  ->
      let tyrec =
        let ty = EcEnv.Ty.hnorm f.f_ty genv.te_env in
        match ty.ty_node with
        | Trec fields -> fields
        | _ -> assert false
-     in wproj_recs genv tyrec (trans_form env f) s
+     in wproj_recs genv tyrec (trans_form env f) fname
 
   | Fpvar(pv,mem) -> trans_pvar env pv fp.f_ty mem
 
