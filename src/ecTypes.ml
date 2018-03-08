@@ -503,6 +503,7 @@ and expr_node =
   | Equant of equantif * ebindings * expr  (* fun/forall/exists      *)
   | Elet   of lpattern * expr * expr       (* let binding            *)
   | Etuple of expr list                    (* tuple constructor      *)
+  | Erec   of expr Msym.t                  (* records                *)
   | Eif    of expr * expr * expr           (* _ ? _ : _              *)
   | Ematch of expr * expr list * ty        (* match _ with _         *)
   | Eproj  of expr * int                   (* projection of a tuple  *)
@@ -549,6 +550,7 @@ let fv_node e =
   | Eapp (e, es)      -> union e_fv (e :: es)
   | Elet (lp, e1, e2) -> fv_union (e_fv e1) (fv_diff (e_fv e2) (lp_fv lp))
   | Etuple es         -> union e_fv es
+  | Erec fds          -> union e_fv (Msym.values fds)
   | Eif (e1, e2, e3)  -> union e_fv [e1; e2; e3]
   | Ematch (e, es, _) -> union e_fv (e :: es)
   | Equant (_, b, e)  -> List.fold_left (fun s (id, _) -> Mid.remove id s) (e_fv e) b
@@ -636,6 +638,9 @@ module Hexpr = Why3.Hashcons.Make (struct
     | Etuple es ->
         Why3.Hashcons.combine_list e_hash 0 es
 
+    | Erec fds ->
+        Why3.Hashcons.combine_list e_hash 0 (Msym.values fds)
+
     | Eif (c, e1, e2) ->
         Why3.Hashcons.combine2
           (e_hash c) (e_hash e1) (e_hash e2)
@@ -674,6 +679,8 @@ let e_tuple = fun es ->
   | []  -> e_tt
   | [x] -> x
   | _   -> mk_expr (Etuple es) (ttuple (List.map e_ty es))
+
+let e_rec   = fun fds -> mk_expr (Erec fds) (trec (Msym.map e_ty fds))
 
 let e_if    = fun c e1 e2 -> mk_expr (Eif (c, e1, e2)) e2.e_ty
 let e_match = fun e es ty -> mk_expr (Ematch (e, es, ty)) ty
@@ -744,6 +751,9 @@ module ExprSmart = struct
   let e_tuple (e, es) es' =
     if es == es' then e else e_tuple es'
 
+  let e_rec (e, fds) fds' =
+    if Msym.equal (fun x y -> x == y) fds fds' then e else e_rec fds'
+
   let e_proj (e, e1, i) (e1', ty') =
     if   e1 == e1' && e.e_ty == ty'
     then e
@@ -799,6 +809,10 @@ let e_map fty fe e =
       let le' = List.Smart.map fe le in
         ExprSmart.e_tuple (e, le) le'
 
+  | Erec fds ->
+      let fds' = Msym.map fe fds in
+      ExprSmart.e_rec (e, fds) fds'
+
   | Eproj (e1, i) ->
       let e' = fe e1 in
       let ty = fty e.e_ty in
@@ -838,6 +852,7 @@ let rec e_fold fe state e =
   | Eapp (e, args)        -> List.fold_left fe (fe state e) args
   | Elet (_, e1, e2)      -> List.fold_left fe state [e1; e2]
   | Etuple es             -> List.fold_left fe state es
+  | Erec fds              -> Msym.fold_left (fun x _ -> fe x) state fds
   | Eproj(e,_)            -> fe state e
   | Eif (e1, e2, e3)      -> List.fold_left fe state [e1; e2; e3]
   | Ematch (e, es, _)     -> List.fold_left fe state (e :: es)

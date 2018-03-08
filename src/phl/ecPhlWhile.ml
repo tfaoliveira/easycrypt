@@ -397,6 +397,7 @@ module ASyncWhile = struct
       | Fop  (p, tys) -> e_op p tys fp.f_ty
       | Fapp (f, fs)  -> e_app (aux f) (List.map aux fs) fp.f_ty
       | Ftuple fs     -> e_tuple (List.map aux fs)
+      | Frec fds      -> e_rec (Msym.map aux fds)
       | Fproj  (f, i) -> e_proj (aux f) i fp.f_ty
       | Ffield (f, s) -> e_field (aux f) s fp.f_ty
 

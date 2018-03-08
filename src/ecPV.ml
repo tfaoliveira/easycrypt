@@ -318,6 +318,7 @@ module PV = struct
       | Fint _ | Flocal _ | Fop _ -> fv
       | Fapp(e, es) -> List.fold_left (aux env) (aux env fv e) es
       | Ftuple es   -> List.fold_left (aux env) fv es
+      | Frec fds    -> Msym.fold_left (fun x _ -> aux env x) fv fds
       | Fproj(e,_)  -> aux env fv e
       | Ffield(e,_) -> aux env fv e
       | FhoareF _  | FhoareS _ | FbdHoareF _  | FbdHoareS _

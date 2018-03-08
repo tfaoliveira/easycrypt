@@ -15,7 +15,7 @@ open EcModules
 
 module Sid  = EcIdent.Sid
 module Mid  = EcIdent.Mid
-module MSym = EcSymbols.Msym
+module Msym = EcSymbols.Msym
 
 (* -------------------------------------------------------------------- *)
 exception NoSectionOpened
@@ -69,7 +69,7 @@ let rec on_mpath_ty cb (ty : ty) =
   | Ttuple tys       -> List.iter (on_mpath_ty cb) tys
   | Tconstr (_, tys) -> List.iter (on_mpath_ty cb) tys
   | Tfun (ty1, ty2)  -> List.iter (on_mpath_ty cb) [ty1; ty2]
-  | Trec fields      -> MSym.iter (fun _ x -> on_mpath_ty cb x) fields
+  | Trec fields      -> Msym.iter (fun _ x -> on_mpath_ty cb x) fields
 
 let on_mpath_pv cb (pv : prog_var)=
   cb pv.pv_name.x_top

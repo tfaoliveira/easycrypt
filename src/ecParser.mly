@@ -776,7 +776,8 @@ lpattern_u:
     { LPTuple p }
 
 | LPBRACE fs=rlist1(lp_field, SEMICOLON) SEMICOLON? RPBRACE
-    { LPRecord fs }
+               { LPRecord fs }
+
 
 lp_field:
 | f=qident EQ x=ident { (f, x) }
@@ -847,8 +848,8 @@ sexpr_u:
 | r=loc(RBOOL)
    { PEident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }
 
-| LOBRACE fields=rlist1(expr_field, SEMICOLON) SEMICOLON? ROBRACE
-   { PEDrecord fields }
+(*| LOBRACE fields=rlist1(expr_field, SEMICOLON) SEMICOLON? ROBRACE
+                   { PEdrecord fields }*)
 
 | LPBRACE fields=rlist1(expr_field, SEMICOLON) SEMICOLON? RPBRACE
    { PErecord fields }
@@ -1025,7 +1026,7 @@ sform_u(P):
    { PFtuple fs }
 
 | LOBRACE fields=rlist1(form_field, SEMICOLON) SEMICOLON? ROBRACE
-   { PFDrecord fields }
+   { PFdrecord fields }
 
 | LPBRACE fields=rlist1(form_field, SEMICOLON) SEMICOLON? RPBRACE
    { PFrecord fields }

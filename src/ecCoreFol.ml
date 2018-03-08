@@ -14,11 +14,12 @@ open EcModules
 
 type memory = EcMemory.memory
 
-module BI = EcBigInt
-module Mp = EcPath.Mp
-module Sp = EcPath.Sp
-module Sm = EcPath.Sm
-module Sx = EcPath.Sx
+module BI   = EcBigInt
+module Mp   = EcPath.Mp
+module Sp   = EcPath.Sp
+module Sm   = EcPath.Sm
+module Sx   = EcPath.Sx
+module Msym = EcSymbols.Msym
 
 open EcBigInt.Notations
 
@@ -61,6 +62,7 @@ and f_node =
   | Fop     of EcPath.path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
+  | Frec    of form Msym.t
   | Fproj   of form * int
   | Ffield  of form * EcSymbols.symbol
   | FhoareF of hoareF (* $hr / $hr *)
@@ -395,10 +397,15 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | Ftuple args ->
         Why3.Hashcons.combine_list f_hash 0 args
+
+    | Frec fds ->
+        Why3.Hashcons.combine_list f_hash 0 (Msym.values fds)
+
     | Fproj(f,i) ->
-       Why3.Hashcons.combine (f_hash f) i
+        Why3.Hashcons.combine (f_hash f) i
+
     | Ffield(f,s) ->
-       Why3.Hashcons.combine (f_hash f) (EcSymbols.sym_hash s)
+        Why3.Hashcons.combine (f_hash f) (EcSymbols.sym_hash s)
 
     | FhoareF   hf  -> hf_hash hf
     | FhoareS   hs  -> hs_hash hs
@@ -424,8 +431,9 @@ module Hsform = Why3.Hashcons.Make (struct
     | Flocal id          -> fv_singleton id
     | Fapp (f, args)     -> union f_fv (f :: args)
     | Ftuple args        -> union f_fv args
-    | Fproj(e, _)        -> f_fv e
-    | Ffield(e,_)        -> f_fv e
+    | Frec fds           -> union f_fv (Msym.values fds)
+    | Fproj(f, _)        -> f_fv f
+    | Ffield(f,_)        -> f_fv f
     | Fif (f1, f2, f3)   -> union f_fv [f1; f2; f3]
     | Fmatch (b, fs, ty) -> fv_union ty.ty_fv (union f_fv (b :: fs))
 
@@ -555,6 +563,8 @@ let f_tuple args =
   | [x] -> x
   | _   -> mk_form (Ftuple args) (ttuple (List.map f_ty args))
 
+let f_rec fds = mk_form (Frec fds) (trec (Msym.map f_ty fds))
+
 let f_quant q b f =
   if List.is_empty b then f else
     let (q, b, f) =
@@ -569,7 +579,7 @@ let f_quant q b f =
     mk_form (Fquant (q, b, f)) ty
 
 let f_proj   f  i  ty = mk_form (Fproj (f, i)) ty
-let f_field f  s  ty = mk_form (Ffield (f, s)) ty
+let f_field f  s  ty  = mk_form (Ffield (f, s)) ty
 let f_if     f1 f2 f3 = mk_form (Fif (f1, f2, f3)) f2.f_ty
 let f_match  b  fs ty = mk_form (Fmatch (b, fs, ty)) ty
 let f_let    q  f1 f2 = mk_form (Flet (q, f1, f2)) f2.f_ty (* FIXME rename binding *)
@@ -707,6 +717,7 @@ module FSmart = struct
   type a_let   = lpattern * form * form
   type a_op    = EcPath.path * ty list * ty
   type a_tuple = form list
+  type a_rec   = form Msym.t
   type a_app   = form * form list * ty
   type a_proj  = form * ty
   type a_field = form * ty
@@ -759,6 +770,9 @@ module FSmart = struct
 
   let f_tuple (fp, fs) fs' =
     if fs == fs' then fp else f_tuple fs'
+
+  let f_rec (fp, fds) fds' =
+    if Msym.equal (fun x y -> x == y) fds fds' then fp else f_rec fds'
 
   let f_proj (fp, (f, ty)) (f', ty') i =
     if   f == f' && ty == ty'
@@ -849,6 +863,10 @@ let f_map gt g fp =
       let fs' = List.Smart.map g fs in
         FSmart.f_tuple (fp, fs) fs'
 
+  | Frec fds ->
+      let fds' = Msym.map g fds in
+        FSmart.f_rec (fp, fds) fds'
+
   | Fproj (f, i) ->
       let f'  = g f in
       let ty' = gt fp.f_ty in
@@ -924,6 +942,7 @@ let f_iter g f =
   | Flet     (_, f1, f2)  -> g f1;g f2
   | Fapp     (e, es)      -> List.iter g (e :: es)
   | Ftuple   es           -> List.iter g es
+  | Frec     fds          -> Msym.iter (fun _ -> g) fds
   | Fproj    (e, _)       -> g e
   | Ffield   (e, _)       -> g e
 
@@ -951,6 +970,7 @@ let form_exists g f =
   | Flet     (_, f1, f2)  -> g f1 || g f2
   | Fapp     (e, es)      -> List.exists g (e :: es)
   | Ftuple   es           -> List.exists g es
+  | Frec     fds          -> Msym.exists (fun _ -> g) fds
   | Fproj    (e, _)       -> g e
   | Ffield   (e, _)       -> g e
 
@@ -978,6 +998,7 @@ let form_forall g f =
   | Flet     (_, f1, f2)  -> g f1 && g f2
   | Fapp     (e, es)      -> List.for_all g (e :: es)
   | Ftuple   es           -> List.for_all g es
+  | Frec     fds          -> Msym.for_all (fun _ -> g) fds
   | Fproj    (e, _)       -> g e
   | Ffield   (e, _)       -> g e
 
@@ -1258,6 +1279,9 @@ let rec form_of_expr mem (e : expr) =
 
   | Etuple es ->
      f_tuple (List.map (form_of_expr mem) es)
+
+  | Erec fds ->
+     f_rec (Msym.map (form_of_expr mem) fds)
 
   | Eproj (e1, i) ->
      f_proj (form_of_expr mem e1) i e.e_ty

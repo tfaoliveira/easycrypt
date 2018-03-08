@@ -843,6 +843,10 @@ module FPosition = struct
               let fs' = doit p fs in
               FSmart.f_tuple (fp, fs) fs'
 
+          | Frec fds -> assert false
+              (*let fds' = doit p fds in
+              FSmart.f_rec (fp, fds) fds'*)
+
           | Fproj (f, i) ->
              FSmart.f_proj (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) i
 

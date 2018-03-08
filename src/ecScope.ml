@@ -21,7 +21,7 @@ open EcBigInt.Notations
 
 module Sid  = EcIdent.Sid
 module Mid  = EcIdent.Mid
-module MSym = EcSymbols.Msym
+module Msym = EcSymbols.Msym
 module BI   = EcBigInt
 
 (* -------------------------------------------------------------------- *)

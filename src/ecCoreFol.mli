@@ -15,6 +15,8 @@ open EcTypes
 open EcModules
 open EcMemory
 
+module Msym = EcSymbols.Msym
+
 (* -------------------------------------------------------------------- *)
 val mhr    : memory
 val mleft  : memory
@@ -60,6 +62,7 @@ and f_node =
   | Fop     of path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
+  | Frec    of form Msym.t
   | Fproj   of form * int
   | Ffield  of form * EcSymbols.symbol
 
@@ -178,6 +181,7 @@ val f_glob  : mpath -> memory -> form
 val f_op     : path -> EcTypes.ty list -> EcTypes.ty -> form
 val f_app    : form -> form list -> EcTypes.ty -> form
 val f_tuple  : form list -> form
+val f_rec    : form Msym.t -> form
 val f_proj   : form -> int -> EcTypes.ty -> form
 val f_field  : form -> EcSymbols.symbol -> EcTypes.ty -> form
 val f_if     : form -> form -> form -> form
@@ -281,6 +285,7 @@ module FSmart : sig
   type a_let    = lpattern * form * form
   type a_op     = path * ty list * ty
   type a_tuple  = form list
+  type a_rec    = form Msym.t
   type a_app    = form * form list * ty
   type a_proj   = form * ty
   type a_field  = form * ty
@@ -294,6 +299,7 @@ module FSmart : sig
   val f_let      : (form * a_let    ) -> a_let     -> form
   val f_op       : (form * a_op     ) -> a_op      -> form
   val f_tuple    : (form * a_tuple  ) -> a_tuple   -> form
+  val f_rec      : (form * a_rec    ) -> a_rec     -> form
   val f_app      : (form * a_app    ) -> a_app     -> form
   val f_proj     : (form * a_proj   ) -> a_proj    -> int -> form
   val f_field    : (form * a_field  ) -> a_field   -> EcSymbols.symbol -> form
