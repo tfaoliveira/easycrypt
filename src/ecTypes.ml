@@ -684,8 +684,8 @@ let e_rec   = fun fds -> mk_expr (Erec fds) (trec (Msym.map e_ty fds))
 
 let e_if    = fun c e1 e2 -> mk_expr (Eif (c, e1, e2)) e2.e_ty
 let e_match = fun e es ty -> mk_expr (Ematch (e, es, ty)) ty
-let e_proj  = fun e i ty -> mk_expr (Eproj(e,i)) ty
-let e_field = fun e s ty -> mk_expr (Efield(e,s)) ty
+let e_proj  = fun e i ty  -> mk_expr (Eproj(e,i)) ty
+let e_field = fun e s ty  -> mk_expr (Efield(e,s)) ty
 let e_quantif q b e =
   if List.is_empty b then e else
 

@@ -1178,9 +1178,9 @@ let transexp (env : EcEnv.env) mode ue e =
         | []      -> (e_tt, EcTypes.tunit)
         | [e, ty] -> (e, ty)
         | _       ->
-            let es, tys = List.split tes in
-              (e_tuple es, ttuple tys)
-    end
+           let es, tys = List.split tes in
+           (e_tuple es, ttuple tys)
+        end
 
     | PEif (pc, pe1, pe2) ->
       let c, tyc = transexp env pc in
@@ -1216,7 +1216,15 @@ let transexp (env : EcEnv.env) mode ue e =
         ctor, reccty
 
     | PEdrecord fields  ->
-       assert false
+       let trans_rf    = fun x -> (snd (unloc x.rf_name), transexp env x.rf_value) in
+       let fbindings   = List.map trans_rf fields in
+       let (keys,elts) = List.split fbindings in
+       let (exprs,tys) = List.split elts in
+       let expbindings = List.combine keys exprs in
+       let tybindings  = List.combine keys tys in
+       let tyfds       = Msym.of_list tybindings in
+       let fds         = Msym.of_list expbindings in
+       e_rec fds, trec tyfds
 
 
     | PEproj (sube, x) -> begin
@@ -2297,7 +2305,7 @@ let trans_form_or_pattern env (ps, ue) pf tt =
         let ctor = f_app ctor (List.map fst fields) reccty in
         ctor
 
-    | PFdrecord fields -> (* FIXME bug *)
+    | PFdrecord fields ->
        let trans_rf = fun x -> (snd (unloc x.rf_name), transf env x.rf_value) in
        let fbindings = List.map trans_rf fields in
        let fds = Msym.of_list fbindings in

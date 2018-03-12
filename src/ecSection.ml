@@ -97,6 +97,7 @@ let rec on_mpath_expr cb (e : expr) =
     | Evar   pv           -> on_mpath_pv cb pv
     | Elet   (lp, e1, e2) -> on_mpath_lp cb lp; List.iter cbrec [e1; e2]
     | Etuple es           -> List.iter cbrec es
+    | Erec   fds          -> Msym.iter (fun _ -> cbrec) fds
     | Eop    (_, tys)     -> List.iter (on_mpath_ty cb) tys
     | Eapp   (e, es)      -> List.iter cbrec (e :: es)
     | Eif    (c, e1, e2)  -> List.iter cbrec [c; e1; e2]
@@ -189,6 +190,7 @@ let rec on_mpath_form cb (f : EcFol.form) =
     | EcFol.Fop       (_, tys)     -> List.iter (on_mpath_ty cb) tys
     | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
     | EcFol.Ftuple    fs           -> List.iter cbrec fs
+    | EcFol.Frec      fds          -> Msym.iter (fun _ -> cbrec) fds
     | EcFol.Fproj     (f, _)       -> cbrec f
     | EcFol.Ffield    (f, _)       -> cbrec f
     | EcFol.Fpvar     (pv, _)      -> on_mpath_pv  cb pv

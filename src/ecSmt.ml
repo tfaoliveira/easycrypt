@@ -74,8 +74,9 @@ module Why3Recs : sig
   type w3rec     = {
     w3r_fvs   : ident list;
     w3r_fds   : fields;
-    w3r_name   : WTy.tysymbol;
+    w3r_name  : WTy.tysymbol;
     w3r_wproj : WTerm.lsymbol Msym.t;
+    w3r_lsymb : WTerm.lsymbol;
   }
 
   val create :
@@ -111,8 +112,9 @@ end = struct
   type w3rec     = {
     w3r_fvs   : ident list;
     w3r_fds   : fields;
-    w3r_name   : WTy.tysymbol;
+    w3r_name  : WTy.tysymbol;
     w3r_wproj : WTerm.lsymbol Msym.t;
+    w3r_lsymb : WTerm.lsymbol;
   }
 
   type w3recs = w3rec list Hfds.t
@@ -469,46 +471,8 @@ let rec trans_ty ((genv, lenv) as env) ty =
      let fvs = Sid.big_union (List.map Tvar.fv (Msym.values fields))in
      let fvs = Sid.elements fvs in
      let tvs = List.map (fun x -> (x, Sp.empty)) fvs in
-
-     let wty =
-       match Why3Recs.find genv.te_env (fvs, fields) genv.te_recs with
-
-       | None ->
-          let lenv2, tparams = lenv_of_tparams tvs in
-
-          let keys = Msym.keys fields in
-          let sid  = String.concat "_" keys in
-          let pid  = str_p sid in
-          let wty  = WTy.create_tysymbol pid tparams None in
-
-          let wcid  = str_p (Printf.sprintf "%s_ctor" sid) in
-          let wctys = trans_tys (genv, lenv2) (Msym.values fields) in
-          let wdom  = WTy.ty_app wty (List.map WTy.ty_var tparams) in
-          let wcls  = WTerm.create_lsymbol ~constr:1 wcid wctys (Some wdom) in
-
-          let for_field (fname, fty) =
-            let wfty = trans_ty (genv, lenv2) fty in
-            WTerm.create_lsymbol (str_p fname) [wdom] (Some wfty)
-          in
-
-          let wproj = Msym.mapi (uncurry for_field) fields in
-          let dcl   = [wty, [wcls, List.map some (Msym.values wproj)]] in
-          let dcl   = WDecl.create_data_decl dcl in
-
-          genv.te_task <- WTask.add_decl genv.te_task dcl;
-          let w3r = Why3Recs.{
-            w3r_fvs   = fvs;
-            w3r_fds   = fields;
-            w3r_name  = wty;
-            w3r_wproj = wproj;
-          } in
-
-          Why3Recs.add genv.te_recs w3r; wty
-
-       | Some x -> x.Why3Recs.w3r_name
-
-     in
-
+     let w3r = create_wrec genv fvs tvs fields in
+     let wty = w3r.Why3Recs.w3r_name in
      WTy.ty_app wty (List.map (trans_tv lenv |- fst) tvs)
 
 and trans_tglob ((genv, _lenv) as env) mp =
@@ -598,6 +562,43 @@ and trans_tydecl genv (p, tydecl) =
   Hp.add genv.te_ty p ts;
   List.iter (fun (p, wop) -> Hp.add genv.te_op p wop) opts;
   ts
+
+and create_wrec genv fvs tvs fields =
+  match Why3Recs.find genv.te_env (fvs, fields) genv.te_recs with
+  | None ->
+     let lenv2, tparams = lenv_of_tparams tvs in
+
+     let keys = Msym.keys fields in
+     let sid  = String.concat "_" keys in
+     let pid  = str_p sid in
+     let wty  = WTy.create_tysymbol pid tparams None in
+
+     let wcid  = str_p (Printf.sprintf "%s_ctor" sid) in
+     let wctys = trans_tys (genv, lenv2) (Msym.values fields) in
+     let wdom  = WTy.ty_app wty (List.map WTy.ty_var tparams) in
+     let wcls  = WTerm.create_lsymbol ~constr:1 wcid wctys (Some wdom) in
+
+     let for_field (fname, fty) =
+       let wfty = trans_ty (genv, lenv2) fty in
+       WTerm.create_lsymbol (str_p fname) [wdom] (Some wfty)
+     in
+
+     let wproj = Msym.mapi (uncurry for_field) fields in
+     let dcl   = [wty, [wcls, List.map some (Msym.values wproj)]] in
+     let dcl   = WDecl.create_data_decl dcl in
+
+     genv.te_task <- WTask.add_decl genv.te_task dcl;
+     let w3r = Why3Recs.{
+           w3r_fvs   = fvs;
+           w3r_fds   = fields;
+           w3r_name  = wty;
+           w3r_wproj = wproj;
+           w3r_lsymb = wcls;
+               } in
+     Why3Recs.add genv.te_recs w3r; w3r
+
+  | Some x -> x
+
 
 (* -------------------------------------------------------------------- *)
 let rm_mp_args mp =
@@ -759,6 +760,19 @@ let rec trans_form
   | Fapp (f,args) -> trans_app env f (List.map (trans_form env) args)
 
   | Ftuple args   -> wt_tuple genv (List.map (trans_form_b env) args)
+
+  | Frec fds      ->
+     let temp  = Msym.map (trans_form_b env) fds in
+     let tyfds = Msym.map (EcFol.f_ty) fds in
+
+     let fvs   = Sid.big_union (List.map Tvar.fv (Msym.values tyfds))in
+     let fvs   = Sid.elements fvs in
+     let tvs   = List.map (fun x -> (x, Sp.empty)) fvs in
+
+     let w3r   = create_wrec genv fvs tvs tyfds in
+
+     let test  = WTerm.t_app_infer (w3r.Why3Recs.w3r_lsymb) (Msym.values temp) in
+     test
 
   | Fproj (tfp,i) -> wproj_tuple genv (trans_form env tfp) i
 
@@ -1380,6 +1394,7 @@ module Frequency = struct
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
       | Ffield   (e, _)       -> doit e
+      | Frec     fds          -> Msym.iter (fun _ -> doit) fds
 
       | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
       | FequivF _ | FequivS _ | FeagerF _  -> ()

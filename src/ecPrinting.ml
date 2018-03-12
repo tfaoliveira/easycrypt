@@ -764,12 +764,17 @@ let pp_tuple mode (ppe : PPEnv.t) pp_sub osc fmt es =
   let pp fmt = pp_list ",@ " (pp_sub ppe (osc, (min_op_prec, `NonAssoc))) fmt es in
   let pp fmt = Format.fprintf fmt "@[<hov 0>%t@]" pp in
 
-    pp_maybe_paren prth (fun fmt () -> pp fmt) fmt ()
+  pp_maybe_paren prth (fun fmt () -> pp fmt) fmt ()
 
 let pp_rec (ppe : PPEnv.t) pp_sub osc fmt fds =
-  (*let pp fmt = pp_list ",@ " (pp_sub ppe (osc, (min_op_prec, `NonAssoc))) fmt fds in
-  let pp fmt = Format.fprintf fmt "@[<hov 0>%t@]" pp in*)
-  assert false
+  let pp_field fmt (name, x) =
+    Format.fprintf fmt "%a = %a"
+      pp_symbol name (pp_sub ppe (osc, (min_op_prec, `NonAssoc))) x in
+
+  Format.fprintf fmt "{<@[%a@]>}"
+    (pp_list ";@ " pp_field) (Msym.bindings fds)
+
+
 
 let pp_proji ppe pp_sub osc fmt (e,i) =
   Format.fprintf fmt "%a.`%i"
@@ -1537,7 +1542,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       pp_tuple `ForTuple ppe pp_form_r (fst outer) fmt args
 
   | Frec fds ->
-      pp_rec ppe pp_form_r (fst outer) fmt fds
+     (*let pp_field fmt (name, x) =*)
+     pp_rec ppe pp_form_r (fst outer) fmt fds
 
   | Fproj (e1, i) -> begin
       try
