@@ -718,10 +718,10 @@ let rec pp_type_r ppe outer fmt ty =
   | Trec fds -> begin
       let pp fmt fds =
         let pp_field fmt (name, x) =
-          Format.fprintf fmt "%a = %a"
+          Format.fprintf fmt "%a : %a;"
             pp_symbol name (pp_type_r ppe (t_prio_tpl, `Left)) x in
 
-           Format.fprintf fmt "{<@[%a@]>}"
+           Format.fprintf fmt "{< @[%a@] >}"
              (pp_list ";@ " pp_field) (Msym.bindings fds)
 
       in maybe_paren_nosc outer t_prio_name pp fmt fds
@@ -771,7 +771,7 @@ let pp_rec (ppe : PPEnv.t) pp_sub osc fmt fds =
     Format.fprintf fmt "%a = %a"
       pp_symbol name (pp_sub ppe (osc, (min_op_prec, `NonAssoc))) x in
 
-  Format.fprintf fmt "{<@[%a@]>}"
+  Format.fprintf fmt "{< @[%a@] >}"
     (pp_list ";@ " pp_field) (Msym.bindings fds)
 
 
@@ -1542,8 +1542,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       pp_tuple `ForTuple ppe pp_form_r (fst outer) fmt args
 
   | Frec fds ->
-     (*let pp_field fmt (name, x) =*)
-     pp_rec ppe pp_form_r (fst outer) fmt fds
+      pp_rec ppe pp_form_r (fst outer) fmt fds
 
   | Fproj (e1, i) -> begin
       try
@@ -1554,7 +1553,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
     end
 
   | Ffield (e, s) ->
-     pp_fields ppe pp_form_r (fst outer) fmt (e, s)
+      pp_fields ppe pp_form_r (fst outer) fmt (e, s)
 
   | FhoareF hf ->
       let ppe =
