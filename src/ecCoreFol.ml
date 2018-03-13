@@ -772,7 +772,7 @@ module FSmart = struct
     if fs == fs' then fp else f_tuple fs'
 
   let f_rec (fp, fds) fds' =
-    if Msym.equal (fun x y -> x == y) fds fds' then fp else f_rec fds'
+    if Msym.equal (==) fds fds' then fp else f_rec fds'
 
   let f_proj (fp, (f, ty)) (f', ty') i =
     if   f == f' && ty == ty'

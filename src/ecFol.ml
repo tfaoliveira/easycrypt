@@ -588,7 +588,9 @@ type sform =
   | SFmatch of form * form list * ty
   | SFlet   of lpattern * form * form
   | SFtuple of form list
+  | SFrec   of form Msym.t
   | SFproj  of form * int
+  | SFfield of form * EcSymbols.symbol
   | SFquant of quantif * (EcIdent.t * gty) * form Lazy.t
   | SFtrue
   | SFfalse
@@ -634,7 +636,9 @@ let rec sform_of_form fp =
   | Fmatch (b, fs, ty)  -> SFmatch (b, fs, ty)
   | Flet   (lv, f1, f2) -> SFlet   (lv, f1, f2)
   | Ftuple fs           -> SFtuple fs
+  | Frec  fds           -> SFrec fds
   | Fproj (f, i)        -> SFproj  (f,i)
+  | Ffield (f,s)        -> SFfield (f,s)
 
   | Fquant (_, [ ]  , f) -> sform_of_form f
   | Fquant (q, [b]  , f) -> SFquant (q, b, lazy f)

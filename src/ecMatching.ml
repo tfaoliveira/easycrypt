@@ -447,7 +447,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           if List.length fs1 <> List.length fs2 then
             failure ();
           List.iter2 (doit env ilc) (b1 :: fs1) (b2 :: fs2)
-        end
+      end
 
       | Fint i1, Fint i2 ->
           if not (EcBigInt.equal i1 i2) then failure ();
@@ -468,6 +468,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           if not (EcPath.p_equal op1 op2) then
             failure ();
           try  List.iter2 (EcUnify.unify env ue) tys1 tys2
+          with EcUnify.UnificationFailure _ -> failure ();
+      end
+
+      | Frec fds1, Frec fds2 -> begin
+          try
+            if not (Msym.equal (fun f1 f2 -> doit env ilc f1 f2; true) fds1 fds2) then
+                   failure ();
           with EcUnify.UnificationFailure _ -> failure ();
       end
 
@@ -709,6 +716,13 @@ module FPosition = struct
           | Fif    (c, f1, f2) -> doit pos (`WithCtxt (ctxt, [c; f1; f2]))
           | Fapp   (f, fs)     -> doit pos (`WithCtxt (ctxt, f :: fs))
           | Ftuple fs          -> doit pos (`WithCtxt (ctxt, fs))
+          | Frec   fds         ->
+             let bnd = Msym.bindings fds in
+             let bnd = List.sort
+                         (fun (x, _) (y, _) -> EcSymbols.sym_compare x y)
+                         bnd in
+             let _,elts = List.split bnd in
+             doit pos (`WithCtxt (ctxt, elts))
 
           | Fmatch (b, fs, _) ->
                doit pos (`WithCtxt (ctxt, b :: fs))
@@ -723,7 +737,10 @@ module FPosition = struct
               doit pos (`WithSubCtxt [(ctxt, f1); (subctxt, f2)])
 
           | Fproj (f, _) ->
-              doit pos (`WithCtxt (ctxt, [f]))
+             doit pos (`WithCtxt (ctxt, [f]))
+
+          | Ffield (f,_) ->
+             doit pos (`WithCtxt (ctxt, [f]))
 
           | Fpr pr ->
               let subctxt = Sid.add pr.pr_mem ctxt in
@@ -844,15 +861,18 @@ module FPosition = struct
               FSmart.f_tuple (fp, fs) fs'
 
           | Frec fds ->
-              (*let fds' = doit p fds in
-              FSmart.f_rec (fp, fds) fds'*)
-              assert false
+             let bnd = Msym.bindings fds in
+             let bnd = List.sort (fun (x,_) (y,_) -> EcSymbols.sym_compare x y) bnd in
+             let (keys,elts) = List.split bnd in
+             let ft = doit p elts in
+             let fds' = Msym.of_list (List.combine keys ft) in
+             FSmart.f_rec (fp, fds) fds'
 
           | Fproj (f, i) ->
-             FSmart.f_proj (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) i
+              FSmart.f_proj (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) i
 
           | Ffield (f, s) ->
-             FSmart.f_field (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) s
+              FSmart.f_field (fp, (f, fp.f_ty)) (as_seq1 (doit p [f]), fp.f_ty) s
 
           | Flet (lv, f1, f2) ->
               let (f1', f2') = as_seq2 (doit p [f1; f2]) in

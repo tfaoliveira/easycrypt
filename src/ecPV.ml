@@ -255,6 +255,7 @@ module PV = struct
     let rec aux fv f =
       match f.f_node with
       | Ftuple fs -> List.fold_left aux fv fs
+      | Frec fds  -> Msym.fold_left (fun x _ -> aux x) fv fds
       | Fpvar(pv,_) ->
         { fv with s_pv = Mnpv.add (pvm env pv) f.f_ty fv.s_pv }
       | Fglob(mp,_) ->

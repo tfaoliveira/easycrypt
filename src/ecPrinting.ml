@@ -1463,7 +1463,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
     and is_trm f =
       match f.f_node with
       | Ftuple [f] -> is_trm f
-      | Fint _ | Flocal _ | Fpvar _ | Fop _ | Ftuple _ -> true
+      | Fint _ | Flocal _ | Fpvar _ | Fop _ | Ftuple _ | Frec _ -> true
       | _ -> false
 
     in

@@ -163,7 +163,9 @@ type sform =
   | SFmatch of form * form list * ty
   | SFlet   of lpattern * form * form
   | SFtuple of form list
+  | SFrec   of form Msym.t
   | SFproj  of form * int
+  | SFfield of form * EcSymbols.symbol
 
   | SFquant of quantif * (EcIdent.t * gty) * form Lazy.t
   | SFtrue

@@ -678,7 +678,21 @@ and check_alpha_equal ri hyps f1 f2 =
     | Ftuple args1, Ftuple args2 when List.length args1 = List.length args2 ->
       List.iter2 (aux env subst) args1 args2
 
+    | Frec fds1, Frec fds2 when Msym.equal (fun _ _ -> true) fds1 fds2 ->
+      let bnd1 = Msym.bindings fds1 in
+      let bnd2 = Msym.bindings fds2 in
+      let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
+      let bnd1 = List.sort comp bnd1 in
+      let bnd2 = List.sort comp bnd2 in
+      let bnd1 = List.map snd bnd1 in
+      let bnd2 = List.map snd bnd2 in
+      List.iter2 (aux env subst) bnd1 bnd2
+
+
     | Fproj(f1,i1), Fproj(f2,i2) when i1 = i2 ->
+      aux env subst f1 f2
+
+    | Ffield (f1,s1), Ffield(f2,s2) when s1 = s2 ->
       aux env subst f1 f2
 
     | FhoareF hf1, FhoareF hf2 ->

@@ -1865,6 +1865,9 @@ let process_congr tc =
   | Ftuple _, Ftuple _ when iseq ->
       FApi.t_seqs [t_split; t_logic_trivial] tc
 
+  | Frec fds1, Frec fds2 ->
+      assert false
+
   | _, _ when iseq && EcReduction.is_alpha_eq hyps f1 f2 ->
       EcLowGoal.t_reflex tc
 
