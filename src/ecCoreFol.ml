@@ -1156,6 +1156,9 @@ let destr_op_app f =
 let destr_tuple = function
   { f_node = Ftuple fs } -> fs | _ -> destr_error "tuple"
 
+let destr_rec = function
+  { f_node = Frec fs } -> fs | _ -> destr_error "rec"
+
 let destr_local = function
   { f_node = Flocal id } -> id | _ -> destr_error "local"
 
@@ -1214,6 +1217,7 @@ let is_from_destr dt f =
 let is_true      f = f_equal f f_true
 let is_false     f = f_equal f f_false
 let is_tuple     f = is_from_destr destr_tuple     f
+let is_rec       f = is_from_destr destr_rec       f
 let is_op        f = is_from_destr destr_op        f
 let is_local     f = is_from_destr destr_local     f
 let is_pvar      f = is_from_destr destr_pvar      f

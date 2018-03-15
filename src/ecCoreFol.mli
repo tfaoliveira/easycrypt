@@ -331,6 +331,7 @@ val destr_local     : form -> EcIdent.t
 val destr_pvar      : form -> prog_var * memory
 val destr_proj      : form -> form * int
 val destr_tuple     : form -> form list
+val destr_rec       : form -> form Msym.t
 val destr_app       : form -> form * form list
 val destr_not       : form -> form
 val destr_nots      : form -> bool * form
@@ -367,6 +368,7 @@ val destr_int       : form -> zint
 val is_true      : form -> bool
 val is_false     : form -> bool
 val is_tuple     : form -> bool
+val is_rec       : form -> bool
 val is_not       : form -> bool
 val is_and       : form -> bool
 val is_or        : form -> bool
