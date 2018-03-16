@@ -1279,6 +1279,12 @@ instr:
 
    { PSif ((c, b), ei, odfl [] el) }
 
+| MATCH c=paren(expr) WITH
+    PIPE? bs=plist0(p=mcptn(sbinop) IMPL s=block { (p, s) }, PIPE)
+  END
+
+   { PSmatch (c, bs) }
+
 | WHILE LPAREN c=expr RPAREN b=block
    { PSwhile (c, b) }
 
@@ -1605,13 +1611,13 @@ opbr:
    { { pop_patterns = ptn; pop_body = e; } }
 
 %inline opcase:
-| x=ident EQ p=opptn(sbinop)
+| x=ident EQ p=mcptn(sbinop)
     { { pop_name = x; pop_pattern = p; } }
 
-| x=ident EQ p=paren(opptn(binop))
+| x=ident EQ p=paren(mcptn(binop))
     { { pop_name = x; pop_pattern = p; } }
 
-opptn(BOP):
+mcptn(BOP):
 | c=qoident tvi=tvars_app? ps=bdident*
     { PPApp ((c, tvi), ps) }
 

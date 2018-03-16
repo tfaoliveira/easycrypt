@@ -95,6 +95,10 @@ and 'a rfield = {
 }
 
 (* -------------------------------------------------------------------- *)
+type ppattern =
+| PPApp of (pqsymbol * ptyannot option) * osymbol list
+
+(* -------------------------------------------------------------------- *)
 type plvalue_r =
   | PLvSymbol of pqsymbol
   | PLvTuple  of pqsymbol list
@@ -108,6 +112,7 @@ type pinstr_r =
   | PSrnd    of plvalue * pexpr
   | PScall   of plvalue option * pgamepath * (pexpr list) located
   | PSif     of pscond * pscond list * pstmt
+  | PSmatch  of pexpr * (ppattern * pstmt) list
   | PSwhile  of pscond
   | PSassert of pexpr
 
@@ -150,7 +155,6 @@ and pfunction_decl = {
 }
 
 (* -------------------------------------------------------------------- *)
-
 and pmodule_def = {
   ptm_header : pmodule_header;
   ptm_body   : pmodule_expr;
@@ -189,7 +193,6 @@ and pfunction_local = {
   pfl_type  : pty   option;
   pfl_init  : pexpr option;
 }
-
 
 type pmodule_decl = {
   ptmd_name  : psymbol;
@@ -271,9 +274,6 @@ let rec pf_ident ?(raw = false) f =
   | _ -> None
 
 (* -------------------------------------------------------------------- *)
-type ppattern =
-| PPApp of (pqsymbol * ptyannot option) * osymbol list
-
 type ptyvardecls =
   (psymbol * pqsymbol list) list
 
