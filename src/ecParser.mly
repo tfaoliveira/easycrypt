@@ -776,7 +776,7 @@ lpattern_u:
     { LPTuple p }
 
 | LPBRACE fs=rlist1(lp_field, SEMICOLON) SEMICOLON? RPBRACE
-               { LPRecord fs }
+    { LPRecord fs }
 
 
 lp_field:

@@ -579,7 +579,7 @@ let f_quant q b f =
     mk_form (Fquant (q, b, f)) ty
 
 let f_proj   f  i  ty = mk_form (Fproj (f, i)) ty
-let f_field f  s  ty  = mk_form (Ffield (f, s)) ty
+let f_field  f  s  ty = mk_form (Ffield (f, s)) ty
 let f_if     f1 f2 f3 = mk_form (Fif (f1, f2, f3)) f2.f_ty
 let f_match  b  fs ty = mk_form (Fmatch (b, fs, ty)) ty
 let f_let    q  f1 f2 = mk_form (Flet (q, f1, f2)) f2.f_ty (* FIXME rename binding *)
@@ -870,12 +870,12 @@ let f_map gt g fp =
   | Fproj (f, i) ->
       let f'  = g f in
       let ty' = gt fp.f_ty in
-      FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
+        FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
 
   | Ffield (f, s) ->
       let f' = g f in
       let ty' = gt fp.f_ty in
-      FSmart.f_field (fp, (f, fp.f_ty)) (f', ty') s
+        FSmart.f_field (fp, (f, fp.f_ty)) (f', ty') s
 
   | FhoareF hf ->
       let pr' = g hf.hf_pr in

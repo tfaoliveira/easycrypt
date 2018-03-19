@@ -117,8 +117,6 @@ and tyerror =
 | UnknownScope           of qsymbol
 | RecordTypeError        of rcerror
 
-
-
 exception TyError of EcLocation.t * EcEnv.env * tyerror
 
 let tyerror loc env e = raise (TyError (loc, env, e))

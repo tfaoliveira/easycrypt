@@ -181,7 +181,7 @@ type tenv = {
   (*---*) te_gen        : WTerm.term Hf.t;
   (*---*) te_xpath      : WTerm.lsymbol Hx.t; (* proc and var *)
   (*---*) te_absmod     : w3absmod Hid.t;     (* abstract module *)
-  }
+}
 
 let empty_tenv env task known_ty known =
   { te_env        = env;
@@ -457,7 +457,7 @@ let rec trans_ty ((genv, lenv) as env) ty =
   | Tvar x ->
       trans_tv lenv x
 
-  | Ttuple  ts->
+  | Ttuple  ts ->
       wty_tuple genv (trans_tys env ts)
 
   | Tconstr (p, tys) ->

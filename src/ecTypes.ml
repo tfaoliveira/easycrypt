@@ -71,7 +71,6 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
-
     | Trec fds ->
         let hash_field (x, ty) =
           Why3.Hashcons.combine (sym_hash x) (ty_hash ty)
@@ -125,7 +124,7 @@ let rec dump_ty ty =
         (String.concat ", " (List.map dump_ty tys))
 
   | Tfun (t1, t2) ->
-     Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+      Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
 
   | Trec fds ->
       Printf.sprintf "{< %s >}" (String.concat "; " (List.map dump_ty (Msym.values fds)))
@@ -183,7 +182,7 @@ module TySmart = struct
     if t1 == t1' && t2 == t2' then ty else tfun t1' t2'
 
   let trec (ty, fds) fds' =
-    if fds'== fds then ty else trec fds'
+    if Msym.equal (==) fds' fds then ty else trec fds'
 end
 
 (* -------------------------------------------------------------------- *)
@@ -199,18 +198,18 @@ let ty_map f t =
         TySmart.tconstr (t, (p, lty)) (p, lty')
 
   | Tfun (t1, t2) ->
-     TySmart.tfun (t, (t1, t2)) (f t1, f t2)
+      TySmart.tfun (t, (t1, t2)) (f t1, f t2)
 
   | Trec fds ->
-     let fds' = Msym.map f fds in
-     TySmart.trec (t,fds) fds'
+      let fds' = Msym.map f fds in
+       TySmart.trec (t,fds) fds'
 
 let ty_fold f s ty =
   match ty.ty_node with
   | Tglob _ | Tunivar _ | Tvar _ -> s
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
-  | Tfun(t1,t2) -> f (f s t1) t2
+  | Tfun(t1, t2) -> f (f s t1) t2
   | Trec fds -> Msym.fold_left (fun x _ y -> f x y) s fds
 
 let ty_sub_exists f t =
@@ -292,9 +291,7 @@ let rec ty_subst s =
       | Tvar id       -> odfl ty (s.ts_v id)
       | Ttuple lty    -> TySmart.ttuple (ty, lty) (List.Smart.map aux lty)
       | Tfun (t1, t2) -> TySmart.tfun (ty, (t1, t2)) (aux t1, aux t2)
-
       | Trec fds      -> TySmart.trec (ty,fds) (Msym.map aux fds)
-
       | Tconstr(p, lty) -> begin
         match Mp.find_opt p s.ts_def with
         | None ->
@@ -308,7 +305,7 @@ let rec ty_subst s =
               with Failure _ -> assert false
             in
               ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ s; } body
-        end)
+          end)
 
 
 
@@ -601,10 +598,10 @@ module Hexpr = Why3.Hashcons.Make (struct
         qt_equal q1 q2 && e_equal e1 e2 && b_equal b1 b2
 
     | Eproj(e1, i1), Eproj(e2, i2) ->
-       i1 = i2 && e_equal e1 e2
+        i1 = i2 && e_equal e1 e2
 
     | Efield(e1, s1), Efield(e2,s2) ->
-       s1 = s2 && e_equal e1 e2
+        s1 = s2 && e_equal e1 e2
 
     | _, _ -> false
 
@@ -654,10 +651,10 @@ module Hexpr = Why3.Hashcons.Make (struct
         Why3.Hashcons.combine2 (qt_hash q) (e_hash e) (b_hash b)
 
     | Eproj (e, i) ->
-       Why3.Hashcons.combine (e_hash e) i
+        Why3.Hashcons.combine (e_hash e) i
 
     |Efield (e, s) ->
-      Why3.Hashcons.combine (e_hash e) (EcSymbols.sym_hash s)
+        Why3.Hashcons.combine (e_hash e) (EcSymbols.sym_hash s)
 
   let tag n e =
     let fv = fv_union (fv_node e.e_node) e.e_ty.ty_fv in
@@ -681,7 +678,6 @@ let e_tuple = fun es ->
   | _   -> mk_expr (Etuple es) (ttuple (List.map e_ty es))
 
 let e_rec   = fun fds -> mk_expr (Erec fds) (trec (Msym.map e_ty fds))
-
 let e_if    = fun c e1 e2 -> mk_expr (Eif (c, e1, e2)) e2.e_ty
 let e_match = fun e es ty -> mk_expr (Ematch (e, es, ty)) ty
 let e_proj  = fun e i ty  -> mk_expr (Eproj(e,i)) ty
@@ -839,9 +835,9 @@ let e_map fty fe e =
       ExprSmart.e_quant (e, (q, b, bd)) (q, b', bd')
 
   |Efield (e1, s) ->
-    let e' = fe e1 in
-    let ty = fty e.e_ty in
-    ExprSmart.e_field (e, e1, s) (e', ty)
+     let e' = fe e1 in
+     let ty = fty e.e_ty in
+     ExprSmart.e_field (e, e1, s) (e', ty)
 
 let rec e_fold fe state e =
   match e.e_node with

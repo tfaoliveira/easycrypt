@@ -713,7 +713,7 @@ let rec pp_type_r ppe outer fmt ty =
           (pp_type_r ppe (t_prio_fun, `Left )) t1
           (pp_type_r ppe (t_prio_fun, `Right)) t2
       in
-      maybe_paren_nosc outer t_prio_fun pp fmt (t1, t2)
+        maybe_paren_nosc outer t_prio_fun pp fmt (t1, t2)
 
   | Trec fds -> begin
       let pp fmt fds =
@@ -764,7 +764,7 @@ let pp_tuple mode (ppe : PPEnv.t) pp_sub osc fmt es =
   let pp fmt = pp_list ",@ " (pp_sub ppe (osc, (min_op_prec, `NonAssoc))) fmt es in
   let pp fmt = Format.fprintf fmt "@[<hov 0>%t@]" pp in
 
-  pp_maybe_paren prth (fun fmt () -> pp fmt) fmt ()
+    pp_maybe_paren prth (fun fmt () -> pp fmt) fmt ()
 
 let pp_rec (ppe : PPEnv.t) pp_sub osc fmt fds =
   let pp_field fmt (name, x) =

@@ -1364,6 +1364,12 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
               let pt     = { pt_head = PTHandle hd; pt_args = []; } in
               (tc, pt, 0)
 
+          | Trec fds ->
+              let indtc  = pf_gen_rec_elim ~witheq:false fds hyps in
+              let tc, hd = FApi.bwd1_of_fwd indtc tc in
+              let pt     = { pt_head = PTHandle hd; pt_args = []; } in
+              (tc, pt, 0)
+
           | _ when EcReduction.EqTest.for_type env tunit ty ->
               let pt = { pt_head = PTGlobal (LG.p_unit_elim, []);
                          pt_args = []; } in
