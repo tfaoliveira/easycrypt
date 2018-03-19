@@ -1843,6 +1843,11 @@ and transinstr
         (List.fold_right for1_s cs (transstmt env ue sel)) ]
   end
 
+  | PSmatch (pe, pcases) -> begin
+    let e, ety = transexp env `InProc ue pe in
+    assert false
+  end
+
   | PSwhile (pe, pbody) ->
       let e, ety = transexp env `InProc ue pe in
       let body = transstmt env ue pbody in
