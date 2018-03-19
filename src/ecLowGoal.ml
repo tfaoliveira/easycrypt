@@ -347,6 +347,21 @@ module LowIntro = struct
 end
 
 (* -------------------------------------------------------------------- *)
+let split_and_sort f1 f2 =
+
+      let fds1 = destr_rec f1 in
+      let fds2 = destr_rec f2 in
+      let bnd1 = Msym.bindings fds1 in
+      let bnd2 = Msym.bindings fds2 in
+      let comp = fun (k1, _) (k2, _) -> EcSymbols.sym_compare k1 k2 in
+      let bnd1 = List.sort comp bnd1 in
+      let bnd2 = List.sort comp bnd2 in
+
+      let (keys, fs1) = List.split bnd1 in
+      let (_, fs2)    = List.split bnd2 in
+      (keys,fs1,fs2)
+
+(* -------------------------------------------------------------------- *)
 let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
   let add_local hyps id sbt x gty =
     let gty = Fsubst.gty_subst sbt gty in
@@ -905,9 +920,10 @@ let gen_rec_intro keys tys =
   let bnd   = List.combine keys tys in
   let eqs   = List.map eq bnd in
   let bnd1  = List.map (snd |- proj3_1) eqs in
-  let bnd1  = List.combine keys bnd1 in
   let bnd2  = List.map (snd |- proj3_2) eqs in
+  let bnd1  = List.combine keys bnd1 in
   let bnd2  = List.combine keys bnd2 in
+
   let rec1  = Msym.of_list bnd1 in
   let rec2  = Msym.of_list bnd2 in
 
@@ -1093,8 +1109,52 @@ let gen_tuple_eq_elim (tys : ty list) : form =
   f_forall [(p, GTty tbool)] concl
 
 (* -------------------------------------------------------------------- *)
+let gen_rec_eq_elim keys (tys : ty list) : form =
+  let p  = EcIdent.create "p" in
+  let fp = f_local p tbool in
+
+ let var ty s i =
+    let var = EcIdent.create (Printf.sprintf "%s%d" s i) in
+    (var, f_local var ty) in
+
+  let eq (s, ty) =
+    let (x, fx) = var ty s 1 in
+    let (y, fy) = var ty s 2 in
+    ((x, fx), (y, fy), f_eq fx fy) in
+
+  let bnd   = List.combine keys tys in
+  let eqs   = List.map eq bnd in
+  let bnd1  = List.map (snd |- proj3_1) eqs in
+  let bnd2  = List.map (snd |- proj3_2) eqs in
+  let bnd1  = List.combine keys bnd1 in
+  let bnd2  = List.combine keys bnd2 in
+
+
+  let rec1  = Msym.of_list bnd1 in
+  let rec2  = Msym.of_list bnd2 in
+
+
+  let concl = f_eq (f_rec rec1)
+                   (f_rec rec2) in
+  let concl = f_imps [f_imps (List.map proj3_3 eqs) fp; concl] fp in
+  let concl =
+    let bindings =
+      let for1 ((x, fx), (y, fy), _) bindings =
+        (x, GTty fx.f_ty) :: (y, GTty fy.f_ty) :: bindings in
+      List.fold_right for1 eqs [] in
+    f_forall bindings concl
+  in
+
+  f_forall [(p, GTty tbool)] concl
+
+(* -------------------------------------------------------------------- *)
 let pf_gen_tuple_eq_elim tys hyps pe =
   let fp = gen_tuple_eq_elim tys in
+  FApi.newfact pe (VExtern (`TupleEqElim tys, [])) hyps fp
+
+  (* -------------------------------------------------------------------- *)
+let pf_gen_rec_eq_elim keys tys hyps pe =
+  let fp = gen_rec_eq_elim keys tys in
   FApi.newfact pe (VExtern (`TupleEqElim tys, [])) hyps fp
 
 (* -------------------------------------------------------------------- *)
@@ -1115,6 +1175,37 @@ let t_elim_eq_tuple_r ((_, sf) : form * sform) concl tc =
   | _ -> raise TTC.NoMatch
 
 let t_elim_eq_tuple ?reduce goal = t_elim_r ?reduce [t_elim_eq_tuple_r] goal
+
+(* -------------------------------------------------------------------- *)
+let t_elim_eq_rec_r ((_, sf) : form * sform) concl tc =
+  match sf with
+  | SFeq (f1, f2) when is_rec f1 && is_tuple f2 ->
+      let tc   = RApi.rtcenv_of_tcenv1 tc in
+      let hyps = RApi.tc_hyps tc in
+
+      let fds1 = destr_rec f1 in
+      let fds2 = destr_rec f2 in
+      let bnd1 = Msym.bindings fds1 in
+      let bnd2 = Msym.bindings fds2 in
+      let comp = fun (k1, _) (k2, _) -> EcSymbols.sym_compare k1 k2 in
+      let bnd1 = List.sort comp bnd1 in
+      let bnd2 = List.sort comp bnd2 in
+
+      let (keys, fs1) = List.split bnd1 in
+      let (_, fs2)    = List.split bnd2 in
+      let fs   = List.combine fs1 fs2 in
+
+      let tys  = List.map (f_ty |- fst) fs in
+      let hd   = RApi.bwd_of_fwd (pf_gen_rec_eq_elim keys tys hyps) tc in
+      let args = List.flatten (List.map (fun (x, y) -> [x; y]) fs) in
+      let args = concl :: args in
+
+      RApi.of_pure_u (tt_apply_hd hd ~args ~sk:1) tc;
+      RApi.tcenv_of_rtcenv tc
+
+  | _ -> raise TTC.NoMatch
+
+let t_elim_eq_rec ?reduce goal = t_elim_r ?reduce [t_elim_eq_rec_r] goal
 
 (* -------------------------------------------------------------------- *)
 let t_elim_exists_r ((f, _) : form * sform) concl tc =
@@ -1329,6 +1420,7 @@ let t_elim_default_r = [
   t_elim_iff_r;
   t_elim_if_r;
   t_elim_eq_tuple_r;
+  t_elim_eq_rec_r;
   t_elim_exists_r;
 ]
 
