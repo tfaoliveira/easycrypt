@@ -1469,7 +1469,9 @@ module Frequency = struct
       | Flet     (_, f1, f2)  -> List.iter add [f1; f2]
       | Fapp     (e, es)      -> List.iter add (e :: es)
       | Ftuple   es           -> List.iter add es
+      | Frec     fds          -> Msym.iter (fun  _ -> add) fds
       | Fproj    (e, _)       -> add e
+      | Ffield   (e, _)       -> add e
       | Fpr      pr           -> addx pr.pr_fun;add pr.pr_event;add pr.pr_args
       | _ -> () in
     add ax.ax_spec

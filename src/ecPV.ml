@@ -817,7 +817,9 @@ module Mpv2 = struct
       | Ftuple es1, Ftuple es2 ->
         List.fold_left2 (add_eq local) eqs es1 es2
       | Fproj(f1,i1), Fproj(f2,i2) when i1 = i2 ->
-        add_eq local eqs f1 f2
+         add_eq local eqs f1 f2
+      | Ffield(f1,s1), Ffield(f2,s2) when s1 = s2 ->
+         add_eq local eqs f1 f2
       | _, _ -> raise Not_found in
 
     let rec aux local eqs f =

@@ -345,8 +345,23 @@ module Hsform = Why3.Hashcons.Make (struct
     | Ftuple args1, Ftuple args2 ->
         List.all2 f_equal args1 args2
 
-    | Fproj(f1,i1), Fproj(f2,i2) ->
-      i1 = i2 && f_equal f1 f2
+    | Frec fds1, Frec fds2 when Msym.equal (fun _ _ -> true) fds1 fds2 ->
+        let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
+
+        let bnd1        = Msym.bindings fds1 in
+        let (_, fs1) = List.split (List.sort comp bnd1) in
+
+        let bnd2        = Msym.bindings fds2 in
+        let (_, fs2) = List.split (List.sort comp bnd2) in
+
+        List.all2 f_equal fs1 fs2
+
+
+    | Fproj(f1, i1), Fproj(f2, i2) ->
+       i1 = i2 && f_equal f1 f2
+
+    | Ffield(f1, s1), Ffield(f2, s2) ->
+       s1 = s2 && f_equal f1 f2
 
     | FhoareF   hf1 , FhoareF   hf2  -> hf_equal hf1 hf2
     | FhoareS   hs1 , FhoareS   hs2  -> hs_equal hs1 hs2

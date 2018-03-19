@@ -38,6 +38,17 @@ module EqTest = struct
           List.length lt1 = List.length lt2
        && List.all2 (for_type env) lt1 lt2
 
+    | Trec fds1, Trec fds2 ->
+       let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
+
+       let bnd1     = Msym.bindings fds1 in
+       let (_, fs1) = List.split (List.sort comp bnd1) in
+       let bnd2     = Msym.bindings fds2 in
+       let (_, fs2) = List.split (List.sort comp bnd2) in
+
+          Msym.equal (fun _ _ -> true) fds1 fds2
+       && List.all2 (for_type env) fs1 fs2
+
     | Tfun (t1, t2), Tfun (t1', t2') ->
         for_type env t1 t1' && for_type env t2 t2'
 
