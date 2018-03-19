@@ -894,18 +894,25 @@ let gen_tuple_intro tys =
 (* -------------------------------------------------------------------- *)
 let gen_rec_intro keys tys =
  let var ty s i =
-    let var = EcIdent.create (Printf.sprintf "%s %d" s i) in
+    let var = EcIdent.create (Printf.sprintf "%s%d" s i) in
     (var, f_local var ty) in
 
-  let eq i (s, ty) =
-    let (x, fx) = var ty s i in
-    let (y, fy) = var ty s i in
+  let eq (s, ty) =
+    let (x, fx) = var ty s 1 in
+    let (y, fy) = var ty s 2 in
     ((x, fx), (y, fy), f_eq fx fy) in
 
   let bnd   = List.combine keys tys in
-  let eqs   = List.mapi eq bnd in
-  let concl = f_eq (f_tuple (List.map (snd |- proj3_1) eqs))
-                   (f_tuple (List.map (snd |- proj3_2) eqs)) in
+  let eqs   = List.map eq bnd in
+  let bnd1  = List.map (snd |- proj3_1) eqs in
+  let bnd1  = List.combine keys bnd1 in
+  let bnd2  = List.map (snd |- proj3_2) eqs in
+  let bnd2  = List.combine keys bnd2 in
+  let rec1  = Msym.of_list bnd1 in
+  let rec2  = Msym.of_list bnd2 in
+
+  let concl = f_eq (f_rec rec1)
+                   (f_rec rec2) in
   let concl = f_imps (List.map proj3_3 eqs) concl in
   let concl =
     let bindings =
