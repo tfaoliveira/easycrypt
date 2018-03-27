@@ -722,7 +722,7 @@ module FPosition = struct
              let bnd = List.sort
                          (fun (x, _) (y, _) -> EcSymbols.sym_compare x y)
                          bnd in
-             let _,elts = List.split bnd in
+             let elts = snd (List.split bnd) in
              doit pos (`WithCtxt (ctxt, elts))
 
           | Fmatch (b, fs, _) ->

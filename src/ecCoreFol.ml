@@ -358,10 +358,10 @@ module Hsform = Why3.Hashcons.Make (struct
         List.all2 f_equal fs1 fs2
 
 
-    | Fproj(f1, i1), Fproj(f2, i2) ->
+    | Fproj(f1,i1), Fproj(f2,i2) ->
        i1 = i2 && f_equal f1 f2
 
-    | Ffield(f1, s1), Ffield(f2, s2) ->
+    | Ffield(f1,s1), Ffield(f2,s2) ->
        s1 = s2 && f_equal f1 f2
 
     | FhoareF   hf1 , FhoareF   hf2  -> hf_equal hf1 hf2

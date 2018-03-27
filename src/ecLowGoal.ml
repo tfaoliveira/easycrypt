@@ -929,8 +929,7 @@ let gen_rec_intro keys tys =
   let rec1  = Msym.of_list bnd1 in
   let rec2  = Msym.of_list bnd2 in
 
-  let concl = f_eq (f_rec rec1)
-                   (f_rec rec2) in
+  let concl = f_eq (f_rec rec1) (f_rec rec2) in
   let concl = f_imps (List.map proj3_3 eqs) concl in
   let concl =
     let bindings =
@@ -973,11 +972,11 @@ let t_tuple_intro ?reduce (tc : tcenv1) =
     TTC.t_lazy_match ?reduce t_tuple_intro_r tc
 
 (* -------------------------------------------------------------------- *)
-let t_rec_intro_s (keys : EcSymbols.symbol list) (fs : form pair list) (tc : tcenv1) =
-  let tc     = RApi.rtcenv_of_tcenv1 tc in
-  let tys    = List.map (fun f -> (snd f).f_ty) fs in
-  let hd     = RApi.bwd_of_fwd (pf_gen_rec_intro keys tys (RApi.tc_hyps tc)) tc in
-  let fs     = List.flatten (List.map (fun (x, y) -> [x; y]) fs) in
+let t_rec_intro_s (keys : symbol list) (fs : form pair list) (tc : tcenv1) =
+  let tc  = RApi.rtcenv_of_tcenv1 tc in
+  let tys = List.map (fun f -> (snd f).f_ty) fs in
+  let hd  = RApi.bwd_of_fwd (pf_gen_rec_intro keys tys (RApi.tc_hyps tc)) tc in
+  let fs  = List.flatten (List.map (fun (x, y) -> [x; y]) fs) in
 
   let a = tt_apply_hd hd ~args:fs ~sk:(List.length tys) in
   RApi.of_pure_u a tc; (*FIXME : Bug ici *)
@@ -1127,14 +1126,10 @@ let gen_rec_eq_elim keys (tys : ty list) : form =
   let bnd2  = List.map (snd |- proj3_2) eqs in
   let bnd1  = List.combine keys bnd1 in
   let bnd2  = List.combine keys bnd2 in
-
-
   let rec1  = Msym.of_list bnd1 in
   let rec2  = Msym.of_list bnd2 in
 
-
-  let concl = f_eq (f_rec rec1)
-                   (f_rec rec2) in
+  let concl = f_eq (f_rec rec1) (f_rec rec2) in
   let concl = f_imps [f_imps (List.map proj3_3 eqs) fp; concl] fp in
   let concl =
     let bindings =
