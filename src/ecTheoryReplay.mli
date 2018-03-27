@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -26,7 +27,7 @@ type 'a ovrenv = {
   ovre_ntclr    : EcPath.Sp.t;
   ovre_opath    : EcPath.path;
   ovre_npath    : EcPath.path;
-  ovre_prefix   : symbol list;
+  ovre_prefix   : (symbol list) EcUtils.pair;
   ovre_glproof  : (ptactic_core option * evtags option) list;
   ovre_abstract : bool;
   ovre_local    : bool;

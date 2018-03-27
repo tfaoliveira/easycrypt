@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -264,13 +265,31 @@
       let iterate  = ref None in
       let selected = ref None in
 
+      let is_universal p = unloc p = "" || unloc p = "!" in
+
+      let ok_use_only pp p =
+        if pp.pp_add_rm <> []
+        then let msg = "use-only elements must come at beginning"
+	     in parse_error (loc p) (Some msg)
+	else if pp.pp_use_only <> [] && is_universal p
+             then let msg = "cannot add universal to non-empty use-only"
+                  in parse_error (loc p) (Some msg)
+        else match pp.pp_use_only with
+             | [q] ->
+	       if is_universal q
+	       then let msg = "use-only part is already universal"
+		    in parse_error (loc p) (Some msg)
+	       else ()
+             | _ -> () in
+
       let add_prover (k, p) =
         let r = odfl empty_pprover_list !pnames in
         pnames := Some
           (match k with
-          | `Only    -> { r with pp_use_only =            p  :: r.pp_use_only }
-          | `Include -> { r with pp_add_rm   = (`Include, p) :: r.pp_add_rm   }
-          | `Exclude -> { r with pp_add_rm   = (`Exclude, p) :: r.pp_add_rm   }) in
+           | `Only    ->
+	     (ok_use_only r p; { r with pp_use_only = p :: r.pp_use_only })
+           | `Include -> { r with pp_add_rm = (`Include, p) :: r.pp_add_rm }
+           | `Exclude -> { r with pp_add_rm = (`Exclude, p) :: r.pp_add_rm }) in
 
       let do1 o  =
         match o with
@@ -2868,6 +2887,9 @@ tactic_core_r:
 | TRY t=tactic_core
    { Ptry t }
 
+| TRY NOT t=tactic_core
+   { Pnstrict t }
+
 | BY t=tactics
    { Pby (Some t) }
 
@@ -3258,7 +3280,7 @@ smt_info:
 
 smt_info1:
 | t=word
-    { `MAXLEMMAS (Some t)      }
+    { `MAXLEMMAS (Some t) }
 
 | TIMEOUT EQ t=word
     { `TIMEOUT t }

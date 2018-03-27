@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -641,18 +642,16 @@ module String = struct
             then List.map fst matched
             else aux matched (i+1)
           end
-
       in aux matched 0
 
     let last_matching tomatch s =
-      first_matching (List.map rev tomatch) (rev s)
+      List.map rev (first_matching (List.map rev tomatch) (rev s))
   end
 
   let option_matching tomatch s =
     match OptionMatching.all_matching tomatch s with
-    | [s] -> [s] | matched ->
-    match OptionMatching.first_matching matched s with
-    | [s] -> [s] | matched -> OptionMatching.last_matching matched s
+    | [s] -> [s]
+    | matched -> OptionMatching.first_matching matched s
 end
 
 (* -------------------------------------------------------------------- *)

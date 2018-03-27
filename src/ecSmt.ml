@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -1260,16 +1261,17 @@ let core_theories = [
      ]);
 
   ((["map"], "Const"),
-     [CI_Map.p_cnst, "const"]);
+     [(CI_Map.p_cst, "const")]);
 ]
 
 let core_ty_theories = [
   ((["map"], "Map"),
-   [(CI_Map.p_map, "map")]);
+     [(CI_Map.p_map, "map")]);
 ]
 
 let core_theories = Lazy.from_fun (fun () ->
   let add_core_theory tbl (thname, operators) =
+
     let theory = curry P.get_w3_th thname in
     let namesp = theory.WTheory.th_export in
     List.iter (fun (p, name) ->
@@ -1290,7 +1292,6 @@ let core_theories = Lazy.from_fun (fun () ->
   let ty_known = Hp.create 7 in
   List.iter (add_core_ty ty_known) core_ty_theories;
   ty_known, known
-
 )
 
 (* -------------------------------------------------------------------- *)

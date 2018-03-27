@@ -14,7 +14,8 @@ RUN \
 
 COPY sudo-ci /etc/sudoers.d/ci
 
-RUN adduser --disabled-password --gecos "CI" ci
+RUN addgroup --gid 2000 ci
+RUN adduser --disabled-password --gecos "CI" --uid 2000 --gid 2000 ci
 RUN chmod 440 /etc/sudoers.d/ci
 
 USER    ci
@@ -26,6 +27,7 @@ ENV OPAMJOBS    2
 
 RUN \
 	opam init -a && \
+	opam switch -v -A 4.03.0 easycrypt && \
 	opam remote add easycrypt https://github.com/EasyCrypt/opam.git && \
 	opam install depext && opam depext easycrypt ec-provers && \
 	opam install ec-provers && \

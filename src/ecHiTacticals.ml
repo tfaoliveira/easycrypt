@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -125,6 +126,13 @@ and process1_seq (ttenv : ttenv) (ts : ptactic list) (tc : tcenv1) =
   in
 
   aux ts (tcenv_of_tcenv1 tc)
+
+(* -------------------------------------------------------------------- *)
+and process1_nstrict (ttenv : ttenv) (t : ptactic_core) (tc : tcenv1) =
+  if ttenv.tt_smtmode <> `Strict then
+    tc_error !!tc "try! can only be used in strict proof mode";
+  let ttenv = { ttenv with tt_smtmode = `Standard } in
+  process1_try ttenv t tc
 
 (* -------------------------------------------------------------------- *)
 and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
@@ -303,6 +311,7 @@ and process_core (ttenv : ttenv) ({ pl_loc = loc } as t : ptactic_core) (tc : tc
     | Pprogress (o, t)      -> `One (process1_progress ttenv o t)
     | Pdebug                -> `One (process1_debug    ttenv)
     | Psubgoal  tt          -> `All (process_chain     ttenv tt)
+    | Pnstrict  t           -> `One (process1_nstrict  ttenv t)
   in
   (match tactic with `One t -> t_onall t | `All t -> t) tc
 

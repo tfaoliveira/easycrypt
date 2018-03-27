@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -14,6 +15,7 @@ type command = [
 | `Compile of cmp_option
 | `Cli     of cli_option
 | `Config
+| `Why3Config
 ]
 
 and options = {
@@ -237,7 +239,9 @@ let specs = {
       `Group "provers";
       `Spec  ("emacs", `Flag, "Output format set to <emacs>")]);
 
-    ("config", "Print EasyCrypt configuration", [])
+    ("config", "Print EasyCrypt configuration", []);
+
+    ("why3config", "Configure why3", []);
   ];
 
   xp_groups = [
@@ -364,6 +368,11 @@ let parse ?ini argv =
         if anons != [] then
           raise (Arg.Bad "this command does not take arguments");
         `Config
+
+    | "why3config" ->
+        if anons != [] then
+          raise (Arg.Bad "this command does not take arguments");
+        `Why3Config
 
     | _ -> assert false
   in

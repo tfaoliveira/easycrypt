@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -122,6 +123,16 @@ module CI_Distr : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module CI_Map : sig
+  val i_Map  : symbol
+  val p_Map  : path
+  val p_map  : path
+  val p_get  : path
+  val p_set  : path
+  val p_cst  : path
+end
+
+(* -------------------------------------------------------------------- *)
 module CI_Logic : sig
   val i_Logic  : symbol
   val p_Logic  : path
@@ -165,13 +176,4 @@ module CI_Logic : sig
   val p_ip_dup        : path
 
   val p_negbTE        : path
-end
-
-module CI_Map : sig
-  val i_Map  : symbol
-  val p_Map  : path
-  val p_map  : path
-  val p_get  : path
-  val p_set  : path
-  val p_cnst : path
 end
