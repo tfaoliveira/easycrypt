@@ -347,14 +347,8 @@ module Hsform = Why3.Hashcons.Make (struct
         List.all2 f_equal args1 args2
 
     | Frec fds1, Frec fds2 when Msym.equal (fun _ _ -> true) fds1 fds2 ->
-        let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
-
-        let bnd1        = Msym.bindings fds1 in
-        let (_, fs1) = List.split (List.sort comp bnd1) in
-
-        let bnd2        = Msym.bindings fds2 in
-        let (_, fs2) = List.split (List.sort comp bnd2) in
-
+        let fs1        = Msym.values fds1 in
+        let fs2        = Msym.values fds2 in
         List.all2 f_equal fs1 fs2
 
 

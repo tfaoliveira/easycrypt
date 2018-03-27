@@ -348,19 +348,14 @@ module LowIntro = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let split_and_sort f1 f2 =
+let get_keys_elts f1 f2 =
 
       let fds1 = destr_rec f1 in
       let fds2 = destr_rec f2 in
-      let bnd1 = Msym.bindings fds1 in
-      let bnd2 = Msym.bindings fds2 in
-      let comp = fun (k1, _) (k2, _) -> EcSymbols.sym_compare k1 k2 in
-      let bnd1 = List.sort comp bnd1 in
-      let bnd2 = List.sort comp bnd2 in
-
-      let (keys, fs1) = List.split bnd1 in
-      let (_, fs2)    = List.split bnd2 in
-      let fs = List.combine fs1 fs2 in
+      let keys = Msym.keys fds1 in
+      let fs1  = Msym.values fds1 in
+      let fs2  = Msym.values fds2 in
+      let fs   = List.combine fs1 fs2 in
       (keys,fs)
 
 (* -------------------------------------------------------------------- *)
@@ -986,7 +981,7 @@ let t_rec_intro ?reduce (tc : tcenv1) =
   let t_rec_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f2) when is_rec f1 && is_rec f2 ->
-        let (keys,fs) = split_and_sort f1 f2 in
+        let (keys,fs) = get_keys_elts f1 f2 in
         t_rec_intro_s keys fs tc
     | _ -> raise TTC.NoMatch
   in
@@ -1177,7 +1172,7 @@ let t_elim_eq_rec_r ((_, sf) : form * sform) concl tc =
       let tc   = RApi.rtcenv_of_tcenv1 tc in
       let hyps = RApi.tc_hyps tc in
 
-      let (keys, fs) = split_and_sort f1 f2 in
+      let (keys, fs) = get_keys_elts f1 f2 in
 
       let tys  = List.map (f_ty |- fst) fs in
       let hd   = RApi.bwd_of_fwd (pf_gen_rec_eq_elim keys tys hyps) tc in
@@ -1488,7 +1483,7 @@ let t_split ?(closeonly = false) ?reduce (tc : tcenv1) =
         t_tuple_intro_s fs tc
 
     | SFeq (f1, f2) when not closeonly && (is_rec f1 && is_rec f2) ->
-        let (keys, fs) = split_and_sort f1 f2 in
+        let (keys, fs) = get_keys_elts f1 f2 in
         t_rec_intro_s keys fs tc
 
     | SFif (cond, _, _) when not closeonly ->

@@ -40,12 +40,8 @@ module EqTest = struct
        && List.all2 (for_type env) lt1 lt2
 
     | Trec fds1, Trec fds2 ->
-       let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
-
-       let bnd1     = Msym.bindings fds1 in
-       let (_, fs1) = List.split (List.sort comp bnd1) in
-       let bnd2     = Msym.bindings fds2 in
-       let (_, fs2) = List.split (List.sort comp bnd2) in
+       let fs1 = Msym.values fds1 in
+       let fs2 = Msym.values fds2 in
 
           Msym.equal (fun _ _ -> true) fds1 fds2
        && List.all2 (for_type env) fs1 fs2
@@ -691,15 +687,9 @@ and check_alpha_equal ri hyps f1 f2 =
       List.iter2 (aux env subst) args1 args2
 
     | Frec fds1, Frec fds2 when Msym.equal (fun _ _ -> true) fds1 fds2 ->
-      let bnd1 = Msym.bindings fds1 in
-      let bnd2 = Msym.bindings fds2 in
-      let comp = fun (x, _) (y, _) -> EcSymbols.sym_compare x y in
-      let bnd1 = List.sort comp bnd1 in
-      let bnd2 = List.sort comp bnd2 in
-      let bnd1 = List.map snd bnd1 in
-      let bnd2 = List.map snd bnd2 in
-      List.iter2 (aux env subst) bnd1 bnd2
-
+      let fs1 = Msym.values fds1 in
+      let fs2 = Msym.values fds2 in
+      List.iter2 (aux env subst) fs1 fs2
 
     | Fproj(f1,i1), Fproj(f2,i2) when i1 = i2 ->
       aux env subst f1 f2

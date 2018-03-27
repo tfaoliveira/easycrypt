@@ -718,12 +718,7 @@ module FPosition = struct
           | Fapp   (f, fs)     -> doit pos (`WithCtxt (ctxt, f :: fs))
           | Ftuple fs          -> doit pos (`WithCtxt (ctxt, fs))
           | Frec   fds         ->
-             let bnd = Msym.bindings fds in
-             let bnd = List.sort
-                         (fun (x, _) (y, _) -> EcSymbols.sym_compare x y)
-                         bnd in
-             let elts = snd (List.split bnd) in
-             doit pos (`WithCtxt (ctxt, elts))
+             doit pos (`WithCtxt (ctxt, Msym.values fds))
 
           | Fmatch (b, fs, _) ->
                doit pos (`WithCtxt (ctxt, b :: fs))
@@ -862,10 +857,9 @@ module FPosition = struct
               FSmart.f_tuple (fp, fs) fs'
 
           | Frec fds ->
-             let bnd = Msym.bindings fds in
-             let bnd = List.sort (fun (x,_) (y,_) -> EcSymbols.sym_compare x y) bnd in
-             let (keys,elts) = List.split bnd in
-             let ft = doit p elts in
+             let keys = Msym.keys fds in
+             let elts = Msym.values fds in
+             let ft   = doit p elts in
              let fds' = Msym.of_list (List.combine keys ft) in
              FSmart.f_rec (fp, fds) fds'
 
