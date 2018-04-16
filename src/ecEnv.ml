@@ -2174,7 +2174,7 @@ module NormMp = struct
   let fun_use env xp =
     gen_fun_use env (ref Sx.empty) Sid.empty use_empty xp
 
-  let mod_use env mp =
+  let mod_use1 env us mp =
     let mp = norm_mpath env mp in
     let me = Mod.by_mpath mp env in
     let params = me.me_sig.mis_params in
@@ -2211,7 +2211,15 @@ module NormMp = struct
 
     and fun_use us f = gen_fun_use env' fdone rm us f in
 
-    mod_use use_empty mp'
+    mod_use us mp'
+
+  let mod_use env mp =
+    let rec aux us mp =
+      let mp = norm_mpath env mp in
+      let args = mp.m_args in
+      let us = mod_use1 env us (mpath mp.m_top []) in
+      List.fold_left aux us args in
+    aux use_empty mp
 
   let mod_use env mp =
     try Mm.find mp !(env.env_norm).mod_use with Not_found ->
