@@ -773,6 +773,16 @@ let destr_exists_prenex f =
     | bds, f -> (bds, f)
 
 (* -------------------------------------------------------------------- *)
+let destr_ands ~deep =
+  let rec doit f =
+    try
+      let (f1, f2) = destr_and f in
+      (if deep then doit f1 else [f1]) @ (doit f2)
+    with DestrError _ -> [f]
+
+  in fun f -> doit f
+
+(* -------------------------------------------------------------------- *)
 module type DestrRing = sig
   val le  : form -> form * form
   val lt  : form -> form * form

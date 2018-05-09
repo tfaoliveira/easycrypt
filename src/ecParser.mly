@@ -3395,11 +3395,11 @@ global_action:
 | PRAGMA MINUS x=pragma { Goption (x, false) }
 
 pragma_r:
-| x=_lident
-    { x }
+| x=plist1(_lident, COLON)
+    { String.concat ":" x }
 
-| u=_uident COLON x=_lident
-    { Printf.sprintf "%s:%s" u x }
+| u=_uident COLON x=plist1(_lident, COLON)
+    { String.concat ":" (u :: x) }
 
 pragma:
 | x=loc(pragma_r) { x }
