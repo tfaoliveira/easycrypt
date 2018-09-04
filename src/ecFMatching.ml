@@ -933,7 +933,211 @@ end
 
 
 
-(* (\* -------------------------------------------------------------------------- *\) *)
+(* -------------------------------------------------------------------------- *)
+module Unification = struct
+  exception No_Match
+  module MName = EcMaps.Map.Make(Name)
+
+  type meta_name = Name.t
+  type 'a map_meta_names = 'a MName.t
+
+  type only_name = Name.t
+  type 'a map_only_names = 'a MName.t
+
+  type axiom =
+    | Axiom_Form     of form
+    | Axiom_Memory   of EcMemory.memory
+    | Axiom_MemEnv   of EcMemory.memenv
+    | Axiom_Prog_Var of prog_var
+    | Axiom_Local    of ident
+    | Axiom_Int      of EcBigInt.zint
+    | Axiom_Op       of EcPath.path * EcTypes.ty list
+    | Axiom_Module   of mpath_top
+
+  type fun_symbol =
+    (* from type form *)
+    | Sym_Form_If
+    | Sym_Form_App
+    | Sym_Form_Tuple
+    | Sym_Form_Proj
+    | Sym_Form_Match
+    | Sym_Form_Quant
+    | Sym_Form_Let
+    | Sym_Form_Pvar
+    | Sym_Form_Glob
+    | Sym_Form_Hoare_F
+    | Sym_Form_Hoare_S
+    | Sym_Form_bd_Hoare_F
+    | Sym_Form_bd_Hoare_S
+    | Sym_Form_Equiv_F
+    | Sym_Form_Equiv_S
+    | Sym_Form_Eager_F
+    | Sym_Form_Pr
+    (* form type stmt*)
+    | Sym_Stmt_Seq
+    (* from type instr *)
+    | Sym_Instr_Assign
+    | Sym_Instr_Sample
+    | Sym_Instr_Call
+    | Sym_Instr_If
+    | Sym_Instr_While
+    | Sym_Instr_Assert
+    (* from type xpath *)
+    | Sym_Xpath
+    (* from type mpath *)
+    | Sym_Mpath
+
+  type pattern =
+    | Pat_Anything
+    | Pat_Meta_Name  of pattern * meta_name
+    (* | Pat_Sub        of pattern *)
+
+    | Pat_Fun_Symbol of fun_symbol * pattern list
+    | Pat_Axiom      of axiom
+
+  type environnement = {
+      env_hyps : EcEnv.LDecl.hyps
+    }
+
+  type continuation =
+    | Continuation_None
+    | Continuation_Meta_Named of meta_name * continuation
+    (* Continuation_Or          (attempt1,     next_attempts, otherwise) *)
+    | Continuation_Or         of continuation * engine list * engine
+    | Continuation_And        of (pattern * pattern) list * continuation
+
+  (*maybe change the list into a Lazy stream *)
+  and backtrack = engine list
+
+  and engine = {
+      eng_immutable_left  : pattern;
+      eng_immutable_right : pattern;
+      eng_unify           : pattern * pattern;
+      eng_environnement   : environnement;
+      eng_continuation    : continuation;
+      eng_backtrack       : backtrack;
+      eng_bind_meta_names : pattern map_meta_names;
+      eng_bind_only_names : only_name map_only_names;
+      (* eng_bind_randoms *)
+      (* eng_bind_types *)
+    }
+
+  let eq_form (f1 : form) (f2 : form) (_e : engine) =
+    (* FIXME *) f1 = f2
+
+  let eq_axiom (a1 : axiom) (a2 : axiom) (e : engine) =
+    match a1, a2 with
+    | Axiom_Form f1, Axiom_Form f2 -> eq_form f1 f2 e
+    | Axiom_Memory m1, Axiom_Memory m2 -> EcMemory.mem_equal m1 m2
+    | Axiom_MemEnv m1, Axiom_MemEnv m2 -> EcMemory.me_equal m1 m2
+    | Axiom_Prog_Var x1, Axiom_Prog_Var x2 ->
+       (* FIXME *) x1 = x2
+    | Axiom_Local id1, Axiom_Local id2 ->
+       (* FIXME *) EcIdent.id_equal id1 id2
+    | Axiom_Int i1, Axiom_Int i2 -> EcBigInt.equal i1 i2
+    | Axiom_Op (op1,lty1), Axiom_Op (op2,lty2) ->
+       EcPath.p_equal op1 op2
+       && (* FIXME *) List.for_all2 EcTypes.ty_equal lty1 lty2
+    | Axiom_Module m1, Axiom_Module m2 -> EcPath.mt_equal m1 m2
+    | _,_ -> false
+
+  let eq_fun_symbol (f1 : fun_symbol) (f2 : fun_symbol) (_e : engine) = f1 = f2
+
+  let rec unify (e : engine) =
+    match e.eng_unify with
+    | Pat_Anything, Pat_Anything -> next_match None e
+    | Pat_Anything, p | p, Pat_Anything -> next_match (Some p) e
+
+    | Pat_Meta_Name (p1,n1), p2 ->
+       unify_meta_name n1 { e with eng_unify = (p1,p2) }
+
+    | p1, Pat_Meta_Name (p2,n2) ->
+       unify_meta_name n2 { e with eng_unify = (p1,p2) }
+
+    | Pat_Axiom a1, Pat_Axiom a2 ->
+       if (eq_axiom a1 a2 e) then next_match (Some (Pat_Axiom a1)) e
+       else next_no_match e
+
+    (* FIXME : add particular cases *)
+
+    | Pat_Fun_Symbol _, Pat_Axiom _
+      | Pat_Axiom _, Pat_Fun_Symbol _ -> next_no_match e
+
+    | Pat_Fun_Symbol (f1,l1), Pat_Fun_Symbol (f2,l2) ->
+       if (eq_fun_symbol f1 f2 e)
+       then next_match None { e with
+                eng_continuation =
+                  Continuation_And (List.map2 (fun x y -> (x,y)) l1 l2,
+                                    e.eng_continuation)}
+       else next_no_match e
+
+  and unify_meta_name (name : meta_name) (e : engine) =
+    match MName.find_opt name e.eng_bind_meta_names with
+    | None -> unify { e with
+                  eng_continuation =
+                    Continuation_Meta_Named (name, e.eng_continuation) }
+    | Some p1 ->
+       let p2,p3 = e.eng_unify in
+       let cont = Continuation_And
+                    ([(Pat_Meta_Name (Pat_Anything,name),p3)],
+                     e.eng_continuation) in
+       let e = { e with
+                 eng_unify = (p1,p2);
+                 eng_continuation =
+                   Continuation_Meta_Named (name, cont);
+               }
+       in unify e
+
+  and next_no_match (e : engine) =
+    match e.eng_continuation with
+    | Continuation_None -> raise No_Match
+    | Continuation_Or (_, [], e') -> next_no_match e'
+    | Continuation_Or (_, e1::l, e') ->
+       unify { e1 with
+           eng_continuation = Continuation_Or (e1.eng_continuation,
+                                               l, e') }
+    | Continuation_And (_, cont)
+      | Continuation_Meta_Named (_, cont) ->
+       next_no_match { e with eng_continuation = cont }
+
+  and next_match (p : pattern option) (e : engine) =
+    match e.eng_continuation with
+    | Continuation_None -> e
+    | Continuation_Or (cont1, _, _) ->
+       next_match (Some (fst e.eng_unify)) { e with eng_continuation = cont1 }
+    | Continuation_And ([],cont) ->
+       (* FIXME *)
+       next_match None { e with eng_continuation = cont }
+    | Continuation_And (p1p2::rest, cont) ->
+       (* FIXME : (p : pattern option) is not used nor given to
+          reconstruct the right pattern *)
+       unify { e with
+           eng_unify = p1p2;
+           eng_continuation = Continuation_And (rest, cont) }
+    | Continuation_Meta_Named (name, cont) -> begin
+        match MName.find_opt name e.eng_bind_meta_names, p with
+        | None, None ->
+           let e =
+             { e with
+               eng_bind_meta_names =
+                 MName.add name (fst e.eng_unify) e.eng_bind_meta_names;
+               eng_continuation = cont;
+             }
+           in
+           next_match None e
+        | Some p, None ->
+           let e = { e with
+                     eng_continuation = cont } in
+           next_match (Some p) e
+        | None, Some _p ->
+           (* FIXME *) e
+        | Some _, Some _ ->
+           (* FIXME *) e
+      end
+
+
+
+end
 
 (* module IPattern = struct *)
 (*   open FPattern *)
