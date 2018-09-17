@@ -178,7 +178,7 @@ proof.
 elim: n=> [|n ge0n ih] ge0x; first by rewrite powr0 -fromint1 rpow0.
 rewrite powrS // fromintD; move: ge0x.
 rewrite ler_eqVlt=> -[<-|]; first rewrite (mul0r 0%r).
-  by rewrite rpow0r -fromintD /#.
+  by rewrite rpow0r -fromintD eq_fromint /#.
 by move=> gt0x; rewrite rpowD // rpow1 // ih 1:ltrW.
 qed.
 
