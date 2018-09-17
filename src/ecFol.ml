@@ -231,6 +231,7 @@ let f_int_add_simpl =
     | _, _ ->
         let simpls = [
            (fun () -> try_add_opp f1 f2);
+           (fun () -> try_add_opp f2 f1);
            (fun () -> i1 |> obind (try_addc^~ f2));
            (fun () -> i2 |> obind (try_addc^~ f1));
         ] in
@@ -326,7 +327,7 @@ let f_real_add_simpl =
   let try_add_opp f1 f2 =
     try
       let f2 = DestrReal.opp f2 in
-      if f_equal f1 f2 then Some f_i0 else None
+      if f_equal f1 f2 then Some f_r0 else None
     with DestrError _ -> None in
 
   let try_addc i f =
@@ -363,6 +364,7 @@ let f_real_add_simpl =
         let simpls = [
            (fun () -> try_norm_rintdiv f1 f2);
            (fun () -> try_add_opp f1 f2);
+           (fun () -> try_add_opp f2 f1);
            (fun () -> r1 |> obind (try_addc^~ f2));
            (fun () -> r2 |> obind (try_addc^~ f1));
         ] in

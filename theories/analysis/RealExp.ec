@@ -464,7 +464,7 @@ lemma dotpBr x y1 y2 : dotp x (y1 - y2) = dotp x y1 - dotp x y2.
 proof. by rewrite dotpDr dotpNr. qed.
 
 lemma dotpv0 x : dotp x zerov = 0%r.
-proof. by rewrite -(@subrr zerov) dotpBr subrr. qed.
+proof. by rewrite -(@subrr zerov) dotpBr. qed.
 
 lemma dotp0v x : dotp zerov x = 0%r.
 proof. by rewrite dotpC dotpv0. qed.
