@@ -396,7 +396,7 @@ realize addrA.
 proof. by move=> v1 v2 v3; apply/eqvP=> i; rewrite !addvE addrA. qed.
 
 realize addNr.
-proof. by move=> v; apply/eqvP=> i; rewrite addvE oppvE zerovE addNr. qed.
+proof. by move=> v; apply/eqvP=> i; rewrite addvE oppvE. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma scalevA a b v : a ** (b ** v) = a * b ** v.
