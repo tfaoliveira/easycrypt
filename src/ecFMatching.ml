@@ -4,8 +4,7 @@ open EcTypes
 open EcPath
 open EcIdent
 open EcEnv
-(* open EcGenRegexp *)
-(* open EcMatching *)
+open EcModules
 
 (* ---------------------------------------------------------------------- *)
 exception NoMatches
@@ -16,68 +15,131 @@ exception NoNext
 module Name = struct
   include EcIdent
   let compare = id_compare
-end
+end (* struct
+ *   type t =
+ *     | Id     of ident
+ *     | Mpath  of mpath_top
+ *     | Path   of path
+ *
+ *   let compare (t1 : t) (t2 : t) = match t1,t2 with
+ *     | Id id1, Id id2 -> id_compare id1 id2
+ *     | Mpath mp1, Mpath mp2 ->
+ *        let m1, m2 = mpath mp1 [], mpath mp2 [] in
+ *        m_compare m1 m2
+ *     | Path p1, Path p2 -> p_compare p1 p2
+ *     | Id _, _ -> 1
+ *     | Mpath _, Id _ -> -1
+ *     | Mpath _, _ -> 1
+ *     | _, _ -> -1
+ *
+ *   let id_eq_name (i1 : ident) = function
+ *     | Id i2 -> id_equal i1 i2
+ *     | _ -> false
+ *
+ *   let mt_equal (mt1 : mpath_top) = function
+ *     | Mpath mt2 -> mt_equal mt1 mt2
+ *     | _ -> false
+ *
+ *   let p_equal (p1 : path) = function
+ *     | Path p2 -> p_equal p1 p2
+ *     | _ -> false
+ *
+ *   let of_id id = Id id
+ *
+ * end *)
+
+module MName = Mid (* struct
+ *   include Map.Make(Name)
+ * end *)
 
 
 (* -------------------------------------------------------------------------- *)
 
 module FPattern = struct
 
-  type name = Name.t
+  type meta_name = Name.t
+  type 'a map_meta_names = 'a MName.t
 
-  (* invariant of pattern : if the form is not Pobject, then there is
+  type only_name = Name.t
+  type 'a map_only_names = 'a MName.t
+
+  type axiom =
+    | Axiom_Form     of form
+    | Axiom_Memory   of EcMemory.memory
+    | Axiom_MemEnv   of EcMemory.memenv
+    | Axiom_Prog_Var of prog_var
+    | Axiom_Local    of ident
+    | Axiom_ZInt     of EcBigInt.zint
+    | Axiom_Op       of EcPath.path * EcTypes.ty list
+    | Axiom_Module   of mpath_top
+    | Axiom_Instr    of EcModules.instr
+    | Axiom_Stmt     of EcModules.stmt
+    | Axiom_Lvalue   of EcModules.lvalue
+
+  type fun_symbol =
+    (* from type form *)
+    | Sym_Form_If
+    | Sym_Form_App
+    | Sym_Form_Tuple
+    | Sym_Form_Proj         of int
+    | Sym_Form_Match
+    | Sym_Form_Quant        of quantif * bindings
+    | Sym_Form_Let
+    | Sym_Form_Pvar
+    | Sym_Form_Prog_var
+    | Sym_Form_Glob
+    | Sym_Form_Local
+    | Sym_Form_Hoare_F
+    | Sym_Form_Hoare_S
+    | Sym_Form_bd_Hoare_F
+    | Sym_Form_bd_Hoare_S
+    | Sym_Form_Equiv_F
+    | Sym_Form_Equiv_S
+    | Sym_Form_Eager_F
+    | Sym_Form_Pr
+    (* form type stmt*)
+    | Sym_Stmt_Seq
+    (* from type instr *)
+    | Sym_Instr_Assign
+    | Sym_Instr_Sample
+    | Sym_Instr_Call
+    | Sym_Instr_If
+    | Sym_Instr_While
+    | Sym_Instr_Assert
+    (* from type xpath *)
+    | Sym_Xpath
+    (* from type mpath *)
+    | Sym_Mpath
+
+
+  (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
   type pattern =
-    | Panything
-    | Pnamed     of pattern * name
-    | Psub       of pattern
-    | Por        of pattern list
+    | Pat_Anything
+    | Pat_Meta_Name  of pattern * meta_name
+    | Pat_Sub        of pattern
+    | Pat_Or         of pattern list
+    | Pat_Instance   of pattern option * meta_name * EcPath.path * pattern list
 
-    | Ptype      of pattern * ty
+    | Pat_Fun_Symbol of fun_symbol * pattern list
+    | Pat_Axiom      of axiom
+    | Pat_Type       of pattern * ty
 
-    | Pobject    of tobject
+  type environnement = {
+      env_hyps : EcEnv.LDecl.hyps;
+      (* FIXME : ajouter ici les stratégies *)
+    }
 
-    | Pif        of pattern * pattern * pattern
-    | Papp       of pattern * pattern list
-    | Ptuple     of pattern list
-    | Pproj      of pattern * int
-    | Pmatch     of pattern * pattern list
-    | Pquant     of quantif * bindings * pattern
-    (* | Plet    of lpattern * pattern * pattern *)
-    | Ppvar      of pattern * pattern
-    | Pglob      of pattern * pattern
-    (* | FhoareF of hoareF (\* $hr / $hr *\) *)
-    (* | FhoareS of hoareS *)
-    (* | FbdHoareF of bdHoareF (\* $hr / $hr *\) *)
-    (* | FbdHoareS of bdHoareS *)
-    (* | FequivF of equivF (\* $left,$right / $left,$right *\) *)
-    (* | FequivS of equivS *)
-    (* | FeagerF of eagerF *)
-    | Ppr             of pattern * pattern * pattern * pattern
 
-    | Pprog_var       of prog_var
-
-    | Pxpath          of xpath
-    (* mpath patterns *)
-    (*                   mpath_top, mpath  list *)
-    | Pmpath          of pattern * pattern list
-
-   and tobject =
-    | Oform      of form
-    | Omem       of EcMemory.memory
-    (* | Ompath     of mpath *)
-    (* | Oxpath     of xpath *)
-    | Ompath_top of mpath_top
-
-  type tmatch = tobject * binding Mid.t
-
-  type map = tmatch Mid.t
-
-  type to_match = tmatch * pattern
+  (* type tmatch = axiom * binding Mid.t
+   *
+   * type map = tmatch Mid.t
+   *
+   * type to_match = tmatch * pattern *)
 
   type pat_continuation =
     | ZTop
-    | Znamed     of tmatch * name * pat_continuation
+    | Znamed     of axiom * meta_name * pat_continuation
     (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
        - e_list : if not, the sorted list of next engines to try matching with
@@ -89,50 +151,99 @@ module FPattern = struct
        - after  : list of couples (form, pattern) to check in the following
        - cont   : continuation if all the matches succeed
      *)
-    | Zand       of to_match list * to_match list * pat_continuation
+    | Zand       of (axiom * pattern) list * (axiom * pattern) list * pat_continuation
 
     | Zbinds     of pat_continuation * binding Mid.t
 
   and engine = {
-      e_head         : tmatch;
-      e_continuation : pat_continuation;
+      e_head         : axiom;
       e_pattern      : pattern;
-      e_map          : map;
-      e_hyps         : EcEnv.LDecl.hyps;
+      e_binds        : binding Mid.t;
+      e_continuation : pat_continuation;
+      e_map          : axiom MName.t;
+      e_env          : environnement;
     }
 
   and nengine = {
       ne_continuation : pat_continuation;
-      ne_map          : map;
+      ne_map          : axiom MName.t;
       ne_binds        : binding Mid.t;
-      ne_hyps         : EcEnv.LDecl.hyps;
+      ne_env          : environnement;
     }
 
   (* val mkengine    : base -> engine *)
   let mkengine (f : form) (p : pattern) (h : LDecl.hyps) : engine = {
-      e_head         = Oform f, Mid.empty ;
+      e_head         = Axiom_Form f;
+      e_binds        = Mid.empty ;
       e_continuation = ZTop ;
-      e_map          = Mid.empty ;
+      e_map          = MName.empty ;
       e_pattern      = p ;
-      e_hyps         = h ;
+      e_env          = { env_hyps = h } ;
     }
 
   type ismatch =
     | Match
     | NoMatch
 
-  let object_equal (o1 : tobject) (o2 : tobject) (h : LDecl.hyps) : bool =
+  let eq_form (f1 : form) (f2 : form) (_env : environnement) =
+    f_equal f1 f2
+
+  let eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environnement) =
+    EcMemory.mem_equal m1 m2
+
+  let eq_memenv (m1 : EcMemory.memenv) (m2 : EcMemory.memenv) (_env : environnement) =
+    EcMemory.me_equal m1 m2
+
+  let eq_prog_var (x1 : prog_var) (x2 : prog_var) (_env : environnement) =
+    pv_equal x1 x2
+
+  let eq_local i1 i2 _ = id_equal i1 i2
+
+  let eq_op
+        ((op1, lty1) : EcPath.path * EcTypes.ty list)
+        ((op2, lty2) : EcPath.path * EcTypes.ty list)
+        (_env : environnement) =
+    EcPath.p_equal op1 op2 && List.for_all2 EcTypes.ty_equal lty1 lty2
+
+  let eq_module (m1 : mpath_top) (m2 : mpath_top) (_env : environnement) =
+    EcPath.mt_equal m1 m2
+
+  let eq_type (ty1 : ty) (ty2 : ty) (_env : environnement) =
+    ty_equal ty1 ty2
+
+  let eq_name (n1 : meta_name) (n2 : meta_name) =
+    0 = Name.compare n1 n2
+
+  let eq_instr (i1 : EcModules.instr) (i2 : EcModules.instr) (_env : environnement) =
+    EcModules.i_equal i1 i2
+
+  let eq_stmt (s1 : EcModules.stmt) (s2 : EcModules.stmt) (_env : environnement) =
+    EcModules.s_equal s1 s2
+
+  let object_equal (o1 : axiom) (o2 : axiom) (env : environnement) : bool =
     match o1,o2 with
-    | Oform f1, Oform f2 -> EcReduction.is_conv h f1 f2
-    | Omem m1, Omem m2 -> EcMemory.mem_equal m1 m2
-    | Ompath_top (`Local id1), Ompath_top (`Local id2) -> id_equal id1 id2
-    | Ompath_top (`Concrete (p1,None)), Ompath_top (`Concrete (p2,None)) ->
-       p_equal p1 p2
-    | Ompath_top (`Concrete (p1,Some op1)), Ompath_top (`Concrete (p2,Some op2)) ->
-       p_equal p1 p2 && p_equal op1 op2
-    | ((Omem _|Ompath_top _|Oform _),
-       (Omem _|Ompath_top _|Oform _))
-      -> false
+    | Axiom_Form f1, Axiom_Form f2 ->
+       eq_form f1 f2 env
+    | Axiom_Memory m1, Axiom_Memory m2 ->
+       eq_memory m1 m2 env
+    | Axiom_MemEnv m1, Axiom_MemEnv m2 ->
+       eq_memenv m1 m2 env
+    | Axiom_Prog_Var x1, Axiom_Prog_Var x2 ->
+       eq_prog_var x1 x2 env
+    | Axiom_Local x1, Axiom_Local x2 ->
+       eq_local x1 x2 env
+    | Axiom_ZInt i1, Axiom_ZInt i2 ->
+       0 = EcBigInt.compare i1 i2
+    | Axiom_Op (op1,lty1), Axiom_Op (op2,lty2) ->
+       eq_op (op1,lty1) (op2,lty2) env
+    | Axiom_Module m1, Axiom_Module m2 ->
+       eq_module m1 m2 env
+    | Axiom_Instr i1, Axiom_Instr i2 ->
+       eq_instr i1 i2 env
+    | Axiom_Stmt s1, Axiom_Stmt s2 ->
+       eq_stmt s1 s2 env
+    | _,_ -> false
+
 
   let rec merge_binds bs1 bs2 map = match bs1,bs2 with
     | [], _ | _,[] -> Some (map,bs1,bs2)
@@ -141,75 +252,73 @@ module FPattern = struct
     | (id1,_)::bs1, (id2,ty2)::bs2 ->
        merge_binds bs1 bs2 (Mid.add id1 (id2,ty2) map)
 
-  (* add_match can raise the exception : CannotUnify *)
-  (* val add_match : matches -> name -> t_matches -> matches *)
-  let add_match (map : map) (name : name) (o : tmatch) h =
-    if Mid.set_disjoint (snd o) map
-    then
-      let (o1,o2) = o in
-      let o = o1,match o1 with
-                 | Oform      f  -> Mid.set_inter o2 (f_fv f)
-                 | Omem       m  -> Mid.set_inter o2 (Sid.singleton m)
-                 | Ompath_top mp -> Mid.set_inter o2 (m_fv Mid.empty (mpath mp [])) in
-      let map = match Mid.find_opt name map with
-        | None   -> Mid.add name o map
-        | Some x -> if object_equal (fst x) (fst o) h then map
-                    else raise CannotUnify
-      in map
-    else raise CannotUnify
+  (* (\* add_match can raise the exception : CannotUnify *\)
+   * (\* val add_match : matches -> name -> t_matches -> matches *\)
+   * let add_match (map : axiom Mid.t) (name : meta_name)
+   *       (a : axiom) (b : binding Mid.t) h =
+   *   if Mid.set_disjoint b map
+   *   then
+   *     let (o1,o2) = o in
+   *     let o = o1,match o1 with
+   *                | Oform      f  -> Mid.set_inter o2 (f_fv f)
+   *                | Omem       m  -> Mid.set_inter o2 (Sid.singleton m)
+   *                | Ompath_top mp -> Mid.set_inter o2 (m_fv Mid.empty (mpath mp [])) in
+   *     let map = match Mid.find_opt name map with
+   *       | None   -> Mid.add name o map
+   *       | Some x -> if object_equal (fst x) (fst o) h then map
+   *                   else raise CannotUnify
+   *     in map
+   *   else raise CannotUnify *)
 
   let e_next (e : engine) : nengine =
     { ne_continuation = e.e_continuation;
       ne_map = e.e_map;
-      ne_binds = snd e.e_head;
-      ne_hyps = e.e_hyps;
+      ne_binds = e.e_binds;
+      ne_env = e.e_env;
     }
 
-  let n_engine (tm : tmatch) (e_pattern : pattern) (n : nengine) =
-    { e_head = (fst tm, n.ne_binds);
+  let n_engine (a : axiom) (e_pattern : pattern) (n : nengine) =
+    { e_head = a;
+      e_binds = n.ne_binds;
       e_pattern;
       e_continuation = n.ne_continuation;
       e_map = n.ne_map;
-      e_hyps = n.ne_hyps;
+      e_env = n.ne_env;
     }
 
+
   let sub_engine e p f =
-    { e with e_head = f; e_pattern = Psub p }
+    { e with e_head = f; e_pattern = Pat_Sub p }
 
 
-  let p_app_simpl p subst =
+  let p_app_simpl p subst env =
     let rec aux = function
-      | Panything -> Panything
-      | Pnamed (p,id2) -> begin
-          match Mid.find_opt id2 subst with
-          | None -> Pnamed (aux p,id2)
-          | Some (Ptype (p,ty1),GTty ty2) when ty_equal ty2 ty1 -> Ptype (p,ty1)
-          | Some (Ptype _, GTty _) -> assert false
-          | Some (p,GTty ty) -> Ptype (p,ty)
+      | Pat_Anything -> Pat_Anything
+      | Pat_Meta_Name (p1,name) -> begin
+          match MName.find_opt name subst with
+          | None -> Pat_Meta_Name (p1,name)
+          | Some (Pat_Type (p2,ty1), GTty ty2) when eq_type ty1 ty2 env -> Pat_Type (p2,ty1)
+          | Some (Pat_Type _, GTty _) -> assert false
+          | Some (p,GTty ty) -> Pat_Type (p,ty)
           | Some (p,GTmem _) | Some (p, GTmodty _) -> p
         end
-      | Psub p -> Psub (aux p)
-      | Por l -> Por (List.map aux l)
-      | Ptype (p,ty) -> Ptype (aux p,ty)
-      | Pobject o -> Pobject o (* FIXME *)
-      | Pif (p1,p2,p3) -> Pif (aux p1,
-                               aux p2,
-                               aux p3)
-      | Papp (op,args) -> Papp (aux op, List.map aux args)
-      | Ptuple l -> Ptuple (List.map aux l)
-      | Pproj (p,i) -> Pproj (aux p,i)
-      | Pmatch (op,l) -> Pmatch (aux op, List.map aux l)
-      | Pquant (q,bds,p) when Mid.set_disjoint subst (Mid.of_list bds) ->
-         Pquant (q,bds,aux p)
-      | Pquant _ ->
-         raise (Invalid_argument
-                  "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
-      | Ppvar (p1,p2) -> Ppvar (aux p1,aux p2)
-      | Pglob (p1,p2) -> Pglob (aux p1,aux p2)
-      | Ppr (p1,p2,p3,p4) -> Ppr (aux p1, aux p2, aux p3, aux p4)
-      | Pprog_var pv -> Pprog_var pv (* FIXME : when the id is about a module name *)
-      | Pxpath xp -> Pxpath xp
-      | Pmpath (p1,p2) -> Pmpath (aux p1, List.map aux p2)
+      | Pat_Sub p1 -> Pat_Sub (aux p1)
+      | Pat_Or lp -> Pat_Or (List.map aux lp)
+      | Pat_Instance (ret,name,fun_name,args) ->
+         Pat_Instance (omap aux ret,name,fun_name,List.map aux args)
+      | Pat_Fun_Symbol (symbol,lp) -> begin
+          match symbol with
+          | Sym_Form_Quant (q,binds) when MName.set_disjoint subst (MName.of_list binds) ->
+             Pat_Fun_Symbol (Sym_Form_Quant (q,binds), List.map aux lp)
+          | Sym_Form_Quant _ ->
+             raise (Invalid_argument
+                      "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
+          | _ ->
+             Pat_Fun_Symbol (symbol, List.map aux lp)
+        end
+      | Pat_Axiom axiom ->
+         Pat_Axiom axiom
+      | Pat_Type (p1,ty) -> Pat_Type (aux p1, ty)
     in aux p
 
   let olist f l =
@@ -221,240 +330,405 @@ module FPattern = struct
                    | Some x -> aux (x::acc) true rest in
     aux [] false l
 
-  let replace_id id subst =
+  let replace_id id subst env =
     match Mid.find_opt id subst with
     | None -> None
-    | Some (Ptype (p,ty1),GTty ty2) when ty_equal ty2 ty1 -> Some (Ptype (p,ty1))
-    | Some (Ptype _, GTty _) -> assert false
+    | Some (Pat_Type (p,ty1),GTty ty2) when eq_type ty2 ty1 env -> Some (Pat_Type (p,ty1))
+    | Some (Pat_Type _, GTty _) -> assert false
     | Some (_,GTty _) -> None
     | Some (p,GTmem _) | Some (p, GTmodty _) -> Some p
 
-  let p_app_simpl_opt p subst =
+  let p_app_simpl_opt p subst env =
     let rec aux = function
-      | Panything -> None
-      | Pnamed (_,id2) -> replace_id id2 subst
-      | Psub p -> omap (fun x -> Psub x) (aux p)
-      | Por l -> omap (fun x -> Por x) (olist aux l)
-      | Ptype (p,ty) -> omap (fun p -> Ptype (p,ty)) (aux p)
-      | Pobject o -> Some (Pobject o) (* FIXME *)
-      | Pif (p1,p2,p3) ->
-         let p = match olist aux [p1;p2;p3] with
-           | None -> None
-           | Some ([p1;p2;p3]) -> Some (Pif (p1,p2,p3))
-           | _ -> assert false in
-         p
-      | Papp (op,args) ->
-         let p = match olist aux (op::args) with
-           | None -> None
-           | Some (op::args) -> Some (Papp (op,args))
-           | _ -> assert false
-         in p
-      | Ptuple l -> omap (fun x -> Ptuple x) (olist aux l)
-      | Pproj (p,i) -> omap (fun x -> Pproj (x,i)) (aux p)
-      | Pmatch (op,l) ->
-         let p = match olist aux (op::l) with
-           | None -> None
-           | Some (op::args) -> Some (Pmatch (op,args))
-           | _ -> assert false
-         in p
-      | Pquant (q,bds,p) when Mid.set_disjoint subst (Mid.of_list bds) ->
-         omap (fun x -> Pquant (q,bds,x)) (aux p)
-      | Pquant _ ->
-         raise (Invalid_argument
-                  "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
-      | Ppvar (p1,p2) ->
-         let p = match aux p1 with
-           | None -> None
-           | Some p1 -> match aux p2 with
-                        | None -> None
-                        | Some p2 -> Some (Ppvar (p1,p2)) in p
-      | Pglob (p1,p2) ->
-         let p = match aux p1 with
-           | None -> None
-           | Some p1 ->
-              match aux p2 with
-              | None -> None
-              | Some p2 -> Some (Pglob (p1,p2)) in p
-      | Ppr (p1,p2,p3,p4) ->
-         let p = match olist aux [p1;p2;p3;p4] with
-           | None -> None
-           | Some [p1;p2;p3;p4] -> Some (Ppr (p1,p2,p3,p4))
-           | _ -> assert false in p
-      | Pprog_var _ -> None (* FIXME : when the id is about a module name *)
-      | Pxpath _ -> None
-      | Pmpath (op,args) ->
-         let p = match olist aux (op::args) with
-           | None -> None
-           | Some (op::args) -> Some (Pmpath (op,args))
-           | _ -> assert false
-         in p
+      | Pat_Anything -> None
+      | Pat_Meta_Name (_,name) -> replace_id name subst env
+      | Pat_Sub p1 -> omap (fun x -> Pat_Sub x) (aux p1)
+      | Pat_Or lp -> omap (fun x -> Pat_Or x) (olist aux lp)
+      | Pat_Fun_Symbol (symbol,lp) -> begin
+          match symbol with
+          | Sym_Form_Quant (q,binds) when Mid.set_disjoint subst (Mid.of_list binds) ->
+             omap (fun x -> Pat_Fun_Symbol (Sym_Form_Quant (q,binds), x)) (olist aux lp)
+          | Sym_Form_Quant _ ->
+             raise (Invalid_argument
+                      "in p_app_simpl_opt : invalid argument name, it has been found in a sub quantif.")
+          | _ ->
+             omap (fun x -> Pat_Fun_Symbol (symbol, x)) (olist aux lp)
+        end
+      | Pat_Axiom axiom -> (* FIXME *) Some (Pat_Axiom axiom)
+      | Pat_Type (p1,ty) -> omap (fun p -> Pat_Type (p,ty)) (aux p1)
+      | Pat_Instance (opt_lv, name, fun_name, args) -> begin
+         match replace_id name subst env with
+         | None ->
+            omap (fun x -> Pat_Instance (opt_lv, name, fun_name, x)) (olist aux args)
+         | Some p -> Some p
+        end
+      (* | Panything -> None
+       * | Pnamed (_,id2) -> replace_id id2 subst
+       * | Psub p -> omap (fun x -> Psub x) (aux p)
+       * | Por l -> omap (fun x -> Por x) (olist aux l)
+       * | Ptype (p,ty) -> omap (fun p -> Ptype (p,ty)) (aux p)
+       * | Pobject o -> Some (Pobject o) (\* FIXME *\)
+       * | Pif (p1,p2,p3) ->
+       *    let p = match olist aux [p1;p2;p3] with
+       *      | None -> None
+       *      | Some ([p1;p2;p3]) -> Some (Pif (p1,p2,p3))
+       *      | _ -> assert false in
+       *    p
+       * | Papp (op,args) ->
+       *    let p = match olist aux (op::args) with
+       *      | None -> None
+       *      | Some (op::args) -> Some (Papp (op,args))
+       *      | _ -> assert false
+       *    in p
+       * | Ptuple l -> omap (fun x -> Ptuple x) (olist aux l)
+       * | Pproj (p,i) -> omap (fun x -> Pproj (x,i)) (aux p)
+       * | Pmatch (op,l) ->
+       *    let p = match olist aux (op::l) with
+       *      | None -> None
+       *      | Some (op::args) -> Some (Pmatch (op,args))
+       *      | _ -> assert false
+       *    in p
+       * | Pquant (q,bds,p) when Mid.set_disjoint subst (Mid.of_list bds) ->
+       *    omap (fun x -> Pquant (q,bds,x)) (aux p)
+       * | Pquant _ ->
+       *    raise (Invalid_argument
+       *             "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
+       * | Ppvar (p1,p2) ->
+       *    let p = match aux p1 with
+       *      | None -> None
+       *      | Some p1 -> match aux p2 with
+       *                   | None -> None
+       *                   | Some p2 -> Some (Ppvar (p1,p2)) in p
+       * | Pglob (p1,p2) ->
+       *    let p = match aux p1 with
+       *      | None -> None
+       *      | Some p1 ->
+       *         match aux p2 with
+       *         | None -> None
+       *         | Some p2 -> Some (Pglob (p1,p2)) in p
+       * | Ppr (p1,p2,p3,p4) ->
+       *    let p = match olist aux [p1;p2;p3;p4] with
+       *      | None -> None
+       *      | Some [p1;p2;p3;p4] -> Some (Ppr (p1,p2,p3,p4))
+       *      | _ -> assert false in p
+       * | Pprog_var _ -> None (\* FIXME : when the id is about a module name *\)
+       * | Pxpath _ -> None
+       * | Pmpath (op,args) ->
+       *    let p = match olist aux (op::args) with
+       *      | None -> None
+       *      | Some (op::args) -> Some (Pmpath (op,args))
+       *      | _ -> assert false
+       *    in p *)
     in aux p
 
 
-  let obeta_reduce = function
-    | Papp (Pquant (Llambda, binds, p), pargs) ->
+  let obeta_reduce env = function
+    | Pat_Fun_Symbol (Sym_Form_App,
+                      (Pat_Fun_Symbol (Sym_Form_Quant (Llambda,binds),[p]))
+                      ::pargs) ->
        let (bs1,bs2), (pargs1,pargs2) = List.prefix2 binds pargs in
        let p = match pargs2 with
          | [] -> p
-         | _ -> Papp (p, pargs2) in
+         | _ -> Pat_Fun_Symbol (Sym_Form_App, p::pargs2) in
        let p = match bs2 with
          | [] -> p
-         | _ -> Pquant (Llambda, bs2, p) in
+         | _ -> Pat_Fun_Symbol (Sym_Form_Quant (Llambda, bs2), [p]) in
        let subst = Mid.empty in
        let subst =
          try List.fold_left2 (fun a (b,t) c -> Mid.add_new Not_found b (c,t) a) subst bs1 pargs1
          with
-         | Not_found -> raise (Invalid_argument "beta_reduce : two bindings has got the same name.")
+         | Not_found -> raise (Invalid_argument "beta_reduce : two bindings have got the same name.")
        in
-       p_app_simpl_opt p subst
+       p_app_simpl_opt p subst env
     | _ -> None
 
 
-  let beta_reduce = function
-    | Papp (Pquant (Llambda, binds, p), pargs) ->
+  let beta_reduce env = function
+    | Pat_Fun_Symbol (Sym_Form_App,
+                      (Pat_Fun_Symbol (Sym_Form_Quant (Llambda,binds),[p]))
+                      ::pargs) ->
        let (bs1,bs2), (pargs1,pargs2) = List.prefix2 binds pargs in
        let p = match pargs2 with
          | [] -> p
-         | _ -> Papp (p, pargs2) in
+         | _ -> Pat_Fun_Symbol (Sym_Form_App, p::pargs2) in
        let p = match bs2 with
          | [] -> p
-         | _ -> Pquant (Llambda, bs2, p) in
+         | _ -> Pat_Fun_Symbol (Sym_Form_Quant (Llambda, bs2), [p]) in
        let subst = Mid.empty in
        let subst =
          try List.fold_left2 (fun a (b,t) c -> Mid.add_new Not_found b (c,t) a) subst bs1 pargs1
          with
-         | Not_found -> raise (Invalid_argument "beta_reduce : two bindings has got the same name.")
+         | Not_found -> raise (Invalid_argument "beta_reduce : two bindings have got the same name.")
        in
-       p_app_simpl p subst
+       p_app_simpl p subst env
     | p -> p
+
+  let rec mpath_to_pattern (m : mpath) =
+    Pat_Fun_Symbol (Sym_Mpath, (Pat_Axiom (Axiom_Module m.m_top))
+                               ::(List.map mpath_to_pattern m.m_args))
 
 
   let subst_name n1 n2 p =
     let rec aux = function
-      | Panything -> Panything
-      | Pnamed (p,n) when id_equal n1 n -> Pnamed (p,n2)
-      | Pnamed (p,n) -> Pnamed (aux p, n)
-      | Psub p -> Psub (aux p)
-      | Por pl -> Por (List.map aux pl)
-      | Ptype (p,ty) -> Ptype (aux p, ty)
-      | Pif (p2,p3,p4) -> Pif (aux p2,aux p3,aux p4)
-      | Papp (p2,pl) -> Papp (aux p2,List.map aux pl)
-      | Ptuple pl -> Ptuple (List.map aux pl)
-      | Pproj (p2,i) -> Pproj (aux p2,i)
-      | Pmatch (p2,pl) -> Pmatch (aux p2,List.map aux pl)
-      | Pquant (q,bs,p2) -> Pquant (q,bs,aux p2)
-      | Ppvar (p2,p3) -> Ppvar (aux p2,aux p3)
-      | Pglob (p2,p3) -> Pglob (aux p2,aux p3)
-      | Ppr (p2,p3,p4,p5) -> Ppr (aux p2,
-                                  aux p3,
-                                  aux p4,
-                                  aux p5)
-      | Pprog_var pv -> Pprog_var pv (* FIXME *)
-      | Pxpath xp -> Pxpath xp  (* FIXME *)
-      | Pmpath (p2,pl) -> Pmpath (aux p2, List.map aux pl)
-      | Pobject (Omem mem) ->
-         if id_equal n1 mem then Pobject (Omem n2) else Pobject (Omem n1)
-      | Pobject (Ompath_top _) as p -> p
-      | Pobject (Oform f) as p2 ->
-         if not(Mid.mem n1 f.f_fv) then p2
-         else match f.f_node with
-              |  Flocal id ->
-                  if id_equal id n1 then Pobject (Oform (f_local n2 f.f_ty)) else p2
-              | Fquant (quant,bs,f') ->
-                 if Mid.mem n1 f'.f_fv then Pquant (quant,bs,aux (Pobject (Oform f')))
-                 else p2
-              | Fif (f1,f2,f3) ->
-                 Pif (aux (Pobject (Oform f1)),
-                      aux (Pobject (Oform f2)),
-                      aux (Pobject (Oform f3)))
-              | Fmatch _ | Flet _-> Pobject (Oform f) (* FIXME *)
-              | Fint _ -> Pobject (Oform f)
-              | Fpvar (pvar,mem) ->
-                 if id_equal mem n1 then Ppvar (Pprog_var pvar, Pobject (Omem n2))
-                 else p2
-              | Fglob (mpath,mem) ->
-                 if id_equal mem n1 then
-                   Pglob (aux_mpath mpath, Pobject (Omem n2))
-                 else p2
-              | Fop _ -> Pobject (Oform f) (* FIXME *)
-              | Fapp (f1,fargs) ->
-                 Papp (aux (Pobject (Oform f1)),
-                       List.map (fun f -> aux (Pobject (Oform f))) fargs)
-              | Ftuple t ->
-                 Ptuple (List.map (fun f -> aux (Pobject (Oform f))) t)
-              | Fproj (f1,i) -> Pproj (aux (Pobject (Oform f1)),i)
-              | _ -> (* FIXME *) p2
-      and aux_mpath mp =
-        Pmpath (Pobject (Ompath_top mp.m_top), List.map aux_mpath mp.m_args)
+      | Pat_Anything -> Pat_Anything
+      | Pat_Meta_Name (p,name) when eq_name n1 name -> Pat_Meta_Name (p,n2)
+      | Pat_Meta_Name (p2,name) -> Pat_Meta_Name (aux p2,name)
+      | Pat_Sub p2 -> aux p2
+      | Pat_Or lp -> Pat_Or (List.map aux lp)
+
+      | Pat_Fun_Symbol (Sym_Form_Quant (q,binds),lp)
+           when Mid.mem n1 (Mid.of_list binds) ->
+         (* FIXME *) Pat_Fun_Symbol (Sym_Form_Quant (q,binds),lp)
+      | Pat_Fun_Symbol (symbol,lp) -> Pat_Fun_Symbol (symbol, List.map aux lp)
+      | Pat_Type (p2,ty) -> Pat_Type (aux p2, ty)
+      | Pat_Instance (opt_lv, module_name, fun_name, args)
+           when 0 = Name.compare module_name n1 ->
+         Pat_Instance (opt_lv, n2, fun_name, args)
+      | Pat_Instance (a,b,c,args) -> Pat_Instance (a,b,c, List.map aux args)
+      | Pat_Axiom axiom ->
+         match axiom with
+         | Axiom_Memory m when 0 = Name.compare m n1 -> Pat_Axiom (Axiom_Memory n2)
+         | Axiom_MemEnv (m,mt) when 0 = Name.compare m n1 -> Pat_Axiom (Axiom_MemEnv (n2,mt))
+         | Axiom_Local id when 0 = Name.compare id n1 -> Pat_Axiom (Axiom_Local n2)
+         (* | Axiom_Module mt1 when Name.mt_equal mt1 n1 ->
+          *    let p = match n2 with
+          *      | Name.Id id -> Pat_Axiom (Axiom_Local id)
+          *      | Name.Mpath mp -> Pat_Axiom (Axiom_Module mp)
+          *      | Name.Path p -> Pat_Axiom (Axiom_Op (p,[]))
+          *    in p *)
+         | Axiom_Form f when Mid.mem n1 f.f_fv -> begin
+           match f.f_node with
+           |  Flocal id when id_equal id n1 ->
+               Pat_Fun_Symbol (Sym_Form_Local,[Pat_Axiom (Axiom_Form (f_local n2 f.f_ty))])
+           | Fquant (_quant,bs,_f') when Mid.mem n1 (Mid.of_list bs) ->
+              (* FIXME *) Pat_Axiom axiom
+           | Fquant (quant,bs,f') when Mid.mem n1 f'.f_fv ->
+              Pat_Fun_Symbol (Sym_Form_Quant (quant,bs), [aux (Pat_Axiom (Axiom_Form f'))])
+           | Fif (f1,f2,f3) ->
+              let lp = List.map aux (List.map (fun x -> Pat_Axiom (Axiom_Form x)) [f1;f2;f3]) in
+              Pat_Fun_Symbol (Sym_Form_If, lp)
+           | Fmatch _ | Flet _-> Pat_Axiom axiom (* FIXME *)
+           | Fint _ -> Pat_Axiom axiom
+           | Fpvar (pvar,mem) when id_equal mem n1 ->
+              Pat_Fun_Symbol (Sym_Form_Pvar,[Pat_Axiom (Axiom_Form (f_pvar pvar f.f_ty n2))])
+           | Fglob (mpath,mem) when id_equal mem n1 ->
+              Pat_Fun_Symbol (Sym_Form_Glob, [mpath_to_pattern mpath; Pat_Axiom (Axiom_Memory n2)])
+           | Fop _ -> Pat_Axiom axiom (* FIXME *)
+           | Fapp (f1,fargs) ->
+              let lp = f1 :: fargs in
+              let lp = List.map (fun x -> Pat_Axiom (Axiom_Form x)) lp in
+              let lp = List.map aux lp in
+              Pat_Fun_Symbol (Sym_Form_App, lp)
+           | Ftuple lp ->
+              let lp = List.map (fun x -> Pat_Axiom (Axiom_Form x)) lp in
+              let lp = List.map aux lp in
+              Pat_Fun_Symbol (Sym_Form_Tuple, lp)
+           | Fproj (f1,i) ->
+              let p = aux (Pat_Axiom (Axiom_Form f1)) in
+              Pat_Fun_Symbol (Sym_Form_Proj i, [p])
+           | _ -> (* FIXME *) p
+           end
+         | Axiom_Lvalue _ -> Pat_Axiom axiom
+         | Axiom_ZInt _ | Axiom_Memory _ | Axiom_MemEnv _ | Axiom_Form _
+           | Axiom_Prog_Var _ | Axiom_Local _ | Axiom_Op _ | Axiom_Module _
+           | Axiom_Instr _ | Axiom_Stmt _ ->
+            Pat_Axiom axiom
+
+      (* | Panything -> Panything
+       * | Pif (p2,p3,p4) -> Pif (aux p2,aux p3,aux p4)
+       * | Papp (p2,pl) -> Papp (aux p2,List.map aux pl)
+       * | Ptuple pl -> Ptuple (List.map aux pl)
+       * | Pproj (p2,i) -> Pproj (aux p2,i)
+       * | Pmatch (p2,pl) -> Pmatch (aux p2,List.map aux pl)
+       * | Pquant (q,bs,p2) -> Pquant (q,bs,aux p2)
+       * | Ppvar (p2,p3) -> Ppvar (aux p2,aux p3)
+       * | Pglob (p2,p3) -> Pglob (aux p2,aux p3)
+       * | Ppr (p2,p3,p4,p5) -> Ppr (aux p2,
+       *                             aux p3,
+       *                             aux p4,
+       *                             aux p5)
+       * | Pprog_var pv -> Pprog_var pv (\* FIXME *\)
+       * | Pxpath xp -> Pxpath xp  (\* FIXME *\)
+       * | Pmpath (p2,pl) -> Pmpath (aux p2, List.map aux pl)
+       * | Pobject (Omem mem) ->
+       *    if id_equal n1 mem then Pobject (Omem n2) else Pobject (Omem n1)
+       * | Pobject (Ompath_top _) as p -> p
+       * | Pobject (Oform f) as p2 ->
+       *    if not(Mid.mem n1 f.f_fv) then p2
+       *    else match f.f_node with
+       *         |  Flocal id ->
+       *             if id_equal id n1 then Pobject (Oform (f_local n2 f.f_ty)) else p2
+       *         | Fquant (quant,bs,f') ->
+       *            if Mid.mem n1 f'.f_fv then Pquant (quant,bs,aux (Pobject (Oform f')))
+       *            else p2
+       *         | Fif (f1,f2,f3) ->
+       *            Pif (aux (Pobject (Oform f1)),
+       *                 aux (Pobject (Oform f2)),
+       *                 aux (Pobject (Oform f3)))
+       *         | Fmatch _ | Flet _-> Pobject (Oform f) (\* FIXME *\)
+       *         | Fint _ -> Pobject (Oform f)
+       *         | Fpvar (pvar,mem) ->
+       *            if id_equal mem n1 then Ppvar (Pprog_var pvar, Pobject (Omem n2))
+       *            else p2
+       *         | Fglob (mpath,mem) ->
+       *            if id_equal mem n1 then
+       *              Pglob (aux_mpath mpath, Pobject (Omem n2))
+       *            else p2
+       *         | Fop _ -> Pobject (Oform f) (\* FIXME *\)
+       *         | Fapp (f1,fargs) ->
+       *            Papp (aux (Pobject (Oform f1)),
+       *                  List.map (fun f -> aux (Pobject (Oform f))) fargs)
+       *         | Ftuple t ->
+       *            Ptuple (List.map (fun f -> aux (Pobject (Oform f))) t)
+       *         | Fproj (f1,i) -> Pproj (aux (Pobject (Oform f1)),i)
+       *         | _ -> (\* FIXME *\) p2
+       * and aux_mpath mp =
+       *   Pmpath (Pobject (Ompath_top mp.m_top), List.map aux_mpath mp.m_args) *)
     in aux p
 
-  let rec substitution n1 p1 p2 = match p2 with
-    | Panything -> Panything
-    | Pnamed (_,n2) when id_equal n1 n2 -> p1
-    | Pnamed (p2,n2) -> Pnamed (substitution n1 p1 p2, n2)
-    | Psub p -> Psub (substitution n1 p1 p)
-    | Por pl -> Por (List.map (substitution n1 p1) pl)
-    | Ptype (p,ty) -> Ptype (substitution n1 p1 p, ty)
-    | Pif (p2,p3,p4) -> Pif (substitution n1 p1 p2,
-                             substitution n1 p1 p3,
-                             substitution n1 p1 p4)
-    | Papp (p2,pl) -> Papp (substitution n1 p1 p2,
-                            List.map (substitution n1 p1) pl)
-    | Ptuple pl -> Ptuple (List.map (substitution n1 p1) pl)
-    | Pproj (p2,i) -> Pproj (substitution n1 p1 p2,i)
-    | Pmatch (p2,pl) -> Pmatch (substitution n1 p1 p2,
-                                List.map (substitution n1 p1) pl)
-    | Pquant (q,bs,p2) -> Pquant (q,bs,substitution n1 p1 p2)
-    | Ppvar (p2,p3) -> Ppvar (substitution n1 p1 p2,substitution n1 p1 p3)
-    | Pglob (p2,p3) -> Pglob (substitution n1 p1 p2,substitution n1 p1 p3)
-    | Ppr (p2,p3,p4,p5) -> Ppr (substitution n1 p1 p2,
-                                substitution n1 p1 p3,
-                                substitution n1 p1 p4,
-                                substitution n1 p1 p5)
-    | Pprog_var pv ->
-       let xp = pv.pv_name in
-       let name = xp.x_sub in
-       if (EcPath.tostring name) = (EcIdent.tostring n1) then p1 else p2
-    | Pxpath xp ->
-       let name = xp.x_sub in
-       if (EcPath.tostring name) = (EcIdent.tostring n1) then p1 else p2
-    | Pmpath (p2,pl) -> Pmpath (substitution n1 p1 p2,
-                                List.map (substitution n1 p1) pl)
-    | Pobject (Omem mem) ->
-       if id_equal n1 mem then p1 else p2
-    | Pobject (Ompath_top _) -> p2
-    | Pobject (Oform f) ->
-       if not(Mid.mem n1 f.f_fv) then p2
-       else match f.f_node with
-            |  Flocal id ->
-                if id_equal id n1 then Ptype (p1,f.f_ty) else p2
-            | Fquant (quant,bs,f') ->
-               if Mid.mem n1 f'.f_fv then Pquant (quant,bs,substitution n1 p1 (Pobject (Oform f')))
-               else p2
-            | Fif (f1,f2,f3) ->
-               Pif (substitution n1 p1 (Pobject (Oform f1)),
-                    substitution n1 p1 (Pobject (Oform f2)),
-                    substitution n1 p1 (Pobject (Oform f3)))
-            | Fmatch _ | Flet _-> Pobject (Oform f) (* FIXME *)
-            | Fint _ -> Pobject (Oform f)
-            | Fpvar (pvar,mem) ->
-               if id_equal mem n1 then Ppvar (Pprog_var pvar,p1)
-               else p2
-            | Fglob (mpath,mem) ->
-               if id_equal mem n1 then Pglob (substitution_mpath n1 p1 mpath, p1)
-               else p2
-            | Fop _ -> Pobject (Oform f) (* FIXME *)
-            | Fapp (f1,fargs) ->
-               Papp (substitution n1 p1 (Pobject (Oform f1)),
-                     List.map (fun f -> substitution n1 p1 (Pobject (Oform f))) fargs)
-            | Ftuple t ->
-               Ptuple (List.map (fun f -> substitution n1 p1 (Pobject (Oform f))) t)
-            | Fproj (f1,i) -> Pproj (substitution n1 p1 (Pobject (Oform f1)),i)
-            | _ -> (* FIXME *) p2
+  let substitution n1 p1 p =
+    let rec aux p = match p with
+    | Pat_Anything -> Pat_Anything
+    | Pat_Meta_Name (_,name) when eq_name n1 name -> p1
+    | Pat_Meta_Name (p,name) -> Pat_Meta_Name (aux p,name)
+    | Pat_Sub p -> Pat_Sub (aux p)
+    | Pat_Or lp -> Pat_Or (List.map aux lp)
+    | Pat_Type (p,ty) -> Pat_Type (aux p, ty)
+    | Pat_Fun_Symbol (sym,lp) -> Pat_Fun_Symbol (sym,List.map aux lp)
+    | Pat_Instance (_, name, _, _) when eq_name n1 name ->
+       p1
+    | Pat_Instance (lv, name, fun_name, args) ->
+       Pat_Instance (lv, name, fun_name, List.map aux args)
+    | Pat_Axiom axiom ->
+       match axiom with
+       | Axiom_Local id when eq_name id n1 -> p1
+       | Axiom_Form f when Mid.mem n1 f.f_fv -> begin
+           match f.f_node with
+           | Flocal id when eq_name id n1 -> p1
+           | Fquant (_quant,bs,_f') when Mid.mem n1 (Mid.of_list bs) ->
+              (* FIXME *) Pat_Axiom axiom
+           | Fquant (quant,bs,f') when Mid.mem n1 f'.f_fv ->
+              Pat_Fun_Symbol (Sym_Form_Quant (quant,bs), [aux (Pat_Axiom (Axiom_Form f'))])
+           | Fif (f1,f2,f3) ->
+              let lp = List.map aux (List.map (fun x -> Pat_Axiom (Axiom_Form x)) [f1;f2;f3]) in
+              Pat_Fun_Symbol (Sym_Form_If, lp)
+           | Fmatch _ | Flet _-> Pat_Axiom axiom (* FIXME *)
+           | Fint _ -> Pat_Axiom axiom
+           | Fop _ -> Pat_Axiom axiom (* FIXME *)
+           | Fapp (f1,fargs) ->
+              let lp = f1 :: fargs in
+              let lp = List.map (fun x -> Pat_Axiom (Axiom_Form x)) lp in
+              let lp = List.map aux lp in
+              Pat_Fun_Symbol (Sym_Form_App, lp)
+           | Ftuple lp ->
+              let lp = List.map (fun x -> Pat_Axiom (Axiom_Form x)) lp in
+              let lp = List.map aux lp in
+              Pat_Fun_Symbol (Sym_Form_Tuple, lp)
+           | Fproj (f1,i) ->
+              let p = aux (Pat_Axiom (Axiom_Form f1)) in
+              Pat_Fun_Symbol (Sym_Form_Proj i, [p])
+           | _ -> (* FIXME *) p
+         end
+       | Axiom_Instr i -> begin
+           match i.i_node with
+           | Sabstract name when eq_name name n1 ->
+              p1
+           | Sabstract name -> Pat_Axiom axiom
+           | _ when Mid.mem n1 (EcModules.s_fv (EcModules.stmt [i])) ->
+              Pat_Axiom axiom
+           | Sasgn (lv,e) ->
+              let lv' = Pat_Axiom (Axiom_Lvalue lv) in
+              let e' = Pat_Axiom (Axiom_Form (EcFol.form_of_expr (EcIdent.create "new_mem") e)) in
+              Pat_Fun_Symbol (Sym_Instr_Assign, [lv'; aux e'])
+           | Srnd (lv,e) ->
+              let lv' = Pat_Axiom (Axiom_Lvalue lv) in
+              let e' = Pat_Axiom (Axiom_Form (EcFol.form_of_expr (EcIdent.create "new_mem") e)) in
+              Pat_Fun_Symbol (Sym_Instr_Sample, [lv'; aux e'])
+           | Scall (opt_lv,procedure,args) ->
+              Pat_Fun_Symbol (Sym_Instr_Call, )
+           | Sif (e,strue, sfalse) ->
+              Pat_Fun_Symbol (Sym_Instr_If, )
+           | Swhile (e,body) ->
+              Pat_Fun_Symbol (Sym_Instr_While, )
+           | Sassert e ->
+              Pat_Fun_Symbol (Sym_Instr_Assert, )
+         end
+       | Axiom_Stmt s when Mid.mem n1 (EcModules.s_fv s) -> begin
 
-    and substitution_mpath n1 p1 mpath =
-      Pmpath (Pobject (Ompath_top mpath.m_top),
-              List.map (substitution_mpath n1 p1) mpath.m_args)
+         end
+       | Axiom_Lvalue _ -> Pat_Axiom axiom
+       | Axiom_ZInt _ | Axiom_Memory _ | Axiom_MemEnv _ | Axiom_Form _
+         | Axiom_Prog_Var _ | Axiom_Local _ | Axiom_Op _ | Axiom_Module _
+         | Axiom_Instr _ | Axiom_Stmt _ ->
+          Pat_Axiom axiom
+    in aux p
+
+    (* | Panything -> Panything
+     * | Pnamed (_,n2) when id_equal n1 n2 -> p1
+     * | Pnamed (p2,n2) -> Pnamed (substitution n1 p1 p2, n2)
+     * | Psub p -> Psub (substitution n1 p1 p)
+     * | Por pl -> Por (List.map (substitution n1 p1) pl)
+     * | Ptype (p,ty) -> Ptype (substitution n1 p1 p, ty)
+     * | Pif (p2,p3,p4) -> Pif (substitution n1 p1 p2,
+     *                          substitution n1 p1 p3,
+     *                          substitution n1 p1 p4)
+     * | Papp (p2,pl) -> Papp (substitution n1 p1 p2,
+     *                         List.map (substitution n1 p1) pl)
+     * | Ptuple pl -> Ptuple (List.map (substitution n1 p1) pl)
+     * | Pproj (p2,i) -> Pproj (substitution n1 p1 p2,i)
+     * | Pmatch (p2,pl) -> Pmatch (substitution n1 p1 p2,
+     *                             List.map (substitution n1 p1) pl)
+     * | Pquant (q,bs,p2) -> Pquant (q,bs,substitution n1 p1 p2)
+     * | Ppvar (p2,p3) -> Ppvar (substitution n1 p1 p2,substitution n1 p1 p3)
+     * | Pglob (p2,p3) -> Pglob (substitution n1 p1 p2,substitution n1 p1 p3)
+     * | Ppr (p2,p3,p4,p5) -> Ppr (substitution n1 p1 p2,
+     *                             substitution n1 p1 p3,
+     *                             substitution n1 p1 p4,
+     *                             substitution n1 p1 p5)
+     * | Pprog_var pv ->
+     *    let xp = pv.pv_name in
+     *    let name = xp.x_sub in
+     *    if (EcPath.tostring name) = (EcIdent.tostring n1) then p1 else p2
+     * | Pxpath xp ->
+     *    let name = xp.x_sub in
+     *    if (EcPath.tostring name) = (EcIdent.tostring n1) then p1 else p2
+     * | Pmpath (p2,pl) -> Pmpath (substitution n1 p1 p2,
+     *                             List.map (substitution n1 p1) pl)
+     * | Pobject (Omem mem) ->
+     *    if id_equal n1 mem then p1 else p2
+     * | Pobject (Ompath_top _) -> p2
+     * | Pobject (Oform f) ->
+     *    if not(Mid.mem n1 f.f_fv) then p2
+     *    else match f.f_node with
+     *         |  Flocal id ->
+     *             if id_equal id n1 then Ptype (p1,f.f_ty) else p2
+     *         | Fquant (quant,bs,f') ->
+     *            if Mid.mem n1 f'.f_fv then Pquant (quant,bs,substitution n1 p1 (Pobject (Oform f')))
+     *            else p2
+     *         | Fif (f1,f2,f3) ->
+     *            Pif (substitution n1 p1 (Pobject (Oform f1)),
+     *                 substitution n1 p1 (Pobject (Oform f2)),
+     *                 substitution n1 p1 (Pobject (Oform f3)))
+     *         | Fmatch _ | Flet _-> Pobject (Oform f) (\* FIXME *\)
+     *         | Fint _ -> Pobject (Oform f)
+     *         | Fpvar (pvar,mem) ->
+     *            if id_equal mem n1 then Ppvar (Pprog_var pvar,p1)
+     *            else p2
+     *         | Fglob (mpath,mem) ->
+     *            if id_equal mem n1 then Pglob (substitution_mpath n1 p1 mpath, p1)
+     *            else p2
+     *         | Fop _ -> Pobject (Oform f) (\* FIXME *\)
+     *         | Fapp (f1,fargs) ->
+     *            Papp (substitution n1 p1 (Pobject (Oform f1)),
+     *                  List.map (fun f -> substitution n1 p1 (Pobject (Oform f))) fargs)
+     *         | Ftuple t ->
+     *            Ptuple (List.map (fun f -> substitution n1 p1 (Pobject (Oform f))) t)
+     *         | Fproj (f1,i) -> Pproj (substitution n1 p1 (Pobject (Oform f1)),i)
+     *         | _ -> (\* FIXME *\) p2 *)
+
+    (* and substitution_mpath n1 p1 mpath =
+     *   Pmpath (Pobject (Ompath_top mpath.m_top),
+     *           List.map (substitution_mpath n1 p1) mpath.m_args) *)
 
   (* ---------------------------------------------------------------------- *)
   let rec process (e : engine) : nengine =
@@ -924,220 +1198,6 @@ module FPattern = struct
 end
 
 
-
-
-
-
-
-
-
-
-
-(* -------------------------------------------------------------------------- *)
-module Unification = struct
-  exception No_Match
-  module MName = EcMaps.Map.Make(Name)
-
-  type meta_name = Name.t
-  type 'a map_meta_names = 'a MName.t
-
-  type only_name = Name.t
-  type 'a map_only_names = 'a MName.t
-
-  type axiom =
-    | Axiom_Form     of form
-    | Axiom_Memory   of EcMemory.memory
-    | Axiom_MemEnv   of EcMemory.memenv
-    | Axiom_Prog_Var of prog_var
-    | Axiom_Local    of ident
-    | Axiom_Int      of EcBigInt.zint
-    | Axiom_Op       of EcPath.path * EcTypes.ty list
-    | Axiom_Module   of mpath_top
-
-  type fun_symbol =
-    (* from type form *)
-    | Sym_Form_If
-    | Sym_Form_App
-    | Sym_Form_Tuple
-    | Sym_Form_Proj
-    | Sym_Form_Match
-    | Sym_Form_Quant
-    | Sym_Form_Let
-    | Sym_Form_Pvar
-    | Sym_Form_Glob
-    | Sym_Form_Hoare_F
-    | Sym_Form_Hoare_S
-    | Sym_Form_bd_Hoare_F
-    | Sym_Form_bd_Hoare_S
-    | Sym_Form_Equiv_F
-    | Sym_Form_Equiv_S
-    | Sym_Form_Eager_F
-    | Sym_Form_Pr
-    (* form type stmt*)
-    | Sym_Stmt_Seq
-    (* from type instr *)
-    | Sym_Instr_Assign
-    | Sym_Instr_Sample
-    | Sym_Instr_Call
-    | Sym_Instr_If
-    | Sym_Instr_While
-    | Sym_Instr_Assert
-    (* from type xpath *)
-    | Sym_Xpath
-    (* from type mpath *)
-    | Sym_Mpath
-
-  type pattern =
-    | Pat_Anything
-    | Pat_Meta_Name  of pattern * meta_name
-    (* | Pat_Sub        of pattern *)
-
-    | Pat_Fun_Symbol of fun_symbol * pattern list
-    | Pat_Axiom      of axiom
-
-  type environnement = {
-      env_hyps : EcEnv.LDecl.hyps
-    }
-
-  type continuation =
-    | Continuation_None
-    | Continuation_Meta_Named of meta_name * continuation
-    (* Continuation_Or          (attempt1,     next_attempts, otherwise) *)
-    | Continuation_Or         of continuation * engine list * engine
-    | Continuation_And        of (pattern * pattern) list * continuation
-
-  (*maybe change the list into a Lazy stream *)
-  and backtrack = engine list
-
-  and engine = {
-      eng_immutable_left  : pattern;
-      eng_immutable_right : pattern;
-      eng_unify           : pattern * pattern;
-      eng_environnement   : environnement;
-      eng_continuation    : continuation;
-      eng_backtrack       : backtrack;
-      eng_bind_meta_names : pattern map_meta_names;
-      eng_bind_only_names : only_name map_only_names;
-      (* eng_bind_randoms *)
-      (* eng_bind_types *)
-    }
-
-  let eq_form (f1 : form) (f2 : form) (_e : engine) =
-    (* FIXME *) f1 = f2
-
-  let eq_axiom (a1 : axiom) (a2 : axiom) (e : engine) =
-    match a1, a2 with
-    | Axiom_Form f1, Axiom_Form f2 -> eq_form f1 f2 e
-    | Axiom_Memory m1, Axiom_Memory m2 -> EcMemory.mem_equal m1 m2
-    | Axiom_MemEnv m1, Axiom_MemEnv m2 -> EcMemory.me_equal m1 m2
-    | Axiom_Prog_Var x1, Axiom_Prog_Var x2 ->
-       (* FIXME *) x1 = x2
-    | Axiom_Local id1, Axiom_Local id2 ->
-       (* FIXME *) EcIdent.id_equal id1 id2
-    | Axiom_Int i1, Axiom_Int i2 -> EcBigInt.equal i1 i2
-    | Axiom_Op (op1,lty1), Axiom_Op (op2,lty2) ->
-       EcPath.p_equal op1 op2
-       && (* FIXME *) List.for_all2 EcTypes.ty_equal lty1 lty2
-    | Axiom_Module m1, Axiom_Module m2 -> EcPath.mt_equal m1 m2
-    | _,_ -> false
-
-  let eq_fun_symbol (f1 : fun_symbol) (f2 : fun_symbol) (_e : engine) = f1 = f2
-
-  let rec unify (e : engine) =
-    match e.eng_unify with
-    | Pat_Anything, Pat_Anything -> next_match None e
-    | Pat_Anything, p | p, Pat_Anything -> next_match (Some p) e
-
-    | Pat_Meta_Name (p1,n1), p2 ->
-       unify_meta_name n1 { e with eng_unify = (p1,p2) }
-
-    | p1, Pat_Meta_Name (p2,n2) ->
-       unify_meta_name n2 { e with eng_unify = (p1,p2) }
-
-    | Pat_Axiom a1, Pat_Axiom a2 ->
-       if (eq_axiom a1 a2 e) then next_match (Some (Pat_Axiom a1)) e
-       else next_no_match e
-
-    (* FIXME : add particular cases *)
-
-    | Pat_Fun_Symbol _, Pat_Axiom _
-      | Pat_Axiom _, Pat_Fun_Symbol _ -> next_no_match e
-
-    | Pat_Fun_Symbol (f1,l1), Pat_Fun_Symbol (f2,l2) ->
-       if (eq_fun_symbol f1 f2 e)
-       then next_match None { e with
-                eng_continuation =
-                  Continuation_And (List.map2 (fun x y -> (x,y)) l1 l2,
-                                    e.eng_continuation)}
-       else next_no_match e
-
-  and unify_meta_name (name : meta_name) (e : engine) =
-    match MName.find_opt name e.eng_bind_meta_names with
-    | None -> unify { e with
-                  eng_continuation =
-                    Continuation_Meta_Named (name, e.eng_continuation) }
-    | Some p1 ->
-       let p2,p3 = e.eng_unify in
-       let cont = Continuation_And
-                    ([(Pat_Meta_Name (Pat_Anything,name),p3)],
-                     e.eng_continuation) in
-       let e = { e with
-                 eng_unify = (p1,p2);
-                 eng_continuation =
-                   Continuation_Meta_Named (name, cont);
-               }
-       in unify e
-
-  and next_no_match (e : engine) =
-    match e.eng_continuation with
-    | Continuation_None -> raise No_Match
-    | Continuation_Or (_, [], e') -> next_no_match e'
-    | Continuation_Or (_, e1::l, e') ->
-       unify { e1 with
-           eng_continuation = Continuation_Or (e1.eng_continuation,
-                                               l, e') }
-    | Continuation_And (_, cont)
-      | Continuation_Meta_Named (_, cont) ->
-       next_no_match { e with eng_continuation = cont }
-
-  and next_match (p : pattern option) (e : engine) =
-    match e.eng_continuation with
-    | Continuation_None -> e
-    | Continuation_Or (cont1, _, _) ->
-       next_match (Some (fst e.eng_unify)) { e with eng_continuation = cont1 }
-    | Continuation_And ([],cont) ->
-       (* FIXME *)
-       next_match None { e with eng_continuation = cont }
-    | Continuation_And (p1p2::rest, cont) ->
-       (* FIXME : (p : pattern option) is not used nor given to
-          reconstruct the right pattern *)
-       unify { e with
-           eng_unify = p1p2;
-           eng_continuation = Continuation_And (rest, cont) }
-    | Continuation_Meta_Named (name, cont) -> begin
-        match MName.find_opt name e.eng_bind_meta_names, p with
-        | None, None ->
-           let e =
-             { e with
-               eng_bind_meta_names =
-                 MName.add name (fst e.eng_unify) e.eng_bind_meta_names;
-               eng_continuation = cont;
-             }
-           in
-           next_match None e
-        | Some p, None ->
-           let e = { e with
-                     eng_continuation = cont } in
-           next_match (Some p) e
-        | None, Some _p ->
-           (* FIXME *) e
-        | Some _, Some _ ->
-           (* FIXME *) e
-      end
-
-
-
-end
 
 (* module IPattern = struct *)
 (*   open FPattern *)
