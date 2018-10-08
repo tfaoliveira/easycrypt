@@ -908,6 +908,7 @@ module FPattern = struct
        end
 
     | Pat_Axiom o1, o2 when object_equal o1 o2 e.e_env -> next Match e
+
     | Pat_Axiom o1, o2 -> begin
         match o1, o2 with
         | Axiom_Form f1, Axiom_Form f2 -> begin
@@ -1250,7 +1251,7 @@ module FPattern = struct
 
       end
 
-    | Pat_Instance (_,_,_,_), _ -> next NoMatch e
+    | Pat_Instance (_,_,_,_), _ -> (* FIXME *) next NoMatch e
 
 
   and next (m : ismatch) (e : engine) : nengine = next_n m (e_next e)
