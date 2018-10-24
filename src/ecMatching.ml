@@ -929,7 +929,7 @@ module RegexpBaseInstr = struct
     e_pos    : pos;
     e_path   : pos list;
     e_hyps   : LDecl.hyps;
-    e_map    : tmatch Mid.t;
+    e_map    : map;
   }
 
   let mkengine (s : subject) (h : LDecl.hyps) = {
@@ -937,7 +937,7 @@ module RegexpBaseInstr = struct
     e_pos    = 0;
     e_path   = [];
     e_hyps   = h;
-    e_map    = Mid.empty;
+    e_map    = MName.empty;
   }
 
   let position (e : engine) =
@@ -972,6 +972,8 @@ module RegexpBaseInstr = struct
   let eat_xpath (f : EcPath.xpath) (fn : EcPath.xpath) =
     if not (EcPath.x_equal f fn) then raise NoMatch
 
+  let none_fun _ _ = None
+
   let rec eat_base (eng : engine) (r : regexp1) =
     let z = eng.e_zipper in
 
@@ -985,7 +987,7 @@ module RegexpBaseInstr = struct
            let map = match x1 with
            | LvVar (pv,ty) ->
               let fx1 = f_pvar pv ty mhr in
-              let e = FPattern.mkengine fx1 x2 eng.e_hyps in
+              let e = FPattern.mkengine fx1 x2 eng.e_hyps none_fun in
               let e = { e with e_map = eng.e_map } in
               let map = match FPattern.search_eng e with
                 | None -> raise NoMatch
@@ -995,7 +997,7 @@ module RegexpBaseInstr = struct
            | LvTuple tuple ->
               let f x = f_pvar (fst x) (snd x) mhr in
               let fx1 = f_tuple (List.map f tuple) in
-              let e = FPattern.mkengine fx1 x2 eng.e_hyps in
+              let e = FPattern.mkengine fx1 x2 eng.e_hyps none_fun in
               let e = { e with e_map = eng.e_map } in
               let map = match FPattern.search_eng e with
                 | None -> raise NoMatch
@@ -1008,7 +1010,7 @@ module RegexpBaseInstr = struct
            in
 
            let f1 = form_of_expr mhr e1 in
-           let e = FPattern.mkengine f1 p2 eng.e_hyps in
+           let e = FPattern.mkengine f1 p2 eng.e_hyps none_fun in
            let e = { e with e_map = map } in
            let map = match FPattern.search_eng e with
              | None -> raise NoMatch
@@ -1026,15 +1028,16 @@ module RegexpBaseInstr = struct
                let _fop = f_op op tys ty in
                raise NoMatch
           in
-          let e = FPattern.mkengine fx1 p1 eng.e_hyps in
+          let e = FPattern.mkengine fx1 p1 eng.e_hyps none_fun in
           let e = { e with e_map = eng.e_map } in
           let map = match FPattern.search_eng e with
             | None -> raise NoMatch
             | Some e -> e.ne_map in
           let args = List.map (form_of_expr mhr) args in
           let f = f_pr mleft f (f_tuple args) f_true in
-          let p = Ppr (Panything, p2, pargs, Panything) in
-          let e = FPattern.mkengine f p eng.e_hyps in
+          let p = Pat_Fun_Symbol
+                    (Sym_Form_Pr,Pat_Anything::p2::pargs::Pat_Anything::[]) in
+          let e = FPattern.mkengine f p eng.e_hyps none_fun in
           let e = { e with e_map = map } in
           let map = match FPattern.search_eng e with
             | None -> raise NoMatch
@@ -1043,7 +1046,7 @@ module RegexpBaseInstr = struct
 
        | Sif (e, st, sf), RIf (pcond, stn, sfn) -> begin
            let fcond = form_of_expr mhr e in
-           let e' = FPattern.mkengine fcond pcond eng.e_hyps in
+           let e' = FPattern.mkengine fcond pcond eng.e_hyps none_fun in
            let e' = { e' with e_map = eng.e_map } in
            let map = match FPattern.search_eng e' with
              | None -> raise NoMatch
@@ -1068,7 +1071,7 @@ module RegexpBaseInstr = struct
 
        | Swhile (e, s), RWhile (pcond,sn) -> begin
            let fcond = form_of_expr mhr e in
-           let e' = FPattern.mkengine fcond pcond eng.e_hyps in
+           let e' = FPattern.mkengine fcond pcond eng.e_hyps none_fun in
            let e' = { e' with e_map = eng.e_map } in
            let map = match FPattern.search_eng e' with
              | None -> raise NoMatch

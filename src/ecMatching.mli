@@ -200,5 +200,5 @@ module RegexpStmt : sig
   type subject = instr list
   type matches = subject Mstr.t
 
-  val search : regexp -> subject -> LDecl.hyps -> (tmatch Mid.t * matches) option
+  val search : regexp -> subject -> LDecl.hyps -> (map * matches) option
 end

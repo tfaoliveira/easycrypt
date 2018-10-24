@@ -9,11 +9,11 @@ open EcDecl
 open EcFMatching
 open EcCoreFol
 open FPattern
-
+open EcPath
 
 let default_name = "object matched to rewrite"
 let rewrite_name = "rewrited object"
-let default_name = EcIdent.create default_name
+let default_name = Name.create default_name
 let rewrite_name = EcIdent.create rewrite_name
 
 let process_match (x : pqsymbol) (tc : tcenv1)  =
@@ -35,16 +35,22 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
     | _ -> f',f' in
 
   let p = pattern_of_form binds f1 in
-  let p = Pnamed (p, default_name) in
-  let p = Psub p in
+  let p = Pat_Meta_Name (p, default_name) in
+  let p = Pat_Sub p in
 
   let f = tc1_goal tc in
 
   let print = function
-    | (Omem m,_) ->
+    | (Pat_Axiom (Axiom_Memory m),_) ->
        Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) m
-    | Oform f,_ ->
+    | (Pat_Axiom (Axiom_Form f)),_ ->
        Format.fprintf fmt "%a\n" (EcPrinting.pp_form ppe) f
+    | (Pat_Axiom (Axiom_Module (`Local id)),_) ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) id
+    | (Pat_Axiom (Axiom_Module (`Concrete (p1,_)) ),_) ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_opname ppe) p1
+    | (Pat_Axiom (Axiom_Mpath { m_top = `Local id }),_) ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) id
     | _,_ -> ()
   in
 
@@ -53,13 +59,15 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        print o
   in
 
-  let _ = match FPattern.search f p hyps with
+  let fun_none _ _ = None in
+
+  let _ = match FPattern.search f p hyps fun_none with
     | None ->
        Format.fprintf
          fmt "%a\n" (EcPrinting.pp_form ppe)
          (EcFol.f_local (EcIdent.create "there_is_no_map") EcTypes.tint)
     | Some map ->
-       let map = Mid.add rewrite_name (Oform (rewrite_term map f2), Mid.empty) map in
+       let map = Mid.add rewrite_name (Pat_Axiom (Axiom_Form (rewrite_term map f2)), Mid.empty) map in
        Mid.iter print_names map
   in
 

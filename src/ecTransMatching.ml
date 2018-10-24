@@ -58,19 +58,19 @@ let rec trans_block (anchors, pattern_parsed) =
 and trans_stmt = function
   | IM_Any      -> any_stmt
   | IM_Parens r -> trans_stmt r
-  | IM_Assign   -> Base (RAssign (Panything,Panything))
-  | IM_Sample   -> Base (RSample (Panything,Panything))
-  | IM_Call     -> Base (RCall (Panything,Panything,Panything))
+  | IM_Assign   -> Base (RAssign (Pat_Anything,Pat_Anything))
+  | IM_Sample   -> Base (RSample (Pat_Anything,Pat_Anything))
+  | IM_Call     -> Base (RCall (Pat_Anything,Pat_Anything,Pat_Anything))
 
   | IM_If (bt, bf)  ->
      let branch_true  = trans_block (odfl any_block bt) in
      let branch_false = trans_block (odfl any_block bf) in
-     Base (RIf (Panything,branch_true, branch_false))
+     Base (RIf (Pat_Anything,branch_true, branch_false))
 
   | IM_While b     ->
      let branch = odfl any_block b in
      let branch = trans_block branch in
-     Base (RWhile (Panything,branch))
+     Base (RWhile (Pat_Anything,branch))
 
   | IM_Named (s, r) ->
      let r = odfl IM_Any r in

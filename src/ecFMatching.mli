@@ -5,107 +5,154 @@ open EcPath
 open EcEnv
 
 (* ---------------------------------------------------------------------- *)
+exception Matches
 exception NoMatches
 exception CannotUnify
 exception NoNext
 
 
+module Name : sig
+  include module type of EcIdent
+  val compare : t -> t -> int
+end
+
+module MName = Mid
+
 (* -------------------------------------------------------------------------- *)
 
 module FPattern : sig
 
-  type name = ident
+  type meta_name = Name.t
 
-  (* invariant of pattern : if the form is not Pobject, then there is
+  type axiom =
+    | Axiom_Form     of form
+    | Axiom_Memory   of EcMemory.memory
+    | Axiom_MemEnv   of EcMemory.memenv
+    | Axiom_Prog_Var of prog_var
+    | Axiom_Local    of ident
+    | Axiom_ZInt     of EcBigInt.zint
+    | Axiom_Op       of EcPath.path * EcTypes.ty list
+    | Axiom_Module   of mpath_top
+    | Axiom_Mpath    of mpath
+    | Axiom_Instr    of EcModules.instr
+    | Axiom_Stmt     of EcModules.stmt
+    | Axiom_Lvalue   of EcModules.lvalue
+    | Axiom_Xpath    of EcPath.xpath
+    | Axiom_Hoarecmp of EcFol.hoarecmp
+
+  type fun_symbol =
+    (* from type form *)
+    | Sym_Form_If
+    | Sym_Form_App
+    | Sym_Form_Tuple
+    | Sym_Form_Proj         of int
+    | Sym_Form_Match
+    | Sym_Form_Quant        of quantif * bindings
+    | Sym_Form_Let          of lpattern
+    | Sym_Form_Pvar
+    | Sym_Form_Prog_var     of EcTypes.pvar_kind
+    | Sym_Form_Glob
+    | Sym_Form_Local
+    | Sym_Form_Hoare_F
+    | Sym_Form_Hoare_S
+    | Sym_Form_bd_Hoare_F
+    | Sym_Form_bd_Hoare_S
+    | Sym_Form_Equiv_F
+    | Sym_Form_Equiv_S
+    | Sym_Form_Eager_F
+    | Sym_Form_Pr
+    (* form type stmt*)
+    | Sym_Stmt_Seq
+    (* from type instr *)
+    | Sym_Instr_Assign
+    | Sym_Instr_Sample
+    | Sym_Instr_Call
+    | Sym_Instr_Call_Lv
+    | Sym_Instr_If
+    | Sym_Instr_While
+    | Sym_Instr_Assert
+    (* from type xpath *)
+    | Sym_Xpath
+    (* from type mpath *)
+    | Sym_Mpath
+    (* generalized *)
+    | Sym_Quant             of quantif * (ident list)
+
+  (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
   type pattern =
-    | Panything
-    | Pnamed     of pattern * name
-    | Psub       of pattern
-    | Por        of pattern list
+    | Pat_Anything
+    | Pat_Meta_Name  of pattern * meta_name
+    | Pat_Sub        of pattern
+    | Pat_Or         of pattern list
+    | Pat_Instance   of pattern option * meta_name * EcPath.path * pattern list
+    | Pat_Red_Strat  of pattern * reduction_strategy
 
-    | Ptype      of pattern * ty
+    | Pat_Fun_Symbol of fun_symbol * pattern list
+    | Pat_Axiom      of axiom
+    | Pat_Type       of pattern * ty
 
-    | Pobject    of tobject
+  and reduction_strategy = pattern -> axiom -> (pattern * axiom) option
 
-    | Pif        of pattern * pattern * pattern
-    | Papp       of pattern * pattern list
-    | Ptuple     of pattern list
-    | Pproj      of pattern * int
-    | Pmatch     of pattern * pattern list
-    | Pquant     of quantif * bindings * pattern
-    (* | Plet    of lpattern * pattern * pattern *)
-    | Ppvar      of pattern * pattern
-    | Pglob      of pattern * pattern
-    (* | FhoareF of hoareF (\* $hr / $hr *\) *)
-    (* | FhoareS of hoareS *)
-    (* | FbdHoareF of bdHoareF (\* $hr / $hr *\) *)
-    (* | FbdHoareS of bdHoareS *)
-    (* | FequivF of equivF (\* $left,$right / $left,$right *\) *)
-    (* | FequivS of equivS *)
-    (* | FeagerF of eagerF *)
-    | Ppr             of pattern * pattern * pattern * pattern
 
-    | Pprog_var       of prog_var
+  type environnement = {
+      env_hyps      : EcEnv.LDecl.hyps;
+      env_unienv    : EcUnify.unienv;
+      env_red_strat : reduction_strategy;
+      (* FIXME : ajouter ici les stratégies *)
+    }
 
-    | Pxpath          of xpath
-    (* mpath patterns *)
-    (*                   mpath_top, mpath  list *)
-    | Pmpath          of pattern * pattern list
+  type map = (pattern * binding Mid.t) MName.t
 
-   and tobject =
-    | Oform      of form
-    | Omem       of EcMemory.memory
-    (* | Ompath     of mpath *)
-    (* | Oxpath     of xpath *)
-    | Ompath_top of mpath_top
-
-  type tmatch = tobject * binding Mid.t
-
-  type map = tmatch Mid.t
-
-  type to_match = tmatch * pattern
 
   type pat_continuation =
     | ZTop
-    | Znamed     of tmatch * name * pat_continuation
+    | Znamed     of axiom * meta_name * pat_continuation
+
     (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
        - e_list : if not, the sorted list of next engines to try matching with
        - ne     : if no match at all, then take the nengine to go up
      *)
     | Zor        of pat_continuation * engine list * nengine
+
     (* Zand (before, after, cont) :
        - before : list of couples (form, pattern) that has already been checked
        - after  : list of couples (form, pattern) to check in the following
        - cont   : continuation if all the matches succeed
      *)
-    | Zand       of to_match list * to_match list * pat_continuation
+    | Zand       of (axiom * pattern) list
+                    * (axiom * pattern) list
+                    * pat_continuation
 
     | Zbinds     of pat_continuation * binding Mid.t
 
   and engine = {
-      e_head         : tmatch;
-      e_continuation : pat_continuation;
+      e_head         : axiom;
       e_pattern      : pattern;
+      e_binds        : binding Mid.t;
+      e_continuation : pat_continuation;
       e_map          : map;
-      e_hyps         : EcEnv.LDecl.hyps;
+      e_env          : environnement;
     }
 
   and nengine = {
       ne_continuation : pat_continuation;
       ne_map          : map;
       ne_binds        : binding Mid.t;
-      ne_hyps         : EcEnv.LDecl.hyps;
+      ne_env          : environnement;
     }
 
-  val search          : form -> pattern -> LDecl.hyps -> map option
+  val search          : form -> pattern -> LDecl.hyps -> reduction_strategy
+                        -> map option
 
   val search_eng      : engine -> nengine option
 
-  val mkengine        : form -> pattern -> LDecl.hyps -> engine
+  val mkengine        : form -> pattern -> LDecl.hyps -> reduction_strategy
+                        -> engine
 
   val pattern_of_form : bindings -> form -> pattern
 
-  val rewrite_term : map -> EcFol.form -> EcFol.form
+  val rewrite_term    : map -> EcFol.form -> EcFol.form
+
 end
