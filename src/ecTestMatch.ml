@@ -49,8 +49,10 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) id
     | (Pat_Axiom (Axiom_Module (`Concrete (p1,_)) ),_) ->
        Format.fprintf fmt "%a\n" (EcPrinting.pp_opname ppe) p1
-    | (Pat_Axiom (Axiom_Mpath { m_top = `Local id }),_) ->
-       Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) id
+    | (Pat_Axiom (Axiom_Mpath m),_) ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_funname ppe) (xpath m (psymbol "my_fun"))
+    | (Pat_Fun_Symbol (Sym_Quant _,_),_) ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) (EcIdent.create "Higher order")
     | _,_ -> ()
   in
 

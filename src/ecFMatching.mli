@@ -30,7 +30,6 @@ module FPattern : sig
     | Axiom_MemEnv   of EcMemory.memenv
     | Axiom_Prog_Var of prog_var
     | Axiom_Local    of ident
-    | Axiom_ZInt     of EcBigInt.zint
     | Axiom_Op       of EcPath.path * EcTypes.ty list
     | Axiom_Module   of mpath_top
     | Axiom_Mpath    of mpath
@@ -107,7 +106,7 @@ module FPattern : sig
 
   type pat_continuation =
     | ZTop
-    | Znamed     of axiom * meta_name * pat_continuation
+    | Znamed     of pattern * meta_name * pat_continuation
 
     (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
