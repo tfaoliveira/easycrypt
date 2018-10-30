@@ -68,8 +68,8 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        Format.fprintf
          fmt "%a\n" (EcPrinting.pp_form ppe)
          (EcFol.f_local (EcIdent.create "there_is_no_map") EcTypes.tint)
-    | Some map ->
-       let map = Mid.add rewrite_name (Pat_Axiom (Axiom_Form (rewrite_term map f2)), Mid.empty) map in
+    | Some (map,env) ->
+       let map = Mid.add rewrite_name (Pat_Axiom (Axiom_Form (rewrite_term map f2 env)), Mid.empty) map in
        Mid.iter print_names map
   in
 

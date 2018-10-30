@@ -29,7 +29,6 @@ module FPattern : sig
     | Axiom_Memory   of EcMemory.memory
     | Axiom_MemEnv   of EcMemory.memenv
     | Axiom_Prog_Var of prog_var
-    | Axiom_Local    of ident
     | Axiom_Op       of EcPath.path * EcTypes.ty list
     | Axiom_Module   of mpath_top
     | Axiom_Mpath    of mpath
@@ -42,16 +41,15 @@ module FPattern : sig
   type fun_symbol =
     (* from type form *)
     | Sym_Form_If
-    | Sym_Form_App
+    | Sym_Form_App          of ty
     | Sym_Form_Tuple
     | Sym_Form_Proj         of int
-    | Sym_Form_Match
+    | Sym_Form_Match        of ty
     | Sym_Form_Quant        of quantif * bindings
     | Sym_Form_Let          of lpattern
-    | Sym_Form_Pvar
+    | Sym_Form_Pvar         of ty
     | Sym_Form_Prog_var     of EcTypes.pvar_kind
     | Sym_Form_Glob
-    | Sym_Form_Local
     | Sym_Form_Hoare_F
     | Sym_Form_Hoare_S
     | Sym_Form_bd_Hoare_F
@@ -75,6 +73,7 @@ module FPattern : sig
     (* from type mpath *)
     | Sym_Mpath
     (* generalized *)
+    | Sym_App
     | Sym_Quant             of quantif * (ident list)
 
   (* invariant of pattern : if the form is not Pat_Axiom, then there is
@@ -143,7 +142,7 @@ module FPattern : sig
     }
 
   val search          : form -> pattern -> LDecl.hyps -> reduction_strategy
-                        -> map option
+                        -> (map * environnement) option
 
   val search_eng      : engine -> nengine option
 
@@ -152,6 +151,6 @@ module FPattern : sig
 
   val pattern_of_form : bindings -> form -> pattern
 
-  val rewrite_term    : map -> EcFol.form -> EcFol.form
+  val rewrite_term    : map -> EcFol.form -> environnement -> EcFol.form
 
 end
