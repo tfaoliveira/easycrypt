@@ -4,7 +4,6 @@ open EcParsetree
 open EcMatching
 open EcGenRegexp
 open EcFMatching
-open FPattern
 
 (* -------------------------------------------------------------------- *)
 let default_start_name = "$start"

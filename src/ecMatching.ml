@@ -20,7 +20,6 @@ open EcModules
 open EcFol
 open EcGenRegexp
 open EcFMatching
-open FPattern
 
 (* -------------------------------------------------------------------- *)
 module Zipper = struct
@@ -987,9 +986,9 @@ module RegexpBaseInstr = struct
            let map = match x1 with
            | LvVar (pv,ty) ->
               let fx1 = f_pvar pv ty mhr in
-              let e = FPattern.mkengine fx1 x2 eng.e_hyps none_fun in
+              let e = EcFMatching.mkengine fx1 x2 eng.e_hyps none_fun in
               let e = { e with e_map = eng.e_map } in
-              let map = match FPattern.search_eng e with
+              let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
                 | Some e -> e.ne_map in
               map
@@ -997,9 +996,9 @@ module RegexpBaseInstr = struct
            | LvTuple tuple ->
               let f x = f_pvar (fst x) (snd x) mhr in
               let fx1 = f_tuple (List.map f tuple) in
-              let e = FPattern.mkengine fx1 x2 eng.e_hyps none_fun in
+              let e = EcFMatching.mkengine fx1 x2 eng.e_hyps none_fun in
               let e = { e with e_map = eng.e_map } in
-              let map = match FPattern.search_eng e with
+              let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
                 | Some e -> e.ne_map in
               map
@@ -1010,9 +1009,9 @@ module RegexpBaseInstr = struct
            in
 
            let f1 = form_of_expr mhr e1 in
-           let e = FPattern.mkengine f1 p2 eng.e_hyps none_fun in
+           let e = EcFMatching.mkengine f1 p2 eng.e_hyps none_fun in
            let e = { e with e_map = map } in
-           let map = match FPattern.search_eng e with
+           let map = match EcFMatching.search_eng e with
              | None -> raise NoMatch
              | Some e -> e.ne_map in
            { eng with e_map = map }, []
@@ -1028,27 +1027,27 @@ module RegexpBaseInstr = struct
                let _fop = f_op op tys ty in
                raise NoMatch
           in
-          let e = FPattern.mkengine fx1 p1 eng.e_hyps none_fun in
+          let e = EcFMatching.mkengine fx1 p1 eng.e_hyps none_fun in
           let e = { e with e_map = eng.e_map } in
-          let map = match FPattern.search_eng e with
+          let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
             | Some e -> e.ne_map in
           let args = List.map (form_of_expr mhr) args in
           let f = f_pr mleft f (f_tuple args) f_true in
           let p = Pat_Fun_Symbol
                     (Sym_Form_Pr,Pat_Anything::p2::pargs::Pat_Anything::[]) in
-          let e = FPattern.mkengine f p eng.e_hyps none_fun in
+          let e = EcFMatching.mkengine f p eng.e_hyps none_fun in
           let e = { e with e_map = map } in
-          let map = match FPattern.search_eng e with
+          let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
             | Some e -> e.ne_map in
           { eng with e_map = map }, []
 
        | Sif (e, st, sf), RIf (pcond, stn, sfn) -> begin
            let fcond = form_of_expr mhr e in
-           let e' = FPattern.mkengine fcond pcond eng.e_hyps none_fun in
+           let e' = EcFMatching.mkengine fcond pcond eng.e_hyps none_fun in
            let e' = { e' with e_map = eng.e_map } in
-           let map = match FPattern.search_eng e' with
+           let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
              | Some e' -> e'.ne_map in
 
@@ -1071,9 +1070,9 @@ module RegexpBaseInstr = struct
 
        | Swhile (e, s), RWhile (pcond,sn) -> begin
            let fcond = form_of_expr mhr e in
-           let e' = FPattern.mkengine fcond pcond eng.e_hyps none_fun in
+           let e' = EcFMatching.mkengine fcond pcond eng.e_hyps none_fun in
            let e' = { e' with e_map = eng.e_map } in
-           let map = match FPattern.search_eng e' with
+           let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
              | Some e' -> e'.ne_map in
            let es = mkengine s.s_node eng.e_hyps in

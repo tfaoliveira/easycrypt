@@ -17,7 +17,6 @@ open EcUnify
 open EcEnv
 open EcGenRegexp
 open EcFMatching
-open FPattern
 
 (* -------------------------------------------------------------------- *)
 module Zipper : sig

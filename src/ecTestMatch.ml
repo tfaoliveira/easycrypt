@@ -51,9 +51,8 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        Format.fprintf fmt "%a\n" (EcPrinting.pp_opname ppe) p1
     | (Pat_Axiom (Axiom_Mpath m),_) ->
        Format.fprintf fmt "%a\n" (EcPrinting.pp_funname ppe) (xpath m (psymbol "my_fun"))
-    | (Pat_Fun_Symbol (Sym_Quant _,_),_) ->
-       Format.fprintf fmt "%a\n" (EcPrinting.pp_local ppe) (EcIdent.create "Higher order")
-    | _,_ -> ()
+    | p,_ ->
+       Format.fprintf fmt "%a\n" (EcPrinting.pp_pattern ppe) p
   in
 
   let print_names n o =

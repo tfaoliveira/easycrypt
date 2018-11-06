@@ -2838,3 +2838,357 @@ module ObjectInfo = struct
     if !ok = 0 then
       Format.fprintf fmt "%s@." "no such object in any category"
 end
+
+(* -------------------------------------------------------------------------- *)
+open EcFMatching
+
+let rec pp_pat_axiom ppe fmt a = match a with
+  | Axiom_Form f ->
+     pp_form ppe fmt f
+  | Axiom_Memory m ->
+     pp_mem ppe fmt m
+  | Axiom_MemEnv _ -> assert false
+  | Axiom_Prog_Var pv ->
+     pp_pv ppe fmt pv
+  | Axiom_Op (path,_) ->
+     pp_path fmt path
+  | Axiom_Module m ->
+     pp_topmod ppe fmt (EcPath.mpath m [])
+  | Axiom_Mpath m ->
+     pp_topmod ppe fmt m
+  | Axiom_Xpath x ->
+     pp_funname ppe fmt x
+  | Axiom_Instr i ->
+     pp_instr ppe fmt i
+  | Axiom_Stmt s ->
+     pp_stmt ppe fmt s
+  | Axiom_Lvalue lv ->
+     pp_lvalue ppe fmt lv
+  | Axiom_Hoarecmp h ->
+     Format.fprintf fmt "%s" (string_of_hrcmp h)
+
+and pp_pattern ppe fmt p = match p with
+  | Pat_Anything ->
+     Format.fprintf fmt "_"
+  | Pat_Meta_Name (Pat_Anything,name)
+    | Pat_Meta_Name (Pat_Type(Pat_Anything,_),name) ->
+     pp_form ppe fmt (f_local name tbool)
+  | Pat_Meta_Name (p,name) ->
+     Format.fprintf fmt "(%a as %a)"
+       (pp_pattern ppe) p
+       (pp_form ppe) (f_local name tbool)
+  | Pat_Sub _ -> assert false
+  | Pat_Or _ -> assert false
+  | Pat_Instance _ -> assert false
+  | Pat_Red_Strat _ -> assert false
+  | Pat_Axiom a -> pp_pat_axiom ppe fmt a
+  | Pat_Type (p,_) -> pp_pattern ppe fmt p
+  | Pat_Fun_Symbol (symbol,args) ->
+     match symbol,args with
+     | Sym_Form_If, [p1;p2;p3] ->
+        Format.fprintf fmt "if %a@ then@ %a@ else@ %a"
+          (pp_pattern ppe) p1
+          (pp_pattern ppe) p2
+          (pp_pattern ppe) p3
+     | Sym_Form_If, _ -> assert false
+
+     | Sym_Form_App _,op::args ->
+        let rec doit fmt args =
+          match args with
+          | [] -> pp_pattern ppe fmt op
+          | a :: args ->
+             Format.fprintf fmt "%a@ %a"
+               doit args (pp_pattern ppe) a
+        in
+        doit fmt args
+     | Sym_Form_App _,_ -> assert false
+
+     | Sym_Form_Tuple, t ->
+        let pp () =
+          match t with
+          | [] -> Format.fprintf fmt "()"
+          | p :: rest ->
+             let rec doit fmt tuple =
+               match tuple with
+               | [] -> pp_pattern ppe fmt p
+               | a :: tuple ->
+                  Format.fprintf fmt "%a,%a"
+                    doit tuple (pp_pattern ppe) a
+             in
+             Format.fprintf fmt "(%a)"
+               doit rest
+        in
+        pp ()
+
+     | Sym_Form_Proj i, [p] ->
+        Format.fprintf fmt "%a.`%i"
+          (pp_pattern ppe) p (i+1)
+     | Sym_Form_Proj _,_ -> assert false
+
+     | Sym_Form_Match _, _ ->
+        Format.fprintf fmt "no-syntax-yet"
+
+     | Sym_Form_Quant (q,binds), [p] ->
+        let fv = pat_fv p in
+        let (subppe, pp) = pp_bindings ppe ~fv:fv binds in
+        let pp fmt () =
+          match q with
+          | Llambda ->
+             Format.fprintf fmt "@[<hov 2>%s %t =>@ %a@]"
+               (string_of_quant q) pp
+               (pp_pattern subppe) p
+          | _ ->
+             Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
+               (string_of_quant q) pp
+               (pp_pattern subppe) p in
+        pp fmt ()
+     | Sym_Form_Quant _,_ -> assert false
+
+     | Sym_Form_Let _, _ ->
+        Format.fprintf fmt "no-syntax-yet"
+
+     | Sym_Form_Pvar _,[pv;pm] ->
+        let ppe = match pm with
+          | Pat_Axiom (Axiom_Memory m) ->
+             PPEnv.enter_by_memid ppe m
+          | _ -> ppe
+        in
+        Format.fprintf fmt "%a{%a}" (pp_pattern ppe) pv (pp_pattern ppe) pm
+     | Sym_Form_Pvar _,_ -> assert false
+
+     | Sym_Form_Prog_var _, [p] ->
+        pp_pattern ppe fmt p
+     | Sym_Form_Prog_var _,_ -> assert false
+
+     | Sym_Form_Glob, [pmod;pmem] ->
+        let ppe = match pmem with
+          | Pat_Axiom (Axiom_Memory m) ->
+             PPEnv.enter_by_memid ppe m
+          | _ -> ppe
+        in
+        Format.fprintf fmt "(glob %a){%a}"
+          (pp_pattern ppe) pmod
+          (pp_pattern ppe) pmem
+     | Sym_Form_Glob, _ -> assert false
+
+     | Sym_Form_Hoare_F, [po;pf;pr] ->
+        let ppe = match pf with
+          | Pat_Axiom(Axiom_Xpath f) ->
+             PPEnv.create_and_push_mem ppe ~active:true (EcFol.mhr, f)
+          | _ -> ppe in
+        Format.fprintf fmt "hoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]]"
+          (pp_pattern ppe) pf
+          (pp_pattern ppe) pr
+          (pp_pattern ppe) po
+     | Sym_Form_Hoare_F, _ -> assert false
+
+     | Sym_Form_Hoare_S, [pm;po;ps;pr] ->
+        let ppe = match pm with
+          | Pat_Axiom(Axiom_MemEnv m) ->
+             PPEnv.push_mem ppe ~active:true m
+          | _ -> ppe in
+        Format.fprintf fmt "hoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]]"
+          (pp_pattern ppe) ps
+          (pp_pattern ppe) pr
+          (pp_pattern ppe) po
+     | Sym_Form_Hoare_S, _ -> assert false
+
+     | Sym_Form_Equiv_F, [pr;fl;fr;po] ->
+      let ppe =
+        match fl,fr with
+        | Pat_Axiom(Axiom_Xpath fl),Pat_Axiom(Axiom_Xpath fr) ->
+           PPEnv.create_and_push_mems
+             ppe [(EcFol.mleft , fl); (EcFol.mright, fr)]
+        | _ -> ppe
+      in
+      Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
+        (pp_pattern ppe) fl
+        (pp_pattern ppe) fr
+        (pp_pattern ppe) pr
+        (pp_pattern ppe) po
+     | Sym_Form_Equiv_F, _ -> assert false
+
+     | Sym_Form_Equiv_S, [ml;mr;pr;sl;sr;po] ->
+      let ppe = match ml,mr with
+        | Pat_Axiom(Axiom_MemEnv ml),Pat_Axiom(Axiom_MemEnv mr) ->
+           PPEnv.push_mems ppe [ml; mr]
+        | _ -> ppe in
+      Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
+        (pp_pattern ppe) sl
+        (pp_pattern ppe) sr
+        (pp_pattern ppe) pr
+        (pp_pattern ppe) po
+     | Sym_Form_Equiv_S, _ -> assert false
+
+     | Sym_Form_Eager_F, [pr;sl;fl;fr;sr;po] ->
+      let ppe = match fl,fr with
+        | Pat_Axiom(Axiom_Xpath fl),Pat_Axiom(Axiom_Xpath fr) ->
+           PPEnv.create_and_push_mems
+             ppe [(EcFol.mleft , fl); (EcFol.mright, fr)]
+        | _ -> ppe
+      in
+      Format.fprintf fmt "eager[@[<hov 2>@ %a,@ %a ~@ %a,@ %a :@ @[%a ==>@ %a@]@]]"
+        (pp_pattern ppe) sl
+        (pp_pattern ppe) fl
+        (pp_pattern ppe) fr
+        (pp_pattern ppe) sr
+
+        (pp_pattern ppe) pr
+        (pp_pattern ppe) po
+     | Sym_Form_Eager_F, _ -> assert false
+
+     | Sym_Form_bd_Hoare_F, [pr;f;po;cmp;bd] ->
+        let ppe = match f with
+          | Pat_Axiom(Axiom_Xpath f) ->
+             PPEnv.create_and_push_mem ppe ~active:true (EcFol.mhr, f)
+          | _ -> ppe in
+      Format.fprintf fmt "phoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]] %a %a"
+        (pp_pattern ppe) f
+        (pp_pattern ppe) pr
+        (pp_pattern ppe) po
+        (pp_pattern ppe) cmp
+        (pp_pattern ppe) bd
+     | Sym_Form_bd_Hoare_F, _ -> assert false
+
+     | Sym_Form_bd_Hoare_S, [m;pr;s;po;cmp;bd] ->
+        let ppe = match m with
+          | Pat_Axiom(Axiom_MemEnv m) ->
+             PPEnv.push_mem ppe ~active:true m
+          | _ -> ppe in
+        Format.fprintf fmt "phoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]] %a %a"
+          (pp_pattern ppe) s
+          (pp_pattern ppe) pr
+          (pp_pattern ppe) po
+          (pp_pattern ppe) cmp
+          (pp_pattern ppe) bd
+     | Sym_Form_bd_Hoare_S, _ -> assert false
+
+     | Sym_Form_Pr, [mem;pfun;args;event] ->
+        let ppe = match pfun with
+          | Pat_Axiom(Axiom_Xpath f) ->
+             PPEnv.create_and_push_mem ppe ~active:true (EcFol.mhr, f)
+          | _ -> ppe in
+      Format.fprintf fmt "Pr[@[%a@[%t@] @@ %a :@ %a@]]"
+        (pp_pattern ppe) pfun
+        (match args with
+         | Pat_Axiom(Axiom_Form ({ f_node = Ftuple _} as f)) ->
+            (fun fmt -> pp_form ppe fmt f)
+         | Pat_Axiom(Axiom_Form f) when EcFol.f_equal f_tt f ->
+             (fun fmt -> pp_string fmt "()")
+         | _ ->
+             (fun fmt -> Format.fprintf fmt "(%a)" (pp_pattern ppe) args))
+        (pp_pattern ppe) mem
+        (pp_pattern ppe) event
+     | Sym_Form_Pr, _ -> assert false
+     | Sym_Stmt_Seq, lp ->
+        pp_list "@," (pp_pattern ppe) fmt lp
+
+     | Sym_Instr_Assign, [lv;e] ->
+        Format.fprintf fmt "@[<hov 2>%a <-@ @[%a@]@];"
+          (pp_pattern ppe) lv (pp_pattern ppe) e
+     | Sym_Instr_Assign, _ -> assert false
+
+     | Sym_Instr_Sample, [lv;e] ->
+        Format.fprintf fmt "@[<hov 2>%a <$@ @[%a@];"
+          (pp_pattern ppe) lv (pp_pattern ppe) e
+     | Sym_Instr_Sample, _ -> assert false
+
+     | Sym_Instr_Call, xp::args ->
+        Format.fprintf fmt "%a(@[%a@]);"
+          (pp_pattern ppe) xp
+          (pp_list ",@ " (pp_pattern ppe)) args
+     | Sym_Instr_Call, _ -> assert false
+
+     | Sym_Instr_Call_Lv, lv::xp::args ->
+        Format.fprintf fmt "@[<hov 2>%a <@@@ %a(@[%a@])@];"
+          (pp_pattern ppe) lv
+          (pp_pattern ppe) xp
+          (pp_list ",@ " (pp_pattern ppe)) args
+     | Sym_Instr_Call_Lv, _ -> assert false
+
+     | Sym_Instr_If, [e;s1;s2] ->
+        let pp_else ppe fmt s =
+          match s with
+          | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  -> ()
+          | Pat_Fun_Symbol(Sym_Stmt_Seq,[_]) ->
+             Format.fprintf fmt "@,else %a" (pp_pat_block ppe) s
+          | _   -> Format.fprintf fmt "@ else %a" (pp_pat_block ppe) s
+        in
+        Format.fprintf fmt "@[<v>if (@[%a@]) %a%a@]"
+          (pp_pat_block ppe) e (pp_pat_block ppe) s1 (pp_else ppe) s2
+     | Sym_Instr_If, _ -> assert false
+
+     | Sym_Instr_While, [e;_] ->
+        Format.fprintf fmt "while (%a) {...}"
+          (pp_pattern ppe) e
+     | Sym_Instr_While, _ -> assert false
+
+     | Sym_Instr_Assert, [e] ->
+        Format.fprintf fmt "assert %a;"
+          (pp_pattern ppe) e
+     | Sym_Instr_Assert, _ -> assert false
+
+     | Sym_Xpath, [mp;p] ->
+        Format.fprintf fmt "%a.%a"
+          (pp_pattern ppe) mp (pp_pattern ppe) p
+     | Sym_Xpath, _ -> assert false
+
+     | Sym_Mpath, m::args ->
+        let rec doit fmt tuple =
+          match tuple with
+          | [] -> pp_pattern ppe fmt p
+          | a :: tuple ->
+             Format.fprintf fmt "%a,%a"
+               doit tuple (pp_pattern ppe) a
+        in
+        Format.fprintf fmt "%a(%a)"
+          (pp_pattern ppe) m doit args
+     | Sym_Mpath, _ -> assert false
+
+     | Sym_App, op::args ->
+        let rec doit fmt tuple =
+          match tuple with
+          | [] -> pp_pattern ppe fmt p
+          | a :: tuple ->
+             Format.fprintf fmt "%a,%a"
+               doit tuple (pp_pattern ppe) a
+        in
+        Format.fprintf fmt "%a(%a)"
+          (pp_pattern ppe) op doit args
+     | Sym_App, _ -> assert false
+
+     | Sym_Quant (q,b::binds), [pat] ->
+        let subppe = PPEnv.add_locals ppe binds in
+        let rec doit fmt tuple =
+          match tuple with
+          | [] -> pp_mem ppe fmt b
+          | a :: tuple ->
+             Format.fprintf fmt "%a@ %a"
+               doit tuple (pp_mem ppe) a
+        in
+        let pp fmt = Format.fprintf fmt "%a" doit binds in
+        let pp fmt () =
+          match q with
+          | Llambda ->
+             Format.fprintf fmt "@[<hov 2>%s %t =>@ %a@]"
+               (string_of_quant q) pp
+               (pp_pattern subppe) pat
+          | _ ->
+             Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
+               (string_of_quant q) pp
+               (pp_pattern subppe) pat in
+        pp fmt ()
+
+     | Sym_Quant _, _ -> assert false
+
+
+and pp_pat_block ppe fmt p =
+  match p with
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  ->
+     Format.fprintf fmt "{}"
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,[i]) ->
+     Format.fprintf fmt "@;<1 2>%a" (pp_pattern ppe) i
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,l)   ->
+     Format.fprintf fmt "{@,  @[<v>%a@]@,}"
+       (pp_pattern ppe) (Pat_Fun_Symbol(Sym_Stmt_Seq,l))
+  | _ -> assert false

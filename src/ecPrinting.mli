@@ -50,12 +50,15 @@ val pp_topmod  : PPEnv.t -> mpath pp
 val pp_form    : PPEnv.t -> form pp
 val pp_type    : PPEnv.t -> ty pp
 val pp_tyname  : PPEnv.t -> path pp
-val pp_axname : PPEnv.t -> path pp
+val pp_axname  : PPEnv.t -> path pp
 
 val pp_mem      : PPEnv.t -> EcIdent.t pp
 val pp_tyvar    : PPEnv.t -> ident pp
 val pp_tyunivar : PPEnv.t -> EcUid.uid pp
 val pp_path     : path pp
+
+val pp_pat_axiom: PPEnv.t -> EcFMatching.axiom pp
+val pp_pattern  : PPEnv.t -> EcFMatching.pattern pp
 
 (* -------------------------------------------------------------------- *)
 val pp_typedecl : PPEnv.t -> (path * tydecl                ) pp
