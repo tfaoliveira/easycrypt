@@ -8,7 +8,6 @@ open EcLocation
 open EcDecl
 open EcFMatching
 open EcCoreFol
-open FPattern
 open EcPath
 
 let default_name = "object matched to rewrite"
@@ -62,7 +61,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
 
   let fun_none _ _ = None in
 
-  let _ = match FPattern.search f p hyps fun_none with
+  let _ = match EcFMatching.search f p hyps fun_none with
     | None ->
        Format.fprintf
          fmt "%a\n" (EcPrinting.pp_form ppe)
