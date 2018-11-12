@@ -69,7 +69,7 @@ type fun_symbol =
   | Sym_Mpath
   (* generalized *)
   | Sym_App
-  | Sym_Quant             of quantif * (ident list)
+  | Sym_Quant             of quantif * ((ident * (gty option)) list)
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
@@ -83,15 +83,17 @@ type pattern =
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
   | Pat_Axiom      of axiom
-  | Pat_Type       of pattern * ty
+  | Pat_Type       of pattern * gty
 
 and reduction_strategy = pattern -> axiom -> (pattern * axiom) option
 
 
 type environnement = {
-    env_hyps      : EcEnv.LDecl.hyps;
-    env_unienv    : EcUnify.unienv;
-    env_red_strat : reduction_strategy;
+    env_hyps           : EcEnv.LDecl.hyps;
+    env_unienv         : EcUnify.unienv;
+    env_red_strat      : reduction_strategy;
+    env_red_info       : EcReduction.reduction_info;
+    env_restore_unienv : EcUnify.unienv option;
     (* FIXME : ajouter ici les stratégies *)
   }
 
@@ -136,13 +138,18 @@ and nengine = {
     ne_env          : environnement;
   }
 
-val search          : form -> pattern -> LDecl.hyps -> reduction_strategy
-                      -> (map * environnement) option
+val search          : form -> pattern -> LDecl.hyps -> reduction_strategy ->
+                      EcReduction.reduction_info ->
+                      (map * environnement) option
 
 val search_eng      : engine -> nengine option
 
-val mkengine        : form -> pattern -> LDecl.hyps -> reduction_strategy
-                      -> engine
+val red_make_strat_from_info : EcReduction.reduction_info -> LDecl.hyps ->
+                               pattern -> axiom -> (pattern * axiom) option
+
+val mkengine        : form -> pattern -> LDecl.hyps -> reduction_strategy ->
+                      EcReduction.reduction_info ->
+                      engine
 
 val pattern_of_form : bindings -> form -> pattern
 

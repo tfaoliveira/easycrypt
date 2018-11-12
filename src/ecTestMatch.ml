@@ -59,9 +59,11 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        print o
   in
 
-  let fun_none _ _ = None in
+  let red_info = EcReduction.full_red in
 
-  let _ = match EcFMatching.search f p hyps fun_none with
+  let fun_none p f = EcFMatching.red_make_strat_from_info red_info hyps p f in
+
+  let _ = match EcFMatching.search f p hyps fun_none EcReduction.full_red with
     | None ->
        Format.fprintf
          fmt "%a\n" (EcPrinting.pp_form ppe)

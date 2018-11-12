@@ -64,8 +64,9 @@ val h_red     : reduction_info -> LDecl.hyps -> form -> form
 
 val simplify : reduction_info -> LDecl.hyps -> form -> form
 
-val is_conv    : LDecl.hyps -> form -> form -> bool
-val check_conv : LDecl.hyps -> form -> form -> unit
+val is_conv_param : reduction_info -> LDecl.hyps -> form -> form -> bool
+val is_conv       : LDecl.hyps -> form -> form -> bool
+val check_conv    : LDecl.hyps -> form -> form -> unit
 
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]

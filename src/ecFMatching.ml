@@ -72,7 +72,7 @@ type fun_symbol =
   | Sym_Mpath
   (* generalized *)
   | Sym_App
-  | Sym_Quant             of quantif * (ident list)
+  | Sym_Quant             of quantif * ((ident * (gty option)) list)
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
@@ -86,15 +86,17 @@ type pattern =
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
   | Pat_Axiom      of axiom
-  | Pat_Type       of pattern * ty
+  | Pat_Type       of pattern * gty
 
 and reduction_strategy = pattern -> axiom -> (pattern * axiom) option
 
 
 type environnement = {
-    env_hyps      : EcEnv.LDecl.hyps;
-    env_unienv    : EcUnify.unienv;
-    env_red_strat : reduction_strategy;
+    env_hyps           : EcEnv.LDecl.hyps;
+    env_unienv         : EcUnify.unienv;
+    env_red_strat      : reduction_strategy;
+    env_red_info       : EcReduction.reduction_info;
+    env_restore_unienv : EcUnify.unienv option;
     (* FIXME : ajouter ici les stratégies *)
   }
 
@@ -141,17 +143,26 @@ and nengine = {
 
 (* val mkengine    : base -> engine *)
 let mkengine (f : form) (p : pattern) (h : LDecl.hyps)
-      (strategy : reduction_strategy) : engine = {
+      (strategy : reduction_strategy) (red_info : EcReduction.reduction_info)
+    : engine = {
     e_head         = Axiom_Form f;
     e_binds        = Mid.empty ;
     e_continuation = ZTop ;
     e_map          = MName.empty ;
     e_pattern      = p ;
     e_env          = {
-        env_hyps      = h;
-        env_unienv    = EcUnify.UniEnv.create None;
-        env_red_strat = strategy;
+        env_hyps           = h;
+        env_unienv         = EcUnify.UniEnv.create None;
+        env_red_strat      = strategy;
+        env_red_info       = red_info;
+        env_restore_unienv = None;
       } ;
+  }
+
+let restore_environnement (env : environnement) : environnement =
+  { env with
+    env_unienv = odfl env.env_unienv env.env_restore_unienv;
+    env_restore_unienv = None;
   }
 
 type ismatch =
@@ -190,10 +201,8 @@ let pat_fv p =
        | _ -> map
   in aux Mid.empty p
 
-let eq_form (f1 : form) (f2 : form) (_env : environnement) =
-  match f1.f_node, f2.f_node with
-  | Fint i1, Fint i2 -> EcBigInt.equal i1 i2
-  | _ -> f_equal f1 f2
+let eq_form (f1 : form) (f2 : form) (env : environnement) =
+  EcReduction.is_conv_param env.env_red_info env.env_hyps f1 f2
 
 let eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environnement) =
   EcMemory.mem_equal m1 m2
@@ -201,10 +210,8 @@ let eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environnemen
 let eq_memenv (m1 : EcMemory.memenv) (m2 : EcMemory.memenv) (_env : environnement) =
   EcMemory.me_equal m1 m2
 
-let eq_prog_var (x1 : prog_var) (x2 : prog_var) (_env : environnement) =
-  pv_equal x1 x2
-
-let eq_local i1 i2 _ = id_equal i1 i2
+let eq_prog_var (x1 : prog_var) (x2 : prog_var) (env : environnement) =
+  EcReduction.EqTest.for_pv (EcEnv.LDecl.toenv env.env_hyps) x1 x2
 
 let eq_op
       ((op1, lty1) : EcPath.path * EcTypes.ty list)
@@ -215,65 +222,78 @@ let eq_op
 let eq_module (m1 : mpath_top) (m2 : mpath_top) (_env : environnement) =
   EcPath.mt_equal m1 m2
 
-let eq_type (ty1 : ty) (ty2 : ty) (_env : environnement) =
-  ty_equal ty1 ty2
-
 let eq_name (n1 : meta_name) (n2 : meta_name) =
   0 = id_compare n1 n2
 
-let eq_instr (i1 : EcModules.instr) (i2 : EcModules.instr) (_env : environnement) =
-  EcModules.i_equal i1 i2
+let eq_instr (i1 : EcModules.instr) (i2 : EcModules.instr) (env : environnement) =
+  EcReduction.EqTest.for_instr (EcEnv.LDecl.toenv env.env_hyps) i1 i2
 
-let eq_stmt (s1 : EcModules.stmt) (s2 : EcModules.stmt) (_env : environnement) =
-  EcModules.s_equal s1 s2
+let eq_stmt (s1 : EcModules.stmt) (s2 : EcModules.stmt) (env : environnement) =
+  EcReduction.EqTest.for_stmt (EcEnv.LDecl.toenv env.env_hyps) s1 s2
 
 let eq_lvalue (lv1 : lvalue) (lv2 :lvalue) (_env : environnement) : bool =
   lv_equal lv1 lv2
 
-let eq_mpath (m1 : mpath) (m2 : mpath) (_env : environnement) : bool =
-  m_equal m1 m2
+let eq_mpath (m1 : mpath) (m2 : mpath) (env : environnement) : bool =
+  EcReduction.EqTest.for_mp (EcEnv.LDecl.toenv env.env_hyps) m1 m2
 
-let eq_xpath (x1 : xpath) (x2 : xpath) (_env : environnement) : bool =
-  x_equal x1 x2
+let eq_xpath (x1 : xpath) (x2 : xpath) (env : environnement) : bool =
+  EcReduction.EqTest.for_xp (EcEnv.LDecl.toenv env.env_hyps) x1 x2
 
 let eq_hoarecmp (c1 : hoarecmp) (c2 : hoarecmp) (_ : environnement) : bool =
   c1 = c2
 
-let eq_type (ty1 : ty) (ty2 : ty) (env : environnement) : bool =
+let eq_type (ty1 : ty) (ty2 : ty) (env : environnement) : bool * environnement =
+  let unienv = EcUnify.UniEnv.copy env.env_unienv in
   try
     EcUnify.unify (EcEnv.LDecl.toenv env.env_hyps) env.env_unienv ty1 ty2;
-    true
+    true, { env with env_restore_unienv = Some (odfl unienv env.env_restore_unienv); }
   with
-  | _ -> false
+  | _ -> false, { env with env_restore_unienv = Some (odfl unienv env.env_restore_unienv); }
+
+let eq_gty (gty1 : gty) (gty2 : gty) (env : environnement) : bool * environnement =
+  match gty1, gty2 with
+  | GTty ty1, GTty ty2 -> eq_type ty1 ty2 env
+  | _,_ -> EcCoreFol.gty_equal gty1 gty2, env
 
 let eq_axiom (o1 : axiom) (o2 : axiom) (env : environnement) : bool =
   let aux o1 o2 =
     match o1,o2 with
     | Axiom_Form f1, Axiom_Form f2 ->
        eq_form f1 f2 env
+
     | Axiom_Memory m1, Axiom_Memory m2 ->
        eq_memory m1 m2 env
+
     | Axiom_MemEnv m1, Axiom_MemEnv m2 ->
        eq_memenv m1 m2 env
+
     | Axiom_Prog_Var x1, Axiom_Prog_Var x2 ->
        eq_prog_var x1 x2 env
+
     | Axiom_Op (op1,lty1), Axiom_Op (op2,lty2) ->
        eq_op (op1,lty1) (op2,lty2) env
+
     | Axiom_Module m1, Axiom_Module m2 ->
        eq_module m1 m2 env
+
     | Axiom_Mpath m1, Axiom_Mpath m2 ->
        eq_mpath m1 m2 env
+
     | Axiom_Instr i1, Axiom_Instr i2 ->
        eq_instr i1 i2 env
+
     | Axiom_Stmt s1, Axiom_Stmt s2 ->
        eq_stmt s1 s2 env
+
     | Axiom_Lvalue lv1, Axiom_Lvalue lv2 ->
        eq_lvalue lv1 lv2 env
+
     | Axiom_Xpath x1, Axiom_Xpath x2 ->
        eq_xpath x1 x2 env
+
     | Axiom_Hoarecmp c1, Axiom_Hoarecmp c2 ->
        eq_hoarecmp c1 c2 env
-
 
     | _,_ -> false
   in
@@ -353,37 +373,58 @@ let n_engine (a : axiom) (e_pattern : pattern) (n : nengine) =
 let sub_engine e p b f =
   { e with e_head = f; e_pattern = Pat_Sub p; e_binds = b }
 
+let fold_left_list (f : 'a -> 'b -> 'b * 'a) (a : 'a) (l : 'b list) : 'a * 'b list =
+  let rec aux a acc l = match l with
+    | [] -> a,List.rev acc
+    | x::rest -> let x,a = f a x in aux a (x::acc) rest in
+  aux a [] l
 
-let p_app_simpl p subst env =
-  let rec aux = function
-    | Pat_Anything -> Pat_Anything
-    | Pat_Meta_Name (p1,name) -> begin
-        match MName.find_opt name subst with
-        | None -> Pat_Meta_Name (p1,name)
-        | Some (Pat_Type (p2,ty1), GTty ty2) when eq_type ty1 ty2 env -> Pat_Type (p2,ty1)
-        | Some (Pat_Type _, GTty _) -> assert false
-        | Some (p,GTty ty) -> Pat_Type (p,ty)
-        | Some (p,GTmem _) | Some (p, GTmodty _) -> p
-      end
-    | Pat_Red_Strat (p,f) -> Pat_Red_Strat (aux p,f)
-    | Pat_Sub p1 -> Pat_Sub (aux p1)
-    | Pat_Or lp -> Pat_Or (List.map aux lp)
-    | Pat_Instance (ret,name,fun_name,args) ->
-       Pat_Instance (omap aux ret,name,fun_name,List.map aux args)
-    | Pat_Fun_Symbol (symbol,lp) -> begin
-        match symbol with
-        | Sym_Form_Quant (q,binds) when MName.set_disjoint subst (MName.of_list binds) ->
-           Pat_Fun_Symbol (Sym_Form_Quant (q,binds), List.map aux lp)
-        | Sym_Form_Quant _ ->
-           raise (Invalid_argument
-                    "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
-        | _ ->
-           Pat_Fun_Symbol (symbol, List.map aux lp)
-      end
-    | Pat_Axiom axiom ->
-       Pat_Axiom axiom
-    | Pat_Type (p1,ty) -> Pat_Type (aux p1, ty)
-  in aux p
+(* let p_app_simpl p subst env : pattern * environnement =
+ *   let rec aux env = function
+ *     | Pat_Anything -> Pat_Anything, env
+ *     | Pat_Meta_Name (p1,name) -> begin
+ *         match MName.find_opt name subst with
+ *         | None -> Pat_Meta_Name (p1,name), env
+ *         | Some (Pat_Type (p2,ty1), GTty ty2) ->
+ *            let unienv = EcUnify.UniEnv.copy env.env_unienv in
+ *            if eq_type ty1 ty2 env
+ *            then
+ *              let env =
+ *                if (unienv = env.env_unienv)
+ *                then env
+ *                else { env with
+ *                       env_restore_unienv =
+ *                         Some (odfl unienv env.env_restore_unienv); } in
+ *              Pat_Type (p2,ty1), env
+ *            else assert false
+ *         | Some (p,GTty ty) -> Pat_Type (p,ty), env
+ *         | Some (p,GTmem _) | Some (p, GTmodty _) -> p, env
+ *       end
+ *     | Pat_Red_Strat (p,f) ->
+ *        let (p,env) = aux env p in
+ *        Pat_Red_Strat (p,f), env
+ *     | Pat_Sub p1 -> let p1,env = aux env p1 in Pat_Sub p1, env
+ *     | Pat_Or lp ->
+ *        let env,lp = fold_left_list aux env lp in
+ *        Pat_Or lp, env
+ *     | Pat_Instance (ret,name,fun_name,args) ->
+ *        assert false
+ *     | Pat_Fun_Symbol (symbol,lp) -> begin
+ *         match symbol with
+ *         | Sym_Form_Quant (q,binds) when MName.set_disjoint subst (MName.of_list binds) ->
+ *            let env,lp = fold_left_list aux env lp in
+ *            Pat_Fun_Symbol (Sym_Form_Quant (q,binds), lp), env
+ *         | Sym_Form_Quant _ ->
+ *            raise (Invalid_argument
+ *                     "in p_app_simpl : invalid argument name, it has been found in a sub quantif.")
+ *         | _ ->
+ *            let env,lp = fold_left_list aux env lp in
+ *            Pat_Fun_Symbol (symbol, lp), env
+ *       end
+ *     | Pat_Axiom axiom ->
+ *        Pat_Axiom axiom, env
+ *     | Pat_Type (p1,ty) -> let p1,env = aux env p1 in Pat_Type (p1, ty), env
+ *   in aux env p *)
 
 let omap_list (default : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   let rec aux acc there_is_Some = function
@@ -396,28 +437,59 @@ let omap_list (default : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list
 
 let olist f (l : 'a list) = omap_list (fun x -> x) f l
 
+let ofold_list default (f : 'env -> 'p -> 'a option * 'env) (e : 'env) (lp : 'p list) =
+  let rec aux e acc there_is_Some = function
+    | [] -> if there_is_Some then Some (List.rev acc),e else None,e
+    | x::rest ->
+       match f e x with
+       | None,e -> aux e ((default x)::acc) there_is_Some rest
+       | Some x,e -> aux e (x::acc) true rest
+  in aux e [] false lp
+
+let myomap f (o,e) = match o with
+  | None -> None,e
+  | Some x -> Some (f x),e
+
+(* -------------------------------------------------------------------------- *)
+let red_make_strat_from_info (i : EcReduction.reduction_info)
+      (hyps : LDecl.hyps) (p : pattern) (a : axiom) : (pattern * axiom) option =
+  match a with
+  | Axiom_Form f ->
+     omap (fun f -> (p,Axiom_Form f)) (EcReduction.h_red_opt i hyps f)
+  | _ -> None
+
+(* -------------------------------------------------------------------------- *)
 let replace_id id subst env =
   match Mid.find_opt id subst with
-  | None -> None
-  | Some (Pat_Type (p,ty1),GTty ty2) when eq_type ty2 ty1 env -> Some (Pat_Type (p,ty1))
-  | Some (Pat_Type _, GTty _) -> assert false
-  | Some (_,GTty _) -> None
-  | Some (p,GTmem _) | Some (p, GTmodty _) -> Some p
+  | None -> None, env
+  | Some (Pat_Type (p,GTty ty1),GTty ty2) ->
+     let eq_ty,env = eq_type ty2 ty1 env in
+     if eq_ty
+     then Some (Pat_Type (p,GTty ty1)), env
+     else assert false
+  | Some (_,GTty _) -> None, env
+  | Some (p,GTmem _) | Some (p, GTmodty _) -> Some p, env
 
 let p_app_simpl_opt p subst env =
-  let rec aux = function
-    | Pat_Anything -> None
+  let id x = x in
+  let rec aux env = function
+    | Pat_Anything -> None,env
     | Pat_Meta_Name (_,name) -> replace_id name subst env
-    | Pat_Sub p1 -> omap (fun x -> Pat_Sub x) (aux p1)
-    | Pat_Or lp -> omap (fun x -> Pat_Or x) (olist aux lp)
+    | Pat_Sub p1 ->
+       let oa, env = aux env p1 in
+       omap (fun x -> Pat_Sub x) oa, env
+    | Pat_Or lp ->
+       myomap (fun x -> Pat_Or x) (ofold_list id aux env lp)
     | Pat_Fun_Symbol (symbol,lp) -> begin
         match symbol with
         | Sym_Form_Quant (q,binds)
              when Mid.set_disjoint subst (Mid.of_list binds) ->
-           omap (fun x -> Pat_Fun_Symbol (Sym_Form_Quant (q,binds), x)) (olist aux lp)
+           myomap (fun (x) -> Pat_Fun_Symbol (Sym_Form_Quant (q,binds), x))
+             (ofold_list id aux env lp)
         | Sym_Quant (q,binds)
-             when Mid.set_disjoint subst (Sid.of_list binds) ->
-           omap (fun x -> Pat_Fun_Symbol (Sym_Quant (q,binds), x)) (olist aux lp)
+             when Mid.set_disjoint subst (Mid.of_list binds) ->
+           myomap (fun (x) -> Pat_Fun_Symbol (Sym_Quant (q,binds), x))
+             (ofold_list id aux env lp)
         | Sym_Form_Quant _ ->
            raise (Invalid_argument
                     "in p_app_simpl_opt : Sym_Form_Quant : invalid argument name, it has been found in a sub quantif.")
@@ -425,16 +497,18 @@ let p_app_simpl_opt p subst env =
            raise (Invalid_argument
                     "in p_app_simpl_opt : Sym_Quant : invalid argument name, it has been found in a sub quantif.")
         | _ ->
-           omap (fun x -> Pat_Fun_Symbol (symbol, x)) (olist aux lp)
+           myomap (fun (x) -> Pat_Fun_Symbol (symbol, x))
+             (ofold_list id aux env lp)
       end
-    | Pat_Axiom axiom -> (* FIXME *) Some (Pat_Axiom axiom)
-    | Pat_Type (p1,ty) -> omap (fun p -> Pat_Type (p,ty)) (aux p1)
-    | Pat_Red_Strat (p,f) -> omap (fun p -> Pat_Red_Strat (p,f)) (aux p)
+    | Pat_Axiom axiom -> (* FIXME *) Some (Pat_Axiom axiom), env
+    | Pat_Type (p1,ty) -> myomap (fun (p) -> Pat_Type (p,ty)) (aux env p1)
+    | Pat_Red_Strat (p,f) -> myomap (fun (p) -> Pat_Red_Strat (p,f)) (aux env p)
     | Pat_Instance (opt_lv, name, fun_name, args) -> begin
         match replace_id name subst env with
-        | None ->
-           omap (fun x -> Pat_Instance (opt_lv, name, fun_name, x)) (olist aux args)
-        | Some p -> Some p
+        | None,env ->
+           myomap (fun (x) -> Pat_Instance (opt_lv, name, fun_name, x))
+             (ofold_list id aux env args)
+        | Some p,env -> Some p,env
       end
   (* | Panything -> None
    * | Pnamed (_,id2) -> replace_id id2 subst
@@ -493,8 +567,7 @@ let p_app_simpl_opt p subst env =
    *      | Some (op::args) -> Some (Pmpath (op,args))
    *      | _ -> assert false
    *    in p *)
-  in aux p
-
+  in aux env p
 
 let obeta_reduce env = function
   | Pat_Fun_Symbol (Sym_Form_App ty,
@@ -541,17 +614,20 @@ let obeta_reduce env = function
        | _ -> Pat_Fun_Symbol (Sym_Quant (Llambda, bs2), [p]) in
      let subst = Mid.empty in
      let subst =
-       try List.fold_left2 (fun a b c -> Mid.add_new Not_found b c a) subst bs1 pargs1
+       try List.fold_left2 (fun a b c -> Mid.add_new Not_found b c a)
+             subst (List.map fst bs1) pargs1
        with
        | Not_found -> raise (Invalid_argument "beta_reduce : two bindings have got the same name.")
      in
      let subst = Mid.map (fun x -> x,GTmem (EcMemory.memtype (EcMemory.abstract mhr))) subst in
      p_app_simpl_opt p subst env
 
-  | _ -> None
+  | _ -> None, env
 
 
-let beta_reduce env p = odfl p (obeta_reduce env p)
+let beta_reduce env p = match obeta_reduce env p with
+  | None, env -> p, env
+  | Some p, env -> p, env
 
 let rec mpath_to_pattern (m : mpath) =
   Pat_Fun_Symbol (Sym_Mpath, (Pat_Axiom (Axiom_Module m.m_top))
@@ -720,7 +796,8 @@ let rec expr_of_form f : expr = match f.f_node with
     | FeagerF _
     | Fpr _ -> assert false
 
-let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
+let rec rewrite_pattern_opt (map: map) (p : pattern) (env : environnement) =
+  let id x = x in
   let smap = Sid.of_list (Mid.keys map) in
   let get_form = function
     | Pat_Axiom (Axiom_Form f) -> f
@@ -752,44 +829,51 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
   let pattern_mpath m = Pat_Axiom (Axiom_Mpath m) in
   let pattern_instr i = Pat_Axiom (Axiom_Instr i) in
   let pattern_prog_var pv = Pat_Axiom (Axiom_Prog_Var pv) in
-  let rec aux_f f : pattern option = aux (Pat_Axiom (Axiom_Form f))
-  and aux_a a : pattern option = aux (Pat_Axiom a)
-  and aux (p : pattern) : pattern option =
+  let rec aux_f e f = aux e (Pat_Axiom (Axiom_Form f))
+  and aux_a e a = aux e (Pat_Axiom a)
+  and aux env (p : pattern) : pattern option * environnement =
     match p with
-    | Pat_Anything -> None
+    | Pat_Anything -> None,env
     | Pat_Meta_Name (_,name) -> begin
         match MName.find_opt name map with
-        | None -> None
-        | Some (p,_) -> Some p
+        | None -> None,env
+        | Some (p,_) -> Some p,env
       end
-    | Pat_Sub _ -> None
-    | Pat_Or _ -> None
-    | Pat_Instance _ -> None
-    | Pat_Red_Strat (p,_) -> aux p
-    | Pat_Type (p,ty) -> begin
-        match aux p with
-        | None -> None
-        | Some (Pat_Axiom (Axiom_Form f)) as op ->
-           if eq_type ty f.f_ty e then op else None
-        | _ -> None
+    | Pat_Sub _ -> None,env
+    | Pat_Or _ -> None,env
+    | Pat_Instance _ -> None,env
+    | Pat_Red_Strat (p,_) -> aux env p
+    | Pat_Type (p,GTty ty) -> begin
+        match aux env p with
+        | None,env -> None, env
+        | Some (Pat_Axiom (Axiom_Form f) as op),e ->
+           let eq_ty,env = eq_type ty f.f_ty e in
+           if eq_ty
+           then
+             Some op,env
+           else None,env
+        | _ -> None,env
       end
+    | Pat_Type (_p,_) -> assert false
     | Pat_Axiom a -> begin
         match a with
         | Axiom_Form f -> begin
             match f.f_node with
             | Fquant (quant,bs,f')
                  when Sid.disjoint (Sid.of_list (List.map fst bs)) smap ->
-               omap (fun f -> Pat_Axiom (Axiom_Form (f_quant quant bs (get_form f)))) (aux_f f')
+               let oa,e = aux_f env f' in
+               omap (fun f -> Pat_Axiom (Axiom_Form (f_quant quant bs (get_form f))))
+                 oa,e
             | Fquant _ ->
                raise (Invalid_argument "in rewrite_term, a quantifier appeares in the matching map")
             | Fif (f1,f2,f3) ->
-               omap (function
+               myomap (function
                    | f1::f2::f3::[] ->
                       Pat_Axiom (Axiom_Form (f_if (get_form f1) (get_form f2) (get_form f3)))
                    | _ -> assert false)
-                 (omap_list pattern_form aux_f [f1;f2;f3])
+                 (ofold_list id aux env (List.map pattern_form [f1;f2;f3]))
             | Fmatch (fop,fargs,ty) ->
-               omap (function
+               myomap (function
                    | fop::fargs ->
                       Pat_Axiom
                         (Axiom_Form
@@ -798,7 +882,7 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                                  (get_form fop,List.map get_form fargs,ty))
                               ty))
                    | _ -> assert false)
-                 (omap_list pattern_form aux_f (fop::fargs))
+                 (ofold_list id aux env (List.map pattern_form(fop::fargs)))
             | Flet (lv,f1,f2) -> begin
                 match lv with
                 | LSymbol (id,_) when Mid.mem id map ->
@@ -806,73 +890,76 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                 | LTuple l when not(Sid.disjoint smap (Sid.of_list (List.map fst l))) ->
                    raise (Invalid_argument "in rewrite_term, one of the let-lvalues appear in the matching map")
                 | _ ->
-                   omap (function
+                   myomap (function
                        | f1::f2::[] ->
                           Pat_Axiom
                             (Axiom_Form
                                (f_let lv (get_form f1) (get_form f2)))
                        | _ -> assert false)
-                     (omap_list pattern_form aux_f [f1;f2])
+                     (ofold_list id aux env (List.map pattern_form [f1;f2]))
               end
-            | Fint _ -> None
+            | Fint _ -> None, env
             | Flocal id -> begin
                 match Mid.find_opt id map with
-                | None -> None
+                | None -> None, env
                 | Some (Pat_Axiom (Axiom_Form f'), _) -> begin
-                    match aux_f f' with
-                    | None -> Some (Pat_Axiom(Axiom_Form f'))
-                    | Some a -> Some a
+                    match aux_f env f' with
+                    | None, env -> Some (Pat_Axiom(Axiom_Form f')),env
+                    | Some a, env -> Some a, env
                   end
-                | Some (p,_) -> aux p
+                | Some (p,_) -> aux env p
               end
             | Fpvar (pvar,mem) ->
-               omap (function
+               myomap (function
                    | (Pat_Axiom(Axiom_Prog_Var pvar))::(Pat_Axiom(Axiom_Memory mem))::[] ->
                       Pat_Axiom(Axiom_Form (f_pvar pvar f.f_ty mem))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Prog_Var pvar;Axiom_Memory mem])
+                 (ofold_list pattern_axiom aux_a env [Axiom_Prog_Var pvar;Axiom_Memory mem])
             | Fglob (mpath,mem) ->
-               omap (function
+               myomap (function
                    | (Pat_Axiom(Axiom_Mpath mpath))::(Pat_Axiom(Axiom_Memory mem))::[] ->
                       Pat_Axiom(Axiom_Form (f_glob mpath mem))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Mpath mpath;Axiom_Memory mem])
-            | Fop _ -> None
+                 (ofold_list pattern_axiom aux_a env [Axiom_Mpath mpath;Axiom_Memory mem])
+            | Fop _ -> None, env
             | Fapp (f1,fargs) ->
-               omap (function
+               myomap (function
                    | fop::fargs ->
                       Pat_Axiom(Axiom_Form (f_app (get_form fop) (List.map get_form fargs) f.f_ty))
                    | _ -> assert false)
-                 (omap_list pattern_form aux_f (f1::fargs))
+                 (ofold_list pattern_form aux_f env (f1::fargs))
             | Ftuple t ->
-               omap (fun l -> Pat_Axiom(Axiom_Form (f_tuple (List.map get_form l))))
-                 (omap_list pattern_form aux_f t)
+               myomap (fun (l) -> Pat_Axiom(Axiom_Form (f_tuple (List.map get_form l))))
+                 (ofold_list pattern_form aux_f env t)
             | Fproj (f1,i) ->
-               omap (fun fi -> Pat_Axiom(Axiom_Form (f_proj (get_form fi) i f.f_ty))) (aux_f f1)
+               myomap (fun (fi) -> Pat_Axiom(Axiom_Form (f_proj (get_form fi) i f.f_ty)))
+                 (aux_f env f1)
             | FhoareF h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Xpath f);
                       Pat_Axiom(Axiom_Form po)] ->
                       Pat_Axiom(Axiom_Form (f_hoareF pr f po))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Form h.hf_po;
-                                                 Axiom_Xpath h.hf_f;
-                                                 Axiom_Form h.hf_po])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_Form h.hf_po;
+                     Axiom_Xpath h.hf_f;
+                     Axiom_Form h.hf_po])
             | FhoareS h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_MemEnv m);
                       Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Stmt s);
                       Pat_Axiom(Axiom_Form po)] ->
                       Pat_Axiom(Axiom_Form (f_hoareS m pr s po))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_MemEnv h.hs_m;
-                                                 Axiom_Form h.hs_pr;
-                                                 Axiom_Stmt h.hs_s;
-                                                 Axiom_Form h.hs_po])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_MemEnv h.hs_m;
+                     Axiom_Form h.hs_pr;
+                     Axiom_Stmt h.hs_s;
+                     Axiom_Form h.hs_po])
             | FbdHoareF h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Xpath f);
                       Pat_Axiom(Axiom_Form po);
@@ -880,13 +967,14 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                       Pat_Axiom(Axiom_Form bd)] ->
                       Pat_Axiom(Axiom_Form (f_bdHoareF pr f po cmp bd))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Form h.bhf_pr;
-                                                 Axiom_Xpath h.bhf_f;
-                                                 Axiom_Form h.bhf_po;
-                                                 Axiom_Hoarecmp h.bhf_cmp;
-                                                 Axiom_Form h.bhf_bd])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_Form h.bhf_pr;
+                     Axiom_Xpath h.bhf_f;
+                     Axiom_Form h.bhf_po;
+                     Axiom_Hoarecmp h.bhf_cmp;
+                     Axiom_Form h.bhf_bd])
             | FbdHoareS h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_MemEnv m);
                       Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Stmt s);
@@ -895,26 +983,28 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                       Pat_Axiom(Axiom_Form bd)] ->
                       Pat_Axiom(Axiom_Form (f_bdHoareS m pr s po cmp bd))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_MemEnv h.bhs_m;
-                                                 Axiom_Form h.bhs_pr;
-                                                 Axiom_Stmt h.bhs_s;
-                                                 Axiom_Form h.bhs_po;
-                                                 Axiom_Hoarecmp h.bhs_cmp;
-                                                 Axiom_Form h.bhs_bd])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_MemEnv h.bhs_m;
+                     Axiom_Form h.bhs_pr;
+                     Axiom_Stmt h.bhs_s;
+                     Axiom_Form h.bhs_po;
+                     Axiom_Hoarecmp h.bhs_cmp;
+                     Axiom_Form h.bhs_bd])
             | FequivF h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Xpath fl);
                       Pat_Axiom(Axiom_Xpath fr);
                       Pat_Axiom(Axiom_Form po)] ->
                       Pat_Axiom(Axiom_Form (f_equivF pr fl fr po))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Form h.ef_pr;
-                                                 Axiom_Xpath h.ef_fl;
-                                                 Axiom_Xpath h.ef_fr;
-                                                 Axiom_Form h.ef_po])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_Form h.ef_pr;
+                     Axiom_Xpath h.ef_fl;
+                     Axiom_Xpath h.ef_fr;
+                     Axiom_Form h.ef_po])
             | FequivS h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_MemEnv ml);
                       Pat_Axiom(Axiom_MemEnv mr);
                       Pat_Axiom(Axiom_Form pr);
@@ -923,14 +1013,15 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                       Pat_Axiom(Axiom_Form po)] ->
                       Pat_Axiom(Axiom_Form (f_equivS ml mr pr sl sr po))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_MemEnv h.es_ml;
-                                                 Axiom_MemEnv h.es_mr;
-                                                 Axiom_Form h.es_pr;
-                                                 Axiom_Stmt h.es_sl;
-                                                 Axiom_Stmt h.es_sr;
-                                                 Axiom_Form h.es_po])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_MemEnv h.es_ml;
+                     Axiom_MemEnv h.es_mr;
+                     Axiom_Form h.es_pr;
+                     Axiom_Stmt h.es_sl;
+                     Axiom_Stmt h.es_sr;
+                     Axiom_Form h.es_po])
             | FeagerF h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Form pr);
                       Pat_Axiom(Axiom_Stmt sl);
                       Pat_Axiom(Axiom_Xpath fl);
@@ -939,220 +1030,260 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                       Pat_Axiom(Axiom_Form po)] ->
                       Pat_Axiom(Axiom_Form (f_eagerF pr sl fl fr sr po))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Form h.eg_pr;
-                                                 Axiom_Stmt h.eg_sl;
-                                                 Axiom_Xpath h.eg_fl;
-                                                 Axiom_Xpath h.eg_fr;
-                                                 Axiom_Stmt h.eg_sr;
-                                                 Axiom_Form h.eg_po])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_Form h.eg_pr;
+                     Axiom_Stmt h.eg_sl;
+                     Axiom_Xpath h.eg_fl;
+                     Axiom_Xpath h.eg_fr;
+                     Axiom_Stmt h.eg_sr;
+                     Axiom_Form h.eg_po])
             | Fpr _ when Mid.mem mhr map ->
                raise (Invalid_argument "&hr appears in the matching map so it shouldn't be replaced in a pr formula")
             | Fpr h ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Memory mem);
                       Pat_Axiom(Axiom_Xpath f);
                       Pat_Axiom(Axiom_Form args);
                       Pat_Axiom(Axiom_Form event)] ->
                       Pat_Axiom(Axiom_Form (f_pr mem f args event))
                    | _ -> assert false)
-                 (omap_list pattern_axiom aux_a [Axiom_Memory h.pr_mem;
-                                                 Axiom_Xpath h.pr_fun;
-                                                 Axiom_Form h.pr_args;
-                                                 Axiom_Form h.pr_event])
+                 (ofold_list pattern_axiom aux_a env
+                    [Axiom_Memory h.pr_mem;
+                     Axiom_Xpath h.pr_fun;
+                     Axiom_Form h.pr_args;
+                     Axiom_Form h.pr_event])
           end
         | Axiom_Memory m -> begin
             match Mid.find_opt m map with
-            | None -> None
+            | None -> None, env
             | Some (Pat_Axiom (Axiom_Memory m | Axiom_MemEnv (m,_)),_) ->
-               Some (Pat_Axiom(Axiom_Memory m))
+               Some (Pat_Axiom(Axiom_Memory m)),env
             | _ -> (* FIXME *) assert false
           end
         | Axiom_MemEnv (m,t) -> begin
             match Mid.find_opt m map with
-            | None -> None
+            | None -> None, env
             | Some (Pat_Axiom (Axiom_Memory m),_) ->
-               Some (Pat_Axiom(Axiom_MemEnv (m,t)))
+               Some (Pat_Axiom(Axiom_MemEnv (m,t))),env
             | Some (Pat_Axiom (Axiom_MemEnv (m,t)),_) ->
-               Some (Pat_Axiom(Axiom_MemEnv (m,t)))
+               Some (Pat_Axiom(Axiom_MemEnv (m,t))),env
             | _ -> (* FIXME *) assert false
           end
         | Axiom_Prog_Var p ->
-           omap (function
+           myomap (function
                | Pat_Axiom(Axiom_Xpath xp) ->
                   Pat_Axiom(Axiom_Prog_Var (pv xp p.pv_kind))
                | _ -> assert false)
-             (aux_a (Axiom_Xpath p.pv_name))
-        | Axiom_Op _ -> None
+             (aux_a env (Axiom_Xpath p.pv_name))
+        | Axiom_Op _ -> None, env
         | Axiom_Module mt -> begin
             match mt with
             | `Local id -> begin
                 match Mid.find_opt id map with
-                | None -> None
-                | Some (Pat_Axiom (Axiom_Module _) as a,_) -> Some a
-                | Some (Pat_Axiom (Axiom_Mpath _) as a,_)  -> Some a
+                | None -> None, env
+                | Some (Pat_Axiom (Axiom_Module _) as a,_) -> Some a,env
+                | Some (Pat_Axiom (Axiom_Mpath _) as a,_)  -> Some a,env
                 | _ -> (* FIXME *) assert false
               end
-            | _ -> None
+            | _ -> None, env
           end
         | Axiom_Mpath m ->
-           omap (function
+           myomap (function
                | (Pat_Axiom(Axiom_Module mt))::margs ->
                   Pat_Axiom(Axiom_Mpath (mpath mt (List.map get_mpath margs)))
                | (Pat_Axiom(Axiom_Mpath m))::[] -> Pat_Axiom(Axiom_Mpath m)
                | _ -> assert false)
-             (olist aux ((Pat_Axiom(Axiom_Module m.m_top))::(List.map pattern_mpath m.m_args)))
+             (ofold_list id aux env
+                ((Pat_Axiom(Axiom_Module m.m_top))::
+                   (List.map pattern_mpath m.m_args)))
         | Axiom_Instr i -> begin
             match i.i_node with
             | Sasgn (lv,e) ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form f)] ->
                       Pat_Axiom(Axiom_Instr (i_asgn (lv,(expr_of_form f))))
                    | _ -> assert false)
-                 (olist aux [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form (form_of_expr e))])
+                 (ofold_list id aux env [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form (form_of_expr e))])
             | Srnd  (lv,e) ->
-               omap (function
+               myomap (function
                    | [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form f)] ->
                       Pat_Axiom(Axiom_Instr (i_rnd (lv,(expr_of_form f))))
                    | _ -> assert false)
-                 (olist aux [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form (form_of_expr e))])
+                 (ofold_list id aux env
+                    [Pat_Axiom(Axiom_Lvalue lv);
+                     Pat_Axiom(Axiom_Form (form_of_expr e))])
             | Scall (lvo,f,args) ->
-               let l = (Pat_Axiom(Axiom_Xpath f))::(List.map pattern_form
-                                                      (List.map form_of_expr args)) in
+               let l = (Pat_Axiom(Axiom_Xpath f))::
+                         (List.map pattern_form(List.map form_of_expr args)) in
                let l = match lvo with
                  | None -> l
                  | Some lv -> (Pat_Axiom(Axiom_Lvalue lv))::l in
-               omap (function
+               myomap (function
                    | (Pat_Axiom(Axiom_Xpath xp))::args ->
-                      Pat_Axiom(Axiom_Instr (i_call (None,xp,List.map expr_of_form (List.map get_form args))))
+                      Pat_Axiom
+                        (Axiom_Instr
+                           (i_call
+                              (None,xp,
+                               List.map expr_of_form (List.map get_form args))))
                    | (Pat_Axiom(Axiom_Lvalue lv))::(Pat_Axiom(Axiom_Xpath xp))::args ->
-                      Pat_Axiom(Axiom_Instr (i_call (Some lv,xp,List.map expr_of_form (List.map get_form args))))
+                      Pat_Axiom
+                        (Axiom_Instr
+                           (i_call
+                              (Some lv,xp,List.map expr_of_form
+                                            (List.map get_form args))))
                    | _ -> assert false)
-                 (olist aux l)
+                 (ofold_list id aux env l)
             | Sif (e,strue,sfalse) ->
-               omap (function
-                   | [Pat_Axiom(Axiom_Form f);Pat_Axiom(Axiom_Stmt strue);Pat_Axiom(Axiom_Stmt sfalse)] ->
-                      Pat_Axiom(Axiom_Instr (i_if (expr_of_form f,strue,sfalse)))
+               myomap (function
+                   | [Pat_Axiom(Axiom_Form f);
+                      Pat_Axiom(Axiom_Stmt strue);
+                      Pat_Axiom(Axiom_Stmt sfalse)] ->
+                      Pat_Axiom
+                        (Axiom_Instr
+                           (i_if
+                              (expr_of_form f,strue,sfalse)))
                    | _ -> assert false)
-                 (olist aux [Pat_Axiom(Axiom_Form (form_of_expr e));
-                             Pat_Axiom(Axiom_Stmt strue);
-                             Pat_Axiom(Axiom_Stmt sfalse)])
+                 (ofold_list id aux env
+                    [Pat_Axiom(Axiom_Form (form_of_expr e));
+                     Pat_Axiom(Axiom_Stmt strue);
+                     Pat_Axiom(Axiom_Stmt sfalse)])
             | Swhile (e,sbody) ->
-               omap (function
-                   | [Pat_Axiom(Axiom_Form f);Pat_Axiom(Axiom_Stmt sbody)] ->
+               myomap (function
+                   | [Pat_Axiom(Axiom_Form f);
+                      Pat_Axiom(Axiom_Stmt sbody)] ->
                       Pat_Axiom(Axiom_Instr (i_while (expr_of_form f,sbody)))
                    | _ -> assert false)
-                 (olist aux [Pat_Axiom(Axiom_Form (form_of_expr e));
-                             Pat_Axiom(Axiom_Stmt sbody)])
+                 (ofold_list id aux env
+                    [Pat_Axiom(Axiom_Form (form_of_expr e));
+                     Pat_Axiom(Axiom_Stmt sbody)])
             | Sassert e ->
-               omap (fun f -> Pat_Axiom(Axiom_Instr (i_assert (expr_of_form (get_form f)))))
-                 (aux (Pat_Axiom(Axiom_Form (form_of_expr e))))
+               myomap (fun (f) ->
+                   Pat_Axiom(Axiom_Instr
+                               (i_assert (expr_of_form (get_form f)))))
+                 (aux env (Pat_Axiom(Axiom_Form(form_of_expr e))))
             | Sabstract id -> begin
                 match Mid.find_opt id map with
-                | None -> None
-                | Some (Pat_Axiom (Axiom_Instr _) as a,_) -> Some a
+                | None -> None, env
+                | Some (Pat_Axiom (Axiom_Instr _) as a,_) -> Some a,env
                 | _ -> (* FIXME *) assert false
               end
           end
         | Axiom_Stmt s ->
-           omap (fun l -> Pat_Axiom(Axiom_Stmt (stmt (List.map get_instr l))))
-             (olist aux (List.map pattern_instr s.s_node))
+           myomap (fun (l) -> Pat_Axiom(Axiom_Stmt (stmt (List.map get_instr l))))
+             (ofold_list id aux env (List.map pattern_instr s.s_node))
         | Axiom_Lvalue lv -> begin
             match lv with
             | LvVar (pv,ty) ->
-               omap (function
+               myomap (function
                    | Pat_Axiom(Axiom_Prog_Var pv) ->
                       Pat_Axiom(Axiom_Lvalue (LvVar (pv,ty)))
                    | _ -> assert false)
-                 (aux (Pat_Axiom(Axiom_Prog_Var pv)))
+                 (aux env (Pat_Axiom(Axiom_Prog_Var pv)))
             | LvTuple lv ->
-               omap (fun l ->
+               myomap (fun (l) ->
                    Pat_Axiom
                      (Axiom_Lvalue
                         (LvTuple
                            (List.map2
                               (fun (_,ty) lv -> (get_prog_var lv,ty)) lv l))))
-                 (olist aux (List.map pattern_prog_var (List.map fst lv)))
+                 (ofold_list id aux env
+                    (List.map pattern_prog_var (List.map fst lv)))
             | _ -> assert false
           end
         | Axiom_Xpath xp ->
-           omap (function
+           myomap (function
                | Pat_Axiom(Axiom_Mpath m) ->
                   Pat_Axiom(Axiom_Xpath (xpath m xp.x_sub))
                | _ -> assert false)
-             (aux (Pat_Axiom(Axiom_Mpath xp.x_top)))
-        | Axiom_Hoarecmp _ -> None
+             (aux env (Pat_Axiom(Axiom_Mpath xp.x_top)))
+        | Axiom_Hoarecmp _ -> None, env
       end
     | Pat_Fun_Symbol (symbol,lp) ->
        match symbol,lp with
        | Sym_Form_If, ([_;_;_] as p) ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Form fcond);
                  Pat_Axiom(Axiom_Stmt strue);
                  Pat_Axiom(Axiom_Stmt sfalse)] ->
-                 Pat_Axiom(Axiom_Instr (i_if (expr_of_form fcond,strue,sfalse)))
+                 Pat_Axiom
+                   (Axiom_Instr
+                      (i_if
+                         (expr_of_form fcond,strue,sfalse)))
               | _ -> assert false)
-            (olist aux p)
+            (ofold_list id aux env p)
        | Sym_Form_If, _ -> assert false
        | Sym_Form_Tuple, t ->
-          omap (fun l -> Pat_Axiom(Axiom_Form (f_tuple (List.map get_form l))))
-            (olist aux t)
+          myomap (fun (l) ->
+              Pat_Axiom(Axiom_Form (f_tuple (List.map get_form l))))
+            (ofold_list id aux env t)
        | Sym_Form_Proj i,[p] ->
-          omap (fun p -> let f = get_form p in
-                         Pat_Axiom(Axiom_Form(f_proj f i f.f_ty)))
-            (aux p)
+          myomap (fun (p) ->
+              let f = get_form p in
+              Pat_Axiom(Axiom_Form(f_proj f i f.f_ty)))
+            (aux env p)
        | Sym_Form_Proj _,_ -> assert false
        | Sym_Form_Match ty, p::pargs ->
-          omap (function
+          myomap (function
               | p::pargs ->
-                 Pat_Axiom(Axiom_Form(mk_form (Fmatch (get_form p,List.map get_form pargs,ty)) ty))
+                 Pat_Axiom
+                   (Axiom_Form
+                      (mk_form
+                         (Fmatch (get_form p,List.map get_form pargs,ty)) ty))
               | _ -> assert false)
-            (olist aux (p::pargs))
+            (ofold_list id aux env (p::pargs))
        | Sym_Form_Match _,_ -> assert false
        | Sym_Form_Quant (q,bs), [p] ->
-          omap (fun p -> Pat_Axiom(Axiom_Form(f_quant q bs (get_form p))))
-            (aux p)
+          myomap (fun (p) ->
+              Pat_Axiom(Axiom_Form(f_quant q bs (get_form p))))
+            (aux env p)
        | Sym_Form_Quant _,_ -> assert false
        | Sym_Form_Let lp, ([_;_] as l) ->
-          omap (function
-              | [p1;p2] -> Pat_Axiom(Axiom_Form(f_let lp (get_form p1) (get_form p2)))
+          myomap (function
+              | [p1;p2] ->
+                 Pat_Axiom
+                   (Axiom_Form
+                      (f_let lp (get_form p1) (get_form p2)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Let _,_ -> assert false
        | Sym_Form_Pvar ty, ([_;_] as l) ->
-          omap (function
-              | [p1;p2] -> Pat_Axiom(Axiom_Form(f_pvar (get_prog_var p1) ty (get_memory p2)))
+          myomap (function
+              | [p1;p2] ->
+                 Pat_Axiom(Axiom_Form(f_pvar (get_prog_var p1) ty (get_memory p2)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Pvar _,_ -> assert false
        | Sym_Form_Prog_var k, [p] ->
-          omap (fun p -> Pat_Axiom(Axiom_Prog_Var(EcTypes.pv (get_xpath p) k)))
-            (aux p)
+          myomap (fun (p) ->
+              Pat_Axiom(Axiom_Prog_Var(EcTypes.pv (get_xpath p) k)))
+            (aux env p)
        | Sym_Form_Prog_var _,_ -> assert false
        | Sym_Form_Glob, ([_;_] as l) ->
-          omap (function
-              | [pf;pm] -> Pat_Axiom(Axiom_Form(f_glob (get_mpath pf) (get_memory pm)))
+          myomap (function
+              | [pf;pm] ->
+                 Pat_Axiom(Axiom_Form(f_glob (get_mpath pf) (get_memory pm)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Glob,_ -> assert false
        | Sym_Form_Hoare_F, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Xpath f);
                  Pat_Axiom(Axiom_Form po)] ->
                  Pat_Axiom(Axiom_Form (f_hoareF pr f po))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Hoare_S, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_MemEnv m);
                  Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Stmt s);
                  Pat_Axiom(Axiom_Form po)] ->
                  Pat_Axiom(Axiom_Form (f_hoareS m pr s po))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_bd_Hoare_F, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Xpath f);
                  Pat_Axiom(Axiom_Form po);
@@ -1160,9 +1291,9 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                  Pat_Axiom(Axiom_Form bd)] ->
                  Pat_Axiom(Axiom_Form (f_bdHoareF pr f po cmp bd))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_bd_Hoare_S, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_MemEnv m);
                  Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Stmt s);
@@ -1171,18 +1302,18 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                  Pat_Axiom(Axiom_Form bd)] ->
                  Pat_Axiom(Axiom_Form (f_bdHoareS m pr s po cmp bd))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Equiv_F, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Xpath fl);
                  Pat_Axiom(Axiom_Xpath fr);
                  Pat_Axiom(Axiom_Form po)] ->
                  Pat_Axiom(Axiom_Form (f_equivF pr fl fr po))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Equiv_S, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_MemEnv ml);
                  Pat_Axiom(Axiom_MemEnv mr);
                  Pat_Axiom(Axiom_Form pr);
@@ -1191,9 +1322,9 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                  Pat_Axiom(Axiom_Form po)] ->
                  Pat_Axiom(Axiom_Form (f_equivS ml mr pr sl sr po))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Eager_F, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Form pr);
                  Pat_Axiom(Axiom_Stmt sl);
                  Pat_Axiom(Axiom_Xpath fl);
@@ -1202,138 +1333,160 @@ let rewrite_pattern_opt (map: map) (p : pattern) (e : environnement) =
                  Pat_Axiom(Axiom_Form po)] ->
                  Pat_Axiom(Axiom_Form (f_eagerF pr sl fl fr sr po))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Form_Pr, l ->
-          omap (function
+          myomap (function
               | [Pat_Axiom(Axiom_Memory mem);
                  Pat_Axiom(Axiom_Xpath f);
                  Pat_Axiom(Axiom_Form args);
                  Pat_Axiom(Axiom_Form event)] ->
                  Pat_Axiom(Axiom_Form (f_pr mem f args event))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Stmt_Seq, l ->
-          omap (fun l -> Pat_Axiom(Axiom_Stmt(stmt (List.map get_instr l))))
-            (olist aux l)
+          myomap (fun (l) ->
+              Pat_Axiom(Axiom_Stmt(stmt (List.map get_instr l))))
+            (ofold_list id aux env l)
        | Sym_Instr_Assign, ([_;_] as l) ->
-          omap (function
-              | [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form f)] ->
+          myomap (function
+              | [Pat_Axiom(Axiom_Lvalue lv);
+                 Pat_Axiom(Axiom_Form f)] ->
                  Pat_Axiom(Axiom_Instr (i_asgn (lv,(expr_of_form f))))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_Assign, _ -> assert false
        | Sym_Instr_Sample, ([_;_] as l) ->
-          omap (function
-              | [Pat_Axiom(Axiom_Lvalue lv);Pat_Axiom(Axiom_Form f)] ->
+          myomap (function
+              | [Pat_Axiom(Axiom_Lvalue lv);
+                 Pat_Axiom(Axiom_Form f)] ->
                  Pat_Axiom(Axiom_Instr (i_rnd (lv,(expr_of_form f))))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_Sample, _ -> assert false
        | Sym_Instr_Call, (_::_ as l) ->
-          omap (function
+          myomap (function
               | (Pat_Axiom(Axiom_Xpath xp))::args ->
                  Pat_Axiom
                    (Axiom_Instr
                       (i_call
-                         (None,xp,List.map expr_of_form (List.map get_form args))))
+                         (None,xp,List.map expr_of_form
+                                    (List.map get_form args))))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_Call, _ -> assert false
        | Sym_Instr_Call_Lv, (_::_::_ as l) ->
-          omap (function
-              | (Pat_Axiom(Axiom_Lvalue lv))::(Pat_Axiom(Axiom_Xpath xp))::args ->
+          myomap (function
+              | (Pat_Axiom(Axiom_Lvalue lv))
+                ::(Pat_Axiom(Axiom_Xpath xp))
+                ::args ->
                  Pat_Axiom
                    (Axiom_Instr
                       (i_call
-                         (Some lv,xp,List.map expr_of_form (List.map get_form args))))
+                         (Some lv,xp,List.map expr_of_form
+                                       (List.map get_form args))))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_Call_Lv, _ -> assert false
        | Sym_Instr_If, ([_;_;_] as l) ->
-          omap (function
-              | [Pat_Axiom(Axiom_Form f);Pat_Axiom(Axiom_Stmt strue);Pat_Axiom(Axiom_Stmt sfalse)] ->
+          myomap (function
+              | [Pat_Axiom(Axiom_Form f);
+                 Pat_Axiom(Axiom_Stmt strue);
+                 Pat_Axiom(Axiom_Stmt sfalse)] ->
                  Pat_Axiom(Axiom_Instr (i_if (expr_of_form f,strue,sfalse)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_If, _ -> assert false
        | Sym_Instr_While, ([_;_] as l) ->
-          omap (function
-              | [Pat_Axiom(Axiom_Form f);Pat_Axiom(Axiom_Stmt sbody)] ->
+          myomap (function
+              | [Pat_Axiom(Axiom_Form f);
+                 Pat_Axiom(Axiom_Stmt sbody)] ->
                  Pat_Axiom(Axiom_Instr (i_while (expr_of_form f,sbody)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Instr_While, _ -> assert false
        | Sym_Instr_Assert, [p] ->
-          omap (fun f -> Pat_Axiom(Axiom_Instr (i_assert (expr_of_form (get_form f)))))
-            (aux p)
+          myomap (fun (f) ->
+              Pat_Axiom(Axiom_Instr (i_assert (expr_of_form (get_form f)))))
+            (aux env p)
        | Sym_Instr_Assert, _ -> assert false
        | Sym_Xpath, ([_;_] as l) ->
-          omap (function
+          myomap (function
               | [pm;pf] ->
                  Pat_Axiom(Axiom_Xpath (xpath (get_mpath pm) (get_path pf)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Xpath, _ -> assert false
        (* from type mpath *)
        | Sym_Mpath, (_::_ as l) ->
-          omap (function
+          myomap (function
               | [pm] ->
                  Pat_Axiom(Axiom_Mpath (get_mpath pm))
               | pm::pargs ->
-                 Pat_Axiom(Axiom_Mpath(mpath (get_mpath_top pm) (List.map get_mpath pargs)))
+                 Pat_Axiom(Axiom_Mpath(mpath (get_mpath_top pm)
+                                         (List.map get_mpath pargs)))
               | _ -> assert false)
-            (olist aux l)
+            (ofold_list id aux env l)
        | Sym_Mpath, _ -> assert false
        (* generalized *)
        | Sym_Form_App ty, (_::_ as l) -> begin
-           match obeta_reduce e p with
-           | None ->
-              omap (function
+           match obeta_reduce env p with
+           | None, env ->
+              myomap (function
                   | p::l ->
-                     Pat_Axiom(Axiom_Form(f_app (get_form p) (List.map get_form l) ty))
+                     Pat_Axiom
+                       (Axiom_Form
+                          (f_app (get_form p)
+                             (List.map get_form l) ty))
                   | _ -> assert false)
-                (olist aux l)
-           | Some p -> aux p
+                (ofold_list id aux env l)
+           | Some p,env -> rewrite_pattern_opt map p env
          end
        | Sym_Form_App _,_ -> assert false
 
        | Sym_App, _::_ -> begin
-           match obeta_reduce e p with
-           | None -> assert false
-           | Some p -> aux p
+           match obeta_reduce env p with
+           | None,_ -> assert false
+           | Some p,env -> rewrite_pattern_opt map p env
          end
-       | Sym_App, _ -> None
-       | Sym_Quant _,_ -> None
-  in aux p
+       | Sym_App, _ -> None, env
+       | Sym_Quant _,_ -> None, env
+  in aux env p
 
-let rewrite_pattern map p e = odfl p (rewrite_pattern_opt map p e)
+let rewrite_pattern map p e = match rewrite_pattern_opt map p e with
+  | None, env -> p,env
+  | Some p, env -> p,env
 
-let rewrite_term map f e = match rewrite_pattern map (Pat_Axiom(Axiom_Form f)) e with
-  | Pat_Axiom(Axiom_Form f) -> f
+let rewrite_term map f e =
+  match rewrite_pattern map (Pat_Axiom(Axiom_Form f)) e with
+  | Pat_Axiom(Axiom_Form f),_ -> f
   | _ -> assert false
 
 (* ---------------------------------------------------------------------- *)
 let rec abstract_opt
           (other_args : Sid.t)
-          (ep : (engine * pattern) option)
+          (ep : pattern option * gty Mid.t * engine)
           ((arg,parg) : Name.t * pattern) :
-          (engine * pattern) option =
+          pattern option * gty Mid.t * engine =
+  let id x = x in
   match ep with
-  | None -> None
-  | Some (e,p) ->
-     let rec aux = function
+  | None, map, e -> None, map, e
+  | Some p, map, e ->
+     let rec aux ((o,env) : gty Mid.t * environnement)
+               (p : pattern) :
+               pattern option * (gty Mid.t * environnement) =
+       match p with
        | Pat_Anything
          | Pat_Sub _
          | Pat_Or _
          | Pat_Instance _ -> assert false
-       | Pat_Meta_Name (_,n) as p when Sid.mem n other_args -> Some p
-       | Pat_Meta_Name _ -> None
+       | Pat_Meta_Name (_,n) when Sid.mem n other_args -> None, (o,env)
+       | Pat_Meta_Name _ -> None, (o,env)
        | Pat_Fun_Symbol (s,lp) ->
-          omap (fun x -> Pat_Fun_Symbol (s,x)) (olist aux lp)
-       | Pat_Type (p,_) -> aux p
+          let test = ofold_list id aux (o,env) lp in
+          myomap (fun x -> Pat_Fun_Symbol (s,x)) test
+       | Pat_Type (p,_) -> aux (o,env) p
        | Pat_Red_Strat (p,x) ->
-          omap (fun p -> Pat_Red_Strat (p,x)) (aux p)
-
+          myomap (fun p -> Pat_Red_Strat (p,x)) (aux (o,env) p)
        | Pat_Axiom axiom ->
           match parg,axiom with
           | Pat_Anything,_
@@ -1343,9 +1496,10 @@ let rec abstract_opt
             | Pat_Meta_Name _,_ -> assert false
           | Pat_Red_Strat _,_ ->
              (* FIXME *) assert false
-          | Pat_Type (p,ty), Axiom_Form f
-               when eq_type f.f_ty ty e.e_env ->
-             aux p
+          | Pat_Type (p,GTty ty), Axiom_Form f ->
+             let eq_ty, env = eq_type f.f_ty ty env in
+             if eq_ty then aux (o,env) p
+             else assert false
           | Pat_Type _, Axiom_Form _ -> assert false
           | Pat_Type _, Axiom_Memory _ -> assert false
           | Pat_Type _, Axiom_MemEnv _ -> assert false
@@ -1361,7 +1515,7 @@ let rec abstract_opt
           | Pat_Fun_Symbol (symbol,_),_ -> begin
               (* FIXME : unification *)
               match rewrite_pattern_opt e.e_map parg e.e_env with
-              | None -> begin
+              | None,_ -> begin
                   match symbol with
                   | Sym_Form_If         -> assert false
                   | Sym_Form_App _      -> assert false
@@ -1394,14 +1548,21 @@ let rec abstract_opt
                   | Sym_App             -> assert false
                   | Sym_Quant _         -> assert false
                 end
-              | Some p -> omap snd (abstract_opt other_args ep (arg,p))
+              | Some p,env ->
+                 let ep = match ep with
+                   | None, map, e -> None, map, e
+                   | Some p, map, engine -> Some p, map, { engine with e_env = env } in
+                 match abstract_opt other_args ep (arg,p) with
+                 | None, _, _ -> None, (map, env)
+                 | Some p, map, eng -> Some p, (map, eng.e_env)
             end
           | Pat_Axiom (Axiom_Form f as axiom2),_
                when eq_axiom axiom axiom2 e.e_env ->
-             Some (Pat_Axiom(Axiom_Form (f_local arg f.f_ty)))
+             Some (Pat_Axiom(Axiom_Form (f_local arg f.f_ty))), (Mid.add arg (GTty f.f_ty) map,env)
           | Pat_Axiom axiom2,_
                when eq_axiom axiom axiom2 e.e_env ->
-             Some (Pat_Meta_Name (Pat_Anything,arg))
+             (* FIXME *)
+             Some (Pat_Meta_Name (Pat_Anything,arg)), (o, env)
 
           | Pat_Axiom axiom2, axiom1 ->
              match axiom1, axiom2 with
@@ -1411,91 +1572,108 @@ let rec abstract_opt
                | Axiom_Hoarecmp _,_
                -> raise (Invalid_argument "ici")
              | Axiom_Module (`Local id),_ when eq_name id arg ->
-                Some (Pat_Meta_Name (Pat_Anything,arg))
-             | Axiom_Module _,_ -> None
+                (* FIXME *)
+                Some (Pat_Meta_Name (Pat_Anything,arg)), (o,env)
+             | Axiom_Module _,_ -> None, (o,env)
              | Axiom_Mpath mp1, _ ->
-                omap (fun l -> Pat_Fun_Symbol (Sym_Mpath, l))
-                  (olist aux (List.map (fun m -> Pat_Axiom (Axiom_Mpath m)) mp1.m_args))
+                myomap (fun l -> Pat_Fun_Symbol (Sym_Mpath, l))
+                  (ofold_list id aux (o,env)
+                     (List.map (fun m -> Pat_Axiom (Axiom_Mpath m)) mp1.m_args))
              | Axiom_Prog_Var pv1, _ ->
-                omap (fun x -> Pat_Fun_Symbol (Sym_Form_Prog_var pv1.pv_kind, [x]))
-                  (aux (Pat_Axiom (Axiom_Xpath pv1.pv_name)))
+                myomap (fun x -> Pat_Fun_Symbol (Sym_Form_Prog_var pv1.pv_kind, [x]))
+                  (aux (o,env) (Pat_Axiom (Axiom_Xpath pv1.pv_name)))
              | Axiom_Xpath xp1, _ ->
-                omap (fun l -> Pat_Fun_Symbol (Sym_Xpath,l))
-                  (olist aux [Pat_Axiom (Axiom_Mpath xp1.x_top);
-                              Pat_Axiom (Axiom_Op (xp1.x_sub,[]))])
+                myomap (fun l -> Pat_Fun_Symbol (Sym_Xpath,l))
+                  (ofold_list id aux (o,env)
+                     [Pat_Axiom (Axiom_Mpath xp1.x_top);
+                      Pat_Axiom (Axiom_Op (xp1.x_sub,[]))])
              | Axiom_Lvalue lv, a -> begin
                  match a, lv with
                  | Axiom_Prog_Var pv1, LvVar (pv2,_) when pv_equal pv1 pv2 ->
-                    Some (Pat_Meta_Name (Pat_Anything,arg))
+                    Some (Pat_Meta_Name (Pat_Anything,arg)), (o,env)
                  | Axiom_Prog_Var _, LvTuple l ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
-                      (olist aux (List.map (fun (x,_) -> Pat_Axiom (Axiom_Prog_Var x)) l))
-                 | Axiom_Prog_Var _, _ -> (* FIXME *) None
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
+                      (ofold_list id aux (o,env)
+                         (List.map (fun (x,_) -> Pat_Axiom (Axiom_Prog_Var x)) l))
+                 | Axiom_Prog_Var _, _ -> (* FIXME *) None, (o,env)
                  | Axiom_Lvalue (LvVar (pv1,ty1)), LvVar (pv2,ty2)
-                      when pv_equal pv1 pv2 && eq_type ty1 ty2 e.e_env ->
-                    Some (Pat_Meta_Name (Pat_Anything,arg))
+                      when pv_equal pv1 pv2 ->
+                    let eq_ty, env = eq_type ty1 ty2 e.e_env in
+                    if eq_ty then Some (Pat_Meta_Name (Pat_Anything,arg)), (o,env)
+                    else None, (o,env)
                  | Axiom_Lvalue (LvVar (_,_)), LvTuple t ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
-                      (olist aux (List.map (fun x -> Pat_Axiom (Axiom_Lvalue (LvVar x))) t))
-                 | _,_ -> (* FIXME : LvMap *) None
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
+                      (ofold_list id aux (o,env)
+                         (List.map (fun x -> Pat_Axiom (Axiom_Lvalue (LvVar x))) t))
+                 | _,_ -> (* FIXME : LvMap *) None, (o,env)
                end
 
              | Axiom_Stmt s1, axiom2 -> begin
-                 match omap (fun l -> Pat_Fun_Symbol (Sym_Stmt_Seq,l))
-                         (olist aux (List.map (fun i -> Pat_Axiom (Axiom_Instr i)) s1.s_node)) with
-                 | Some _ as res -> res
-                 | None ->
+                 match myomap (fun l -> Pat_Fun_Symbol (Sym_Stmt_Seq,l))
+                         (ofold_list id aux (o,env)
+                            (List.map (fun i -> Pat_Axiom (Axiom_Instr i)) s1.s_node)) with
+                 | Some _,_ as res -> res
+                 | None, (o,env) ->
                     match axiom2 with
                     | Axiom_Stmt s2 -> begin
                         if List.compare_lengths s1.s_node s2.s_node <= 0
-                        then None
+                        then None, (o,env)
                         else
-                          match aux (Pat_Axiom (Axiom_Stmt (stmt (List.tl s1.s_node)))) with
-                          | Some _ as res -> res
-                          | None -> aux (Pat_Axiom (Axiom_Stmt (stmt (List.rev (List.tl (List.rev s1.s_node))))))
+                          match
+                            aux (o,env)
+                              (Pat_Axiom (Axiom_Stmt (stmt (List.tl s1.s_node)))) with
+                          | Some _,_ as res -> res
+                          | None,(o,env) ->
+                             aux (o,env)
+                               (Pat_Axiom
+                                  (Axiom_Stmt
+                                     (stmt
+                                        (List.rev (List.tl (List.rev s1.s_node))))))
                       end
-                    |  _ -> None
+                    |  _ -> None, (o,env)
                end
 
              | Axiom_Instr i, a2 -> begin
                  match a2,i.i_node with
                  | Axiom_Hoarecmp _,_
                    | Axiom_Memory _,_
-                   | Axiom_MemEnv _,_ -> None
+                   | Axiom_MemEnv _,_ -> None, (o,env)
                  | _, Sasgn (lv1,e1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_Assign,l))
-                      (olist aux [Pat_Axiom (Axiom_Lvalue lv1);
-                                  Pat_Axiom (Axiom_Form (form_of_expr e1))])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_Assign,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Lvalue lv1);
+                          Pat_Axiom (Axiom_Form (form_of_expr e1))])
                  | _, Srnd (lv1,e1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_Sample,l))
-                      (olist aux [Pat_Axiom (Axiom_Lvalue lv1);
-                                  Pat_Axiom (Axiom_Form (form_of_expr e1))])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_Sample,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Lvalue lv1);
+                          Pat_Axiom (Axiom_Form (form_of_expr e1))])
                  | _,Scall (None,f1,args1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_Call,l))
-                      (olist aux
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_Call,l))
+                      (ofold_list id aux (o,env)
                          ((Pat_Axiom (Axiom_Xpath f1))::
                             (List.map (fun x -> Pat_Axiom (Axiom_Form (form_of_expr x))) args1)))
                  | _,Scall (Some lv1,f1,args1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_Call,l))
-                      (olist aux
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_Call,l))
+                      (ofold_list id aux (o,env)
                          ((Pat_Axiom (Axiom_Lvalue lv1))::
                             (Pat_Axiom (Axiom_Xpath f1))::
                               (List.map (fun x -> Pat_Axiom (Axiom_Form (form_of_expr x))) args1)))
                  | _,Sassert e1 ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_Assert,[l]))
-                      (aux (Pat_Axiom (Axiom_Form (form_of_expr e1))))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_Assert,[l]))
+                      (aux (o,env) (Pat_Axiom (Axiom_Form (form_of_expr e1))))
                  | _,Sif (e1,strue1,sfalse1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_If,l))
-                      (olist aux
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_If,l))
+                      (ofold_list id aux (o,env)
                          [Pat_Axiom (Axiom_Form (form_of_expr e1));
                           Pat_Axiom (Axiom_Stmt strue1);
                           Pat_Axiom (Axiom_Stmt sfalse1)])
                  | _,Swhile (e1,sbody1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Instr_While,l))
-                      (olist aux
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Instr_While,l))
+                      (ofold_list id aux (o,env)
                          [Pat_Axiom (Axiom_Form (form_of_expr e1));
                           Pat_Axiom (Axiom_Stmt sbody1)])
-                 | _,Sabstract _ -> None
+                 | _,Sabstract _ -> None, (o,env)
                end
 
              | Axiom_Form f1, _ -> begin
@@ -1503,103 +1681,123 @@ let rec abstract_opt
                  | Fquant (_,bds,_) when List.exists (fun (a,_) -> id_equal a arg) bds ->
                     raise (Invalid_argument "ici2")
                  | Fquant (q,bds,f1) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Quant (q,bds),[l]))
-                      (aux (Pat_Axiom (Axiom_Form f1)))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Quant (q,bds),[l]))
+                      (aux (o,env) (Pat_Axiom (Axiom_Form f1)))
                  | Fif (f1,f2,f3) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_If,l))
-                      (olist aux [Pat_Axiom (Axiom_Form f1);
-                                  Pat_Axiom (Axiom_Form f2);
-                                  Pat_Axiom (Axiom_Form f3)])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_If,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Form f1);
+                          Pat_Axiom (Axiom_Form f2);
+                          Pat_Axiom (Axiom_Form f3)])
                  | Fmatch (f1,matches,_) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Match f1.f_ty,l))
-                      (olist aux ((Pat_Axiom (Axiom_Form f1))::
-                                    (List.map (fun x -> Pat_Axiom (Axiom_Form x)) matches)))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Match f1.f_ty,l))
+                      (ofold_list id aux (o,env)
+                         ((Pat_Axiom (Axiom_Form f1))::
+                            (List.map (fun x -> Pat_Axiom (Axiom_Form x)) matches)))
                  | Flet (lv,f1,f2) -> begin
                      if (match lv with
-                         | LSymbol (id,_) -> id_equal id arg
-                         | LTuple l -> List.exists (fun (a,_) -> id_equal a arg) l
-                         | LRecord (_,l) -> List.exists (fun (a,_) -> odfl false (omap (id_equal arg) a)) l)
+                         | LSymbol (id,_) ->
+                            id_equal id arg
+                         | LTuple l ->
+                            List.exists (fun (a,_) -> id_equal a arg) l
+                         | LRecord (_,l) ->
+                            List.exists (fun (a,_) -> odfl false (omap (id_equal arg) a)) l)
                      then
-                       None
+                       None, (o,env)
                      else
-                       omap (fun l -> Pat_Fun_Symbol (Sym_Form_Let lv,l))
-                         (olist aux [Pat_Axiom (Axiom_Form f1);Pat_Axiom (Axiom_Form f2)])
+                       myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Let lv,l))
+                         (ofold_list id aux (o,env)
+                            [Pat_Axiom (Axiom_Form f1);
+                             Pat_Axiom (Axiom_Form f2)])
                    end
-                 | Fint _ -> None
-                 | Flocal _ -> None
+                 | Fint _ -> None, (o,env)
+                 | Flocal _ -> None, (o,env)
                  | Fpvar (pv,m) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Pvar f1.f_ty,l))
-                      (olist aux [Pat_Axiom (Axiom_Prog_Var pv);Pat_Axiom (Axiom_Memory m)])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Pvar f1.f_ty,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Prog_Var pv);
+                          Pat_Axiom (Axiom_Memory m)])
                  | Fglob (m,mem) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Glob,l))
-                      (olist aux [Pat_Axiom (Axiom_Mpath m);Pat_Axiom (Axiom_Memory mem)])
-                 | Fop _ -> None
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Glob,l))
+                      (ofold_list id aux (o,env) [Pat_Axiom (Axiom_Mpath m);Pat_Axiom (Axiom_Memory mem)])
+                 | Fop _ -> None, (o,env)
                  | Fapp (f1,fargs) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_App f1.f_ty,l))
-                      (olist aux (List.map (fun x -> Pat_Axiom (Axiom_Form x)) (f1::fargs)))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_App f1.f_ty,l))
+                      (ofold_list id aux (o,env) (List.map (fun x -> Pat_Axiom (Axiom_Form x)) (f1::fargs)))
                  | Ftuple tuple ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
-                      (olist aux (List.map (fun x -> Pat_Axiom (Axiom_Form x)) tuple))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
+                      (ofold_list id aux (o,env) (List.map (fun x -> Pat_Axiom (Axiom_Form x)) tuple))
                  | Fproj (f,i) ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Proj i,[l]))
-                      (aux (Pat_Axiom (Axiom_Form f)))
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Proj i,[l]))
+                      (aux (o,env) (Pat_Axiom (Axiom_Form f)))
                  | FhoareF h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Hoare_F,l))
-                      (olist aux [Pat_Axiom (Axiom_Form h.hf_pr);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Hoare_F,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Form h.hf_pr);
                                   Pat_Axiom (Axiom_Xpath h.hf_f);
                                   Pat_Axiom (Axiom_Form h.hf_po)])
                  | FhoareS h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Hoare_S,l))
-                      (olist aux [Pat_Axiom (Axiom_MemEnv h.hs_m);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Hoare_S,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_MemEnv h.hs_m);
                                   Pat_Axiom (Axiom_Form h.hs_pr);
                                   Pat_Axiom (Axiom_Stmt h.hs_s);
                                   Pat_Axiom (Axiom_Form h.hs_po)])
                  | FbdHoareF h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_bd_Hoare_F,l))
-                      (olist aux [Pat_Axiom (Axiom_Form h.bhf_pr);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_bd_Hoare_F,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Form h.bhf_pr);
                                   Pat_Axiom (Axiom_Xpath h.bhf_f);
                                   Pat_Axiom (Axiom_Form h.bhf_po);
                                   Pat_Axiom (Axiom_Hoarecmp h.bhf_cmp);
                                   Pat_Axiom (Axiom_Form h.bhf_bd)])
                  | FbdHoareS h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_bd_Hoare_S,l))
-                      (olist aux [Pat_Axiom (Axiom_MemEnv h.bhs_m);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_bd_Hoare_S,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_MemEnv h.bhs_m);
                                   Pat_Axiom (Axiom_Form h.bhs_pr);
                                   Pat_Axiom (Axiom_Stmt h.bhs_s);
                                   Pat_Axiom (Axiom_Form h.bhs_po);
                                   Pat_Axiom (Axiom_Hoarecmp h.bhs_cmp);
                                   Pat_Axiom (Axiom_Form h.bhs_bd)])
                  | FequivF h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Equiv_F,l))
-                      (olist aux [Pat_Axiom (Axiom_Form h.ef_pr);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Equiv_F,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Form h.ef_pr);
                                   Pat_Axiom (Axiom_Xpath h.ef_fl);
                                   Pat_Axiom (Axiom_Xpath h.ef_fr);
                                   Pat_Axiom (Axiom_Form h.ef_po)])
                  | FequivS h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Equiv_S,l))
-                      (olist aux [Pat_Axiom (Axiom_MemEnv h.es_ml);
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Equiv_S,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_MemEnv h.es_ml);
                                   Pat_Axiom (Axiom_MemEnv h.es_mr);
                                   Pat_Axiom (Axiom_Form h.es_pr);
                                   Pat_Axiom (Axiom_Stmt h.es_sl);
                                   Pat_Axiom (Axiom_Stmt h.es_sr);
                                   Pat_Axiom (Axiom_Form h.es_po)])
                  | FeagerF h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Eager_F,l))
-                      (olist aux [Pat_Axiom (Axiom_Form h.eg_pr);
-                                  Pat_Axiom (Axiom_Stmt h.eg_sl);
-                                  Pat_Axiom (Axiom_Xpath h.eg_fl);
-                                  Pat_Axiom (Axiom_Xpath h.eg_fr);
-                                  Pat_Axiom (Axiom_Stmt h.eg_sr);
-                                  Pat_Axiom (Axiom_Form h.eg_po)])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Eager_F,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Form h.eg_pr);
+                          Pat_Axiom (Axiom_Stmt h.eg_sl);
+                          Pat_Axiom (Axiom_Xpath h.eg_fl);
+                          Pat_Axiom (Axiom_Xpath h.eg_fr);
+                          Pat_Axiom (Axiom_Stmt h.eg_sr);
+                          Pat_Axiom (Axiom_Form h.eg_po)])
                  | Fpr h ->
-                    omap (fun l -> Pat_Fun_Symbol (Sym_Form_Pr,l))
-                      (olist aux [Pat_Axiom (Axiom_Memory h.pr_mem);
-                                  Pat_Axiom (Axiom_Xpath h.pr_fun);
-                                  Pat_Axiom (Axiom_Form h.pr_args);
-                                  Pat_Axiom (Axiom_Form h.pr_event)])
+                    myomap (fun l -> Pat_Fun_Symbol (Sym_Form_Pr,l))
+                      (ofold_list id aux (o,env)
+                         [Pat_Axiom (Axiom_Memory h.pr_mem);
+                          Pat_Axiom (Axiom_Xpath h.pr_fun);
+                          Pat_Axiom (Axiom_Form h.pr_args);
+                          Pat_Axiom (Axiom_Form h.pr_event)])
                end
 
-     in omap (fun x -> e,x) (aux p)
+     in
+     match aux (map,e.e_env) p with
+     | None, (map,env) -> None, map, { e with e_env = restore_environnement env }
+     | Some p, (map,env) -> Some p, map, { e with e_env = restore_environnement env }
 
 
 (* ---------------------------------------------------------------------- *)
@@ -1628,12 +1826,12 @@ let rec process (e : engine) : nengine =
        }
 
   | Pat_Type (p,ty), o2 -> begin
-      match o2 with
-      | Axiom_Form f ->
-         if eq_type ty f.f_ty e.e_env then
-           process { e with e_pattern = p }
-         else next NoMatch e
-      | _ -> next NoMatch e
+      match o2,ty with
+      | Axiom_Form f, GTty ty ->
+         let eq_ty, env = eq_type ty f.f_ty e.e_env in
+         if eq_ty then process { e with e_pattern = p }
+         else next NoMatch { e with e_env = restore_environnement env }
+      | _ -> (* FIXME : add cases about others gty *) next NoMatch e
     end
 
   | Pat_Or [], _ -> next NoMatch e
@@ -1745,21 +1943,23 @@ let rec process (e : engine) : nengine =
      begin
        (* higher order *)
        let args = List.mapi (fun i x -> EcIdent.create (String.concat "" ["s";string_of_int i]), x) pargs in
-       let pat_opt =
+       let pat_opt, map, e =
          (* FIXME : add strategies to adapt the order of the arguments *)
          List.fold_left (abstract_opt (Sid.of_list (List.map fst args)))
-           (Some (e,Pat_Axiom axiom)) args in
+           (Some (Pat_Axiom axiom),Mid.empty,e) args in
        match pat_opt with
        | None -> next NoMatch e
-       | Some (e,pat) ->
+       | Some pat ->
           (* FIXME : add restrictions according to the types *)
-          let pat = Pat_Fun_Symbol(Sym_Quant(Llambda,List.map fst args),[pat]) in
+          let f (name,_) = (name,Mid.find_opt name map) in
+          let args = List.map f args in
+          let pat = Pat_Fun_Symbol(Sym_Quant(Llambda,args),[pat]) in
           let m,e =
             try Match, { e with
                          e_map = add_match e.e_map name pat e.e_binds e.e_env;
                        }
             with
-            | CannotUnify -> NoMatch, e
+            | CannotUnify -> NoMatch, { e with e_env = restore_environnement e.e_env }
           in
           next m e
      end
@@ -1874,24 +2074,30 @@ let rec process (e : engine) : nengine =
              process { e with e_pattern;
                               e_head = Axiom_Form f }
           | Sym_Form_Match ty, p::pl, Fmatch (fmatch,fl,_)
-               when 0 = List.compare_lengths pl fl &&
-                      eq_type ty f.f_ty e.e_env ->
-             let zand = List.map2 (fun x y -> Axiom_Form x, y) fl pl in
-             process {
-                 e with
-                 e_pattern = p;
-                 e_head = Axiom_Form fmatch;
-                 e_binds = binds;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-          | Sym_Form_Pvar ty, p1::p2::[], Fpvar (_,m)
-               when eq_type f.f_ty ty e.e_env ->
-             process { e with
-                 e_pattern = p2;
-                 e_head = Axiom_Memory m;
-                 e_binds = binds;
-                 e_continuation = Zand ([],[Axiom_Form f,p1],e.e_continuation);
-               }
+               when 0 = List.compare_lengths pl fl ->
+             let eq_ty, env = eq_type ty f.f_ty e.e_env in
+             if eq_ty
+             then
+               let zand = List.map2 (fun x y -> Axiom_Form x, y) fl pl in
+               process {
+                   e with
+                   e_pattern = p;
+                   e_head = Axiom_Form fmatch;
+                   e_binds = binds;
+                   e_continuation = Zand ([],zand,e.e_continuation);
+                 }
+             else next NoMatch { e with e_env = restore_environnement env }
+          | Sym_Form_Pvar ty, p1::p2::[], Fpvar (_,m) ->
+             let eq_ty, env = eq_type f.f_ty ty e.e_env in
+             if eq_ty
+             then
+               process { e with
+                   e_pattern = p2;
+                   e_head = Axiom_Memory m;
+                   e_binds = binds;
+                   e_continuation = Zand ([],[Axiom_Form f,p1],e.e_continuation);
+                 }
+             else next NoMatch { e with e_env = restore_environnement env }
           | Sym_Form_Prog_var _, [p], Fpvar (x2,_) ->
              process { e with
                  e_pattern = p;
@@ -2134,7 +2340,6 @@ let rec process (e : engine) : nengine =
 
   | Pat_Instance (_,_,_,_), _ -> (* FIXME *) assert false
 
-
 and next (m : ismatch) (e : engine) : nengine = next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
@@ -2144,7 +2349,10 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | Match, ZTop   -> e
 
   | NoMatch, Znamed (_f, _name, ne_continuation) ->
-     next_n NoMatch { e with ne_continuation }
+     next_n NoMatch { e with
+         ne_continuation;
+         ne_env = restore_environnement e.ne_env;
+       }
 
   | Match, Znamed (f, name, ne_continuation) ->
      let m,e =
@@ -2160,25 +2368,37 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      next_n m e
 
   | NoMatch, Zand (_,_,ne_continuation) ->
-     next_n NoMatch { e with ne_continuation }
+     next_n NoMatch { e with
+         ne_continuation;
+         ne_env = restore_environnement e.ne_env;
+       }
 
-  | Match, Zand (_before,[],ne_continuation) -> next_n Match { e with ne_continuation }
+  | Match, Zand (_before,[],ne_continuation) ->
+     next_n Match { e with ne_continuation }
+
   | Match, Zand (before,(f,p)::after,z) ->
      process (n_engine f p { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
   | Match, Zor (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
 
   | NoMatch, Zor (_, [], ne) ->
-     next_n NoMatch ne
+     next_n NoMatch { ne with ne_env = restore_environnement e.ne_env; }
 
   | NoMatch, Zor (_, e'::engines, ne) ->
-     process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
+     process { e' with
+         e_continuation = Zor (e'.e_continuation, engines, ne);
+         e_env = restore_environnement e'.e_env;
+       }
 
   | Match, Zbinds (ne_continuation, ne_binds) ->
      next_n Match { e with ne_continuation; ne_binds }
 
   | NoMatch, Zbinds (ne_continuation, ne_binds) ->
-     next_n NoMatch { e with ne_continuation; ne_binds }
+     next_n NoMatch { e with
+         ne_continuation;
+         ne_binds;
+         ne_env = restore_environnement e.ne_env;
+       }
 
 and sub_engines (e : engine) (p : pattern) : engine list =
   match e.e_head with
@@ -2253,9 +2473,10 @@ let search_eng e =
   try Some (process e) with
   | NoMatches -> None
 
-let search (f : form) (p : pattern) (h : LDecl.hyps) (red : reduction_strategy) =
+let search (f : form) (p : pattern) (h : LDecl.hyps) (red : reduction_strategy)
+      (red_info : EcReduction.reduction_info) =
   try
-    let ne = process (mkengine f p h red) in
+    let ne = process (mkengine f p h red red_info) in
     Some (get_n_matches ne, ne.ne_env)
   with
   | NoMatches -> None
@@ -2295,7 +2516,7 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
         | Fint _ -> None
         | Flocal id ->
            if Sid.mem id sbd
-           then Some (Pat_Meta_Name (Pat_Type (Pat_Anything,f.f_ty), id))
+           then Some (Pat_Meta_Name (Pat_Type (Pat_Anything,GTty f.f_ty), id))
            else None
         | Fpvar(x,m) ->
            omap (fun l -> Pat_Fun_Symbol (Sym_Form_Pvar f.f_ty,l))
@@ -2311,9 +2532,9 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
                    (Sym_App,
                     (Pat_Meta_Name(Pat_Anything,id))::
                       (List.map (fun x -> odfl (Pat_Axiom(Axiom_Form x)) (aux_f x)) args)),
-                 f.f_ty))
+                 GTty f.f_ty))
         | Fapp(fop,args) ->
-           omap (fun l -> Pat_Type (Pat_Fun_Symbol (Sym_Form_App f.f_ty,l),f.f_ty))
+           omap (fun l -> Pat_Type (Pat_Fun_Symbol (Sym_Form_App f.f_ty,l),GTty f.f_ty))
              (omap_list pat_form aux_f (fop::args))
         | Ftuple args ->
            omap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
@@ -2428,11 +2649,11 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
     | Axiom_Lvalue lv -> begin
         match lv with
         | LvVar (pv,ty) ->
-           omap (fun x -> Pat_Type (x,ty))
+           omap (fun x -> Pat_Type (x,GTty ty))
              (aux (Axiom_Prog_Var pv))
         | LvTuple l ->
-           let default (pv,ty) = Pat_Type (Pat_Axiom (Axiom_Prog_Var pv),ty) in
-           let aux (pv,ty) = omap (fun x -> Pat_Type (x,ty)) (aux (Axiom_Prog_Var pv)) in
+           let default (pv,ty) = Pat_Type (Pat_Axiom (Axiom_Prog_Var pv),GTty ty) in
+           let aux (pv,ty) = omap (fun x -> Pat_Type (x,GTty ty)) (aux (Axiom_Prog_Var pv)) in
            omap (fun l -> Pat_Fun_Symbol (Sym_Form_Tuple,l))
              (omap_list default aux l)
         | LvMap _ -> (* FIXME *) raise (Invalid_argument "bleuh")

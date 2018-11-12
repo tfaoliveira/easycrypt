@@ -766,6 +766,10 @@ and is_alpha_eq hyps f1 f2 =
   try check_alpha_eq hyps f1 f2; true
   with _ -> false
 
+let is_conv_param red_info hyps f1 f2 =
+  try check_alpha_equal red_info hyps f1 f2; true
+  with _ -> false
+
 let is_conv hyps f1 f2 =
   try check_conv hyps f1 f2; true
   with _ -> false

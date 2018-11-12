@@ -3157,14 +3157,22 @@ and pp_pattern ppe fmt p = match p with
           (pp_pattern ppe) op doit args
      | Sym_App, _ -> assert false
 
-     | Sym_Quant (q,b::binds), [pat] ->
-        let subppe = PPEnv.add_locals ppe binds in
+     | Sym_Quant (q,(b,oty)::binds), [pat] ->
+        let subppe = PPEnv.add_locals ppe (List.map fst ((b,oty)::binds)) in
         let rec doit fmt tuple =
           match tuple with
-          | [] -> pp_mem ppe fmt b
-          | a :: tuple ->
-             Format.fprintf fmt "%a@ %a"
-               doit tuple (pp_mem ppe) a
+          | [] ->
+             begin match oty with
+             | None -> pp_mem ppe fmt b
+             | Some _ -> Format.fprintf fmt "(%a)" (pp_mem ppe) b
+             end
+          | (a,oty) :: tuple ->
+             begin match oty with
+             | None -> Format.fprintf fmt "%a@ %a"
+                         doit tuple (pp_mem ppe) a
+             | Some _ ->
+                Format.fprintf fmt "%a@ (%a)" doit tuple (pp_mem ppe) a
+             end
         in
         let pp fmt = Format.fprintf fmt "%a" doit binds in
         let pp fmt () =
