@@ -1,12 +1,8 @@
 (* -------------------------------------------------------------------- *)
 open EcParsetree
-open EcMatching
+open EcSMatching
 
 
-(* -------------------------------------------------------------------- *)
-val default_start_name : string
-val default_end_name   : string
-val default_name       : string
 
 (* -------------------------------------------------------------------- *)
 val trans_stmt : pim_regexp -> regexp_instr

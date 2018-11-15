@@ -1,14 +1,9 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcParsetree
-open EcMatching
+open EcSMatching
 open EcGenRegexp
-open EcFMatching
-
-(* -------------------------------------------------------------------- *)
-let default_start_name = "$start"
-let default_end_name = "$end"
-let default_name = "$default"
+open EcPattern
 
 (*-------------------------------------------------------------------- *)
 let any_stmt  = Repeat (Any, (None, None), `Greedy)

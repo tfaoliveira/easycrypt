@@ -1764,9 +1764,9 @@ and transstmt
   ?(map : ismap = Mstr.empty) (env : EcEnv.env) ue (stmt : pstmt) : stmt
 =
   let l_start =
-    Mstr.find_def [] EcTransMatching.default_start_name map in
+    Mstr.find_def [] EcPattern.default_start_name map in
   let l_end =
-    Mstr.find_def [] EcTransMatching.default_end_name   map in
+    Mstr.find_def [] EcPattern.default_end_name   map in
   let instr_list_list = List.map (transinstr ~map env ue) stmt in
   let instr_list_list = instr_list_list @ [l_end] in
   let instr_list_list = l_start :: instr_list_list in

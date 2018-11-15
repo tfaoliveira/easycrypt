@@ -12,7 +12,6 @@ open EcTypes
 open EcFol
 open EcEnv
 open EcPV
-open EcMatching
 open EcTransMatching
 open EcModules
 open EcMaps
@@ -97,7 +96,7 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
   let mt = snd (match oget s with `Left -> es.es_ml | `Right -> es.es_mr) in
   (* Translation of the stmt *)
   let regexpstmt = trans_block p in
-  let map = match RegexpStmt.search regexpstmt ct.s_node hyps with
+  let map = match EcSMatching.RegexpStmt.search regexpstmt ct.s_node hyps with
     | None -> Mstr.empty
     | Some (_,m) -> m in
   let p1, q1 =

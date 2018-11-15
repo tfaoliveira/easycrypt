@@ -1369,7 +1369,6 @@ and try_pp_lossless (ppe : PPEnv.t) outer fmt f =
               maybe_paren outer (fst outer, prio) pp fmt (); true
 
 and try_pp_notations (ppe : PPEnv.t) outer fmt f =
-  let open EcMatching in
 
   let try_notation (p, (tv, nt)) =
     if not (Sp.mem p ppe.PPEnv.ppe_fb) then begin
@@ -1383,7 +1382,7 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
           let a1, a2 = List.split_at na a in
           f_app f a1 (toarrow (List.map f_ty a2) oty), a2
         else f_app f a oty, [] in
-      let ev   = MEV.of_idents (List.map fst nt.ont_args) `Form in
+      let ev   = EcMatching.MEV.of_idents (List.map fst nt.ont_args) `Form in
       let ue   = EcUnify.UniEnv.create None in
       let ov   = EcUnify.UniEnv.opentvi ue tv None in
       let ti   = Tvar.subst ov in
@@ -1394,7 +1393,7 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
 
       try
         let (ue, ev) =
-          EcMatching.f_match_core fmnotation hy (ue, ev) bd f
+          EcMatching.f_match_core EcMatching.fmnotation hy (ue, ev) bd f
         in
 
         if not (EcMatching.can_concretize ev ue) then
@@ -2840,7 +2839,7 @@ module ObjectInfo = struct
 end
 
 (* -------------------------------------------------------------------------- *)
-open EcFMatching
+open EcPattern
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
@@ -2866,18 +2865,24 @@ let rec pp_pat_axiom ppe fmt a = match a with
      pp_lvalue ppe fmt lv
   | Axiom_Hoarecmp h ->
      Format.fprintf fmt "%s" (string_of_hrcmp h)
+  | Axiom_Local (id,ty) ->
+     Format.fprintf fmt "@[(%a@ :@ %a)@]"
+       (pp_mem ppe) id
+       (pp_type ppe) ty
 
 and pp_pattern ppe fmt p = match p with
   | Pat_Anything ->
      Format.fprintf fmt "_"
   | Pat_Meta_Name (Pat_Anything,name)
     | Pat_Meta_Name (Pat_Type(Pat_Anything,_),name) ->
-     pp_form ppe fmt (f_local name tbool)
+     Format.fprintf fmt "#%a"
+       (pp_mem ppe) name
   | Pat_Meta_Name (p,name) ->
      Format.fprintf fmt "(%a as %a)"
        (pp_pattern ppe) p
        (pp_form ppe) (f_local name tbool)
-  | Pat_Sub _ -> assert false
+  | Pat_Sub p ->
+     Format.fprintf fmt "Sub@[(%a)@]" (pp_pattern ppe) p
   | Pat_Or _ -> assert false
   | Pat_Instance _ -> assert false
   | Pat_Red_Strat _ -> assert false
@@ -2893,32 +2898,13 @@ and pp_pattern ppe fmt p = match p with
      | Sym_Form_If, _ -> assert false
 
      | Sym_Form_App _,op::args ->
-        let rec doit fmt args =
-          match args with
-          | [] -> pp_pattern ppe fmt op
-          | a :: args ->
-             Format.fprintf fmt "%a@ %a"
-               doit args (pp_pattern ppe) a
-        in
-        doit fmt args
+        Format.fprintf fmt "@[%a@]"
+          (pp_list "@ " (pp_pattern ppe)) (op::args)
      | Sym_Form_App _,_ -> assert false
 
      | Sym_Form_Tuple, t ->
-        let pp () =
-          match t with
-          | [] -> Format.fprintf fmt "()"
-          | p :: rest ->
-             let rec doit fmt tuple =
-               match tuple with
-               | [] -> pp_pattern ppe fmt p
-               | a :: tuple ->
-                  Format.fprintf fmt "%a,%a"
-                    doit tuple (pp_pattern ppe) a
-             in
-             Format.fprintf fmt "(%a)"
-               doit rest
-        in
-        pp ()
+        Format.fprintf fmt "@[(%a)@]"
+          (pp_list "," (pp_pattern ppe)) t
 
      | Sym_Form_Proj i, [p] ->
         Format.fprintf fmt "%a.`%i"
@@ -3134,56 +3120,34 @@ and pp_pattern ppe fmt p = match p with
      | Sym_Xpath, _ -> assert false
 
      | Sym_Mpath, m::args ->
-        let rec doit fmt tuple =
-          match tuple with
-          | [] -> pp_pattern ppe fmt p
-          | a :: tuple ->
-             Format.fprintf fmt "%a,%a"
-               doit tuple (pp_pattern ppe) a
-        in
         Format.fprintf fmt "%a(%a)"
-          (pp_pattern ppe) m doit args
+          (pp_pattern ppe) m
+          (pp_list "," (pp_pattern ppe)) args
      | Sym_Mpath, _ -> assert false
 
      | Sym_App, op::args ->
-        let rec doit fmt tuple =
-          match tuple with
-          | [] -> pp_pattern ppe fmt p
-          | a :: tuple ->
-             Format.fprintf fmt "%a,%a"
-               doit tuple (pp_pattern ppe) a
-        in
-        Format.fprintf fmt "%a(%a)"
-          (pp_pattern ppe) op doit args
+        Format.fprintf fmt "@[%a@ %a@]"
+          (pp_pattern ppe) op
+          (pp_list "@ " (pp_pattern ppe)) args
      | Sym_App, _ -> assert false
 
-     | Sym_Quant (q,(b,oty)::binds), [pat] ->
-        let subppe = PPEnv.add_locals ppe (List.map fst ((b,oty)::binds)) in
-        let rec doit fmt tuple =
-          match tuple with
-          | [] ->
-             begin match oty with
-             | None -> pp_mem ppe fmt b
-             | Some _ -> Format.fprintf fmt "(%a)" (pp_mem ppe) b
-             end
-          | (a,oty) :: tuple ->
-             begin match oty with
-             | None -> Format.fprintf fmt "%a@ %a"
-                         doit tuple (pp_mem ppe) a
-             | Some _ ->
-                Format.fprintf fmt "%a@ (%a)" doit tuple (pp_mem ppe) a
-             end
-        in
-        let pp fmt = Format.fprintf fmt "%a" doit binds in
+     | Sym_Quant (q,binds), [pat] ->
+        let subppe = PPEnv.add_locals ppe (List.map fst binds) in
+        let pp_my_bind ppe fmt (b,oty) = match oty with
+          | Some (ty) ->
+             (snd (pp_binding ppe ([b],ty))) fmt
+          | _ -> pp_mem ppe fmt b in
         let pp fmt () =
           match q with
           | Llambda ->
-             Format.fprintf fmt "@[<hov 2>%s %t =>@ %a@]"
-               (string_of_quant q) pp
+             Format.fprintf fmt "@[<hov 2>%s %a =>@ %a@]"
+               (string_of_quant q)
+               (pp_list "@ " (pp_my_bind ppe)) binds
                (pp_pattern subppe) pat
           | _ ->
-             Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
-               (string_of_quant q) pp
+             Format.fprintf fmt "@[<hov 2>%s %a,@ %a@]"
+               (string_of_quant q)
+               (pp_list "@ " (pp_my_bind ppe)) binds
                (pp_pattern subppe) pat in
         pp fmt ()
 
