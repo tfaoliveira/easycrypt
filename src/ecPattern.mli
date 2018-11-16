@@ -87,18 +87,45 @@ type map = pattern MName.t
 val pat_fv : pattern -> int Mid.t
 
 (* -------------------------------------------------------------------------- *)
+
+val pat_axiom : axiom -> pattern
+
+val pat_form      : form            -> pattern
+val pat_mpath     : mpath           -> pattern
+val pat_mpath_top : mpath_top       -> pattern
+val pat_xpath     : xpath           -> pattern
+val pat_op        : path -> ty list -> pattern
+val pat_lvalue    : lvalue          -> pattern
+val pat_instr     : instr           -> pattern
+val pat_stmt      : stmt            -> pattern
+val pat_local     : ident -> ty     -> pattern
+
+(* -------------------------------------------------------------------------- *)
+
 val p_true    : pattern
 val p_false   : pattern
 
 (* -------------------------------------------------------------------------- *)
-val p_let     : lpattern -> pattern -> pattern -> pattern
-val p_if      : pattern -> pattern -> pattern -> pattern
-val p_proj    : pattern -> int -> ty -> pattern
-val p_app     : pattern -> pattern list -> ty option -> pattern
-val p_f_quant : quantif -> bindings -> pattern -> pattern
-val p_quant   : quantif -> (EcIdent.t * EcFol.gty option) list -> pattern ->
-                pattern
-val p_pvar    : prog_var -> ty -> memory -> pattern
+val p_mpath        : pattern -> pattern list -> pattern
+val p_xpath        : pattern -> pattern -> pattern
+val p_prog_var     : pattern -> pvar_kind -> pattern
+val p_lvalue_var   : pattern -> ty -> pattern
+val p_lvalue_tuple : pattern list -> pattern
+
+val p_let      : lpattern -> pattern -> pattern -> pattern
+val p_if       : pattern -> pattern -> pattern -> pattern
+val p_proj     : pattern -> int -> ty -> pattern
+val p_app      : pattern -> pattern list -> ty option -> pattern
+val p_f_quant  : quantif -> bindings -> pattern -> pattern
+val p_quant    : quantif -> (EcIdent.t * EcFol.gty option) list -> pattern -> pattern
+val p_pvar     : prog_var -> ty -> memory -> pattern
+
+val p_assign   : pattern -> pattern -> pattern
+val p_sample   : pattern -> pattern -> pattern
+val p_call     : pattern option -> pattern -> pattern list -> pattern
+val p_instr_if : pattern -> pattern -> pattern -> pattern
+val p_while    : pattern -> pattern -> pattern
+val p_assert   : pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 val p_destr_app : pattern -> pattern * pattern list

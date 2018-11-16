@@ -197,18 +197,18 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let print_types (id : EcUid.uid) (ty : EcTypes.ty option) =
     match ty with
     | Some ty ->
-       Format.fprintf fmt "Type@ %a@ is unified with@ %a.\n"
+       Format.fprintf fmt "Type@ @[%a@]@ is unified with@ @[%a@].@ "
          (EcPrinting.pp_type ppe) (EcTypes.tuni id)
          (EcPrinting.pp_type ppe) ty
     | None ->
-       Format.fprintf fmt "Type@ %a@ is not unified.\n"
+       Format.fprintf fmt "Type@ @[%a@]@ is not unified.@ "
          (EcPrinting.pp_type ppe) (EcTypes.tuni id)
   in
 
   let _ = match EcFMatching.search_eng engine with
     | None ->
        Format.fprintf
-         fmt "Failed match of@ %a@ with@ %a\n \n"
+         fmt "Failed match of@ @[%a@]@ with@ @[%a@]@ "
          (EcPrinting.pp_pattern ppe) p
          (EcPrinting.pp_form ppe) f
 

@@ -6,13 +6,6 @@ open EcMemory
 open EcIdent
 open EcModules
 
-(* This is for EcTransMatching ---------------------------------------- *)
-let default_start_name = "$start"
-let default_end_name = "$end"
-let default_name = "$default"
-
-(* -------------------------------------------------------------------------- *)
-
 module Name = EcIdent
 
 module MName = Mid
@@ -91,13 +84,88 @@ type pattern =
 and reduction_strategy = pattern -> axiom -> (pattern * axiom) option
 
 
+(* This is for EcTransMatching ---------------------------------------- *)
+let default_start_name = "$start"
+let default_end_name = "$end"
+let default_name = "$default"
+
+
+(* -------------------------------------------------------------------------- *)
+let olist_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
+  let rec aux accb = function
+    | []     -> Some (List.rev accb)
+    | a :: r -> match f a with
+                | None -> None
+                | Some b -> aux (b::accb) r
+  in aux [] l
+
+(* -------------------------------------------------------------------------- *)
+let rec expr_of_form (f : form) : expr option = match f.f_node with
+  | Fquant (q,b,f1)    ->
+     let eq = match q with
+       | Llambda -> `ELambda
+       | Lforall -> `EForall
+       | Lexists -> `EExists in
+     let b = try Some(List.map (snd_map EcFol.gty_as_ty) b) with
+             | _ -> None in
+     odfl None (omap (fun b -> omap (EcTypes.e_quantif eq b)
+                                 (expr_of_form f1)) b)
+  | Fif (f1,f2,f3)     -> begin
+      match expr_of_form f1 with
+      | None -> None
+      | Some e1 ->
+      match expr_of_form f2 with
+      | None -> None
+      | Some e2 ->
+      match expr_of_form f3 with
+      | None -> None
+      | Some e3 -> Some (EcTypes.e_if e1 e2 e3)
+    end
+  | Fmatch (f1,lf,ty) -> begin
+      match expr_of_form f1 with
+      | None -> None
+      | Some e1 -> omap (fun l -> EcTypes.e_match e1 l ty)
+                     (olist_all expr_of_form lf)
+    end
+  | Flet (lp,f1,f2)    ->
+     odfl None
+       (omap (fun e1 ->
+            omap (fun e2 -> EcTypes.e_let lp e1 e2)
+              (expr_of_form f2))
+          (expr_of_form f1))
+  | Fint i             -> Some (EcTypes.e_int i)
+  | Flocal id          -> Some (EcTypes.e_local id f.f_ty)
+  | Fpvar (pv,_)       -> Some (EcTypes.e_var pv f.f_ty)
+  | Fop (op,lty)       -> Some (EcTypes.e_op op lty f.f_ty)
+  | Fapp (f1,args)     ->
+     odfl None
+       (omap (fun e1 ->
+            omap (fun l -> EcTypes.e_app e1 l f.f_ty)
+              (olist_all expr_of_form args))
+          (expr_of_form f1))
+  | Ftuple t           ->
+     omap (fun l -> EcTypes.e_tuple l) (olist_all expr_of_form t)
+  | Fproj (f1,i)       ->
+     omap (fun e -> EcTypes.e_proj e i f.f_ty) (expr_of_form f1)
+  | _                  -> None
+
+(* -------------------------------------------------------------------------- *)
+
 type map = pattern MName.t
 
 
 (* -------------------------------------------------------------------------- *)
 let pat_axiom x = Pat_Axiom x
 
-let pat_form f = pat_axiom (Axiom_Form f)
+let pat_form f      = pat_axiom (Axiom_Form f)
+let pat_mpath m     = pat_axiom (Axiom_Mpath m)
+let pat_mpath_top m = pat_axiom (Axiom_Module m)
+let pat_xpath x     = pat_axiom (Axiom_Xpath x)
+let pat_op op lty   = pat_axiom (Axiom_Op (op,lty))
+let pat_lvalue lv   = pat_axiom (Axiom_Lvalue lv)
+let pat_instr i     = pat_axiom (Axiom_Instr i)
+let pat_stmt s      = pat_axiom (Axiom_Stmt s)
+let pat_local id ty = pat_axiom (Axiom_Local (id,ty))
 
 (* -------------------------------------------------------------------------- *)
 
@@ -133,6 +201,57 @@ let pat_fv p =
 let p_equal : pattern -> pattern -> bool = (==)
 
 (* -------------------------------------------------------------------------- *)
+let p_mpath (p : pattern) (args : pattern list) =
+  let rec oget_mpaths acc = function
+    | [] -> Some (List.rev acc)
+    | (Pat_Axiom(Axiom_Mpath m))::r ->
+       oget_mpaths (m::acc) r
+    | (Pat_Axiom(Axiom_Module mt))::r ->
+       oget_mpaths ((mpath mt [])::acc) r
+    | _ -> None in
+  let oget_mpaths l = oget_mpaths [] l in
+  let oget_mpath =
+    match p with
+    | Pat_Axiom(Axiom_Module mt) -> Some (mpath mt [])
+    | Pat_Axiom(Axiom_Mpath m)   -> Some m
+    | _ -> None in
+  match oget_mpath, oget_mpaths args with
+  | Some m, Some args ->
+     Pat_Axiom(Axiom_Mpath (mpath m.m_top (m.m_args @ args)))
+  | _,_ -> Pat_Fun_Symbol(Sym_Mpath,p::args)
+
+let p_xpath (p : pattern) (f : pattern) =
+  match p,f with
+  | Pat_Axiom(Axiom_Mpath m),Pat_Axiom(Axiom_Op (op,[])) ->
+     Pat_Axiom(Axiom_Xpath (EcPath.xpath m op))
+  | _ -> Pat_Fun_Symbol(Sym_Xpath,[p;f])
+
+let p_prog_var (p : pattern) (k : pvar_kind) =
+  match p with
+  | Pat_Axiom(Axiom_Xpath x) -> Pat_Axiom(Axiom_Prog_Var (pv x k))
+  | _ -> Pat_Fun_Symbol(Sym_Form_Prog_var k,[p])
+
+let p_lvalue_var (p : pattern) (ty : ty) =
+  match p with
+  | Pat_Axiom(Axiom_Prog_Var pv) ->
+     Pat_Axiom(Axiom_Lvalue(LvVar(pv,ty)))
+  | p -> Pat_Type(p,GTty ty)
+
+let p_lvalue_tuple (p : pattern list) =
+  let rec oget_pv acc = function
+    | [] -> Some (List.rev acc)
+    | a :: r ->
+       match a with
+       | Pat_Type(Pat_Axiom(Axiom_Prog_Var pv),GTty ty)
+         | Pat_Axiom(Axiom_Lvalue(LvVar (pv,ty))) ->
+          oget_pv ((pv,ty)::acc) r
+       | _ -> None
+  in match oget_pv [] p with
+     | None -> Pat_Fun_Symbol(Sym_Form_Tuple,p)
+     | Some l -> Pat_Axiom(Axiom_Lvalue(LvTuple l))
+
+
+
 let p_if (p1 : pattern) (p2 : pattern) (p3 : pattern) =
   Pat_Fun_Symbol(Sym_Form_If,[p1;p2;p3])
 
@@ -169,19 +288,225 @@ let p_f_exists b p = p_f_quant Lexists b p
 let p_pvar (x : prog_var) (ty : ty) (m : EcMemory.memory) =
   pat_form(EcFol.f_pvar x ty m)
 
+
+let p_assign (plv : pattern) (pe : pattern) = match plv, pe with
+  | Pat_Axiom(Axiom_Lvalue lv),Pat_Axiom(Axiom_Form f) -> begin
+      match expr_of_form f with
+      | None ->
+         Pat_Fun_Symbol(Sym_Instr_Assign,[plv;pe])
+      | Some e -> Pat_Axiom(Axiom_Instr(i_asgn (lv,e)))
+    end
+  | _ -> Pat_Fun_Symbol(Sym_Instr_Assign,[plv;pe])
+
+let p_sample (plv : pattern) (pe : pattern) = match plv, pe with
+  | Pat_Axiom(Axiom_Lvalue lv),Pat_Axiom(Axiom_Form f) -> begin
+      match expr_of_form f with
+      | None ->
+         Pat_Fun_Symbol(Sym_Instr_Sample,[plv;pe])
+      | Some e -> Pat_Axiom(Axiom_Instr(i_rnd (lv,e)))
+    end
+  | _ -> Pat_Fun_Symbol(Sym_Instr_Sample,[plv;pe])
+
+let p_call (olv : pattern option) (f : pattern) (args : pattern list) =
+  let get_expr = function
+    | Pat_Axiom(Axiom_Form f) -> expr_of_form f
+    | _ -> None in
+  match olv,f with
+  | None,Pat_Axiom(Axiom_Xpath proc) -> begin
+      match olist_all get_expr args with
+      | Some args -> Pat_Axiom(Axiom_Instr(i_call(None,proc,args)))
+      | None -> Pat_Fun_Symbol(Sym_Instr_Call,f::args)
+    end
+  | Some(Pat_Axiom(Axiom_Lvalue lv) as olv),Pat_Axiom(Axiom_Xpath proc) ->
+     begin
+       match olist_all get_expr args with
+       | Some args -> Pat_Axiom(Axiom_Instr(i_call(Some lv,proc,args)))
+       | None -> Pat_Fun_Symbol(Sym_Instr_Call_Lv,olv::f::args)
+     end
+  | None,_ -> Pat_Fun_Symbol(Sym_Instr_Call,f::args)
+  | Some lv,_ -> Pat_Fun_Symbol(Sym_Instr_Call_Lv,lv::f::args)
+
+let p_instr_if (pcond : pattern) (ps1 : pattern) (ps2 : pattern) =
+  match pcond, ps1, ps2 with
+  | Pat_Axiom(Axiom_Form f),Pat_Axiom(Axiom_Stmt s1),Pat_Axiom(Axiom_Stmt s2) ->
+     odfl (Pat_Fun_Symbol(Sym_Instr_If,[pcond;ps1;ps2]))
+       (omap (fun cond -> Pat_Axiom(Axiom_Instr(i_if(cond,s1,s2))))
+          (expr_of_form f))
+  | _ -> Pat_Fun_Symbol(Sym_Instr_If,[pcond;ps1;ps2])
+
+let p_while (pcond : pattern) (ps : pattern) =
+  match pcond, ps with
+  | Pat_Axiom(Axiom_Form f),Pat_Axiom(Axiom_Stmt s) ->
+     odfl (Pat_Fun_Symbol(Sym_Instr_While,[pcond;ps]))
+       (omap (fun cond -> Pat_Axiom(Axiom_Instr(i_while(cond,s))))
+          (expr_of_form f))
+  | _ -> Pat_Fun_Symbol(Sym_Instr_While,[pcond;ps])
+
+let p_assert (p : pattern) = match p with
+  | Pat_Axiom(Axiom_Form f) ->
+     odfl (Pat_Fun_Symbol(Sym_Instr_Assert,[p]))
+       (omap (fun e -> Pat_Axiom(Axiom_Instr(i_assert e))) (expr_of_form f))
+  | _ -> Pat_Fun_Symbol(Sym_Instr_Assert,[p])
+
 (* -------------------------------------------------------------------------- *)
 
 module Psubst = struct
 
   type p_subst = {
-      ps_loc : pattern Mid.t;
+      ps_freshen : bool;
+      ps_patloc  : pattern             Mid.t;
+      ps_mp      : mpath               Mid.t;
+      ps_mem     : ident               Mid.t;
+      ps_opdef   : (ident list * expr) Mp.t;
+      ps_pddef   : (ident list * form) Mp.t;
+      ps_exloc   : expr                Mid.t;
+      ps_sty     : ty_subst;
     }
 
-  let p_subst_id = { ps_loc = Mid.empty }
+  let p_subst_id = {
+      ps_freshen = false;
+      ps_patloc  = Mid.empty;
+      ps_mp      = Mid.empty;
+      ps_mem     = Mid.empty;
+      ps_opdef   = Mp.empty;
+      ps_pddef   = Mp.empty;
+      ps_exloc   = Mid.empty;
+      ps_sty     = ty_subst_id;
+    }
 
-  let p_bind_local (s : p_subst) (id : EcIdent.t) (p : pattern) =
-    { s with ps_loc = Mid.add id p s.ps_loc }
+  let is_subst_id s =
+       s.ps_freshen = false
+    && is_ty_subst_id s.ps_sty
+    && Mid.is_empty   s.ps_patloc
+    && Mid.is_empty   s.ps_mem
+    && Mp.is_empty    s.ps_opdef
+    && Mp.is_empty    s.ps_pddef
+    && Mid.is_empty   s.ps_exloc
 
+  let p_subst_init ?mods ?sty ?opdef ?prdef () =
+    { p_subst_id with
+      ps_mp    = odfl Mid.empty mods;
+      ps_sty   = odfl ty_subst_id sty;
+      ps_opdef = odfl Mp.empty opdef;
+      ps_pddef = odfl Mp.empty prdef;
+    }
+
+  let p_bind_local (s : p_subst) (id : ident) (p : pattern) =
+    let merge o = assert (o = None); Some p in
+    { s with ps_patloc = Mid.change merge id s.ps_patloc }
+
+  let p_bind_mem (s : p_subst) (m1 : memory) (m2 : memory) =
+    let merge o = assert (o = None); Some m2 in
+    { s with ps_mem = Mid.change merge m1 s.ps_mem }
+
+  let p_bind_mod (s : p_subst) (x : ident) (m : mpath) =
+    let merge o = assert (o = None); Some m in
+    { s with ps_mp = Mid.change merge x s.ps_mp }
+
+  let p_bind_rename (s : p_subst) (nfrom : ident) (nto : ident) (ty : ty) =
+    let np = pat_local nto ty in
+    let ne = e_local nto ty in
+    let s = p_bind_local s nfrom np in
+    let merge o = assert (o = None); Some ne in
+    { s with ps_exloc = Mid.change merge nfrom s.ps_exloc }
+
+  (* ------------------------------------------------------------------------ *)
+  let p_rem_local (s : p_subst) (n : ident) =
+    { s with ps_patloc = Mid.remove n s.ps_patloc;
+             ps_exloc  = Mid.remove n s.ps_exloc; }
+
+  let p_rem_mem (s : p_subst) (m : memory) =
+    { s with ps_mem = Mid.remove m s.ps_mem }
+
+  let p_rem_mod (s : p_subst) (m : ident) =
+    let smp = Mid.remove m s.ps_mp in
+    let sty = s.ps_sty in
+    let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
+    { s with ps_mp = smp; ps_sty = sty; }
+
+  (* ------------------------------------------------------------------------ *)
+  let add_local (s : p_subst) (n,t as nt : ident * ty) =
+    let n' = if s.ps_freshen then EcIdent.fresh n else n in
+    let t' = (ty_subst s.ps_sty) t in
+    if   n == n' && t == t'
+    then (s, nt)
+    else (p_bind_rename s n n' t'), (n',t')
+
+  let add_locals = List.Smart.map_fold add_local
+
+  let subst_lpattern (s : p_subst) (lp : lpattern) =
+    match lp with
+    | LSymbol x ->
+        let (s, x') = add_local s x in
+          if x == x' then (s, lp) else (s, LSymbol x')
+
+    | LTuple xs ->
+        let (s, xs') = add_locals s xs in
+          if xs == xs' then (s, lp) else (s, LTuple xs')
+
+    | LRecord (p, xs) ->
+        let (s, xs') =
+          List.Smart.map_fold
+            (fun s ((x, t) as xt) ->
+              match x with
+              | None ->
+                  let t' = (ty_subst s.ps_sty) t in
+                    if t == t' then (s, xt) else (s, (x, t'))
+              | Some x ->
+                  let (s, (x', t')) = add_local s (x, t) in
+                    if   x == x' && t == t'
+                    then (s, xt)
+                    else (s, (Some x', t')))
+            s xs
+        in
+          if xs == xs' then (s, lp) else (s, LRecord (p, xs'))
+
+  let gty_subst (s : p_subst) (gty : gty) =
+    if is_subst_id s then gty else
+
+    match gty with
+    | GTty ty ->
+        let ty' = (ty_subst s.ps_sty) ty in
+        if ty == ty' then gty else GTty ty'
+
+    | GTmodty (p, (rx, r)) ->
+        let sub  = s.ps_sty.ts_mp in
+        let xsub = EcPath.x_substm s.ps_sty.ts_p s.ps_mp in
+        let p'   = mty_subst s.ps_sty.ts_p sub p in
+        let rx'  = Sx.fold (fun m rx' -> Sx.add (xsub m) rx') rx Sx.empty in
+        let r'   = Sm.fold (fun m r' -> Sm.add (sub m) r') r Sm.empty in
+
+        if   p == p' && Sx.equal rx rx' && Sm.equal r r'
+        then gty
+        else GTmodty (p', (rx', r'))
+
+    | GTmem mt ->
+        let mt' = EcMemory.mt_substm s.ps_sty.ts_p s.ps_mp
+                    (ty_subst s.ps_sty) mt in
+        if mt == mt' then gty else GTmem mt'
+
+  (* ------------------------------------------------------------------------ *)
+  let add_binding (s : p_subst) (x,gty as xt : binding) =
+    let gty' = gty_subst s gty in
+    let x'   = if s.ps_freshen then EcIdent.fresh x else x in
+    if   x == x' && gty == gty'
+    then
+      let s = match gty with
+        | GTty _    -> p_rem_local s x
+        | GTmodty _ -> p_rem_mod   s x
+        | GTmem _   -> p_rem_mem   s x in
+      (s,xt)
+    else
+      let s = match gty' with
+        | GTty   ty -> p_bind_rename s x x' ty
+        | GTmodty _ -> p_bind_mod s x (EcPath.mident x')
+        | GTmem   _ -> p_bind_mem s x x'
+      in
+      (s, (x', gty'))
+
+  let add_bindings = List.map_fold add_binding
+
+  (* ------------------------------------------------------------------------ *)
   let p_subst (_s : p_subst) (p : pattern) = p
 
 end

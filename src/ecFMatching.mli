@@ -1,7 +1,5 @@
 open EcFol
-open EcTypes
 open EcIdent
-open EcPath
 open EcEnv
 open EcPattern
 
@@ -15,9 +13,11 @@ type environnement = {
     env_hyps           : EcEnv.LDecl.hyps;
     env_unienv         : EcUnify.unienv;
     env_red_strat      : reduction_strategy;
-    env_red_info       : EcReduction.reduction_info;
+    env_red_info_p     : EcReduction.reduction_info;
+    env_red_info_a     : EcReduction.reduction_info;
     env_restore_unienv : EcUnify.unienv option;
     env_map            : EcPattern.map;
+    env_current_binds  : bindings;
     (* FIXME : ajouter ici les stratégies *)
   }
 
