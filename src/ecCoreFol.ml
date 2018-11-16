@@ -1007,6 +1007,11 @@ let destr_lambda f =
   | Fquant(Llambda,bd,p) -> bd, p
   | _ -> destr_error "lambda"
 
+let destr_lambda1 f =
+  match f.f_node with
+  | Fquant(Llambda,(x, GTty ty)::bd,p) -> x, ty,f_lambda bd p
+  | _ -> destr_error "lambda"
+
 let decompose_lambda f =
   match f.f_node with
   | Fquant(Llambda,bd,p) -> bd, p

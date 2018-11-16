@@ -2378,8 +2378,8 @@ rnd_info:
 | empty
     { PNoRndParams }
 
-| f=sform
-    { PSingleRndParam f }
+| gen=iboption(AUTO) f=sform
+    { PSingleRndParam (gen, f) }
 
 | f=sform g=sform
     { PTwoRndParams (f, g) }

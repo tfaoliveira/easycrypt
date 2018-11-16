@@ -192,7 +192,9 @@ let cfield_of_field (r : field) : cfield =
 let field_of_cfield (cr:cfield) : field = fst cr
 
 (* -------------------------------------------------------------------- *)
-let toring hyps ((r, cr) : cring) (rmap : RState.rstate) (form : form) =
+let toring
+  ?(gonly = false) hyps ((r, cr) : cring) (rmap : RState.rstate) (form : form)
+=
   let rmap = ref rmap in
 
   let int_of_form form = reffold (RState.add hyps form) rmap in
@@ -204,14 +206,14 @@ let toring hyps ((r, cr) : cring) (rmap : RState.rstate) (form : form) =
         match Mp.find_opt op cr with
         | None -> abstract form
         | Some op -> begin
-          match op,args with
+          match op, args with
           | `Zero, []           -> PEc c0
-          | `One , []           -> PEc c1
           | `Add , [arg1; arg2] -> PEadd (doit arg1, doit arg2)
           | `Opp , [arg1]       -> PEopp (doit arg1)
           | `Sub , [arg1; arg2] -> PEsub (doit arg1, doit arg2)
-          | `Mul , [arg1; arg2] -> PEmul (doit arg1, doit arg2)
-          | `Exp , [arg1; arg2] -> begin
+          | `One , []           when not gonly -> PEc c1
+          | `Mul , [arg1; arg2] when not gonly -> PEmul (doit arg1, doit arg2)
+          | `Exp , [arg1; arg2] when not gonly -> begin
             match arg2.f_node with
             | Fint n -> PEpow (doit arg1, n)
             | _ -> abstract form
@@ -423,5 +425,3 @@ let field_simplify hyps (cr : cfield) (eqs : eq list) (f : form) =
   let norm = norm_pe_of_ring (fst cr).f_ring in
   let norm form = ofring (norm form eqs) in
   (List.map norm cond, (norm num, norm denum))
-
-

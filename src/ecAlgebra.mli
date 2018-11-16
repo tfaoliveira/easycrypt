@@ -67,7 +67,8 @@ val field_of_cfield : cfield-> field
 
 (* -------------------------------------------------------------------- *)
 val toring:
-     LDecl.hyps
+     ?gonly:bool                        (* only reify the additive subgroup *)
+  -> LDecl.hyps
   -> cring                              (* ring structure *)
   -> RState.rstate                      (* reification state *)
   -> form                               (* formula to reify *)

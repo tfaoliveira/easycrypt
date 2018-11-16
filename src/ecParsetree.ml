@@ -435,7 +435,7 @@ type p_app_bd_info =
 
 type ('a, 'b, 'c) rnd_tac_info =
   | PNoRndParams
-  | PSingleRndParam of 'c
+  | PSingleRndParam of bool * 'c
   | PTwoRndParams   of 'a * 'a
   | PMultRndParams  of ('a tuple5) * 'b
 

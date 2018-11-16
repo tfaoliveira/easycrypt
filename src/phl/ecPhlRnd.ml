@@ -337,7 +337,7 @@ let t_bdhoare_rnd_r tac_info tc =
         let concl = f_bdHoareS_r {bhs with bhs_s=s; bhs_pr=pre; bhs_po=post; bhs_bd=f_r1} in
         let concl = f_forall_simpl binders concl in
         [concl]
-    | PSingleRndParam event, FHle ->
+    | PSingleRndParam (false, event), FHle ->
         let event = event ty_distr in
         let bounded_distr = f_real_le (f_mu env distr event) bound in
         let pre = f_and bhs.bhs_pr pre_bound in
@@ -345,7 +345,7 @@ let t_bdhoare_rnd_r tac_info tc =
         let concl = f_hoareS bhs.bhs_m pre s post in
         let concl = f_forall_simpl binders concl in
         [concl]
-    | PSingleRndParam event, _ ->
+    | PSingleRndParam (false, event), _ ->
         let event = event ty_distr in
         let bounded_distr = f_cmp (f_mu env distr event) bound in
         let pre = f_and bhs.bhs_pr pre_bound in
@@ -390,6 +390,70 @@ let t_bdhoare_rnd = FApi.t_low1 "bdhoare-rnd" t_bdhoare_rnd_r
 let t_equiv_rnd   = FApi.t_low2 "equiv-rnd"   t_equiv_rnd_r
 
 (* -------------------------------------------------------------------- *)
+let process_inv pe hyps _es f ty1 ty2 =
+  let env = EcEnv.LDecl.toenv hyps in
+  let f = f ty1 ty2 in
+
+  if not (EcReduction.EqTest.for_type env ty1 ty2) then
+    tc_error pe "BIM";
+
+  let x, _, f =
+    try destr_lambda1 f with DestrError _ -> tc_error pe "BOUM" in
+
+  let tp = (EcEnv.LDecl.tohyps hyps).EcBaseLogic.h_tvar in
+  let cr =
+    match EcTyping.get_ring (tp, ty2) env with
+    | None    -> tc_error pe "Cannot find a ring structure"
+    | Some cr -> cr in
+
+  let acr = EcDecl.{ cr with r_embed = `Default }  in
+  let cr  = EcAlgebra.cring_of_ring acr in
+
+  let st = EcAlgebra.RState.empty in
+
+  let xid, st =
+    match EcAlgebra.toring ~gonly:true hyps cr st (f_local x ty1) with
+    | EcRing.PEX xid, st -> xid, st
+    | _, _ -> assert false in
+
+  let f, st = EcAlgebra.toring ~gonly:true hyps cr st f in
+
+  let module T = Solveq.Types in
+
+  let rec translate f =
+    match f with
+    | EcRing.PEX x ->
+        T.Var x
+    | EcRing.PEadd (f1, f2) ->
+        T.Add (translate f1, translate f2)
+    | EcRing.PEopp f ->
+        T.Opp (translate f)
+    | EcRing.PEsub (f1, f2) ->
+        T.Add (translate f1, T.Opp (translate f2))
+    | _ -> assert false
+
+  and itranslate f =
+    match f with
+    | T.Var x ->
+        EcRing.PEX x
+    | T.Add (f1, f2) ->
+        EcRing.PEadd (itranslate f1, itranslate f2)
+    | T.Opp f ->
+        EcRing.PEopp (itranslate f)
+    | T.Zero ->
+        EcRing.PEc (EcBigInt.zero)
+  in
+
+  let f = translate f in
+  let f =
+    match T.compute_inv xid f with
+    | None   -> tc_error pe "failed to compute inverse"
+    | Some f -> f in
+  let f = EcAlgebra.ofring acr st (itranslate f) in
+
+  f_lambda [(x, GTty ty2)] f
+
+(* -------------------------------------------------------------------- *)
 let process_rnd side tac_info tc =
   let concl = FApi.tc1_goal tc in
 
@@ -403,9 +467,9 @@ let process_rnd side tac_info tc =
       | PNoRndParams ->
           PNoRndParams
 
-      | PSingleRndParam fp ->
-          PSingleRndParam
-            (fun t -> TTC.tc1_process_Xhl_form tc (tfun t tbool) fp)
+      | PSingleRndParam (b, fp) ->
+          let ffp t = TTC.tc1_process_Xhl_form tc (tfun t tbool) fp in
+          PSingleRndParam (b, ffp)
 
       | PMultRndParams ((phi, d1, d2, d3, d4), p) ->
           let p t = p |> omap (TTC.tc1_process_Xhl_form tc (tfun t tbool)) in
@@ -426,9 +490,24 @@ let process_rnd side tac_info tc =
 
     let bij_info =
       match tac_info with
-      | PNoRndParams -> None, None
-      | PSingleRndParam f -> Some (process_form f), None
-      | PTwoRndParams (f, finv) -> Some (process_form f), Some (process_form finv)
+      | PNoRndParams ->
+          None, None
+
+      | PSingleRndParam (false, f) ->
+          Some (process_form f), None
+
+      | PSingleRndParam (true, f) ->
+          let hyps = FApi.tc1_hyps tc in
+          let es   = destr_equivS concl in
+          let f    = process_form f in
+          let finv = process_inv !!tc hyps es f in
+          (Some f, Some finv)
+
+      | PTwoRndParams (f, finv) ->
+          let f    = process_form f    in
+          let finv = process_form finv in
+          (Some f, Some finv)
+
       | _ -> tc_error !!tc "invalid arguments"
 
     in

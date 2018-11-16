@@ -35,7 +35,7 @@ let t_exfalso = FApi.t_low0 "exfalso" t_exfalso_r
 
 (* -------------------------------------------------------------------- *)
 let prnd_info =
-  EcParsetree.PSingleRndParam f_predT
+  EcParsetree.PSingleRndParam (false, f_predT)
 
 (* -------------------------------------------------------------------- *)
 let t_auto_rnd_hoare_r tc =
