@@ -28,4 +28,4 @@ after_failure:
 script:
 - >-
   docker run -v $PWD:/home/ci/easycrypt:rw easycryptpa/ec-build-box
-  sh -c "cd easycrypt && opam pin -y add solveq https://github.com/charlie-j/solveq.git && opam config exec -- make ${TARGETS}"
+  sh -c "cd easycrypt && opam pin -y add solveq https://github.com/EasyCrypt/solveq.git && opam config exec -- make ${TARGETS}"
