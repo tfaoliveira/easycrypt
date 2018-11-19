@@ -158,6 +158,8 @@ type map = pattern MName.t
 let pat_axiom x = Pat_Axiom x
 
 let pat_form f      = pat_axiom (Axiom_Form f)
+let pat_memory m    = pat_axiom (Axiom_Memory m)
+let pat_memenv m    = pat_axiom (Axiom_MemEnv m)
 let pat_mpath m     = pat_axiom (Axiom_Mpath m)
 let pat_mpath_top m = pat_axiom (Axiom_Module m)
 let pat_xpath x     = pat_axiom (Axiom_Xpath x)
@@ -166,6 +168,7 @@ let pat_lvalue lv   = pat_axiom (Axiom_Lvalue lv)
 let pat_instr i     = pat_axiom (Axiom_Instr i)
 let pat_stmt s      = pat_axiom (Axiom_Stmt s)
 let pat_local id ty = pat_axiom (Axiom_Local (id,ty))
+let pat_cmp cmp     = pat_axiom (Axiom_Hoarecmp cmp)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -348,6 +351,94 @@ let p_assert (p : pattern) = match p with
        (omap (fun e -> Pat_Axiom(Axiom_Instr(i_assert e))) (expr_of_form f))
   | _ -> Pat_Fun_Symbol(Sym_Instr_Assert,[p])
 
+
+let p_hoareF (pr : pattern) (f : pattern) (po : pattern) =
+  match pr,f,po with
+  | Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Xpath f),
+    Pat_Axiom(Axiom_Form po) ->
+     Pat_Axiom(Axiom_Form (f_hoareF pr f po))
+  | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[pr;f;po])
+
+let p_hoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern) =
+  match m,pr,s,po with
+  | Pat_Axiom(Axiom_MemEnv m),
+    Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Stmt s),
+    Pat_Axiom(Axiom_Form po) ->
+     Pat_Axiom(Axiom_Form (f_hoareS m pr s po))
+  | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[m;pr;s;po])
+
+let p_bdHoareF (pr : pattern) (f : pattern) (po : pattern) (cmp : pattern)
+      (bd : pattern) =
+  match pr, f, po, cmp, bd with
+  | Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Xpath f),
+    Pat_Axiom(Axiom_Form po),
+    Pat_Axiom(Axiom_Hoarecmp cmp),
+    Pat_Axiom(Axiom_Form bd) ->
+     Pat_Axiom(Axiom_Form(f_bdHoareF pr f po cmp bd))
+  | _ ->
+     Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[pr;f;po;cmp;bd])
+
+let p_bdHoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern)
+      (cmp : pattern) (bd : pattern) =
+  match m, pr, s, po, cmp, bd with
+  | Pat_Axiom(Axiom_MemEnv m),
+    Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Stmt s),
+    Pat_Axiom(Axiom_Form po),
+    Pat_Axiom(Axiom_Hoarecmp cmp),
+    Pat_Axiom(Axiom_Form bd) ->
+     Pat_Axiom(Axiom_Form(f_bdHoareS m pr s po cmp bd))
+  | _ ->
+     Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[m;pr;s;po;cmp;bd])
+
+let p_equivF (pr : pattern) (fl : pattern) (fr : pattern) (po : pattern) =
+  match pr, fl, fr, po with
+  | Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Xpath fl),
+    Pat_Axiom(Axiom_Xpath fr),
+    Pat_Axiom(Axiom_Form po) ->
+     pat_form (f_equivF pr fl fr po)
+  | _ ->
+     Pat_Fun_Symbol(Sym_Form_Equiv_F,[pr;fl;fr;po])
+
+let p_equivS (ml : pattern) (mr : pattern) (pr : pattern) (sl : pattern)
+      (sr : pattern) (po : pattern) =
+  match ml, mr, pr, sl, sr, po with
+  | Pat_Axiom(Axiom_MemEnv ml),
+    Pat_Axiom(Axiom_MemEnv mr),
+    Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Stmt sl),
+    Pat_Axiom(Axiom_Stmt sr),
+    Pat_Axiom(Axiom_Form po) ->
+     pat_form (f_equivS ml mr pr sl sr po)
+  | _ ->
+     Pat_Fun_Symbol(Sym_Form_Equiv_F,[ml;mr;pr;sl;sr;po])
+
+let p_eagerF (pr : pattern) (sl : pattern) (fl : pattern)
+      (fr : pattern) (sr : pattern) (po : pattern) =
+  match pr, sl, fl, fr, sr, po with
+  | Pat_Axiom(Axiom_Form pr),
+    Pat_Axiom(Axiom_Stmt sl),
+    Pat_Axiom(Axiom_Xpath fl),
+    Pat_Axiom(Axiom_Xpath fr),
+    Pat_Axiom(Axiom_Stmt sr),
+    Pat_Axiom(Axiom_Form po) ->
+     pat_form (f_eagerF pr sl fl fr sr po)
+  | _ ->
+     Pat_Fun_Symbol(Sym_Form_Eager_F,[pr;sl;fl;fr;sr;po])
+
+let p_pr (pm : pattern) (pf : pattern) (pargs : pattern) (pevent : pattern) =
+  match pm, pf, pargs, pevent with
+  | Pat_Axiom(Axiom_Memory m),
+    Pat_Axiom(Axiom_Xpath f),
+    Pat_Axiom(Axiom_Form args),
+    Pat_Axiom(Axiom_Form event) ->
+     pat_form (f_pr m f args event)
+  | _ -> Pat_Fun_Symbol(Sym_Form_Pr,[pm;pf;pargs;pevent])
+
 (* -------------------------------------------------------------------------- *)
 
 module Psubst = struct
@@ -507,7 +598,204 @@ module Psubst = struct
   let add_bindings = List.map_fold add_binding
 
   (* ------------------------------------------------------------------------ *)
-  let p_subst (_s : p_subst) (p : pattern) = p
+  let rec p_subst (s : p_subst) (p : pattern) =
+    let p = match p with
+    | Pat_Anything -> Pat_Anything
+    | Pat_Sub p -> Pat_Sub (p_subst s p)
+    | Pat_Or lp -> Pat_Or (List.map (p_subst s) lp)
+    | Pat_Instance _ -> assert false
+    | Pat_Red_Strat (p,f) -> Pat_Red_Strat (p_subst s p,f)
+    | Pat_Type (p,gty) ->
+       let gty = gty_subst s gty in
+       Pat_Type (p_subst s p,gty)
+    | Pat_Meta_Name (p,name) -> begin
+        match Mid.find_opt name s.ps_patloc with
+        | Some p -> p
+        | None -> Pat_Meta_Name (p_subst s p,name)
+      end
+    | Pat_Axiom a -> begin
+        match a with
+        | Axiom_Form fp -> begin
+            match fp.f_node with
+            | Fquant (q, b, f) ->
+               let s, b' = add_bindings s b in
+               let p     = p_subst s (pat_form f) in
+               p_f_quant q b' p
+
+            | Flet (lp, f1, f2) ->
+               let f1'    = p_subst s (pat_form f1) in
+               let s, lp' = subst_lpattern s lp in
+               let f2'    = p_subst s (pat_form f2) in
+               p_let lp' f1' f2'
+
+            | Flocal id -> begin
+                match Mid.find_opt id s.ps_patloc with
+                | Some p -> p
+                | None ->
+                   let ty = ty_subst s.ps_sty fp.f_ty in
+                   pat_form (FSmart.f_local (fp, (id, fp.f_ty)) (id, ty))
+              end
+
+            | Fop (p, lty) when Mp.mem p s.ps_opdef ->
+               let ty   = ty_subst s.ps_sty fp.f_ty in
+               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
+               let body = oget (Mp.find_opt p s.ps_opdef) in
+               p_subst_op s.ps_freshen ty lty [] body
+
+            | Fop (p, lty) when Mp.mem p s.ps_pddef ->
+               let ty   = ty_subst s.ps_sty fp.f_ty in
+               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
+               let body = oget (Mp.find_opt p s.ps_pddef) in
+               p_subst_pd ty lty [] body
+
+            | Fapp ({ f_node = Fop (op, lty) }, args) when Mp.mem op s.ps_opdef ->
+               let ty   = ty_subst s.ps_sty fp.f_ty in
+               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
+               let body = oget (Mp.find_opt op s.ps_opdef) in
+               let args = List.map (fun f -> p_subst s (pat_form f)) args in
+               p_subst_op s.ps_freshen ty lty args body
+
+            | Fapp ({ f_node = Fop (op, lty) }, args) when Mp.mem op s.ps_pddef ->
+               let ty   = ty_subst s.ps_sty fp.f_ty in
+               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
+               let body = oget (Mp.find_opt op s.ps_pddef) in
+               let args = List.map (fun f -> p_subst s (pat_form f)) args in
+               p_subst_pd s.ps_freshen ty lty args body
+
+            | Fop (op, lty) ->
+               let ty'  = ty_subst s.ps_sty fp.f_ty in
+               let lty' = List.Smart.map (ty_subst s.ps_sty) lty in
+               let op'  = s.ps_sty.ts_p op in
+               pat_form (FSmart.f_op (fp, (op, lty, fp.f_ty)) (op', lty', ty'))
+
+            | Fpvar (pv, m) ->
+               let pv' = pv_subst (EcPath.x_substm s.ps_sty.ts_p s.ps_mp) pv in
+               let m'  = Mid.find_def m m s.ps_mem in
+               let ty' = ty_subst s.ps_sty fp.f_ty in
+               pat_form (FSmart.f_pvar (fp, (pv, fp.f_ty, m)) (pv', ty', m'))
+
+            | Fglob (mp, m) ->
+               let m'  = Mid.find_def m m s.ps_mem in
+               let mp' = s.ps_sty.ts_mp mp in
+               pat_form (FSmart.f_glob (fp, (mp, m)) (mp', m'))
+
+            | FhoareF hf ->
+               assert (not (Mid.mem mhr s.ps_mem) && not (Mid.mem mhr s.ps_mem));
+               let pr' = p_subst s (pat_form hf.hf_pr) in
+               let po' = p_subst s (pat_form hf.hf_po) in
+               let mp' = EcPath.x_substm s.ps_sty.ts_p s.ps_mp hf.hf_f in
+               p_hoareF pr' (pat_xpath mp') po'
+               (* FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; } *)
+
+            | FhoareS hs ->
+               assert (not (Mid.mem (fst hs.hs_m) s.ps_mem));
+               let es  = e_subst_init s.ps_freshen s.ps_sty.ts_p
+                           (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
+               let pr' = p_subst s (pat_form hs.hs_pr) in
+               let po' = p_subst s (pat_form hs.hs_po) in
+               let st' = EcModules.s_subst es hs.hs_s in
+               let me' = EcMemory.me_substm s.ps_sty.ts_p s.ps_mp s.ps_mem
+                           (ty_subst s.ps_sty) hs.hs_m in
+               p_hoareS (pat_memenv me') pr' (pat_stmt st') po'
+               (* FSmart.f_hoareS (fp, hs)
+                *   { hs_pr = pr'; hs_po = po'; hs_s = st'; hs_m = me'; } *)
+
+            | FbdHoareF bhf ->
+               assert (not (Mid.mem mhr s.ps_mem) && not (Mid.mem mhr s.ps_mem));
+               let pr' = p_subst s (pat_form bhf.bhf_pr) in
+               let po' = p_subst s (pat_form bhf.bhf_po) in
+               let mp' = EcPath.x_substm s.ps_sty.ts_p s.ps_mp bhf.bhf_f in
+               let bd' = p_subst s (pat_form bhf.bhf_bd) in
+               p_bdHoareF pr' (pat_xpath mp') po' (pat_cmp bhf.bhf_cmp) bd'
+               (* FSmart.f_bdHoareF (fp, bhf)
+                *   { bhf with bhf_pr = pr'; bhf_po = po';
+                *              bhf_f  = mp'; bhf_bd = bd'; } *)
+
+            | FbdHoareS bhs ->
+               assert (not (Mid.mem (fst bhs.bhs_m) s.ps_mem));
+               let es  = e_subst_init s.ps_freshen s.ps_sty.ts_p
+                           (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
+               let pr' = p_subst s (pat_form bhs.bhs_pr) in
+               let po' = p_subst s (pat_form bhs.bhs_po) in
+               let st' = EcModules.s_subst es bhs.bhs_s in
+               let me' = EcMemory.me_substm s.ps_sty.ts_p s.ps_mp s.ps_mem
+                           (ty_subst s.ps_sty) bhs.bhs_m in
+               let bd' = p_subst s (pat_form bhs.bhs_bd) in
+               p_bdHoareS (pat_memenv me') pr' (pat_stmt st') po'
+                 (pat_cmp bhs.bhs_cmp) bd'
+               (* FSmart.f_bdHoareS (fp, bhs)
+                *   { bhs with bhs_pr = pr'; bhs_po = po'; bhs_s = st';
+                *              bhs_bd = bd'; bhs_m  = me'; } *)
+
+            | FequivF ef ->
+               assert (not (Mid.mem mleft s.ps_mem) && not (Mid.mem mright s.ps_mem));
+               let m_subst = EcPath.x_substm s.ps_sty.ts_p s.ps_mp in
+               let pr' = p_subst s (pat_form ef.ef_pr) in
+               let po' = p_subst s (pat_form ef.ef_po) in
+               let fl' = m_subst ef.ef_fl in
+               let fr' = m_subst ef.ef_fr in
+               p_equivF pr' (pat_xpath fl') (pat_xpath fr') po'
+               (* FSmart.f_equivF (fp, ef)
+                *   { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; } *)
+
+            | FequivS eqs ->
+               assert (not (Mid.mem (fst eqs.es_ml) s.ps_mem) &&
+                         not (Mid.mem (fst eqs.es_mr) s.ps_mem));
+               let es = e_subst_init s.ps_freshen s.ps_sty.ts_p
+                          (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
+               let s_subst = EcModules.s_subst es in
+               let pr' = p_subst s (pat_form eqs.es_pr) in
+               let po' = p_subst s (pat_form eqs.es_po) in
+               let sl' = s_subst eqs.es_sl in
+               let sr' = s_subst eqs.es_sr in
+               let ml' = EcMemory.me_substm s.ps_sty.ts_p s.ps_mp s.ps_mem
+                           (ty_subst s.ps_sty) eqs.es_ml in
+               let mr' = EcMemory.me_substm s.ps_sty.ts_p s.ps_mp s.ps_mem
+                           (ty_subst s.ps_sty) eqs.es_mr in
+
+               p_equivS (pat_memenv ml') (pat_memenv mr') pr' (pat_stmt sl')
+                 (pat_stmt sr') po'
+               (* FSmart.f_equivS (fp, eqs)
+                *   { es_ml = ml'; es_mr = mr';
+                *     es_pr = pr'; es_po = po';
+                *     es_sl = sl'; es_sr = sr'; } *)
+
+            | FeagerF eg ->
+               assert (not (Mid.mem mleft s.ps_mem) && not (Mid.mem mright s.ps_mem));
+               let m_subst = EcPath.x_substm s.ps_sty.ts_p s.ps_mp in
+               let pr' = p_subst s (pat_form eg.eg_pr) in
+               let po' = p_subst s (pat_form eg.eg_po) in
+               let fl' = pat_xpath (m_subst eg.eg_fl) in
+               let fr' = pat_xpath (m_subst eg.eg_fr) in
+
+               let es = e_subst_init s.ps_freshen s.ps_sty.ts_p
+                          (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
+               let s_subst = EcModules.s_subst es in
+               let sl' = pat_stmt (s_subst eg.eg_sl) in
+               let sr' = pat_stmt (s_subst eg.eg_sr) in
+
+               p_eagerF pr' sl' fl' fr' sr' po'
+               (* FSmart.f_eagerF (fp, eg)
+                *   { eg_pr = pr'; eg_sl = sl';eg_fl = fl';
+                *     eg_fr = fr'; eg_sr = sr'; eg_po = po'; } *)
+
+            | Fpr pr ->
+               assert (not (Mid.mem mhr s.ps_mem));
+               let pr_mem   = pat_memory (Mid.find_def pr.pr_mem pr.pr_mem s.ps_mem) in
+               let pr_fun   = pat_xpath (EcPath.x_substm s.ps_sty.ts_p s.ps_mp
+                                           pr.pr_fun) in
+               let pr_args  = p_subst s (pat_form pr.pr_args) in
+               let pr_event = p_subst s (pat_form pr.pr_event) in
+
+               p_pr pr_mem pr_fun pr_args pr_event
+               (* FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; } *)
+
+            | _ -> p_map (ty_subst s.ps_sty) (p_subst s) (pat_form fp)
+          end (* axiom_form *)
+      end (* pat_axiom *)
+    | Pat_Fun_Symbol (_,_) -> p
+    in p
+
 
 end
 
