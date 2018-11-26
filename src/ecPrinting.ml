@@ -37,14 +37,19 @@ module PPEnv = struct
     ppe_inuse  : Ssym.t;
     ppe_univar : (symbol Mint.t * Ssym.t) ref;
     ppe_fb     : Sp.t;
+    ppe_width  : int;
   }
 
   let ofenv (env : EcEnv.env) =
+    let width =
+      EcGState.asint 0 (EcGState.getvalue "PP:width" (EcEnv.gstate env)) in
+
     { ppe_env    = env;
       ppe_locals = Mid.empty;
       ppe_inuse  = Ssym.empty;
       ppe_univar = ref (Mint.empty, Ssym.empty);
-      ppe_fb     = Sp.empty; }
+      ppe_fb     = Sp.empty;
+      ppe_width  = max 20 width; }
 
   let enter_by_memid ppe id =
     match EcEnv.Memory.byid id ppe.ppe_env with
@@ -818,17 +823,18 @@ let pp_opname_with_tvi ppe fmt (nm, op, tvi) =
         (pp_list "@, " (pp_type ppe)) tvi
 
 let pp_opapp
-     (ppe    : PPEnv.t)
-     (t_ty   : 'a -> EcTypes.ty)
-    ((dt_sub : 'a -> (EcPath.path * _ * 'a list) option),
-     (pp_sub : PPEnv.t -> _ * (opprec * iassoc) -> _ -> 'a -> unit),
-     (is_trm : 'a -> bool))
-     (outer  : symbol list * ((_ * fixity) * iassoc))
-     (fmt    : Format.formatter)
-     ((pred  : [`Expr | `Form]),
-      (op    : EcPath.path),
-      (tvi   : EcTypes.ty list),
-      (es    : 'a list))
+     (ppe     : PPEnv.t)
+     (t_ty    : 'a -> EcTypes.ty)
+    ((dt_sub  : 'a -> (EcPath.path * _ * 'a list) option),
+     (pp_sub  : PPEnv.t -> _ * (opprec * iassoc) -> _ -> 'a -> unit),
+     (is_trm  : 'a -> bool),
+     (is_proj : EcPath.path -> 'a -> (EcIdent.t * int) option))
+     (outer   : symbol list * ((_ * fixity) * iassoc))
+     (fmt     : Format.formatter)
+     ((pred   : [`Expr | `Form]),
+      (op     : EcPath.path),
+      (tvi    : EcTypes.ty list),
+      (es     : 'a list))
 =
   let (nm, opname) =
     PPEnv.op_symb ppe op (Some (pred, tvi, List.map t_ty es)) in
@@ -995,26 +1001,69 @@ let pp_opapp
 
   and try_pp_record () =
     let env = ppe.PPEnv.ppe_env in
-      match EcEnv.Op.by_path_opt op env with
-      | Some op when EcDecl.is_rcrd op -> begin
-          let recp = EcDecl.operator_as_rcrd op in
-            match EcEnv.Ty.by_path_opt recp env with
-            | Some { tyd_type = `Record (_, fields) } -> begin
-                if List.length fields = List.length es then
-                  let pp fmt () =
-                    let pp_field fmt ((name, _), e) =
-                      Format.fprintf fmt "%s =@ %a" name
-                        (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e
-                    in
-                      Format.fprintf fmt "{|@[<hov 2> %a;@ @]|}"
-                        (pp_list ";@ " pp_field) (List.combine fields es)
-                  in
-                    Some pp
-                else None
-              end
-            | _ -> None
-        end
+
+    match EcEnv.Op.by_path_opt op env with
+    | Some op when EcDecl.is_rcrd op -> begin
+
+      let recp = EcDecl.operator_as_rcrd op in
+
+      match EcEnv.Ty.by_path_opt recp env with
+      | Some { tyd_type = `Record (_, fields) }
+          when List.length fields = List.length es
+        -> begin
+          let wmap =
+            List.fold_left (fun m e ->
+              match is_proj recp e with
+              | None -> m
+              | Some (var, idx) ->
+                  Mid.change
+                    (fun x -> Some (Sint.add idx (odfl Sint.empty x)))
+                    var m
+            ) Mid.empty es in
+
+          let wmap =
+            List.sort
+              (fun (_, x) (_, y) ->
+                compare (Sint.cardinal x) (Sint.cardinal y))
+              (Mid.bindings wmap) in
+
+          let wmap =
+            let n = List.length fields in
+            List.filter (fun (_, x) -> Sint.cardinal x <> n) wmap in
+
+          match List.Exceptionless.hd wmap with
+          | None ->
+              let pp fmt () =
+                let pp_field fmt ((name, _), e) =
+                  Format.fprintf fmt "%s =@ %a" name
+                    (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e
+                in
+                  Format.fprintf fmt "{|@[<hov 2> %a;@ @]|}"
+                    (pp_list ";@ " pp_field) (List.combine fields es)
+              in Some pp
+
+          | Some (x, idxs) ->
+              let fields = List.combine fields es in
+              let fields = List.pmapi
+                (fun i x -> if Sint.mem i idxs then None else Some x)
+                fields in
+
+              let pp fmt () =
+                let pp_field fmt ((name, _), e) =
+                  Format.fprintf fmt "%s =@ %a" name
+                    (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e
+                in
+                  Format.fprintf fmt "{| %a with @[<hov 2> %a;@ @]|}"
+                    (pp_local ppe) x
+                    (pp_list ";@ " pp_field) fields
+              in Some pp
+      end
+
       | _ -> None
+
+    end
+
+    | _ -> None
 
   and try_pp_proj () =
     let env = ppe.PPEnv.ppe_env in
@@ -1178,6 +1227,33 @@ let string_of_hcmp = function
   | FHle -> "<="
   | FHeq -> "="
   | FHge -> ">="
+
+(* -------------------------------------------------------------------- *)
+let string_of_cpos1 ((off, cp) : EcParsetree.codepos1) =
+  let s =
+    match cp with
+    | `ByPos i ->
+        string_of_int i
+
+    | `ByMatch (i, k) ->
+        let s =
+          let k =
+            match k with
+            | `If     -> "if"
+            | `While  -> "while"
+            | `Assign -> "<-"
+            | `Sample -> "<$"
+            | `Call   -> "<@"
+          in Printf.sprintf "^%s" k in
+
+        match i with
+        | None | Some 1 -> s
+        | Some i -> Printf.sprintf "%s{%d}" s i
+  in
+
+  if off = 0 then s else
+
+  Printf.sprintf "%s%s%d" s (if off < 0 then "-" else "+") (abs off)
 
 (* -------------------------------------------------------------------- *)
 let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
@@ -1438,12 +1514,21 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       | Fint _ | Flocal _ | Fpvar _ | Fop _ | Ftuple _ -> true
       | _ -> false
 
+    and is_proj (rc : EcPath.path) (f : form) =
+      match f.f_node with
+      | Fapp ({ f_node = Fop (p, _) }, [{ f_node = Flocal x }]) -> begin
+          match (EcEnv.Op.by_path p ppe.PPEnv.ppe_env).op_kind with
+          | OB_oper (Some (OP_Proj (rc', i, _))) when EcPath.p_equal rc rc' ->
+              Some (x, i)
+          | _ -> None
+      end
+      | _ -> None
+
     in
       pp_opapp ppe f_ty
-        (dt_sub, pp_form_r, is_trm)
+        (dt_sub, pp_form_r, is_trm, is_proj)
         outer fmt (`Form, op, tys, es)
   in
-
 
   match f.f_node with
   | Fint n ->
@@ -2205,7 +2290,7 @@ let pp_hoareF (ppe : PPEnv.t) fmt hf =
 let pp_hoareS (ppe : PPEnv.t) fmt hs =
   let ppe = PPEnv.push_mem ppe ~active:true hs.hs_m in
   let ppnode = collect2_s hs.hs_s.s_node [] in
-  let ppnode = c_ppnode ~width:80 ppe ppnode
+  let ppnode = c_ppnode ~width:ppe.PPEnv.ppe_width ppe ppnode
   in
     Format.fprintf fmt "Context : %a@\n%!" (pp_funname ppe) (EcMemory.xpath hs.hs_m);
     Format.fprintf fmt "@\n%!";
@@ -2235,7 +2320,7 @@ let pp_bdhoareF (ppe : PPEnv.t) fmt hf =
 let pp_bdhoareS (ppe : PPEnv.t) fmt hs =
   let ppe = PPEnv.push_mem ppe ~active:true hs.bhs_m in
   let ppnode = collect2_s hs.bhs_s.s_node [] in
-  let ppnode = c_ppnode ~width:80 ppe ppnode
+  let ppnode = c_ppnode ~width:ppe.PPEnv.ppe_width ppe ppnode
   in
 
   let scmp = string_of_hrcmp hs.bhs_cmp in
@@ -2275,13 +2360,15 @@ let pp_equivS (ppe : PPEnv.t) fmt es =
     if insync then begin
       let ppe    = PPEnv.push_mem ~active:true ppe es.es_ml in
       let ppnode = collect2_s es.es_sl.s_node [] in
-      let ppnode = c_ppnode ~width:80 ppe ppnode in
+      let ppnode = c_ppnode ~width:ppe.PPEnv.ppe_width ppe ppnode in
       fun fmt -> pp_node `Left fmt ppnode
     end else begin
       let ppnode = collect2_s es.es_sl.s_node es.es_sr.s_node in
       let ppnode =
-        c_ppnode ~width:40 ~mem:(fst es.es_ml, fst es.es_mr)
-                 ppe ppnode
+        c_ppnode
+          ~width:(ppe.PPEnv.ppe_width / 2)
+          ~mem:(fst es.es_ml, fst es.es_mr)
+          ppe ppnode
       in fun fmt -> pp_node `Both fmt ppnode
     end in
 
@@ -2565,21 +2652,26 @@ and pp_stmt ppe fmt s =
   pp_list "@," (pp_instr ppe) fmt s.s_node
 
 let rec pp_modexp ppe fmt (p, me) =
-  let (ppe, pp) = pp_mod_params ppe me.me_sig.mis_params in
+  let params =
+    match me.me_body with
+    | ME_Alias (i,_) -> List.take i me.me_sig.mis_params
+    | ME_Decl  _     -> []
+    | _              -> me.me_sig.mis_params in
+  let (ppe, pp) = pp_mod_params ppe params in
   Format.fprintf fmt "@[<v>module %s%t = %a@]"
     me.me_name pp (pp_modbody ppe) (p, me.me_body)
 
 and pp_modbody ppe fmt (p, body) =
   match body with
   | ME_Alias (_, mp) ->
-      Format.fprintf fmt "%a" (pp_topmod ppe) mp
+    Format.fprintf fmt "%a" (pp_topmod ppe) mp
 
   | ME_Structure ms ->
       Format.fprintf fmt "{@,  @[<v>%a@]@,}"
         (pp_list "@,@," (fun fmt i -> pp_moditem ppe fmt (p, i))) ms.ms_body
 
   | ME_Decl (mt, restr) ->
-      Format.fprintf fmt "%a" (pp_modtype ppe) (mt, restr)
+      Format.fprintf fmt "[Abstract : %a]" (pp_modtype ppe) (mt, restr)
 
 and pp_moditem ppe fmt (p, i) =
   match i with
@@ -2748,7 +2840,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
 (* -------------------------------------------------------------------- *)
 let pp_stmt_with_nums (ppe : PPEnv.t) fmt stmt =
   let ppnode = collect2_s stmt.s_node [] in
-  let ppnode = c_ppnode ~width:80 ppe ppnode in
+  let ppnode = c_ppnode ~width:ppe.PPEnv.ppe_width ppe ppnode in
   Format.fprintf fmt "%a" (pp_node `Left) ppnode
 
 (* -------------------------------------------------------------------- *)

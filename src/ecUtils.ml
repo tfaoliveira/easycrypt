@@ -59,6 +59,8 @@ let (|-) g f = fun x -> g (f x)
 let (|>) x f = f x
 let (<|) f x = f x
 
+let (|?) = BatPervasives.(|?)
+
 let curry   f (x, y) = f x y
 let uncurry f x y = f (x, y)
 
@@ -161,6 +163,9 @@ let fst_map (f : 'a -> 'c) ((x, y) : 'a * 'b) =
 
 let snd_map (f : 'b -> 'c) ((x, y) : 'a * 'b) =
   (x, f y)
+
+let pair_map (f : 'a -> 'b) ((x, y) : 'a * 'a) =
+  (f x, f y)
 
 let pair_equal tx ty (x1, y1) (x2, y2) =
   (tx x1 x2) && (ty y1 y2)
@@ -448,6 +453,10 @@ module List = struct
   include Parallel
 
   (* ------------------------------------------------------------------ *)
+  let nth_opt (s : 'a list) (i : int) =
+    try  Some (List.nth s i)
+    with Failure _ | Invalid_argument _ -> None
+
   let last (s : 'a list) =
     match Exceptionless.last s with
     | None   -> failwith "List.last"
@@ -476,10 +485,15 @@ module List = struct
       | y :: ys -> if f y then acc, y, ys else aux (y::acc) ys
     in aux [] xs
 
-  let rec pmap (f : 'a -> 'b option) (xs : 'a list) =
-    match xs with
-    | []      -> []
-    | x :: xs -> let v = f x in ocons v (pmap f xs)
+  let pmapi (f : int -> 'a -> 'b option) =
+    let rec doit i xs =
+      match xs with
+      | [] -> []
+      | x :: xs -> let v = f i x in ocons v (doit (i + 1) xs)
+    in fun (xs : 'a list) -> doit 0 xs
+
+  let pmap (f : 'a -> 'b option) (xs : 'a list) =
+    pmapi (fun _ -> f) xs
 
   let rev_pmap (f : 'a -> 'b option) (xs : 'a list) =
     let rec aux acc xs =
