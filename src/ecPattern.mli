@@ -13,6 +13,8 @@ module MName = Mid
 
 type meta_name = Name.t
 
+type pbindings = (ident * gty option) list
+
 type axiom =
   | Axiom_Form     of form
   | Axiom_Memory   of memory
@@ -33,7 +35,7 @@ type fun_symbol =
   | Sym_Form_If
   | Sym_Form_App          of ty
   | Sym_Form_Tuple
-  | Sym_Form_Proj         of int
+  | Sym_Form_Proj         of int * ty
   | Sym_Form_Match        of ty
   | Sym_Form_Quant        of quantif * bindings
   | Sym_Form_Let          of lpattern
@@ -64,13 +66,14 @@ type fun_symbol =
   | Sym_Mpath
   (* generalized *)
   | Sym_App
-  | Sym_Quant             of quantif * ((ident * (gty option)) list)
+  | Sym_Quant             of quantif * pbindings
+
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
 type pattern =
   | Pat_Anything
-  | Pat_Meta_Name  of pattern * meta_name
+  | Pat_Meta_Name  of pattern * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
   | Pat_Instance   of pattern option * meta_name * path * pattern list
@@ -88,7 +91,14 @@ val pat_fv : pattern -> int Mid.t
 
 (* -------------------------------------------------------------------------- *)
 
+val p_map      : (ty -> ty) -> (pattern -> pattern) -> pattern -> pattern
+val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
+(* -------------------------------------------------------------------------- *)
+
 val pat_axiom : axiom -> pattern
+
+val axiom_form    : form -> axiom
+val axiom_mpath   : mpath -> axiom
 
 val pat_form      : form            -> pattern
 val pat_mpath     : mpath           -> pattern
@@ -99,6 +109,10 @@ val pat_lvalue    : lvalue          -> pattern
 val pat_instr     : instr           -> pattern
 val pat_stmt      : stmt            -> pattern
 val pat_local     : ident -> ty     -> pattern
+val pat_pv        : prog_var        -> pattern
+val pat_memory    : EcMemory.memory -> pattern
+val pat_memenv    : EcMemory.memenv -> pattern
+val pat_cmp       : hoarecmp        -> pattern
 
 (* -------------------------------------------------------------------------- *)
 
@@ -112,13 +126,27 @@ val p_prog_var     : pattern -> pvar_kind -> pattern
 val p_lvalue_var   : pattern -> ty -> pattern
 val p_lvalue_tuple : pattern list -> pattern
 
+val p_type     : pattern -> gty -> pattern
+
 val p_let      : lpattern -> pattern -> pattern -> pattern
 val p_if       : pattern -> pattern -> pattern -> pattern
 val p_proj     : pattern -> int -> ty -> pattern
+val p_tuple    : pattern list -> pattern
 val p_app      : pattern -> pattern list -> ty option -> pattern
 val p_f_quant  : quantif -> bindings -> pattern -> pattern
 val p_quant    : quantif -> (EcIdent.t * EcFol.gty option) list -> pattern -> pattern
-val p_pvar     : prog_var -> ty -> memory -> pattern
+val p_pvar     : pattern -> ty -> pattern -> pattern
+val p_glob     : pattern -> pattern -> pattern
+val p_match    : pattern -> ty -> pattern list -> pattern
+
+val p_hoareF   : pattern -> pattern -> pattern -> pattern
+val p_hoareS   : pattern -> pattern -> pattern -> pattern -> pattern
+val p_bdHoareF : pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+val p_bdHoareS : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+val p_equivF   : pattern -> pattern -> pattern -> pattern -> pattern
+val p_equivS   : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+val p_eagerF   : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+val p_pr       : pattern -> pattern -> pattern -> pattern -> pattern
 
 val p_assign   : pattern -> pattern -> pattern
 val p_sample   : pattern -> pattern -> pattern
@@ -127,25 +155,66 @@ val p_instr_if : pattern -> pattern -> pattern -> pattern
 val p_while    : pattern -> pattern -> pattern
 val p_assert   : pattern -> pattern
 
+val p_stmt     : pattern list -> pattern
+
 (* -------------------------------------------------------------------------- *)
 val p_destr_app : pattern -> pattern * pattern list
 
 (* -------------------------------------------------------------------------- *)
 val p_if_simpl      : pattern -> pattern -> pattern -> pattern
 val p_proj_simpl    : pattern -> int -> ty -> pattern
-val p_app_simpl_opt : pattern option -> pattern list -> ty -> pattern option
+val p_app_simpl_opt : pattern option -> pattern list -> ty option -> pattern option
 val p_forall_simpl  : bindings -> pattern -> pattern
 val p_exists_simpl  : bindings -> pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 module Psubst : sig
-  type p_subst
+  type p_subst = {
+      ps_freshen : bool;
+      ps_patloc  : pattern             Mid.t;
+      ps_mp      : mpath               Mid.t;
+      ps_mem     : ident               Mid.t;
+      ps_opdef   : (ident list * expr) Mp.t;
+      ps_pddef   : (ident list * form) Mp.t;
+      ps_exloc   : expr                Mid.t;
+      ps_sty     : ty_subst;
+    }
 
   val p_subst_id   : p_subst
-  val p_bind_local : p_subst -> EcIdent.t -> pattern -> p_subst
 
-  val p_subst      : p_subst -> pattern -> pattern
+  val is_subst_id  : p_subst -> bool
+  val p_subst_init : ?mods:EcPath.mpath EcIdent.Mid.t ->
+                     ?sty:EcTypes.ty_subst ->
+                     ?opdef:(EcIdent.ident list * EcTypes.expr) EcPath.Mp.t ->
+                     ?prdef:(EcIdent.ident list * EcFol.form) EcPath.Mp.t ->
+                     unit -> p_subst
+
+  val p_bind_local  : p_subst -> ident -> pattern -> p_subst
+  val p_bind_mem    : p_subst -> memory -> memory -> p_subst
+  val p_bind_mod    : p_subst -> ident -> mpath -> p_subst
+  val p_bind_rename : p_subst -> ident -> ident -> ty -> p_subst
+
+  val p_rem_local   : p_subst -> ident -> p_subst
+  val p_rem_mem     : p_subst -> memory -> p_subst
+  val p_rem_mod     : p_subst -> ident -> p_subst
+
+  val add_local     : p_subst -> ident * ty -> p_subst * (t * ty)
+  val add_locals    : p_subst -> (t * ty) list ->
+                      p_subst * (t * ty) list
+
+  val add_binding   : p_subst -> binding -> p_subst * binding
+  val add_bindings  : p_subst -> bindings -> p_subst * bindings
+
+  val add_pbinding  : p_subst -> ident * gty option -> p_subst * (ident * gty option)
+  val add_pbindings : p_subst -> (ident * gty option) list -> p_subst * ((ident * gty option) list)
+
+  val p_subst       : p_subst -> pattern -> pattern
 end
+
+(* -------------------------------------------------------------------- *)
+
+val p_betared_opt : pattern -> pattern option
+
 
 (* -------------------------------------------------------------------- *)
 val default_start_name : string

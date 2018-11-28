@@ -2873,11 +2873,11 @@ let rec pp_pat_axiom ppe fmt a = match a with
 and pp_pattern ppe fmt p = match p with
   | Pat_Anything ->
      Format.fprintf fmt "_"
-  | Pat_Meta_Name (Pat_Anything,name)
-    | Pat_Meta_Name (Pat_Type(Pat_Anything,_),name) ->
+  | Pat_Meta_Name (Pat_Anything,name,_)
+    | Pat_Meta_Name (Pat_Type(Pat_Anything,_),name,_) ->
      Format.fprintf fmt "#%a"
        (pp_mem ppe) name
-  | Pat_Meta_Name (p,name) ->
+  | Pat_Meta_Name (p,name,_) ->
      Format.fprintf fmt "(%a as %a)"
        (pp_pattern ppe) p
        (pp_form ppe) (f_local name tbool)
@@ -2906,7 +2906,7 @@ and pp_pattern ppe fmt p = match p with
         Format.fprintf fmt "@[(%a)@]"
           (pp_list "," (pp_pattern ppe)) t
 
-     | Sym_Form_Proj i, [p] ->
+     | Sym_Form_Proj (i,_), [p] ->
         Format.fprintf fmt "%a.`%i"
           (pp_pattern ppe) p (i+1)
      | Sym_Form_Proj _,_ -> assert false

@@ -13,6 +13,8 @@ open EcUid
 open EcModules
 open EcTypes
 
+open Psubst
+
 let default_name = "object matched to rewrite"
 let rewrite_name = "rewrited object"
 let default_name = Name.create default_name
@@ -43,7 +45,6 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
 
   let red_info = EcReduction.full_red in
 
-  let fun_none _ _  = None in
   let fun_red p f = EcFMatching.red_make_strat_from_info red_info hyps p f in
 
   let p = pattern_of_form binds f1 in
@@ -52,7 +53,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        let op = Pat_Red_Strat(op,fun_red) in
        Pat_Fun_Symbol(Sym_Form_App ty,op::lp)
     | _ -> p in
-  let p = Pat_Meta_Name (p, default_name) in
+  let p = Pat_Meta_Name (p, default_name, None) in
   let p = Pat_Sub p in
 
   let f = tc1_goal tc in
@@ -66,7 +67,11 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        print o
   in
 
-  let engine = EcFMatching.mkengine f p hyps fun_none EcReduction.full_red unienv in
+  let red_info_pattern = EcReduction.betaiota_red in
+  let red_info_axiom   = EcReduction.full_red in
+
+  let environnement = EcFMatching.mkenv hyps red_info_pattern red_info_axiom unienv in
+  let engine = EcFMatching.mkengine (axiom_form f) p environnement in
 
   let types_to_unify =
     let add_unigty acc = function
@@ -86,7 +91,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
     and aux (acc : Suid.t) (p : EcPattern.pattern) =
       match p with
       | Pat_Anything -> acc
-      | Pat_Meta_Name (p,_) -> aux acc p
+      | Pat_Meta_Name (p,_,_) -> aux acc p
       | Pat_Sub p -> aux acc p
       | Pat_Or lp ->
          List.fold_left aux acc lp
@@ -215,17 +220,16 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
     | Some nengine ->
        let engine =
          { engine with
-           e_binds = nengine.ne_binds;
            e_continuation = nengine.ne_continuation;
            e_env = nengine.ne_env;
          } in
-       let map = engine.e_env.env_map in
+       let map = engine.e_env.env_subst.ps_patloc in
        let ty_unification =
          let close = EcUnify.UniEnv.close engine.e_env.env_unienv in
          Muid.mapi (fun ty _ -> close ty) types_to_unify
        in
        let map =
-         Mid.add rewrite_name (Pat_Axiom(Axiom_Form(rewrite_term engine f2))) map in
+         Mid.add rewrite_name (rewrite_term engine f2) map in
        let _ = Mid.iter print_names map in
        Muid.iter print_types ty_unification
   in

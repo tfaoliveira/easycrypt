@@ -10,20 +10,21 @@ exception CannotUnify
 exception NoNext
 
 type environnement = {
-    env_hyps           : EcEnv.LDecl.hyps;
-    env_unienv         : EcUnify.unienv;
-    env_red_strat      : reduction_strategy;
-    env_red_info_p     : EcReduction.reduction_info;
-    env_red_info_a     : EcReduction.reduction_info;
-    env_restore_unienv : EcUnify.unienv option;
-    env_map            : EcPattern.map;
-    env_current_binds  : bindings;
+    env_hyps             : EcEnv.LDecl.hyps;
+    env_unienv           : EcUnify.unienv;
+    env_red_strat        : reduction_strategy;
+    env_red_info_p       : EcReduction.reduction_info;
+    env_red_info_a       : EcReduction.reduction_info;
+    env_restore_unienv   : EcUnify.unienv option;
+    env_subst            : Psubst.p_subst;
+    env_current_binds    : pbindings;
+    env_meta_restr_binds : pbindings Mid.t;
     (* FIXME : ajouter ici les stratégies *)
   }
 
 type pat_continuation =
   | ZTop
-  | Znamed     of pattern * meta_name * pat_continuation
+  | Znamed     of pattern * meta_name * pbindings option * pat_continuation
 
   (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
@@ -41,36 +42,38 @@ type pat_continuation =
                   * (axiom * pattern) list
                   * pat_continuation
 
-  | Zbinds     of pat_continuation * binding Mid.t
+  | Zbinds     of pat_continuation * pbindings
 
 and engine = {
     e_head         : axiom;
     e_pattern      : pattern;
-    e_binds        : binding Mid.t;
     e_continuation : pat_continuation;
     e_env          : environnement;
   }
 
 and nengine = {
     ne_continuation : pat_continuation;
-    ne_binds        : binding Mid.t;
     ne_env          : environnement;
   }
 
 
-val search          : form -> pattern -> LDecl.hyps -> reduction_strategy ->
+val search          : form -> pattern -> LDecl.hyps ->
+                      EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv ->
-                      (map * environnement) option
+                      (Psubst.p_subst * environnement) option
 
 val search_eng      : engine -> nengine option
 
 val red_make_strat_from_info : EcReduction.reduction_info -> LDecl.hyps ->
                                pattern -> axiom -> (pattern * axiom) option
 
-val mkengine        : form -> pattern -> LDecl.hyps -> reduction_strategy ->
-                      EcReduction.reduction_info -> EcUnify.unienv ->
-                      engine
+val mkenv           : LDecl.hyps -> EcReduction.reduction_info ->
+                      EcReduction.reduction_info -> EcUnify.unienv -> environnement
+
+val mkengine        : axiom -> pattern -> environnement -> engine
+val mk_engine       : form -> pattern -> LDecl.hyps -> reduction_strategy ->
+                      EcReduction.reduction_info -> EcUnify.unienv -> engine
 
 val pattern_of_form : bindings -> form -> pattern
 
-val rewrite_term    : engine -> EcFol.form -> EcFol.form
+val rewrite_term    : engine -> EcFol.form -> pattern
