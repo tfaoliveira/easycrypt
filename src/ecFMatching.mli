@@ -19,6 +19,8 @@ type environnement = {
     env_subst            : Psubst.p_subst;
     env_current_binds    : pbindings;
     env_meta_restr_binds : pbindings Mid.t;
+    env_fmt              : Format.formatter;
+    env_ppe              : EcPrinting.PPEnv.t;
     (* FIXME : ajouter ici les stratégies *)
   }
 
@@ -57,23 +59,33 @@ and nengine = {
   }
 
 
-val search          : form -> pattern -> LDecl.hyps ->
+val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
+                      form -> pattern -> LDecl.hyps ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv ->
                       (Psubst.p_subst * environnement) option
 
 val search_eng      : engine -> nengine option
 
-val red_make_strat_from_info : EcReduction.reduction_info -> LDecl.hyps ->
-                               pattern -> axiom -> (pattern * axiom) option
+val red_make_strat_from_env : environnement -> pattern -> axiom ->
+                              (pattern * axiom) option
 
-val mkenv           : LDecl.hyps -> EcReduction.reduction_info ->
+val mkenv           : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
+                      LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv -> environnement
 
 val mkengine        : axiom -> pattern -> environnement -> engine
-val mk_engine       : form -> pattern -> LDecl.hyps -> reduction_strategy ->
+val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
+                      form -> pattern -> LDecl.hyps -> reduction_strategy ->
                       EcReduction.reduction_info -> EcUnify.unienv -> engine
 
 val pattern_of_form : bindings -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
+
+module PReduction : sig
+
+  val h_red_pattern_opt : environnement -> pattern -> pattern option
+  val h_red_axiom_opt   : environnement -> axiom -> pattern option
+
+end

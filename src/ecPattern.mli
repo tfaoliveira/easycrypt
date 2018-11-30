@@ -91,7 +91,7 @@ val pat_fv : pattern -> int Mid.t
 
 (* -------------------------------------------------------------------------- *)
 
-val p_map      : (ty -> ty) -> (pattern -> pattern) -> pattern -> pattern
+(* val p_map      : (ty -> ty) -> (pattern -> pattern) -> pattern -> pattern *)
 val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
 (* -------------------------------------------------------------------------- *)
 
@@ -193,6 +193,7 @@ module Psubst : sig
   val p_bind_mem    : p_subst -> memory -> memory -> p_subst
   val p_bind_mod    : p_subst -> ident -> mpath -> p_subst
   val p_bind_rename : p_subst -> ident -> ident -> ty -> p_subst
+  val p_bind_gty    : p_subst -> ident -> ident -> gty -> p_subst
 
   val p_rem_local   : p_subst -> ident -> p_subst
   val p_rem_mem     : p_subst -> memory -> p_subst

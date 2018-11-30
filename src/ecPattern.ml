@@ -232,6 +232,7 @@ let pat_fv p =
 (* -------------------------------------------------------------------------- *)
 let p_equal : pattern -> pattern -> bool = (==)
 
+
 (* -------------------------------------------------------------------------- *)
 let p_type (p : pattern) (gty : gty) =
   match p with
@@ -580,11 +581,12 @@ let rec p_map (f_ty : ty -> ty) (aux : pattern -> pattern) (p : pattern) =
 
 
 
-let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern) : 'a * pattern =
+let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
+        : 'a * pattern =
   let a, p' = f a p in
   if not (p = p') then a, p' else
   match p with
-  | Pat_Anything -> f a p
+  | Pat_Anything -> a, p
   | Pat_Meta_Name (p,n,ob) ->
      let a, p = p_map_fold f a p in a, Pat_Meta_Name (p,n,ob)
   | Pat_Sub p ->
@@ -1200,6 +1202,12 @@ module Psubst = struct
     let merge o = assert (o = None); Some ne in
     { s with ps_exloc = Mid.change merge nfrom s.ps_exloc }
 
+  let p_bind_gty (s : p_subst) (nfrom : ident) (nto : ident) (gty : gty) =
+    match gty with
+    | GTty ty -> p_bind_rename s nfrom nto ty
+    | GTmem _ -> p_bind_mem s nfrom nto
+    | GTmodty (_,_) -> p_bind_mod s nfrom (mpath (`Local nto) [])
+
   (* ------------------------------------------------------------------------ *)
   let p_rem_local (s : p_subst) (n : ident) =
     { s with ps_patloc = Mid.remove n s.ps_patloc;
@@ -1352,6 +1360,7 @@ module Psubst = struct
 
             | Flocal id -> begin
                 match Mid.find_opt id s.ps_patloc with
+                | Some (Pat_Axiom (Axiom_Local (id,ty))) -> pat_form (f_local id ty)
                 | Some p -> p
                 | None ->
                    let ty = ty_subst s.ps_sty fp.f_ty in
@@ -1486,7 +1495,7 @@ module Psubst = struct
                 *     eg_fr = fr'; eg_sr = sr'; eg_po = po'; } *)
 
             | Fpr pr ->
-               assert (not (Mid.mem mhr s.ps_mem));
+               assert (not (Mid.mem mhr s.ps_mem || Mid.mem mhr s.ps_patloc));
                let pr_mem   = mem_subst s pr.pr_mem in
                let pr_fun   = xp_subst s pr.pr_fun in
                let pr_args  = p_subst s (pat_form pr.pr_args) in
@@ -1495,7 +1504,28 @@ module Psubst = struct
                p_pr pr_mem pr_fun pr_args pr_event
                (* FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; } *)
 
-            | _ -> p_map (ty_subst s.ps_sty) (p_subst s) (pat_form fp)
+            | Fif (f1, f2, f3) ->
+               p_if (p_subst s (pat_form f1)) (p_subst s (pat_form f2))
+                 (p_subst s (pat_form f3))
+
+            | Fmatch (f1, fargs, ty) ->
+               p_match (p_subst s (pat_form f1)) (ty_subst s.ps_sty ty)
+                 (List.map (fun x -> p_subst s (pat_form x)) fargs)
+
+            | Fint _ -> pat_form fp
+
+            | Fapp (op,args) ->
+               let p = p_app (p_subst s (pat_form op))
+                         (List.map (fun x -> p_subst s (pat_form x)) args)
+                         (Some (ty_subst s.ps_sty fp.f_ty)) in
+               odfl p (p_betared_opt p)
+
+            | Ftuple t ->
+               p_tuple (List.map (fun x -> p_subst s (pat_form x)) t)
+
+            | Fproj (f1,i) ->
+               p_proj (p_subst s (pat_form f1)) i (ty_subst s.ps_sty fp.f_ty)
+
           end (* axiom_form *)
 
         | Axiom_Module mtop -> mtop_subst s mtop
@@ -1573,18 +1603,23 @@ module Psubst = struct
            p_bdHoareF (p_subst s pr) (p_subst s pf) (p_subst s po)
              (p_subst s cmp) (p_subst s bd)
         | Sym_Form_bd_Hoare_S, [pm;pr;ps;po;cmp;bd] ->
-           p_bdHoareS (p_subst s pm) (p_subst s pr) (p_subst s ps) (p_subst s po)
+           p_bdHoareS (p_subst s pm) (p_subst s pr)
+             (p_subst s ps) (p_subst s po)
              (p_subst s cmp) (p_subst s bd)
         | Sym_Form_Equiv_F, [pr;fl;fr;po] ->
-           p_equivF (p_subst s pr) (p_subst s fl) (p_subst s fr) (p_subst s po)
+           p_equivF (p_subst s pr) (p_subst s fl)
+             (p_subst s fr) (p_subst s po)
         | Sym_Form_Equiv_S, [ml;mr;pr;sl;sr;po] ->
-           p_equivS (p_subst s ml) (p_subst s mr) (p_subst s pr) (p_subst s sl)
+           p_equivS (p_subst s ml) (p_subst s mr)
+             (p_subst s pr) (p_subst s sl)
              (p_subst s sr) (p_subst s po)
         | Sym_Form_Eager_F, [pr;sl;fl;fr;sr;po] ->
-           p_eagerF (p_subst s pr) (p_subst s sl) (p_subst s fl) (p_subst s fr)
+           p_eagerF (p_subst s pr) (p_subst s sl)
+             (p_subst s fl) (p_subst s fr)
              (p_subst s sr) (p_subst s po)
         | Sym_Form_Pr, [pm;pf;pargs;pevent] ->
-           p_pr (p_subst s pm) (p_subst s pf) (p_subst s pargs) (p_subst s pevent)
+           p_pr (p_subst s pm) (p_subst s pf)
+             (p_subst s pargs) (p_subst s pevent)
         | Sym_Stmt_Seq, lp -> p_stmt (List.map (p_subst s) lp)
         | Sym_Instr_Assign, [lv;e] ->
            p_assign (p_subst s lv) (p_subst s e)
@@ -1625,21 +1660,36 @@ module Psubst = struct
 
 
     and mtop_subst s mtop = match mtop with
-      | `Local id ->
-         odfl (pat_mpath_top (s.ps_sty.ts_mp (mpath mtop [])).m_top)
-           (Mid.find_opt id s.ps_patloc)
+      | `Local id when Mid.mem id s.ps_patloc ->
+         Mid.find id s.ps_patloc
       | _ -> pat_mpath_top (s.ps_sty.ts_mp (mpath mtop [])).m_top
 
     and mp_subst s mp =
-      pat_mpath (s.ps_sty.ts_mp mp)
+      let mp = s.ps_sty.ts_mp mp in
+      match mp.m_top with
+      | `Local id when Mid.mem id s.ps_patloc ->
+         p_mpath (Mid.find id s.ps_patloc)
+           (List.map (mp_subst s) mp.m_args)
+      | _ ->
+       let margs = List.map (mp_subst s) mp.m_args in
+       let m_is_eq m1 = function
+         | Pat_Axiom(Axiom_Mpath m2) -> m_equal m1 m2
+         | _ -> false in
+       if List.for_all2 m_is_eq mp.m_args margs
+       then pat_mpath mp
+       else p_mpath (pat_mpath_top mp.m_top) margs
 
     and mem_subst s m =
-      (* FIXME *)
-      pat_memory (Mid.find_def m m s.ps_mem)
+      let m = Mid.find_def m m s.ps_mem in
+      match Mid.find_opt m s.ps_patloc with
+      | Some p -> p
+      | _ -> pat_memory m
 
     and xp_subst s xp =
-      (* FIXME *)
-      pat_xpath (EcPath.x_substm s.ps_sty.ts_p s.ps_mp xp)
+      let xp = EcPath.x_substm s.ps_sty.ts_p s.ps_mp xp in
+      match mp_subst s xp.x_top with
+      | Pat_Axiom (Axiom_Mpath mp) when m_equal mp xp.x_top -> pat_xpath xp
+      | p -> p_xpath p (pat_op xp.x_sub [])
 
     and memenv_subst s m =
       (* FIXME *)
@@ -1759,65 +1809,67 @@ module Psubst = struct
                   pv, e_map (ty_subst s.ps_sty) (fun x->x) e, ty_subst s.ps_sty ty))
          | _ -> assert false
 
+    and p_betared_opt = function
+      | Pat_Anything -> None
+      | Pat_Meta_Name (p,n,ob) ->
+         omap (fun p -> Pat_Meta_Name (p,n,ob)) (p_betared_opt p)
+      | Pat_Sub p ->
+         omap (fun p -> Pat_Sub p) (p_betared_opt p)
+      | Pat_Or [p] -> p_betared_opt p
+      | Pat_Or _ -> None
+      | Pat_Instance _ -> assert false
+      | Pat_Type (p,gty) ->
+         omap (fun p -> Pat_Type(p,gty)) (p_betared_opt p)
+      | Pat_Red_Strat (p,f) ->
+         omap (fun p -> Pat_Red_Strat (p,f)) (p_betared_opt p)
+      | Pat_Axiom (Axiom_Form f) ->
+         let f2 = try EcFol.f_betared f with
+                  | _ -> f in
+         if f_equal f f2 then None
+         else Some (Pat_Axiom(Axiom_Form f2))
+      | Pat_Axiom _ -> None
+      | Pat_Fun_Symbol (s,lp) ->
+         match s,lp with
+         | Sym_Form_App ty,
+           (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+            let subst = p_subst_id in
+            let subst =
+              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+                subst bs1 pargs1 in
+            Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
+         | Sym_App,
+           (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+            let subst = p_subst_id in
+            let subst =
+              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+                subst bs1 pargs1 in
+            Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 None)
+         | Sym_Form_App ty,
+           (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+            let subst = p_subst_id in
+            let subst =
+              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+                subst bs1 pargs1 in
+            Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
+         | Sym_App,
+           (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+            let subst = p_subst_id in
+            let subst =
+              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+                subst bs1 pargs1 in
+            Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 None)
+         | _ -> None
+
 
 end
 
 (* -------------------------------------------------------------------------- *)
-let rec p_betared_opt = function
-  | Pat_Anything -> None
-  | Pat_Meta_Name (p,n,ob) ->
-     omap (fun p -> Pat_Meta_Name (p,n,ob)) (p_betared_opt p)
-  | Pat_Sub p ->
-     omap (fun p -> Pat_Sub p) (p_betared_opt p)
-  | Pat_Or [p] -> p_betared_opt p
-  | Pat_Or _ -> None
-  | Pat_Instance _ -> assert false
-  | Pat_Type (p,gty) ->
-     omap (fun p -> Pat_Type(p,gty)) (p_betared_opt p)
-  | Pat_Red_Strat (p,f) ->
-     omap (fun p -> Pat_Red_Strat (p,f)) (p_betared_opt p)
-  | Pat_Axiom (Axiom_Form f) ->
-     let f2 = try EcFol.f_betared f with
-              | _ -> f in
-     if f_equal f f2 then None
-     else Some (Pat_Axiom(Axiom_Form f2))
-  | Pat_Axiom _ -> None
-  | Pat_Fun_Symbol (s,lp) ->
-     match s,lp with
-     | Sym_Form_App ty,
-       (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
-        let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-        let subst = Psubst.p_subst_id in
-        let subst =
-          List.fold_left2 (fun s (id,_) p -> Psubst.p_bind_local s id p)
-            subst bs1 pargs1 in
-        Some (p_app (p_f_quant Llambda bs2 (Psubst.p_subst subst p)) pargs2 (Some ty))
-     | Sym_App,
-       (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
-        let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-        let subst = Psubst.p_subst_id in
-        let subst =
-          List.fold_left2 (fun s (id,_) p -> Psubst.p_bind_local s id p)
-            subst bs1 pargs1 in
-        Some (p_app (p_f_quant Llambda bs2 (Psubst.p_subst subst p)) pargs2 None)
-     | Sym_Form_App ty,
-       (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
-        let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-        let subst = Psubst.p_subst_id in
-        let subst =
-          List.fold_left2 (fun s (id,_) p -> Psubst.p_bind_local s id p)
-            subst bs1 pargs1 in
-        Some (p_app (p_quant Llambda bs2 (Psubst.p_subst subst p)) pargs2 (Some ty))
-     | Sym_App,
-       (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
-        let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-        let subst = Psubst.p_subst_id in
-        let subst =
-          List.fold_left2 (fun s (id,_) p -> Psubst.p_bind_local s id p)
-            subst bs1 pargs1 in
-        Some (p_app (p_quant Llambda bs2 (Psubst.p_subst subst p)) pargs2 None)
-     | _ -> None
 
+let p_betared_opt = Psubst.p_betared_opt
 
 (* -------------------------------------------------------------------------- *)
 
