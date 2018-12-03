@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -93,7 +94,11 @@ qed.
 (* -------------------------------------------------------------------- *)
 lemma dprod_fu (da : 'a distr) (db : 'b distr):
   is_full (da `*` db) <=> (is_full da /\ is_full db).
-proof. smt (supp_dprod). qed.
+proof.
+split=> [h|[] ha hb].
++ by split=> [a|b]; [move: (h (a,witness))|move: (h (witness,b))]; rewrite supp_dprod.
+by move=> [] a b; rewrite supp_dprod ha hb.
+qed.
 
 (* -------------------------------------------------------------------- *)
 (* TODO : generalize this to parametric distribution *)

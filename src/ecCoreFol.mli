@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -325,6 +326,7 @@ val destr_app       : form -> form * form list
 val destr_not       : form -> form
 val destr_nots      : form -> bool * form
 val destr_and       : form -> form * form
+val destr_and3      : form -> form * form * form
 val destr_and_r     : form -> [`Sym | `Asym] * (form * form)
 val destr_or        : form -> form * form
 val destr_or_r      : form -> [`Sym | `Asym] * (form * form)
@@ -381,6 +383,7 @@ val is_pr        : form -> bool
 val is_eq_or_iff : form -> bool
 
 (* -------------------------------------------------------------------- *)
+val split_fun  : form -> bindings * form
 val split_args : form -> form * form list
 
 (* -------------------------------------------------------------------- *)

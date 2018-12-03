@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -23,8 +24,7 @@ lemma dlistS (d : 'a distr) n:
 proof.
 elim n=> [|n le0_n ih].
 + by rewrite !dlist_def /= -foldpos // fold0.
-rewrite dlist_def -foldpos 1:/# -dlist_def /=.
-by have <-: n + 1 = n + 1 + 1 - 1 by ring.
+by rewrite dlist_def -foldpos 1:/# -dlist_def /=.
 qed.
 
 lemma dlist01E (d : 'a distr) n x:

@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -366,9 +367,11 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Auto : sig
-  val add1 : local:bool -> path -> env -> env
-  val add  : local:bool -> Sp.t -> env -> env
-  val get  : env -> Sp.t
+  val dname  : symbol
+  val add1   : local:bool -> level:int -> ?base:symbol -> path -> env -> env
+  val add    : local:bool -> level:int -> ?base:symbol -> path list -> env -> env
+  val get    : ?base:symbol -> env -> path list
+  val getall : symbol list -> env -> path list
 end
 
 (* -------------------------------------------------------------------- *)

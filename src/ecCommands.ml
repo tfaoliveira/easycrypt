@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -480,17 +481,24 @@ and process_pragma (scope : EcScope.scope) opt =
 
 (* -------------------------------------------------------------------- *)
 and process_option (scope : EcScope.scope) (name, value) =
-  try  EcScope.Options.set scope (unloc name) value
-  with EcScope.UnknownFlag _ ->
-    EcScope.hierror "unknown option: %s" (unloc name)
+  match value with
+  | `Bool value -> begin
+      try  EcScope.Options.set scope (unloc name) value
+      with EcScope.UnknownFlag _ ->
+        EcScope.hierror "unknown option: %s" (unloc name)
+    end
+
+  | (`Int _) as value ->
+      let gs = EcEnv.gstate (EcScope.env scope) in
+      EcGState.setvalue (unloc name) value gs; scope
 
 (* -------------------------------------------------------------------- *)
-and process_addrw scope baserw =
-  EcScope.Auto.addrw scope baserw
+and process_addrw scope (local, base, names) =
+  EcScope.Auto.add_rw scope ~local ~base names
 
 (* -------------------------------------------------------------------- *)
-and process_addat scope base =
-  EcScope.Auto.addat scope base
+and process_hint scope hint =
+  EcScope.Auto.add_hint scope hint
 
 (* -------------------------------------------------------------------- *)
 and process_dump_why3 scope filename =
@@ -584,7 +592,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gpragma      opt  -> `State (fun scope -> process_pragma     scope  opt)
       | Goption      opt  -> `Fct   (fun scope -> process_option     scope  opt)
       | Gaddrw       hint -> `Fct   (fun scope -> process_addrw      scope hint)
-      | Gaddat       hint -> `Fct   (fun scope -> process_addat      scope hint)
+      | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
       | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
     with
     | `Fct   f -> Some (f scope)

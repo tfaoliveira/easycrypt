@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -34,7 +35,11 @@ val p_top  : path
 val i_Pervasive : symbol
 val p_Pervasive : path
 
-(*-------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------- *)
+val base_rnd : string
+val base_ll  : string
+
+(* -------------------------------------------------------------------- *)
 module CI_Unit : sig
   val p_unit : path
   val p_tt   : path
@@ -119,6 +124,18 @@ module CI_Distr : sig
   val p_support : path
   val p_mu      : path
   val p_lossless: path
+  val p_uniform : path
+  val p_full    : path
+end
+
+(* -------------------------------------------------------------------- *)
+module CI_Map : sig
+  val i_Map  : symbol
+  val p_Map  : path
+  val p_map  : path
+  val p_get  : path
+  val p_set  : path
+  val p_cst  : path
 end
 
 (* -------------------------------------------------------------------- *)
@@ -134,6 +151,8 @@ module CI_Logic : sig
   val p_anda_elim     : path
   val p_and_proj_l    : path
   val p_and_proj_r    : path
+  val p_anda_proj_l   : path
+  val p_anda_proj_r   : path
   val p_or_elim       : path
   val p_ora_elim      : path
   val p_iff_elim      : path
@@ -165,13 +184,4 @@ module CI_Logic : sig
   val p_ip_dup        : path
 
   val p_negbTE        : path
-end
-
-module CI_Map : sig
-  val i_Map  : symbol
-  val p_Map  : path
-  val p_map  : path
-  val p_get  : path
-  val p_set  : path
-  val p_cnst : path
 end

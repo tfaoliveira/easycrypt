@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -300,6 +301,9 @@ end = struct
 
     | InvalidModAppl err ->
         msg "invalid module application:@ %a" (pp_modappl_error env1) err
+
+    | InvalidModType MTE_IncludeFunctor ->
+        msg "cannot include functors"
 
     | InvalidModType MTE_InnerFunctor ->
         msg "functors must be top-level modules"

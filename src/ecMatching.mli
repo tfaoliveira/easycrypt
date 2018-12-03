@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -33,6 +34,16 @@ module Zipper : sig
   }
 
   exception InvalidCPos
+
+  (* Create a codepos1 from a top-level absolute position *)
+  val cpos : int -> codepos1
+
+  (* Split a statement from a top-level position (codepos1) *)
+  val find_by_cpos1  : ?rev:bool -> codepos1 -> stmt -> instr list * instr * instr list
+  val split_at_cpos1 : codepos1 -> stmt -> instr list * instr list
+
+  (* Split a statement from an optional top-level position (codepos1) *)
+  val may_split_at_cpos1 : ?rev:bool -> codepos1 option -> stmt -> instr list * instr list
 
   (* [zipper] soft constructor *)
   val zipper : instr list -> instr list -> ipath -> zipper

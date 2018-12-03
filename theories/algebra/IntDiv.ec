@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -68,7 +69,7 @@ rewrite normr0P normr_id=> mE lt_rd; split=> /=; last first.
   rewrite subr_ge0 (addrC 1) -ltzE lt_rd /= ltr_snaddr //.
   by rewrite oppr_lt0 ltzS.
 apply/(addIr 1)/oppr_inj; rewrite mE; case: (d = 0) => [|nz_d].
-  by move=> ->; rewrite normr0 /= addrAC.
+  by move=> ->; rewrite normr0 /=.
 by rewrite mulrN mulNr -addrA opprD opprK mulrAC -signVzE #ring.
 qed.
 
