@@ -46,16 +46,15 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let red_info_pattern = EcReduction.betaiota_red in
   let red_info_axiom   = EcReduction.full_red in
 
-  let environnement = EcFMatching.mkenv ~ppe ~fmt hyps red_info_pattern red_info_axiom unienv in
-
-  let fun_red p f = EcFMatching.red_make_strat_from_env environnement p f in
+  let environnement = EcFMatching.mkenv ~ppe ~fmt hyps
+                        red_info_pattern red_info_axiom unienv in
 
   let p = pattern_of_form binds f1 in
-  let p = match p with
-    | Pat_Fun_Symbol(Sym_Form_App ty,op::lp) ->
-       let op = Pat_Red_Strat(op,fun_red) in
-       Pat_Fun_Symbol(Sym_Form_App ty,op::lp)
-    | _ -> p in
+  (* let p = match p with
+   *   | Pat_Fun_Symbol(Sym_Form_App ty,op::lp) ->
+   *      let op = Pat_Red_Strat(op,fun_red) in
+   *      Pat_Fun_Symbol(Sym_Form_App ty,op::lp)
+   *   | _ -> p in *)
   let p = Pat_Meta_Name (p, default_name, None) in
   let p = Pat_Sub p in
 
@@ -69,31 +68,6 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
        let _ = Format.fprintf fmt "with name \"%a\" :\n" (EcPrinting.pp_local ppe) n in
        print o
   in
-
-  let rec not_first = function
-    | Pat_Fun_Symbol (s, lp) ->
-       Pat_Fun_Symbol (s, List.map transform lp)
-    | Pat_Axiom _ as p -> p
-    | Pat_Red_Strat (p, f) -> Pat_Red_Strat (not_first p, f)
-    | Pat_Instance _ -> assert false
-    | Pat_Or lp -> Pat_Or (List.map not_first lp)
-    | Pat_Sub p -> Pat_Sub (not_first p)
-    | Pat_Meta_Name (p, n, ob) -> Pat_Meta_Name (not_first p, n, ob)
-    | Pat_Anything -> Pat_Anything
-    | Pat_Type (p,ty) -> Pat_Type (not_first p,ty)
-  and transform p =
-    let red_a p a = EcFMatching.red_make_strat_from_env environnement p a in
-    let env = { environnement with env_red_info_p = red_info_axiom } in
-    let red p a =
-      match red_a p a with
-      | Some (_,a') -> Some (p,a')
-      | None ->
-      match PReduction.h_red_pattern_opt env p with
-      | Some p' -> Some (p',a)
-      | None -> None in
-    Pat_Red_Strat (p, red) in
-
-  let p = not_first p in
 
   let engine = EcFMatching.mkengine (axiom_form f) p environnement in
 

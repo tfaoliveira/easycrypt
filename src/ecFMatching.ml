@@ -1,5 +1,4 @@
 open EcUtils
-(* open EcTyping *)
 open EcFol
 open EcTypes
 open EcPath
@@ -7,6 +6,7 @@ open EcIdent
 open EcEnv
 open EcModules
 open EcPattern
+open Psubst
 
 (* ---------------------------------------------------------------------- *)
 exception Matches
@@ -18,7 +18,6 @@ exception NoNext
 type environnement = {
     env_hyps             : EcEnv.LDecl.hyps;
     env_unienv           : EcUnify.unienv;
-    env_red_strat        : reduction_strategy;
     env_red_info_p       : EcReduction.reduction_info;
     env_red_info_a       : EcReduction.reduction_info;
     env_restore_unienv   : EcUnify.unienv option;
@@ -64,6 +63,30 @@ and nengine = {
     ne_env          : environnement;
   }
 
+(* -------------------------------------------------------------------------- *)
+let h_red_strat hyps s rp ra p a =
+  match PReduction.h_red_pattern_opt hyps rp s p with
+  | Some p -> Some (p, a)
+  | None ->
+     match a with
+     | Axiom_Form f -> begin
+         match EcReduction.h_red_opt ra hyps f with
+         | Some f -> Some (p, axiom_form f)
+         | None -> None
+       end
+     | _ ->
+        match PReduction.h_red_axiom_opt hyps ra s a with
+        | Some (Pat_Axiom a) -> Some (p, a)
+        | _ -> None
+
+let assubst (ue : EcUnify.unienv) (s : Psubst.p_subst) : Psubst.p_subst =
+  let tysubst = { s.ps_sty with ts_u = EcUnify.UniEnv.assubst ue } in
+  { s with ps_sty = tysubst }
+
+let assubst ue env = { env with env_subst = assubst ue env.env_subst }
+
+(* -------------------------------------------------------------------------- *)
+
 let restore_environnement (env : environnement) : environnement =
   match env.env_restore_unienv with
   | None -> env
@@ -104,8 +127,6 @@ let is_modty (m : mpath) (mt : module_type) (mr : mod_restr) (env : environnemen
     try EcTyping.check_modtype_with_restrictions env m ms mt mr; true with
        | _ ->
     false
-
-
 
 let rec map_for_all2 (f : 'a -> 'a -> 'b -> bool * 'b) (l1 : 'a list) (l2 : 'a list) (b : 'b): bool * 'b =
   match l1, l2 with
@@ -389,7 +410,7 @@ and eq_pat (p1 : pattern) (p2 : pattern) (env : environnement) =
        if not eq then false, env
        else eq_pat p1 p2 env
     | Pat_Meta_Name (_,n1,_), p2' | p2', Pat_Meta_Name (_,n1,_) -> begin
-        match Mid.find_opt n1 env.env_subst.Psubst.ps_patloc with
+        match Mid.find_opt n1 (assubst env.env_unienv env).env_subst.Psubst.ps_patloc with
         | Some p1' -> eq_pat p1' p2' env
         | None -> false, env
        end
@@ -720,6 +741,7 @@ let restr_bds_check (env : environnement) (p : pattern) (restr : pbindings) =
 let nadd_match (e : nengine) (name : meta_name) (p : pattern)
       (orb : pbindings option) : nengine =
   let env = e.ne_env in
+  let env = assubst e.ne_env.env_unienv env in
   let subst = env.env_subst in
   let p = Psubst.p_subst subst p in
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
@@ -822,7 +844,9 @@ let rec expr_of_form f : expr = match f.f_node with
     | Fpr _ -> assert false
 
 
-let rewrite_term e f = Psubst.p_subst e.e_env.env_subst (pat_form f)
+let rewrite_term e f =
+  let env = assubst e.e_env.env_unienv e.e_env in
+  Psubst.p_subst env.env_subst (pat_form f)
 
 let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
       (lc : 'c list) : bool * 'a =
@@ -883,8 +907,9 @@ let rec abstract_opt
        else
          Some p', (mgty,env)
      in
-     let p = Psubst.p_subst e.e_env.env_subst p in
-     let parg = Psubst.p_subst e.e_env.env_subst parg in
+     let env = assubst e.e_env.env_unienv e.e_env in
+     let p = Psubst.p_subst env.env_subst p in
+     let parg = Psubst.p_subst env.env_subst parg in
      match aux (map,e.e_env) p parg with
      | None, (map,env) ->
         None, map, { e with e_env = restore_environnement env }
@@ -894,12 +919,23 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  let e = match e.e_env.env_red_strat
-                  (Psubst.p_subst e.e_env.env_subst e.e_pattern) e.e_head with
+  let e =
+    let i_red_p, i_red_a  =
+    match e.e_pattern with
+    | Pat_Red_Strat (_,f) -> f e.e_env.env_red_info_p e.e_env.env_red_info_a
+    | _ -> e.e_env.env_red_info_p, e.e_env.env_red_info_a in
+    let e_env = assubst e.e_env.env_unienv e.e_env in
+    let e = { e with e_env } in
+    let subst = e.e_env.env_subst in
+    match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
+            (Psubst.p_subst subst e.e_pattern) e.e_head with
     | None -> e
     | Some (p,a) ->
        let e_or = { e with e_pattern = p; e_head = a } in
-       { e with e_continuation = Zor (e.e_continuation, [e_or], (e_next e)) }
+       let e_continuation = match e.e_continuation with
+       | Zor (x,l,y) -> Zor (x,e_or::l,y)
+       | _ -> Zor (e.e_continuation, [e_or], (e_next e)) in
+       { e with e_continuation }
   in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
@@ -960,8 +996,8 @@ let rec process (e : engine) : nengine =
          e_continuation = Zor (e.e_continuation,List.map f pl,e_next e);
        }
 
-  | Pat_Red_Strat (e_pattern,env_red_strat),_ ->
-     process { e with e_pattern; e_env = { e.e_env with env_red_strat; } }
+  | Pat_Red_Strat (e_pattern,_),_ ->
+     process { e with e_pattern }
 
   | Pat_Fun_Symbol (Sym_Form_Quant (q1,bs1), [p]),
     Axiom_Form { f_node = Fquant (q2,bs2,f2) } -> begin
@@ -979,6 +1015,7 @@ let rec process (e : engine) : nengine =
           next NoMatch { e with e_env = { e_env with env_restore_unienv } }
         else
           let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id2 id1 gty1 in
+          let env = assubst env.env_unienv env in
           let s = List.fold_left2 f env.env_subst pbs1 fbs1 in
           let e_pattern = Psubst.p_subst s p in
           process { e with
@@ -999,14 +1036,15 @@ let rec process (e : engine) : nengine =
     | Pat_Fun_Symbol(Sym_Form_App _,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom ->
      begin
        (* higher order *)
+       let env = assubst e.e_env.env_unienv e.e_env in
        let add_ident i x =
          EcIdent.create (String.concat "$" ["s";string_of_int i]),
-         Psubst.p_subst e.e_env.env_subst x in
+         Psubst.p_subst env.env_subst x in
        let args = List.mapi add_ident pargs in
        let env_meta_restr_binds =
-         odfl e.e_env.env_meta_restr_binds
-           (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
-       let e = { e with e_env = { e.e_env with env_meta_restr_binds } } in
+         odfl env.env_meta_restr_binds
+           (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
+       let e = { e with e_env = { env with env_meta_restr_binds } } in
        let abstract m (p,m2,e) arg =
          let op,m,e = abstract_opt m (Some p,m2,e) arg in
          odfl p op, m, e in
@@ -1417,6 +1455,8 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      next_n Match { e with ne_continuation }
 
   | Match, Zand (before,(f,p)::after,z) ->
+     let ne_env = assubst e.ne_env.env_unienv e.ne_env in
+     let e = { e with ne_env } in
      let p = Psubst.p_subst e.ne_env.env_subst p in
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
@@ -1517,8 +1557,10 @@ and sub_engines (e : engine) (p : pattern) : engine list =
     end
 
 
-let get_matches (e : engine) : Psubst.p_subst = e.e_env.env_subst
-let get_n_matches (e : nengine) : Psubst.p_subst = e.ne_env.env_subst
+let get_matches (e : engine) : Psubst.p_subst =
+  (assubst e.e_env.env_unienv e.e_env).env_subst
+let get_n_matches (e : nengine) : Psubst.p_subst =
+  (assubst e.ne_env.env_unienv e.ne_env).env_subst
 
 let search_eng e =
   try Some(process e) with
@@ -1820,976 +1862,22 @@ let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
 
 
 
-module PReduction = struct
-  open EcReduction
-  open EcPattern.Psubst
-
-  let rec h_red_args
-        (p_f : 'a -> pattern)
-        (f : environnement -> 'a -> pattern option)
-        (env : environnement) = function
-    | [] -> None
-    | a :: r ->
-       match f env a with
-       | Some a -> Some (a :: (List.map p_f r))
-       | None -> omap (fun l -> (p_f a)::l) (h_red_args p_f f env r)
-
-  let is_record (env : environnement) (f : form) =
-    match EcFol.destr_app f with
-    | { f_node = Fop (p,_) }, _ ->
-       EcEnv.Op.is_record_ctor (LDecl.toenv env.env_hyps) p
-    | _ -> false
-
-  let rec p_is_record (env : environnement) (p : pattern) =
-    match p with
-    | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), p::_) ->
-       p_is_record env p
-    | Pat_Axiom (Axiom_Form f) -> begin
-        match EcFol.destr_app f with
-        | { f_node = Fop (p,_) }, _ ->
-           EcEnv.Op.is_record_ctor (LDecl.toenv env.env_hyps) p
-        | _ -> false
-      end
-    | Pat_Axiom (Axiom_Op (op,_)) ->
-       EcEnv.Op.is_record_ctor (LDecl.toenv env.env_hyps) op
-    | _ -> false
-
-  let reduce_local_opt (env : environnement) (id : Name.t) : pattern option =
-    if env.env_red_info_p.delta_h id
-    then
-      let p = Pat_Meta_Name (Pat_Anything,id,None) in
-      let p' = Psubst.p_subst env.env_subst p in
-      if p = p'
-      then
-        try Some (Pat_Axiom(Axiom_Form(LDecl.unfold id env.env_hyps))) with
-        | NotReducible -> None
-      else Some p'
-    else None
-
-  let rec h_red_pattern_opt (env : environnement) (p : pattern) =
-    try
-      match p with
-      | Pat_Anything -> None
-      | Pat_Meta_Name (_,n,_) -> reduce_local_opt env n
-      | Pat_Sub p -> omap (fun x -> Pat_Sub x) (h_red_pattern_opt env p)
-      | Pat_Or _ -> assert false
-      | Pat_Instance _ -> assert false
-      | Pat_Red_Strat _ -> None
-      | Pat_Type (p,gty) -> omap (fun x -> p_type x gty) (h_red_pattern_opt env p)
-      | Pat_Axiom a -> h_red_axiom_opt env a
-      | Pat_Fun_Symbol (s,lp) ->
-      let ri = env.env_red_info_p in
-      let hyps = env.env_hyps in
-      match s, lp with
-      (* β-reduction *)
-      | (Sym_Form_App _ | Sym_App),
-        (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                          | Sym_Quant (Llambda,_)),[_]))::_
-           when ri.beta -> p_betared_opt p
-
-      (* ζ-reduction *)
-      | Sym_Form_App ty, (Pat_Meta_Name (Pat_Anything,id,_)
-                         | Pat_Axiom (Axiom_Form { f_node = Flocal id })
-                         | Pat_Axiom (Axiom_Local (id,_)))::pargs ->
-         if ri.beta then p_app_simpl_opt (reduce_local_opt env id) pargs (Some ty)
-         else omap (fun x -> p_app x pargs (Some ty)) (reduce_local_opt env id)
-
-      (* ζ-reduction *)
-      | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
-         let s = Psubst.p_bind_local Psubst.p_subst_id x p1 in
-         Some (Psubst.p_subst s p2)
-
-      (* ι-reduction (let-tuple) *)
-      | Sym_Form_Let (LTuple ids), [Pat_Fun_Symbol (Sym_Form_Tuple, lp);p2]
-           when ri.zeta ->
-         let s = List.fold_left2 (fun s (x,_) p -> Psubst.p_bind_local s x p)
-                   Psubst.p_subst_id ids lp in
-         Some (Psubst.p_subst s p2)
-
-      (* ι-reduction (let-records) *)
-      | Sym_Form_Let (LRecord (_, ids)), [p1;p2]
-           when ri.iota && p_is_record env p1 ->
-         let args  = snd (p_destr_app p1) in
-         let subst =
-           List.fold_left2 (fun subst (x, _) e ->
-               match x with
-               | None   -> subst
-               | Some x -> Psubst.p_bind_local subst x e)
-             Psubst.p_subst_id ids args
-         in
-         Some (Psubst.p_subst subst p2)
-
-      (* ι-reduction (records projection) *)
-      | (Sym_Form_App _ | Sym_App),
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1)))
-        ::pargs
-           when ri.iota && EcEnv.Op.is_projection (LDecl.toenv hyps) op -> begin
-          let op =
-            match pargs with
-            | [mk] -> begin
-                match odfl mk (h_red_pattern_opt env mk) with
-                | Pat_Axiom (Axiom_Form { f_node = Fapp ({ f_node = Fop (mkp, _)}, mkargs) } ) ->
-                   if not (EcEnv.Op.is_record_ctor (LDecl.toenv hyps) mkp) then None
-                   else
-                     let v = oget (EcEnv.Op.by_path_opt op (LDecl.toenv env.env_hyps)) in
-                     let v = proj3_2 (EcDecl.operator_as_proj v) in
-                     let v = try Some(List.nth mkargs v)
-                             with _ -> None in
-                     begin
-                       match v with
-                       | None -> None
-                       | Some v -> h_red_form_opt env v
-                     end
-                | Pat_Fun_Symbol
-                   ((Sym_Form_App _ | Sym_App),
-                    (Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
-                                | Axiom_Op (mkp,_)))::pargs) ->
-                   if not (EcEnv.Op.is_record_ctor (LDecl.toenv hyps) mkp) then None
-                   else
-                     let v = oget (EcEnv.Op.by_path_opt op (LDecl.toenv env.env_hyps)) in
-                     let v = proj3_2 (EcDecl.operator_as_proj v) in
-                     let v = try Some(List.nth pargs v)
-                             with _ -> None in
-                     begin
-                       match v with
-                       | None -> None
-                       | Some v -> h_red_pattern_opt env v
-                     end
-                | _ -> None
-              end
-            | _ -> None
-          in match op with
-             | None ->
-                omap (fun x -> p_app x pargs (Some fty)) (h_red_form_opt env f1)
-             | _ -> op
-        end
-
-      (* ι-reduction (tuples projection) *)
-      | Sym_Form_Proj (i,ty), [p1] when ri.iota ->
-         let p' = p_proj_simpl p1 i ty in
-         if p = p'
-         then omap (fun x -> p_proj x i ty) (h_red_pattern_opt env p1)
-         else Some p'
-
-      (* ι-reduction (if-then-else) *)
-      | Sym_Form_If, [p1;p2;p3] when ri.iota ->
-         let p' = p_if_simpl p1 p2 p3 in
-         if   p_equal p p'
-         then omap (fun x -> p_if x p2 p3) (h_red_pattern_opt env p1)
-         else Some p'
-
-      (* ι-reduction (match-fix) *)
-      | Sym_Form_App ty,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)))::args
-           when ri.iota
-                && EcEnv.Op.is_fix_def (LDecl.toenv hyps) op -> begin
-          try
-            let op  = oget (EcEnv.Op.by_path_opt op (LDecl.toenv hyps)) in
-            let fix = EcDecl.operator_as_fix op in
-            if List.length args <> snd (fix.EcDecl.opf_struct) then
-              raise NotReducible
-            else
-            let pargs = Array.of_list args in
-            let myfun (opb, acc) v =
-              let v = pargs.(v) in
-              let v = odfl v (h_red_pattern_opt env v) in
-              match p_destr_app v with
-              | Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
-                           | Axiom_Op (op, _ )), cargs
-                   when EcEnv.Op.is_dtype_ctor (LDecl.toenv hyps) op -> begin
-                  let idx = EcEnv.Op.by_path op (LDecl.toenv hyps) in
-                  let idx = snd (EcDecl.operator_as_ctor idx) in
-                  match opb with
-                  | EcDecl.OPB_Leaf _    -> assert false
-                  | EcDecl.OPB_Branch bs ->
-                     ((Parray.get bs idx).EcDecl.opb_sub, cargs :: acc)
-                end
-              | _ -> raise NotReducible in
-            let pargs = List.fold_left myfun
-                      (fix.EcDecl.opf_branches, [])
-                      (fst fix.EcDecl.opf_struct) in
-            let pargs, (bds, body) =
-              match pargs with
-              | EcDecl.OPB_Leaf (bds, body), cargs -> (List.rev cargs, (bds, body))
-              | _ -> assert false in
-
-            let s =
-              List.fold_left2
-                (fun s (x,_) fa -> Psubst.p_bind_local s x fa)
-                Psubst.p_subst_id fix.EcDecl.opf_args args in
-
-            let s =
-              List.fold_left2
-                (fun s bds cargs ->
-                  List.fold_left2
-                    (fun s (x,_) fa -> Psubst.p_bind_local s x fa)
-                    s bds cargs)
-                s bds pargs in
-
-            let body = EcFol.form_of_expr EcFol.mhr body in
-            let body =
-              EcFol.Fsubst.subst_tvar
-                (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) lty) body in
-            Some (Psubst.p_subst s (pat_form body))
-
-          with
-          | NotReducible ->
-             omap (fun x -> p_app x args (Some ty))
-               (h_red_form_opt env f1)
-        end
-
-      (* ι-reduction (match-fix) *)
-      | Sym_App,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)))::args
-           when ri.iota
-                && EcEnv.Op.is_fix_def (LDecl.toenv hyps) op -> begin
-          try
-            let op  = oget (EcEnv.Op.by_path_opt op (LDecl.toenv hyps)) in
-            let fix = EcDecl.operator_as_fix op in
-            if List.length args <> snd (fix.EcDecl.opf_struct) then
-              raise NotReducible
-            else
-            let pargs = Array.of_list args in
-            let myfun (opb, acc) v =
-              let v = pargs.(v) in
-              let v = odfl v (h_red_pattern_opt env v) in
-              match p_destr_app v with
-              | Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
-                           | Axiom_Op (op, _ )), cargs
-                   when EcEnv.Op.is_dtype_ctor (LDecl.toenv hyps) op -> begin
-                  let idx = EcEnv.Op.by_path op (LDecl.toenv hyps) in
-                  let idx = snd (EcDecl.operator_as_ctor idx) in
-                  match opb with
-                  | EcDecl.OPB_Leaf _    -> assert false
-                  | EcDecl.OPB_Branch bs ->
-                     ((Parray.get bs idx).EcDecl.opb_sub, cargs :: acc)
-                end
-              | _ -> raise NotReducible in
-            let pargs = List.fold_left myfun
-                      (fix.EcDecl.opf_branches, [])
-                      (fst fix.EcDecl.opf_struct) in
-            let pargs, (bds, body) =
-              match pargs with
-              | EcDecl.OPB_Leaf (bds, body), cargs -> (List.rev cargs, (bds, body))
-              | _ -> assert false in
-
-            let s =
-              List.fold_left2
-                (fun s (x,_) fa -> Psubst.p_bind_local s x fa)
-                Psubst.p_subst_id fix.EcDecl.opf_args args in
-
-            let s =
-              List.fold_left2
-                (fun s bds cargs ->
-                  List.fold_left2
-                    (fun s (x,_) fa -> Psubst.p_bind_local s x fa)
-                    s bds cargs)
-                s bds pargs in
-
-            let body = EcFol.form_of_expr EcFol.mhr body in
-            let body =
-              EcFol.Fsubst.subst_tvar
-                (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) lty) body in
-            Some (Psubst.p_subst s (pat_form body))
-
-          with
-          | NotReducible ->
-             omap (fun x -> p_app x args (None))
-               (h_red_form_opt env f1)
-        end
-
-      (* μ-reduction *)
-      | Sym_Form_Glob, [mp;mem] when ri.modpath ->
-         let p' = match mp, mem with
-           | Pat_Axiom (Axiom_Mpath mp), Pat_Axiom (Axiom_Memory m) ->
-              let f  = f_glob mp m in
-              let f' = EcEnv.NormMp.norm_glob (LDecl.toenv hyps) m mp in
-              if f_equal f f' then None
-              else Some (pat_form f')
-           | _ ->
-           match h_red_pattern_opt env mp with
-           | Some mp' when not (p_equal mp mp') -> Some (p_glob mp' mem)
-           | _ -> omap (fun x -> p_glob mp x) (h_red_pattern_opt env mem) in
-         p'
-
-      (* μ-reduction *)
-      | Sym_Form_Pvar ty, [ppv;m] ->
-         let pv = match ppv with
-           | Pat_Axiom (Axiom_Prog_Var pv) ->
-              let pv' = EcEnv.NormMp.norm_pvar (LDecl.toenv hyps) pv in
-              if pv_equal pv pv' then
-                omap (p_pvar ppv ty) (h_red_pattern_opt env m)
-              else Some (p_pvar (pat_pv pv') ty m)
-           | _ ->
-           match h_red_pattern_opt env ppv with
-           | Some pv -> Some (p_pvar pv ty m)
-           | None -> omap (p_pvar ppv ty) (h_red_pattern_opt env m) in
-         pv
-
-    (* logical reduction *)
-    | Sym_Form_App ty,
-      (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo)))::args
-         when is_some ri.logic && is_logical_op op
-      ->
-       let pcompat =
-         match oget ri.logic with `Full -> true | `ProductCompat -> false
-       in
-
-       let p' =
-         match op_kind op, args with
-         | Some (`Not), [f1]    when pcompat -> Some (p_not_simpl f1)
-         | Some (`Imp), [f1;f2] when pcompat -> Some (p_imp_simpl f1 f2)
-         | Some (`Iff), [f1;f2] when pcompat -> Some (p_iff_simpl f1 f2)
-
-
-         | Some (`And `Asym), [f1;f2] -> Some (p_anda_simpl f1 f2)
-         | Some (`Or  `Asym), [f1;f2] -> Some (p_ora_simpl f1 f2)
-         | Some (`And `Sym ), [f1;f2] -> Some (p_and_simpl f1 f2)
-         | Some (`Or  `Sym ), [f1;f2] -> Some (p_or_simpl f1 f2)
-         | Some (`Int_le   ), [f1;f2] -> Some (p_int_le_simpl f1 f2)
-         | Some (`Int_lt   ), [f1;f2] -> Some (p_int_lt_simpl f1 f2)
-         | Some (`Real_le  ), [f1;f2] -> Some (p_real_le_simpl f1 f2)
-         | Some (`Real_lt  ), [f1;f2] -> Some (p_real_lt_simpl f1 f2)
-         | Some (`Int_add  ), [f1;f2] -> Some (p_int_add_simpl f1 f2)
-         | Some (`Int_opp  ), [f]     -> Some (p_int_opp_simpl f)
-         | Some (`Int_mul  ), [f1;f2] -> Some (p_int_mul_simpl f1 f2)
-         | Some (`Real_add ), [f1;f2] -> Some (p_real_add_simpl f1 f2)
-         | Some (`Real_opp ), [f]     -> Some (p_real_opp_simpl f)
-         | Some (`Real_mul ), [f1;f2] -> Some (p_real_mul_simpl f1 f2)
-         | Some (`Real_inv ), [f]     -> Some (p_real_inv_simpl f)
-         | Some (`Eq       ), [f1;f2] -> begin
-             match (p_destr_app f1), (p_destr_app f2) with
-             | (Pat_Axiom (Axiom_Form { f_node = Fop (op1, _)}), args1),
-               (Pat_Axiom (Axiom_Form { f_node = Fop (op2, _)}), args2)
-                  when EcEnv.Op.is_dtype_ctor (LDecl.toenv env.env_hyps) op1
-                       && EcEnv.Op.is_dtype_ctor (LDecl.toenv env.env_hyps) op2 ->
-
-                let idx p =
-                  let idx = EcEnv.Op.by_path p (LDecl.toenv env.env_hyps) in
-                  snd (EcDecl.operator_as_ctor idx)
-                in
-                if   idx op1 <> idx op2
-                then Some p_false
-                else Some (p_ands (List.map2 p_eq args1 args2))
-
-             | (_, []), (_, []) ->
-                let env = { env with env_restore_unienv = None } in
-                let eq_ty1, env = is_gty f1 (GTty EcTypes.tunit) env in
-                let o =
-                  if eq_ty1
-                  then
-                    let eq_ty2, env = is_gty f2 (GTty EcTypes.tunit) env in
-                    if eq_ty2
-                    then Some p_true
-                    else let _ = restore_environnement env in None
-                  else let _ = restore_environnement env in None in
-                begin
-                  match o with
-                  | Some f -> Some f
-                  | None ->
-                     if   p_equal f1 f2
-                     then Some p_true
-                     else Some (p_eq_simpl f1 f2)
-                end
-
-             | _ ->
-                let env = { env with env_restore_unienv = None } in
-                let eq, env = eq_pat f1 f2 env in
-                if   eq
-                then Some p_true
-                else let _ = restore_environnement env in
-                     Some (p_eq_simpl f1 f2)
-           end
-
-         | _ when ri.delta_p op ->
-            let op = h_red_op_opt env op tys in
-            EcPattern.p_app_simpl_opt op args (Some ty)
-
-         | _ -> Some p
-       in
-       begin
-         match p' with
-         | Some p' ->
-            if p_equal p p'
-            then omap (fun l -> p_app (pat_form fo) l (Some ty))
-                   (h_red_args (fun x -> x) h_red_pattern_opt env args)
-            else Some p'
-         | None -> None
-       end
-
-      (* | Sym_Form_If, [p1;p2;p3] ->
-       *
-       * | Sym_Form_App ty, p1::pargs ->
-       *
-       * | Sym_Form_Tuple, pt ->
-       *
-       * | Sym_Form_Proj (i,ty), [p1] ->
-       *
-       * | Sym_Form_Match ty, p1::pargs ->
-       *
-       * | Sym_Form_Quant (q,bs), [p1] ->
-       *
-       * | Sym_Form_Let lp, [p1;p2] ->
-       *
-       * | Sym_Form_Pvar ty, [p1] ->
-       *
-       * | Sym_Form_Prog_var k1, [xp;m] ->
-       *
-       * | Sym_Form_Glob, [mp;m] ->
-       *
-       * | Sym_Form_Hoare_F, [pr1;xp1;po1] ->
-       *
-       * | Sym_Form_Hoare_S, [m1;pr1;s1;po1] ->
-       *
-       * | Sym_Form_bd_Hoare_F, [pr1;xp1;po1;cmp1;bd1] ->
-       *
-       * | Sym_Form_bd_Hoare_S, [m1;pr1;s1;po1;cmp1;bd1] ->
-       *
-       * | Sym_Form_Equiv_F, [pr1;xpl1;xpr1;po1] ->
-       *
-       * | Sym_Form_Equiv_S, [ml1;mr1;pr1;sl1;sr1;po1] ->
-       *
-       * | Sym_Form_Eager_F, [pr1;sl1;xpl1;xpr1;sr1;po1] ->
-       *
-       * | Sym_Form_Pr, [m1;xp1;args1;event1] ->
-       *
-       * | Sym_Stmt_Seq, s1 ->
-       *
-       * | Sym_Instr_Assign, [lv1;e1] ->
-       *
-       * | Sym_Instr_Call, xp1::args1 ->
-       *
-       * | Sym_Instr_Call_Lv, lv1::xp1::args1 ->
-       *
-       * | Sym_Instr_If, [cond1;st1;sf1] ->
-       *
-       * | Sym_Instr_While, [cond1;s1] ->
-       *
-       * | Sym_Instr_Assert, [cond1] ->
-       *
-       * | Sym_Xpath, [mp1;p1] ->
-       *
-       * | Sym_Mpath, mtop1::margs1 ->
-       *
-       * | Sym_App, op1::args1 ->
-       *
-       * | Sym_Quant (q1,pb1), [p1] -> *)
-
-      (* | _ -> assert false *)
-    | _ -> None
-    with
-    | EcEnv.NotReducible -> None
-
-  and h_red_axiom_opt (env : environnement) (a : axiom) =
-    try match a with
-      | Axiom_Hoarecmp _    -> None
-      | Axiom_Memory m      -> h_red_mem_opt env m
-      | Axiom_MemEnv m      -> h_red_memenv_opt env m
-      | Axiom_Prog_Var pv   -> h_red_prog_var_opt env pv
-      | Axiom_Op (op,lty)   -> h_red_op_opt env op lty
-      | Axiom_Module m      -> h_red_mpath_top_opt env m
-      | Axiom_Mpath m       -> h_red_mpath_opt env m
-      | Axiom_Instr i       -> h_red_instr_opt env i
-      | Axiom_Stmt s        -> h_red_stmt_opt env s
-      | Axiom_Lvalue lv     -> h_red_lvalue_opt env lv
-      | Axiom_Xpath x       -> h_red_xpath_opt env x
-      | Axiom_Local (id,ty) -> h_red_local_opt env id ty
-      | Axiom_Form f        -> h_red_form_opt env f
-    with
-    | EcEnv.NotReducible -> None
-
-  and h_red_mem_opt env m : pattern option =
-    if env.env_red_info_p.delta_h m
-    then
-      match MName.find_opt m env.env_subst.ps_patloc with
-      | Some _ as p -> p
-      | None ->
-         omap pat_memory (MName.find_opt m env.env_subst.ps_mem)
-    else None
-
-  and h_red_memenv_opt env m =
-    if env.env_red_info_p.delta_h (fst m)
-    then match MName.find_opt (fst m) env.env_subst.ps_patloc with
-         | Some _ as p -> p
-         | None ->
-            omap (fun m' -> pat_memenv (m',snd m))
-              (MName.find_opt (fst m) env.env_subst.ps_mem)
-    else None
-
-  and h_red_prog_var_opt env pv =
-    omap (fun x -> p_prog_var x pv.pv_kind) (h_red_xpath_opt env pv.pv_name)
-
-  and h_red_op_opt env op lty =
-    if env.env_red_info_p.delta_p op
-    then Some (pat_form (EcEnv.Op.reduce (LDecl.toenv env.env_hyps) op lty))
-    else None
-
-  and h_red_mpath_top_opt env m =
-    if env.env_red_info_p.modpath
-    then
-      match m with
-      | `Concrete _ -> None
-      | `Local id ->
-      match MName.find_opt id env.env_subst.ps_patloc with
-      | Some _ as p -> p
-      | None ->
-         omap pat_mpath (MName.find_opt id env.env_subst.ps_mp)
-    else None
-
-  and h_red_mpath_opt env m =
-    if env.env_red_info_p.modpath
-    then match h_red_mpath_top_opt env m.m_top with
-         | Some p ->
-            Some (p_mpath p (List.map pat_mpath m.m_args))
-         | None ->
-            omap (fun l -> p_mpath (pat_mpath_top m.m_top) l)
-              (h_red_args pat_mpath h_red_mpath_opt env m.m_args)
-    else None
-
-  and h_red_instr_opt env i =
-    match i.i_node with
-    | Sasgn (lv,e) -> begin
-        match h_red_lvalue_opt env lv with
-        | Some lv -> Some (p_assign lv (pat_form (form_of_expr e)))
-        | None ->
-           omap (fun p -> p_assign (pat_lvalue lv) p)
-             (h_red_form_opt env (form_of_expr e))
-      end
-    | Srnd (lv,e) -> begin
-        match h_red_lvalue_opt env lv with
-        | Some lv -> Some (p_sample lv (pat_form (form_of_expr e)))
-        | None ->
-           omap (fun p -> p_sample (pat_lvalue lv) p)
-             (h_red_form_opt env (form_of_expr e))
-      end
-    | Scall (olv,f,args) -> begin
-        match omap (h_red_lvalue_opt env) olv with
-        | Some (Some lv) ->
-           Some (p_call (Some lv) (pat_xpath f)
-                   (List.map (fun x -> pat_form (form_of_expr x)) args))
-        | Some None | None ->
-        match h_red_xpath_opt env f with
-        | Some f ->
-           Some (p_call (omap pat_lvalue olv) f
-                   (List.map (fun x -> pat_form (form_of_expr x)) args))
-        | None ->
-           let olv = omap pat_lvalue olv in
-           omap
-             (fun args -> p_call olv (pat_xpath f) args)
-             (h_red_args (fun e -> pat_form (form_of_expr e))
-                (fun env e -> h_red_form_opt env (form_of_expr e)) env args)
-      end
-    | Sif (cond,s1,s2) -> begin
-        match h_red_form_opt env (form_of_expr cond) with
-        | Some cond ->
-           Some (p_instr_if cond (pat_stmt s1) (pat_stmt s2))
-        | None ->
-        match h_red_stmt_opt env s1 with
-        | Some s1 ->
-           Some (p_instr_if (pat_form(form_of_expr cond)) s1 (pat_stmt s2))
-        | None ->
-           omap
-             (fun s2 -> p_instr_if (pat_form(form_of_expr cond)) (pat_stmt s1) s2)
-             (h_red_stmt_opt env s2)
-      end
-    | Swhile (cond,s) -> begin
-        match h_red_form_opt env (form_of_expr cond) with
-        | Some cond -> Some (p_while cond (pat_stmt s))
-        | None ->
-           omap (fun s -> p_while (pat_form(form_of_expr cond)) s)
-             (h_red_stmt_opt env s)
-      end
-    | Sassert e -> omap p_assert (h_red_form_opt env (form_of_expr e))
-    | Sabstract name ->
-       if env.env_red_info_p.delta_h name
-       then MName.find_opt name env.env_subst.ps_patloc
-       else None
-
-  and h_red_stmt_opt env s =
-    omap (fun l -> Pat_Fun_Symbol(Sym_Stmt_Seq,l))
-      (h_red_args pat_instr h_red_instr_opt env s.s_node)
-
-  and h_red_lvalue_opt env = function
-    | LvVar (pv,ty) ->
-       omap (fun x -> p_lvalue_var x ty) (h_red_prog_var_opt env pv)
-    | LvTuple l ->
-       omap p_lvalue_tuple
-         (h_red_args (fun (pv,ty) -> pat_lvalue (LvVar(pv,ty)))
-            (fun env x -> h_red_lvalue_opt env (LvVar x)) env l)
-    | LvMap _ -> None
-
-
-  and h_red_xpath_opt env x =
-    if env.env_red_info_p.modpath
-    then match h_red_mpath_opt env x.x_top with
-         | Some p -> Some (p_xpath p (pat_op x.x_sub []))
-         | None -> None
-    else None
-
-  and h_red_local_opt env id _ty = MName.find_opt id env.env_subst.ps_patloc
-
-  and h_red_form_opt (env : environnement) (f : form) =
-    let ri = env.env_red_info_p in
-    let hyps = env.env_hyps in
-
-    match f.f_node with
-    (* β-reduction *)
-    | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) when ri.beta ->
-       begin
-         try Some (Pat_Axiom(Axiom_Form(f_betared f))) with
-         | _ -> None
-       end
-
-    (* ζ-reduction *)
-    | Flocal x -> reduce_local_opt env x
-
-    (* ζ-reduction *)
-    | Fapp ({ f_node = Flocal x }, args) ->
-       let pargs = List.map pat_form args in
-       EcPattern.p_app_simpl_opt (reduce_local_opt env x) pargs (Some f.f_ty)
-
-    (* ζ-reduction *)
-    | Flet (LSymbol(x,_), e1, e2) when ri.zeta ->
-       let s = Psubst.p_bind_local Psubst.p_subst_id x (pat_form e1) in
-       Some (Psubst.p_subst s (pat_form e2))
-
-    (* ι-reduction (let-tuple) *)
-    | Flet (LTuple ids, { f_node = Ftuple es }, e2) when ri.iota ->
-       let s =
-         List.fold_left2
-           (fun s (x,_) e1 -> Psubst.p_bind_local s x (pat_form e1))
-           Psubst.p_subst_id ids es
-       in
-       Some(Psubst.p_subst s (pat_form e2))
-
-    (* ι-reduction (let-records) *)
-    | Flet (LRecord (_, ids), f1, f2) when ri.iota && is_record env f1 ->
-       let args  = snd (EcFol.destr_app f1) in
-       let subst =
-         List.fold_left2 (fun subst (x, _) e ->
-             match x with
-             | None   -> subst
-             | Some x -> Psubst.p_bind_local subst x (pat_form e))
-           Psubst.p_subst_id ids args
-       in
-       Some (Psubst.p_subst subst (pat_form f2))
-
-    (* ι-reduction (records projection) *)
-    | Fapp ({ f_node = Fop (p, _); f_ty = ty} as f1, args)
-         when ri.iota && EcEnv.Op.is_projection (LDecl.toenv env.env_hyps) p -> begin
-        let op =
-          match args with
-          | [mk] -> begin
-              match odfl (pat_form mk) (h_red_form_opt env mk) with
-              | Pat_Axiom
-                (Axiom_Form
-                   { f_node =
-                       Fapp ({ f_node = Fop (mkp, _) }, mkargs) } ) ->
-                 if not (EcEnv.Op.is_record_ctor (LDecl.toenv env.env_hyps) mkp) then
-                   None
-                 else
-                   let v = oget (EcEnv.Op.by_path_opt (* op *) mkp (LDecl.toenv env.env_hyps)) in
-                   let v = proj3_2 (EcDecl.operator_as_proj v) in
-                   let v = try Some(List.nth mkargs v)
-                           with _ -> None in
-                   begin
-                     match v with
-                     | None -> None
-                     | Some v -> h_red_form_opt env v
-                   end
-              | Pat_Fun_Symbol
-                  ((Sym_Form_App _ | Sym_App),
-                   (Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
-                               | Axiom_Op (mkp,_)))::pargs) ->
-                 if not (EcEnv.Op.is_record_ctor (LDecl.toenv hyps) mkp) then None
-                 else
-                   let v = oget (EcEnv.Op.by_path_opt (* op *) mkp (LDecl.toenv env.env_hyps)) in
-                   let v = proj3_2 (EcDecl.operator_as_proj v) in
-                   let v = try Some(List.nth pargs v)
-                           with _ -> None in
-                   begin
-                     match v with
-                     | None -> None
-                     | Some v -> h_red_pattern_opt env v
-                   end
-              | _ -> None
-            end
-          | _ -> None
-        in match op with
-           | None ->
-              omap (fun x -> p_app x (List.map pat_form args) (Some ty))
-                (h_red_form_opt env f1)
-           | _ -> op
-      end
-
-    (* ι-reduction (tuples projection) *)
-    | Fproj(f1, i) when ri.iota ->
-       let f' = f_proj_simpl f1 i f.f_ty in
-       if f_equal f f'
-       then omap (fun x -> p_proj x i f.f_ty) (h_red_form_opt env f1)
-       else Some (pat_form f')
-
-    (* ι-reduction (if-then-else) *)
-    | Fif (f1, f2, f3) when ri.iota ->
-       let f' = f_if_simpl f1 f2 f3 in
-       if f_equal f f'
-       then omap (fun x -> p_if x (pat_form f2) (pat_form f3)) (h_red_form_opt env f1)
-       else Some (pat_form f')
-
-    (* ι-reduction (match-fix) *)
-    | Fapp ({ f_node = Fop (p, tys); } as f1, fargs)
-         when ri.iota && EcEnv.Op.is_fix_def (LDecl.toenv env.env_hyps) p -> begin
-
-        try
-          let op  = oget (EcEnv.Op.by_path_opt p (LDecl.toenv env.env_hyps)) in
-          let fix = EcDecl.operator_as_fix op in
-
-          if List.length fargs <> snd (fix.EcDecl.opf_struct) then
-            raise NotReducible;
-
-          let args  = Array.of_list (List.map pat_form fargs) in
-          let myfun (opb, acc) v =
-            let v = args.(v) in
-            let v = odfl v (h_red_pattern_opt env v) in
-
-            match p_destr_app v
-              (* fst_map (fun x -> x.f_node) (EcFol.destr_app v) *)
-            with
-            | Pat_Axiom(Axiom_Form { f_node = Fop (p, _)}), cargs
-                 when EcEnv.Op.is_dtype_ctor (LDecl.toenv env.env_hyps) p -> begin
-                let idx = EcEnv.Op.by_path p (LDecl.toenv env.env_hyps) in
-                let idx = snd (EcDecl.operator_as_ctor idx) in
-                match opb with
-                | EcDecl.OPB_Leaf   _  -> assert false
-                | EcDecl.OPB_Branch bs ->
-                   ((Parray.get bs idx).EcDecl.opb_sub, cargs :: acc)
-              end
-            | _ -> raise NotReducible in
-          let pargs = List.fold_left myfun
-                        (fix.EcDecl.opf_branches, []) (fst fix.EcDecl.opf_struct)
-          in
-
-          let pargs, (bds, body) =
-            match pargs with
-            | EcDecl.OPB_Leaf (bds, body), cargs ->
-               (List.rev cargs, (bds, body))
-            | _ -> assert false
-          in
-
-          let subst =
-            List.fold_left2
-              (fun subst (x, _) fa -> Psubst.p_bind_local subst x fa)
-              Psubst.p_subst_id fix.EcDecl.opf_args (List.map pat_form fargs) in
-
-          let subst =
-            List.fold_left2
-              (fun subst bds cargs ->
-                List.fold_left2
-                  (fun subst (x, _) fa -> Psubst.p_bind_local subst x fa)
-                  subst bds cargs)
-              subst bds pargs in
-
-          let body = EcFol.form_of_expr EcFol.mhr body in
-          let body =
-            EcFol.Fsubst.subst_tvar
-              (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
-
-          Some (Psubst.p_subst subst (pat_form body))
-
-        with NotReducible ->
-          omap (fun x -> p_app x (List.map pat_form fargs) (Some f.f_ty))
-            (h_red_form_opt env f1)
-      end
-
-    (* μ-reduction *)
-    | Fglob (mp, m) when ri.modpath ->
-       let f' = EcEnv.NormMp.norm_glob (LDecl.toenv env.env_hyps) m mp in
-       if f_equal f f' then None
-       else Some (pat_form f')
-
-    (* μ-reduction *)
-    | Fpvar (pv, m) when ri.modpath ->
-       let pv' = EcEnv.NormMp.norm_pvar (LDecl.toenv env.env_hyps) pv in
-       if pv_equal pv pv' then None
-       else Some (p_pvar (pat_pv pv') f.f_ty (pat_memory m))
-
-    (* logical reduction *)
-    | Fapp ({f_node = Fop (p, tys); } as fo, args)
-         when is_some ri.logic && is_logical_op p
-      ->
-       let pcompat =
-         match oget ri.logic with `Full -> true | `ProductCompat -> false
-       in
-
-       let f' =
-         match op_kind p, args with
-         | Some (`Not), [f1]    when pcompat -> Some (pat_form (f_not_simpl f1))
-         | Some (`Imp), [f1;f2] when pcompat -> Some (pat_form (f_imp_simpl f1 f2))
-         | Some (`Iff), [f1;f2] when pcompat -> Some (pat_form (f_iff_simpl f1 f2))
-
-
-         | Some (`And `Asym), [f1;f2] -> Some (pat_form (f_anda_simpl f1 f2))
-         | Some (`Or  `Asym), [f1;f2] -> Some (pat_form (f_ora_simpl f1 f2))
-         | Some (`And `Sym ), [f1;f2] -> Some (pat_form (f_and_simpl f1 f2))
-         | Some (`Or  `Sym ), [f1;f2] -> Some (pat_form (f_or_simpl f1 f2))
-         | Some (`Int_le   ), [f1;f2] -> Some (pat_form (f_int_le_simpl f1 f2))
-         | Some (`Int_lt   ), [f1;f2] -> Some (pat_form (f_int_lt_simpl f1 f2))
-         | Some (`Real_le  ), [f1;f2] -> Some (pat_form (f_real_le_simpl f1 f2))
-         | Some (`Real_lt  ), [f1;f2] -> Some (pat_form (f_real_lt_simpl f1 f2))
-         | Some (`Int_add  ), [f1;f2] -> Some (pat_form (f_int_add_simpl f1 f2))
-         | Some (`Int_opp  ), [f]     -> Some (pat_form (f_int_opp_simpl f))
-         | Some (`Int_mul  ), [f1;f2] -> Some (pat_form (f_int_mul_simpl f1 f2))
-         | Some (`Real_add ), [f1;f2] -> Some (pat_form (f_real_add_simpl f1 f2))
-         | Some (`Real_opp ), [f]     -> Some (pat_form (f_real_opp_simpl f))
-         | Some (`Real_mul ), [f1;f2] -> Some (pat_form (f_real_mul_simpl f1 f2))
-         | Some (`Real_inv ), [f]     -> Some (pat_form (f_real_inv_simpl f))
-         | Some (`Eq       ), [f1;f2] -> begin
-             match fst_map f_node (destr_app f1), fst_map f_node (destr_app f2) with
-             | (Fop (p1, _), args1), (Fop (p2, _), args2)
-                  when EcEnv.Op.is_dtype_ctor (LDecl.toenv env.env_hyps) p1
-                       && EcEnv.Op.is_dtype_ctor (LDecl.toenv env.env_hyps) p2 ->
-
-                let idx p =
-                  let idx = EcEnv.Op.by_path p (LDecl.toenv env.env_hyps) in
-                  snd (EcDecl.operator_as_ctor idx)
-                in
-                if   idx p1 <> idx p2
-                then Some p_false
-                else Some (pat_form (f_ands (List.map2 f_eq args1 args2)))
-
-             | (_, []), (_, []) ->
-                let eq_ty1, env = eq_type f1.f_ty EcTypes.tunit env in
-                let o =
-                  if eq_ty1
-                  then
-                    let eq_ty2, env = eq_type f2.f_ty EcTypes.tunit env in
-                    if eq_ty2
-                    then Some f_true
-                    else let _ = restore_environnement env in None
-                  else let _ = restore_environnement env in None in
-                begin
-                  match o with
-                  | Some f -> Some (pat_form f)
-                  | None ->
-                     if   f_equal f1 f2 || is_alpha_eq env.env_hyps f1 f2
-                     then Some p_true
-                     else Some (pat_form (f_eq_simpl f1 f2))
-                end
-
-             | _ ->
-                if   f_equal f1 f2 || is_alpha_eq hyps f1 f2
-                then Some p_true
-                else Some (pat_form (f_eq_simpl f1 f2))
-           end
-
-         | _ when ri.delta_p p ->
-            let op = h_red_op_opt env p tys in
-            EcPattern.p_app_simpl_opt op (List.map pat_form args) (Some f.f_ty)
-
-         | _ -> Some (pat_form f)
-       in
-       begin
-         match f' with
-         | Some (Pat_Axiom(Axiom_Form f')) ->
-            if f_equal f f'
-            then omap (fun l -> p_app (pat_form fo) l (Some f.f_ty))
-                   (h_red_args pat_form h_red_form_opt env args)
-            else Some (pat_form f')
-         | Some _ -> f'
-         | None -> None
-       end
-
-    (* δ-reduction *)
-    | Fop (p, tys) ->
-       h_red_op_opt env p tys
-
-    (* δ-reduction *)
-    | Fapp ({ f_node = Fop (p, tys) }, args) when ri.delta_p p ->
-       let op = h_red_op_opt env p tys in
-       EcPattern.p_app_simpl_opt op (List.map pat_form args) (Some f.f_ty)
-
-    (* η-reduction *)
-    | Fquant (Llambda, [x, GTty _], { f_node = Fapp (f, [{ f_node = Flocal y }]) })
-         when id_equal x y && not (Mid.mem x f.f_fv)
-      -> Some (pat_form f)
-
-    (* contextual rule - let *)
-    | Flet (lp, f1, f2) ->
-       omap (fun x -> p_let lp x (pat_form f2)) (h_red_form_opt env f1)
-
-    (* Contextual rule - application args. *)
-    | Fapp (f1, args) ->
-       omap (fun x -> p_app x (List.map pat_form args) (Some f.f_ty))
-         (h_red_form_opt env f1)
-
-    (* Contextual rule - bindings *)
-    | Fquant (Lforall as t, b, f1)
-      | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full -> begin
-        let ctor = match t with
-          | Lforall -> p_forall_simpl
-          | Lexists -> p_exists_simpl
-          | _       -> assert false in
-
-        try
-          let localkind_of_binding (id,gty) =
-            match gty with
-            | GTty ty -> id,EcBaseLogic.LD_var (ty,None)
-            | GTmodty (mt,mr) -> id,EcBaseLogic.LD_modty (mt,mr)
-            | GTmem mt -> id,EcBaseLogic.LD_mem mt in
-          let b' = List.map localkind_of_binding b in
-          let env_hyps = List.fold_left (fun h (id,k) -> LDecl.add_local id k h)
-              env.env_hyps b' in
-          omap (ctor b) (h_red_form_opt {env with env_hyps } f1)
-        with NotReducible ->
-          let f' = ctor b (pat_form f1) in
-          if (match f' with | Pat_Axiom(Axiom_Form f') -> f_equal f f'
-                            | _ -> false)
-          then None
-          else Some f'
-      end
-
-    | _ -> None
-
-  (* let red_core_opt (env : environnement) (p : pattern) (a : axiom) =
-   *   match p,a with
-   *   | *)
-
-end
-
 (* val mkengine    : base -> engine *)
 let mkenv ?ppe ?fmt (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
       (red_info_a : EcReduction.reduction_info)
       (unienv : EcUnify.unienv)
-    : environnement =
-  let env = {
-      env_hyps             = h;
-      env_unienv           = unienv;
-      env_red_strat        = (fun _ _ -> None);
-      env_red_info_p       = red_info_p;
-      env_red_info_a       = red_info_a;
-      env_restore_unienv   = None;
-      env_subst            = Psubst.p_subst_id;
-      env_current_binds    = [] ;
-      env_meta_restr_binds = Mid.empty;
-      env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
-      env_fmt              = odfl Format.std_formatter fmt;
-    } in
-  let env_red_strat p a =
-    match PReduction.h_red_pattern_opt env p with
-    | Some p -> Some (p, a)
-    | None ->
-    match a with
-    | Axiom_Form f -> begin
-       match EcReduction.h_red_opt env.env_red_info_a env.env_hyps f with
-       | Some f -> Some (p, axiom_form f)
-       | None -> None
-      end
-    | _ ->
-    match PReduction.h_red_pattern_opt env (pat_axiom a) with
-    | Some (Pat_Axiom a) -> Some (p, a)
-    | _ -> None in
-  { env with env_red_strat }
-
+    : environnement = {
+    env_hyps             = h;
+    env_unienv           = unienv;
+    env_red_info_p       = red_info_p;
+    env_red_info_a       = red_info_a;
+    env_restore_unienv   = None;
+    env_subst            = Psubst.p_subst_id;
+    env_current_binds    = [] ;
+    env_meta_restr_binds = Mid.empty;
+    env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
+    env_fmt              = odfl Format.std_formatter fmt;
+  }
 
 let mkengine (a : axiom) (p : pattern) (env : environnement) : engine =
   { e_head = a;
@@ -2798,15 +1886,14 @@ let mkengine (a : axiom) (p : pattern) (env : environnement) : engine =
     e_continuation = ZTop;
   }
 
-let mk_engine ?ppe ?fmt f e_pattern env_hyps env_red_strat env_red_info_a env_unienv = {
+let mk_engine ?ppe ?fmt f e_pattern env_hyps env_red_info_p env_red_info_a env_unienv = {
     e_pattern;
     e_head         = axiom_form f;
     e_continuation = ZTop;
     e_env          = {
         env_hyps;
         env_unienv;
-        env_red_strat;
-        env_red_info_p       = EcReduction.no_red;
+        env_red_info_p;
         env_red_info_a;
         env_restore_unienv   = None;
         env_subst            = Psubst.p_subst_id;
@@ -2829,15 +1916,11 @@ let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
   | NoMatches -> None
 
 (* -------------------------------------------------------------------------- *)
-let red_make_strat_from_env (env: environnement) (p : pattern) (a : axiom) : (pattern * axiom) option =
-  match a with
-  | Axiom_Form f -> begin
-      try omap (fun f -> (p,Axiom_Form f))
-            (EcReduction.h_red_opt env.env_red_info_a env.env_hyps f)
-      with | EcEnv.NotReducible -> assert false
-    end
-  | _ ->
-     begin
-       try omap (fun p -> (p,a)) (PReduction.h_red_pattern_opt env p)
-       with | EcEnv.NotReducible -> assert false
-     end
+open EcReduction
+
+let no_delta_head (p : pattern) =
+  let f (rp : reduction_info) ra =
+    { rp with delta_h = fun _ -> false },
+    { ra with delta_h = fun _ -> false } in
+  let p' = Pat_Red_Strat (p,f) in
+  Pat_Or [p';p]

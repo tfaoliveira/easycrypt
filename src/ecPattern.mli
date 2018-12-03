@@ -83,7 +83,9 @@ type pattern =
   | Pat_Axiom      of axiom
   | Pat_Type       of pattern * gty
 
-and reduction_strategy = pattern -> axiom -> (pattern * axiom) option
+and reduction_strategy =
+  EcReduction.reduction_info -> EcReduction.reduction_info ->
+  EcReduction.reduction_info * EcReduction.reduction_info
 
 type map = pattern MName.t
 
@@ -267,3 +269,19 @@ val p_betared_opt : pattern -> pattern option
 val default_start_name : string
 val default_end_name   : string
 val default_name       : string
+
+
+(* -------------------------------------------------------------------------- *)
+
+module PReduction : sig
+
+  val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+                          Psubst.p_subst -> Name.t -> pattern option
+
+  val h_red_pattern_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+                          Psubst.p_subst -> pattern -> pattern option
+  val h_red_axiom_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+                          Psubst.p_subst -> axiom -> pattern option
+  val h_red_form_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+                          Psubst.p_subst -> form -> pattern option
+end

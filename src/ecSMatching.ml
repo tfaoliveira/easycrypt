@@ -96,7 +96,7 @@ module RegexpBaseInstr = struct
               let fx1 = f_pvar pv ty mhr in
               let unienv = EcUnify.UniEnv.create None in
               let e = EcFMatching.mk_engine fx1 x2 eng.e_hyps
-                        none_fun EcReduction.full_red unienv in
+                        EcReduction.full_red EcReduction.full_red unienv in
               let e = { e with
                         e_env = { e.e_env with
                                   env_subst = { Psubst.p_subst_id with
@@ -111,7 +111,7 @@ module RegexpBaseInstr = struct
               let fx1 = f_tuple (List.map f tuple) in
               let unienv = EcUnify.UniEnv.create None in
               let e = EcFMatching.mk_engine fx1 x2 eng.e_hyps
-                        none_fun EcReduction.full_red unienv in
+                        EcReduction.full_red EcReduction.full_red unienv in
               let e = { e with
                         e_env = { e.e_env with
                                   env_subst = { Psubst.p_subst_id with
@@ -128,7 +128,7 @@ module RegexpBaseInstr = struct
 
            let f1 = form_of_expr mhr e1 in
            let unienv = EcUnify.UniEnv.create None in
-           let e = EcFMatching.mk_engine f1 p2 eng.e_hyps none_fun
+           let e = EcFMatching.mk_engine f1 p2 eng.e_hyps EcReduction.full_red
                      EcReduction.full_red unienv in
            let e = { e with
                      e_env = { e.e_env with
@@ -151,7 +151,7 @@ module RegexpBaseInstr = struct
                raise NoMatch
           in
           let unienv = EcUnify.UniEnv.create None in
-          let e = EcFMatching.mk_engine fx1 p1 eng.e_hyps none_fun
+          let e = EcFMatching.mk_engine fx1 p1 eng.e_hyps EcReduction.full_red
                     EcReduction.full_red unienv in
           let e = { e with
                     e_env = { e.e_env with
@@ -165,7 +165,7 @@ module RegexpBaseInstr = struct
           let p = Pat_Fun_Symbol
                     (Sym_Form_Pr,Pat_Anything::p2::pargs::Pat_Anything::[]) in
           let unienv = EcUnify.UniEnv.create None in
-          let e = EcFMatching.mk_engine f p eng.e_hyps none_fun
+          let e = EcFMatching.mk_engine f p eng.e_hyps EcReduction.full_red
                     EcReduction.full_red unienv in
           let e = { e with
                     e_env = { e.e_env with
@@ -179,7 +179,7 @@ module RegexpBaseInstr = struct
        | Sif (cond, st, sf), RIf (pcond, stn, sfn) -> begin
            let fcond = form_of_expr mhr cond in
            let unienv = EcUnify.UniEnv.create None in
-           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps none_fun
+           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps EcReduction.full_red
                       EcReduction.full_red unienv in
            let e' = { e' with
                       e_env = { e'.e_env with
@@ -209,7 +209,7 @@ module RegexpBaseInstr = struct
        | Swhile (e, s), RWhile (pcond,sn) -> begin
            let fcond = form_of_expr mhr e in
            let unienv = EcUnify.UniEnv.create None in
-           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps none_fun
+           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps EcReduction.full_red
                       EcReduction.full_red unienv in
            let e' = { e' with
                       e_env = { e'.e_env with

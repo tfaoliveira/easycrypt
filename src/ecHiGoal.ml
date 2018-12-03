@@ -1543,8 +1543,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
 
   let engine =
     EcFMatching.mk_engine
-      concl p hyps
-      (fun _ _ -> None) EcReduction.full_red ue in
+      concl p hyps EcReduction.full_red EcReduction.full_red ue in
 
   let ppe = EcPrinting.PPEnv.ofenv env in
   Format.eprintf "%a\n%!" (EcPrinting.pp_pattern ppe) p;

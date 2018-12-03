@@ -12,7 +12,6 @@ exception NoNext
 type environnement = {
     env_hyps             : EcEnv.LDecl.hyps;
     env_unienv           : EcUnify.unienv;
-    env_red_strat        : reduction_strategy;
     env_red_info_p       : EcReduction.reduction_info;
     env_red_info_a       : EcReduction.reduction_info;
     env_restore_unienv   : EcUnify.unienv option;
@@ -67,25 +66,16 @@ val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
 
 val search_eng      : engine -> nengine option
 
-val red_make_strat_from_env : environnement -> pattern -> axiom ->
-                              (pattern * axiom) option
-
 val mkenv           : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv -> environnement
 
 val mkengine        : axiom -> pattern -> environnement -> engine
 val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      form -> pattern -> LDecl.hyps -> reduction_strategy ->
+                      form -> pattern -> LDecl.hyps ->
+                      EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv -> engine
 
 val pattern_of_form : bindings -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
-
-module PReduction : sig
-
-  val h_red_pattern_opt : environnement -> pattern -> pattern option
-  val h_red_axiom_opt   : environnement -> axiom -> pattern option
-
-end
