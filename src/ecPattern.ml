@@ -2251,3 +2251,163 @@ let p_destr_app p =
   | Pat_Axiom (Axiom_Form { f_node = Fapp (f,args) }) ->
      pat_form f, List.map pat_form args
   | _ -> p, []
+
+(* -------------------------------------------------------------------------- *)
+exception Invalid_Type of string
+
+let rec form_of_pattern (p : pattern) = match p with
+  | Pat_Anything            -> raise (Invalid_Type "formula")
+  | Pat_Meta_Name (p,_,_)   -> raise (Invalid_Type "formula")
+  | Pat_Sub p               -> raise (Invalid_Type "formula")
+  | Pat_Or [p]              -> form_of_pattern p
+  | Pat_Or _                -> raise (Invalid_Type "formula")
+  | Pat_Instance _          -> assert false
+  | Pat_Red_Strat (p,_)     -> form_of_pattern p
+  | Pat_Type (p,GTty ty)    -> let f = form_of_pattern p in
+                             if ty_equal ty f.f_ty then f
+                             else raise (Invalid_Type "formula")
+  | Pat_Type _              -> raise (Invalid_Type "formula")
+  | Pat_Axiom
+      (Axiom_Form f)        -> f
+  | Pat_Axiom
+      (Axiom_Local (id,ty)) -> f_local id ty
+  | Pat_Axiom _             -> raise (Invalid_Type "formula")
+  | Pat_Fun_Symbol (s, lp)  ->
+  match s, lp with
+  | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern p1)
+                                 (form_of_pattern p2)
+                                 (form_of_pattern p3)
+  | Sym_Form_App ty, p::lp    -> f_app (form_of_pattern p)
+                                 (List.map form_of_pattern lp) ty
+  | Sym_Form_Tuple, t         -> f_tuple (List.map form_of_pattern t)
+  | Sym_Form_Proj (i,ty), [p] -> f_proj (form_of_pattern p) i ty
+  | Sym_Form_Match ty, p::lp  -> mk_form (Fmatch (form_of_pattern p,
+                                                  List.map form_of_pattern lp,
+                                                  ty)) ty
+  | Sym_Form_Quant (q,b), [p] -> f_quant q b (form_of_pattern p)
+  | Sym_Form_Let lp, [p1;p2]  -> f_let lp (form_of_pattern p1)
+                                   (form_of_pattern p2)
+  | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern pv) ty
+                                   (memory_of_pattern pm)
+  | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula")
+  | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern mp) (memory_of_pattern mem)
+  | Sym_Form_Hoare_F, [pr;xp;po] ->
+     f_hoareF (form_of_pattern pr) (xpath_of_pattern xp) (form_of_pattern po)
+  | Sym_Form_Hoare_S, [pm;pr;s;po] ->
+     f_hoareS (memenv_of_pattern pm) (form_of_pattern pr) (stmt_of_pattern s)
+       (form_of_pattern po)
+  | Sym_Form_bd_Hoare_F, [pr;xp;po;cmp;bd] ->
+     f_bdHoareF (form_of_pattern pr) (xpath_of_pattern xp) (form_of_pattern pr)
+       (cmp_of_pattern cmp) (form_of_pattern bd)
+  | Sym_Form_bd_Hoare_S, [pm;pr;s;po;cmp;bd] ->
+     f_bdHoareS (memenv_of_pattern pm) (form_of_pattern pr) (stmt_of_pattern s)
+       (form_of_pattern pr) (cmp_of_pattern cmp) (form_of_pattern bd)
+  | Sym_Form_Equiv_F, [pr;f1;f2;po] ->
+     f_equivF (form_of_pattern pr) (xpath_of_pattern f1) (xpath_of_pattern f2)
+       (form_of_pattern po)
+  | Sym_Form_Equiv_S, [pm1;pm2;pr;s1;s2;po] ->
+     f_equivS (memenv_of_pattern pm1) (memenv_of_pattern pm2) (form_of_pattern pr)
+       (stmt_of_pattern s1) (stmt_of_pattern s2) (form_of_pattern po)
+  | Sym_Form_Eager_F, [po;s1;f1;f2;s2;pr] ->
+     f_eagerF (form_of_pattern po) (stmt_of_pattern s1) (xpath_of_pattern f1)
+       (xpath_of_pattern f2) (stmt_of_pattern s2) (form_of_pattern pr)
+  | Sym_Form_Pr, [pm;f;args;event] ->
+     f_pr (memory_of_pattern pm) (xpath_of_pattern f) (form_of_pattern args)
+       (form_of_pattern event)
+  | Sym_App, pop::pargs ->
+     f_app (form_of_pattern pop) (List.map form_of_pattern pargs)
+  | Sym_Quant (q,pb), [p] ->
+     let f (id,ogt) = id,odfl (raise (Invalid_Type "formula")) ogt in
+     f_quant q (List.map f pb) (form_of_pattern p)
+  | _ -> raise (Invalid_Type "formula")
+
+and memory_of_pattern = function
+  | Pat_Axiom (Axiom_Memory m) -> m
+  | _ -> raise (Invalid_Type "memory")
+
+and prog_var_of_pattern = function
+  | Pat_Axiom (Axiom_Prog_Var pv) -> pv
+  | Pat_Fun_Symbol (Sym_Form_Prog_var k, [xp]) ->
+     pv (xpath_of_pattern xp) k
+  | _ -> raise (Invalid_Type "prog_var")
+
+and xpath_of_pattern = function
+  | Pat_Axiom (Axiom_Xpath xp) -> xp
+  | Pat_Fun_Symbol (Sym_Xpath, [mp;p]) ->
+     EcPath.xpath (mpath_of_pattern mp) (path_of_pattern p)
+  | _ -> raise (Invalid_Type "xpath")
+
+and path_of_pattern = function
+  | Pat_Axiom (Axiom_Op (p,[])) -> p
+  | _ -> raise (Invalid_Type "path")
+
+and mpath_of_pattern = function
+  | Pat_Axiom (Axiom_Mpath mp) -> mp
+  | Pat_Fun_Symbol (Sym_Mpath, mp::margs) ->
+     mpath (mpath_top_of_pattern mp) (List.map mpath_of_pattern margs)
+  | _ -> raise (Invalid_Type "mpath")
+
+and mpath_top_of_pattern = function
+  | Pat_Axiom (Axiom_Module m) -> m
+  | _ -> raise (Invalid_Type "mpath_top")
+
+and memenv_of_pattern = function
+  | Pat_Axiom (Axiom_MemEnv m) -> m
+  | Pat_Type (p, GTmem mt) -> begin
+      try (memory_of_pattern p, mt) with
+      | Invalid_Type "memory" ->
+         let (m,mt') = memenv_of_pattern p in
+         if mt_equal mt mt' then (m,mt)
+         else raise (Invalid_Type "memenv")
+    end
+  | _ -> raise (Invalid_Type "memenv")
+
+and stmt_of_pattern = function
+  | Pat_Axiom (Axiom_Stmt s) -> s
+  | Pat_Fun_Symbol (Sym_Stmt_Seq, l) ->
+     stmt (List.flatten (List.map instr_of_pattern l))
+  | _ -> raise (Invalid_Type "stmt")
+
+and instr_of_pattern = function
+  | Pat_Axiom (Axiom_Instr i) -> [i]
+  | Pat_Axiom (Axiom_Stmt s) -> s.s_node
+  | Pat_Fun_Symbol (Sym_Instr_Assign, [lv;e]) ->
+     [i_asgn (lvalue_of_pattern lv, expr_of_pattern e)]
+  | Pat_Fun_Symbol (Sym_Instr_Sample, [lv;e]) ->
+     [i_rnd  (lvalue_of_pattern lv, expr_of_pattern e)]
+  | Pat_Fun_Symbol (Sym_Instr_Call, f::args) ->
+     [i_call (None, xpath_of_pattern f, List.map expr_of_pattern args)]
+  | Pat_Fun_Symbol (Sym_Instr_Call_Lv, lv::f::args) ->
+     [i_call (Some (lvalue_of_pattern lv), xpath_of_pattern f,
+              List.map expr_of_pattern args)]
+  | Pat_Fun_Symbol (Sym_Instr_If, [cond;s1;s2]) ->
+     [i_if (expr_of_pattern cond) (stmt_of_pattern s1) (stmt_of_pattern s2)]
+  | Pat_Fun_Symbol (Sym_Instr_While, [cond;s]) ->
+     [i_while (expr_of_pattern cond, stmt_of_pattern s)]
+  | Pat_Fun_Symbol (Sym_Instr_Assert, [e]) ->
+     [i_assert (expr_of_pattern e)]
+  | Pat_Fun_Symbol (Sym_Stmt_Seq, lp) ->
+     List.flatten (List.map instr_of_pattern lp)
+  | _ -> raise (Invalid_Type "instr")
+
+and lvalue_of_pattern = function
+  | Pat_Axiom (Axiom_Lvalue lv) -> lv
+  | Pat_Type (pv, GTty ty) ->
+     LvVar (prog_var_of_pattern pv, ty)
+  | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
+     let t = List.map lvalue_of_pattern t in
+     let t = List.map (function LvVar (x,t) -> (x,t)
+                              | _ -> raise (Invalid_Type "lvalue tuple")) t in
+     LvTuple t
+  | _ -> raise (Invalid_Type "lvalue")
+
+and expr_of_pattern p =
+  try match expr_of_form (form_of_pattern p) with
+      | Some e -> e
+      | None -> raise (Invalid_Type "expr from form")
+  with
+  | Invalid_Type s -> raise (Invalid_Type (String.concat " in " [s;"expr"]))
+
+and cmp_of_pattern = function
+  | Pat_Axiom (Axiom_Hoarecmp cmp) -> cmp
+  | _ -> raise (Invalid_Type "hoarecmp")

@@ -91,7 +91,6 @@ val pat_fv : pattern -> int Mid.t
 
 (* -------------------------------------------------------------------------- *)
 val p_equal    : pattern -> pattern -> bool
-(* val p_map      : (ty -> ty) -> (pattern -> pattern) -> pattern -> pattern *)
 val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
 (* -------------------------------------------------------------------------- *)
 
@@ -113,6 +112,10 @@ val pat_pv        : prog_var        -> pattern
 val pat_memory    : EcMemory.memory -> pattern
 val pat_memenv    : EcMemory.memenv -> pattern
 val pat_cmp       : hoarecmp        -> pattern
+
+(* -------------------------------------------------------------------------- *)
+exception Not_a_Formula
+val form_of_pattern : pattern -> form
 
 (* -------------------------------------------------------------------------- *)
 
