@@ -1563,7 +1563,13 @@ let get_n_matches (e : nengine) : Psubst.p_subst =
   (assubst e.ne_env.env_unienv e.ne_env).env_subst
 
 let search_eng e =
-  try Some(process e) with
+  try
+    let ne = process e in
+    let ne_env = assubst ne.ne_env.env_unienv ne.ne_env in
+    let s = {Psubst.p_subst_id with ps_sty = ne.ne_env.env_subst.ps_sty } in
+    let ps_patloc = Mid.map (Psubst.p_subst s) s.ps_patloc in
+    Some { ne with ne_env = { ne_env with env_subst = { ne_env.env_subst with ps_patloc } } }
+  with
   | NoMatches -> None
 
 let pattern_of_axiom (bindings: bindings) (a : axiom) =
