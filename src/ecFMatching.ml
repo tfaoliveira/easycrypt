@@ -1921,7 +1921,9 @@ open EcReduction
 
 let no_delta_head (p : pattern) =
   let f (rp : reduction_info) ra =
-    { rp with delta_h = fun _ -> false },
-    { ra with delta_h = fun _ -> false } in
+    { rp with delta_h = (fun _ -> false);
+              delta_p = (fun _ -> false) },
+    { ra with delta_h = (fun _ -> false);
+              delta_p = (fun _ -> false) } in
   let p' = Pat_Red_Strat (p,f) in
   Pat_Or [p';p]
