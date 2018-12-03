@@ -10,7 +10,6 @@ module Name = EcIdent
 module MName = Mid
 
 (* -------------------------------------------------------------------------- *)
-
 type meta_name = Name.t
 
 type pbindings = (ident * gty option) list
