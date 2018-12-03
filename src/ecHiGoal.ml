@@ -1545,9 +1545,6 @@ let process_pose xsym bds o p (tc : tcenv1) =
     EcFMatching.mk_engine
       concl p hyps EcReduction.full_red EcReduction.full_red ue in
 
-  let ppe = EcPrinting.PPEnv.ofenv env in
-  Format.eprintf "%a\n%!" (EcPrinting.pp_pattern ppe) p;
-
   let dopat, body =
     let module E = struct exception Failure end in
 
@@ -1559,14 +1556,13 @@ let process_pose xsym bds o p (tc : tcenv1) =
           (false, pf)
       | Some mtch, _ -> begin
           let subst = mtch.EcFMatching.ne_env.EcFMatching.env_subst in
-          match Mid.find_opt root subst.EcPattern.Psubst.ps_patloc with
-          | Some (EcPattern.Pat_Axiom (EcPattern.Axiom_Form body)) ->
-              (true, body)
-          | Some subp ->
-              Format.eprintf "%a\n%!" (EcPrinting.pp_pattern ppe) subp;
-              raise E.Failure
-          | None -> raise E.Failure
-        end
+          let f = Mid.find_opt root subst.EcPattern.Psubst.ps_patloc in
+          let f =
+            try  EcPattern.form_of_pattern env (oget f)
+            with EcPattern.Invalid_Type _ -> raise E.Failure in
+
+          (true, f)
+      end
 
     with E.Failure ->
       tc_error !!tc "cannot find an occurence"
