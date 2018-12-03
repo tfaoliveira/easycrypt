@@ -230,7 +230,7 @@ let pat_fv p =
   in aux Mid.empty p
 
 (* -------------------------------------------------------------------------- *)
-let p_equal : pattern -> pattern -> bool = (==)
+let p_equal = (==)
 
 
 (* -------------------------------------------------------------------------- *)
@@ -420,7 +420,7 @@ let p_hoareF (pr : pattern) (f : pattern) (po : pattern) =
   | Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Xpath f),
     Pat_Axiom(Axiom_Form po) ->
-     Pat_Axiom(Axiom_Form (f_hoareF pr f po))
+     pat_form (f_hoareF pr f po)
   | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[pr;f;po])
 
 let p_hoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern) =
@@ -429,7 +429,7 @@ let p_hoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern) =
     Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Stmt s),
     Pat_Axiom(Axiom_Form po) ->
-     Pat_Axiom(Axiom_Form (f_hoareS m pr s po))
+     pat_form (f_hoareS m pr s po)
   | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[m;pr;s;po])
 
 let p_bdHoareF (pr : pattern) (f : pattern) (po : pattern) (cmp : pattern)
@@ -440,7 +440,7 @@ let p_bdHoareF (pr : pattern) (f : pattern) (po : pattern) (cmp : pattern)
     Pat_Axiom(Axiom_Form po),
     Pat_Axiom(Axiom_Hoarecmp cmp),
     Pat_Axiom(Axiom_Form bd) ->
-     Pat_Axiom(Axiom_Form(f_bdHoareF pr f po cmp bd))
+     pat_form(f_bdHoareF pr f po cmp bd)
   | _ ->
      Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[pr;f;po;cmp;bd])
 
@@ -453,7 +453,7 @@ let p_bdHoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern)
     Pat_Axiom(Axiom_Form po),
     Pat_Axiom(Axiom_Hoarecmp cmp),
     Pat_Axiom(Axiom_Form bd) ->
-     Pat_Axiom(Axiom_Form(f_bdHoareS m pr s po cmp bd))
+     pat_form(f_bdHoareS m pr s po cmp bd)
   | _ ->
      Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[m;pr;s;po;cmp;bd])
 
@@ -1826,7 +1826,7 @@ module Psubst = struct
          let f2 = try EcFol.f_betared f with
                   | _ -> f in
          if f_equal f f2 then None
-         else Some (Pat_Axiom(Axiom_Form f2))
+         else Some (pat_form f2)
       | Pat_Axiom _ -> None
       | Pat_Fun_Symbol (s,lp) ->
          match s,lp with
@@ -1882,8 +1882,11 @@ let p_destr_app = function
   | p -> p, []
 
 (* -------------------------------------------------------------------------- *)
-let p_true  = Pat_Axiom(Axiom_Form EcFol.f_true)
-let p_false = Pat_Axiom(Axiom_Form EcFol.f_false)
+let f_op_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
+
+(* -------------------------------------------------------------------------- *)
+let p_true  = pat_form EcFol.f_true
+let p_false = pat_form EcFol.f_false
 
 let p_is_true = function
   | Pat_Axiom(Axiom_Form f) -> EcCoreFol.is_true f
@@ -1898,23 +1901,115 @@ let p_bool_val p =
   else if p_is_false p then Some false
   else None
 
+let p_eq (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom(Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (f_eq f1 f2)
+  | _ -> assert false
+
 let p_not = function
-  | Pat_Axiom(Axiom_Form f) -> Pat_Axiom(Axiom_Form (EcFol.f_not f))
-  | p -> p_app (Pat_Axiom(Axiom_Form EcFol.fop_not)) [p] (Some EcTypes.tbool)
+  | Pat_Axiom(Axiom_Form f) -> pat_form (EcFol.f_not f)
+  | p -> p_app (pat_form EcFol.fop_not) [p] (Some EcTypes.tbool)
 
 let p_imp (p1 : pattern) (p2 : pattern) = match p1,p2 with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
-     Pat_Axiom(Axiom_Form (EcFol.f_imp f1 f2))
-  | _ -> p_app (Pat_Axiom(Axiom_Form EcFol.fop_imp)) [p1;p2]
+     pat_form (EcFol.f_imp f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_imp) [p1;p2]
            (Some EcTypes.tbool)
 
 let p_anda (p1 : pattern) (p2 : pattern) = match p1,p2 with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
-     Pat_Axiom(Axiom_Form (EcFol.f_anda f1 f2))
-  | _ -> p_app (Pat_Axiom(Axiom_Form EcFol.fop_anda)) [p1;p2]
+     pat_form  (EcFol.f_anda f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_anda) [p1;p2]
            (Some EcTypes.tbool)
+
+let p_ora (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_ora f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_ora) [p1;p2] (Some EcTypes.tbool)
+
+let p_iff (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_iff f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_iff) [p1;p2] (Some EcTypes.tbool)
+
+let p_and (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_and f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_and) [p1;p2] (Some EcTypes.tbool)
+
+let p_or (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_or f1 f2)
+  | _ -> p_app (pat_form EcFol.fop_or) [p1;p2] (Some EcTypes.tbool)
+
+let p_ands (ps : pattern list) = match List.rev ps with
+  | [] -> p_true
+  | p::ps -> List.fold_left ((^~) p_and) p ps
+
+(* -------------------------------------------------------------------------- *)
+let p_int_0 = pat_form (f_i0)
+let p_real_0 = pat_form (f_r0)
+
+let p_destr_int (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form { f_node = Fint x } ) -> x
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [{f_node = Fint n}])})
+       when f_equal op fop_int_opp ->
+     EcBigInt.neg n
+  | _ -> destr_error "p_destr_int"
+
+let p_int_le (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_le f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+
+let p_int_lt (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_lt f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+
+let p_int_add (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_add f1 f2)
+  | _ -> p_app (pat_form fop_int_add) [p1;p2] (Some EcTypes.tint)
+
+let p_int_opp (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
+  | _ -> p_app (pat_form fop_int_opp) [p] (Some EcTypes.tint)
+
+let p_int_mul (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_mul f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
+
+let p_real_le (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_real_le f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_le [] (toarrow [treal ; treal ] tbool))) [p1;p2] (Some EcTypes.tbool)
+
+let p_real_lt (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_real_lt f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_lt [] (toarrow [treal ; treal ] tbool))) [p1;p2] (Some EcTypes.tbool)
+
+let p_real_add (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_real_add f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_add [] (toarrow [tint ; tint ] treal))) [p1;p2] (Some EcTypes.treal)
+
+let p_real_opp (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_opp [] (toarrow [treal] treal))) [p] (Some EcTypes.treal)
+
+let p_real_mul (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_real_mul f1 f2)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_mul [] (toarrow [treal ; treal ] treal))) [p1;p2] (Some EcTypes.treal)
+
+let p_real_inv (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_real_inv f)
+  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_inv [] (toarrow [treal] treal))) [p] (Some EcTypes.treal)
 
 (* -------------------------------------------------------------------------- *)
 let p_is_not = function
@@ -1922,7 +2017,7 @@ let p_is_not = function
   | _ -> false
 
 let p_destr_not = function
-  | Pat_Axiom(Axiom_Form f) -> Pat_Axiom(Axiom_Form (EcFol.destr_not f))
+  | Pat_Axiom(Axiom_Form f) -> pat_form (EcFol.destr_not f)
   | _ -> assert false
 
 (* -------------------------------------------------------------------------- *)
@@ -1946,6 +2041,176 @@ let p_anda_simpl (p1 : pattern) (p2 : pattern) =
   else if p_is_false p2 then p_false
   else p_anda p1 p2
 
+let p_ora_simpl (p1 : pattern) (p2 : pattern) =
+  if p_is_true p1 then p_true
+  else if p_is_false p1 then p2
+  else if p_is_true p2 then p_true
+  else if p_is_false p2 then p1
+  else p_ora p1 p2
+
+let rec p_iff_simpl (p1 : pattern) (p2 : pattern) =
+       if p_equal  p1 p2 then p_true
+  else if p_is_true  p1  then p2
+  else if p_is_false p1  then p_not_simpl p2
+  else if p_is_true  p2  then p1
+  else if p_is_false p2  then p_not_simpl p1
+  else
+    let aux p1 = match p1 with
+      | Pat_Fun_Symbol
+        ((Sym_Form_App _ | Sym_App),
+         [Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) }
+                     | Axiom_Op (op1,[]));p1]) ->
+         Some op1, p1
+      | Pat_Axiom
+          (Axiom_Form
+             { f_node = Fapp ({f_node = Fop (op,[])}, [f1]) } ) ->
+         Some op, pat_form f1
+      | _ -> None, p1 in
+    match aux p1, aux p2 with
+    | (Some op1, p1), (Some op2, p2)
+         when
+           (EcPath.p_equal op1 EcCoreLib.CI_Bool.p_not &&
+              EcPath.p_equal op2 EcCoreLib.CI_Bool.p_not) ->
+       p_iff_simpl p1 p2
+    | _ -> p_iff p1 p2
+
+let p_and_simpl (p1 : pattern) (p2 : pattern) =
+  if      p_is_true p1  then p2
+  else if p_is_false p1 then p_false
+  else if p_is_true p2  then p1
+  else if p_is_false p2 then p_false
+  else p_and p1 p2
+
+let p_or_simpl (p1 : pattern) (p2 : pattern) =
+  if      p_is_true p1  then p_true
+  else if p_is_false p1 then p2
+  else if p_is_true p2  then p_true
+  else if p_is_false p2 then p1
+  else p_or p1 p2
+
+let p_andas_simpl = List.fold_right p_anda_simpl
+
+let rec p_eq_simpl (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then p_true
+  else match p1, p2 with
+  | Pat_Axiom (Axiom_Form { f_node = Fint _ } ),
+    Pat_Axiom (Axiom_Form { f_node = Fint _ } ) -> p_false
+
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op1, [{f_node = Fint _}]) }),
+    Pat_Axiom (Axiom_Form { f_node = Fapp (op2, [{f_node = Fint _}]) })
+      when f_equal op1 f_op_real_of_int &&
+           f_equal op2 f_op_real_of_int
+    -> p_false
+
+  | Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) } ),
+    Pat_Axiom (Axiom_Form { f_node = Fop (op2, []) } )
+       when
+         (EcPath.p_equal op1 EcCoreLib.CI_Bool.p_true  &&
+          EcPath.p_equal op2 EcCoreLib.CI_Bool.p_false  )
+      || (EcPath.p_equal op2 EcCoreLib.CI_Bool.p_true  &&
+          EcPath.p_equal op1 EcCoreLib.CI_Bool.p_false  )
+    -> p_false
+
+  | Pat_Axiom (Axiom_Form { f_node = Ftuple fs1 } ),
+    Pat_Axiom (Axiom_Form { f_node = Ftuple fs2 } )
+       when List.length fs1 = List.length fs2 ->
+      p_andas_simpl (List.map2 (fun x y -> pat_form (f_eq_simpl x y)) fs1 fs2) p_true
+
+  | _ -> p_eq p1 p2
+
+
+(* -------------------------------------------------------------------------- *)
+let p_int_le_simpl (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then p_true
+  else match p1, p2 with
+  | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
+    Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
+     pat_form (f_bool (EcBigInt.compare x1 x2 <= 0))
+  | _, _ -> p_int_le p1 p2
+
+let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then p_true
+  else match p1, p2 with
+  | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
+    Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
+     pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
+  | _, _ -> p_int_le p1 p2
+
+let p_int_add_simpl (p1 : pattern) (p2 : pattern) =
+  try pat_form (f_int (EcBigInt.add (p_destr_int p1) (p_destr_int p2)))
+  with
+  | DestrError _ ->
+     if p_equal p_int_0 p1 then p2
+     else if p_equal p_int_0 p2 then p1
+     else match p2 with
+          | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f2]) })
+               when f_equal op fop_int_opp && p_equal p1 (pat_form f2) ->
+             p_int_0
+          | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
+                            [Pat_Axiom (Axiom_Form op);p2])
+               when f_equal op fop_int_opp && p_equal p1 p2 ->
+             p_int_0
+          | _ -> p_int_add p1 p2
+
+let p_int_opp_simpl (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (f_int_opp_simpl f)
+  | _ -> p_int_opp p
+
+let p_int_mul_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (f_int_mul_simpl f1 f2)
+  | _ -> p_int_mul p1 p2
+
+let p_real_le_simpl (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then p_true else
+    let aux p = match p with
+      | Pat_Axiom (Axiom_Form { f_node = Fapp (op1,
+                                               [{f_node = Fint x1}]) })
+           when f_equal op1 f_op_real_of_int ->
+         Some x1
+      | _ -> None in
+    match aux p1, aux p2 with
+    | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 <= 0))
+    | _ -> p_real_le p1 p2
+
+let p_real_lt_simpl (p1 : pattern) (p2 : pattern) =
+  let f_op_real_of_int =
+    f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal) in
+  if p_equal p1 p2 then p_true else
+    let aux p = match p with
+      | Pat_Axiom (Axiom_Form { f_node = Fapp (op1,
+                                               [{f_node = Fint x1}]) })
+           when f_equal op1 f_op_real_of_int ->
+         Some x1
+      | _ -> None in
+    match aux p1, aux p2 with
+    | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
+    | _ -> p_real_lt p1 p2
+
+let p_real_add_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (f_real_add_simpl f1 f2)
+  | _ -> p_real_add p1 p2
+
+let p_real_opp_simpl (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (f_real_opp_simpl f)
+  | _ -> p_real_opp p
+
+let p_real_mul_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (f_real_mul_simpl f1 f2)
+  | _ -> p_real_mul p1 p2
+
+let p_real_inv_simpl (p : pattern) = match p with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (f_real_inv_simpl f)
+  | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
+                    [Pat_Axiom (Axiom_Form { f_node = Fop (op,_) }
+                                | Axiom_Op (op,_));f])
+       when (op_kind op) = Some `Real_inv ->
+     f
+  | _ -> p_real_inv p
+
+
 (* -------------------------------------------------------------------------- *)
 let p_if_simpl (p1 : pattern) (p2 : pattern) (p3 : pattern) =
   if p_equal p2 p3 then p2
@@ -1961,7 +2226,7 @@ let p_if_simpl (p1 : pattern) (p2 : pattern) (p3 : pattern) =
 let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
   match p1 with
   | Pat_Fun_Symbol(Sym_Form_Tuple,pargs) -> List.nth pargs i
-  | Pat_Axiom(Axiom_Form f) -> Pat_Axiom(Axiom_Form (f_proj_simpl f i ty))
+  | Pat_Axiom(Axiom_Form f) -> pat_form (f_proj_simpl f i ty)
   | _ -> p_proj p1 i ty
 
 let p_app_simpl_opt op pargs oty = match op,oty with
@@ -1979,3 +2244,10 @@ let p_forall_simpl b p =
 let p_exists_simpl b p =
   let b = List.filter (fun (id,_) -> Mid.mem id (pat_fv p)) b in
   p_f_exists b p
+
+let p_destr_app p =
+  match p with
+  | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), p::lp) -> p,lp
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (f,args) }) ->
+     pat_form f, List.map pat_form args
+  | _ -> p, []
