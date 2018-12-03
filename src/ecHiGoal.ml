@@ -1522,45 +1522,69 @@ let process_pose xsym bds o p (tc : tcenv1) =
   let (env, hyps, concl) = FApi.tc1_eflat tc in
   let o = norm_rwocc o in
 
-  let (ptenv, p) =
+  let root = EcIdent.create "<root>" in
+
+  let (p, ue, pf) =
     let ps  = ref Mid.empty in
     let ue  = TTC.unienv_of_hyps hyps in
     let (senv, bds) = EcTyping.trans_binding env ue bds in
-    let p = EcTyping.trans_pattern senv (ps, ue) p in
-    let ev = MEV.of_idents (Mid.keys !ps) `Form in
-    (ptenv !!tc hyps (ue, ev),
-     f_lambda (List.map (snd_map gtty) bds) p)
+    let p   = EcTyping.trans_pattern senv (ps, ue) p in
+    let p   = f_lambda (List.map (snd_map gtty) bds) p in
+    let ps  = List.map (snd_map gtty) (Mid.bindings !ps) in
+    let pf  =
+      if   List.is_empty ps && EcUnify.UniEnv.closed ue
+      then Some p else None in
+    let p   = EcFMatching.pattern_of_form ps p in
+    let p   = EcPattern.Pat_Meta_Name (p, root, None) in
+    let p   = EcPattern.Pat_Sub p in
+
+    (p, ue, pf)
   in
 
-  let dopat =
-    try  PT.pf_find_occurence ptenv ~keyed:`Lazy ~ptn:p concl; true
-    with PT.FindOccFailure _ ->
-      if not (PT.can_concretize ptenv) then
-        if not (EcMatching.MEV.filled !(ptenv.PT.pte_ev)) then
-          tc_error !!tc "cannot find an occurence"
-        else
-          tc_error !!tc "%s - %s"
-            "cannot find an occurence"
-            "instantiate type variables manually"
-      else
-        false
+  let engine =
+    EcFMatching.mk_engine
+      concl p hyps
+      (fun _ _ -> None) EcReduction.full_red ue in
+
+  let ppe = EcPrinting.PPEnv.ofenv env in
+  Format.eprintf "%a\n%!" (EcPrinting.pp_pattern ppe) p;
+
+  let dopat, body =
+    let module E = struct exception Failure end in
+
+    try
+      match EcFMatching.search_eng engine, pf with
+      | None, None ->
+          raise E.Failure
+      | None, Some pf ->
+          (false, pf)
+      | Some mtch, _ -> begin
+          let subst = mtch.EcFMatching.ne_env.EcFMatching.env_subst in
+          match Mid.find_opt root subst.EcPattern.Psubst.ps_patloc with
+          | Some (EcPattern.Pat_Axiom (EcPattern.Axiom_Form body)) ->
+              (true, body)
+          | Some subp ->
+              Format.eprintf "%a\n%!" (EcPrinting.pp_pattern ppe) subp;
+              raise E.Failure
+          | None -> raise E.Failure
+        end
+
+    with E.Failure ->
+      tc_error !!tc "cannot find an occurence"
   in
 
-  let p = PT.concretize_form ptenv p in
+  let x = EcIdent.create (unloc xsym) in
 
-  let (x, letin) =
-    match dopat with
-    | false -> (EcIdent.create (unloc xsym), concl)
-    | true  -> begin
-        let cpos =
-          try  FPosition.select_form hyps o p concl
-          with InvalidOccurence -> tacuerror "invalid occurence selector"
-        in
-          FPosition.topattern ~x:(EcIdent.create (unloc xsym)) cpos concl
-    end
+  let letin =
+    if not dopat then concl else
+
+    let cpos =
+      try  FPosition.select_form hyps o body concl
+      with InvalidOccurence -> tacuerror "invalid occurence selector"
+    in snd (FPosition.topattern ~x cpos concl)
   in
 
-  let letin = EcFol.f_let1 x p letin in
+  let letin = EcFol.f_let1 x body letin in
 
   FApi.t_seq
     (fun tc -> tcenv_of_tcenv1 (t_change letin tc))
