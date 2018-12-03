@@ -81,7 +81,20 @@ let h_red_strat hyps s rp ra p a =
 
 let assubst (ue : EcUnify.unienv) (s : Psubst.p_subst) : Psubst.p_subst =
   let tysubst = { s.ps_sty with ts_u = EcUnify.UniEnv.assubst ue } in
-  { s with ps_sty = tysubst }
+  let subst = { s with ps_sty = tysubst } in
+  let seen = ref Sid.empty in
+
+  let rec for_ident x binding subst =
+    if Sid.mem x !seen then subst else begin
+        seen := Sid.add x !seen;
+        let subst =
+          Mid.fold2_inter (fun x bdx _ -> for_ident x bdx)
+            subst.ps_patloc (pat_fv binding) subst in
+        { subst with ps_patloc = Mid.add x (Psubst.p_subst subst binding) subst.ps_patloc }
+      end
+  in
+  Mid.fold_left (fun acc x bd -> for_ident x bd acc) subst subst.ps_patloc
+
 
 let assubst ue env = { env with env_subst = assubst ue env.env_subst }
 
