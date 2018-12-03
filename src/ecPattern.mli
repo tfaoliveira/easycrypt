@@ -114,8 +114,21 @@ val pat_memenv    : EcMemory.memenv -> pattern
 val pat_cmp       : hoarecmp        -> pattern
 
 (* -------------------------------------------------------------------------- *)
-exception Not_a_Formula
-val form_of_pattern : pattern -> form
+exception Invalid_Type of string
+
+val form_of_pattern      : EcEnv.env -> pattern -> form
+val memory_of_pattern    : pattern -> memory
+val memenv_of_pattern    : pattern -> memenv
+val prog_var_of_pattern  : EcEnv.env -> pattern -> prog_var
+val xpath_of_pattern     : EcEnv.env -> pattern -> xpath
+val mpath_of_pattern     : EcEnv.env -> pattern -> mpath
+val mpath_top_of_pattern : EcEnv.env -> pattern -> mpath_top
+val path_of_pattern      : pattern -> path
+val stmt_of_pattern      : EcEnv.env -> pattern -> stmt
+val instr_of_pattern     : EcEnv.env -> pattern -> instr list
+val lvalue_of_pattern    : EcEnv.env -> pattern -> lvalue
+val expr_of_pattern      : EcEnv.env -> pattern -> expr
+val cmp_of_pattern       : pattern -> hoarecmp
 
 (* -------------------------------------------------------------------------- *)
 
