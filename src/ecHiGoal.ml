@@ -1530,6 +1530,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let (senv, bds) = EcTyping.trans_binding env ue bds in
     let p   = EcTyping.trans_pattern senv (ps, ue) p in
     let p   = f_lambda (List.map (snd_map gtty) bds) p in
+    let p   = Fsubst.uni (EcUnify.UniEnv.assubst ue) p in
     let ps  = List.map (snd_map gtty) (Mid.bindings !ps) in
     let pf  =
       if   List.is_empty ps && EcUnify.UniEnv.closed ue
@@ -1557,8 +1558,9 @@ let process_pose xsym bds o p (tc : tcenv1) =
       | Some mtch, _ -> begin
           let subst = mtch.EcFMatching.ne_env.EcFMatching.env_subst in
           let f = Mid.find_opt root subst.EcPattern.Psubst.ps_patloc in
+          let f = EcPattern.Psubst.p_subst subst (oget f) in
           let f =
-            try  EcPattern.form_of_pattern env (oget f)
+            try  EcPattern.form_of_pattern env f
             with EcPattern.Invalid_Type _ -> raise E.Failure in
 
           (true, f)
