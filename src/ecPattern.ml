@@ -1152,8 +1152,6 @@ module Psubst = struct
   type p_subst = {
       ps_freshen : bool;
       ps_patloc  : pattern             Mid.t;
-      ps_mp      : mpath               Mid.t;
-      ps_mem     : ident               Mid.t;
       ps_opdef   : (ident list * expr) Mp.t;
       ps_pddef   : (ident list * form) Mp.t;
       ps_exloc   : expr                Mid.t;
@@ -1163,8 +1161,6 @@ module Psubst = struct
   let p_subst_id = {
       ps_freshen = false;
       ps_patloc  = Mid.empty;
-      ps_mp      = Mid.empty;
-      ps_mem     = Mid.empty;
       ps_opdef   = Mp.empty;
       ps_pddef   = Mp.empty;
       ps_exloc   = Mid.empty;
@@ -1175,14 +1171,11 @@ module Psubst = struct
        s.ps_freshen = false
     && is_ty_subst_id s.ps_sty
     && Mid.is_empty   s.ps_patloc
-    && Mid.is_empty   s.ps_mem
-    && Mp.is_empty    s.ps_opdef
     && Mp.is_empty    s.ps_pddef
     && Mid.is_empty   s.ps_exloc
 
   let p_subst_init ?mods ?sty ?opdef ?prdef () =
     { p_subst_id with
-      ps_mp    = odfl Mid.empty mods;
       ps_sty   = odfl ty_subst_id sty;
       ps_opdef = odfl Mp.empty opdef;
       ps_pddef = odfl Mp.empty prdef;
@@ -1193,12 +1186,12 @@ module Psubst = struct
     { s with ps_patloc = Mid.change merge id s.ps_patloc }
 
   let p_bind_mem (s : p_subst) (m1 : memory) (m2 : memory) =
-    let merge o = assert (o = None); Some m2 in
-    { s with ps_mem = Mid.change merge m1 s.ps_mem }
+    let merge o = assert (o = None); Some (pat_memory m2) in
+    { s with ps_patloc = Mid.change merge m1 s.ps_patloc }
 
   let p_bind_mod (s : p_subst) (x : ident) (m : mpath) =
-    let merge o = assert (o = None); Some m in
-    { s with ps_mp = Mid.change merge x s.ps_mp }
+    let merge o = assert (o = None); Some (pat_mpath m) in
+    { s with ps_patloc = Mid.change merge x s.ps_patloc }
 
   let p_bind_rename (s : p_subst) (nfrom : ident) (nto : ident) (ty : ty) =
     let np = pat_local nto ty in
@@ -1219,13 +1212,18 @@ module Psubst = struct
              ps_exloc  = Mid.remove n s.ps_exloc; }
 
   let p_rem_mem (s : p_subst) (m : memory) =
-    { s with ps_mem = Mid.remove m s.ps_mem }
+    { s with ps_patloc = Mid.remove m s.ps_patloc }
 
   let p_rem_mod (s : p_subst) (m : ident) =
-    let smp = Mid.remove m s.ps_mp in
+    let ps_patloc = Mid.remove m s.ps_patloc in
     let sty = s.ps_sty in
+    let smp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                ps_patloc in
     let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
-    { s with ps_mp = smp; ps_sty = sty; }
+    let ps_patloc =
+      Mid.mapi (fun id a -> odfl a (omap pat_mpath (Mid.find_opt id smp)))
+        ps_patloc in
+    { s with ps_patloc = ps_patloc; ps_sty = sty; }
 
   (* ------------------------------------------------------------------------ *)
   let add_local (s : p_subst) (n,t as nt : ident * ty) =
@@ -1274,7 +1272,9 @@ module Psubst = struct
 
     | GTmodty (p, (rx, r)) ->
         let sub  = s.ps_sty.ts_mp in
-        let xsub = EcPath.x_substm s.ps_sty.ts_p s.ps_mp in
+        let mp   = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                     s.ps_patloc in
+        let xsub = EcPath.x_substm s.ps_sty.ts_p mp in
         let p'   = mty_subst s.ps_sty.ts_p sub p in
         let rx'  = Sx.fold (fun m rx' -> Sx.add (xsub m) rx') rx Sx.empty in
         let r'   = Sm.fold (fun m r' -> Sm.add (sub m) r') r Sm.empty in
@@ -1284,7 +1284,9 @@ module Psubst = struct
         else GTmodty (p', (rx', r'))
 
     | GTmem mt ->
-        let mt' = EcMemory.mt_substm s.ps_sty.ts_p s.ps_mp
+        let mp  = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                    s.ps_patloc in
+        let mt' = EcMemory.mt_substm s.ps_sty.ts_p mp
                     (ty_subst s.ps_sty) mt in
         if mt == mt' then gty else GTmem mt'
 
@@ -1418,7 +1420,8 @@ module Psubst = struct
                (* pat_form (FSmart.f_glob (fp, (mp, m)) (mp', m')) *)
 
             | FhoareF hf ->
-               assert (not (Mid.mem mhr s.ps_mem) && not (Mid.mem mhr s.ps_mem));
+               assert (not (Mid.mem mhr s.ps_patloc)
+                       && not (Mid.mem mhr s.ps_patloc));
                let pr' = p_subst s (pat_form hf.hf_pr) in
                let po' = p_subst s (pat_form hf.hf_po) in
                let mp' = xp_subst s hf.hf_f in
@@ -1426,7 +1429,7 @@ module Psubst = struct
                (* FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; } *)
 
             | FhoareS hs ->
-               assert (not (Mid.mem (fst hs.hs_m) s.ps_mem));
+               assert (not (Mid.mem (fst hs.hs_m) s.ps_patloc));
                let pr' = p_subst s (pat_form hs.hs_pr) in
                let po' = p_subst s (pat_form hs.hs_po) in
                let st' = stmt_subst s hs.hs_s in
@@ -1436,7 +1439,8 @@ module Psubst = struct
                 *   { hs_pr = pr'; hs_po = po'; hs_s = st'; hs_m = me'; } *)
 
             | FbdHoareF bhf ->
-               assert (not (Mid.mem mhr s.ps_mem) && not (Mid.mem mhr s.ps_mem));
+               assert (not (Mid.mem mhr s.ps_patloc)
+                       && not (Mid.mem mhr s.ps_patloc));
                let pr' = p_subst s (pat_form bhf.bhf_pr) in
                let po' = p_subst s (pat_form bhf.bhf_po) in
                let mp' = xp_subst s bhf.bhf_f in
@@ -1447,7 +1451,7 @@ module Psubst = struct
                 *              bhf_f  = mp'; bhf_bd = bd'; } *)
 
             | FbdHoareS bhs ->
-               assert (not (Mid.mem (fst bhs.bhs_m) s.ps_mem));
+               assert (not (Mid.mem (fst bhs.bhs_m) s.ps_patloc));
                let pr' = p_subst s (pat_form bhs.bhs_pr) in
                let po' = p_subst s (pat_form bhs.bhs_po) in
                let st' = stmt_subst s bhs.bhs_s in
@@ -1460,7 +1464,8 @@ module Psubst = struct
                 *              bhs_bd = bd'; bhs_m  = me'; } *)
 
             | FequivF ef ->
-               assert (not (Mid.mem mleft s.ps_mem) && not (Mid.mem mright s.ps_mem));
+               assert (not (Mid.mem mleft s.ps_patloc)
+                       && not (Mid.mem mright s.ps_patloc));
                let pr' = p_subst s (pat_form ef.ef_pr) in
                let po' = p_subst s (pat_form ef.ef_po) in
                let fl' = xp_subst s ef.ef_fl in
@@ -1470,8 +1475,8 @@ module Psubst = struct
                 *   { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; } *)
 
             | FequivS eqs ->
-               assert (not (Mid.mem (fst eqs.es_ml) s.ps_mem) &&
-                         not (Mid.mem (fst eqs.es_mr) s.ps_mem));
+               assert (not (Mid.mem (fst eqs.es_ml) s.ps_patloc)
+                       && not (Mid.mem (fst eqs.es_mr) s.ps_patloc));
                let pr' = p_subst s (pat_form eqs.es_pr) in
                let po' = p_subst s (pat_form eqs.es_po) in
                let sl' = stmt_subst s eqs.es_sl in
@@ -1486,7 +1491,8 @@ module Psubst = struct
                 *     es_sl = sl'; es_sr = sr'; } *)
 
             | FeagerF eg ->
-               assert (not (Mid.mem mleft s.ps_mem) && not (Mid.mem mright s.ps_mem));
+               assert (not (Mid.mem mleft s.ps_patloc)
+                       && not (Mid.mem mright s.ps_patloc));
                let pr' = p_subst s (pat_form eg.eg_pr) in
                let po' = p_subst s (pat_form eg.eg_po) in
                let fl' = xp_subst s eg.eg_fl in
@@ -1500,7 +1506,7 @@ module Psubst = struct
                 *     eg_fr = fr'; eg_sr = sr'; eg_po = po'; } *)
 
             | Fpr pr ->
-               assert (not (Mid.mem mhr s.ps_mem || Mid.mem mhr s.ps_patloc));
+               assert (not (Mid.mem mhr s.ps_patloc));
                let pr_mem   = mem_subst s pr.pr_mem in
                let pr_fun   = xp_subst s pr.pr_fun in
                let pr_args  = p_subst s (pat_form pr.pr_args) in
@@ -1658,7 +1664,9 @@ module Psubst = struct
 
     and pv_subst s pv =
       (* FIXME *)
-      let pv = EcTypes.pv_subst (EcPath.x_substm s.ps_sty.ts_p s.ps_mp) pv in
+      let mp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                 s.ps_patloc in
+      let pv = EcTypes.pv_subst (EcPath.x_substm s.ps_sty.ts_p mp) pv in
       match xp_subst s pv.pv_name with
       | Pat_Axiom (Axiom_Xpath xp) when x_equal xp pv.pv_name -> pat_pv pv
       | p -> p_prog_var p pv.pv_kind
@@ -1685,21 +1693,27 @@ module Psubst = struct
        else p_mpath (pat_mpath_top mp.m_top) margs
 
     and mem_subst s m =
-      let m = Mid.find_def m m s.ps_mem in
       match Mid.find_opt m s.ps_patloc with
       | Some p -> p
       | _ -> pat_memory m
 
     and xp_subst s xp =
-      let xp = EcPath.x_substm s.ps_sty.ts_p s.ps_mp xp in
+      let mp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                 s.ps_patloc in
+      let xp = EcPath.x_substm s.ps_sty.ts_p mp xp in
       match mp_subst s xp.x_top with
       | Pat_Axiom (Axiom_Mpath mp) when m_equal mp xp.x_top -> pat_xpath xp
       | p -> p_xpath p (pat_op xp.x_sub [])
 
     and memenv_subst s m =
+      let mp  = Mid.map_filter
+                  (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
+                  s.ps_patloc in
+      let mem = Mid.map_filter
+                  (function Pat_Axiom(Axiom_Memory m) -> Some m | _ -> None)
+                  s.ps_patloc in
       (* FIXME *)
-      pat_memenv (EcMemory.me_substm s.ps_sty.ts_p s.ps_mp s.ps_mem
-                    (ty_subst s.ps_sty) m)
+      pat_memenv (EcMemory.me_substm s.ps_sty.ts_p mp mem (ty_subst s.ps_sty) m)
 
     and e_subst s e = p_subst s (pat_form (form_of_expr e))
 
@@ -2903,17 +2917,12 @@ module PReduction = struct
     then
       match MName.find_opt m s.ps_patloc with
       | Some _ as p -> p
-      | None ->
-         omap pat_memory (MName.find_opt m s.ps_mem)
+      | None -> MName.find_opt m s.ps_patloc
     else None
 
   and h_red_memenv_opt _hyps ri s m =
     if ri.delta_h (fst m)
-    then match MName.find_opt (fst m) s.ps_patloc with
-         | Some _ as p -> p
-         | None ->
-            omap (fun m' -> pat_memenv (m',snd m))
-              (MName.find_opt (fst m) s.ps_mem)
+    then MName.find_opt (fst m) s.ps_patloc
     else None
 
   and h_red_prog_var_opt hyps ri s pv =
@@ -2929,11 +2938,7 @@ module PReduction = struct
     then
       match m with
       | `Concrete _ -> None
-      | `Local id ->
-      match MName.find_opt id s.ps_patloc with
-      | Some _ as p -> p
-      | None ->
-         omap pat_mpath (MName.find_opt id s.ps_mp)
+      | `Local id -> MName.find_opt id s.ps_patloc
     else None
 
   and h_red_mpath_opt hyps ri s m =

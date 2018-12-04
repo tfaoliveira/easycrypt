@@ -219,8 +219,6 @@ module Psubst : sig
   type p_subst = {
       ps_freshen : bool;
       ps_patloc  : pattern             Mid.t;
-      ps_mp      : mpath               Mid.t;
-      ps_mem     : ident               Mid.t;
       ps_opdef   : (ident list * expr) Mp.t;
       ps_pddef   : (ident list * form) Mp.t;
       ps_exloc   : expr                Mid.t;

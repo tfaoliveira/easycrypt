@@ -1434,7 +1434,8 @@ and next (m : ismatch) (e : engine) : nengine = match m with
       | None -> next_n m (e_next e)
       | Some (p,a) -> process { e with e_pattern = p; e_head = a }
     end
-  | _ -> next_n m (e_next e)
+  | _ ->
+     next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
   match m,e.ne_continuation with
@@ -1532,17 +1533,40 @@ and sub_engines (e : engine) (p : pattern) : engine list =
      List.map (fun x -> sub_engine e p e.e_env.env_current_binds (Axiom_Instr x)) s.s_node
   | Axiom_Form f -> begin
       match f.f_node with
-      | Flet _
-        | FhoareF _
-        | FhoareS _
-        | FbdHoareF _
-        | FbdHoareS _
-        | FequivF _
-        | FequivS _
-        | FeagerF _
-        | Fint _
+      | Fint _
         | Flocal _
         | Fop _-> []
+
+      | Flet (_,f1,f2) ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [axiom_form f1;axiom_form f2]
+      | FhoareF h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [axiom_form h.hf_pr; Axiom_Xpath h.hf_f; Axiom_Form h.hf_po]
+      | FhoareS h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [Axiom_MemEnv h.hs_m; axiom_form h.hs_pr; Axiom_Stmt h.hs_s;
+            axiom_form h.hs_po]
+      | FbdHoareF h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [axiom_form h.bhf_pr; Axiom_Xpath h.bhf_f; Axiom_Form h.bhf_po;
+            Axiom_Hoarecmp h.bhf_cmp; Axiom_Form h.bhf_bd]
+      | FbdHoareS h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [Axiom_MemEnv h.bhs_m; axiom_form h.bhs_pr; Axiom_Stmt h.bhs_s;
+            axiom_form h.bhs_po; Axiom_Hoarecmp h.bhs_cmp; Axiom_Form h.bhs_bd]
+      | FequivF h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [Axiom_Form h.ef_pr; Axiom_Xpath h.ef_fl; Axiom_Xpath h.ef_fr;
+            Axiom_Form h.ef_po]
+      | FequivS h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [Axiom_MemEnv h.es_ml; Axiom_MemEnv h.es_mr; Axiom_Form h.es_pr;
+            Axiom_Stmt h.es_sl; Axiom_Stmt h.es_sr; Axiom_Form h.es_po]
+      | FeagerF h ->
+         List.map (sub_engine e p e.e_env.env_current_binds)
+           [Axiom_Form h.eg_pr; Axiom_Stmt h.eg_sl; Axiom_Xpath h.eg_fl;
+            Axiom_Xpath h.eg_fr; Axiom_Stmt h.eg_sr; Axiom_Form h.eg_po]
       | Fif (cond,f1,f2) ->
          List.map (sub_engine e p e.e_env.env_current_binds)
            [Axiom_Form cond;Axiom_Form f1;Axiom_Form f2]
