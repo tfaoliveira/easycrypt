@@ -1541,8 +1541,11 @@ let process_pose xsym bds o p (tc : tcenv1) =
     (p, ue, pf)
   in
 
+  let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
+  let fmt = Format.std_formatter in
+
   let engine =
-    EcFMatching.mk_engine
+    EcFMatching.mk_engine ~fmt ~ppe
       concl p hyps EcReduction.full_red EcReduction.full_red ue in
 
   let dopat, body =

@@ -314,21 +314,26 @@ let is_gty (p : pattern) (gty1 : gty) env = match gty1, p with
 
 
 let eq_form (f1 : form) (f2 : form) (env : environnement) =
-  let eq_ty, _ = eq_type f1.f_ty f2.f_ty env in
-  if eq_ty && not(ty_equal f1.f_ty f2.f_ty)
+  let env_restore_unienv = env.env_restore_unienv in
+  let env = { env with env_restore_unienv = None } in
+  let eq_ty, env = eq_type f1.f_ty f2.f_ty env in
+  if eq_ty
   then
-    raise (Invalid_argument
-             (String.concat " and "
-                (List.map EcTypes.dump_ty [f1.f_ty;f2.f_ty])))
+    let sty    = env.env_subst.ps_sty in
+    let sf     = Fsubst.f_subst_init ~sty () in
+    let f1, f2 = Fsubst.f_subst sf f1, Fsubst.f_subst sf f2 in
+    EcReduction.is_conv_param env.env_red_info_a env.env_hyps f1 f2,
+    { env with env_restore_unienv }
   else
-    EcReduction.is_conv_param env.env_red_info_a env.env_hyps f1 f2
+    let env = restore_environnement env in
+    false, { env with env_restore_unienv }
 
 let rec eq_axiom (o1 : axiom) (o2 : axiom) (env : environnement) :
       bool * environnement =
   let aux o1 o2 =
     match o1,o2 with
     | Axiom_Form f1, Axiom_Form f2 ->
-       eq_form f1 f2 env, env
+       eq_form f1 f2 env
 
     | Axiom_Memory m1, Axiom_Memory m2 ->
        eq_memory m1 m2 env, env
@@ -932,24 +937,6 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  let e =
-    let i_red_p, i_red_a  =
-    match e.e_pattern with
-    | Pat_Red_Strat (_,f) -> f e.e_env.env_red_info_p e.e_env.env_red_info_a
-    | _ -> e.e_env.env_red_info_p, e.e_env.env_red_info_a in
-    let e_env = assubst e.e_env.env_unienv e.e_env in
-    let e = { e with e_env } in
-    let subst = e.e_env.env_subst in
-    match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
-            (Psubst.p_subst subst e.e_pattern) e.e_head with
-    | None -> e
-    | Some (p,a) ->
-       let e_or = { e with e_pattern = p; e_head = a } in
-       let e_continuation = match e.e_continuation with
-       | Zor (x,l,y) -> Zor (x,e_or::l,y)
-       | _ -> Zor (e.e_continuation, [e_or], (e_next e)) in
-       { e with e_continuation }
-  in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
@@ -1027,7 +1014,7 @@ let rec process (e : engine) : nengine =
           let e_env = restore_environnement e.e_env in
           next NoMatch { e with e_env = { e_env with env_restore_unienv } }
         else
-          let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id2 id1 gty1 in
+          let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
           let env = assubst env.env_unienv env in
           let s = List.fold_left2 f env.env_subst pbs1 fbs1 in
           let e_pattern = Psubst.p_subst s p in
@@ -1433,7 +1420,21 @@ let rec process (e : engine) : nengine =
 
   | Pat_Instance (_,_,_,_), _ -> (* FIXME *) assert false
 
-and next (m : ismatch) (e : engine) : nengine = next_n m (e_next e)
+and next (m : ismatch) (e : engine) : nengine = match m with
+  | NoMatch -> begin
+      let i_red_p, i_red_a  =
+        match e.e_pattern with
+        | Pat_Red_Strat (_,f) -> f e.e_env.env_red_info_p e.e_env.env_red_info_a
+        | _ -> e.e_env.env_red_info_p, e.e_env.env_red_info_a in
+      let e_env = assubst e.e_env.env_unienv e.e_env in
+      let e = { e with e_env } in
+      let subst = e.e_env.env_subst in
+      match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
+              (Psubst.p_subst subst e.e_pattern) e.e_head with
+      | None -> next_n m (e_next e)
+      | Some (p,a) -> process { e with e_pattern = p; e_head = a }
+    end
+  | _ -> next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
   match m,e.ne_continuation with
@@ -1576,7 +1577,8 @@ let get_n_matches (e : nengine) : Psubst.p_subst =
   (assubst e.ne_env.env_unienv e.ne_env).env_subst
 
 let search_eng e =
-  try Some (process e)
+  try
+    Some (process e)
   with
   | NoMatches -> None
 
@@ -1600,7 +1602,7 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
         | Fquant(quant,binds,f)
              when Mid.set_disjoint (Sid.of_list (List.map fst binds)) sbd ->
            omap (fun fi -> typ fty (p_f_quant quant binds fi)) (aux_f f)
-        | Fquant _ -> raise (Invalid_argument "quantificator on variables that are aimed to be abstracted as meta-variables.")
+        | Fquant _ -> assert false
         | Fif(f1,f2,f3) ->
            omap (function [p1;p2;p3] -> typ fty (p_if p1 p2 p3) | _ -> assert false)
              (omap_list pat_form aux_f [f1;f2;f3])
@@ -1609,15 +1611,11 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
              (omap_list pat_form aux_f (f::args))
         | Flet (lp,f1,f2) -> begin
             match lp with
-            | LSymbol (id,_) when Mid.mem id sbd ->
-               raise (Invalid_argument
-                        "let-operation on a variable that is aimed to be abstracted as a meta-variable.")
-            | LTuple tuple when not(Mid.set_disjoint (Sid.of_list (List.map fst tuple)) sbd) ->
-               raise (Invalid_argument
-                        "let-operation on variables that are aimed to be abstracted as meta-variables.")
-            | LRecord _ ->
-               raise (Invalid_argument
-                        "let-operation using the notation of fmap.")
+            | LSymbol (id,_) when Mid.mem id sbd -> assert false
+            | LTuple tuple
+                 when not(Mid.set_disjoint (Sid.of_list (List.map fst tuple)) sbd) ->
+               assert false
+            | LRecord _ -> assert false
             | _ ->
                omap (function [p1;p2] -> typ fty (p_let lp p1 p2) | _ -> assert false)
                  (omap_list pat_form aux_f [f1;f2])
@@ -1794,7 +1792,7 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
            let aux (pv,ty) =
              omap (fun x -> p_type x (GTty ty)) (aux (Axiom_Prog_Var pv)) in
            omap (fun l -> p_tuple l) (omap_list default aux l)
-        | LvMap _ -> (* FIXME *) raise (Invalid_argument "bleuh")
+        | LvMap _ -> (* FIXME *) assert false
       end
     | Axiom_Xpath xp ->
        omap (fun mp -> p_xpath mp (pat_op xp.x_sub []))
