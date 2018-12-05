@@ -902,12 +902,12 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  let _ =
-    let fmt, ppe = e.e_env.env_fmt, e.e_env.env_ppe in
-    Format.fprintf fmt "[W]-- %a =? %a\n"
-      (EcPrinting.pp_pattern ppe) e.e_pattern
-      (EcPrinting.pp_pat_axiom ppe) e.e_head
-  in
+  (* let _ =
+   *   let fmt, ppe = e.e_env.env_fmt, e.e_env.env_ppe in
+   *   Format.fprintf fmt "[W]-- %a =? %a\n"
+   *     (EcPrinting.pp_pattern ppe) e.e_pattern
+   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+   * in *)
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
