@@ -61,27 +61,28 @@ and nengine = {
     ne_env          : environment;
   }
 
+val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
+                      ?metas:Sid.t -> unit -> match_env
 
 val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:EcPattern.pattern EcIdent.Mid.t ->
-                      EcFol.form -> EcPattern.pattern -> EcEnv.LDecl.hyps ->
+                      ?mtch:match_env -> EcFol.form -> EcPattern.pattern ->
+                      EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info ->
-                      EcReduction.reduction_info ->
-                      EcUnify.unienv -> (match_env * environment) option
+                      (match_env * environment) option
 
 val search_eng      : engine -> nengine option
 
 val mkenv           : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:pattern Mid.t -> LDecl.hyps ->
+                      ?mtch:match_env -> LDecl.hyps ->
                       EcReduction.reduction_info ->
-                      EcReduction.reduction_info -> EcUnify.unienv -> environment
+                      EcReduction.reduction_info -> environment
 
 val mkengine        : axiom -> pattern -> environment -> engine
 
 val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:pattern Mid.t -> form -> pattern -> LDecl.hyps ->
+                      ?mtch:match_env -> form -> pattern -> LDecl.hyps ->
                       EcReduction.reduction_info ->
-                      EcReduction.reduction_info -> EcUnify.unienv -> engine
+                      EcReduction.reduction_info -> engine
 
 val pattern_of_form : bindings -> form -> pattern
 

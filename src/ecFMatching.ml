@@ -1871,11 +1871,15 @@ let pattern_of_axiom b a =
 let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
 
 
+let init_match_env ?mtch ?unienv ?metas () =
+  { me_matches   = odfl Mid.empty mtch;
+    me_unienv    = odfl (EcUnify.UniEnv.create None) unienv;
+    me_meta_vars = odfl Sid.empty metas;
+  }
 
 (* val mkengine    : base -> engine *)
 let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
       (red_info_a : EcReduction.reduction_info)
-      (unienv : EcUnify.unienv)
     : environment = {
     env_hyps             = h;
     env_red_info_p       = red_info_p;
@@ -1885,11 +1889,11 @@ let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps) (red_info_p : EcReduction.reduction_i
     env_meta_restr_binds = Mid.empty;
     env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
     env_fmt              = odfl Format.std_formatter fmt;
-    env_match            = {
-        me_matches   = odfl Mid.empty mtch;
-        me_unienv    = unienv;
-        me_meta_vars = Mid.empty;
-      };
+    env_match            = odfl {
+                               me_matches   = Mid.empty;
+                               me_unienv    = EcUnify.UniEnv.create None;
+                               me_meta_vars = Mid.empty;
+                             } mtch;
   }
 
 let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
@@ -1904,7 +1908,7 @@ let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
     e_continuation = ZTop;
   }
 
-let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a unienv =
+let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a =
   let e = {
       e_pattern;
       e_head         = axiom_form f;
@@ -1918,11 +1922,11 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a
           env_meta_restr_binds = Mid.empty;
           env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv env_hyps)) ppe;
           env_fmt              = odfl Format.std_formatter fmt;
-          env_match            = {
-              me_matches   = odfl Mid.empty mtch;
-              me_meta_vars = Mid.empty;
-              me_unienv    = unienv;
-            }
+          env_match            = odfl {
+                                     me_matches   = Mid.empty;
+                                     me_meta_vars = Mid.empty;
+                                     me_unienv    = EcUnify.UniEnv.create None;
+                                   } mtch
         }
     } in
   { e with
@@ -1938,10 +1942,9 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a
 
 let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
       (red_info_p : EcReduction.reduction_info)
-      (red_info_a : EcReduction.reduction_info)
-      (unienv : EcUnify.unienv) =
+      (red_info_a : EcReduction.reduction_info) =
   try
-    let env = mkenv ?ppe ?fmt ?mtch h red_info_p red_info_a unienv in
+    let env = mkenv ?ppe ?fmt ?mtch h red_info_p red_info_a in
     let ne = process (mkengine (axiom_form f) p env) in
     Some (get_n_matches ne, ne.ne_env)
   with

@@ -1545,9 +1545,11 @@ let process_pose xsym bds o p (tc : tcenv1) =
   let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
   let fmt = Format.std_formatter in
 
+  let mtch = EcFMatching.init_match_env ~unienv:ue () in
+
   let engine =
-    EcFMatching.mk_engine ~fmt ~ppe
-      concl p hyps EcReduction.full_red EcReduction.full_red ue in
+    EcFMatching.mk_engine ~fmt ~ppe ~mtch
+      concl p hyps EcReduction.full_red EcReduction.full_red in
 
   let dopat, body =
     let module E = struct exception Failure end in

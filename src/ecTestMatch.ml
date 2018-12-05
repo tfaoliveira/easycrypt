@@ -44,8 +44,10 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let red_info_pattern = EcReduction.betaiota_red in
   let red_info_axiom   = EcReduction.full_red in
 
-  let environnement = EcFMatching.mkenv ~ppe ~fmt hyps
-                        red_info_pattern red_info_axiom unienv in
+  let mtch = EcFMatching.init_match_env ~unienv () in
+
+  let environnement = EcFMatching.mkenv ~ppe ~fmt ~mtch hyps
+                        red_info_pattern red_info_axiom in
 
   let p = pattern_of_form binds f1 in
   (* let p = match p with
