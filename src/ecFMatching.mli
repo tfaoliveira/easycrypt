@@ -88,6 +88,6 @@ val pattern_of_form : bindings -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
 
-val match_is_full   : environment -> bool
+val match_is_full   : match_env -> LDecl.hyps -> bool
 
 val psubst_from_env : match_env -> Psubst.p_subst

@@ -667,12 +667,12 @@ module FV : sig
 
   val add_fv   : fv -> ident -> fv
   val union    : fv -> fv -> fv
-  val lvalue   : environment -> fv -> lvalue -> fv
-  val axiom    : environment -> fv -> axiom -> fv
-  val pattern  : environment -> fv -> pattern -> fv
-  val lvalue0  : environment -> lvalue -> fv
-  val axiom0   : environment -> axiom -> fv
-  val pattern0 : environment -> pattern -> fv
+  val lvalue   : match_env -> LDecl.hyps -> fv -> lvalue -> fv
+  val axiom    : match_env -> LDecl.hyps -> fv -> axiom -> fv
+  val pattern  : match_env -> LDecl.hyps -> fv -> pattern -> fv
+  val lvalue0  : match_env -> LDecl.hyps -> lvalue -> fv
+  val axiom0   : match_env -> LDecl.hyps -> axiom -> fv
+  val pattern0 : match_env -> LDecl.hyps -> pattern -> fv
 end = struct
   type fv = int Mid.t
 
@@ -682,16 +682,16 @@ end = struct
   let union (m1 : fv) (m2 : fv) =
     Mid.union (fun _ i1 i2 -> Some (i1 + i2)) m1 m2
 
-  let rec lvalue (env : environment) (map : fv) =
+  let rec lvalue (env : match_env) h (map : fv) =
     function
     | LvVar (pv,_) ->
-        pattern env map (pat_pv pv)
+        pattern env h map (pat_pv pv)
     | LvTuple t ->
-        List.fold_left (pattern env) map (List.map (fun (x,_) -> pat_pv x) t)
+        List.fold_left (pattern env h) map (List.map (fun (x,_) -> pat_pv x) t)
     | LvMap ((_,_),pv,e,_) ->
-        pattern env (union map e.e_fv) (pat_pv pv)
+        pattern env h (union map e.e_fv) (pat_pv pv)
 
-  and axiom (env : environment) =
+  and axiom (env : match_env) h =
     let rec aux (map : fv) (a : axiom) =
       match a with
       | Axiom_Form f -> union f.f_fv map
@@ -699,13 +699,13 @@ end = struct
       | Axiom_Instr i -> union map i.i_fv
       | Axiom_Stmt s -> union map s.s_fv
       | Axiom_MemEnv (m, _) -> add_fv map m
-      | Axiom_Prog_Var pv -> pattern env map (pat_xpath pv.pv_name)
-      | Axiom_Xpath xp -> pattern env map (pat_mpath xp.x_top)
+      | Axiom_Prog_Var pv -> pattern env h map (pat_xpath pv.pv_name)
+      | Axiom_Xpath xp -> pattern env h map (pat_mpath xp.x_top)
       | Axiom_Mpath mp ->
-          let env0 = LDecl.toenv env.env_hyps in
+          let env0 = LDecl.toenv h in
           if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else
-          List.fold_left (pattern env)
-            (pattern env map (pat_mpath_top mp.m_top))
+          List.fold_left (pattern env h)
+            (pattern env h map (pat_mpath_top mp.m_top))
             (List.map pat_mpath mp.m_args)
 
       | Axiom_Module (`Local id) -> add_fv map id
@@ -713,11 +713,11 @@ end = struct
       | Axiom_Local (id,_) -> add_fv map id
       | Axiom_Op _ -> map
       | Axiom_Hoarecmp _ -> map
-      | Axiom_Lvalue lv -> lvalue env map lv
+      | Axiom_Lvalue lv -> lvalue env h map lv
 
     in fun m a -> aux m a
 
-  and pattern env =
+  and pattern env h =
     let rec aux (map : int Mid.t) = function
       | Pat_Anything -> map
       | Pat_Meta_Name (p,n,_) -> aux (add_fv map n) p
@@ -740,21 +740,21 @@ end = struct
              map' in
          union map map'
       | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
-      | Pat_Axiom a -> axiom env map a
+      | Pat_Axiom a -> axiom env h map a
       | Pat_Instance _ -> assert false (* FIXME: instance *)
 
     in fun m p -> aux m p
 
   (* ------------------------------------------------------------------ *)
-  let lvalue0  env = lvalue  env Mid.empty
-  let axiom0   env = axiom   env Mid.empty
-  let pattern0 env = pattern env Mid.empty
+  let lvalue0  env h = lvalue  env h Mid.empty
+  let axiom0   env h = axiom   env h Mid.empty
+  let pattern0 env h = pattern env h Mid.empty
 end
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
-  let m = Mid.set_diff (FV.pattern0 env p) mr in
+  let m = Mid.set_diff (FV.pattern0 env.env_match env.env_hyps p) mr in
   Mid.for_all (fun x _ -> LDecl.has_id x env.env_hyps) m
 
 
@@ -1904,7 +1904,7 @@ let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
         env with
         env_match = {
           env.env_match with
-          me_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 env p) };
+          me_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 env.env_match env.env_hyps p) };
       };
     e_continuation = ZTop;
   }
@@ -1936,7 +1936,7 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a
       env_match = {
         e.e_env.env_match with
         me_meta_vars =
-          Mid.map (fun _ -> ()) (FV.pattern0 e.e_env e_pattern);
+          Mid.map (fun _ -> ()) (FV.pattern0 e.e_env.env_match e.e_env.env_hyps e_pattern);
       };
     };
   }
@@ -1952,13 +1952,13 @@ let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
   | NoMatches -> None
 
 
-let match_is_full (e : environment) =
-  let matches   = e.env_match.me_matches in
-  let meta_vars = e.env_match.me_meta_vars in
+let match_is_full (e : match_env) h =
+  let matches   = e.me_matches in
+  let meta_vars = e.me_meta_vars in
 
   let f n = match Mid.find_opt n matches with
     | None   -> false
-    | Some p -> let fv = FV.pattern0 e p in
+    | Some p -> let fv = FV.pattern0 e h p in
                 Mid.for_all (fun n _ -> not (Sid.mem n meta_vars)) fv in
 
   Sid.for_all f meta_vars
