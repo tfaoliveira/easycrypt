@@ -1,3 +1,4 @@
+(* -------------------------------------------------------------------- *)
 open EcUtils
 open EcFol
 open EcTypes
@@ -15,7 +16,7 @@ exception CannotUnify
 exception NoNext
 
 
-type environnement = {
+type environment = {
     env_hyps             : EcEnv.LDecl.hyps;
     env_unienv           : EcUnify.unienv;
     env_red_info_p       : EcReduction.reduction_info;
@@ -56,12 +57,12 @@ and engine = {
     e_head         : axiom;
     e_pattern      : pattern;
     e_continuation : pat_continuation;
-    e_env          : environnement;
+    e_env          : environment;
   }
 
 and nengine = {
     ne_continuation : pat_continuation;
-    ne_env          : environnement;
+    ne_env          : environment;
   }
 
 (* -------------------------------------------------------------------------- *)
@@ -101,7 +102,7 @@ let assubst ue env = { env with env_subst = assubst ue env.env_subst }
 
 (* -------------------------------------------------------------------------- *)
 
-let restore_environnement (env : environnement) : environnement =
+let restore_environment (env : environment) : environment =
   match env.env_restore_unienv with
   | None -> env
   | Some unienv ->
@@ -110,8 +111,8 @@ let restore_environnement (env : environnement) : environnement =
      EcUnify.UniEnv.restore dst src;
      env
 
-let add_binds (env : environnement) (env_current_binds : (ident * gty option) list)
-    : environnement =
+let add_binds (env : environment) (env_current_binds : (ident * gty option) list)
+    : environment =
   { env with env_current_binds }
 
 type ismatch =
@@ -131,7 +132,7 @@ let mem_ty_univar (ty : ty) =
   with
   | FoundUnivar -> false
 
-let is_modty (m : mpath) (mt : module_type) (mr : mod_restr) (env : environnement) =
+let is_modty (m : mpath) (mt : module_type) (mr : mod_restr) (env : environment) =
   let env = LDecl.toenv env.env_hyps in
   let ms = Mod.by_mpath_opt m env in
   match ms with
@@ -151,7 +152,7 @@ let rec map_for_all2 (f : 'a -> 'a -> 'b -> bool * 'b) (l1 : 'a list) (l2 : 'a l
      else false, b
 
 
-let rec eq_type (ty1 : ty) (ty2 : ty) (env : environnement) : bool * environnement =
+let rec eq_type (ty1 : ty) (ty2 : ty) (env : environment) : bool * environment =
   let unienv = EcUnify.UniEnv.copy env.env_unienv in
   (try
      EcUnify.unify (EcEnv.LDecl.toenv env.env_hyps) env.env_unienv ty1 ty2;
@@ -160,10 +161,10 @@ let rec eq_type (ty1 : ty) (ty2 : ty) (env : environnement) : bool * environneme
    | _ -> false),
   { env with env_restore_unienv = Some (odfl unienv env.env_restore_unienv); }
 
-let eq_memtype (m1 : EcMemory.memtype) (m2 : EcMemory.memtype) (env : environnement) =
+let eq_memtype (m1 : EcMemory.memtype) (m2 : EcMemory.memtype) (env : environment) =
   EcMemory.mt_equal m1 m2, env
 
-let rec eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environnement) =
+let rec eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environment) =
   EcMemory.mem_equal m1 m2
   (* || match Mid.find_opt m1 env.env_subst.Psubst.ps_patloc,
    *          Mid.find_opt m2 env.env_subst.Psubst.ps_patloc with
@@ -177,10 +178,10 @@ let rec eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environn
    *         when not (EcMemory.mem_equal m2 m2') -> eq_memory m1 m2' env
    *    | _ -> false *)
 
-let eq_memenv (m1 : EcMemory.memenv) (m2 : EcMemory.memenv) (_env : environnement) =
+let eq_memenv (m1 : EcMemory.memenv) (m2 : EcMemory.memenv) (_env : environment) =
   EcMemory.me_equal m1 m2
 
-let rec eq_mpath (m1 : mpath) (m2 : mpath) (env : environnement) : bool =
+let rec eq_mpath (m1 : mpath) (m2 : mpath) (env : environment) : bool =
   EcReduction.EqTest.for_mp (EcEnv.LDecl.toenv env.env_hyps) m1 m2
   (* then true
    * else
@@ -211,13 +212,13 @@ let rec eq_mpath (m1 : mpath) (m2 : mpath) (env : environnement) : bool =
    *   end
    * | _      -> assert false *)
 
-and eq_module (mt1 : mpath_top) (mt2 : mpath_top) (_env : environnement) =
+and eq_module (mt1 : mpath_top) (mt2 : mpath_top) (_env : environment) =
   if EcPath.mt_equal mt1 mt2 then true
   else match mt1, mt2 with
        | `Local id1, `Local id2 -> id_equal id1 id2
        | _ -> false
 
-let eq_xpath (x1 : xpath) (x2 : xpath) (env : environnement) : bool =
+let eq_xpath (x1 : xpath) (x2 : xpath) (env : environment) : bool =
   EcReduction.EqTest.for_xp (EcEnv.LDecl.toenv env.env_hyps) x1 x2
   || (if EcPath.p_equal x1.x_sub x2.x_sub then eq_mpath x1.x_top x2.x_top env
       else false)
@@ -225,19 +226,19 @@ let eq_xpath (x1 : xpath) (x2 : xpath) (env : environnement) : bool =
 let eq_name (n1 : meta_name) (n2 : meta_name) =
   0 = id_compare n1 n2
 
-let eq_instr (i1 : EcModules.instr) (i2 : EcModules.instr) (env : environnement) =
+let eq_instr (i1 : EcModules.instr) (i2 : EcModules.instr) (env : environment) =
   EcReduction.EqTest.for_instr (EcEnv.LDecl.toenv env.env_hyps) i1 i2
 
-let eq_stmt (s1 : EcModules.stmt) (s2 : EcModules.stmt) (env : environnement) =
+let eq_stmt (s1 : EcModules.stmt) (s2 : EcModules.stmt) (env : environment) =
   EcReduction.EqTest.for_stmt (EcEnv.LDecl.toenv env.env_hyps) s1 s2
 
-let eq_lvalue (lv1 : lvalue) (lv2 :lvalue) (_env : environnement) : bool =
+let eq_lvalue (lv1 : lvalue) (lv2 :lvalue) (_env : environment) : bool =
   lv_equal lv1 lv2
 
 let eq_op
       ((op1, lty1) : EcPath.path * EcTypes.ty list)
       ((op2, lty2) : EcPath.path * EcTypes.ty list)
-      (env : environnement) =
+      (env : environment) =
   if EcPath.p_equal op1 op2
   then
     List.fold_left2
@@ -247,20 +248,20 @@ let eq_op
       (true,env) lty1 lty2
   else false,env
 
-let eq_prog_var (x1 : prog_var) (x2 : prog_var) (env : environnement) =
+let eq_prog_var (x1 : prog_var) (x2 : prog_var) (env : environment) =
   pv_equal x1 x2
   || (x1.pv_kind = x2.pv_kind && eq_xpath x1.pv_name x2.pv_name env)
 
-let eq_hoarecmp (c1 : hoarecmp) (c2 : hoarecmp) (_ : environnement) : bool =
+let eq_hoarecmp (c1 : hoarecmp) (c2 : hoarecmp) (_ : environment) : bool =
   c1 = c2
 
 
-let eq_gty (gty1 : gty) (gty2 : gty) (env : environnement) : bool * environnement =
+let eq_gty (gty1 : gty) (gty2 : gty) (env : environment) : bool * environment =
   match gty1, gty2 with
   | GTty ty1, GTty ty2 -> eq_type ty1 ty2 env
   | _,_ -> EcCoreFol.gty_equal gty1 gty2, env
 
-let eq_sym (s1 : fun_symbol) (s2 : fun_symbol) (env : environnement) =
+let eq_sym (s1 : fun_symbol) (s2 : fun_symbol) (env : environment) =
   match s1,s2 with
   | Sym_Form_Proj (i1,t1), Sym_Form_Proj (i2,t2) ->
      if not (i1 = i2) then false, env
@@ -313,7 +314,7 @@ let is_gty (p : pattern) (gty1 : gty) env = match gty1, p with
   | _ -> false, env
 
 
-let eq_form (f1 : form) (f2 : form) (env : environnement) =
+let eq_form (f1 : form) (f2 : form) (env : environment) =
   let env_restore_unienv = env.env_restore_unienv in
   let env = { env with env_restore_unienv = None } in
   let eq_ty, env = eq_type f1.f_ty f2.f_ty env in
@@ -326,11 +327,11 @@ let eq_form (f1 : form) (f2 : form) (env : environnement) =
     EcReduction.is_conv_param ri env.env_hyps f1 f2,
     { env with env_restore_unienv }
   else
-    let env = restore_environnement env in
+    let env = restore_environment env in
     false, { env with env_restore_unienv }
 
-let rec eq_axiom (o1 : axiom) (o2 : axiom) (env : environnement) :
-      bool * environnement =
+let rec eq_axiom (o1 : axiom) (o2 : axiom) (env : environment) :
+      bool * environment =
   let aux o1 o2 =
     match o1,o2 with
     | Axiom_Form f1, Axiom_Form f2 ->
@@ -395,7 +396,7 @@ let rec eq_axiom (o1 : axiom) (o2 : axiom) (env : environnement) :
   in
   aux o1 o2
 
-and eq_pat (p1 : pattern) (p2 : pattern) (env : environnement) =
+and eq_pat (p1 : pattern) (p2 : pattern) (env : environment) =
   let env_restore_unienv = env.env_restore_unienv in
   let env = { env with env_restore_unienv = None } in
   let eq, env = match p1, p2 with
@@ -666,7 +667,7 @@ and eq_pat (p1 : pattern) (p2 : pattern) (env : environnement) =
       end
     | _, _ -> false, env
   in
-  let env = if eq then env else restore_environnement env in
+  let env = if eq then env else restore_environment env in
   eq, { env with env_restore_unienv }
 
 let rec merge_binds bs1 bs2 env = match bs1,bs2 with
@@ -683,76 +684,103 @@ let rec merge_binds bs1 bs2 env = match bs1,bs2 with
          { env with env_current_binds = env.env_current_binds @ [y, Some ty2]; }
        in merge_binds r1 r2 env
      else
-       let _ = restore_environnement env in None
+       let _ = restore_environment env in None
   | _ -> None
 
 (* -------------------------------------------------------------------------- *)
-let pat_add_fv map (n : ident) =
-  match Mid.find_opt n map with
-  | None -> Mid.add n 1 map
-  | Some i -> Mid.add n (i+1) map
+module FV : sig
+  type fv = int Mid.t
 
-let pat_fv_union m1 m2 =
-  Mid.fold_left (fun m n _ -> pat_add_fv m n) m1 m2
+  val add_fv   : fv -> ident -> fv
+  val union    : fv -> fv -> fv
+  val lvalue   : environment -> fv -> lvalue -> fv
+  val axiom    : environment -> fv -> axiom -> fv
+  val pattern  : environment -> fv -> pattern -> fv
+  val lvalue0  : environment -> lvalue -> fv
+  val axiom0   : environment -> axiom -> fv
+  val pattern0 : environment -> pattern -> fv
+end = struct
+  type fv = int Mid.t
 
-let pat_fv p env =
-  let rec aux (map : int Mid.t) = function
-    | Pat_Anything -> map
-    | Pat_Meta_Name (p,n,_) ->
-       aux (pat_add_fv map n) p
-    | Pat_Sub p -> aux map p
-    | Pat_Or lp -> List.fold_left aux map lp
-    | Pat_Instance _ -> assert false
-    | Pat_Red_Strat (p,_) -> aux map p
-    | Pat_Type (p,_) -> aux map p
-    | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
-       let map' = List.fold_left aux Mid.empty lp in
-       let map' =
-         Mid.filter
-           (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-           map' in
-       pat_fv_union map map'
-    | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
-       let map' = List.fold_left aux Mid.empty lp in
-       let map' =
-         Mid.filter
-           (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-           map' in
-       pat_fv_union map map'
-    | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
-    | Pat_Axiom a ->
-       match a with
-       | Axiom_Form f -> pat_fv_union f.f_fv map
-       | Axiom_Memory m -> pat_add_fv map m
-       | Axiom_Instr i -> pat_fv_union map i.i_fv
-       | Axiom_Stmt s -> pat_fv_union map s.s_fv
-       | Axiom_MemEnv (m,_) -> pat_add_fv map m
-       | Axiom_Prog_Var pv -> aux map (pat_xpath pv.pv_name)
-       | Axiom_Xpath xp -> aux map (pat_mpath xp.x_top)
-       | Axiom_Mpath mp ->
-          if None <> EcEnv.Mod.by_mpath_opt mp (LDecl.toenv env.env_hyps)
-          then map
-          else
-            List.fold_left aux (aux map (pat_mpath_top mp.m_top))
-              (List.map pat_mpath mp.m_args)
-       | Axiom_Module (`Local id) -> pat_add_fv map id
-       | Axiom_Module _ -> map
-       | Axiom_Local (id,_) -> pat_add_fv map id
-       | Axiom_Op _ -> map
-       | Axiom_Hoarecmp _ -> map
-       | Axiom_Lvalue lv ->
-          match lv with
-          | LvVar (pv,_) -> aux map (pat_pv pv)
-          | LvTuple t ->
-             List.fold_left aux map (List.map (fun (x,_) -> pat_pv x) t)
-          | LvMap ((_,_),pv,e,_) ->
-             aux (pat_fv_union map e.e_fv) (pat_pv pv)
-  in aux Mid.empty p
+  let add_fv (m: fv) (x : ident) =
+    Mid.change (fun i -> Some (odfl 0 i + 1)) x m
 
+  let union (m1 : fv) (m2 : fv) =
+    Mid.union (fun _ i1 i2 -> Some (i1 + i2)) m1 m2
 
-let restr_bds_check (env : environnement) (p : pattern) (restr : pbindings) =
+  let rec lvalue (env : environment) (map : fv) =
+    function
+    | LvVar (pv,_) ->
+        pattern env map (pat_pv pv)
+    | LvTuple t ->
+        List.fold_left (pattern env) map (List.map (fun (x,_) -> pat_pv x) t)
+    | LvMap ((_,_),pv,e,_) ->
+        pattern env (union map e.e_fv) (pat_pv pv)
+
+  and axiom (env : environment) =
+    let rec aux (map : fv) (a : axiom) =
+      match a with
+      | Axiom_Form f -> union f.f_fv map
+      | Axiom_Memory m -> add_fv map m
+      | Axiom_Instr i -> union map i.i_fv
+      | Axiom_Stmt s -> union map s.s_fv
+      | Axiom_MemEnv (m, _) -> add_fv map m
+      | Axiom_Prog_Var pv -> pattern env map (pat_xpath pv.pv_name)
+      | Axiom_Xpath xp -> pattern env map (pat_mpath xp.x_top)
+      | Axiom_Mpath mp ->
+          let env0 = LDecl.toenv env.env_hyps in
+          if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else
+          List.fold_left (pattern env)
+            (pattern env map (pat_mpath_top mp.m_top))
+            (List.map pat_mpath mp.m_args)
+
+      | Axiom_Module (`Local id) -> add_fv map id
+      | Axiom_Module _ -> map
+      | Axiom_Local (id,_) -> add_fv map id
+      | Axiom_Op _ -> map
+      | Axiom_Hoarecmp _ -> map
+      | Axiom_Lvalue lv -> lvalue env map lv
+
+    in fun m a -> aux m a
+
+  and pattern env =
+    let rec aux (map : int Mid.t) = function
+      | Pat_Anything -> map
+      | Pat_Meta_Name (p,n,_) -> aux (add_fv map n) p
+      | Pat_Sub p -> aux map p
+      | Pat_Or lp -> List.fold_left aux map lp
+      | Pat_Red_Strat (p,_) -> aux map p
+      | Pat_Type (p,_) -> aux map p
+      | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
+         let map' = List.fold_left aux Mid.empty lp in
+         let map' =
+           Mid.filter
+             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
+             map' in
+         union map map'
+      | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
+         let map' = List.fold_left aux Mid.empty lp in
+         let map' =
+           Mid.filter
+             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
+             map' in
+         union map map'
+      | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
+      | Pat_Axiom a -> axiom env map a
+      | Pat_Instance _ -> assert false (* FIXME: instance *)
+
+    in fun m p -> aux m p
+
+  (* ------------------------------------------------------------------ *)
+  let lvalue0  env = lvalue  env Mid.empty
+  let axiom0   env = axiom   env Mid.empty
+  let pattern0 env = pattern env Mid.empty
+end
+
+(* --------------------------------------------------------------------- *)
+let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
-  let m = Mid.set_diff (pat_fv p env) mr in
+  let m = Mid.set_diff (FV.pattern0 env p) mr in
   Mid.for_all (fun x _ -> LDecl.has_id x env.env_hyps) m
 
 
@@ -831,37 +859,6 @@ let myomap f (o,e) = match o with
  *   Pat_Fun_Symbol (Sym_Xpath, [Pat_Axiom (Axiom_Op (x.x_sub,[])); pat_of_mpath x.x_top]) *)
 
 
-(* ---------------------------------------------------------------------- *)
-let rec expr_of_form f : expr = match f.f_node with
-  | Fquant (q,bds,f1) ->
-     let q = match q with
-       | Llambda -> `ELambda
-       | Lexists -> `EExists
-       | Lforall -> `EForall in
-     e_quantif q (List.map (fun (x,y) -> (x,gty_as_ty y)) bds) (expr_of_form f1)
-  | Fif (f1,f2,f3) ->
-     e_if (expr_of_form f1) (expr_of_form f2) (expr_of_form f3)
-  | Fmatch (f1,fargs,ty) ->
-     e_match (expr_of_form f1) (List.map expr_of_form fargs) ty
-  | Flet (lv,f1,f2) ->
-     e_let lv (expr_of_form f1) (expr_of_form f2)
-  | Fint i -> e_int i
-  | Flocal id -> e_local id f.f_ty
-  | Fpvar (pv,_) -> e_var pv f.f_ty
-  | Fop (op,lty) -> e_op op lty f.f_ty
-  | Fapp (op,args) -> e_app (expr_of_form op) (List.map expr_of_form args) f.f_ty
-  | Ftuple t -> e_tuple (List.map expr_of_form t)
-  | Fproj (f1,i) -> e_proj (expr_of_form f1) i f.f_ty
-  | FhoareF _
-    | Fglob _
-    | FhoareS _
-    | FbdHoareF _
-    | FbdHoareS _
-    | FequivF _
-    | FequivS _
-    | FeagerF _
-    | Fpr _ -> assert false
-
 
 let rewrite_term e f =
   let env = assubst e.e_env.env_unienv e.e_env in
@@ -931,9 +928,9 @@ let rec abstract_opt
      let parg = Psubst.p_subst env.env_subst parg in
      match aux (map,e.e_env) p parg with
      | None, (map,env) ->
-        None, map, { e with e_env = restore_environnement env }
+        None, map, { e with e_env = restore_environment env }
      | Some p, (map,env) ->
-        Some p, map, { e with e_env = restore_environnement env }
+        Some p, map, { e with e_env = restore_environment env }
 
 
 (* ---------------------------------------------------------------------- *)
@@ -970,13 +967,13 @@ let rec process (e : engine) : nengine =
          let eq, env = eq_type ty1 ty2 e.e_env in
          if eq then
            process { e with e_pattern = p; e_env = env; }
-         else next NoMatch { e with e_env = restore_environnement env }
+         else next NoMatch { e with e_env = restore_environment env }
       | Axiom_Form f, GTty ty ->
          let eq_ty, env = eq_type ty f.f_ty e.e_env in
          if eq_ty then
            process { e with e_pattern = p; e_env = env }
          else
-           next NoMatch { e with e_env = restore_environnement env; }
+           next NoMatch { e with e_env = restore_environment env; }
       | Axiom_Module mtop, GTmodty (mty,mrestr) ->
          if is_modty (mpath mtop []) mty mrestr e.e_env
          then process { e with e_pattern = p }
@@ -990,7 +987,7 @@ let rec process (e : engine) : nengine =
          let eq_ty, env = eq_memtype (EcMemory.memtype m) mt e.e_env in
          if eq_ty
          then process { e with e_pattern = p; e_env = env; }
-         else next NoMatch { e with e_env = restore_environnement env; }
+         else next NoMatch { e with e_env = restore_environment env; }
       | _ -> (* FIXME : add cases about others gty *)
          next NoMatch e
     end
@@ -1021,7 +1018,7 @@ let rec process (e : engine) : nengine =
         let e = { e with e_env = { e.e_env with env_restore_unienv } } in
         let eq, env = map_for_all2 eq_gty (List.map snd pbs1) (List.map snd fbs1) e.e_env in
         if not eq then
-          let e_env = restore_environnement e.e_env in
+          let e_env = restore_environment e.e_env in
           next NoMatch { e with e_env = { e_env with env_restore_unienv } }
         else
           let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
@@ -1038,7 +1035,7 @@ let rec process (e : engine) : nengine =
   | Pat_Axiom o1, o2 ->
      let eq_ty, env = eq_axiom o1 o2 e.e_env in
      if eq_ty then next Match { e with e_env = env }
-     else next NoMatch { e with e_env = restore_environnement env }
+     else next NoMatch { e with e_env = restore_environment env }
 
   | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Anything,name,ob))::pargs),axiom
     | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom
@@ -1078,7 +1075,7 @@ let rec process (e : engine) : nengine =
               Match, e
            (* | _ -> raise CannotUnify *)
          with
-         | CannotUnify -> NoMatch, { e with e_env = restore_environnement e.e_env }
+         | CannotUnify -> NoMatch, { e with e_env = restore_environment e.e_env }
        in
        next m e
      end
@@ -1185,7 +1182,7 @@ let rec process (e : engine) : nengine =
              if eq_ty then
                process { e with e_pattern; e_env;
                                 e_head = Axiom_Form f1 }
-             else next NoMatch { e with e_env = restore_environnement e_env }
+             else next NoMatch { e with e_env = restore_environment e_env }
           | Sym_Form_Match ty, p::pl, Fmatch (fmatch,fl,_)
                when 0 = List.compare_lengths pl fl ->
              let eq_ty, env = eq_type ty f.f_ty e.e_env in
@@ -1198,7 +1195,7 @@ let rec process (e : engine) : nengine =
                    e_head = Axiom_Form fmatch;
                    e_continuation = Zand ([],zand,e.e_continuation);
                  }
-             else next NoMatch { e with e_env = restore_environnement env }
+             else next NoMatch { e with e_env = restore_environment env }
           | Sym_Form_Pvar ty, p1::p2::[], Fpvar (_,m) ->
              let eq_ty, env = eq_type f.f_ty ty e.e_env in
              if eq_ty
@@ -1208,7 +1205,7 @@ let rec process (e : engine) : nengine =
                    e_head = Axiom_Memory m;
                    e_continuation = Zand ([],[Axiom_Form f,p1],e.e_continuation);
                  }
-             else next NoMatch { e with e_env = restore_environnement env }
+             else next NoMatch { e with e_env = restore_environment env }
           | Sym_Form_Prog_var k, [p], Fpvar (x2,_) when k = x2.pv_kind ->
              process { e with
                  e_pattern = p;
@@ -1459,7 +1456,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
      next_n NoMatch { e with
          ne_continuation;
-         ne_env = restore_environnement e.ne_env;
+         ne_env = restore_environment e.ne_env;
        }
 
   | Match, Znamed (f, name, ob, ne_continuation) ->
@@ -1470,13 +1467,13 @@ and next_n (m : ismatch) (e : nengine) : nengine =
        with
        | CannotUnify ->
           NoMatch, { e with ne_continuation;
-                            ne_env = restore_environnement e.ne_env; } in
+                            ne_env = restore_environment e.ne_env; } in
      next_n m e
 
   | NoMatch, Zand (_,_,ne_continuation) ->
      next_n NoMatch { e with
          ne_continuation;
-         ne_env = restore_environnement e.ne_env;
+         ne_env = restore_environment e.ne_env;
        }
 
   | Match, Zand (_before,[],ne_continuation) ->
@@ -1492,19 +1489,19 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | Match, Zor (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
 
   | NoMatch, Zor (_, [], ne) ->
-     next_n NoMatch { ne with ne_env = restore_environnement e.ne_env; }
+     next_n NoMatch { ne with ne_env = restore_environment e.ne_env; }
 
   | NoMatch, Zor (_, e'::engines, ne) ->
      process { e' with
          e_continuation = Zor (e'.e_continuation, engines, ne);
-         e_env = restore_environnement e'.e_env;
+         e_env = restore_environment e'.e_env;
        }
 
   | Match, Zbinds (ne_continuation, env_current_binds) ->
      next_n Match { e with ne_continuation; ne_env = { e.ne_env with env_current_binds } }
 
   | NoMatch, Zbinds (ne_continuation, env_current_binds) ->
-     let env = restore_environnement e.ne_env in
+     let env = restore_environment e.ne_env in
      let ne_env = { env with env_current_binds } in
      next_n NoMatch { e with ne_continuation; ne_env; }
 
@@ -1915,7 +1912,7 @@ let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
 let mkenv ?ppe ?fmt (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
       (red_info_a : EcReduction.reduction_info)
       (unienv : EcUnify.unienv)
-    : environnement = {
+    : environment = {
     env_hyps             = h;
     env_unienv           = unienv;
     env_red_info_p       = red_info_p;
@@ -1928,7 +1925,7 @@ let mkenv ?ppe ?fmt (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
     env_fmt              = odfl Format.std_formatter fmt;
   }
 
-let mkengine (a : axiom) (p : pattern) (env : environnement) : engine =
+let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
   { e_head = a;
     e_pattern = p;
     e_env = env;

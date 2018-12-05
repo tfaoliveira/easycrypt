@@ -891,3 +891,60 @@ let destr_exists_prenex f =
     match prenex_exists [] f with
     | [] , _ -> destr_error "exists"
     | bds, f -> (bds, f)
+
+(* -------------------------------------------------------------------------- *)
+exception FormNotAnExpression
+
+let rec expr_of_form (f : form) : expr =
+  match f.f_node with
+  | Fint i        -> EcTypes.e_int i
+  | Flocal id     -> EcTypes.e_local id f.f_ty
+  | Fpvar (pv, _) -> EcTypes.e_var pv f.f_ty
+  | Fop (op, lty) -> EcTypes.e_op op lty f.f_ty
+
+  | Fquant (q, b, f1) ->
+     let eq = match q with
+       | Llambda -> `ELambda
+       | Lforall -> `EForall
+       | Lexists -> `EExists in
+
+     let trans_gty =
+       function GTty ty -> ty | _ -> raise FormNotAnExpression in
+
+     let eb = List.map (snd_map trans_gty) b in
+     let e1 = expr_of_form f1 in
+
+     e_quantif eq eb e1
+
+  | Fif (f1, f2, f3)     ->
+      let e1 = expr_of_form f1 in
+      let e2 = expr_of_form f2 in
+      let e3 = expr_of_form f3 in
+      e_if e1 e2 e3
+
+  | Fmatch (f1, lf, ty) ->
+      let e1 = expr_of_form f1 in
+      let le = List.map expr_of_form lf in
+      e_match e1 le ty
+
+  | Flet (lp, f1, f2) ->
+      let e1 = expr_of_form f1 in
+      let e2 = expr_of_form f2 in
+      e_let lp e1 e2
+
+  | Fapp (hd, args) ->
+      let hde   = expr_of_form hd in
+      let eargs = List.map expr_of_form args in
+      e_app hde eargs f.f_ty
+
+  | Ftuple fs ->
+      e_tuple (List.map expr_of_form fs)
+
+  | Fproj (f1, i) ->
+      e_proj (expr_of_form f1) i f.f_ty
+
+  | _ -> raise FormNotAnExpression
+
+(* -------------------------------------------------------------------- *)
+let expr_of_form f =
+  try Some (expr_of_form f) with FormNotAnExpression -> None
