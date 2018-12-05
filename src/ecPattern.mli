@@ -228,8 +228,7 @@ module Psubst : sig
   val p_subst_id   : p_subst
 
   val is_subst_id  : p_subst -> bool
-  val p_subst_init : ?mods:EcPath.mpath EcIdent.Mid.t ->
-                     ?sty:EcTypes.ty_subst ->
+  val p_subst_init : ?sty:EcTypes.ty_subst ->
                      ?opdef:(EcIdent.ident list * EcTypes.expr) EcPath.Mp.t ->
                      ?prdef:(EcIdent.ident list * EcFol.form) EcPath.Mp.t ->
                      unit -> p_subst

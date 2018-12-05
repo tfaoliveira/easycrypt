@@ -1174,7 +1174,7 @@ module Psubst = struct
     && Mp.is_empty    s.ps_pddef
     && Mid.is_empty   s.ps_exloc
 
-  let p_subst_init ?mods ?sty ?opdef ?prdef () =
+  let p_subst_init ?sty ?opdef ?prdef () =
     { p_subst_id with
       ps_sty   = odfl ty_subst_id sty;
       ps_opdef = odfl Mp.empty opdef;
@@ -2482,7 +2482,7 @@ module PReduction = struct
       let p' = Psubst.p_subst s p in
       if p = p'
       then
-        try Some (Pat_Axiom(Axiom_Form(EcEnv.LDecl.unfold id hyps))) with
+        try Some (pat_form (EcEnv.LDecl.unfold id hyps)) with
         | EcEnv.NotReducible -> None
       else Some p'
     else None
@@ -3032,7 +3032,10 @@ module PReduction = struct
          | None -> None
     else None
 
-  and h_red_local_opt _hyps _ri s id _ty = MName.find_opt id s.ps_patloc
+  and h_red_local_opt _hyps ri s id _ty =
+    if ri.delta_h id
+    then MName.find_opt id s.ps_patloc
+    else None
 
   and h_red_form_opt hyps ri s (f : form) =
     match f.f_node with

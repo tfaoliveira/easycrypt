@@ -51,6 +51,7 @@ type pat_continuation =
 
   | Zbinds     of pat_continuation * pbindings
 
+
 and engine = {
     e_head         : axiom;
     e_pattern      : pattern;
@@ -137,9 +138,8 @@ let is_modty (m : mpath) (mt : module_type) (mr : mod_restr) (env : environnemen
   | None -> false
   | Some ms ->
     let ms = ms.me_sig in
-    try EcTyping.check_modtype_with_restrictions env m ms mt mr; true with
-       | _ ->
-    false
+    try EcTyping.check_modtype_with_restrictions env m ms mt mr; true
+    with EcTyping.TymodCnvFailure _ -> false
 
 let rec map_for_all2 (f : 'a -> 'a -> 'b -> bool * 'b) (l1 : 'a list) (l2 : 'a list) (b : 'b): bool * 'b =
   match l1, l2 with
@@ -322,7 +322,8 @@ let eq_form (f1 : form) (f2 : form) (env : environnement) =
     let sty    = env.env_subst.ps_sty in
     let sf     = Fsubst.f_subst_init ~sty () in
     let f1, f2 = Fsubst.f_subst sf f1, Fsubst.f_subst sf f2 in
-    EcReduction.is_conv_param env.env_red_info_a env.env_hyps f1 f2,
+    let ri     = env.env_red_info_a in
+    EcReduction.is_conv_param ri env.env_hyps f1 f2,
     { env with env_restore_unienv }
   else
     let env = restore_environnement env in
@@ -937,6 +938,12 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
+  let _ =
+    let fmt, ppe = e.e_env.env_fmt, e.e_env.env_ppe in
+    Format.fprintf fmt "[W]-- %a =? %a\n"
+      (EcPrinting.pp_pattern ppe) e.e_pattern
+      (EcPrinting.pp_pat_axiom ppe) e.e_head
+  in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
@@ -996,8 +1003,11 @@ let rec process (e : engine) : nengine =
          e_continuation = Zor (e.e_continuation,List.map f pl,e_next e);
        }
 
-  | Pat_Red_Strat (e_pattern,_),_ ->
-     process { e with e_pattern }
+  | Pat_Red_Strat (e_pattern,f),_ ->
+     let env_red_info_p, env_red_info_a =
+       f e.e_env.env_red_info_p e.e_env.env_red_info_a in
+     let e_env = { e.e_env with env_red_info_a; env_red_info_p } in
+     process { e with e_pattern; e_env }
 
   | Pat_Fun_Symbol (Sym_Form_Quant (q1,bs1), [p]),
     Axiom_Form { f_node = Fquant (q2,bs2,f2) } -> begin
@@ -1422,17 +1432,20 @@ let rec process (e : engine) : nengine =
 
 and next (m : ismatch) (e : engine) : nengine = match m with
   | NoMatch -> begin
-      let i_red_p, i_red_a  =
-        match e.e_pattern with
-        | Pat_Red_Strat (_,f) -> f e.e_env.env_red_info_p e.e_env.env_red_info_a
-        | _ -> e.e_env.env_red_info_p, e.e_env.env_red_info_a in
+      let i_red_p, i_red_a =
+        e.e_env.env_red_info_p, e.e_env.env_red_info_a in
       let e_env = assubst e.e_env.env_unienv e.e_env in
       let e = { e with e_env } in
       let subst = e.e_env.env_subst in
       match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
               (Psubst.p_subst subst e.e_pattern) e.e_head with
       | None -> next_n m (e_next e)
-      | Some (p,a) -> process { e with e_pattern = p; e_head = a }
+      | Some (p,a) ->
+         let e_or = { e with e_pattern = p; e_head = a } in
+         match e.e_continuation with
+         | Zor (cont,(_::_ as l),nomatch_cont) ->
+            process { e with e_continuation = Zor (cont,l@[e_or],nomatch_cont) }
+         | _ -> process e_or
     end
   | _ ->
      next_n m (e_next e)
@@ -1950,15 +1963,3 @@ let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
     Some (get_n_matches ne, ne.ne_env)
   with
   | NoMatches -> None
-
-(* -------------------------------------------------------------------------- *)
-open EcReduction
-
-let no_delta_head (p : pattern) =
-  let f (rp : reduction_info) ra =
-    { rp with delta_h = (fun _ -> false);
-              delta_p = (fun _ -> false) },
-    { ra with delta_h = (fun _ -> false);
-              delta_p = (fun _ -> false) } in
-  let p' = Pat_Red_Strat (p,f) in
-  Pat_Or [p';p]

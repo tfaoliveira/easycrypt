@@ -71,7 +71,6 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
 
   let engine = EcFMatching.mkengine (axiom_form f) p environnement in
 
-
   let types_to_unify =
     let add_unigty acc = function
       | _, GTty ty -> Suid.union acc (EcTypes.Tuni.univars ty)
