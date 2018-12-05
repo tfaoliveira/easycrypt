@@ -217,21 +217,14 @@ val p_destr_app     : pattern -> pattern * pattern list
 (* -------------------------------------------------------------------------- *)
 module Psubst : sig
   type p_subst = {
-      ps_freshen : bool;
       ps_patloc  : pattern             Mid.t;
-      ps_opdef   : (ident list * expr) Mp.t;
-      ps_pddef   : (ident list * form) Mp.t;
-      ps_exloc   : expr                Mid.t;
       ps_sty     : ty_subst;
     }
 
   val p_subst_id   : p_subst
 
   val is_subst_id  : p_subst -> bool
-  val p_subst_init : ?sty:EcTypes.ty_subst ->
-                     ?opdef:(EcIdent.ident list * EcTypes.expr) EcPath.Mp.t ->
-                     ?prdef:(EcIdent.ident list * EcFol.form) EcPath.Mp.t ->
-                     unit -> p_subst
+  val p_subst_init : ?sty:EcTypes.ty_subst -> unit -> p_subst
 
   val p_bind_local  : p_subst -> ident -> pattern -> p_subst
   val p_bind_mem    : p_subst -> memory -> memory -> p_subst

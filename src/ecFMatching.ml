@@ -15,20 +15,22 @@ exception NoMatches
 exception CannotUnify
 exception NoNext
 
+type match_env = {
+    me_unienv    : EcUnify.unienv;
+    me_meta_vars : Sid.t;
+    me_matches   : pattern Mid.t;
+  }
 
 type environment = {
     env_hyps             : EcEnv.LDecl.hyps;
-    env_unienv           : EcUnify.unienv;
+    env_match            : match_env;
     env_red_info_p       : EcReduction.reduction_info;
     env_red_info_a       : EcReduction.reduction_info;
     env_restore_unienv   : EcUnify.unienv option;
-    env_subst            : Psubst.p_subst;
     env_current_binds    : pbindings;
     env_meta_restr_binds : pbindings Mid.t;
     env_fmt              : Format.formatter;
     env_ppe              : EcPrinting.PPEnv.t;
-    env_meta_vars        : Sid.t;
-    (* FIXME : ajouter ici les stratégies *)
   }
 
 type pat_continuation =
@@ -82,10 +84,12 @@ let h_red_strat hyps s rp ra p a =
         | Some (Pat_Axiom a) -> Some (p, a)
         | _ -> None
 
-let assubst (ue : EcUnify.unienv) (s : Psubst.p_subst) : Psubst.p_subst =
-  let tysubst = { s.ps_sty with ts_u = EcUnify.UniEnv.assubst ue } in
-  let subst = { s with ps_sty = tysubst } in
-  let seen = ref Sid.empty in
+let saturate (me : match_env) =
+  let ue    = me.me_unienv in
+  let mtch  = me.me_matches in
+  let sty   = { EcTypes.ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
+  let subst = { ps_patloc = mtch; ps_sty = sty } in
+  let seen  = ref Sid.empty in
 
   let rec for_ident x binding subst =
     if Sid.mem x !seen then subst else begin
@@ -96,10 +100,17 @@ let assubst (ue : EcUnify.unienv) (s : Psubst.p_subst) : Psubst.p_subst =
         { subst with ps_patloc = Mid.add x (Psubst.p_subst subst binding) subst.ps_patloc }
       end
   in
-  Mid.fold_left (fun acc x bd -> for_ident x bd acc) subst subst.ps_patloc
+  let subst = Mid.fold_left (fun acc x bd -> for_ident x bd acc)
+                subst subst.ps_patloc in
+  { me with me_matches = subst.ps_patloc }
 
 
-let assubst ue env = { env with env_subst = assubst ue env.env_subst }
+let saturate env = { env with env_match = saturate env.env_match }
+
+let psubst_from_env env =
+  let sty   = { EcTypes.ty_subst_id with
+                ts_u = EcUnify.UniEnv.assubst env.env_match.me_unienv } in
+  { ps_patloc = env.env_match.me_matches; ps_sty = sty }
 
 (* -------------------------------------------------------------------------- *)
 
@@ -107,7 +118,7 @@ let restore_environment (env : environment) : environment =
   match env.env_restore_unienv with
   | None -> env
   | Some unienv ->
-     let dst = env.env_unienv in
+     let dst = env.env_match.me_unienv in
      let src = unienv in
      EcUnify.UniEnv.restore dst src;
      env
@@ -154,9 +165,9 @@ let rec map_for_all2 (f : 'a -> 'a -> 'b -> bool * 'b) (l1 : 'a list) (l2 : 'a l
 
 
 let rec eq_type (ty1 : ty) (ty2 : ty) (env : environment) : bool * environment =
-  let unienv = EcUnify.UniEnv.copy env.env_unienv in
+  let unienv = EcUnify.UniEnv.copy env.env_match.me_unienv in
   (try
-     EcUnify.unify (EcEnv.LDecl.toenv env.env_hyps) env.env_unienv ty1 ty2;
+     EcUnify.unify (EcEnv.LDecl.toenv env.env_hyps) env.env_match.me_unienv ty1 ty2;
      true
    with
    | _ -> false),
@@ -167,51 +178,12 @@ let eq_memtype (m1 : EcMemory.memtype) (m2 : EcMemory.memtype) (env : environmen
 
 let rec eq_memory (m1 : EcMemory.memory) (m2 : EcMemory.memory) (_env : environment) =
   EcMemory.mem_equal m1 m2
-  (* || match Mid.find_opt m1 env.env_subst.Psubst.ps_patloc,
-   *          Mid.find_opt m2 env.env_subst.Psubst.ps_patloc with
-   *    | Some (Pat_Axiom (Axiom_Memory m1')),
-   *      Some (Pat_Axiom (Axiom_Memory m2'))
-   *         when not (EcMemory.mem_equal m1 m1')
-   *              && not (EcMemory.mem_equal m2 m2') -> eq_memory m1' m2' env
-   *    | Some (Pat_Axiom (Axiom_Memory m1')), _
-   *         when not (EcMemory.mem_equal m1 m1') -> eq_memory m1' m2 env
-   *    | _, Some (Pat_Axiom (Axiom_Memory m2'))
-   *         when not (EcMemory.mem_equal m2 m2') -> eq_memory m1 m2' env
-   *    | _ -> false *)
 
 let eq_memenv (m1 : EcMemory.memenv) (m2 : EcMemory.memenv) (_env : environment) =
   EcMemory.me_equal m1 m2
 
 let rec eq_mpath (m1 : mpath) (m2 : mpath) (env : environment) : bool =
   EcReduction.EqTest.for_mp (EcEnv.LDecl.toenv env.env_hyps) m1 m2
-  (* then true
-   * else
-   * let (margsl1,margsl2),(margsr1,margsr2) = suffix2 m1.m_args m2.m_args in
-   * if not (List.for_all2 (fun a b -> eq_mpath a b env) margsl2 margsr2) then false
-   * else
-   * match margsl1, margsr1 with
-   * | [], [] -> eq_module m1.m_top m2.m_top env
-   * | [], _  -> begin
-   *     match m1.m_top with
-   *     | `Local id1 -> begin
-   *         match Mid.find_opt id1 env.env_subst.Psubst.ps_patloc with
-   *         | Some (Pat_Axiom (Axiom_Mpath m1')) ->
-   *            eq_mpath m1' (mpath m2.m_top margsr1) env
-   *         | _ -> false
-   *       end
-   *     | _ -> false
-   *   end
-   * | _, []  -> begin
-   *     match m2.m_top with
-   *     | `Local id2 -> begin
-   *         match Mid.find_opt id2 env.env_subst.Psubst.ps_patloc with
-   *         | Some (Pat_Axiom (Axiom_Mpath m2')) ->
-   *            eq_mpath (mpath m1.m_top margsl1) m2' env
-   *         | _ -> false
-   *       end
-   *     | _ -> false
-   *   end
-   * | _      -> assert false *)
 
 and eq_module (mt1 : mpath_top) (mt2 : mpath_top) (_env : environment) =
   if EcPath.mt_equal mt1 mt2 then true
@@ -321,7 +293,8 @@ let eq_form (f1 : form) (f2 : form) (env : environment) =
   let eq_ty, env = eq_type f1.f_ty f2.f_ty env in
   if eq_ty
   then
-    let sty    = env.env_subst.ps_sty in
+    let sty    = { EcTypes.ty_subst_id with
+                   ts_u = EcUnify.UniEnv.assubst env.env_match.me_unienv } in
     let sf     = Fsubst.f_subst_init ~sty () in
     let f1, f2 = Fsubst.f_subst sf f1, Fsubst.f_subst sf f2 in
     let ri     = env.env_red_info_a in
@@ -431,7 +404,7 @@ and eq_pat (p1 : pattern) (p2 : pattern) (env : environment) =
        if not eq then false, env
        else eq_pat p1 p2 env
     | Pat_Meta_Name (_,n1,_), p2' | p2', Pat_Meta_Name (_,n1,_) -> begin
-        match Mid.find_opt n1 (assubst env.env_unienv env).env_subst.Psubst.ps_patloc with
+        match Mid.find_opt n1 (saturate env).env_match.me_matches with
         | Some p1' -> eq_pat p1' p2' env
         | None -> false, env
        end
@@ -789,13 +762,16 @@ let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
 let nadd_match (e : nengine) (name : meta_name) (p : pattern)
       (orb : pbindings option) : nengine =
   let env = e.ne_env in
-  let env = assubst e.ne_env.env_unienv env in
-  let subst = env.env_subst in
+  let env = saturate env in
+  let subst = psubst_from_env env in
   let p = Psubst.p_subst subst p in
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
     let env_subst = Psubst.p_bind_local subst name p in
-    { e with ne_env = { env with env_subst } }
+    { e with ne_env = {
+        env with env_match = {
+          env.env_match with
+          me_matches = env_subst.ps_patloc;}; }; }
   else raise CannotUnify
 
 let e_next (e : engine) : nengine =
@@ -862,8 +838,9 @@ let myomap f (o,e) = match o with
 
 
 let rewrite_term e f =
-  let env = assubst e.e_env.env_unienv e.e_env in
-  Psubst.p_subst env.env_subst (pat_form f)
+  let env   = saturate e.e_env in
+  let subst = psubst_from_env env in
+  Psubst.p_subst subst (pat_form f)
 
 let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
       (lc : 'c list) : bool * 'a =
@@ -924,9 +901,10 @@ let rec abstract_opt
        else
          Some p', (mgty,env)
      in
-     let env = assubst e.e_env.env_unienv e.e_env in
-     let p = Psubst.p_subst env.env_subst p in
-     let parg = Psubst.p_subst env.env_subst parg in
+     let env   = saturate e.e_env in
+     let subst = psubst_from_env env in
+     let p     = Psubst.p_subst subst p in
+     let parg  = Psubst.p_subst subst parg in
      match aux (map,e.e_env) p parg with
      | None, (map,env) ->
         None, map, { e with e_env = restore_environment env }
@@ -1007,47 +985,17 @@ let rec process (e : engine) : nengine =
      let e_env = { e.e_env with env_red_info_a; env_red_info_p } in
      process { e with e_pattern; e_env }
 
-  | Pat_Fun_Symbol (Sym_Form_Quant (q1,bs1), [p]),
-    Axiom_Form { f_node = Fquant (q2,bs2,f2) } -> begin
-      (* FIXME : lambda case to be considered in higher order *)
-      if not(q1 = q2) then next NoMatch e
-      else
-      if 0 > List.compare_lengths bs1 bs2 then next NoMatch e
-      else
-        let (pbs1,_), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
-        let env_restore_unienv = e.e_env.env_restore_unienv in
-        let e = { e with e_env = { e.e_env with env_restore_unienv } } in
-        let eq, env = map_for_all2 eq_gty (List.map snd pbs1) (List.map snd fbs1) e.e_env in
-        if not eq then
-          let e_env = restore_environment e.e_env in
-          next NoMatch { e with e_env = { e_env with env_restore_unienv } }
-        else
-          let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
-          let env = assubst env.env_unienv env in
-          let s = List.fold_left2 f env.env_subst pbs1 fbs1 in
-          let e_pattern = Psubst.p_subst s p in
-          process { e with
-              e_pattern;
-              e_env = { env with env_subst = s; env_restore_unienv; };
-              e_head = Axiom_Form (f_quant q2 fbs2 f2);
-            }
-    end
-
-  | Pat_Axiom o1, o2 ->
-     let eq_ty, env = eq_axiom o1 o2 e.e_env in
-     if eq_ty then next Match { e with e_env = env }
-     else next NoMatch { e with e_env = restore_environment env }
-
   | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Anything,name,ob))::pargs),axiom
     | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom
     | Pat_Fun_Symbol(Sym_Form_App _,(Pat_Meta_Name(Pat_Anything,name,ob))::pargs),axiom
     | Pat_Fun_Symbol(Sym_Form_App _,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom ->
      begin
        (* higher order *)
-       let env = assubst e.e_env.env_unienv e.e_env in
+       let env = saturate e.e_env in
+       let subst = psubst_from_env env in
        let add_ident i x =
          EcIdent.create (String.concat "$" ["s";string_of_int i]),
-         Psubst.p_subst env.env_subst x in
+         Psubst.p_subst subst x in
        let args = List.mapi add_ident pargs in
        let env_meta_restr_binds =
          odfl env.env_meta_restr_binds
@@ -1059,12 +1007,12 @@ let rec process (e : engine) : nengine =
        let pat, map, e =
          (* FIXME : add strategies to adapt the order of the arguments *)
          List.fold_left (abstract (Sid.of_list (List.map fst args)))
-           (Psubst.p_subst e.e_env.env_subst (Pat_Axiom axiom),Mid.empty,e) args in
+           (Psubst.p_subst subst (Pat_Axiom axiom),Mid.empty,e) args in
        let f (name,_) = (name,Mid.find_opt name map) in
        let args = List.map f args in
        (* let pat = omap (p_quant Llambda args) pat in *)
        let pat = p_quant Llambda args pat in
-       let pat = Psubst.p_subst e.e_env.env_subst pat in
+       let pat = Psubst.p_subst subst pat in
        (* let (pat, e) = match rewrite_pattern_opt e pat with
         *   | Some pat,e -> pat, e
         *   | None, e -> pat, e in *)
@@ -1080,6 +1028,11 @@ let rec process (e : engine) : nengine =
        in
        next m e
      end
+
+  | Pat_Axiom o1, o2 ->
+     let eq_ty, env = eq_axiom o1 o2 e.e_env in
+     if eq_ty then next Match { e with e_env = env }
+     else next NoMatch { e with e_env = restore_environment env }
 
   | Pat_Fun_Symbol (symbol, lp), o2 -> begin
       match o2 with
@@ -1197,6 +1150,29 @@ let rec process (e : engine) : nengine =
                    e_continuation = Zand ([],zand,e.e_continuation);
                  }
              else next NoMatch { e with e_env = restore_environment env }
+          | Sym_Form_Quant (q1,bs1), [p], Fquant (q2,bs2,f2)
+               when q1 = q2 && 0 > List.compare_lengths bs1 bs2 -> begin
+              (* FIXME : lambda case to be considered in higher order *)
+              let (pbs1,_), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
+              let env_restore_unienv = e.e_env.env_restore_unienv in
+              let e = { e with e_env = { e.e_env with env_restore_unienv } } in
+              let eq, env = map_for_all2 eq_gty (List.map snd pbs1) (List.map snd fbs1) e.e_env in
+              if not eq then
+                let e_env = restore_environment e.e_env in
+                next NoMatch { e with e_env = { e_env with env_restore_unienv } }
+              else
+              let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
+              let env   = saturate env in
+              let subst = psubst_from_env env in
+              let s     = List.fold_left2 f subst pbs1 fbs1 in
+              let e_pattern = Psubst.p_subst s p in
+              process { e with
+                  e_pattern;
+                  e_env = { env with env_restore_unienv; };
+                  e_head = Axiom_Form (f_quant q2 fbs2 f2);
+                }
+            end
+
           | Sym_Form_Pvar ty, p1::p2::[], Fpvar (_,m) ->
              let eq_ty, env = eq_type f.f_ty ty e.e_env in
              if eq_ty
@@ -1432,9 +1408,9 @@ and next (m : ismatch) (e : engine) : nengine = match m with
   | NoMatch -> begin
       let i_red_p, i_red_a =
         e.e_env.env_red_info_p, e.e_env.env_red_info_a in
-      let e_env = assubst e.e_env.env_unienv e.e_env in
+      let e_env = saturate e.e_env in
       let e = { e with e_env } in
-      let subst = e.e_env.env_subst in
+      let subst = psubst_from_env e_env in
       match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
               (Psubst.p_subst subst e.e_pattern) e.e_head with
       | None -> next_n m (e_next e)
@@ -1481,9 +1457,10 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      next_n Match { e with ne_continuation }
 
   | Match, Zand (before,(f,p)::after,z) ->
-     let ne_env = assubst e.ne_env.env_unienv e.ne_env in
-     let e = { e with ne_env } in
-     let p = Psubst.p_subst e.ne_env.env_subst p in
+     let ne_env = saturate e.ne_env in
+     let e      = { e with ne_env } in
+     let subst  = psubst_from_env ne_env in
+     let p      = Psubst.p_subst subst p in
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
@@ -1606,10 +1583,8 @@ and sub_engines (e : engine) (p : pattern) : engine list =
     end
 
 
-let get_matches (e : engine) : Psubst.p_subst =
-  (assubst e.e_env.env_unienv e.e_env).env_subst
-let get_n_matches (e : nengine) : Psubst.p_subst =
-  (assubst e.ne_env.env_unienv e.ne_env).env_subst
+let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
+let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
 
 let search_eng e =
   try
@@ -1910,59 +1885,75 @@ let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
 
 
 (* val mkengine    : base -> engine *)
-let mkenv ?ppe ?fmt (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
+let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
       (red_info_a : EcReduction.reduction_info)
       (unienv : EcUnify.unienv)
     : environment = {
     env_hyps             = h;
-    env_unienv           = unienv;
     env_red_info_p       = red_info_p;
     env_red_info_a       = red_info_a;
     env_restore_unienv   = None;
-    env_subst            = Psubst.p_subst_id;
     env_current_binds    = [] ;
     env_meta_restr_binds = Mid.empty;
     env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
     env_fmt              = odfl Format.std_formatter fmt;
-    env_meta_vars        = Sid.empty;
+    env_match            = {
+        me_matches   = odfl Mid.empty mtch;
+        me_unienv    = unienv;
+        me_meta_vars = Mid.empty;
+      };
   }
 
 let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
   { e_head = a;
     e_pattern = p;
-    e_env = { env with env_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 env p) };
+    e_env = {
+        env with
+        env_match = {
+          env.env_match with
+          me_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 env p) };
+      };
     e_continuation = ZTop;
   }
 
-let mk_engine ?ppe ?fmt f e_pattern env_hyps env_red_info_p env_red_info_a env_unienv =
+let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a unienv =
   let e = {
       e_pattern;
       e_head         = axiom_form f;
       e_continuation = ZTop;
       e_env          = {
           env_hyps;
-          env_unienv;
           env_red_info_p;
           env_red_info_a;
           env_restore_unienv   = None;
-          env_subst            = Psubst.p_subst_id;
           env_current_binds    = [];
           env_meta_restr_binds = Mid.empty;
           env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv env_hyps)) ppe;
           env_fmt              = odfl Format.std_formatter fmt;
-          env_meta_vars        = Mid.empty;
+          env_match            = {
+              me_matches   = odfl Mid.empty mtch;
+              me_meta_vars = Mid.empty;
+              me_unienv    = unienv;
+            }
         }
     } in
   { e with
-    e_env = { e.e_env with
-              env_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 e.e_env e_pattern); }; }
+    e_env = {
+      e.e_env with
+      env_match = {
+        e.e_env.env_match with
+        me_meta_vars =
+          Mid.map (fun _ -> ()) (FV.pattern0 e.e_env e_pattern);
+      };
+    };
+  }
 
-let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
+let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
       (red_info_p : EcReduction.reduction_info)
       (red_info_a : EcReduction.reduction_info)
       (unienv : EcUnify.unienv) =
   try
-    let env = mkenv ?ppe ?fmt h red_info_p red_info_a unienv in
+    let env = mkenv ?ppe ?fmt ?mtch h red_info_p red_info_a unienv in
     let ne = process (mkengine (axiom_form f) p env) in
     Some (get_n_matches ne, ne.ne_env)
   with
@@ -1970,8 +1961,8 @@ let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
 
 
 let match_is_full (e : environment) =
-  let matches   = e.env_subst.ps_patloc in
-  let meta_vars = e.env_meta_vars in
+  let matches   = e.env_match.me_matches in
+  let meta_vars = e.env_match.me_meta_vars in
 
   let f n = match Mid.find_opt n matches with
     | None   -> false

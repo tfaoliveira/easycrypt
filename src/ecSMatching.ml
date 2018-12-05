@@ -95,30 +95,22 @@ module RegexpBaseInstr = struct
            | LvVar (pv,ty) ->
               let fx1 = f_pvar pv ty mhr in
               let unienv = EcUnify.UniEnv.create None in
-              let e = EcFMatching.mk_engine fx1 x2 eng.e_hyps
+              let e = EcFMatching.mk_engine ~mtch:eng.e_map fx1 x2 eng.e_hyps
                         EcReduction.full_red EcReduction.full_red unienv in
-              let e = { e with
-                        e_env = { e.e_env with
-                                  env_subst = { Psubst.p_subst_id with
-                                                ps_patloc = eng.e_map } } } in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
-                | Some e -> e.ne_env.env_subst.ps_patloc in
+                | Some e -> e.ne_env.env_match.me_matches in
               map
 
            | LvTuple tuple ->
               let f x = f_pvar (fst x) (snd x) mhr in
               let fx1 = f_tuple (List.map f tuple) in
               let unienv = EcUnify.UniEnv.create None in
-              let e = EcFMatching.mk_engine fx1 x2 eng.e_hyps
+              let e = EcFMatching.mk_engine ~mtch:eng.e_map fx1 x2 eng.e_hyps
                         EcReduction.full_red EcReduction.full_red unienv in
-              let e = { e with
-                        e_env = { e.e_env with
-                                  env_subst = { Psubst.p_subst_id with
-                                                ps_patloc = eng.e_map } } } in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
-                | Some e -> e.ne_env.env_subst.ps_patloc in
+                | Some e -> e.ne_env.env_match.me_matches in
               map
 
            | LvMap ((op,tys),_pv,_e,ty) ->
@@ -128,15 +120,11 @@ module RegexpBaseInstr = struct
 
            let f1 = form_of_expr mhr e1 in
            let unienv = EcUnify.UniEnv.create None in
-           let e = EcFMatching.mk_engine f1 p2 eng.e_hyps EcReduction.full_red
+           let e = EcFMatching.mk_engine ~mtch:map f1 p2 eng.e_hyps EcReduction.full_red
                      EcReduction.full_red unienv in
-           let e = { e with
-                     e_env = { e.e_env with
-                               env_subst = { Psubst.p_subst_id with
-                                             ps_patloc = map } } } in
            let map = match EcFMatching.search_eng e with
              | None -> raise NoMatch
-             | Some e -> e.ne_env.env_subst.ps_patloc in
+             | Some e -> e.ne_env.env_match.me_matches in
            { eng with e_map = map }, []
 
        | Scall (Some x,f,args), RCall (p1,p2,pargs)  ->
@@ -151,43 +139,31 @@ module RegexpBaseInstr = struct
                raise NoMatch
           in
           let unienv = EcUnify.UniEnv.create None in
-          let e = EcFMatching.mk_engine fx1 p1 eng.e_hyps EcReduction.full_red
-                    EcReduction.full_red unienv in
-          let e = { e with
-                    e_env = { e.e_env with
-                              env_subst = { Psubst.p_subst_id with
-                                            ps_patloc = eng.e_map } } } in
+          let e = EcFMatching.mk_engine ~mtch:eng.e_map fx1 p1 eng.e_hyps
+                    EcReduction.full_red EcReduction.full_red unienv in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
-            | Some e -> e.ne_env.env_subst.ps_patloc in
+            | Some e -> e.ne_env.env_match.me_matches in
           let args = List.map (form_of_expr mhr) args in
           let f = f_pr mleft f (f_tuple args) f_true in
           let p = Pat_Fun_Symbol
                     (Sym_Form_Pr,Pat_Anything::p2::pargs::Pat_Anything::[]) in
           let unienv = EcUnify.UniEnv.create None in
-          let e = EcFMatching.mk_engine f p eng.e_hyps EcReduction.full_red
-                    EcReduction.full_red unienv in
-          let e = { e with
-                    e_env = { e.e_env with
-                              env_subst = { Psubst.p_subst_id with
-                                            ps_patloc = map } } } in
+          let e = EcFMatching.mk_engine ~mtch:map f p eng.e_hyps
+                    EcReduction.full_red EcReduction.full_red unienv in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
-            | Some e -> e.ne_env.env_subst.ps_patloc in
+            | Some e -> e.ne_env.env_match.me_matches in
           { eng with e_map = map }, []
 
        | Sif (cond, st, sf), RIf (pcond, stn, sfn) -> begin
            let fcond = form_of_expr mhr cond in
            let unienv = EcUnify.UniEnv.create None in
-           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps EcReduction.full_red
-                      EcReduction.full_red unienv in
-           let e' = { e' with
-                      e_env = { e'.e_env with
-                                env_subst = { Psubst.p_subst_id with
-                                              ps_patloc = eng.e_map } } } in
+           let e' = EcFMatching.mk_engine ~mtch:eng.e_map fcond pcond eng.e_hyps
+                      EcReduction.full_red EcReduction.full_red unienv in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
-             | Some e' -> e'.ne_env.env_subst.ps_patloc in
+             | Some e' -> e'.ne_env.env_match.me_matches in
 
            let e_t = mkengine st.s_node eng.e_hyps in
            let e_t = { e_t with e_map = map } in
@@ -209,15 +185,11 @@ module RegexpBaseInstr = struct
        | Swhile (e, s), RWhile (pcond,sn) -> begin
            let fcond = form_of_expr mhr e in
            let unienv = EcUnify.UniEnv.create None in
-           let e' = EcFMatching.mk_engine fcond pcond eng.e_hyps EcReduction.full_red
-                      EcReduction.full_red unienv in
-           let e' = { e' with
-                      e_env = { e'.e_env with
-                                env_subst = { Psubst.p_subst_id with
-                                              ps_patloc = eng.e_map } } } in
+           let e' = EcFMatching.mk_engine ~mtch:eng.e_map fcond pcond eng.e_hyps
+                      EcReduction.full_red EcReduction.full_red unienv in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
-             | Some e' -> e'.ne_env.env_subst.ps_patloc in
+             | Some e' -> e'.ne_env.env_match.me_matches in
            let es = mkengine s.s_node eng.e_hyps in
            let es = { es with e_map = map } in
            let es =

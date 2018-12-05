@@ -13,8 +13,6 @@ open EcUid
 open EcModules
 open EcTypes
 
-open Psubst
-
 let default_name = "object matched to rewrite"
 let rewrite_name = "rewrited object"
 let default_name = Name.create default_name
@@ -222,9 +220,9 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
            e_continuation = nengine.ne_continuation;
            e_env = nengine.ne_env;
          } in
-       let map = engine.e_env.env_subst.ps_patloc in
+       let map = engine.e_env.env_match.me_matches in
        let ty_unification =
-         let close = EcUnify.UniEnv.close engine.e_env.env_unienv in
+         let close = EcUnify.UniEnv.close engine.e_env.env_match.me_unienv in
          Muid.mapi (fun ty _ -> close ty) types_to_unify
        in
        let map =

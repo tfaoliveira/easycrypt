@@ -1102,36 +1102,21 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
 module Psubst = struct
 
   type p_subst = {
-      ps_freshen : bool;
-      ps_patloc  : pattern             Mid.t;
-      ps_opdef   : (ident list * expr) Mp.t;
-      ps_pddef   : (ident list * form) Mp.t;
-      ps_exloc   : expr                Mid.t;
-      ps_sty     : ty_subst;
+      ps_patloc : pattern Mid.t;
+      ps_sty    : ty_subst;
     }
 
   let p_subst_id = {
-      ps_freshen = false;
-      ps_patloc  = Mid.empty;
-      ps_opdef   = Mp.empty;
-      ps_pddef   = Mp.empty;
-      ps_exloc   = Mid.empty;
-      ps_sty     = ty_subst_id;
+      ps_patloc = Mid.empty;
+      ps_sty    = ty_subst_id;
     }
 
   let is_subst_id s =
-       s.ps_freshen = false
-    && is_ty_subst_id s.ps_sty
+       is_ty_subst_id s.ps_sty
     && Mid.is_empty   s.ps_patloc
-    && Mp.is_empty    s.ps_pddef
-    && Mid.is_empty   s.ps_exloc
 
-  let p_subst_init ?sty ?opdef ?prdef () =
-    { p_subst_id with
-      ps_sty   = odfl ty_subst_id sty;
-      ps_opdef = odfl Mp.empty opdef;
-      ps_pddef = odfl Mp.empty prdef;
-    }
+  let p_subst_init ?sty () =
+    { p_subst_id with ps_sty = odfl ty_subst_id sty; }
 
   let p_bind_local (s : p_subst) (id : ident) (p : pattern) =
     let merge o = assert (o = None); Some p in
@@ -1147,10 +1132,7 @@ module Psubst = struct
 
   let p_bind_rename (s : p_subst) (nfrom : ident) (nto : ident) (ty : ty) =
     let np = pat_local nto ty in
-    let ne = e_local nto ty in
-    let s = p_bind_local s nfrom np in
-    let merge o = assert (o = None); Some ne in
-    { s with ps_exloc = Mid.change merge nfrom s.ps_exloc }
+    p_bind_local s nfrom np
 
   let p_bind_gty (s : p_subst) (nfrom : ident) (nto : ident) (gty : gty) =
     match gty with
@@ -1160,8 +1142,7 @@ module Psubst = struct
 
   (* ------------------------------------------------------------------------ *)
   let p_rem_local (s : p_subst) (n : ident) =
-    { s with ps_patloc = Mid.remove n s.ps_patloc;
-             ps_exloc  = Mid.remove n s.ps_exloc; }
+    { s with ps_patloc = Mid.remove n s.ps_patloc; }
 
   let p_rem_mem (s : p_subst) (m : memory) =
     { s with ps_patloc = Mid.remove m s.ps_patloc }
@@ -1179,11 +1160,10 @@ module Psubst = struct
 
   (* ------------------------------------------------------------------------ *)
   let add_local (s : p_subst) (n,t as nt : ident * ty) =
-    let n' = if s.ps_freshen then EcIdent.fresh n else n in
     let t' = (ty_subst s.ps_sty) t in
-    if   n == n' && t == t'
+    if   t == t'
     then (s, nt)
-    else (p_bind_rename s n n' t'), (n',t')
+    else s, (n,t')
 
   let add_locals = List.Smart.map_fold add_local
 
@@ -1245,8 +1225,7 @@ module Psubst = struct
   (* ------------------------------------------------------------------------ *)
   let add_binding (s : p_subst) (x,gty as xt : binding) =
     let gty' = gty_subst s gty in
-    let x'   = if s.ps_freshen then EcIdent.fresh x else x in
-    if   x == x' && gty == gty'
+    if   gty == gty'
     then
       let s = match gty with
         | GTty _    -> p_rem_local s x
@@ -1254,20 +1233,14 @@ module Psubst = struct
         | GTmem _   -> p_rem_mem   s x in
       (s,xt)
     else
-      let s = match gty' with
-        | GTty   ty -> p_bind_rename s x x' ty
-        | GTmodty _ -> p_bind_mod s x (EcPath.mident x')
-        | GTmem   _ -> p_bind_mem s x x'
-      in
-      (s, (x', gty'))
+      (s, (x, gty'))
 
   let add_bindings = List.map_fold add_binding
 
   (* ------------------------------------------------------------------------ *)
   let add_pbinding (s : p_subst) (x,ogty as xt : ident * gty option) =
     let gty' = omap (gty_subst s) ogty in
-    let x'   = if s.ps_freshen then EcIdent.fresh x else x in
-    if   x == x' && ogty == gty'
+    if   ogty == gty'
     then
       let s = match ogty with
         | Some (GTty _)    -> p_rem_local s x
@@ -1276,13 +1249,7 @@ module Psubst = struct
         | None             -> s
       in (s,xt)
     else
-      let s = match gty' with
-        | Some (GTty   ty) -> p_bind_rename s x x' ty
-        | Some (GTmodty _) -> p_bind_mod s x (EcPath.mident x')
-        | Some (GTmem   _) -> p_bind_mem s x x'
-        | None             -> s
-      in
-      (s, (x', gty'))
+      (s, (x, gty'))
 
   let add_pbindings = List.map_fold add_pbinding
 
@@ -1325,32 +1292,6 @@ module Psubst = struct
                    let ty = ty_subst s.ps_sty fp.f_ty in
                    pat_form (FSmart.f_local (fp, (id, fp.f_ty)) (id, ty))
               end
-
-            | Fop (p, lty) when Mp.mem p s.ps_opdef ->
-               let ty   = ty_subst s.ps_sty fp.f_ty in
-               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-               let body = oget (Mp.find_opt p s.ps_opdef) in
-               p_subst_op s.ps_freshen (Some ty) lty [] body
-
-            | Fop (p, lty) when Mp.mem p s.ps_pddef ->
-               let ty   = ty_subst s.ps_sty fp.f_ty in
-               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-               let body = oget (Mp.find_opt p s.ps_pddef) in
-               p_subst_pd (Some ty) lty [] body
-
-            | Fapp ({ f_node = Fop (op, lty) }, args) when Mp.mem op s.ps_opdef ->
-               let ty   = ty_subst s.ps_sty fp.f_ty in
-               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-               let body = oget (Mp.find_opt op s.ps_opdef) in
-               let args = List.map (fun f -> p_subst s (pat_form f)) args in
-               p_subst_op s.ps_freshen (Some ty) lty args body
-
-            | Fapp ({ f_node = Fop (op, lty) }, args) when Mp.mem op s.ps_pddef ->
-               let ty   = ty_subst s.ps_sty fp.f_ty in
-               let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-               let body = oget (Mp.find_opt op s.ps_pddef) in
-               let args = List.map (fun f -> p_subst s (pat_form f)) args in
-               p_subst_pd (Some ty) lty args body
 
             | Fop (op, lty) ->
                let ty'  = ty_subst s.ps_sty fp.f_ty in
@@ -1502,16 +1443,6 @@ module Psubst = struct
         | Axiom_MemEnv m -> memenv_subst s m
 
         | Axiom_Prog_Var pv -> pv_subst s pv
-
-        | Axiom_Op (op,lty) when Mp.mem op s.ps_opdef ->
-           let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-           let body = oget (Mp.find_opt op s.ps_opdef) in
-           p_subst_op s.ps_freshen None lty [] body
-
-        | Axiom_Op (op, lty) when Mp.mem op s.ps_pddef ->
-           let lty  = List.Smart.map (ty_subst s.ps_sty) lty in
-           let body = oget (Mp.find_opt op s.ps_pddef) in
-           p_subst_pd None lty [] body
 
         | Axiom_Op (op,lty) ->
            let lty = List.Smart.map (ty_subst s.ps_sty) lty in
@@ -1698,87 +1629,19 @@ module Psubst = struct
        *             (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
        * pat_stmt (EcModules.s_subst es stmt) *)
 
-    and p_subst_op freshen oty lty args (tyids, e) =
-
-      let e =
-        (* FIXME *)
-        let sty = Tvar.init tyids lty in
-        let sty = { ty_subst_id with ts_v = Mid.find_opt^~ sty; } in
-        let sty = { p_subst_id with ps_freshen = freshen; ps_sty = sty ; } in
-        e_subst sty e
-      in
-
-      let (sag, args, e) =
-        match e with
-        | Pat_Axiom(Axiom_Form { f_node = Fquant (Llambda, largs, lbody) })
-             when args <> [] ->
-           let largs1, largs2 = List.takedrop (List.length args  ) largs in
-           let  args1,  args2 = List.takedrop (List.length largs1)  args in
-           (Mid.of_list (List.combine (List.map fst largs1) args1),
-            args2, p_f_quant Llambda largs2 (pat_form lbody))
-        | Pat_Fun_Symbol(Sym_Form_Quant (Llambda,largs),[pbody])
-             when args <> [] ->
-           let largs1, largs2 = List.takedrop (List.length args  ) largs in
-           let  args1,  args2 = List.takedrop (List.length largs1)  args in
-           (Mid.of_list (List.combine (List.map fst largs1) args1),
-            args2, p_f_quant Llambda largs2 pbody)
-        | _ -> (Mid.of_list [], args, e)
-      in
-
-      let sag = { p_subst_id with ps_patloc = sag } in
-      p_app (p_subst sag e) args oty
-
-
-    and p_subst_pd oty lty args (tyids, f) =
-      (* FIXME: factor this out *)
-      (* FIXME: is fd_freshen value correct? *)
-
-      let p =
-        let sty = Tvar.init tyids lty in
-        let sty = { ty_subst_id with ts_v = Mid.find_opt^~ sty; } in
-        let sty = { p_subst_id with ps_freshen = true; ps_sty = sty; } in
-        p_subst sty (pat_form f)
-      in
-
-      let (sag, args, p) =
-        match p with
-        | Pat_Axiom(Axiom_Form f) -> begin
-            match f.f_node with
-            | Fquant (Llambda, largs, lbody) when args <> [] ->
-               let largs1, largs2 = List.takedrop (List.length args  ) largs in
-               let  args1,  args2 = List.takedrop (List.length largs1)  args in
-               (Mid.of_list (List.combine (List.map fst largs1) args1),
-                args2, pat_form (f_lambda largs2 lbody))
-
-            | _ -> (Mid.of_list [], args, p)
-          end
-        | Pat_Fun_Symbol (Sym_Form_Quant (Llambda, largs), [lbody])
-             when args <> [] ->
-           let largs1, largs2 = List.takedrop (List.length args  ) largs in
-           let  args1,  args2 = List.takedrop (List.length largs1)  args in
-           (Mid.of_list (List.combine (List.map fst largs1) args1),
-            args2, p_f_quant Llambda largs2 lbody)
-
-        (* FIXME : Sym_Form_Quant *)
-        | _ -> (Mid.of_list [], args, p)
-      in
-
-      let sag = { p_subst_id with ps_patloc = sag } in
-      p_app (p_subst sag p) args oty
-
     and lv_subst (s : p_subst) (lv : lvalue) = match lv with
       | LvVar (pv,ty) ->
          p_lvalue_var (p_subst s (pat_pv pv)) (ty_subst s.ps_sty ty)
       | LvTuple l ->
          p_lvalue_tuple (List.map (fun x -> lv_subst s (LvVar x)) l)
       | LvMap ((op,lty),pv,e,ty) ->
-         match pv_subst s pv with
-         | Pat_Axiom(Axiom_Prog_Var pv) ->
-            pat_lvalue
-              (LvMap
-                 ((op,List.map (ty_subst s.ps_sty) lty),
-                  pv, e_map (ty_subst s.ps_sty) (fun x->x) e, ty_subst s.ps_sty ty))
-         | _ -> assert false
+      match pv_subst s pv with
+      | Pat_Axiom(Axiom_Prog_Var pv) ->
+         pat_lvalue
+           (LvMap
+              ((op,List.map (ty_subst s.ps_sty) lty),
+               pv, e_map (ty_subst s.ps_sty) (fun x->x) e, ty_subst s.ps_sty ty))
+      | _ -> assert false
 
     and p_betared_opt = function
       | Pat_Anything -> None
@@ -1800,41 +1663,40 @@ module Psubst = struct
          else Some (pat_form f2)
       | Pat_Axiom _ -> None
       | Pat_Fun_Symbol (s,lp) ->
-         match s,lp with
-         | Sym_Form_App ty,
-           (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
-            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-            let subst = p_subst_id in
-            let subst =
-              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
-                subst bs1 pargs1 in
-            Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
-         | Sym_App,
-           (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
-            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-            let subst = p_subst_id in
-            let subst =
-              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
-                subst bs1 pargs1 in
-            Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 None)
-         | Sym_Form_App ty,
-           (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
-            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-            let subst = p_subst_id in
-            let subst =
-              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
-                subst bs1 pargs1 in
-            Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
-         | Sym_App,
-           (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
-            let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-            let subst = p_subst_id in
-            let subst =
-              List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
-                subst bs1 pargs1 in
-            Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 None)
-         | _ -> None
-
+      match s,lp with
+      | Sym_Form_App ty,
+        (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+         let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
+      | Sym_App,
+        (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+         let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 None)
+      | Sym_Form_App ty,
+        (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+         let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
+      | Sym_App,
+        (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+         let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 None)
+      | _ -> None
 
 end
 
