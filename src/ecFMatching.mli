@@ -9,7 +9,7 @@ exception NoMatches
 exception CannotUnify
 exception NoNext
 
-type environnement = {
+type environment = {
     env_hyps             : EcEnv.LDecl.hyps;
     env_unienv           : EcUnify.unienv;
     env_red_info_p       : EcReduction.reduction_info;
@@ -49,12 +49,12 @@ and engine = {
     e_head         : axiom;
     e_pattern      : pattern;
     e_continuation : pat_continuation;
-    e_env          : environnement;
+    e_env          : environment;
   }
 
 and nengine = {
     ne_continuation : pat_continuation;
-    ne_env          : environnement;
+    ne_env          : environment;
   }
 
 
@@ -62,15 +62,15 @@ val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       form -> pattern -> LDecl.hyps ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info -> EcUnify.unienv ->
-                      (Psubst.p_subst * environnement) option
+                      (Psubst.p_subst * environment) option
 
 val search_eng      : engine -> nengine option
 
 val mkenv           : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       LDecl.hyps -> EcReduction.reduction_info ->
-                      EcReduction.reduction_info -> EcUnify.unienv -> environnement
+                      EcReduction.reduction_info -> EcUnify.unienv -> environment
 
-val mkengine        : axiom -> pattern -> environnement -> engine
+val mkengine        : axiom -> pattern -> environment -> engine
 val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       form -> pattern -> LDecl.hyps ->
                       EcReduction.reduction_info ->

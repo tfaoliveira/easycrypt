@@ -194,6 +194,9 @@ type sform =
 val sform_of_form : form -> sform
 
 (* -------------------------------------------------------------------- *)
+val expr_of_form : form -> expr option
+
+(* -------------------------------------------------------------------- *)
 module type DestrRing = sig
   val le  : form -> form * form
   val lt  : form -> form * form

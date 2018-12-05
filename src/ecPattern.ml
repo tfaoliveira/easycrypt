@@ -1,3 +1,4 @@
+(* ------------------------------------------------------------------------------ *)
 open EcUtils
 open EcFol
 open EcTypes
@@ -104,55 +105,6 @@ let olist_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
                 | Some b -> aux (b::accb) r
   in aux [] l
 
-(* -------------------------------------------------------------------------- *)
-let rec expr_of_form (f : form) : expr option = match f.f_node with
-  | Fquant (q,b,f1)    ->
-     let eq = match q with
-       | Llambda -> `ELambda
-       | Lforall -> `EForall
-       | Lexists -> `EExists in
-     let b = try Some(List.map (snd_map EcFol.gty_as_ty) b) with
-             | _ -> None in
-     odfl None (omap (fun b -> omap (EcTypes.e_quantif eq b)
-                                 (expr_of_form f1)) b)
-  | Fif (f1,f2,f3)     -> begin
-      match expr_of_form f1 with
-      | None -> None
-      | Some e1 ->
-      match expr_of_form f2 with
-      | None -> None
-      | Some e2 ->
-      match expr_of_form f3 with
-      | None -> None
-      | Some e3 -> Some (EcTypes.e_if e1 e2 e3)
-    end
-  | Fmatch (f1,lf,ty) -> begin
-      match expr_of_form f1 with
-      | None -> None
-      | Some e1 -> omap (fun l -> EcTypes.e_match e1 l ty)
-                     (olist_all expr_of_form lf)
-    end
-  | Flet (lp,f1,f2)    ->
-     odfl None
-       (omap (fun e1 ->
-            omap (fun e2 -> EcTypes.e_let lp e1 e2)
-              (expr_of_form f2))
-          (expr_of_form f1))
-  | Fint i             -> Some (EcTypes.e_int i)
-  | Flocal id          -> Some (EcTypes.e_local id f.f_ty)
-  | Fpvar (pv,_)       -> Some (EcTypes.e_var pv f.f_ty)
-  | Fop (op,lty)       -> Some (EcTypes.e_op op lty f.f_ty)
-  | Fapp (f1,args)     ->
-     odfl None
-       (omap (fun e1 ->
-            omap (fun l -> EcTypes.e_app e1 l f.f_ty)
-              (olist_all expr_of_form args))
-          (expr_of_form f1))
-  | Ftuple t           ->
-     omap (fun l -> EcTypes.e_tuple l) (olist_all expr_of_form t)
-  | Fproj (f1,i)       ->
-     omap (fun e -> EcTypes.e_proj e i f.f_ty) (expr_of_form f1)
-  | _                  -> None
 
 (* -------------------------------------------------------------------------- *)
 
