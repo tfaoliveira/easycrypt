@@ -20,6 +20,7 @@ type environment = {
     env_meta_restr_binds : pbindings Mid.t;
     env_fmt              : Format.formatter;
     env_ppe              : EcPrinting.PPEnv.t;
+    env_meta_vars        : Sid.t;
     (* FIXME : ajouter ici les stratégies *)
   }
 
@@ -79,3 +80,5 @@ val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
 val pattern_of_form : bindings -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
+
+val match_is_full   : environment -> bool

@@ -27,6 +27,7 @@ type environment = {
     env_meta_restr_binds : pbindings Mid.t;
     env_fmt              : Format.formatter;
     env_ppe              : EcPrinting.PPEnv.t;
+    env_meta_vars        : Sid.t;
     (* FIXME : ajouter ici les stratégies *)
   }
 
@@ -1923,32 +1924,38 @@ let mkenv ?ppe ?fmt (h : LDecl.hyps) (red_info_p : EcReduction.reduction_info)
     env_meta_restr_binds = Mid.empty;
     env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
     env_fmt              = odfl Format.std_formatter fmt;
+    env_meta_vars        = Sid.empty;
   }
 
 let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
   { e_head = a;
     e_pattern = p;
-    e_env = env;
+    e_env = { env with env_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 env p) };
     e_continuation = ZTop;
   }
 
-let mk_engine ?ppe ?fmt f e_pattern env_hyps env_red_info_p env_red_info_a env_unienv = {
-    e_pattern;
-    e_head         = axiom_form f;
-    e_continuation = ZTop;
-    e_env          = {
-        env_hyps;
-        env_unienv;
-        env_red_info_p;
-        env_red_info_a;
-        env_restore_unienv   = None;
-        env_subst            = Psubst.p_subst_id;
-        env_current_binds    = [];
-        env_meta_restr_binds = Mid.empty;
-        env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv env_hyps)) ppe;
-        env_fmt              = odfl Format.std_formatter fmt;
-      };
-  }
+let mk_engine ?ppe ?fmt f e_pattern env_hyps env_red_info_p env_red_info_a env_unienv =
+  let e = {
+      e_pattern;
+      e_head         = axiom_form f;
+      e_continuation = ZTop;
+      e_env          = {
+          env_hyps;
+          env_unienv;
+          env_red_info_p;
+          env_red_info_a;
+          env_restore_unienv   = None;
+          env_subst            = Psubst.p_subst_id;
+          env_current_binds    = [];
+          env_meta_restr_binds = Mid.empty;
+          env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv env_hyps)) ppe;
+          env_fmt              = odfl Format.std_formatter fmt;
+          env_meta_vars        = Mid.empty;
+        }
+    } in
+  { e with
+    e_env = { e.e_env with
+              env_meta_vars = Mid.map (fun _ -> ()) (FV.pattern0 e.e_env e_pattern); }; }
 
 let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
       (red_info_p : EcReduction.reduction_info)
@@ -1960,3 +1967,15 @@ let search ?ppe ?fmt (f : form) (p : pattern) (h : LDecl.hyps)
     Some (get_n_matches ne, ne.ne_env)
   with
   | NoMatches -> None
+
+
+let match_is_full (e : environment) =
+  let matches   = e.env_subst.ps_patloc in
+  let meta_vars = e.env_meta_vars in
+
+  let f n = match Mid.find_opt n matches with
+    | None   -> false
+    | Some p -> let fv = FV.pattern0 e p in
+                Mid.for_all (fun n _ -> not (Sid.mem n meta_vars)) fv in
+
+  Sid.for_all f meta_vars
