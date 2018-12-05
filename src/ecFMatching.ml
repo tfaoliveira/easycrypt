@@ -817,12 +817,6 @@ let sub_engine e p b f =
   { e with e_head = f; e_pattern = Pat_Sub p;
            e_env = { e.e_env with env_current_binds = b; }; }
 
-let fold_left_list (f : 'a -> 'b -> 'b * 'a) (a : 'a) (l : 'b list) : 'a * 'b list =
-  let rec aux a acc l = match l with
-    | [] -> a,List.rev acc
-    | x::rest -> let x,a = f a x in aux a (x::acc) rest in
-  aux a [] l
-
 let omap_list (default : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   let rec aux acc there_is_Some = function
     | [] -> if there_is_Some then Some (List.rev acc) else None
@@ -843,10 +837,6 @@ let ofold_list default (f : 'env -> 'p -> 'a option * 'env) (e : 'env) (lp : 'p 
        | Some x,e -> aux e (x::acc) true rest
   in aux e [] false lp
 
-let myomap f (o,e) = match o with
-  | None -> None,e
-  | Some x -> Some (f x),e
-
 (* let rec mpath_to_pattern (m : mpath) =
  *   Pat_Fun_Symbol (Sym_Mpath, (Pat_Axiom (Axiom_Module m.m_top))
  *                              ::(List.map mpath_to_pattern m.m_args))
@@ -858,8 +848,6 @@ let myomap f (o,e) = match o with
  *
  * let rec pat_of_xpath (x : xpath) =
  *   Pat_Fun_Symbol (Sym_Xpath, [Pat_Axiom (Axiom_Op (x.x_sub,[])); pat_of_mpath x.x_top]) *)
-
-
 
 let rewrite_term e f =
   let env = assubst e.e_env.env_unienv e.e_env in
