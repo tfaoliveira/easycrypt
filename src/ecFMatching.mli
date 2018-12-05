@@ -90,4 +90,4 @@ val rewrite_term    : engine -> EcFol.form -> pattern
 
 val match_is_full   : environment -> bool
 
-val psubst_from_env : environment -> Psubst.p_subst
+val psubst_from_env : match_env -> Psubst.p_subst
