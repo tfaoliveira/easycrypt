@@ -1531,12 +1531,13 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let p   = EcTyping.trans_pattern senv (ps, ue) p in
     let p   = f_lambda (List.map (snd_map gtty) bds) p in
     let p   = Fsubst.uni (EcUnify.UniEnv.assubst ue) p in
-    let ps  = List.map (fun (id, ty) -> id, EcPattern.OGTty (Some ty))
-                (Mid.bindings !ps) in
+    let ps  = Mid.of_list (List.map (fun (id, ty) -> id, EcPattern.OGTty (Some ty))
+                             (Mid.bindings !ps)) in
+    let me  = EcFMatching.init_match_env ~metas:ps () in
     let pf  =
-      if   List.is_empty ps && EcUnify.UniEnv.closed ue
+      if   Mid.is_empty ps && EcUnify.UniEnv.closed ue
       then Some p else None in
-    let p   = EcFMatching.pattern_of_form ps p in
+    let p   = EcFMatching.pattern_of_form me p in
     let p   = EcPattern.Pat_Meta_Name (p, root, None) in
     let p   = EcPattern.Pat_Sub p in
 

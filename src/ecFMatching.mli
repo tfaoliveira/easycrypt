@@ -84,7 +84,7 @@ val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info -> engine
 
-val pattern_of_form : pbindings -> form -> pattern
+val pattern_of_form : match_env -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
 

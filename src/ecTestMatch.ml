@@ -49,7 +49,9 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let environnement = EcFMatching.mkenv ~ppe ~fmt ~mtch hyps
                         red_info_pattern red_info_axiom in
 
-  let p = pattern_of_form (List.map (snd_map EcPattern.ogty_of_gty) binds) f1 in
+  let metas = Mid.of_list (List.map (snd_map EcPattern.ogty_of_gty) binds) in
+  let me = EcFMatching.init_match_env ~metas () in
+  let p = pattern_of_form me f1 in
   (* let p = match p with
    *   | Pat_Fun_Symbol(Sym_Form_App ty,op::lp) ->
    *      let op = Pat_Red_Strat(op,fun_red) in

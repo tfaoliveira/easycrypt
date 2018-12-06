@@ -1678,8 +1678,7 @@ let search_eng e =
   with
   | NoMatches -> None
 
-let pattern_of_axiom (bindings: pbindings) (a : axiom) =
-  let sbd           = Mid.of_list bindings in
+let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
   let pat_axiom x   = Pat_Axiom x in
   let pat_form x    = Pat_Axiom (Axiom_Form x) in
   let axiom_expr e  = Axiom_Form (form_of_expr e) in
@@ -1992,7 +1991,7 @@ let pattern_of_axiom b a =
   let m = get_meta_bindings p in
   write_meta_bindings m p
 
-let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
+let pattern_of_form me f = pattern_of_axiom me.me_meta_vars (Axiom_Form f)
 
 
 let init_match_env ?mtch ?unienv ?metas () =
