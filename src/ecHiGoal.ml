@@ -842,18 +842,18 @@ let process_view1 pe tc =
 
         let (pte, ids, cutf, view) = instantiate f1 [] pte in
 
-        let evm  = !(pte.PT.ptev_env.PT.pte_ev) in
+        let evm  = !(pte.PT.ptev_env.PT.pte_mc) in
         let args = List.drop inargs pte.PT.ptev_pt.pt_args in
         let args = List.combine (List.rev ids) args in
 
         let ids =
           let for1 ((_, ty) as idty, arg) =
             match ty, arg with
-            | GTty _, PAFormula { f_node = Flocal x } when MEV.mem x `Form evm ->
-                if MEV.isset x `Form evm then None else Some (x, idty)
+            | GTty _, PAFormula { f_node = Flocal x } when EcFMatching.menv_has_form x evm ->
+                if Mid.mem x evm.EcFMatching.me_matches then None else Some (x, idty)
 
-            | GTmem _, PAMemory x when MEV.mem x `Mem evm ->
-                if MEV.isset x `Mem evm then None else Some (x, idty)
+            | GTmem _, PAMemory x when EcFMatching.menv_has_memory x evm ->
+                if Mid.mem x evm.EcFMatching.me_matches then None else Some (x, idty)
 
             | _, _ -> assert false
 
@@ -896,15 +896,25 @@ let process_view1 pe tc =
 
           let for1 evm (x, idty) id =
             match idty with
-            | _, GTty   ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
-            | _, GTmem   _ -> evm := MEV.set x (`Mem id) !evm
+            | _, GTty ty ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_form !evm (f_local id ty))
+                      (!evm).EcFMatching.me_matches }
+
+            | _, GTmem _ ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_memory !evm id)
+                      (!evm).EcFMatching.me_matches }
+
             | _, GTmodty _ -> assert false
 
           in
 
           let tc = EcLowGoal.t_intros_i_1 intros tc in
 
-          List.iter2 (for1 pte.PT.ptev_env.PT.pte_ev) ids intros;
+          List.iter2 (for1 pte.PT.ptev_env.PT.pte_mc) ids intros;
 
           let pte =
             match view with

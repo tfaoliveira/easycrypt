@@ -71,6 +71,10 @@ val menv_add_mem    : ident -> match_env -> match_env
 
 val menv_get_form   : ident -> env -> match_env -> form option
 
+val menv_has_form   : ident -> match_env -> bool
+
+val menv_has_memory : ident -> match_env -> bool
+
 val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
                       ?metas:ogty Mid.t -> unit -> match_env
 

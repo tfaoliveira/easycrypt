@@ -25,7 +25,8 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let pt_env = EcProofTerm.pt_of_uglobal pf_env hyps axiom_name in
   let f = pt_env.EcProofTerm.ptev_ax in
 
-  let unienv = pt_env.EcProofTerm.ptev_env.EcProofTerm.pte_ue in
+  let unienv =
+    !(pt_env.EcProofTerm.ptev_env.EcProofTerm.pte_mc).EcFMatching.me_unienv in
 
   let fmt    = Format.std_formatter in
   let ppe    = EcPrinting.PPEnv.ofenv env in

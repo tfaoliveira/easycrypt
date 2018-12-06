@@ -2120,3 +2120,13 @@ let menv_get_form x env menv =
       try  Some (Translate.form_of_pattern env p)
       with Translate.Invalid_Type _ -> None)
     (Mid.find_opt x menv.me_matches)
+
+(* -------------------------------------------------------------------- *)
+let menv_has_form x menv =
+  match Mid.find_opt x menv.me_meta_vars with
+  | Some (OGTty _) -> true | _ -> false
+
+(* -------------------------------------------------------------------- *)
+let menv_has_memory x menv =
+  match Mid.find_opt x menv.me_meta_vars with
+  | Some (OGTmem _) -> true | _ -> false
