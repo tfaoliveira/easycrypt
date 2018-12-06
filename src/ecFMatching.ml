@@ -1993,6 +1993,7 @@ let pattern_of_axiom b a =
 
 let pattern_of_form me f = pattern_of_axiom me.me_meta_vars (Axiom_Form f)
 
+let pattern_of_memory me m = pattern_of_axiom me.me_meta_vars (Axiom_Memory m)
 
 let init_match_env ?mtch ?unienv ?metas () =
   { me_matches   = odfl Mid.empty mtch;
