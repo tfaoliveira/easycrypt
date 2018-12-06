@@ -61,6 +61,18 @@ and nengine = {
     ne_env          : environment;
   }
 
+val menv_copy       : match_env -> match_env
+
+val menv_of_hyps    : LDecl.hyps -> match_env
+
+val menv_add_form   : ident -> EcTypes.ty -> match_env -> match_env
+
+val menv_add_mem    : ident -> match_env -> match_env
+
+val menv_get_form   : ident -> env -> match_env -> form option
+
+val menv_add_meta_var : match_env -> EcPattern.Name.t -> match_env
+
 val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
                       ?metas:ogty Mid.t -> unit -> match_env
 
@@ -89,13 +101,7 @@ val pattern_of_memory : match_env -> EcMemory.memory -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
 
-val match_is_full   : match_env -> LDecl.hyps -> bool
-
-val psubst_of_env   : match_env -> Psubst.p_subst
-val fsubst_of_env   : match_env -> env -> f_subst
-
-val add_meta_var    : EcPattern.Name.t -> ogty -> match_env -> match_env
-
+val menv_is_full    : match_env -> LDecl.hyps -> bool
 
 (* -------------------------------------------------------------------------- *)
 module Translate : sig
@@ -115,3 +121,6 @@ module Translate : sig
   val expr_of_pattern      : EcEnv.env -> pattern -> EcTypes.expr
   val cmp_of_pattern       : pattern -> hoarecmp
 end
+
+val psubst_of_menv  : match_env -> Psubst.p_subst
+val fsubst_of_menv  : match_env -> env -> f_subst

@@ -169,6 +169,9 @@ val p_assert   : pattern -> pattern
 
 val p_stmt     : pattern list -> pattern
 
+(* -------------------------------------------------------------------- *)
+val p_var_form : EcIdent.t -> ty -> pattern
+
 (* -------------------------------------------------------------------------- *)
 val p_destr_app : pattern -> pattern * pattern list
 
@@ -207,7 +210,6 @@ val p_real_inv_simpl : pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
-(* -------------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------------- *)
 module Psubst : sig
@@ -245,15 +247,12 @@ module Psubst : sig
 end
 
 (* -------------------------------------------------------------------- *)
-
 val p_betared_opt : pattern -> pattern option
-
 
 (* -------------------------------------------------------------------- *)
 val default_start_name : string
 val default_end_name   : string
 val default_name       : string
-
 
 (* -------------------------------------------------------------------------- *)
 

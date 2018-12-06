@@ -68,6 +68,42 @@ and nengine = {
     ne_env          : environment;
   }
 
+(* -------------------------------------------------------------------- *)
+let menv_copy (me : match_env) =
+  { me with me_unienv = EcUnify.UniEnv.copy me.me_unienv }
+
+(* -------------------------------------------------------------------- *)
+let menv_add_meta_var (me : match_env) (n : Name.t) : match_env =
+  { me with me_meta_vars = Sid.add n me.me_meta_vars }
+
+(* -------------------------------------------------------------------- *)
+let menv_of_hyps (hy : LDecl.hyps) =
+  { me_unienv    = EcProofTyping.unienv_of_hyps hy;
+    me_meta_vars = Sid.empty;
+    me_matches   = Mid.empty; }
+
+(* -------------------------------------------------------------------- *)
+let menv_add_form x ty menv =
+  assert (not (Mid.mem x menv.me_meta_vars));
+  { menv with
+      me_meta_vars = Sid.add x menv.me_meta_vars;
+      me_matches   = Mid.add x (p_var_form x ty) menv.me_matches; }
+
+(* -------------------------------------------------------------------- *)
+let menv_add_mem x menv =
+  assert (not (Mid.mem x menv.me_meta_vars));
+  { menv with
+      me_meta_vars = Sid.add x menv.me_meta_vars;
+      me_matches   = Mid.add x
+                       (Pat_Meta_Name (Pat_Anything, x, None))
+                       menv.me_matches; }
+
+(* -------------------------------------------------------------------- *)
+let menv_get_form x env menv =
+  obind
+    (fun p -> try Some (form_of_pattern env p) with Invalid_Type _ -> None)
+    (Mid.find_opt x menv.me_matches)
+
 (* -------------------------------------------------------------------------- *)
 let h_red_strat hyps s rp ra p a =
   match PReduction.h_red_pattern_opt hyps rp s p with
@@ -107,7 +143,7 @@ let saturate (me : match_env) =
 
 let saturate env = { env with env_match = saturate env.env_match }
 
-let psubst_of_env env =
+let psubst_of_menv env =
   let sty   = { EcTypes.ty_subst_id with
                 ts_u = EcUnify.UniEnv.assubst env.me_unienv } in
   { ps_patloc = env.me_matches; ps_sty = sty }
@@ -911,7 +947,7 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
       (orb : pbindings option) : nengine =
   let env = e.ne_env in
   let env = saturate env in
-  let subst = psubst_of_env env.env_match in
+  let subst = psubst_of_menv env.env_match in
   let p = Psubst.p_subst subst p in
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
@@ -975,7 +1011,7 @@ let ofold_list default (f : 'env -> 'p -> 'a option * 'env) (e : 'env) (lp : 'p 
 
 let rewrite_term e f =
   let env   = saturate e.e_env in
-  let subst = psubst_of_env env.env_match in
+  let subst = psubst_of_menv env.env_match in
   Psubst.p_subst subst (pat_form f)
 
 let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
@@ -1037,7 +1073,7 @@ let rec abstract_opt
          Some p', (mgty,env)
      in
      let env   = saturate e.e_env in
-     let subst = psubst_of_env env.env_match in
+     let subst = psubst_of_menv env.env_match in
      let p     = Psubst.p_subst subst p in
      let parg  = Psubst.p_subst subst parg in
      match aux (map,e.e_env) p parg with
@@ -1106,7 +1142,7 @@ let rec process (e : engine) : nengine =
      begin
        (* higher order *)
        let env = saturate e.e_env in
-       let subst = psubst_of_env env.env_match in
+       let subst = psubst_of_menv env.env_match in
        let add_ident i x =
          EcIdent.create (String.concat "$" ["s";string_of_int i]),
          Psubst.p_subst subst x in
@@ -1264,7 +1300,7 @@ let rec process (e : engine) : nengine =
               else
               let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
               let e_env = saturate e.e_env in
-              let subst = psubst_of_env e_env.env_match in
+              let subst = psubst_of_menv e_env.env_match in
               let s     = List.fold_left2 f subst pbs1 fbs1 in
               let e_pattern = Psubst.p_subst s p in
               process { e with
@@ -1501,7 +1537,7 @@ and next (m : ismatch) (e : engine) : nengine = match m with
         e.e_env.env_red_info_p, e.e_env.env_red_info_a in
       let e_env = saturate e.e_env in
       let e = { e with e_env } in
-      let subst = psubst_of_env e_env.env_match in
+      let subst = psubst_of_menv e_env.env_match in
       match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
               (Psubst.p_subst subst e.e_pattern) e.e_head with
       | None -> next_n m (e_next e)
@@ -1546,7 +1582,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | Match, Zand (before,(f,p)::after,z) ->
      let ne_env = saturate e.ne_env in
      let e      = { e with ne_env } in
-     let subst  = psubst_of_env ne_env.env_match in
+     let subst  = psubst_of_menv ne_env.env_match in
      let p      = Psubst.p_subst subst p in
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
@@ -2061,7 +2097,8 @@ let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
   | NoMatches -> None
 
 
-let match_is_full (e : match_env) h =
+(* -------------------------------------------------------------------- *)
+let menv_is_full (e : match_env) h =
   let matches   = e.me_matches in
   let meta_vars = e.me_meta_vars in
 
@@ -2073,12 +2110,9 @@ let match_is_full (e : match_env) h =
   Mid.for_all f meta_vars
 
 
-let add_meta_var (n : Name.t) (ogty : ogty) (me : match_env) : match_env =
-  { me with me_meta_vars = Mid.add n ogty me.me_meta_vars }
-
-
-let fsubst_of_env (me : match_env) (env : env) =
-  let ps = psubst_of_env me in
+(* -------------------------------------------------------------------- *)
+let fsubst_of_menv (me : match_env) (env : env) =
+  let ps = psubst_of_menv me in
   let fs = Fsubst.f_subst_init ~sty:ps.ps_sty () in
   let bind_pattern id p s =
     try Fsubst.f_bind_local s id (Translate.form_of_pattern env p)

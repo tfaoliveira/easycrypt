@@ -341,6 +341,9 @@ let p_stmt (lp : pattern list) =
   | Some l -> pat_stmt (stmt l)
   | None -> Pat_Fun_Symbol(Sym_Stmt_Seq,lp)
 
+let p_var_form x ty =
+  p_type (Pat_Meta_Name (Pat_Anything, x, None)) (GTty ty)
+
 let p_assign (plv : pattern) (pe : pattern) = match plv, pe with
   | Pat_Axiom(Axiom_Lvalue lv),Pat_Axiom(Axiom_Form f) -> begin
       match expr_of_form f with
