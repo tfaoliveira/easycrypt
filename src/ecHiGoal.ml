@@ -1522,73 +1522,45 @@ let process_pose xsym bds o p (tc : tcenv1) =
   let (env, hyps, concl) = FApi.tc1_eflat tc in
   let o = norm_rwocc o in
 
-  let root = EcIdent.create "<root>" in
-
-  let (p, ue, pf) =
+  let (ptenv, p) =
     let ps  = ref Mid.empty in
     let ue  = TTC.unienv_of_hyps hyps in
     let (senv, bds) = EcTyping.trans_binding env ue bds in
-    let p   = EcTyping.trans_pattern senv (ps, ue) p in
-    let p   = f_lambda (List.map (snd_map gtty) bds) p in
-    let p   = Fsubst.uni (EcUnify.UniEnv.assubst ue) p in
-    let ps  = Mid.of_list (List.map (fun (id, ty) -> id, EcPattern.OGTty (Some ty))
-                             (Mid.bindings !ps)) in
-    let me  = EcFMatching.init_match_env ~metas:ps () in
-    let pf  =
-      if   Mid.is_empty ps && EcUnify.UniEnv.closed ue
-      then Some p else None in
-    let p   = EcFMatching.pattern_of_form me p in
-    let p   = EcPattern.Pat_Meta_Name (p, root, None) in
-    let p   = EcPattern.Pat_Sub p in
-
-    (p, ue, pf)
+    let p = EcTyping.trans_pattern senv (ps, ue) p in
+    let ev = MEV.of_idents (Mid.keys !ps) `Form in
+    (ptenv !!tc hyps (ue, ev),
+     f_lambda (List.map (snd_map gtty) bds) p)
   in
 
-  let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
-  let fmt = Format.std_formatter in
-
-  let mtch = EcFMatching.init_match_env ~unienv:ue () in
-
-  let engine =
-    EcFMatching.mk_engine ~fmt ~ppe ~mtch
-      concl p hyps EcReduction.full_red EcReduction.full_red in
-
-  let dopat, body =
-    let module E = struct exception Failure end in
-
-    try
-      match EcFMatching.search_eng engine, pf with
-      | None, None ->
-          raise E.Failure
-      | None, Some pf ->
-          (false, pf)
-      | Some mtch, _ -> begin
-          let subst = EcFMatching.psubst_of_env mtch.EcFMatching.ne_env.EcFMatching.env_match in
-          let f = Mid.find_opt root subst.EcPattern.Psubst.ps_patloc in
-          let f = EcPattern.Psubst.p_subst subst (oget f) in
-          let f =
-            try  EcFMatching.Translate.form_of_pattern env f
-            with EcFMatching.Translate.Invalid_Type _ -> raise E.Failure in
-
-          (true, f)
-      end
-
-    with E.Failure ->
-      tc_error !!tc "cannot find an occurence"
+  let dopat =
+    try  PT.pf_find_occurence ptenv ~keyed:`Lazy ~ptn:p concl; true
+    with PT.FindOccFailure _ ->
+      if not (PT.can_concretize ptenv) then
+        if not (EcMatching.MEV.filled !(ptenv.PT.pte_ev)) then
+          tc_error !!tc "cannot find an occurence"
+        else
+          tc_error !!tc "%s - %s"
+            "cannot find an occurence"
+            "instantiate type variables manually"
+      else
+        false
   in
 
-  let x = EcIdent.create (unloc xsym) in
+  let p = PT.concretize_form ptenv p in
 
-  let letin =
-    if not dopat then concl else
-
-    let cpos =
-      try  FPosition.select_form hyps o body concl
-      with InvalidOccurence -> tacuerror "invalid occurence selector"
-    in snd (FPosition.topattern ~x cpos concl)
+  let (x, letin) =
+    match dopat with
+    | false -> (EcIdent.create (unloc xsym), concl)
+    | true  -> begin
+        let cpos =
+          try  FPosition.select_form hyps o p concl
+          with InvalidOccurence -> tacuerror "invalid occurence selector"
+        in
+          FPosition.topattern ~x:(EcIdent.create (unloc xsym)) cpos concl
+    end
   in
 
-  let letin = EcFol.f_let1 x body letin in
+  let letin = EcFol.f_let1 x p letin in
 
   FApi.t_seq
     (fun tc -> tcenv_of_tcenv1 (t_change letin tc))
