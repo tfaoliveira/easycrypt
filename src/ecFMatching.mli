@@ -90,6 +90,7 @@ val rewrite_term    : engine -> EcFol.form -> pattern
 
 val match_is_full   : match_env -> LDecl.hyps -> bool
 
-val psubst_from_env : match_env -> Psubst.p_subst
+val psubst_of_env   : match_env -> Psubst.p_subst
+val fsubst_of_env   : match_env -> env -> f_subst
 
 val add_meta_var    : match_env -> EcPattern.Name.t -> match_env

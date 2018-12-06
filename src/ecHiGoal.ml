@@ -1561,7 +1561,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
       | None, Some pf ->
           (false, pf)
       | Some mtch, _ -> begin
-          let subst = EcFMatching.psubst_from_env mtch.EcFMatching.ne_env.EcFMatching.env_match in
+          let subst = EcFMatching.psubst_of_env mtch.EcFMatching.ne_env.EcFMatching.env_match in
           let f = Mid.find_opt root subst.EcPattern.Psubst.ps_patloc in
           let f = EcPattern.Psubst.p_subst subst (oget f) in
           let f =
