@@ -49,7 +49,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
   let environnement = EcFMatching.mkenv ~ppe ~fmt ~mtch hyps
                         red_info_pattern red_info_axiom in
 
-  let p = pattern_of_form binds f1 in
+  let p = pattern_of_form (List.map (snd_map EcPattern.ogty_of_gty) binds) f1 in
   (* let p = match p with
    *   | Pat_Fun_Symbol(Sym_Form_App ty,op::lp) ->
    *      let op = Pat_Red_Strat(op,fun_red) in
@@ -95,7 +95,9 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
          List.fold_left aux acc lp
       | Pat_Instance _ -> assert false
       | Pat_Red_Strat (p,_) -> aux acc p
-      | Pat_Type (p,gty) -> aux (add_unigty acc (gty,gty)) p
+      | Pat_Type (p,gty) ->
+         aux (odfl acc (omap (fun t -> add_unigty acc (t,t))
+                          (gty_of_ogty gty))) p
       | Pat_Axiom a -> begin
           match a with
           | Axiom_Form f -> begin
@@ -182,7 +184,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
               List.fold_left add_unigty acc binds
            | Sym_Quant (_,binds) ->
               let f acc (_,ogty) = match ogty with
-                | Some (GTty ty) -> add_unity acc ty
+                | OGTty (Some ty) -> add_unity acc ty
                 | _ -> acc in
               List.fold_left f acc binds
            | Sym_Form_Let lp ->

@@ -11,7 +11,7 @@ exception NoNext
 
 type match_env = {
     me_unienv    : EcUnify.unienv;
-    me_meta_vars : Sid.t;
+    me_meta_vars : ogty Mid.t;
     me_matches   : pattern Mid.t;
   }
 
@@ -62,7 +62,7 @@ and nengine = {
   }
 
 val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
-                      ?metas:Sid.t -> unit -> match_env
+                      ?metas:ogty Mid.t -> unit -> match_env
 
 val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       ?mtch:match_env -> EcFol.form -> EcPattern.pattern ->
@@ -84,7 +84,7 @@ val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info -> engine
 
-val pattern_of_form : bindings -> form -> pattern
+val pattern_of_form : pbindings -> form -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
 
@@ -93,4 +93,24 @@ val match_is_full   : match_env -> LDecl.hyps -> bool
 val psubst_of_env   : match_env -> Psubst.p_subst
 val fsubst_of_env   : match_env -> env -> f_subst
 
-val add_meta_var    : match_env -> EcPattern.Name.t -> match_env
+val add_meta_var    : EcPattern.Name.t -> ogty -> match_env -> match_env
+
+
+(* -------------------------------------------------------------------------- *)
+module Translate : sig
+  exception Invalid_Type of string
+
+  val form_of_pattern      : EcEnv.env -> pattern -> form
+  val memory_of_pattern    : pattern -> EcMemory.memory
+  val memenv_of_pattern    : pattern -> EcMemory.memenv
+  val prog_var_of_pattern  : EcEnv.env -> pattern -> EcTypes.prog_var
+  val xpath_of_pattern     : EcEnv.env -> pattern -> EcPath.xpath
+  val mpath_of_pattern     : EcEnv.env -> pattern -> EcPath.mpath
+  val mpath_top_of_pattern : EcEnv.env -> pattern -> EcPath.mpath_top
+  val path_of_pattern      : pattern -> EcPath.path
+  val stmt_of_pattern      : EcEnv.env -> pattern -> EcModules.stmt
+  val instr_of_pattern     : EcEnv.env -> pattern -> EcModules.instr list
+  val lvalue_of_pattern    : EcEnv.env -> pattern -> EcModules.lvalue
+  val expr_of_pattern      : EcEnv.env -> pattern -> EcTypes.expr
+  val cmp_of_pattern       : pattern -> hoarecmp
+end

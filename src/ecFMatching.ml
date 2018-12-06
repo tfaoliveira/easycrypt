@@ -17,7 +17,7 @@ exception NoNext
 
 type match_env = {
     me_unienv    : EcUnify.unienv;
-    me_meta_vars : Sid.t;
+    me_meta_vars : ogty Mid.t;
     me_matches   : pattern Mid.t;
   }
 
@@ -122,8 +122,7 @@ let restore_environment (env : environment) : unit =
      let src = unienv in
      EcUnify.UniEnv.restore dst src
 
-let add_binds (env : environment) (env_current_binds : (ident * gty option) list)
-    : environment =
+let add_binds (env : environment) (env_current_binds : pbindings) : environment =
   { env with env_current_binds }
 
 type ismatch =
@@ -143,15 +142,195 @@ let mem_ty_univar (ty : ty) =
   with
   | FoundUnivar -> false
 
-let is_modty (env : environment) (m : mpath) (mt : module_type) (mr : mod_restr) =
-  let env = LDecl.toenv env.env_hyps in
-  let ms = Mod.by_mpath_opt m env in
+
+let is_modty (env : EcEnv.env) (m : mpath) (mt : module_type) (mr : mod_restr) =
+  let ms = EcEnv.Mod.by_mpath_opt m env in
   match ms with
   | None -> false
   | Some ms ->
     let ms = ms.me_sig in
     try EcTyping.check_modtype_with_restrictions env m ms mt mr; true
     with EcTyping.TymodCnvFailure _ -> false
+
+(* -------------------------------------------------------------------------- *)
+module Translate = struct
+
+  exception Invalid_Type of string
+
+  let rec form_of_pattern env (p : pattern) = match p with
+    | Pat_Anything            -> raise (Invalid_Type "formula")
+    | Pat_Meta_Name (_,_,_)   -> raise (Invalid_Type "formula")
+    | Pat_Sub _               -> raise (Invalid_Type "sub in form")
+    | Pat_Or [p]              -> form_of_pattern env p
+    | Pat_Or _                -> raise (Invalid_Type "formula")
+    | Pat_Instance _          -> assert false
+    | Pat_Red_Strat (p,_)     -> form_of_pattern env p
+    | Pat_Type (p,OGTty (Some ty)) ->
+       let f = form_of_pattern env p in
+       if ty_equal ty f.f_ty then f
+       else raise (Invalid_Type "formula")
+    | Pat_Type (p, OGTty None)-> form_of_pattern env p
+    | Pat_Type _              -> raise (Invalid_Type "formula")
+    | Pat_Axiom (Axiom_Form f)        -> f
+    | Pat_Axiom (Axiom_Local (id,ty)) -> f_local id ty
+    | Pat_Axiom _             -> raise (Invalid_Type "formula")
+    | Pat_Fun_Symbol (s, lp)  ->
+    match s, lp with
+    | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
+                                     (form_of_pattern env p2)
+                                     (form_of_pattern env p3)
+    | Sym_Form_App ty, p::lp    -> f_app (form_of_pattern env p)
+                                     (List.map (form_of_pattern env) lp) ty
+    | Sym_Form_Tuple, t         -> f_tuple (List.map (form_of_pattern env) t)
+    | Sym_Form_Proj (i,ty), [p] -> f_proj (form_of_pattern env p) i ty
+    | Sym_Form_Match ty, p::lp  -> mk_form (Fmatch (form_of_pattern env p,
+                                                    List.map (form_of_pattern env) lp,
+                                                    ty)) ty
+    | Sym_Form_Quant (q,b), [p] -> f_quant q b (form_of_pattern env p)
+    | Sym_Form_Let lp, [p1;p2]  -> f_let lp (form_of_pattern env p1)
+                                     (form_of_pattern env p2)
+    | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern env pv) ty
+                                     (memory_of_pattern pm)
+    | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula")
+    | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp) (memory_of_pattern mem)
+    | Sym_Form_Hoare_F, [pr;xp;po] ->
+       f_hoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
+    | Sym_Form_Hoare_S, [pm;pr;s;po] ->
+       f_hoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
+         (form_of_pattern env po)
+    | Sym_Form_bd_Hoare_F, [pr;xp;po;cmp;bd] ->
+       f_bdHoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
+         (cmp_of_pattern cmp) (form_of_pattern env bd)
+    | Sym_Form_bd_Hoare_S, [pm;pr;s;po;cmp;bd] ->
+       f_bdHoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
+         (form_of_pattern env po) (cmp_of_pattern cmp) (form_of_pattern env bd)
+    | Sym_Form_Equiv_F, [pr;f1;f2;po] ->
+       f_equivF (form_of_pattern env pr) (xpath_of_pattern env f1) (xpath_of_pattern env f2)
+         (form_of_pattern env po)
+    | Sym_Form_Equiv_S, [pm1;pm2;pr;s1;s2;po] ->
+       f_equivS (memenv_of_pattern pm1) (memenv_of_pattern pm2) (form_of_pattern env pr)
+         (stmt_of_pattern env s1) (stmt_of_pattern env s2) (form_of_pattern env po)
+    | Sym_Form_Eager_F, [po;s1;f1;f2;s2;pr] ->
+       f_eagerF (form_of_pattern env po) (stmt_of_pattern env s1) (xpath_of_pattern env f1)
+         (xpath_of_pattern env f2) (stmt_of_pattern env s2) (form_of_pattern env pr)
+    | Sym_Form_Pr, [pm;f;args;event] ->
+       f_pr (memory_of_pattern pm) (xpath_of_pattern env f) (form_of_pattern env args)
+         (form_of_pattern env event)
+    | Sym_App, pop::pargs ->
+       f_ty_app env (form_of_pattern env pop) (List.map (form_of_pattern env) pargs)
+    | Sym_Quant (q,pb), [p] ->
+       let f (id,ogt) = match ogt with
+         | OGTty (Some ty) -> id, GTty ty
+         | OGTmem (Some t) -> id, GTmem t
+         | OGTmodty (Some (t,r)) -> id, GTmodty (t,r)
+         | _ -> raise (Invalid_Type "formula") in
+       f_quant q (List.map f pb) (form_of_pattern env p)
+    | _ -> raise (Invalid_Type "formula")
+
+  and memory_of_pattern = function
+    | Pat_Axiom (Axiom_Memory m) -> m
+    | Pat_Type (p, OGTmem None) -> memory_of_pattern p
+    | _ -> raise (Invalid_Type "memory")
+
+  and prog_var_of_pattern env = function
+    | Pat_Axiom (Axiom_Prog_Var pv) -> pv
+    | Pat_Fun_Symbol (Sym_Form_Prog_var k, [xp]) ->
+       pv (xpath_of_pattern env xp) k
+    | _ -> raise (Invalid_Type "prog_var")
+
+  and xpath_of_pattern env = function
+    | Pat_Axiom (Axiom_Xpath xp) -> xp
+    | Pat_Fun_Symbol (Sym_Xpath, [mp;p]) ->
+       EcPath.xpath (mpath_of_pattern env mp) (path_of_pattern p)
+    | _ -> raise (Invalid_Type "xpath")
+
+  and path_of_pattern = function
+    | Pat_Axiom (Axiom_Op (p,[])) -> p
+    | _ -> raise (Invalid_Type "path")
+
+  and mpath_of_pattern env = function
+    | Pat_Axiom (Axiom_Mpath mp) -> mp
+    | Pat_Fun_Symbol (Sym_Mpath, mp::margs) ->
+       mpath (mpath_top_of_pattern env mp) (List.map (mpath_of_pattern env) margs)
+    | Pat_Type (p, OGTmodty (Some (mt, mr))) ->
+       let mp = mpath_of_pattern env p in
+       if is_modty env mp mt mr then mp
+       else raise (Invalid_Type "mpath's type does not match")
+    | _ -> raise (Invalid_Type "mpath")
+
+  and mpath_top_of_pattern _env = function
+    | Pat_Axiom (Axiom_Module m) -> m
+    | _ -> raise (Invalid_Type "mpath_top")
+
+  and memenv_of_pattern = function
+    | Pat_Axiom (Axiom_MemEnv m) -> m
+    | Pat_Type (p, OGTmem (Some mt)) -> begin
+        try (memory_of_pattern p, mt) with
+        | Invalid_Type "memory" ->
+           let (m,mt') = memenv_of_pattern p in
+           if EcMemory.mt_equal mt mt' then (m,mt)
+           else raise (Invalid_Type "memenv")
+      end
+    | _ -> raise (Invalid_Type "memenv")
+
+  and stmt_of_pattern env = function
+    | Pat_Axiom (Axiom_Stmt s) -> s
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, l) ->
+       stmt (List.flatten (List.map (instr_of_pattern env) l))
+    | _ -> raise (Invalid_Type "stmt")
+
+  and instr_of_pattern env = function
+    | Pat_Axiom (Axiom_Instr i) -> [i]
+    | Pat_Axiom (Axiom_Stmt s) -> s.s_node
+    | Pat_Fun_Symbol (Sym_Instr_Assign, [lv;e]) ->
+       [i_asgn (lvalue_of_pattern env lv, expr_of_pattern env e)]
+    | Pat_Fun_Symbol (Sym_Instr_Sample, [lv;e]) ->
+       [i_rnd  (lvalue_of_pattern env lv, expr_of_pattern env e)]
+    | Pat_Fun_Symbol (Sym_Instr_Call, f::args) ->
+       [i_call (None, xpath_of_pattern env f, List.map (expr_of_pattern env) args)]
+    | Pat_Fun_Symbol (Sym_Instr_Call_Lv, lv::f::args) ->
+       [i_call (Some (lvalue_of_pattern env lv), xpath_of_pattern env f,
+                List.map (expr_of_pattern env) args)]
+    | Pat_Fun_Symbol (Sym_Instr_If, [cond;s1;s2]) ->
+       [i_if (expr_of_pattern env cond, stmt_of_pattern env s1, stmt_of_pattern env s2)]
+    | Pat_Fun_Symbol (Sym_Instr_While, [cond;s]) ->
+       [i_while (expr_of_pattern env cond, stmt_of_pattern env s)]
+    | Pat_Fun_Symbol (Sym_Instr_Assert, [e]) ->
+       [i_assert (expr_of_pattern env e)]
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, lp) ->
+       List.flatten (List.map (instr_of_pattern env) lp)
+    | _ -> raise (Invalid_Type "instr")
+
+  and lvalue_of_pattern env = function
+    | Pat_Axiom (Axiom_Lvalue lv) -> lv
+    | Pat_Type (pv, OGTty (Some ty)) ->
+       LvVar (prog_var_of_pattern env pv, ty)
+    | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
+       let t = List.map (lvalue_of_pattern env) t in
+       let t = List.map (function LvVar (x,t) -> (x,t)
+                                | _ -> raise (Invalid_Type "lvalue tuple")) t in
+       LvTuple t
+    | _ -> raise (Invalid_Type "lvalue")
+
+  and expr_of_pattern env p =
+    try match expr_of_form (form_of_pattern env p) with
+        | Some e -> e
+        | None -> raise (Invalid_Type "expr from form")
+    with
+    | Invalid_Type s -> raise (Invalid_Type (String.concat " in " [s;"expr"]))
+
+  and cmp_of_pattern = function
+    | Pat_Axiom (Axiom_Hoarecmp cmp) -> cmp
+    | _ -> raise (Invalid_Type "hoarecmp")
+
+  let form_of_pattern env p = match p with
+    | Pat_Sub p -> begin
+        try form_of_pattern env p with
+        | Invalid_Type "sub in form" -> assert false
+      end
+    | _ -> form_of_pattern env p
+
+end
 
 module EQ : sig
   val ty        : environment -> ty -> ty -> bool
@@ -170,9 +349,10 @@ module EQ : sig
   val hoarecmp  : environment -> hoarecmp -> hoarecmp -> bool
   val gty       : environment -> gty -> gty -> bool
   val binding   : environment -> binding -> binding -> bool
-  val pbinding  : environment -> ident * gty option -> ident * gty option -> bool
+  val pbinding  : environment -> pbinding -> pbinding -> bool
   val symbol    : environment -> fun_symbol -> fun_symbol -> bool
   val is_gty    : environment -> pattern -> gty -> bool
+  val is_ogty   : environment -> pattern -> ogty -> bool
   val form      : environment -> form -> form -> bool
   val axiom     : environment -> axiom -> axiom -> bool
   val pattern   : environment -> pattern -> pattern -> bool
@@ -238,14 +418,28 @@ end = struct
     | GTty ty1, GTty ty2 -> ty env ty1 ty2
     | _,_ -> EcCoreFol.gty_equal gty1 gty2
 
+  let ogty (env : environment) (gty1 : ogty) (gty2 : ogty) : bool =
+    match gty1, gty2 with
+    | OGTty (Some ty1), OGTty (Some ty2) -> ty env ty1 ty2
+    | _,_ -> ogty_equal gty1 gty2
+
   let binding env (id1,gt1) (id2,gt2) =
     if not (id_equal id1 id2) then false
     else gty env gt1 gt2
 
   let pbinding env (id1,ogt1) (id2,ogt2) =
     match ogt1,ogt2 with
-    | Some gt1, Some gt2 -> binding env (id1,gt1) (id2,gt2)
-    | _ -> id_equal id1 id2
+    | OGTty (Some gt1), OGTty (Some gt2) ->
+       binding env (id1,GTty gt1) (id2,GTty gt2)
+    | OGTty _, OGTty _ -> id_equal id1 id2
+    | OGTty _, _ | _, OGTty _ -> false
+    | OGTmem (Some t1), OGTmem (Some t2) ->
+       binding env (id1,GTmem t1) (id2, GTmem t2)
+    | OGTmem _, OGTmem _ -> id_equal id1 id2
+    | OGTmem _, _ | _, OGTmem _ -> false
+    | OGTmodty (Some (t1,r1)), OGTmodty (Some (t2,r2)) ->
+       binding env (id1, GTmodty (t1,r1)) (id2, GTmodty (t2,r2))
+    | OGTmodty _, OGTmodty _ -> true
 
   let symbol (env : environment) (s1 : fun_symbol) (s2 : fun_symbol) : bool =
     match s1,s2 with
@@ -266,17 +460,33 @@ end = struct
 
 
   let is_gty env (p : pattern) (gty1 : gty) = match gty1, p with
-    | _, Pat_Type (_,gty2) -> gty env gty1 gty2
+    | _, Pat_Type (_,OGTty (Some ty2)) -> gty env gty1 (GTty ty2)
+    | _, Pat_Type (_, OGTmem (Some m)) -> gty env gty1 (GTmem m)
+    | _, Pat_Type (_, OGTmodty (Some (mt, mr))) -> gty env gty1 (GTmodty (mt,mr))
     | GTty ty1, (Pat_Axiom (Axiom_Form { f_ty = ty2 }
                             | Axiom_Local (_,ty2))
                  | Pat_Fun_Symbol ((Sym_Form_App ty2
                                     | Sym_Form_Proj (_,ty2)
-                                   | Sym_Form_Match ty2
-                                   | Sym_Form_Pvar ty2),_)) ->
+                                    | Sym_Form_Match ty2
+                                    | Sym_Form_Pvar ty2),_)) ->
        ty env ty1 ty2
     | GTmem _, Pat_Axiom (Axiom_MemEnv (_,mt2)) ->
        gty env gty1 (GTmem mt2)
     | GTmodty (mt,mr), Pat_Axiom (Axiom_Mpath m) ->
+       let env = LDecl.toenv env.env_hyps in
+       is_modty env m mt mr
+    | _ -> false
+
+  let is_ogty env (p : pattern) (ogty1 : ogty) = match ogty1, p with
+    | _, Pat_Type (_,ogty2) -> ogty env ogty1 ogty2
+    | OGTty None, Pat_Axiom (Axiom_Form _
+                             | Axiom_Op _
+                             | Axiom_Local _) -> true
+    | OGTty (Some ty1), p -> is_gty env p (GTty ty1)
+    | OGTmem _, Pat_Axiom (Axiom_MemEnv (_,mt2)) ->
+       ogty env ogty1 (OGTmem (Some mt2))
+    | OGTmodty (Some (mt, mr)), Pat_Axiom (Axiom_Mpath m) ->
+       let env = LDecl.toenv env.env_hyps in
        is_modty env m mt mr
     | _ -> false
 
@@ -354,9 +564,9 @@ end = struct
          List.for_all2 (pattern env) lp1 lp2
       | Pat_Sub p1, Pat_Sub p2 -> pattern env p1 p2
       | Pat_Type (p1,gt1), Pat_Type (p2,gt2) ->
-         if gty env gt1 gt2 then pattern env p1 p2 else false
+         if ogty env gt1 gt2 then pattern env p1 p2 else false
       | Pat_Type (p1, gt1), p2 | p2, Pat_Type (p1, gt1) ->
-         if is_gty env p2 gt1 then pattern env p1 p2
+         if is_ogty env p2 gt1 then pattern env p1 p2
          else false
       | Pat_Axiom a1, Pat_Axiom a2 ->
          axiom env a1 a2
@@ -573,7 +783,7 @@ end = struct
           | Sym_Quant (q1,pb1), [p1],
             Axiom_Form { f_node = Fquant (q2,b2,f1) } when q1 = q2 ->
              if not (List.for_all2 (pbinding env) pb1
-                             (List.map (fun (x,y) -> x,Some y) b2))
+                             (List.map (snd_map ogty_of_gty) b2))
              then false
              else pattern env p1 (pat_form f1)
 
@@ -595,7 +805,7 @@ let rec merge_binds bs1 bs2 env = match bs1,bs2 with
             || List.mem_assoc y env.env_current_binds ->
      None
   | (x,ty1)::r1, (y,ty2)::r2 when EQ.name x y && EQ.gty env ty1 ty2 ->
-     let env = { env with env_current_binds = env.env_current_binds @ [y, Some ty2]; }
+     let env = { env with env_current_binds = env.env_current_binds @ [y, ogty_of_gty ty2]; }
      in merge_binds r1 r2 env
   | _ -> None
 
@@ -781,7 +991,7 @@ let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
   in aux a a lb lc
 
 (* ---------------------------------------------------------------------- *)
-let add_gty (id : ident) (p : pattern) (m : gty Mid.t) =
+let add_ogty (id : ident) (p : pattern) (m : ogty Mid.t) =
   match p with
   | Pat_Type (_,gty) -> Mid.add id gty m
   | Pat_Axiom (Axiom_Local (_,ty))
@@ -790,15 +1000,15 @@ let add_gty (id : ident) (p : pattern) (m : gty Mid.t) =
     | Pat_Fun_Symbol (Sym_Form_Proj (_,ty),_)
     | Pat_Fun_Symbol (Sym_Form_Match ty,_)
     | Pat_Fun_Symbol (Sym_Form_Pvar ty,_)
-    -> Mid.add id (GTty ty) m
-  | Pat_Axiom (Axiom_MemEnv (_,mt)) -> Mid.add id (GTmem mt) m
+    -> Mid.add id (OGTty (Some ty)) m
+  | Pat_Axiom (Axiom_MemEnv (_,mt)) -> Mid.add id (OGTmem (Some mt)) m
   | _ -> m
 
 let rec abstract_opt
           (other_args : Sid.t)
-          (ep : pattern option * gty Mid.t * engine)
+          (ep : pattern option * ogty Mid.t * engine)
           ((arg,parg) : Name.t * pattern) :
-          pattern option * gty Mid.t * engine =
+          pattern option * ogty Mid.t * engine =
   match ep with
   | None, map, e -> None, map, e
   | Some p, map, e ->
@@ -810,7 +1020,7 @@ let rec abstract_opt
             when Mid.mem n other_args -> false, mgty
        | _,_ ->
           if EQ.pattern env p pp
-          then true, (add_gty arg pp (add_gty arg p mgty))
+          then true, (add_ogty arg pp (add_ogty arg p mgty))
           else false, mgty
      in
      let aux (mgty,env) p a =
@@ -865,7 +1075,7 @@ let rec process (e : engine) : nengine =
          e_continuation = Zor (e.e_continuation,le,e_next e);
        }
 
-  | Pat_Type (p,ty), o2 when EQ.is_gty e.e_env (pat_axiom o2) ty ->
+  | Pat_Type (p,ty), o2 when EQ.is_ogty e.e_env (pat_axiom o2) ty ->
      process { e with e_pattern = p; }
 
   | Pat_Type _, _ -> next NoMatch e
@@ -912,7 +1122,7 @@ let rec process (e : engine) : nengine =
          (* FIXME : add strategies to adapt the order of the arguments *)
          List.fold_left (abstract (Sid.of_list (List.map fst args)))
            (Psubst.p_subst subst (Pat_Axiom axiom),Mid.empty,e) args in
-       let f (name,_) = (name,Mid.find_opt name map) in
+       let f (name,_) = (name,Mid.find name map) in
        let args = List.map f args in
        (* let pat = omap (p_quant Llambda args) pat in *)
        let pat = p_quant Llambda args pat in
@@ -1450,7 +1660,7 @@ and sub_engines (e : engine) (p : pattern) : engine list =
             Axiom_Form pr.pr_args;
             Axiom_Form pr.pr_event]
       | Fquant (_,bs,f) ->
-         [sub_engine e p (List.map (fun (x,y) -> (x,Some y)) bs) (Axiom_Form f)]
+         [sub_engine e p (List.map (snd_map ogty_of_gty) bs) (Axiom_Form f)]
       | Fglob (mp,mem) ->
          List.map (sub_engine e p e.e_env.env_current_binds)
            [Axiom_Module mp.m_top;Axiom_Memory mem]
@@ -1468,19 +1678,19 @@ let search_eng e =
   with
   | NoMatches -> None
 
-let pattern_of_axiom (bindings: bindings) (a : axiom) =
+let pattern_of_axiom (bindings: pbindings) (a : axiom) =
   let sbd           = Mid.of_list bindings in
   let pat_axiom x   = Pat_Axiom x in
   let pat_form x    = Pat_Axiom (Axiom_Form x) in
   let axiom_expr e  = Axiom_Form (form_of_expr e) in
   let axiom_mpath m = Axiom_Mpath m in
   let pat_instr i   = Pat_Axiom (Axiom_Instr i) in
-  let typ ty p      = Pat_Type(p,GTty ty) in
+  let typ ty p      = Pat_Type(p,OGTty (Some ty)) in
 
   let rec aux a     = match a with
     | Axiom_Local (id,ty) ->
        if Mid.mem id sbd
-       then Some (p_type (Pat_Meta_Name(Pat_Anything,id,None)) (GTty ty))
+       then Some (typ ty (Pat_Meta_Name(Pat_Anything,id,None)))
        else Some (pat_axiom a)
     | Axiom_Form f -> begin
         let fty = f.f_ty in
@@ -1509,7 +1719,7 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
         | Fint _ -> None
         | Flocal id ->
            if Mid.mem id sbd
-           then Some (p_type (Pat_Meta_Name(Pat_Anything,id,None)) (GTty fty))
+           then Some (typ fty (Pat_Meta_Name(Pat_Anything,id,None)))
            else if mem_ty_univar fty
            then Some (pat_local id fty)
            else None
@@ -1520,26 +1730,26 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
            omap (function [p1;p2] -> p_glob p1 p2 | _ -> assert false)
              (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
         | Fop (op,lty) ->
-           Some(p_type (pat_op op lty) (GTty fty))
+           Some(typ fty (pat_op op lty))
         | Fapp ({ f_node = Flocal id },args) when Mid.mem id sbd ->
            let p =
              p_app (Pat_Meta_Name(Pat_Anything,id,None))
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
-           Some (p_type p (GTty fty))
+           Some (typ fty p)
         | Fapp(fop,args) ->
            if mem_ty_univar fty
            then
              let pargs = List.map (fun arg -> odfl (pat_form arg) (aux_f arg)) args in
              let pop = odfl (pat_form fop) (aux_f fop) in
-             Some (p_type (p_app pop pargs (Some fty)) (GTty fty))
+             Some (typ fty (p_app pop pargs (Some fty)))
            else
              omap (function
                  | pop::pargs ->
-                    p_type (p_app pop pargs (Some fty)) (GTty fty)
+                    typ fty (p_app pop pargs (Some fty))
                  | _ -> assert false)
                (omap_list pat_form aux_f (fop::args))
         | Ftuple args ->
-           omap (fun l -> p_type (p_tuple l) (GTty fty))
+           omap (fun l -> typ fty (p_tuple l))
              (omap_list pat_form aux_f args)
         | Fproj(f1,i) ->
            if mem_ty_univar fty
@@ -1624,7 +1834,7 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
         *   | Some gty -> gty
         *   | None -> assert false in
         * Some (Pat_Type(Pat_Meta_Name(Pat_Anything, fst m),gty)) *)
-       Some (p_type (Pat_Meta_Name(Pat_Anything, fst m, None)) (GTmem (snd m)))
+       Some (p_type (Pat_Meta_Name(Pat_Anything, fst m, None)) (OGTmem (Some (snd m))))
     | Axiom_Prog_Var pv ->
        omap (fun x -> p_prog_var x pv.pv_kind) (aux (Axiom_Xpath pv.pv_name))
     | Axiom_Op _ -> None
@@ -1672,11 +1882,11 @@ let pattern_of_axiom (bindings: bindings) (a : axiom) =
     | Axiom_Lvalue lv -> begin
         match lv with
         | LvVar (pv,ty) ->
-           omap (fun x -> p_type x (GTty ty)) (aux (Axiom_Prog_Var pv))
+           omap (fun x -> typ ty x) (aux (Axiom_Prog_Var pv))
         | LvTuple l ->
-           let default (pv,ty) = p_type (pat_pv pv) (GTty ty) in
+           let default (pv,ty) = typ ty (pat_pv pv) in
            let aux (pv,ty) =
-             omap (fun x -> p_type x (GTty ty)) (aux (Axiom_Prog_Var pv)) in
+             omap (fun x -> typ ty x) (aux (Axiom_Prog_Var pv)) in
            omap (fun l -> p_tuple l) (omap_list default aux l)
         | LvMap _ -> (* FIXME *) assert false
       end
@@ -1698,13 +1908,39 @@ let rec prefix_binds bs1 bs2 =
 
 let rec prefix_pbinds bs1 bs2 =
   let rec aux acc bs1 bs2 = match bs1,bs2 with
-  | (x,Some ty1)::r1, (y,Some ty2)::r2 when EQ.name x y && gty_equal ty1 ty2 ->
-     aux ((x,Some ty1)::acc) r1 r2
-  | (x,None)::r1, (y,Some ty1)::r2 | (x,Some ty1)::r1, (y,None)::r2
-       when EQ.name x y ->
-     aux ((x,Some ty1)::acc) r1 r2
-  | (x,None)::r1, (y,None)::r2 when EQ.name x y ->
-     aux ((x,None)::acc) r1 r2
+  | (x,OGTty (Some ty1))::r1, (y,OGTty (Some ty2))::r2
+       when EQ.name x y && gty_equal (GTty ty1) (GTty ty2) ->
+     aux ((x,OGTty (Some ty1))::acc) r1 r2
+  | (x,OGTty t1)::r1, (y,OGTty t2)::r2 when EQ.name x y ->
+     let t = match t1 with
+       | Some _ -> t1
+       | None ->
+       match t2 with
+       | Some _ -> t2
+       | None -> None in
+     aux ((x,OGTty t)::acc) r1 r2
+  | (x,OGTmem (Some ty1))::r1, (y,OGTmem (Some ty2))::r2
+       when EQ.name x y && gty_equal (GTmem ty1) (GTmem ty2) ->
+     aux ((x,OGTmem (Some ty1))::acc) r1 r2
+  | (x,OGTmem t1)::r1, (y,OGTmem t2)::r2 when EQ.name x y ->
+     let t = match t1 with
+       | Some _ -> t1
+       | None ->
+       match t2 with
+       | Some _ -> t2
+       | None -> None in
+     aux ((x,OGTmem t)::acc) r1 r2
+  | (x,OGTmodty (Some (t1,mr1)))::r1, (y,OGTmodty (Some (t2,mr2)))::r2
+       when EQ.name x y && gty_equal (GTmodty (t1,mr1)) (GTmodty (t2,mr2)) ->
+     aux ((x,OGTmodty (Some (t1,mr1)))::acc) r1 r2
+  | (x,OGTmodty t1)::r1, (y,OGTmodty t2)::r2 when EQ.name x y ->
+     let t = match t1 with
+       | Some _ -> t1
+       | None ->
+       match t2 with
+       | Some _ -> t2
+       | None -> None in
+     aux ((x,OGTmodty t)::acc) r1 r2
   | _ -> List.rev acc
   in aux [] bs1 bs2
 
@@ -1725,11 +1961,11 @@ let get_meta_bindings (p : pattern) : pbindings Mid.t =
   | Pat_Red_Strat (p,_) -> aux current_bds meta_bds p
   | Pat_Type (p,_) -> aux current_bds meta_bds p
   | Pat_Axiom (Axiom_Form { f_node = Fquant (_,b,f) } ) ->
-     let b = List.map (fun (x,y) -> (x,Some y)) b in
+     let b = List.map (snd_map ogty_of_gty) b in
      aux (current_bds @ b) meta_bds (pat_form f)
   | Pat_Axiom _ -> meta_bds
   | Pat_Fun_Symbol (Sym_Form_Quant (_,b),[p]) ->
-     let b = List.map (fun (x,y) -> (x,Some y)) b in
+     let b = List.map (snd_map ogty_of_gty) b in
      aux (current_bds @ b) meta_bds p
   (* | Pat_Fun_Symbol (Sym_Form_Pr, [pm;pf;pargs;pevent]) ->
    *    let meta_bds = aux (current_bds @ [mhr,None]) meta_bds pevent in
@@ -1762,7 +1998,7 @@ let pattern_of_form b f = pattern_of_axiom b (Axiom_Form f)
 let init_match_env ?mtch ?unienv ?metas () =
   { me_matches   = odfl Mid.empty mtch;
     me_unienv    = odfl (EcUnify.UniEnv.create None) unienv;
-    me_meta_vars = odfl Sid.empty metas;
+    me_meta_vars = odfl Mid.empty metas;
   }
 
 (* val mkengine    : base -> engine *)
@@ -1788,14 +2024,7 @@ let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps)
 let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
   { e_head = a;
     e_pattern = p;
-    e_env = {
-        env with
-        env_match = {
-          env.env_match with
-          me_meta_vars =
-            Sid.union env.env_match.me_meta_vars
-              (Mid.map (fun _ -> ()) (FV.pattern0 env.env_match env.env_hyps p)) };
-      };
+    e_env = env;
     e_continuation = ZTop;
   }
 
@@ -1819,19 +2048,7 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps env_red_info_p env_red_info_a
                                      me_unienv    = EcUnify.UniEnv.create None;
                                    } mtch
         }
-    } in
-  { e with
-    e_env = {
-      e.e_env with
-      env_match = {
-        e.e_env.env_match with
-        me_meta_vars =
-          Sid.union e.e_env.env_match.me_meta_vars
-            (Mid.map (fun _ -> ()) (FV.pattern0 e.e_env.env_match
-                                      e.e_env.env_hyps e_pattern));
-      };
-    };
-  }
+    } in e
 
 let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
       (red_info_p : EcReduction.reduction_info)
@@ -1848,27 +2065,27 @@ let match_is_full (e : match_env) h =
   let matches   = e.me_matches in
   let meta_vars = e.me_meta_vars in
 
-  let f n = match Mid.find_opt n matches with
+  let f n _ = match Mid.find_opt n matches with
     | None   -> false
     | Some p -> let fv = FV.pattern0 e h p in
-                Mid.for_all (fun n _ -> not (Sid.mem n meta_vars)) fv in
+                Mid.for_all (fun n _ -> not (Mid.mem n meta_vars)) fv in
 
-  Sid.for_all f meta_vars
+  Mid.for_all f meta_vars
 
 
-let add_meta_var (me : match_env) (n : Name.t) : match_env =
-  { me with me_meta_vars = Sid.add n me.me_meta_vars }
+let add_meta_var (n : Name.t) (ogty : ogty) (me : match_env) : match_env =
+  { me with me_meta_vars = Mid.add n ogty me.me_meta_vars }
 
 
 let fsubst_of_env (me : match_env) (env : env) =
   let ps = psubst_of_env me in
   let fs = Fsubst.f_subst_init ~sty:ps.ps_sty () in
   let bind_pattern id p s =
-    try Fsubst.f_bind_local s id (form_of_pattern env p)
-    with Invalid_Type _ ->
-    try Fsubst.f_bind_mem s id (memory_of_pattern p)
-    with Invalid_Type _ ->
-    try Fsubst.f_bind_mod s id (mpath_of_pattern env p)
-    with Invalid_Type _ -> s in
+    try Fsubst.f_bind_local s id (Translate.form_of_pattern env p)
+    with Translate.Invalid_Type _ ->
+    try Fsubst.f_bind_mem s id (Translate.memory_of_pattern p)
+    with Translate.Invalid_Type _ ->
+    try Fsubst.f_bind_mod s id (Translate.mpath_of_pattern env p)
+    with Translate.Invalid_Type _ -> s in
 
   Mid.fold bind_pattern me.me_matches fs

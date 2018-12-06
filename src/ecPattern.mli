@@ -12,7 +12,14 @@ module MName = Mid
 (* -------------------------------------------------------------------------- *)
 type meta_name = Name.t
 
-type pbindings = (ident * gty option) list
+
+type ogty =
+  | OGTty    of ty option
+  | OGTmodty of (module_type * mod_restr) option
+  | OGTmem   of EcMemory.memtype option
+
+type pbinding  = ident * ogty
+type pbindings = pbinding list
 
 type axiom =
   | Axiom_Form     of form
@@ -80,7 +87,7 @@ type pattern =
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
   | Pat_Axiom      of axiom
-  | Pat_Type       of pattern * gty
+  | Pat_Type       of pattern * ogty
 
 and reduction_strategy =
   EcReduction.reduction_info -> EcReduction.reduction_info ->
@@ -92,6 +99,11 @@ val pat_fv : pattern -> int Mid.t
 
 (* -------------------------------------------------------------------------- *)
 val p_equal    : pattern -> pattern -> bool
+
+val ogty_equal : ogty -> ogty -> bool
+val ogty_of_gty : gty -> ogty
+val gty_of_ogty : ogty -> gty option
+
 val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
 (* -------------------------------------------------------------------------- *)
 
@@ -115,23 +127,6 @@ val pat_memenv    : EcMemory.memenv -> pattern
 val pat_cmp       : hoarecmp        -> pattern
 
 (* -------------------------------------------------------------------------- *)
-exception Invalid_Type of string
-
-val form_of_pattern      : EcEnv.env -> pattern -> form
-val memory_of_pattern    : pattern -> memory
-val memenv_of_pattern    : pattern -> memenv
-val prog_var_of_pattern  : EcEnv.env -> pattern -> prog_var
-val xpath_of_pattern     : EcEnv.env -> pattern -> xpath
-val mpath_of_pattern     : EcEnv.env -> pattern -> mpath
-val mpath_top_of_pattern : EcEnv.env -> pattern -> mpath_top
-val path_of_pattern      : pattern -> path
-val stmt_of_pattern      : EcEnv.env -> pattern -> stmt
-val instr_of_pattern     : EcEnv.env -> pattern -> instr list
-val lvalue_of_pattern    : EcEnv.env -> pattern -> lvalue
-val expr_of_pattern      : EcEnv.env -> pattern -> expr
-val cmp_of_pattern       : pattern -> hoarecmp
-
-(* -------------------------------------------------------------------------- *)
 
 val p_true    : pattern
 val p_false   : pattern
@@ -143,7 +138,7 @@ val p_prog_var     : pattern -> pvar_kind -> pattern
 val p_lvalue_var   : pattern -> ty -> pattern
 val p_lvalue_tuple : pattern list -> pattern
 
-val p_type     : pattern -> gty -> pattern
+val p_type     : pattern -> ogty -> pattern
 
 val p_let      : lpattern -> pattern -> pattern -> pattern
 val p_if       : pattern -> pattern -> pattern -> pattern
@@ -151,7 +146,7 @@ val p_proj     : pattern -> int -> ty -> pattern
 val p_tuple    : pattern list -> pattern
 val p_app      : pattern -> pattern list -> ty option -> pattern
 val p_f_quant  : quantif -> bindings -> pattern -> pattern
-val p_quant    : quantif -> (EcIdent.t * EcFol.gty option) list -> pattern -> pattern
+val p_quant    : quantif -> pbindings -> pattern -> pattern
 val p_pvar     : pattern -> ty -> pattern -> pattern
 val p_glob     : pattern -> pattern -> pattern
 val p_match    : pattern -> ty -> pattern list -> pattern
@@ -243,8 +238,8 @@ module Psubst : sig
   val add_binding   : p_subst -> binding -> p_subst * binding
   val add_bindings  : p_subst -> bindings -> p_subst * bindings
 
-  val add_pbinding  : p_subst -> ident * gty option -> p_subst * (ident * gty option)
-  val add_pbindings : p_subst -> (ident * gty option) list -> p_subst * ((ident * gty option) list)
+  val add_pbinding  : p_subst -> pbinding -> p_subst * pbinding
+  val add_pbindings : p_subst -> pbindings -> p_subst * pbindings
 
   val p_subst       : p_subst -> pattern -> pattern
 end

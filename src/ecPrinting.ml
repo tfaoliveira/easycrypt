@@ -3254,8 +3254,12 @@ and pp_pattern ppe fmt p = match p with
      | Sym_Quant (q,binds), [pat] ->
         let subppe = PPEnv.add_locals ppe (List.map fst binds) in
         let pp_my_bind ppe fmt (b,oty) = match oty with
-          | Some (ty) ->
-             (snd (pp_binding ppe ([b],ty))) fmt
+          | OGTty (Some ty) ->
+             (snd (pp_binding ppe ([b], GTty ty))) fmt
+          | OGTmem (Some t) ->
+             (snd (pp_binding ppe ([b], GTmem t))) fmt
+          | OGTmodty (Some (t,r)) ->
+             (snd (pp_binding ppe ([b], GTmodty (t,r)))) fmt
           | _ -> pp_mem ppe fmt b in
         let pp fmt () =
           match q with
