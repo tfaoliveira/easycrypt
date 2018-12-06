@@ -20,7 +20,7 @@ type environment = {
     env_match            : match_env;
     env_red_info_p       : EcReduction.reduction_info;
     env_red_info_a       : EcReduction.reduction_info;
-    env_restore_unienv   : EcUnify.unienv option;
+    env_restore_unienv   : EcUnify.unienv option ref;
     env_current_binds    : pbindings;
     env_meta_restr_binds : pbindings Mid.t;
     env_fmt              : Format.formatter;
@@ -91,3 +91,5 @@ val rewrite_term    : engine -> EcFol.form -> pattern
 val match_is_full   : match_env -> LDecl.hyps -> bool
 
 val psubst_from_env : match_env -> Psubst.p_subst
+
+val add_meta_var    : match_env -> EcPattern.Name.t -> match_env
