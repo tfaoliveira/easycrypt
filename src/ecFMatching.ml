@@ -2109,7 +2109,6 @@ let menv_is_full (e : match_env) h =
 
   Mid.for_all f meta_vars
 
-
 (* -------------------------------------------------------------------- *)
 let fsubst_of_menv (me : match_env) (env : env) =
   let ps = psubst_of_menv me in
