@@ -73,36 +73,26 @@ let menv_copy (me : match_env) =
   { me with me_unienv = EcUnify.UniEnv.copy me.me_unienv }
 
 (* -------------------------------------------------------------------- *)
-let menv_add_meta_var (me : match_env) (n : Name.t) : match_env =
-  { me with me_meta_vars = Sid.add n me.me_meta_vars }
-
-(* -------------------------------------------------------------------- *)
 let menv_of_hyps (hy : LDecl.hyps) =
   { me_unienv    = EcProofTyping.unienv_of_hyps hy;
-    me_meta_vars = Sid.empty;
+    me_meta_vars = Mid.empty;
     me_matches   = Mid.empty; }
 
 (* -------------------------------------------------------------------- *)
 let menv_add_form x ty menv =
   assert (not (Mid.mem x menv.me_meta_vars));
   { menv with
-      me_meta_vars = Sid.add x menv.me_meta_vars;
+      me_meta_vars = Mid.add x (OGTty (Some ty)) menv.me_meta_vars;
       me_matches   = Mid.add x (p_var_form x ty) menv.me_matches; }
 
 (* -------------------------------------------------------------------- *)
 let menv_add_mem x menv =
   assert (not (Mid.mem x menv.me_meta_vars));
   { menv with
-      me_meta_vars = Sid.add x menv.me_meta_vars;
+      me_meta_vars = Mid.add x (OGTmem None) menv.me_meta_vars;
       me_matches   = Mid.add x
                        (Pat_Meta_Name (Pat_Anything, x, None))
                        menv.me_matches; }
-
-(* -------------------------------------------------------------------- *)
-let menv_get_form x env menv =
-  obind
-    (fun p -> try Some (form_of_pattern env p) with Invalid_Type _ -> None)
-    (Mid.find_opt x menv.me_matches)
 
 (* -------------------------------------------------------------------------- *)
 let h_red_strat hyps s rp ra p a =
@@ -2122,3 +2112,11 @@ let fsubst_of_menv (me : match_env) (env : env) =
     with Translate.Invalid_Type _ -> s in
 
   Mid.fold bind_pattern me.me_matches fs
+
+(* -------------------------------------------------------------------- *)
+let menv_get_form x env menv =
+  obind
+    (fun p ->
+      try  Some (Translate.form_of_pattern env p)
+      with Translate.Invalid_Type _ -> None)
+    (Mid.find_opt x menv.me_matches)

@@ -250,14 +250,30 @@ let pattern_form ?name hyps ~ptn subject =
 let pf_form_match (pt : pt_env) ?mode ~ptn subject =
   let mode = mode |> odfl EcMatching.fmrigid in
 
+  let ri =
+    if mode.fm_delta then
+      if   mode.fm_conv
+      then EcReduction.full_red
+      else EcReduction.{ no_red with
+               delta_p = (fun _ -> true);
+               delta_h = (fun _ -> true); }
+    else
+      if   mode.fm_conv
+      then EcReduction.nodelta
+      else EcReduction.no_red
+  in
+
   try
-    let (ue, ev) =
-      EcMatching.f_match_core mode pt.pte_hy
-        (pt.pte_ue, !(pt.pte_ev)) ~ptn subject
-    in
-      EcUnify.UniEnv.restore ~dst:pt.pte_ue ~src:ue;
-      pt.pte_ev := ev
-  with EcMatching.MatchFailure as exn ->
+    let ptn = EcFMatching.pattern_of_form !(pt.pte_mc) ptn in
+    let eng =
+      EcFMatching.mk_engine
+        ~mtch:!(pt.pte_mc) subject ptn pt.pte_hy
+        ri ri in
+
+    match EcFMatching.search_eng eng with
+    | None     -> raise EcMatching.MatchFailure
+    | Some eng -> pt.pte_mc := eng.ne_env.env_match
+  with EcMatching.MatchFailure  as exn ->
     (* FIXME: should we check for empty inters. with ecmap? *)
     if not (EcReduction.is_conv pt.pte_hy ptn subject) then
       raise exn

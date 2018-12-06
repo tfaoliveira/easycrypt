@@ -33,7 +33,7 @@ and invalid_arg_form =
   | IAF_Mismatch of (ty * ty)
   | IAF_TyError of env * EcTyping.tyerror
 
-type pterror = (LDecl.hyps * EcUnify.unienv * mevmap) * apperror
+type pterror = (LDecl.hyps * EcFMatching.match_env) * apperror
 
 exception ProofTermError of pterror
 
@@ -41,8 +41,7 @@ exception ProofTermError of pterror
 type pt_env = {
   pte_pe : proofenv;         (* proofenv of this proof-term *)
   pte_hy : LDecl.hyps;       (* local context *)
-  pte_ue : EcUnify.unienv;   (* unification env. *)
-  pte_ev : mevmap ref;       (* metavar env. *)
+  pte_mc : EcFMatching.match_env ref;
 }
 
 type pt_ev = {
@@ -146,7 +145,7 @@ val concretize_e_arg  : cptenv -> pt_arg -> pt_arg
 (* PTEnv constructor *)
 val ptenv_of_penv : LDecl.hyps -> proofenv -> pt_env
 
-val ptenv : proofenv -> LDecl.hyps -> (EcUnify.unienv * mevmap) -> pt_env
+val ptenv : proofenv -> LDecl.hyps -> EcFMatching.match_env -> pt_env
 val copy  : pt_env -> pt_env
 
 (* Proof-terms construction from components *)

@@ -517,8 +517,9 @@ let process_delta ?target (s, o, p) tc =
   (* Continue with matching based unfolding *)
   let (ptenv, p) =
     let (ps, ue), p = TTC.tc1_process_pattern tc p in
-    let ev = MEV.of_idents (Mid.keys ps) `Form in
-      (ptenv !!tc hyps (ue, ev), p)
+    let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) ps in
+    let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+    (ptenv !!tc hyps menv, p)
   in
 
   let (tvi, tparams, body, args) =
@@ -864,12 +865,22 @@ let process_view1 pe tc =
 
           let for1 evm (x, idty) =
             match idty with
-            | id, GTty    ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
-            | id, GTmem   _  -> evm := MEV.set x (`Mem id) !evm
+            | id, GTty ty ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_form !evm (f_local id ty))
+                      (!evm).EcFMatching.me_matches }
+
+            | id, GTmem _  ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_memory !evm id)
+                      (!evm).EcFMatching.me_matches }
+
             | _ , GTmodty _  -> assert false
           in
 
-          List.iter (for1 ptenv.PT.pte_ev) ids;
+          List.iter (for1 ptenv.PT.pte_mc) ids;
 
           if not (PT.can_concretize ptenv) then
             tc_error !!tc "cannot infer all type variables";
@@ -1403,8 +1414,9 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
         | _ ->
           let (ptenv, p) =
             let (ps, ue), p = TTC.tc1_process_pattern tc pf in
-            let ev = MEV.of_idents (Mid.keys ps) `Form in
-              (ptenv !!tc hyps (ue, ev), p)
+            let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) ps in
+            let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+            (ptenv !!tc hyps menv, p)
           in
 
           (try  PT.pf_find_occurence ptenv ~ptn:p concl
@@ -1527,21 +1539,17 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let ue  = TTC.unienv_of_hyps hyps in
     let (senv, bds) = EcTyping.trans_binding env ue bds in
     let p = EcTyping.trans_pattern senv (ps, ue) p in
-    let ev = MEV.of_idents (Mid.keys !ps) `Form in
-    (ptenv !!tc hyps (ue, ev),
-     f_lambda (List.map (snd_map gtty) bds) p)
+    let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) !ps in
+    let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+    (ptenv !!tc hyps menv,
+          f_lambda (List.map (snd_map gtty) bds) p)
   in
 
   let dopat =
     try  PT.pf_find_occurence ptenv ~keyed:`Lazy ~ptn:p concl; true
     with PT.FindOccFailure _ ->
       if not (PT.can_concretize ptenv) then
-        if not (EcMatching.MEV.filled !(ptenv.PT.pte_ev)) then
-          tc_error !!tc "cannot find an occurence"
-        else
-          tc_error !!tc "%s - %s"
-            "cannot find an occurence"
-            "instantiate type variables manually"
+        tc_error !!tc "cannot find an occurence"
       else
         false
   in
@@ -1703,7 +1711,7 @@ let process_elimT qs tc =
   in
 
   begin
-    let ue = pt.ptev_env.pte_ue in
+    let ue = !(pt.ptev_env.pte_mc).EcFMatching.me_unienv in
     try  EcUnify.unify (LDecl.toenv hyps) ue (tfun pfty tbool) xpty
     with EcUnify.UnificationFailure _ -> noelim ()
   end;
@@ -1804,7 +1812,7 @@ let process_case ?(doeq = false) gp tc =
 (* -------------------------------------------------------------------- *)
 let process_exists args (tc : tcenv1) =
   let hyps = FApi.tc1_hyps tc in
-  let pte  = (TTC.unienv_of_hyps hyps, EcMatching.MEV.empty) in
+  let pte  = EcFMatching.menv_of_hyps hyps in
   let pte  = PT.ptenv !!tc (FApi.tc1_hyps tc) pte in
 
   let for1 concl arg =
