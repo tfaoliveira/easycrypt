@@ -591,25 +591,38 @@ end = struct
       | Pat_Sub p1, Pat_Sub p2 -> pattern env p1 p2
       | Pat_Type (p1,gt1), Pat_Type (p2,gt2) ->
          if ogty env gt1 gt2 then pattern env p1 p2 else false
-      | Pat_Type (p1, gt1), p2 | p2, Pat_Type (p1, gt1) ->
+      | Pat_Type (p1, gt1), p2 ->
          if is_ogty env p2 gt1 then pattern env p1 p2
+         else false
+      | p1, Pat_Type (p2, gt2) ->
+         if is_ogty env p1 gt2 then pattern env p1 p2
          else false
       | Pat_Axiom a1, Pat_Axiom a2 ->
          axiom env a1 a2
       | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
          if symbol env s1 s2 then List.for_all2 (pattern env) lp1 lp2
          else false
-      | Pat_Meta_Name (p1,n1,b1), Pat_Meta_Name (p2,n2,b2) when name n1 n2 ->
+      | Pat_Meta_Name (p1,n1,b1), Pat_Meta_Name (p2,n2,b2) ->
+         if not (name n1 n2) then false
+         else
          let eq = match b1, b2 with
            | Some b1, Some b2 -> List.for_all2 (pbinding env) b1 b2
            | _                -> true in
          if eq then pattern env p1 p2 else false
-      | Pat_Meta_Name (_,n1,_), p2' | p2', Pat_Meta_Name (_,n1,_) -> begin
+      | Pat_Meta_Name (_,n1,_), p2' -> begin
           match Mid.find_opt n1 (saturate env).env_match.me_matches with
-          | Some p1' -> pattern env p1' p2'
+          | Some p1' ->
+             if pattern env p1 p1' then false
+             else pattern env p1' p2'
           | None -> false
         end
-
+      | p1', Pat_Meta_Name (_,n2,_) -> begin
+          match Mid.find_opt n2 (saturate env).env_match.me_matches with
+          | Some p2' ->
+             if pattern env p2 p2' then false
+             else pattern env p1' p2'
+          | None -> false
+        end
       | Pat_Axiom a, Pat_Fun_Symbol (s,lp)
         | Pat_Fun_Symbol (s,lp), Pat_Axiom a -> begin
           match s, lp, a with
@@ -944,9 +957,13 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
     let me_matches =
       match Mid.find_opt name e.ne_env.env_match.me_matches with
       | None -> Mid.add name p e.ne_env.env_match.me_matches
-      | Some p' -> if EQ.pattern e.ne_env p p'
-                   then e.ne_env.env_match.me_matches
-                   else raise CannotUnify in
+      | Some p' ->
+         (* raise CannotUnify *)
+         let p' = Psubst.p_subst subst p' in
+         if EQ.pattern e.ne_env p p'
+         then e.ne_env.env_match.me_matches
+         else raise CannotUnify
+    in
     { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
   else raise CannotUnify
 
