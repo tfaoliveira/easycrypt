@@ -82,17 +82,13 @@ let menv_of_hyps (hy : LDecl.hyps) =
 let menv_add_form x ty menv =
   assert (not (Mid.mem x menv.me_meta_vars));
   { menv with
-      me_meta_vars = Mid.add x (OGTty (Some ty)) menv.me_meta_vars;
-      me_matches   = Mid.add x (p_var_form x ty) menv.me_matches; }
+      me_meta_vars = Mid.add x (OGTty (Some ty)) menv.me_meta_vars; }
 
 (* -------------------------------------------------------------------- *)
 let menv_add_mem x menv =
   assert (not (Mid.mem x menv.me_meta_vars));
   { menv with
-      me_meta_vars = Mid.add x (OGTmem None) menv.me_meta_vars;
-      me_matches   = Mid.add x
-                       (Pat_Meta_Name (Pat_Anything, x, None))
-                       menv.me_matches; }
+      me_meta_vars = Mid.add x (OGTmem None) menv.me_meta_vars; }
 
 (* -------------------------------------------------------------------------- *)
 let h_red_strat hyps s rp ra p a =
