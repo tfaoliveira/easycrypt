@@ -915,11 +915,13 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let p = Psubst.p_subst subst p in
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
-    let env_subst = Psubst.p_bind_local subst name p in
-    { e with ne_env = {
-        env with env_match = {
-          env.env_match with
-          me_matches = env_subst.ps_patloc;}; }; }
+    let me_matches =
+      match Mid.find_opt name e.ne_env.env_match.me_matches with
+      | None -> Mid.add name p e.ne_env.env_match.me_matches
+      | Some p' -> if EQ.pattern e.ne_env p p'
+                   then e.ne_env.env_match.me_matches
+                   else raise CannotUnify in
+    { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
   else raise CannotUnify
 
 let e_next (e : engine) : nengine =
