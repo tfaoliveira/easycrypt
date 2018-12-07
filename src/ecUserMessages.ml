@@ -585,7 +585,7 @@ end = struct
     | `Mod   -> "module"
     | `PTerm -> "proof-term"
 
-  let pp_pterm_apperror fmt (((hyps, ue, ev), kind) : pterror) =
+  let pp_pterm_apperror fmt (((hyps, mc), kind) : pterror) =
     let msg x = Format.fprintf fmt x in
 
     match kind with
@@ -598,6 +598,7 @@ end = struct
     | AE_NotFunctional   -> msg "%s" "too many argument"
 
     | AE_InvalidArgForm (IAF_Mismatch (src, dst)) ->
+       let ue  = mc.EcFMatching.me_unienv in
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
        let dst = Tuni.offun (EcUnify.UniEnv.assubst ue) dst in
 
@@ -615,7 +616,7 @@ end = struct
 
     | AE_InvalidArgProof (src, dst) ->
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
-       let sb  = EcMatching.CPTEnv (EcMatching.MEV.assubst ue ev) in
+       let sb  = EcMatching.CPTEnv (EcFMatching.fsubst_of_menv mc (LDecl.toenv hyps)) in
        let src = concretize_e_form sb src in
        let dst = concretize_e_form sb dst in
 

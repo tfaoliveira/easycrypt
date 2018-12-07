@@ -21,7 +21,6 @@ module RegexpBaseInstr = struct
   open Zipper
   open EcPattern
   open EcFMatching
-  open Psubst
 
   type regexp = regexp_instr
   type regexp1 = regexp1_instr

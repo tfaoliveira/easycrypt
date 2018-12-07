@@ -517,8 +517,9 @@ let process_delta ?target (s, o, p) tc =
   (* Continue with matching based unfolding *)
   let (ptenv, p) =
     let (ps, ue), p = TTC.tc1_process_pattern tc p in
-    let ev = MEV.of_idents (Mid.keys ps) `Form in
-      (ptenv !!tc hyps (ue, ev), p)
+    let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) ps in
+    let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+    (ptenv !!tc hyps menv, p)
   in
 
   let (tvi, tparams, body, args) =
@@ -841,18 +842,18 @@ let process_view1 pe tc =
 
         let (pte, ids, cutf, view) = instantiate f1 [] pte in
 
-        let evm  = !(pte.PT.ptev_env.PT.pte_ev) in
+        let evm  = !(pte.PT.ptev_env.PT.pte_mc) in
         let args = List.drop inargs pte.PT.ptev_pt.pt_args in
         let args = List.combine (List.rev ids) args in
 
         let ids =
           let for1 ((_, ty) as idty, arg) =
             match ty, arg with
-            | GTty _, PAFormula { f_node = Flocal x } when MEV.mem x `Form evm ->
-                if MEV.isset x `Form evm then None else Some (x, idty)
+            | GTty _, PAFormula { f_node = Flocal x } when EcFMatching.menv_has_form x evm ->
+                if Mid.mem x evm.EcFMatching.me_matches then None else Some (x, idty)
 
-            | GTmem _, PAMemory x when MEV.mem x `Mem evm ->
-                if MEV.isset x `Mem evm then None else Some (x, idty)
+            | GTmem _, PAMemory x when EcFMatching.menv_has_memory x evm ->
+                if Mid.mem x evm.EcFMatching.me_matches then None else Some (x, idty)
 
             | _, _ -> assert false
 
@@ -864,12 +865,22 @@ let process_view1 pe tc =
 
           let for1 evm (x, idty) =
             match idty with
-            | id, GTty    ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
-            | id, GTmem   _  -> evm := MEV.set x (`Mem id) !evm
+            | id, GTty ty ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_form !evm (f_local id ty))
+                      (!evm).EcFMatching.me_matches }
+
+            | id, GTmem _  ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_memory !evm id)
+                      (!evm).EcFMatching.me_matches }
+
             | _ , GTmodty _  -> assert false
           in
 
-          List.iter (for1 ptenv.PT.pte_ev) ids;
+          List.iter (for1 ptenv.PT.pte_mc) ids;
 
           if not (PT.can_concretize ptenv) then
             tc_error !!tc "cannot infer all type variables";
@@ -885,15 +896,25 @@ let process_view1 pe tc =
 
           let for1 evm (x, idty) id =
             match idty with
-            | _, GTty   ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
-            | _, GTmem   _ -> evm := MEV.set x (`Mem id) !evm
+            | _, GTty ty ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_form !evm (f_local id ty))
+                      (!evm).EcFMatching.me_matches }
+
+            | _, GTmem _ ->
+                evm := { !evm with
+                  EcFMatching.me_matches =
+                    Mid.add x (EcFMatching.pattern_of_memory !evm id)
+                      (!evm).EcFMatching.me_matches }
+
             | _, GTmodty _ -> assert false
 
           in
 
           let tc = EcLowGoal.t_intros_i_1 intros tc in
 
-          List.iter2 (for1 pte.PT.ptev_env.PT.pte_ev) ids intros;
+          List.iter2 (for1 pte.PT.ptev_env.PT.pte_mc) ids intros;
 
           let pte =
             match view with
@@ -1403,8 +1424,9 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
         | _ ->
           let (ptenv, p) =
             let (ps, ue), p = TTC.tc1_process_pattern tc pf in
-            let ev = MEV.of_idents (Mid.keys ps) `Form in
-              (ptenv !!tc hyps (ue, ev), p)
+            let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) ps in
+            let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+            (ptenv !!tc hyps menv, p)
           in
 
           (try  PT.pf_find_occurence ptenv ~ptn:p concl
@@ -1522,73 +1544,41 @@ let process_pose xsym bds o p (tc : tcenv1) =
   let (env, hyps, concl) = FApi.tc1_eflat tc in
   let o = norm_rwocc o in
 
-  let root = EcIdent.create "<root>" in
-
-  let (p, ue, pf) =
+  let (ptenv, p) =
     let ps  = ref Mid.empty in
     let ue  = TTC.unienv_of_hyps hyps in
     let (senv, bds) = EcTyping.trans_binding env ue bds in
-    let p   = EcTyping.trans_pattern senv (ps, ue) p in
-    let p   = f_lambda (List.map (snd_map gtty) bds) p in
-    let p   = Fsubst.uni (EcUnify.UniEnv.assubst ue) p in
-    let ps  = Mid.of_list (List.map (fun (id, ty) -> id, EcPattern.OGTty (Some ty))
-                             (Mid.bindings !ps)) in
-    let me  = EcFMatching.init_match_env ~metas:ps () in
-    let pf  =
-      if   Mid.is_empty ps && EcUnify.UniEnv.closed ue
-      then Some p else None in
-    let p   = EcFMatching.pattern_of_form me p in
-    let p   = EcPattern.Pat_Meta_Name (p, root, None) in
-    let p   = EcPattern.Pat_Sub p in
-
-    (p, ue, pf)
+    let p = EcTyping.trans_pattern senv (ps, ue) p in
+    let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) !ps in
+    let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
+    (ptenv !!tc hyps menv,
+          f_lambda (List.map (snd_map gtty) bds) p)
   in
 
-  let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
-  let fmt = Format.std_formatter in
-
-  let mtch = EcFMatching.init_match_env ~unienv:ue () in
-
-  let engine =
-    EcFMatching.mk_engine ~fmt ~ppe ~mtch
-      concl p hyps EcReduction.full_red EcReduction.full_red in
-
-  let dopat, body =
-    let module E = struct exception Failure end in
-
-    try
-      match EcFMatching.search_eng engine, pf with
-      | None, None ->
-          raise E.Failure
-      | None, Some pf ->
-          (false, pf)
-      | Some mtch, _ -> begin
-          let subst = EcFMatching.psubst_of_env mtch.EcFMatching.ne_env.EcFMatching.env_match in
-          let f = Mid.find_opt root subst.EcPattern.Psubst.ps_patloc in
-          let f = EcPattern.Psubst.p_subst subst (oget f) in
-          let f =
-            try  EcFMatching.Translate.form_of_pattern env f
-            with EcFMatching.Translate.Invalid_Type _ -> raise E.Failure in
-
-          (true, f)
-      end
-
-    with E.Failure ->
-      tc_error !!tc "cannot find an occurence"
+  let dopat =
+    try  PT.pf_find_occurence ptenv ~keyed:`Lazy ~ptn:p concl; true
+    with PT.FindOccFailure _ ->
+      if not (PT.can_concretize ptenv) then
+        tc_error !!tc "cannot find an occurence"
+      else
+        false
   in
 
-  let x = EcIdent.create (unloc xsym) in
+  let p = PT.concretize_form ptenv p in
 
-  let letin =
-    if not dopat then concl else
-
-    let cpos =
-      try  FPosition.select_form hyps o body concl
-      with InvalidOccurence -> tacuerror "invalid occurence selector"
-    in snd (FPosition.topattern ~x cpos concl)
+  let (x, letin) =
+    match dopat with
+    | false -> (EcIdent.create (unloc xsym), concl)
+    | true  -> begin
+        let cpos =
+          try  FPosition.select_form hyps o p concl
+          with InvalidOccurence -> tacuerror "invalid occurence selector"
+        in
+          FPosition.topattern ~x:(EcIdent.create (unloc xsym)) cpos concl
+    end
   in
 
-  let letin = EcFol.f_let1 x body letin in
+  let letin = EcFol.f_let1 x p letin in
 
   FApi.t_seq
     (fun tc -> tcenv_of_tcenv1 (t_change letin tc))
@@ -1731,7 +1721,7 @@ let process_elimT qs tc =
   in
 
   begin
-    let ue = pt.ptev_env.pte_ue in
+    let ue = !(pt.ptev_env.pte_mc).EcFMatching.me_unienv in
     try  EcUnify.unify (LDecl.toenv hyps) ue (tfun pfty tbool) xpty
     with EcUnify.UnificationFailure _ -> noelim ()
   end;
@@ -1832,7 +1822,7 @@ let process_case ?(doeq = false) gp tc =
 (* -------------------------------------------------------------------- *)
 let process_exists args (tc : tcenv1) =
   let hyps = FApi.tc1_hyps tc in
-  let pte  = (TTC.unienv_of_hyps hyps, EcMatching.MEV.empty) in
+  let pte  = EcFMatching.menv_of_hyps hyps in
   let pte  = PT.ptenv !!tc (FApi.tc1_hyps tc) pte in
 
   let for1 concl arg =
