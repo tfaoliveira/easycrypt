@@ -1157,7 +1157,7 @@ let rec process (e : engine) : nengine =
        }
      in process e
 
-  | Pat_Fun_Symbol (Sym_Form_App ty, pop :: pargs),
+  | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), pop :: pargs),
     Axiom_Form { f_node = Fapp (fop, fargs) } ->
      let oe =
        let (fargs1,fargs2),(pargs1,pargs2) = suffix2 fargs pargs in
@@ -1528,15 +1528,17 @@ and next (m : ismatch) (e : engine) : nengine = match m with
       let e_env = saturate e.e_env in
       let e = { e with e_env } in
       let subst = psubst_of_menv e_env.env_match in
-      match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a
-              (Psubst.p_subst subst e.e_pattern) e.e_head with
+      let e_pattern = Psubst.p_subst subst e.e_pattern in
+      match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a e_pattern e.e_head with
       | None -> next_n m (e_next e)
       | Some (p,a) ->
-         let e_or = { e with e_pattern = p; e_head = a } in
-         match e.e_continuation with
-         | Zor (cont,(_::_ as l),nomatch_cont) ->
-            process { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
-         | _ -> process e_or
+         if   EQ.pattern e.e_env p e_pattern then next_n m (e_next e)
+         else
+           let e_or = { e with e_pattern = p; e_head = a } in
+           match e.e_continuation with
+           | Zor (cont,(_::_ as l),nomatch_cont) ->
+              process { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
+           | _ -> process e_or
     end
   | _ ->
       let _ =
@@ -1716,7 +1718,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
   let axiom_expr e  = Axiom_Form (form_of_expr e) in
   let axiom_mpath m = Axiom_Mpath m in
   let pat_instr i   = Pat_Axiom (Axiom_Instr i) in
-  let typ ty p      = Pat_Type(p,OGTty (Some ty)) in
+  let typ ty p      = p_type p (OGTty (Some ty)) in
 
   let rec aux a     = match a with
     | Axiom_Local (id,ty) ->
@@ -1855,19 +1857,14 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Form pr_event])
       end
     | Axiom_Memory m when Mid.mem m sbd ->
-       (* let gty = match Mid.find_opt m sbd with
-        *   | Some gty -> gty
-        *   | None -> assert false in
-        * Some (Pat_Type(Pat_Meta_Name(Pat_Anything,m),gty)) *)
         Some (Pat_Meta_Name(Pat_Anything,m,None))
+
     | Axiom_MemEnv m when Mid.mem (fst m) sbd ->
-       (* let gty = match Mid.find_opt (fst m) sbd with
-        *   | Some gty -> gty
-        *   | None -> assert false in
-        * Some (Pat_Type(Pat_Meta_Name(Pat_Anything, fst m),gty)) *)
        Some (p_type (Pat_Meta_Name(Pat_Anything, fst m, None)) (OGTmem (Some (snd m))))
+
     | Axiom_Prog_Var pv ->
        omap (fun x -> p_prog_var x pv.pv_kind) (aux (Axiom_Xpath pv.pv_name))
+
     | Axiom_Op _ -> None
     | Axiom_Module mt -> begin
         match mt with
@@ -2014,7 +2011,7 @@ let rec write_meta_bindings (m : pbindings Mid.t) (p : pattern) =
   | Pat_Or lp             -> Pat_Or (List.map aux lp)
   | Pat_Instance _        -> assert false
   | Pat_Red_Strat (p,f)   -> Pat_Red_Strat (aux p,f)
-  | Pat_Type (p,gty)      -> Pat_Type (aux p,gty)
+  | Pat_Type (p,gty)      -> p_type (aux p) gty
   | Pat_Axiom _           -> p
   | Pat_Fun_Symbol (s,lp) -> Pat_Fun_Symbol (s,List.map aux lp)
 

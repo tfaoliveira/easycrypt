@@ -262,7 +262,7 @@ let p_lvalue_var (p : pattern) (ty : ty) =
   match p with
   | Pat_Axiom(Axiom_Prog_Var pv) ->
      Pat_Axiom(Axiom_Lvalue(LvVar(pv,ty)))
-  | p -> Pat_Type(p,OGTty (Some ty))
+  | p -> p_type p (OGTty (Some ty))
 
 let p_lvalue_tuple (p : pattern list) =
   let rec oget_pv acc = function
@@ -498,77 +498,6 @@ let lv_ty (f_ty : ty -> ty) = function
   | LvMap ((op,lty),pv,e,ty) ->
      LvMap ((op,List.map f_ty lty),pv,e_map f_ty (fun x->x) e,f_ty ty)
 
-(* let rec p_map (f_ty : ty -> ty) (aux : pattern -> pattern) (p : pattern) =
- *   match p with
- *   | Pat_Anything -> aux p
- *   | Pat_Meta_Name (p,n,ob) ->
- *      let ob' =
- *        omap (fun l -> List.map (function
- *                           | (a,Some (GTty ty)) -> a, Some (GTty (f_ty ty))
- *                           | x -> x) l) ob in
- *      Pat_Meta_Name(aux p,n,ob')
- *   | Pat_Sub p -> Pat_Sub (aux p)
- *   | Pat_Or lp -> Pat_Or (List.map aux lp)
- *   | Pat_Instance _ -> assert false
- *   | Pat_Red_Strat(p,f) -> Pat_Red_Strat(aux p,f)
- *   | Pat_Type(p,GTty ty) -> Pat_Type(aux p,GTty (f_ty ty))
- *   | Pat_Type(p,gty) -> Pat_Type(aux p,gty)
- *   | Pat_Fun_Symbol(s,lp) ->
- *      let s = match s with
- *        | Sym_Form_App ty -> Sym_Form_App (f_ty ty)
- *        | Sym_Form_Match ty -> Sym_Form_Match (f_ty ty)
- *        | Sym_Form_Quant (q,bs) ->
- *           let f (x,gty as b) = match gty with
- *             | GTty ty -> (x,GTty (f_ty ty))
- *             | _ -> b in
- *           Sym_Form_Quant (q,List.map f bs)
- *        | Sym_Form_Pvar ty -> Sym_Form_Pvar (f_ty ty)
- *        | Sym_Quant (q,ob) ->
- *           let f (x,ogty as b) = match ogty with
- *             | Some (GTty ty) -> (x,Some (GTty (f_ty ty)))
- *             | _ -> b in
- *           Sym_Quant (q, List.map f ob)
- *        | Sym_Form_Let lp ->
- *           let lp = match lp with
- *             | LSymbol (x,ty) -> LSymbol (x,f_ty ty)
- *             | LTuple t -> LTuple (List.map (fun (x,ty) -> (x,f_ty ty)) t)
- *             | LRecord (p,l) -> LRecord (p,List.map (fun (x,ty) -> (x,f_ty ty)) l) in
- *           Sym_Form_Let lp
- *        | _ -> s in
- *      Pat_Fun_Symbol(s, List.map aux lp)
- *   | Pat_Axiom a ->
- *      match a with
- *      | Axiom_Form f -> pat_form (f_map f_ty (fun x -> x) f)
- *      | Axiom_Op (op,lty) -> pat_op op (List.map f_ty lty)
- *      | Axiom_Local (id,ty) -> pat_local id (f_ty ty)
- *      | Axiom_Instr i -> begin
- *          match i.i_node with
- *          | Sasgn (lv,e) -> pat_instr (i_asgn (lv_ty f_ty lv,e_map f_ty (fun x->x) e))
- *          | Srnd (lv,e) -> pat_instr (i_rnd (lv_ty f_ty lv,e_map f_ty (fun x->x) e))
- *          | Scall (olv,f,args) ->
- *             pat_instr (i_call (omap (lv_ty f_ty) olv,f,
- *                                List.map (e_map f_ty (fun x->x)) args))
- *          | Sif (e,s1,s2) ->
- *             let p = match aux (pat_stmt s1),aux (pat_stmt s2) with
- *               | Pat_Axiom(Axiom_Stmt s1),Pat_Axiom(Axiom_Stmt s2) ->
- *                  pat_instr (i_if (e_map f_ty (fun x->x) e,s1,s2))
- *               | s1,s2 ->
- *                  Pat_Fun_Symbol(Sym_Instr_If,[pat_form(form_of_expr e);s1;s2])
- *             in p
- *          | Swhile (e,s) -> begin
- *              match aux (pat_stmt s) with
- *              | Pat_Axiom(Axiom_Stmt s) ->
- *                 pat_instr (i_while (e_map f_ty (fun x->x) e,s))
- *              | s ->
- *                 Pat_Fun_Symbol(Sym_Instr_While,[pat_form(form_of_expr mhr e);s])
- *            end
- *          | Sassert e -> pat_instr (i_assert (e_map f_ty (fun x->x) e))
- *          | Sabstract _ -> p
- *        end
- *      | Axiom_Lvalue lv -> pat_lvalue (lv_ty f_ty lv)
- *      | _ -> p *)
-
-
 
 let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
         : 'a * pattern =
@@ -586,7 +515,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
   | Pat_Red_Strat (p, red) ->
      let a, p = p_map_fold f a p in a, Pat_Red_Strat (p, red)
   | Pat_Type(p,gty) ->
-     let a, p = p_map_fold f a p in a, Pat_Type (p, gty)
+     let a, p = p_map_fold f a p in a, p_type p gty
   | Pat_Fun_Symbol (s, lp) ->
      let a, lp = List.map_fold (p_map_fold f) a lp in
      a, Pat_Fun_Symbol (s, lp)
@@ -867,7 +796,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
   | Pat_Or lp -> Pat_Or (List.map replace lp)
   | Pat_Instance _ -> assert false
   | Pat_Red_Strat (p, red) -> Pat_Red_Strat (replace p, red)
-  | Pat_Type(p,gty) -> Pat_Type(replace p, gty)
+  | Pat_Type(p,gty) -> p_type (replace p) gty
   | Pat_Fun_Symbol (s, lp) -> Pat_Fun_Symbol (s, List.map replace lp)
   | Pat_Axiom axiom ->
      match axiom with
@@ -1303,7 +1232,7 @@ module Psubst = struct
     | Pat_Red_Strat (p,f) -> Pat_Red_Strat (p_subst s p,f)
     | Pat_Type (p,gty) ->
        let gty = ogty_subst s gty in
-       Pat_Type (p_subst s p,gty)
+       p_type (p_subst s p) gty
     | Pat_Meta_Name (p,name,ob) -> begin
         match Mid.find_opt name s.ps_patloc with
         | Some p -> p
@@ -1694,7 +1623,7 @@ module Psubst = struct
       | Pat_Or _ -> None
       | Pat_Instance _ -> assert false
       | Pat_Type (p,gty) ->
-         omap (fun p -> Pat_Type(p,gty)) (p_betared_opt p)
+         omap (fun p -> p_type p gty) (p_betared_opt p)
       | Pat_Red_Strat (p,f) ->
          omap (fun p -> Pat_Red_Strat (p,f)) (p_betared_opt p)
       | Pat_Axiom (Axiom_Form f) ->
