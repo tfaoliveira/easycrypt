@@ -2057,6 +2057,85 @@ let p_destr_app p =
 
 
 (* -------------------------------------------------------------------------- *)
+module FV = struct
+  type fv = int Mid.t
+
+  let add_fv (m: fv) (x : ident) =
+    Mid.change (fun i -> Some (odfl 0 i + 1)) x m
+
+  let union (m1 : fv) (m2 : fv) =
+    Mid.union (fun _ i1 i2 -> Some (i1 + i2)) m1 m2
+
+  let rec lvalue h (map : fv) =
+    function
+    | LvVar (pv,_) ->
+        pattern h map (pat_pv pv)
+    | LvTuple t ->
+        List.fold_left (pattern h) map (List.map (fun (x,_) -> pat_pv x) t)
+    | LvMap ((_,_),pv,e,_) ->
+        pattern h (union map e.e_fv) (pat_pv pv)
+
+  and axiom h =
+    let rec aux (map : fv) (a : axiom) =
+      match a with
+      | Axiom_Form f -> union f.f_fv map
+      | Axiom_Memory m -> add_fv map m
+      | Axiom_Instr i -> union map i.i_fv
+      | Axiom_Stmt s -> union map s.s_fv
+      | Axiom_MemEnv (m, _) -> add_fv map m
+      | Axiom_Prog_Var pv -> pattern h map (pat_xpath pv.pv_name)
+      | Axiom_Xpath xp -> pattern h map (pat_mpath xp.x_top)
+      | Axiom_Mpath mp ->
+          let env0 = EcEnv.LDecl.toenv h in
+          if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else
+          List.fold_left (pattern h)
+            (pattern h map (pat_mpath_top mp.m_top))
+            (List.map pat_mpath mp.m_args)
+
+      | Axiom_Module (`Local id) -> add_fv map id
+      | Axiom_Module _ -> map
+      | Axiom_Local (id,_) -> add_fv map id
+      | Axiom_Op _ -> map
+      | Axiom_Hoarecmp _ -> map
+      | Axiom_Lvalue lv -> lvalue h map lv
+
+    in fun m a -> aux m a
+
+  and pattern h =
+    let rec aux (map : int Mid.t) = function
+      | Pat_Anything -> map
+      | Pat_Meta_Name (p,n,_) -> aux (add_fv map n) p
+      | Pat_Sub p -> aux map p
+      | Pat_Or lp -> List.fold_left aux map lp
+      | Pat_Red_Strat (p,_) -> aux map p
+      | Pat_Type (p,_) -> aux map p
+      | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
+         let map' = List.fold_left aux Mid.empty lp in
+         let map' =
+           Mid.filter
+             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
+             map' in
+         union map map'
+      | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
+         let map' = List.fold_left aux Mid.empty lp in
+         let map' =
+           Mid.filter
+             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
+             map' in
+         union map map'
+      | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
+      | Pat_Axiom a -> axiom h map a
+      | Pat_Instance _ -> assert false (* FIXME: instance *)
+
+    in fun m p -> aux m p
+
+  (* ------------------------------------------------------------------ *)
+  let lvalue0  h = lvalue  h Mid.empty
+  let axiom0   h = axiom   h Mid.empty
+  let pattern0 h = pattern h Mid.empty
+end
+
+(* -------------------------------------------------------------------------- *)
 module PReduction = struct
   open EcReduction
   open Psubst
@@ -2095,13 +2174,12 @@ module PReduction = struct
         (s : Psubst.p_subst) (id : Name.t) : pattern option =
     if ri.delta_h id
     then
-      let p = Pat_Meta_Name (Pat_Anything,id,None) in
-      let p' = Psubst.p_subst s p in
-      if p = p'
-      then
-        try Some (pat_form (EcEnv.LDecl.unfold id hyps)) with
-        | EcEnv.NotReducible -> None
-      else Some p'
+      if EcEnv.LDecl.can_unfold id hyps then
+         Some (pat_form (EcEnv.LDecl.unfold id hyps))
+      else
+        let p = Pat_Meta_Name (Pat_Anything,id,None) in
+        let p' = Psubst.p_subst s p in
+        if p = p' then None else Some p'
     else None
 
   let rec is_delta_p ri pop = match pop with
@@ -2130,14 +2208,17 @@ module PReduction = struct
        id_equal x y && List.for_all check (f :: args)
     | _ -> false
 
-  (* let p_can_eta x (f, args) =
-   *   match List.rev args with
-   *   | (Pat_Axiom (Axiom_Form { f_node = Flocal y }
-   *                | Axiom_Local (y,_))
-   *      | Pat_Meta_Name (Pat_Anything, y, _)) :: args ->
-   *      let check v = not (Mid.mem x v.f_fv) in
-   *      id_equal x y && List.for_all check (f :: args)
-   *   | _ -> false *)
+  let p_can_eta h x (f, args) =
+    match List.rev args with
+    | (Pat_Axiom (Axiom_Form { f_node = Flocal y }
+                 | Axiom_Local (y,_))
+       | Pat_Meta_Name (Pat_Anything, y, _)
+      | Pat_Type (Pat_Axiom (Axiom_Form { f_node = Flocal y }
+                             | Axiom_Local (y,_)),_)
+      | Pat_Type (Pat_Meta_Name (Pat_Anything, y, _),_)) :: args ->
+       let check v = not (Mid.mem x (FV.pattern0 h v)) in
+       id_equal x y && List.for_all check (f :: args)
+    | _ -> false
 
 
   let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
@@ -2157,13 +2238,18 @@ module PReduction = struct
       (* β-reduction *)
       | (Sym_Form_App _ | Sym_App),
         (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                          | Sym_Quant (Llambda,_)),[_]))::_
+                          | Sym_Quant (Llambda,_)),[_])
+         | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+                          | Sym_Quant (Llambda,_)),[_]),_))::_
            when ri.beta -> p_betared_opt p
 
       (* ζ-reduction *)
       | Sym_Form_App ty, (Pat_Meta_Name (Pat_Anything,id,_)
+                         | Pat_Type (Pat_Meta_Name (Pat_Anything,id,_),_)
                          | Pat_Axiom (Axiom_Form { f_node = Flocal id })
-                         | Pat_Axiom (Axiom_Local (id,_)))::pargs ->
+                         | Pat_Type (Pat_Axiom (Axiom_Form { f_node = Flocal id }),_)
+                         | Pat_Axiom (Axiom_Local (id,_))
+                         | Pat_Type (Pat_Axiom (Axiom_Local (id,_)),_))::pargs ->
          if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id) pargs (Some ty)
          else omap (fun x -> p_app x pargs (Some ty)) (reduce_local_opt hyps ri s id)
 
@@ -2194,7 +2280,8 @@ module PReduction = struct
 
       (* ι-reduction (records projection) *)
       | (Sym_Form_App _ | Sym_App),
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1)))
+        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1))
+         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1)),_))
         ::pargs
            when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
           let op =
@@ -2253,7 +2340,8 @@ module PReduction = struct
 
       (* ι-reduction (match-fix) *)
       | Sym_Form_App ty,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)))::args
+        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))
+         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)),_))::args
            when ri.iota
                 && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
           try
@@ -2313,7 +2401,8 @@ module PReduction = struct
 
       (* ι-reduction (match-fix) *)
       | Sym_App,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)))::args
+        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))
+         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)),_))::args
            when ri.iota
                 && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
           try
@@ -2401,7 +2490,8 @@ module PReduction = struct
 
     (* logical reduction *)
     | Sym_Form_App ty,
-      (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo)))::args
+      (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))
+       | Pat_Type (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo)),_))::args
          when is_some ri.logic && is_logical_op op
       ->
        let pcompat =
@@ -2475,31 +2565,45 @@ module PReduction = struct
        let op = reduce_op ri (EcEnv.LDecl.toenv hyps) pop in
        omap (fun op -> p_app_simpl op args None) op
 
-    (* (\* η-reduction *\)
-     * | Sym_Form_Quant (Llambda, [x, GTty _]),
-     *   [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })]
-     *      when can_eta x (fn, args)
-     *   -> Some (pat_form
-     *              (EcFol.f_ty_app
-     *                 (EcEnv.LDecl.toenv hyps) fn
-     *                 (List.take (List.length args - 1) args)))
-     *
-     * (\* η-reduction *\)
-     * | Sym_Form_Quant (Llambda, [x, GTty _]),
-     *   [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
-     *      when p_can_eta x (pn, pargs) ->
-     *
-     *
-     * (\* contextual rule - let *\)
-     * | Flet (lp, f1, f2) -> f_let lp (h_red ri env hyps f1) f2
-     *
-     * (\* Contextual rule - application args. *\)
-     * | Fapp (f1, args) ->
-     *    f_app (h_red ri env hyps f1) args f.f_ty
-     *
-     * (\* Contextual rule - bindings *\)
-     * | Fquant (Lforall as t, b, f1)
-     *   | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full -> begin
+    (* η-reduction *)
+    | Sym_Form_Quant (Llambda, [x, GTty _]),
+      [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })]
+         when can_eta x (fn, args)
+      -> Some (pat_form
+                 (EcFol.f_ty_app
+                    (EcEnv.LDecl.toenv hyps) fn
+                    (List.take (List.length args - 1) args)))
+
+    (* η-reduction *)
+    | (Sym_Form_Quant (Llambda, [x, GTty _])
+       | Sym_Quant (Llambda, [x, OGTty _])),
+      [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
+         when p_can_eta hyps x (pn, pargs) ->
+       Some (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty))
+
+    (* η-reduction *)
+    | (Sym_Form_Quant (Llambda, [x, GTty _])
+       | Sym_Quant (Llambda, [x, OGTty _])),
+      [Pat_Fun_Symbol (Sym_App, pn::pargs)]
+         when p_can_eta hyps x (pn, pargs) ->
+       Some (p_app pn (List.take (List.length pargs - 1) pargs) None)
+
+    (* contextual rule - let *)
+    | Sym_Form_Let lp, [p1;p2] ->
+       omap (fun p1 -> p_let lp p1 p2) (h_red_pattern_opt hyps ri s p1)
+
+    (* Contextual rule - application args. *)
+    | Sym_Form_App ty, p1::args ->
+       omap (fun p1 -> p_app p1 args (Some ty)) (h_red_pattern_opt hyps ri s p1)
+
+    (* Contextual rule - application args. *)
+    | Sym_App, p1::args ->
+       omap (fun p1 -> p_app p1 args None) (h_red_pattern_opt hyps ri s p1)
+
+    (* (\* Contextual rule - bindings *\)
+     * | Sym_Form_Quant (Lforall as t, b), [p1]
+     *   | Sym_Form_Quant (Lexists as t, b), [p1]
+     *      when ri.logic = Some `Full -> begin
      *     let ctor = match t with
      *       | Lforall -> f_forall_simpl
      *       | Lexists -> f_exists_simpl
@@ -2714,10 +2818,11 @@ module PReduction = struct
          | None -> None
     else None
 
-  and h_red_local_opt _hyps ri s id _ty =
-    if ri.delta_h id
-    then MName.find_opt id s.ps_patloc
-    else None
+  and h_red_local_opt hyps ri s id ty =
+    match reduce_local_opt hyps ri s id with
+    | Some (Pat_Axiom (Axiom_Form f)) as op ->
+       if ty_equal ty f.f_ty then op else None
+    | _ -> None
 
   and h_red_form_opt hyps ri s (f : form) =
     match f.f_node with
@@ -2729,7 +2834,7 @@ module PReduction = struct
        end
 
     (* ζ-reduction *)
-    | Flocal x -> reduce_local_opt hyps ri s x
+    | Flocal x -> h_red_local_opt hyps ri s x f.f_ty
 
     (* ζ-reduction *)
     | Fapp ({ f_node = Flocal x }, args) ->
@@ -2997,9 +3102,11 @@ module PReduction = struct
        p_app_simpl_opt op (List.map pat_form args) (Some f.f_ty)
 
     (* η-reduction *)
-    | Fquant (Llambda, [x, GTty _], { f_node = Fapp (f, [{ f_node = Flocal y }]) })
-         when id_equal x y && not (Mid.mem x f.f_fv)
-      -> Some (pat_form f)
+    | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
+         when can_eta x (fn, args)
+      -> Some (p_app (pat_form fn)
+                 (List.map pat_form (List.take (List.length args - 1) args))
+                 (Some f.f_ty))
 
     (* contextual rule - let *)
     | Flet (lp, f1, f2) ->

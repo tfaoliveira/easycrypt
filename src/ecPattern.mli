@@ -212,6 +212,19 @@ val p_real_inv_simpl : pattern -> pattern
 val p_destr_app     : pattern -> pattern * pattern list
 
 (* -------------------------------------------------------------------------- *)
+module FV : sig
+  type fv = int Mid.t
+
+  val add_fv   : fv -> ident -> fv
+  val union    : fv -> fv -> fv
+  val lvalue   : EcEnv.LDecl.hyps -> fv -> lvalue -> fv
+  val axiom    : EcEnv.LDecl.hyps -> fv -> axiom -> fv
+  val pattern  : EcEnv.LDecl.hyps -> fv -> pattern -> fv
+  val lvalue0  : EcEnv.LDecl.hyps -> lvalue -> fv
+  val axiom0   : EcEnv.LDecl.hyps -> axiom -> fv
+  val pattern0 : EcEnv.LDecl.hyps -> pattern -> fv
+end
+(* -------------------------------------------------------------------------- *)
 module Psubst : sig
   type p_subst = {
       ps_patloc  : pattern             Mid.t;

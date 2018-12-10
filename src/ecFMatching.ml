@@ -91,21 +91,6 @@ let menv_add_mem x menv =
       me_meta_vars = Mid.add x (OGTmem None) menv.me_meta_vars; }
 
 (* -------------------------------------------------------------------------- *)
-let h_red_strat hyps s rp ra p a =
-  match PReduction.h_red_pattern_opt hyps rp s p with
-  | Some p -> Some (p, a)
-  | None ->
-     match a with
-     | Axiom_Form f -> begin
-         match EcReduction.h_red_opt ra hyps f with
-         | Some f -> Some (p, axiom_form f)
-         | None -> None
-       end
-     | _ ->
-        match PReduction.h_red_axiom_opt hyps ra s a with
-        | Some (Pat_Axiom a) -> Some (p, a)
-        | _ -> None
-
 let saturate (me : match_env) =
   let ue    = me.me_unienv in
   let mtch  = me.me_matches in
@@ -833,6 +818,20 @@ end = struct
 end
 
 
+
+(* -------------------------------------------------------------------------- *)
+let h_red_strat hyps s rp ra p a =
+  let op = match PReduction.h_red_pattern_opt hyps rp s p with
+    | Some p' -> if p = p' then None else Some (p', a)
+    | None -> None in
+  match op with
+  | Some _ -> op
+  | None ->
+  match PReduction.h_red_axiom_opt hyps ra s a with
+  | Some (Pat_Axiom a) -> Some (p, a)
+  | _ -> None
+
+(* -------------------------------------------------------------------------- *)
 let rec merge_binds bs1 bs2 env = match bs1,bs2 with
   | [], _ | _,[] -> Some (env,bs1,bs2)
   | (x,_)::_, (y,_)::_
@@ -844,100 +843,10 @@ let rec merge_binds bs1 bs2 env = match bs1,bs2 with
      in merge_binds r1 r2 env
   | _ -> None
 
-(* -------------------------------------------------------------------------- *)
-module FV : sig
-  type fv = int Mid.t
-
-  val add_fv   : fv -> ident -> fv
-  val union    : fv -> fv -> fv
-  val lvalue   : match_env -> LDecl.hyps -> fv -> lvalue -> fv
-  val axiom    : match_env -> LDecl.hyps -> fv -> axiom -> fv
-  val pattern  : match_env -> LDecl.hyps -> fv -> pattern -> fv
-  val lvalue0  : match_env -> LDecl.hyps -> lvalue -> fv
-  val axiom0   : match_env -> LDecl.hyps -> axiom -> fv
-  val pattern0 : match_env -> LDecl.hyps -> pattern -> fv
-end = struct
-  type fv = int Mid.t
-
-  let add_fv (m: fv) (x : ident) =
-    Mid.change (fun i -> Some (odfl 0 i + 1)) x m
-
-  let union (m1 : fv) (m2 : fv) =
-    Mid.union (fun _ i1 i2 -> Some (i1 + i2)) m1 m2
-
-  let rec lvalue (env : match_env) h (map : fv) =
-    function
-    | LvVar (pv,_) ->
-        pattern env h map (pat_pv pv)
-    | LvTuple t ->
-        List.fold_left (pattern env h) map (List.map (fun (x,_) -> pat_pv x) t)
-    | LvMap ((_,_),pv,e,_) ->
-        pattern env h (union map e.e_fv) (pat_pv pv)
-
-  and axiom (env : match_env) h =
-    let rec aux (map : fv) (a : axiom) =
-      match a with
-      | Axiom_Form f -> union f.f_fv map
-      | Axiom_Memory m -> add_fv map m
-      | Axiom_Instr i -> union map i.i_fv
-      | Axiom_Stmt s -> union map s.s_fv
-      | Axiom_MemEnv (m, _) -> add_fv map m
-      | Axiom_Prog_Var pv -> pattern env h map (pat_xpath pv.pv_name)
-      | Axiom_Xpath xp -> pattern env h map (pat_mpath xp.x_top)
-      | Axiom_Mpath mp ->
-          let env0 = LDecl.toenv h in
-          if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else
-          List.fold_left (pattern env h)
-            (pattern env h map (pat_mpath_top mp.m_top))
-            (List.map pat_mpath mp.m_args)
-
-      | Axiom_Module (`Local id) -> add_fv map id
-      | Axiom_Module _ -> map
-      | Axiom_Local (id,_) -> add_fv map id
-      | Axiom_Op _ -> map
-      | Axiom_Hoarecmp _ -> map
-      | Axiom_Lvalue lv -> lvalue env h map lv
-
-    in fun m a -> aux m a
-
-  and pattern env h =
-    let rec aux (map : int Mid.t) = function
-      | Pat_Anything -> map
-      | Pat_Meta_Name (p,n,_) -> aux (add_fv map n) p
-      | Pat_Sub p -> aux map p
-      | Pat_Or lp -> List.fold_left aux map lp
-      | Pat_Red_Strat (p,_) -> aux map p
-      | Pat_Type (p,_) -> aux map p
-      | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
-         let map' = List.fold_left aux Mid.empty lp in
-         let map' =
-           Mid.filter
-             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-             map' in
-         union map map'
-      | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
-         let map' = List.fold_left aux Mid.empty lp in
-         let map' =
-           Mid.filter
-             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-             map' in
-         union map map'
-      | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
-      | Pat_Axiom a -> axiom env h map a
-      | Pat_Instance _ -> assert false (* FIXME: instance *)
-
-    in fun m p -> aux m p
-
-  (* ------------------------------------------------------------------ *)
-  let lvalue0  env h = lvalue  env h Mid.empty
-  let axiom0   env h = axiom   env h Mid.empty
-  let pattern0 env h = pattern env h Mid.empty
-end
-
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
-  let m = Mid.set_diff (FV.pattern0 env.env_match env.env_hyps p) mr in
+  let m = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
   Mid.for_all (fun x _ -> LDecl.has_id x env.env_hyps) m
 
 
@@ -1092,14 +1001,20 @@ let rec abstract_opt
 let rec process (e : engine) : nengine =
   let _ =
     let ppe = e.e_env.env_ppe in
-    Format.eprintf "[W]-- %s delta : %a =? %a\n"
-      (if e.e_env.env_red_info_p.EcReduction.delta_p (EcPath.psymbol "foobar")
+    Format.eprintf "[W]?? %s delta_p and %s delta_a : %a =? %a\n"
+      (if e.e_env.env_red_info_p.EcReduction.delta_h (EcIdent.create "foobar")
+       then "with" else "without")
+      (if e.e_env.env_red_info_a.EcReduction.delta_h (EcIdent.create "foobar")
        then "with" else "without")
       (EcPrinting.pp_pattern ppe) e.e_pattern
       (EcPrinting.pp_pat_axiom ppe) e.e_head
   in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
+
+  | Pat_Meta_Name (_,name,_), _
+       when Mid.mem name e.e_env.env_match.me_matches ->
+     process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches }
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
@@ -1529,10 +1444,22 @@ and next (m : ismatch) (e : engine) : nengine = match m with
       let e = { e with e_env } in
       let subst = psubst_of_menv e_env.env_match in
       let e_pattern = Psubst.p_subst subst e.e_pattern in
+      let _ = match e_pattern with
+        | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
+          (Pat_Axiom (Axiom_Form {f_node = Fop (op, _); }))::_)
+             when is_some i_red_p.EcReduction.logic && is_logical_op op ->
+           Format.eprintf "[W]** pattern is logical\n"
+        | _ -> () in
+      let _ = match e.e_head with
+        | Axiom_Form ({ f_node = Fapp ({f_node = Fop (op, _); },_)})
+             when is_some i_red_a.EcReduction.logic && is_logical_op op ->
+           Format.eprintf "[W]** axiom is logical\n"
+        | _ -> () in
       match h_red_strat e.e_env.env_hyps subst i_red_p i_red_a e_pattern e.e_head with
       | None -> next_n m (e_next e)
       | Some (p,a) ->
-         if   EQ.pattern e.e_env p e_pattern then next_n m (e_next e)
+         if   p = e_pattern && a = e.e_head
+         then next_n m (e_next e)
          else
            let e_or = { e with e_pattern = p; e_head = a } in
            match e.e_continuation with
@@ -2097,7 +2024,7 @@ let menv_is_full (e : match_env) h =
 
   let f n _ = match Mid.find_opt n matches with
     | None   -> false
-    | Some p -> let fv = FV.pattern0 e h p in
+    | Some p -> let fv = FV.pattern0 h p in
                 Mid.for_all (fun n _ -> not (Mid.mem n meta_vars)) fv in
 
   Mid.for_all f meta_vars
