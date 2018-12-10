@@ -1090,12 +1090,14 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  (* let _ =
-   *   let fmt, ppe = e.e_env.env_fmt, e.e_env.env_ppe in
-   *   Format.fprintf fmt "[W]-- %a =? %a\n"
-   *     (EcPrinting.pp_pattern ppe) e.e_pattern
-   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-   * in *)
+  let _ =
+    let ppe = e.e_env.env_ppe in
+    Format.eprintf "[W]-- %s delta : %a =? %a\n"
+      (if e.e_env.env_red_info_p.EcReduction.delta_p (EcPath.psymbol "foobar")
+       then "with" else "without")
+      (EcPrinting.pp_pattern ppe) e.e_pattern
+      (EcPrinting.pp_pat_axiom ppe) e.e_head
+  in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
@@ -1140,10 +1142,335 @@ let rec process (e : engine) : nengine =
      let e_env = { e.e_env with env_red_info_a; env_red_info_p } in
      process { e with e_pattern; e_env }
 
-  | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Anything,name,ob))::pargs),axiom
-    | Pat_Fun_Symbol(Sym_App,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom
-    | Pat_Fun_Symbol(Sym_Form_App _,(Pat_Meta_Name(Pat_Anything,name,ob))::pargs),axiom
-    | Pat_Fun_Symbol(Sym_Form_App _,(Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob))::pargs),axiom ->
+  | Pat_Axiom o1, o2 when EQ.axiom e.e_env o1 o2 -> next Match e
+
+  | Pat_Axiom _, _ -> next NoMatch e
+
+  | Pat_Fun_Symbol (Sym_Form_If, p1::p2::p3::[]),
+    Axiom_Form { f_node = Fif (f1,f2,f3) } ->
+     let zand = [(Axiom_Form f2,p2);(Axiom_Form f3,p3)] in
+     let e =
+       { e with
+         e_head = Axiom_Form f1;
+         e_pattern = p1;
+         e_continuation = Zand ([],zand,e.e_continuation);
+       }
+     in process e
+
+  | Pat_Fun_Symbol (Sym_Form_App ty, pop :: pargs),
+    Axiom_Form { f_node = Fapp (fop, fargs) } ->
+     let oe =
+       let (fargs1,fargs2),(pargs1,pargs2) = suffix2 fargs pargs in
+       match fargs1,pargs1 with
+       | _::_,_::_ -> assert false
+       | _, [] ->
+          let fop' = f_ty_app (EcEnv.LDecl.toenv e.e_env.env_hyps) fop fargs1 in
+          let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
+          let pop = match pargs1 with
+            | [] -> pop
+            | _ -> Pat_Fun_Symbol (Sym_App, pop::pargs1) in
+          let zand = (Axiom_Form fop', pop)::zand in
+          let e_pattern,e_head,zand =
+            match List.rev zand with
+            | [] -> assert false
+            | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
+            | _ -> assert false in
+          let e_continuation = e.e_continuation in
+          let e_continuation = Zand ([],zand,e_continuation) in
+          Some (fun () ->
+              process { e with
+                  e_pattern;
+                  e_head;
+                  e_continuation; })
+       | [], _::_ ->
+          let p = Pat_Fun_Symbol (Sym_App, (pop::pargs1)) in
+          let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
+          Some (fun () ->
+              process { e with
+                  e_pattern = p;
+                  e_continuation = Zand ([],zand,e.e_continuation)
+            })
+     in
+     (odfl (fun () -> next NoMatch e) oe) ()
+
+
+  | Pat_Fun_Symbol (Sym_Form_Tuple, lp),
+    Axiom_Form { f_node = Ftuple lf }
+       when 0 = List.compare_lengths lp lf -> begin
+      match lp, lf with
+      | [], _::_ | _::_,[] -> assert false
+      | [], [] -> next Match e
+      | p::ptuple, f::ftuple ->
+         let zand = List.map2 (fun x y -> Axiom_Form x, y) ftuple ptuple in
+         let cont = Zand ([],zand,e.e_continuation) in
+         process { e with
+             e_pattern = p;
+             e_head = Axiom_Form f;
+             e_continuation = cont }
+    end
+
+  | Pat_Fun_Symbol (Sym_Form_Tuple, lp),
+    Axiom_Lvalue (LvTuple lv) when 0 = List.compare_lengths lp lv ->
+     let zand = List.map2 (fun x y -> Axiom_Lvalue (LvVar x), y) lv lp in
+     let e_continuation = Zand ([], zand, e.e_continuation) in
+     next Match { e with e_continuation }
+
+  | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [e_pattern]),
+    Axiom_Form ({ f_node = Fproj (f1,j) } as f)
+       when i = j  && EQ.ty e.e_env ty f.f_ty ->
+     process { e with e_pattern; e_head = Axiom_Form f1 }
+
+  | Pat_Fun_Symbol (Sym_Form_Match ty, p::pl),
+    Axiom_Form ({ f_node = Fmatch (fmatch,fl,_) } as f)
+       when 0 = List.compare_lengths pl fl && EQ.ty e.e_env ty f.f_ty ->
+     let zand = List.map2 (fun x y -> Axiom_Form x, y) fl pl in
+     process { e with
+         e_pattern = p;
+         e_head = Axiom_Form fmatch;
+         e_continuation = Zand ([],zand,e.e_continuation);
+       }
+
+  | Pat_Fun_Symbol (Sym_Form_Quant (q1,bs1), [p]),
+    Axiom_Form { f_node = Fquant (q2,bs2,f2) }
+       when q1 = q2 && 0 >= List.compare_lengths bs1 bs2 -> begin
+      (* FIXME : lambda case to be considered in higher order *)
+      let (pbs1,_), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
+      if not (List.for_all2 (EQ.gty e.e_env) (List.map snd pbs1) (List.map snd fbs1))
+      then  next NoMatch e
+      else
+        let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
+        let e_env = saturate e.e_env in
+        let subst = psubst_of_menv e_env.env_match in
+        let s     = List.fold_left2 f subst pbs1 fbs1 in
+        let e_pattern = Psubst.p_subst s p in
+        process { e with
+            e_pattern; e_env; e_head = Axiom_Form (f_quant q2 fbs2 f2);
+          }
+    end
+
+
+  | Pat_Fun_Symbol (Sym_Form_Pvar ty, p1::p2::[]),
+    Axiom_Form ({ f_node = Fpvar (_,m) } as f) when EQ.ty e.e_env f.f_ty ty ->
+     process { e with
+         e_pattern = p2;
+         e_head = Axiom_Memory m;
+         e_continuation = Zand ([],[Axiom_Form f,p1],e.e_continuation);
+       }
+
+  | Pat_Fun_Symbol (Sym_Form_Prog_var k, [p]),
+    Axiom_Form { f_node = Fpvar (x2,_) } when k = x2.pv_kind ->
+     process { e with e_pattern = p; e_head = Axiom_Xpath x2.pv_name; }
+
+  | Pat_Fun_Symbol (Sym_Form_Glob, p1::p2::[]),
+    Axiom_Form { f_node = Fglob (x,m) } ->
+     let zand = [Axiom_Mpath x,p1] in
+     process { e with
+         e_pattern = p2;
+         e_head = Axiom_Memory m;
+         e_continuation = Zand ([],zand,e.e_continuation);
+       }
+
+  | Pat_Fun_Symbol (Sym_Form_Hoare_F, [ppre;px;ppost]),
+    Axiom_Form { f_node = FhoareF hF } ->
+     let fpre,fx,fpost = hF.hf_pr,hF.hf_f,hF.hf_po in
+     let zand = [Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost] in
+     process { e with
+         e_pattern = px;
+         e_head = Axiom_Xpath fx;
+         e_continuation = Zand ([],zand,e.e_continuation);
+       }
+
+  | Pat_Fun_Symbol (Sym_Form_Hoare_S, [pmem;ppre;ps;ppost]),
+    Axiom_Form { f_node = FhoareS hs } ->
+     let fmem,fpre,fs,fpost = hs.hs_m,hs.hs_pr,hs.hs_s,hs.hs_po in
+     let zand = [Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost;
+                 Axiom_Stmt fs,ps] in
+     process { e with
+         e_pattern = pmem;
+         e_head = Axiom_MemEnv fmem;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, [ppre;pf;ppost;pcmp;pbd]),
+    Axiom_Form { f_node = FbdHoareF bhf } ->
+     let fpre,ff,fpost,fcmp,fbd =
+       bhf.bhf_pr,bhf.bhf_f,bhf.bhf_po,bhf.bhf_cmp,bhf.bhf_bd in
+     let zand = [Axiom_Hoarecmp fcmp,pcmp;
+                 Axiom_Form fbd,pbd;
+                 Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost] in
+     process { e with
+         e_pattern = pf;
+         e_head = Axiom_Xpath ff;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_bd_Hoare_S, [pmem;ppre;ps;ppost;pcmp;pbd]),
+    Axiom_Form { f_node = FbdHoareS bhs } ->
+     let fmem,fpre,fs,fpost,fcmp,fbd =
+       bhs.bhs_m,bhs.bhs_pr,bhs.bhs_s,bhs.bhs_po,bhs.bhs_cmp,bhs.bhs_bd in
+     let zand = [Axiom_Hoarecmp fcmp,pcmp;
+                 Axiom_Form fbd,pbd;
+                 Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost;
+                 Axiom_Stmt fs,ps] in
+     process { e with
+         e_pattern = pmem;
+         e_head = Axiom_MemEnv fmem;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_Equiv_F, [ppre;pf1;pf2;ppost]),
+    Axiom_Form { f_node = FequivF ef } ->
+     let fpre,ff1,ff2,fpost =
+       ef.ef_pr,ef.ef_fl,ef.ef_fr,ef.ef_po in
+     let zand = [Axiom_Xpath ff2,pf2;
+                 Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost] in
+     process { e with
+         e_pattern = pf1;
+         e_head = Axiom_Xpath ff1;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_Equiv_S, [pmem1;pmem2;ppre;ps1;ps2;ppost]),
+    Axiom_Form { f_node = FequivS es } ->
+     let fmem1,fmem2,fpre,fs1,fs2,fpost =
+       es.es_ml,es.es_mr,es.es_pr,es.es_sl,es.es_sr,es.es_po in
+     let zand = [Axiom_MemEnv fmem2,pmem2;
+                 Axiom_Stmt fs1,ps1;
+                 Axiom_Stmt fs2,ps2;
+                 Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost] in
+     process { e with
+         e_pattern = pmem1;
+         e_head = Axiom_MemEnv fmem1;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_Eager_F, [ppre;ps1;pf1;pf2;ps2;ppost]),
+    Axiom_Form { f_node = FeagerF eg } ->
+     let fpre,fs1,ff1,ff2,fs2,fpost =
+       eg.eg_pr,eg.eg_sl,eg.eg_fl,eg.eg_fr,eg.eg_sr,eg.eg_po in
+     let zand = [Axiom_Xpath ff2,pf2;
+                 Axiom_Stmt fs1,ps1;
+                 Axiom_Stmt fs2,ps2;
+                 Axiom_Form fpre,ppre;
+                 Axiom_Form fpost,ppost] in
+     process { e with
+         e_pattern = pf1;
+         e_head = Axiom_Xpath ff1;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Form_Pr, [pmem;pf;pargs;pevent]),
+    Axiom_Form { f_node = Fpr pr } ->
+     let fmem,ff,fargs,fevent =
+       pr.pr_mem,pr.pr_fun,pr.pr_args,pr.pr_event in
+     let zand = [
+         Axiom_Xpath ff,pf;
+         Axiom_Form fargs,pargs;
+         Axiom_Form fevent,pevent
+       ] in
+     process { e with
+         e_pattern = pmem;
+         e_head = Axiom_Memory fmem;
+         e_continuation =
+           Zand ([Axiom_Memory fmem,pmem],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Mpath, [p]), Axiom_Module _ ->
+     process { e with e_pattern = p }
+
+  | Pat_Fun_Symbol (Sym_Mpath, p::rest), Axiom_Mpath m ->
+     let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
+     let zand = List.map2 (fun x y -> (Axiom_Mpath x),y) margs2 pargs2 in
+     let e_continuation = match zand with
+       | [] -> e.e_continuation
+       | _  -> Zand ([],zand,e.e_continuation) in
+     let m = match margs1 with
+       | [] ->
+          Axiom_Module m.m_top
+       | _  -> if margs2 = [] then Axiom_Mpath m
+               else Axiom_Mpath (mpath m.m_top margs1)
+     in
+     let p = match pargs1 with
+       | [] -> p
+       | _ ->
+          Pat_Fun_Symbol (Sym_Mpath, p::pargs1)
+     in
+     process { e with e_pattern = p; e_head = m; e_continuation; }
+
+  | Pat_Fun_Symbol (Sym_Instr_Assign, [plv;prv]),
+    Axiom_Instr { i_node = Sasgn (flv,fe) }
+    | Pat_Fun_Symbol (Sym_Instr_Sample, [plv;prv]),
+      Axiom_Instr { i_node = Srnd (flv,fe) } ->
+     let frv = form_of_expr fe in
+     let zand = [Axiom_Form frv,prv] in
+     process { e with
+         e_pattern = plv;
+         e_head = Axiom_Lvalue flv;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Instr_Call, pf::pargs),
+    Axiom_Instr { i_node = Scall (None,ff,fargs) }
+       when 0 = List.compare_lengths pargs fargs ->
+     let fmap x y = (Axiom_Form (form_of_expr x),y) in
+     let zand = List.map2 fmap fargs pargs in
+     process { e with
+         e_pattern = pf;
+         e_head = Axiom_Xpath ff;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Instr_Call_Lv, plv::pf::pargs),
+    Axiom_Instr { i_node = Scall (Some flv,ff,fargs) } ->
+     let fmap x y = (Axiom_Form (form_of_expr x),y) in
+     let zand = List.map2 fmap fargs pargs in
+     let zand = (Axiom_Lvalue flv,plv)::zand in
+     process { e with
+         e_pattern = pf;
+         e_head = Axiom_Xpath ff;
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Instr_If, [pe;ptrue;pfalse]),
+    Axiom_Instr { i_node = Sif (fe,strue,sfalse) } ->
+     let zand = [Axiom_Stmt strue,ptrue;
+                 Axiom_Stmt sfalse,pfalse] in
+     process { e with
+         e_pattern = pe;
+         e_head = Axiom_Form (form_of_expr fe);
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Instr_While, [pe;pbody]),
+    Axiom_Instr { i_node = Swhile (fe,fbody) } ->
+     let zand = [Axiom_Stmt fbody,pbody] in
+     process { e with
+         e_pattern = pe;
+         e_head = Axiom_Form (form_of_expr fe);
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol (Sym_Instr_Assert, [pe]),
+    Axiom_Instr { i_node = Sassert fe } ->
+     process { e with e_pattern = pe; e_head = Axiom_Form (form_of_expr fe); }
+
+  | Pat_Fun_Symbol (Sym_Stmt_Seq,[]), Axiom_Stmt { s_node = [] } ->
+     next Match e
+
+  | Pat_Fun_Symbol (Sym_Stmt_Seq,pi::pl), Axiom_Stmt { s_node = fi::fl } ->
+     let pl = Pat_Fun_Symbol (Sym_Stmt_Seq, pl) in
+     let zand = [Axiom_Stmt (stmt fl),pl] in
+     process { e with
+         e_pattern = pi;
+         e_head = Axiom_Instr fi;
+         e_continuation = Zand ([],zand,e.e_continuation);
+       }
+
+  | Pat_Fun_Symbol (Sym_Xpath, [pm;pf]), Axiom_Xpath x ->
+     let zand = [Axiom_Mpath x.x_top,pm] in
+     process { e with
+         e_pattern = pf;
+         e_head = Axiom_Op (x.x_sub,[]);
+         e_continuation = Zand ([],zand,e.e_continuation); }
+
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    (Pat_Meta_Name(Pat_Anything,name,ob)
+                     | Pat_Meta_Name(Pat_Type(Pat_Anything,_),name,ob)
+                     | Pat_Type(Pat_Meta_Name(Pat_Anything,name,ob),_))::pargs),axiom->
      begin
        (* higher order *)
        let env = saturate e.e_env in
@@ -1184,360 +1511,18 @@ let rec process (e : engine) : nengine =
        next m e
      end
 
-  | Pat_Axiom o1, o2 when EQ.axiom e.e_env o1 o2 -> next Match e
-
-  | Pat_Axiom _, _ -> next NoMatch e
-
-  | Pat_Fun_Symbol (symbol, lp), o2 -> begin
-      match o2 with
-      | Axiom_Local (_id,_ty) ->
-         (* this should not appear in o2 *)
-         next NoMatch e
-      | Axiom_Form f -> begin
-          match symbol, lp, f.f_node with
-          | Sym_Form_If, p1::p2::p3::[], Fif (f1,f2,f3) ->
-             let zand = [(Axiom_Form f2,p2);(Axiom_Form f3,p3)] in
-             let e =
-               { e with
-                 e_head = Axiom_Form f1;
-                 e_pattern = p1;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-             in process e
-          | Sym_Form_App ty, pop :: pargs, Fapp (fop, fargs) ->
-             let oe =
-               let (rev_fargs2,rev_fargs1),(rev_pargs2,rev_pargs1) =
-                 List.prefix2 (List.rev fargs) (List.rev pargs) in
-               let fargs1,fargs2,pargs1,pargs2 =
-                 List.rev rev_fargs1,List.rev rev_fargs2,
-                 List.rev rev_pargs1,List.rev rev_pargs2 in
-               match fargs1,pargs1 with
-               | _::_,_::_ -> assert false
-               | _, [] ->
-                  let fop' = f_app
-                               fop
-                               fargs1
-                               (EcTypes.toarrow (List.map f_ty fargs2) (f_ty fop))
-                  in
-                  let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
-                  let pop = match pargs1 with
-                    | [] -> pop
-                    | _ -> Pat_Fun_Symbol (Sym_Form_App
-                                             (* FIXME : is this the right type ?? *)
-                                             ty, pop::pargs1) in
-                  let zand = (Axiom_Form fop', pop)::zand in
-                  let e_pattern,e_head,zand =
-                    match List.rev zand with
-                    | [] -> assert false
-                    | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
-                    | _ -> assert false in
-                  let e_continuation = e.e_continuation in
-                  let e_continuation = Zand ([],zand,e_continuation) in
-                  (* let e_list =
-                   *   (\* let rp = obeta_reduce e.e_env p in *\)
-                   *   let l1 =
-                   *     match rp with
-                   *     | None -> []
-                   *     | Some e_pattern ->
-                   *        [{ e with e_pattern }] in
-                   *   let rf = f_betared f in
-                   *   let l2 = match fop.f_node with
-                   *     | Fquant (Llambda,_,_) ->
-                   *        [{ e with e_head = Axiom_Form rf; }]
-                   *     | _ -> [] in
-                   *   l1@l2 in *)
-                  (* let e_continuation = match e_list with
-                   *   | [] -> e_continuation
-                   *   | _ -> Zor (e_continuation,e_list,e_next e) in *)
-                  Some (fun () ->
-                      process { e with
-                          e_pattern;
-                          e_head;
-                          e_continuation; })
-               | [], _::_ ->
-                  let p = Pat_Fun_Symbol (Sym_Form_App
-                                            (* FIXME : is this the right type ?? *)
-                                            ty, (pop::pargs1)) in
-                  let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
-                  Some (fun () ->
-                      process { e with
-                          e_pattern = p;
-                          e_continuation = Zand ([],zand,e.e_continuation)
-                    })
-             in
-             (odfl (fun () -> next NoMatch e) oe) ()
-          | Sym_App, (Pat_Meta_Name (p,_,_))::_,_ -> begin
-              match p with
-              | Pat_Type _ -> assert false
-              | Pat_Anything -> assert false
-              | _ -> assert false
-            end
-          | Sym_Form_Tuple, lp, Ftuple lf
-               when 0 = List.compare_lengths lp lf -> begin
-              match lp, lf with
-              | [], _::_ | _::_,[] -> assert false
-              | [], [] -> next Match e
-              | p::ptuple, f::ftuple ->
-                 let zand = List.map2 (fun x y -> Axiom_Form x, y) ftuple ptuple in
-                 let cont = Zand ([],zand,e.e_continuation) in
-                 process { e with
-                     e_pattern = p;
-                     e_head = Axiom_Form f;
-                     e_continuation = cont }
-            end
-          | Sym_Form_Proj (i,ty), [e_pattern], Fproj (f1,j)
-               when i = j  && EQ.ty e.e_env ty f.f_ty ->
-             process { e with e_pattern; e_head = Axiom_Form f1 }
-          | Sym_Form_Match ty, p::pl, Fmatch (fmatch,fl,_)
-               when 0 = List.compare_lengths pl fl && EQ.ty e.e_env ty f.f_ty ->
-             let zand = List.map2 (fun x y -> Axiom_Form x, y) fl pl in
-             process { e with
-                 e_pattern = p;
-                 e_head = Axiom_Form fmatch;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-          | Sym_Form_Quant (q1,bs1), [p], Fquant (q2,bs2,f2)
-               when q1 = q2 && 0 > List.compare_lengths bs1 bs2 -> begin
-              (* FIXME : lambda case to be considered in higher order *)
-              let (pbs1,_), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
-              if not (List.for_all2 (EQ.gty e.e_env) (List.map snd pbs1) (List.map snd fbs1))
-              then  next NoMatch e
-              else
-              let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
-              let e_env = saturate e.e_env in
-              let subst = psubst_of_menv e_env.env_match in
-              let s     = List.fold_left2 f subst pbs1 fbs1 in
-              let e_pattern = Psubst.p_subst s p in
-              process { e with
-                  e_pattern; e_env; e_head = Axiom_Form (f_quant q2 fbs2 f2);
-                }
-            end
-
-          | Sym_Form_Pvar ty, p1::p2::[], Fpvar (_,m)
-               when EQ.ty e.e_env f.f_ty ty ->
-             process { e with
-                 e_pattern = p2;
-                 e_head = Axiom_Memory m;
-                 e_continuation = Zand ([],[Axiom_Form f,p1],e.e_continuation);
-               }
-          | Sym_Form_Prog_var k, [p], Fpvar (x2,_) when k = x2.pv_kind ->
-             process { e with e_pattern = p; e_head = Axiom_Xpath x2.pv_name; }
-          | Sym_Form_Glob, p1::p2::[], Fglob (x,m) ->
-             let zand = [Axiom_Mpath x,p1] in
-             process { e with
-                 e_pattern = p2;
-                 e_head = Axiom_Memory m;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-          | Sym_Form_Hoare_F, [ppre;px;ppost], FhoareF hF ->
-             let fpre,fx,fpost = hF.hf_pr,hF.hf_f,hF.hf_po in
-             let zand = [Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost] in
-             process { e with
-                 e_pattern = px;
-                 e_head = Axiom_Xpath fx;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-          | Sym_Form_Hoare_S, [pmem;ppre;ps;ppost], FhoareS hs ->
-             let fmem,fpre,fs,fpost = hs.hs_m,hs.hs_pr,hs.hs_s,hs.hs_po in
-             let zand = [Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost;
-                         Axiom_Stmt fs,ps] in
-             process { e with
-                 e_pattern = pmem;
-                 e_head = Axiom_MemEnv fmem;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_bd_Hoare_F, [ppre;pf;ppost;pcmp;pbd], FbdHoareF bhf ->
-             let fpre,ff,fpost,fcmp,fbd =
-               bhf.bhf_pr,bhf.bhf_f,bhf.bhf_po,bhf.bhf_cmp,bhf.bhf_bd in
-             let zand = [Axiom_Hoarecmp fcmp,pcmp;
-                         Axiom_Form fbd,pbd;
-                         Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost] in
-             process { e with
-                 e_pattern = pf;
-                 e_head = Axiom_Xpath ff;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_bd_Hoare_S, [pmem;ppre;ps;ppost;pcmp;pbd], FbdHoareS bhs ->
-             let fmem,fpre,fs,fpost,fcmp,fbd =
-               bhs.bhs_m,bhs.bhs_pr,bhs.bhs_s,bhs.bhs_po,bhs.bhs_cmp,bhs.bhs_bd in
-             let zand = [Axiom_Hoarecmp fcmp,pcmp;
-                         Axiom_Form fbd,pbd;
-                         Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost;
-                         Axiom_Stmt fs,ps] in
-             process { e with
-                 e_pattern = pmem;
-                 e_head = Axiom_MemEnv fmem;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_Equiv_F, [ppre;pf1;pf2;ppost], FequivF ef ->
-             let fpre,ff1,ff2,fpost =
-               ef.ef_pr,ef.ef_fl,ef.ef_fr,ef.ef_po in
-             let zand = [Axiom_Xpath ff2,pf2;
-                         Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost] in
-             process { e with
-                 e_pattern = pf1;
-                 e_head = Axiom_Xpath ff1;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_Equiv_S, [pmem1;pmem2;ppre;ps1;ps2;ppost], FequivS es ->
-             let fmem1,fmem2,fpre,fs1,fs2,fpost =
-               es.es_ml,es.es_mr,es.es_pr,es.es_sl,es.es_sr,es.es_po in
-             let zand = [Axiom_MemEnv fmem2,pmem2;
-                         Axiom_Stmt fs1,ps1;
-                         Axiom_Stmt fs2,ps2;
-                         Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost] in
-             process { e with
-                 e_pattern = pmem1;
-                 e_head = Axiom_MemEnv fmem1;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_Eager_F, [ppre;ps1;pf1;pf2;ps2;ppost], FeagerF eg ->
-             let fpre,fs1,ff1,ff2,fs2,fpost =
-               eg.eg_pr,eg.eg_sl,eg.eg_fl,eg.eg_fr,eg.eg_sr,eg.eg_po in
-             let zand = [Axiom_Xpath ff2,pf2;
-                         Axiom_Stmt fs1,ps1;
-                         Axiom_Stmt fs2,ps2;
-                         Axiom_Form fpre,ppre;
-                         Axiom_Form fpost,ppost] in
-             process { e with
-                 e_pattern = pf1;
-                 e_head = Axiom_Xpath ff1;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Form_Pr, [pmem;pf;pargs;pevent], Fpr pr ->
-             let fmem,ff,fargs,fevent =
-               pr.pr_mem,pr.pr_fun,pr.pr_args,pr.pr_event in
-             let zand = [
-                 Axiom_Xpath ff,pf;
-                 Axiom_Form fargs,pargs;
-                 Axiom_Form fevent,pevent
-               ] in
-             process { e with
-                 e_pattern = pmem;
-                 e_head = Axiom_Memory fmem;
-                 e_continuation =
-                   Zand ([Axiom_Memory fmem,pmem],zand,e.e_continuation); }
-          | _ -> next NoMatch e
-        end
-      | Axiom_Memory _ | Axiom_MemEnv _ | Axiom_Prog_Var _ | Axiom_Op _ ->
-         next NoMatch e
-      | Axiom_Module _ -> begin
-          match symbol, lp with
-          | Sym_Mpath, [p] ->
-             process { e with e_pattern = p }
-          | _ -> next NoMatch e
-        end
-
-      | Axiom_Mpath m -> begin
-          match symbol, lp with
-          | Sym_Mpath, p::rest ->
-             let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
-             let zand = List.map2 (fun x y -> (Axiom_Mpath x),y) margs2 pargs2 in
-             let e_continuation = match zand with
-               | [] -> e.e_continuation
-               | _  -> Zand ([],zand,e.e_continuation) in
-             let m = match margs1 with
-               | [] ->
-                  Axiom_Module m.m_top
-               | _  -> if margs2 = [] then Axiom_Mpath m
-                       else Axiom_Mpath (mpath m.m_top margs1)
-             in
-             let p = match pargs1 with
-               | [] -> p
-               | _ ->
-                  Pat_Fun_Symbol (Sym_Mpath, p::pargs1)
-             in
-             process { e with
-                 e_pattern = p;
-                 e_head = m;
-                 e_continuation
-               }
-          | _ -> next NoMatch e
-
-        end
-
-      | Axiom_Instr i -> begin
-          match symbol, lp, i.i_node with
-          | Sym_Instr_Assign, [plv;prv], Sasgn (flv,fe)
-            | Sym_Instr_Sample, [plv;prv], Srnd (flv,fe) ->
-             let frv = form_of_expr fe in
-             let zand = [Axiom_Form frv,prv] in
-             process { e with
-                 e_pattern = plv;
-                 e_head = Axiom_Lvalue flv;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Instr_Call, pf::pargs, Scall (None,ff,fargs)
-               when 0 = List.compare_lengths pargs fargs ->
-             let fmap x y = (Axiom_Form (form_of_expr x),y) in
-             let zand = List.map2 fmap fargs pargs in
-             process { e with
-                 e_pattern = pf;
-                 e_head = Axiom_Xpath ff;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Instr_Call_Lv, plv::pf::pargs, Scall (Some flv,ff,fargs) ->
-             let fmap x y = (Axiom_Form (form_of_expr x),y) in
-             let zand = List.map2 fmap fargs pargs in
-             let zand = (Axiom_Lvalue flv,plv)::zand in
-             process { e with
-                 e_pattern = pf;
-                 e_head = Axiom_Xpath ff;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Instr_If, [pe;ptrue;pfalse], Sif (fe,strue,sfalse) ->
-             let zand = [Axiom_Stmt strue,ptrue;
-                         Axiom_Stmt sfalse,pfalse] in
-             process { e with
-                 e_pattern = pe;
-                 e_head = Axiom_Form (form_of_expr fe);
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Instr_While, [pe;pbody], Swhile (fe,fbody) ->
-             let zand = [Axiom_Stmt fbody,pbody] in
-             process { e with
-                 e_pattern = pe;
-                 e_head = Axiom_Form (form_of_expr fe);
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | Sym_Instr_Assert, [pe], Sassert fe ->
-             process { e with
-                 e_pattern = pe;
-                 e_head = Axiom_Form (form_of_expr fe);
-               }
-          | _ -> next NoMatch e
-        end
-
-      | Axiom_Stmt s -> begin
-          match symbol,lp,s.s_node with
-          | Sym_Stmt_Seq,[],[] -> next Match e
-          | Sym_Stmt_Seq,pi::pl,fi::fl ->
-             let pl = Pat_Fun_Symbol (Sym_Stmt_Seq, pl) in
-             let zand = [Axiom_Stmt (stmt fl),pl] in
-             process { e with
-                 e_pattern = pi;
-                 e_head = Axiom_Instr fi;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-          | _ -> next NoMatch e
-        end
-
-      | Axiom_Lvalue _ -> next NoMatch e
-
-      | Axiom_Xpath x -> begin
-          match symbol,lp with
-          | Sym_Xpath, [pm;pf] ->
-             let zand = [Axiom_Mpath x.x_top,pm] in
-             process { e with
-                 e_pattern = pf;
-                 e_head = Axiom_Op (x.x_sub,[]);
-                 e_continuation = Zand ([],zand,e.e_continuation); }
-          | _ -> next NoMatch e
-        end
-
-      | Axiom_Hoarecmp _ -> next NoMatch e
-
-    end
+  | Pat_Fun_Symbol _, _ -> next NoMatch e
 
   | Pat_Instance (_,_,_,_), _ -> (* FIXME *) assert false
 
 and next (m : ismatch) (e : engine) : nengine = match m with
   | NoMatch -> begin
+      let _ =
+        let ppe = e.e_env.env_ppe in
+        Format.eprintf "[W]-- %a <> %a\n"
+          (EcPrinting.pp_pattern ppe) e.e_pattern
+          (EcPrinting.pp_pat_axiom ppe) e.e_head
+      in
       let i_red_p, i_red_a =
         e.e_env.env_red_info_p, e.e_env.env_red_info_a in
       let e_env = saturate e.e_env in
@@ -1550,10 +1535,16 @@ and next (m : ismatch) (e : engine) : nengine = match m with
          let e_or = { e with e_pattern = p; e_head = a } in
          match e.e_continuation with
          | Zor (cont,(_::_ as l),nomatch_cont) ->
-            process { e with e_continuation = Zor (cont,l@[e_or],nomatch_cont) }
+            process { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
          | _ -> process e_or
     end
   | _ ->
+      let _ =
+        let ppe = e.e_env.env_ppe in
+        Format.eprintf "[W]++ %a = %a\n"
+          (EcPrinting.pp_pattern ppe) e.e_pattern
+          (EcPrinting.pp_pat_axiom ppe) e.e_head
+      in
      next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
