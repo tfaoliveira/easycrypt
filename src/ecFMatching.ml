@@ -1009,30 +1009,37 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  let _ =
-    let ppe = e.e_env.env_ppe in
-    Format.eprintf "[W]?? %s delta_p and %s delta_a : %a =? %a\n"
-      (if e.e_env.env_red_info_match.EcReduction.delta_p
-            (match e.e_pattern with
-             | Pat_Fun_Symbol
-               (Sym_Form_App _,
-                (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
-             | _ -> EcPath.psymbol "foobar")
-       then "with" else "without")
-      (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
-            (match e.e_head with
-             | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
-             | _ -> EcPath.psymbol "foobar")
-       then "with" else "without")
-      (EcPrinting.pp_pattern ppe) e.e_pattern
-      (EcPrinting.pp_pat_axiom ppe) e.e_head
-  in
+  (* let _ =
+   *   let ppe = e.e_env.env_ppe in
+   *   Format.fprintf e.e_env.env_fmt "[W]?? (%i left) %a =? %a\n"
+   *     (match e.e_continuation with
+   *      | Zand (_,l,_) -> List.length l
+   *      | _ -> 0)
+   *     (\* (if e.e_env.env_red_info_match.EcReduction.delta_p
+   *      *       (match e.e_pattern with
+   *      *        | Pat_Fun_Symbol
+   *      *          (Sym_Form_App _,
+   *      *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
+   *      *        | _ -> EcPath.psymbol "foobar")
+   *      *  then "with" else "without")
+   *      * (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
+   *      *       (match e.e_head with
+   *      *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
+   *      *        | _ -> EcPath.psymbol "foobar")
+   *      *  then "with" else "without") *\)
+   *     (EcPrinting.pp_pattern ppe) e.e_pattern
+   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+   * in *)
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
   (* | Pat_Meta_Name (_,name,_), _
    *      when Mid.mem name e.e_env.env_match.me_matches ->
    *    process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches } *)
+
+  | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
+                             | Axiom_Local (n2,_))
+       when EQ.name n1 n2 -> next Match e
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
@@ -1093,40 +1100,19 @@ let rec process (e : engine) : nengine =
 
   | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), pop :: pargs),
     Axiom_Form { f_node = Fapp (fop, fargs) } ->
-     let oe =
-       let (fargs1,fargs2),(pargs1,pargs2) = suffix2 fargs pargs in
-       match fargs1,pargs1 with
-       | _::_,_::_ -> assert false
-       | _, [] ->
-          let fop' = f_ty_app (EcEnv.LDecl.toenv e.e_env.env_hyps) fop fargs1 in
-          let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
-          let pop = match pargs1 with
-            | [] -> pop
-            | _ -> Pat_Fun_Symbol (Sym_App, pop::pargs1) in
-          let zand = (Axiom_Form fop', pop)::zand in
-          let e_pattern,e_head,zand =
-            match List.rev zand with
-            | [] -> assert false
-            | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
-            | _ -> assert false in
-          let e_continuation = e.e_continuation in
-          let e_continuation = Zand ([],zand,e_continuation) in
-          Some (fun () ->
-              process { e with
-                  e_pattern;
-                  e_head;
-                  e_continuation; })
-       | [], _::_ ->
-          let p = Pat_Fun_Symbol (Sym_App, (pop::pargs1)) in
-          let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
-          Some (fun () ->
-              process { e with
-                  e_pattern = p;
-                  e_continuation = Zand ([],zand,e.e_continuation)
-            })
-     in
-     (odfl (fun () -> next NoMatch e) oe) ()
-
+     let (fargs1,fargs2),(pargs1,pargs2) = suffix2 fargs pargs in
+     if fargs2 = [] && pargs2 = [] then assert false;
+     let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
+     let fop' = f_ty_app (EcEnv.LDecl.toenv e.e_env.env_hyps) fop fargs1 in
+     let pop = p_app pop pargs1 None in
+     let zand = (Axiom_Form fop', pop)::zand in
+     let e_pattern,e_head,zand =
+       match List.rev zand with
+       | [] -> assert false
+       | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
+       | _ -> assert false in
+     let e_continuation = Zand ([e_head,e_pattern],zand,e.e_continuation) in
+     process { e with e_pattern; e_head; e_continuation; }
 
   | Pat_Fun_Symbol (Sym_Form_Tuple, lp),
     Axiom_Form { f_node = Ftuple lf }
@@ -1450,53 +1436,56 @@ let rec process (e : engine) : nengine =
 
 and next (m : ismatch) (e : engine) : nengine = match m with
   | NoMatch -> begin
-      let _ =
-        let ppe = e.e_env.env_ppe in
-        Format.eprintf "[W]-- %a <> %a\n"
-          (EcPrinting.pp_pattern ppe) e.e_pattern
-          (EcPrinting.pp_pat_axiom ppe) e.e_head
-      in
+      (* let _ =
+       *   let ppe = e.e_env.env_ppe in
+       *   Format.fprintf e.e_env.env_fmt "[W]-- (%i left) %a <> %a\n"
+       *     (match e.e_continuation with
+       *      | Zand (_,l,_) -> List.length l
+       *      | _ -> 0)
+       *     (EcPrinting.pp_pattern ppe) e.e_pattern
+       *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+       * in *)
       let i_red_match, i_red_same_meta =
         e.e_env.env_red_info_match, e.e_env.env_red_info_same_meta in
       let e_env = saturate e.e_env in
       let e = { e with e_env } in
       let subst = psubst_of_menv e_env.env_match in
-      let _ = match e.e_pattern with
-        | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
-          (Pat_Axiom (Axiom_Form {f_node = Fop (op, _); }))::_)
-             when is_some i_red_match.EcReduction.logic && is_logical_op op ->
-           Format.eprintf "[W]** pattern is logical\n"
-        | _ -> () in
-      let _ = match e.e_head with
-        | Axiom_Form ({ f_node = Fapp ({f_node = Fop (op, _); },_)})
-             when is_some i_red_match.EcReduction.logic && is_logical_op op ->
-           Format.eprintf "[W]** axiom is logical\n"
-        | _ -> () in
-      let _ =
-        match e.e_pattern with
-        (* β-reduction *)
-        | Pat_Fun_Symbol
-          ((Sym_Form_App _ | Sym_App),
-           (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                            | Sym_Quant (Llambda,_)),[_])
-            | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                                         | Sym_Quant (Llambda,_)),[_]),_))
-           ::_) when e.e_env.env_red_info_match.EcReduction.beta ->
-           Format.fprintf e.e_env.env_fmt "[W]BB pattern can be beta-reduced\n"
-        | Pat_Fun_Symbol
-          ((Sym_Form_Quant (Llambda, [x, GTty _])
-            | Sym_Quant (Llambda, [x, OGTty _])),
-           [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })])
-             when PReduction.can_eta x (fn, args) ->
-           Format.fprintf e.e_env.env_fmt "[W] + pattern can be eta-reduced\n"
-        | Pat_Fun_Symbol
-          ((Sym_Quant (Llambda, [x,_])
-            | Sym_Form_Quant (Llambda, [x,_])),
-           [Pat_Fun_Symbol ((Sym_Form_App _| Sym_App), op::args)])
-             when PReduction.p_can_eta e.e_env.env_hyps x (op,args) ->
-           Format.fprintf e.e_env.env_fmt "[W] - pattern can be eta-reduced\n"
-        | _ -> ()
-      in
+      (* let _ = match e.e_pattern with
+       *   | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
+       *     (Pat_Axiom (Axiom_Form {f_node = Fop (op, _); }))::_)
+       *        when is_some i_red_match.EcReduction.logic && is_logical_op op ->
+       *      Format.eprintf "[W]** pattern is logical\n"
+       *   | _ -> () in *)
+      (* let _ = match e.e_head with
+       *   | Axiom_Form ({ f_node = Fapp ({f_node = Fop (op, _); },_)})
+       *        when is_some i_red_match.EcReduction.logic && is_logical_op op ->
+       *      Format.eprintf "[W]** axiom is logical\n"
+       *   | _ -> () in *)
+      (* let _ =
+       *   match e.e_pattern with
+       *   (\* β-reduction *\)
+       *   | Pat_Fun_Symbol
+       *     ((Sym_Form_App _ | Sym_App),
+       *      (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+       *                       | Sym_Quant (Llambda,_)),[_])
+       *       | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+       *                                    | Sym_Quant (Llambda,_)),[_]),_))
+       *      ::_) when e.e_env.env_red_info_match.EcReduction.beta ->
+       *      Format.fprintf e.e_env.env_fmt "[W]BB pattern can be beta-reduced\n"
+       *   | Pat_Fun_Symbol
+       *     ((Sym_Form_Quant (Llambda, [x, GTty _])
+       *       | Sym_Quant (Llambda, [x, OGTty _])),
+       *      [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })])
+       *        when PReduction.can_eta x (fn, args) ->
+       *      Format.fprintf e.e_env.env_fmt "[W] + pattern can be eta-reduced\n"
+       *   | Pat_Fun_Symbol
+       *     ((Sym_Quant (Llambda, [x,_])
+       *       | Sym_Form_Quant (Llambda, [x,_])),
+       *      [Pat_Fun_Symbol ((Sym_Form_App _| Sym_App), op::args)])
+       *        when PReduction.p_can_eta e.e_env.env_hyps x (op,args) ->
+       *      Format.fprintf e.e_env.env_fmt "[W] - pattern can be eta-reduced\n"
+       *   | _ -> ()
+       * in *)
       match h_red_strat e.e_env.env_hyps subst i_red_match i_red_same_meta
               e.e_pattern e.e_head with
       | None -> next_n m (e_next e)
@@ -1511,12 +1500,15 @@ and next (m : ismatch) (e : engine) : nengine = match m with
            | _ -> process e_or
     end
   | _ ->
-      let _ =
-        let ppe = e.e_env.env_ppe in
-        Format.eprintf "[W]++ %a = %a\n"
-          (EcPrinting.pp_pattern ppe) e.e_pattern
-          (EcPrinting.pp_pat_axiom ppe) e.e_head
-      in
+      (* let _ =
+       *   let ppe = e.e_env.env_ppe in
+       *   Format.fprintf e.e_env.env_fmt "[W]++ (%i left) %a = %a\n"
+       *     (match e.e_continuation with
+       *      | Zand (_,l,_) -> List.length l
+       *      | _ -> 0)
+       *     (EcPrinting.pp_pattern ppe) e.e_pattern
+       *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+       * in *)
      next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
