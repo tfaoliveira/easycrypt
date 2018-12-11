@@ -16,15 +16,15 @@ type match_env = {
   }
 
 type environment = {
-    env_hyps             : EcEnv.LDecl.hyps;
-    env_match            : match_env;
-    env_red_info_p       : EcReduction.reduction_info;
-    env_red_info_a       : EcReduction.reduction_info;
-    env_restore_unienv   : EcUnify.unienv option ref;
-    env_current_binds    : pbindings;
-    env_meta_restr_binds : pbindings Mid.t;
-    env_fmt              : Format.formatter;
-    env_ppe              : EcPrinting.PPEnv.t;
+    env_hyps               : EcEnv.LDecl.hyps;
+    env_match              : match_env;
+    env_red_info_match     : EcReduction.reduction_info;
+    env_red_info_same_meta : EcReduction.reduction_info;
+    env_restore_unienv     : EcUnify.unienv option ref;
+    env_current_binds      : pbindings;
+    env_meta_restr_binds   : pbindings Mid.t;
+    env_fmt                : Format.formatter;
+    env_ppe                : EcPrinting.PPEnv.t;
   }
 
 type pat_continuation =
