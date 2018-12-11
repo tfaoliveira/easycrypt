@@ -561,7 +561,19 @@ end = struct
   and pattern (env : environment) ri (p1 : pattern) (p2 : pattern) : bool =
     let env_restore_unienv = !(env.env_restore_unienv) in
     env.env_restore_unienv := None;
-    let eq = match p1, p2 with
+    let try_translate_eq eq trans p1 p2 =
+      try eq (trans p1) (trans p2) with Translate.Invalid_Type _ -> false in
+    let eq =
+      if      (try_translate_eq (form env ri)
+                 (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
+      then true
+      else if (try_translate_eq (memory env) Translate.memory_of_pattern p1 p2)
+      then true
+      else if (try_translate_eq (mpath env)
+                 (Translate.mpath_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
+      then true
+      else
+      match p1, p2 with
       | Pat_Anything, _ | _, Pat_Anything -> true
       | Pat_Instance _, _ | _, Pat_Instance _ -> assert false
       | Pat_Red_Strat (p1,red1), Pat_Red_Strat (p2,red2) ->
@@ -571,36 +583,11 @@ end = struct
       | Pat_Sub p1, Pat_Sub p2 -> pattern env ri p1 p2
       | Pat_Type (p1,gt1), Pat_Type (p2,gt2) ->
          if ogty env gt1 gt2 then pattern env ri p1 p2 else false
-      | Pat_Type (p1, (OGTty _ as gt1)), p2
-        | p2, Pat_Type (p1, (OGTty _ as gt1)) ->
-         if is_ogty env p2 gt1 then
-           let p1 = try pat_form (Translate.form_of_pattern
-                                    (EcEnv.LDecl.toenv env.env_hyps) p1)
-                    with Translate.Invalid_Type _ -> p1 in
-           let p2 = try pat_form (Translate.form_of_pattern
-                                    (EcEnv.LDecl.toenv env.env_hyps) p2)
-                    with Translate.Invalid_Type _ -> p2 in
-           pattern env ri p1 p2
+      | Pat_Type (p1, gt1), p2 ->
+         if is_ogty env p2 gt1 then pattern env ri p1 p2
          else false
-      | Pat_Type (p1, (OGTmem _ as gt1)), p2
-        | p2, Pat_Type (p1, (OGTmem _ as gt1)) ->
-         if is_ogty env p2 gt1 then
-           let p1 = try pat_memory (Translate.memory_of_pattern p1)
-                    with Translate.Invalid_Type _ -> p1 in
-           let p2 = try pat_memory (Translate.memory_of_pattern p2)
-                    with Translate.Invalid_Type _ -> p2 in
-           pattern env ri p1 p2
-         else false
-      | Pat_Type (p1, (OGTmodty _ as gt1)), p2
-        | p2, Pat_Type (p1, (OGTmodty _ as gt1)) ->
-         if is_ogty env p2 gt1 then
-           let p1 = try pat_mpath (Translate.mpath_of_pattern
-                                    (EcEnv.LDecl.toenv env.env_hyps) p1)
-                    with Translate.Invalid_Type _ -> p1 in
-           let p2 = try pat_mpath (Translate.mpath_of_pattern
-                                    (EcEnv.LDecl.toenv env.env_hyps) p2)
-                    with Translate.Invalid_Type _ -> p2 in
-           pattern env ri p1 p2
+      | p1, Pat_Type (p2, gt2) ->
+         if is_ogty env p1 gt2 then pattern env ri p1 p2
          else false
       | Pat_Axiom a1, Pat_Axiom a2 ->
          axiom env ri a1 a2
@@ -844,7 +831,7 @@ end
 
 
 (* -------------------------------------------------------------------------- *)
-let h_red_strat hyps s rp ra p a =
+let h_red_strat hyps s rp _ p a =
   let op = match PReduction.h_red_pattern_opt hyps rp s p with
     | Some p' -> if p = p' then None else Some (p', a)
     | None -> None in
@@ -888,7 +875,6 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
       | None -> Mid.add name p e.ne_env.env_match.me_matches
       | Some p' ->
          (* raise CannotUnify *)
-         let p' = Psubst.p_subst subst p' in
          if EQ.pattern e.ne_env e.ne_env.env_red_info_same_meta p p'
          then e.ne_env.env_match.me_matches
          else raise CannotUnify
@@ -1044,9 +1030,9 @@ let rec process (e : engine) : nengine =
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
-  | Pat_Meta_Name (_,name,_), _
-       when Mid.mem name e.e_env.env_match.me_matches ->
-     process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches }
+  (* | Pat_Meta_Name (_,name,_), _
+   *      when Mid.mem name e.e_env.env_match.me_matches ->
+   *    process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches } *)
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
@@ -1188,7 +1174,7 @@ let rec process (e : engine) : nengine =
       else
         let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
         let e_env = saturate e.e_env in
-        let subst = psubst_of_menv e_env.env_match in
+        let subst = Psubst.p_subst_id in
         let s     = List.fold_left2 f subst pbs1 fbs1 in
         let e_pattern = Psubst.p_subst s p in
         process { e with
@@ -1475,8 +1461,7 @@ and next (m : ismatch) (e : engine) : nengine = match m with
       let e_env = saturate e.e_env in
       let e = { e with e_env } in
       let subst = psubst_of_menv e_env.env_match in
-      let e_pattern = Psubst.p_subst subst e.e_pattern in
-      let _ = match e_pattern with
+      let _ = match e.e_pattern with
         | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
           (Pat_Axiom (Axiom_Form {f_node = Fop (op, _); }))::_)
              when is_some i_red_match.EcReduction.logic && is_logical_op op ->
@@ -1487,11 +1472,36 @@ and next (m : ismatch) (e : engine) : nengine = match m with
              when is_some i_red_match.EcReduction.logic && is_logical_op op ->
            Format.eprintf "[W]** axiom is logical\n"
         | _ -> () in
+      let _ =
+        match e.e_pattern with
+        (* β-reduction *)
+        | Pat_Fun_Symbol
+          ((Sym_Form_App _ | Sym_App),
+           (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+                            | Sym_Quant (Llambda,_)),[_])
+            | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+                                         | Sym_Quant (Llambda,_)),[_]),_))
+           ::_) when e.e_env.env_red_info_match.EcReduction.beta ->
+           Format.fprintf e.e_env.env_fmt "[W]BB pattern can be beta-reduced\n"
+        | Pat_Fun_Symbol
+          ((Sym_Form_Quant (Llambda, [x, GTty _])
+            | Sym_Quant (Llambda, [x, OGTty _])),
+           [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })])
+             when PReduction.can_eta x (fn, args) ->
+           Format.fprintf e.e_env.env_fmt "[W] + pattern can be eta-reduced\n"
+        | Pat_Fun_Symbol
+          ((Sym_Quant (Llambda, [x,_])
+            | Sym_Form_Quant (Llambda, [x,_])),
+           [Pat_Fun_Symbol ((Sym_Form_App _| Sym_App), op::args)])
+             when PReduction.p_can_eta e.e_env.env_hyps x (op,args) ->
+           Format.fprintf e.e_env.env_fmt "[W] - pattern can be eta-reduced\n"
+        | _ -> ()
+      in
       match h_red_strat e.e_env.env_hyps subst i_red_match i_red_same_meta
-              e_pattern e.e_head with
+              e.e_pattern e.e_head with
       | None -> next_n m (e_next e)
       | Some (p,a) ->
-         if   p = e_pattern && a = e.e_head
+         if   p = e.e_pattern && a = e.e_head
          then next_n m (e_next e)
          else
            let e_or = { e with e_pattern = p; e_head = a } in
@@ -1540,8 +1550,6 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | Match, Zand (before,(f,p)::after,z) ->
      let ne_env = saturate e.ne_env in
      let e      = { e with ne_env } in
-     let subst  = psubst_of_menv ne_env.env_match in
-     let p      = Psubst.p_subst subst p in
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 

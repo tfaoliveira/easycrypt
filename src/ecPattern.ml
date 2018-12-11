@@ -1666,6 +1666,24 @@ module Psubst = struct
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
              subst bs1 pargs1 in
          Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 None)
+      | Sym_Form_App ty,
+        (Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) }))::pargs ->
+         let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_f_quant Llambda bs2 (p_subst subst (pat_form f)))
+                 pargs2 (Some ty))
+      | Sym_App,
+        (Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) }))::pargs ->
+         let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
+         let subst = p_subst_id in
+         let subst =
+           List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
+             subst bs1 pargs1 in
+         Some (p_app (p_f_quant Llambda bs2 (p_subst subst (pat_form f)))
+                 pargs2 None)
       | _ -> None
 
 end
@@ -2240,7 +2258,9 @@ module PReduction = struct
         (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
                           | Sym_Quant (Llambda,_)),[_])
          | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                          | Sym_Quant (Llambda,_)),[_]),_))::_
+                          | Sym_Quant (Llambda,_)),[_]),_)
+         | Pat_Axiom (Axiom_Form { f_node = Fapp (_,_)}))
+        ::_
            when ri.beta -> p_betared_opt p
 
       (* ζ-reduction *)
@@ -2566,20 +2586,28 @@ module PReduction = struct
        omap (fun op -> p_app_simpl op args None) op
 
     (* η-reduction *)
-    | Sym_Form_Quant (Llambda, [x, GTty _]),
+    | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
       [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })]
          when can_eta x (fn, args)
-      -> Some (pat_form
-                 (EcFol.f_ty_app
-                    (EcEnv.LDecl.toenv hyps) fn
-                    (List.take (List.length args - 1) args)))
+      -> Some (p_f_quant Llambda binds
+                 (pat_form
+                    (EcFol.f_ty_app
+                       (EcEnv.LDecl.toenv hyps) fn
+                       (List.take (List.length args - 1) args))))
 
     (* η-reduction *)
-    | (Sym_Form_Quant (Llambda, [x, GTty _])
-       | Sym_Quant (Llambda, [x, OGTty _])),
+    | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
       [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
          when p_can_eta hyps x (pn, pargs) ->
-       Some (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty))
+       Some (p_f_quant Llambda binds
+               (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty)))
+
+    (* η-reduction *)
+    | Sym_Quant (Llambda, (x, OGTty _)::binds),
+      [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
+         when p_can_eta hyps x (pn, pargs) ->
+       Some (p_quant Llambda binds
+               (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty)))
 
     (* η-reduction *)
     | (Sym_Form_Quant (Llambda, [x, GTty _])
