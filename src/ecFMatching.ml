@@ -1037,9 +1037,9 @@ let rec process (e : engine) : nengine =
    *      when Mid.mem name e.e_env.env_match.me_matches ->
    *    process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches } *)
 
-  | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
-                             | Axiom_Local (n2,_))
-       when EQ.name n1 n2 -> next Match e
+  (* | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
+   *                            | Axiom_Local (n2,_))
+   *      when EQ.name n1 n2 -> next Match e *)
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =

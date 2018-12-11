@@ -2963,8 +2963,7 @@ open EcPattern
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
-     Format.fprintf fmt "Form(@[%a@])"
-       (pp_form ppe) f
+     pp_form ppe fmt f
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
@@ -3007,12 +3006,8 @@ and pp_pattern ppe fmt p = match p with
   | Pat_Or _ -> assert false
   | Pat_Instance _ -> assert false
   | Pat_Red_Strat _ -> assert false
-  | Pat_Axiom a ->
-     Format.fprintf fmt "Axiom@[(%a)@]"
-       (pp_pat_axiom ppe) a
-  | Pat_Type (p,_) ->
-     Format.fprintf fmt "Typed(@[%a@])"
-       (pp_pattern ppe) p
+  | Pat_Axiom a -> pp_pat_axiom ppe fmt a
+  | Pat_Type (p,_) -> pp_pattern ppe fmt p
   | Pat_Fun_Symbol (symbol,args) ->
      match symbol,args with
      | Sym_Form_If, [p1;p2;p3] ->
@@ -3023,7 +3018,7 @@ and pp_pattern ppe fmt p = match p with
      | Sym_Form_If, _ -> assert false
 
      | Sym_Form_App _,op::args ->
-        Format.fprintf fmt "Pat_App_ty(@[%a@])"
+        Format.fprintf fmt "@[%a@]"
           (pp_list "@ " (pp_pattern ppe)) (op::args)
      | Sym_Form_App _,_ -> assert false
 
@@ -3251,7 +3246,7 @@ and pp_pattern ppe fmt p = match p with
      | Sym_Mpath, _ -> assert false
 
      | Sym_App, op::args ->
-        Format.fprintf fmt "Sym_App(@[%a@ %a@])"
+        Format.fprintf fmt "@[%a@ %a@]"
           (pp_pattern ppe) op
           (pp_list "@ " (pp_pattern ppe)) args
      | Sym_App, _ -> assert false
