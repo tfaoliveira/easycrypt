@@ -268,7 +268,7 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
     let eng =
       EcFMatching.mk_engine
         ~mtch:!(pt.pte_mc) subject ptn pt.pte_hy
-        ri ri in
+        ri EcReduction.full_red in
 
     match EcFMatching.search_eng eng with
     | None     -> raise EcMatching.MatchFailure
