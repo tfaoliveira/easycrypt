@@ -2961,16 +2961,25 @@ end
 (* -------------------------------------------------------------------------- *)
 open EcPattern
 
+let pp_ogty ppe fmt = function
+  | OGTty (Some ty) -> pp_type ppe fmt ty
+  | OGTty None -> Format.fprintf fmt "ty"
+  | OGTmem (Some _) -> Format.fprintf fmt "Some mem"
+  | OGTmem None -> Format.fprintf fmt "mem"
+  | OGTmodty (Some _) -> Format.fprintf fmt "Some modty"
+  | OGTmodty None -> Format.fprintf fmt "modty"
+
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
-     pp_form ppe fmt f
+     Format.fprintf fmt "Form(%a : %a)"
+       (pp_form ppe) f (pp_type ppe) f.f_ty
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
   | Axiom_Prog_Var pv ->
      pp_pv ppe fmt pv
   | Axiom_Op (path,_) ->
-     pp_path fmt path
+     Format.fprintf fmt "Op(%a)" pp_path path
   | Axiom_Module m ->
      pp_topmod ppe fmt (EcPath.mpath m [])
   | Axiom_Mpath m ->
@@ -3007,7 +3016,10 @@ and pp_pattern ppe fmt p = match p with
   | Pat_Instance _ -> assert false
   | Pat_Red_Strat _ -> assert false
   | Pat_Axiom a -> pp_pat_axiom ppe fmt a
-  | Pat_Type (p,_) -> pp_pattern ppe fmt p
+  | Pat_Type (p,t) ->
+     Format.fprintf fmt "Typed(%a : %a)"
+       (pp_pattern ppe) p
+       (pp_ogty ppe) t
   | Pat_Fun_Symbol (symbol,args) ->
      match symbol,args with
      | Sym_Form_If, [p1;p2;p3] ->
@@ -3017,9 +3029,10 @@ and pp_pattern ppe fmt p = match p with
           (pp_pattern ppe) p3
      | Sym_Form_If, _ -> assert false
 
-     | Sym_Form_App _,op::args ->
-        Format.fprintf fmt "@[%a@]"
+     | Sym_Form_App ty,op::args ->
+        Format.fprintf fmt "PApp(@[%a : %a@])"
           (pp_list "@ " (pp_pattern ppe)) (op::args)
+          (pp_type ppe) ty
      | Sym_Form_App _,_ -> assert false
 
      | Sym_Form_Tuple, t ->

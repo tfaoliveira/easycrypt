@@ -339,6 +339,69 @@ module Translate = struct
 
 end
 
+
+let rec get_ogty env = function
+  | Pat_Anything -> None
+  | Pat_Sub _ -> None
+  | Pat_Or _ -> None
+  | Pat_Instance _ -> assert false
+  | Pat_Red_Strat (p,_) -> get_ogty env p
+  | Pat_Type (_,t) -> Some t
+  | Pat_Meta_Name (p,_,_) -> get_ogty env p
+  | Pat_Axiom (Axiom_Form f) -> Some (OGTty (Some f.f_ty))
+  | Pat_Axiom (Axiom_Memory _) -> Some (OGTmem None)
+  | Pat_Axiom (Axiom_MemEnv (_,mt)) -> Some (OGTmem (Some mt))
+  | Pat_Axiom (Axiom_Prog_Var _) -> None
+  | Pat_Axiom (Axiom_Op (_,_)) -> Some (OGTty None)
+  | Pat_Axiom (Axiom_Module _) -> Some (OGTmodty None)
+  | Pat_Axiom (Axiom_Mpath _) -> Some (OGTmodty None)
+  | Pat_Axiom (Axiom_Xpath _) -> None
+  | Pat_Axiom (Axiom_Instr _) -> None
+  | Pat_Axiom (Axiom_Stmt _) -> None
+  | Pat_Axiom (Axiom_Lvalue _) -> None
+  | Pat_Axiom (Axiom_Hoarecmp _) -> None
+  | Pat_Axiom (Axiom_Local (_,t)) -> Some (OGTty (Some t))
+  | Pat_Fun_Symbol (Sym_Form_If, [_;p2;p3]) -> begin
+      match get_ogty env p2 with
+      | Some (OGTty (Some _)) as r -> r
+      | _ ->
+      match get_ogty env p3 with
+      | Some (OGTty (Some _)) as r -> r
+      | _ -> Some (OGTty None)
+    end
+  | Pat_Fun_Symbol (Sym_Form_App _,_) -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Form_Tuple,_) -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Form_Proj (_,_),_) -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Form_Match t, _) -> Some (OGTty (Some t))
+  | Pat_Fun_Symbol (Sym_Form_Quant _,_) -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Form_Let _, [_;p2]) -> begin
+      match get_ogty env p2 with
+      | Some (OGTty (Some _)) as r -> r
+      | _ -> Some (OGTty None)
+    end
+  | Pat_Fun_Symbol (Sym_Form_Pvar t, _) -> Some (OGTty (Some t))
+  | Pat_Fun_Symbol (Sym_Form_Prog_var _, _) -> None
+  | Pat_Fun_Symbol (Sym_Form_Glob, _)
+    | Pat_Fun_Symbol (Sym_Form_Hoare_S, _)
+    | Pat_Fun_Symbol (Sym_Form_Hoare_F, _)
+    | Pat_Fun_Symbol (Sym_Form_bd_Hoare_S, _)
+    | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, _)
+    | Pat_Fun_Symbol (Sym_Form_Equiv_F, _)
+    | Pat_Fun_Symbol (Sym_Form_Equiv_S, _)
+    | Pat_Fun_Symbol (Sym_Form_Eager_F, _)
+    | Pat_Fun_Symbol (Sym_Form_Pr, _)  -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Stmt_Seq, _) -> None
+  | Pat_Fun_Symbol ((Sym_Instr_Assign
+                    | Sym_Instr_Sample
+                    | Sym_Instr_Call
+                    | Sym_Instr_Call_Lv
+                    | Sym_Instr_Assert), _) -> None
+  | Pat_Fun_Symbol (Sym_Xpath, _) -> None
+  | Pat_Fun_Symbol (Sym_Mpath, _) -> Some (OGTmodty None)
+  | Pat_Fun_Symbol (Sym_App, _) -> Some (OGTty None)
+  | Pat_Fun_Symbol (Sym_Quant _, _) -> Some (OGTty None)
+  | Pat_Fun_Symbol (_,_) -> assert false
+
 module EQ : sig
   val ty        : environment -> ty -> ty -> bool
   val memtype   : environment -> EcMemory.memtype -> EcMemory.memtype -> bool
@@ -408,9 +471,10 @@ end = struct
   let op (env : environment)
         ((op1, lty1) : EcPath.path * EcTypes.ty list)
         ((op2, lty2) : EcPath.path * EcTypes.ty list) =
-    if EcPath.p_equal op1 op2
-    then List.for_all2 (ty env) lty1 lty2
-    else false
+    let _ = Format.fprintf env.env_fmt "[W] op : %s =? %s"
+              (EcPath.tostring op1) (EcPath.tostring op2)
+    in
+    EcPath.p_equal op1 op2 && List.for_all2 (ty env) lty1 lty2
 
   let prog_var (env : environment) (x1 : prog_var) (x2 : prog_var) =
     pv_equal x1 x2
@@ -465,39 +529,6 @@ end = struct
        else List.for_all2 (pbinding env) b1 b2
     | _,_ -> s1 = s2
 
-
-  let is_gty env (p : pattern) (gty1 : gty) = match gty1, p with
-    | _, Pat_Type (_,OGTty (Some ty2)) -> gty env gty1 (GTty ty2)
-    | _, Pat_Type (_, OGTmem (Some m)) -> gty env gty1 (GTmem m)
-    | _, Pat_Type (_, OGTmodty (Some (mt, mr))) -> gty env gty1 (GTmodty (mt,mr))
-    | GTty ty1, (Pat_Axiom (Axiom_Form { f_ty = ty2 }
-                            | Axiom_Local (_,ty2))
-                 | Pat_Fun_Symbol ((Sym_Form_App ty2
-                                    | Sym_Form_Proj (_,ty2)
-                                    | Sym_Form_Match ty2
-                                    | Sym_Form_Pvar ty2),_)) ->
-       ty env ty1 ty2
-    | GTmem _, Pat_Axiom (Axiom_MemEnv (_,mt2)) ->
-       gty env gty1 (GTmem mt2)
-    | GTmodty (mt,mr), Pat_Axiom (Axiom_Mpath m) ->
-       let env = LDecl.toenv env.env_hyps in
-       is_modty env m mt mr
-    | _ -> false
-
-  let is_ogty env (p : pattern) (ogty1 : ogty) = match ogty1, p with
-    | _, Pat_Type (_,ogty2) -> ogty env ogty1 ogty2
-    | OGTty None, Pat_Axiom (Axiom_Form _
-                             | Axiom_Op _
-                             | Axiom_Local _) -> true
-    | OGTty (Some ty1), p -> is_gty env p (GTty ty1)
-    | OGTmem _, Pat_Axiom (Axiom_MemEnv (_,mt2)) ->
-       ogty env ogty1 (OGTmem (Some mt2))
-    | OGTmodty (Some (mt, mr)), Pat_Axiom (Axiom_Mpath m) ->
-       let env = LDecl.toenv env.env_hyps in
-       is_modty env m mt mr
-    | _ -> false
-
-
   let form (env : environment) ri (f1 : form) (f2 : form) =
     let env_restore_unienv = !(env.env_restore_unienv) in
     env.env_restore_unienv := None;
@@ -514,7 +545,38 @@ end = struct
       let _ = restore_environment env in
       false
 
+
+  let is_gty env (p : pattern) (gty1 : gty) =
+    try match gty1 with
+        | GTmodty (mt,mr) ->
+           let e = LDecl.toenv env.env_hyps in
+           let m = Translate.mpath_of_pattern e p in
+           is_modty e m mt mr
+        | _ -> raise (Translate.Invalid_Type "")
+    with
+    | Translate.Invalid_Type _ ->
+    match get_ogty env p with
+    | None -> true
+    | Some ogty2 -> ogty env (ogty_of_gty gty1) ogty2
+
+  let is_ogty env (p : pattern) (ogty1 : ogty) =
+    let _ = Format.fprintf env.env_fmt "[W] check ogty\n" in
+    try match ogty1 with
+        | OGTmodty (Some (mt,mr)) ->
+           let e = LDecl.toenv env.env_hyps in
+           let m = Translate.mpath_of_pattern e p in
+           is_modty e m mt mr
+        | _ -> raise (Translate.Invalid_Type "")
+    with
+    | Translate.Invalid_Type _ ->
+    match get_ogty env p with
+    | None -> true
+    | Some ogty2 -> ogty env ogty1 ogty2
+
+
   let rec axiom (env : environment) ri (o1 : axiom) (o2 : axiom) : bool =
+    let _ = Format.fprintf env.env_fmt "[W] eq_axiom"
+    in
     let aux o1 o2 =
       match o1,o2 with
       | Axiom_Form f1, Axiom_Form f2 ->
@@ -858,7 +920,10 @@ let rec merge_binds bs1 bs2 env = match bs1,bs2 with
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
   let m = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
-  Mid.for_all (fun x _ -> LDecl.has_id x env.env_hyps) m
+  Mid.for_all (fun x _ ->
+      if LDecl.has_id x env.env_hyps then true
+      else is_some (EcEnv.Mod.by_mpath_opt (mpath (`Local x) [])
+                      (LDecl.toenv env.env_hyps))) m
 
 
 (* add_match can raise the exception : CannotUnify *)
@@ -872,15 +937,30 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   then
     let me_matches =
       match Mid.find_opt name e.ne_env.env_match.me_matches with
-      | None -> Mid.add name p e.ne_env.env_match.me_matches
+      | None ->
+         let _ = Format.fprintf e.ne_env.env_fmt "[W] adding %a <- %a\n"
+                   (EcPrinting.pp_pattern e.ne_env.env_ppe)
+                   (Pat_Meta_Name (Pat_Anything,name,None))
+                   (EcPrinting.pp_pattern e.ne_env.env_ppe) p
+         in
+         Mid.add name p e.ne_env.env_match.me_matches
       | Some p' ->
          (* raise CannotUnify *)
          if EQ.pattern e.ne_env e.ne_env.env_red_info_same_meta p p'
          then e.ne_env.env_match.me_matches
-         else raise CannotUnify
+         else
+           let _ = Format.fprintf e.ne_env.env_fmt "[W] cannot unify (%a) and (%a)\n"
+                     (EcPrinting.pp_pattern e.ne_env.env_ppe) p
+                     (EcPrinting.pp_pattern e.ne_env.env_ppe) p'
+           in
+           raise CannotUnify
     in
     { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
-  else raise CannotUnify
+  else
+    let _ = Format.fprintf e.ne_env.env_fmt
+              "[W] cannot unify because of binding restrictions\n"
+    in
+    raise CannotUnify
 
 let e_next (e : engine) : nengine =
   { ne_continuation = e.e_continuation;
@@ -1009,37 +1089,47 @@ let rec abstract_opt
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  (* let _ =
-   *   let ppe = e.e_env.env_ppe in
-   *   Format.fprintf e.e_env.env_fmt "[W]?? (%i left) %a =? %a\n"
-   *     (match e.e_continuation with
-   *      | Zand (_,l,_) -> List.length l
-   *      | _ -> 0)
-   *     (\* (if e.e_env.env_red_info_match.EcReduction.delta_p
-   *      *       (match e.e_pattern with
-   *      *        | Pat_Fun_Symbol
-   *      *          (Sym_Form_App _,
-   *      *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
-   *      *        | _ -> EcPath.psymbol "foobar")
-   *      *  then "with" else "without")
-   *      * (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
-   *      *       (match e.e_head with
-   *      *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
-   *      *        | _ -> EcPath.psymbol "foobar")
-   *      *  then "with" else "without") *\)
-   *     (EcPrinting.pp_pattern ppe) e.e_pattern
-   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-   * in *)
+  let _ =
+    let ppe = e.e_env.env_ppe in
+    Format.fprintf e.e_env.env_fmt "[W]?? (%i left) %a =? %a\n"
+      (match e.e_continuation with
+       | Zand (_,l,_) -> List.length l
+       | _ -> 0)
+      (* (if e.e_env.env_red_info_match.EcReduction.delta_p
+       *       (match e.e_pattern with
+       *        | Pat_Fun_Symbol
+       *          (Sym_Form_App _,
+       *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
+       *        | _ -> EcPath.psymbol "foobar")
+       *  then "with" else "without")
+       * (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
+       *       (match e.e_head with
+       *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
+       *        | _ -> EcPath.psymbol "foobar")
+       *  then "with" else "without") *)
+      (EcPrinting.pp_pattern ppe) e.e_pattern
+      (EcPrinting.pp_pat_axiom ppe) e.e_head
+  in
   match e.e_pattern, e.e_head with
   | Pat_Anything, _ -> next Match e
 
-  (* | Pat_Meta_Name (_,name,_), _
+  (* | Pat_Meta_Name (p,name,ob), _
    *      when Mid.mem name e.e_env.env_match.me_matches ->
-   *    process { e with e_pattern = Mid.find name e.e_env.env_match.me_matches } *)
+   *    let env_meta_restr_binds =
+   *      odfl e.e_env.env_meta_restr_binds
+   *        (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
+   *    let e_env = { e.e_env with env_meta_restr_binds; } in
+   *    let e_or = { e with e_pattern = Mid.find name e.e_env.env_match.me_matches } in
+   *    let e_continuation = Zor (e.e_continuation,[e_or], e_next e) in
+   *    let e = { e with
+   *        e_pattern = p; e_env;
+   *        e_continuation = Znamed(Pat_Axiom e.e_head,name,ob,e.e_continuation);
+   *      } in
+   *    process { e with e_continuation } *)
 
-  (* | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
-   *                            | Axiom_Local (n2,_))
-   *      when EQ.name n1 n2 -> next Match e *)
+  | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
+                             | Axiom_Local (n2,_))
+       when EQ.name n1 n2 -> next Match e
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
@@ -1083,7 +1173,8 @@ let rec process (e : engine) : nengine =
      process { e with e_pattern; e_env }
 
   | Pat_Axiom o1, o2
-       when EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 -> next Match e
+       when EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 ->
+     next Match e
 
   | Pat_Axiom _, _ -> next NoMatch e
 
@@ -1105,12 +1196,12 @@ let rec process (e : engine) : nengine =
      let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
      let fop' = f_ty_app (EcEnv.LDecl.toenv e.e_env.env_hyps) fop fargs1 in
      let pop = p_app pop pargs1 None in
-     let zand = (Axiom_Form fop', pop)::zand in
-     let e_pattern,e_head,zand =
-       match List.rev zand with
-       | [] -> assert false
-       | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
-       | _ -> assert false in
+     let e_head, e_pattern, zand = Axiom_Form fop', pop, List.rev zand in
+     (* let e_pattern,e_head,zand =
+      *   match List.rev zand with
+      *   | [] -> assert false
+      *   | (Axiom_Form f,p)::l -> p,Axiom_Form f,l
+      *   | _ -> assert false in *)
      let e_continuation = Zand ([e_head,e_pattern],zand,e.e_continuation) in
      process { e with e_pattern; e_head; e_continuation; }
 
@@ -1436,15 +1527,15 @@ let rec process (e : engine) : nengine =
 
 and next (m : ismatch) (e : engine) : nengine = match m with
   | NoMatch -> begin
-      (* let _ =
-       *   let ppe = e.e_env.env_ppe in
-       *   Format.fprintf e.e_env.env_fmt "[W]-- (%i left) %a <> %a\n"
-       *     (match e.e_continuation with
-       *      | Zand (_,l,_) -> List.length l
-       *      | _ -> 0)
-       *     (EcPrinting.pp_pattern ppe) e.e_pattern
-       *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-       * in *)
+      let _ =
+        let ppe = e.e_env.env_ppe in
+        Format.fprintf e.e_env.env_fmt "[W] -- (%i left) %a <> %a\n"
+          (match e.e_continuation with
+           | Zand (_,l,_) -> List.length l
+           | _ -> 0)
+          (EcPrinting.pp_pattern ppe) e.e_pattern
+          (EcPrinting.pp_pat_axiom ppe) e.e_head
+      in
       let i_red_match, i_red_same_meta =
         e.e_env.env_red_info_match, e.e_env.env_red_info_same_meta in
       let e_env = saturate e.e_env in
@@ -1500,15 +1591,15 @@ and next (m : ismatch) (e : engine) : nengine = match m with
            | _ -> process e_or
     end
   | _ ->
-      (* let _ =
-       *   let ppe = e.e_env.env_ppe in
-       *   Format.fprintf e.e_env.env_fmt "[W]++ (%i left) %a = %a\n"
-       *     (match e.e_continuation with
-       *      | Zand (_,l,_) -> List.length l
-       *      | _ -> 0)
-       *     (EcPrinting.pp_pattern ppe) e.e_pattern
-       *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-       * in *)
+      let _ =
+        let ppe = e.e_env.env_ppe in
+        Format.fprintf e.e_env.env_fmt "[W] ++ (%i left) %a = %a\n"
+          (match e.e_continuation with
+           | Zand (_,l,_) -> List.length l
+           | _ -> 0)
+          (EcPrinting.pp_pattern ppe) e.e_pattern
+          (EcPrinting.pp_pat_axiom ppe) e.e_head
+      in
      next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
@@ -1723,7 +1814,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            omap (function [p1;p2] -> p_glob p1 p2 | _ -> assert false)
              (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
         | Fop (op,lty) ->
-           Some(typ fty (pat_op op lty))
+           Some(pat_op op lty)
         | Fapp ({ f_node = Flocal id },args) when Mid.mem id sbd ->
            let p =
              p_app (Pat_Meta_Name(Pat_Anything,id,None))

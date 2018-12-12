@@ -2141,6 +2141,9 @@ module FV = struct
              (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
              map' in
          union map map'
+      | Pat_Fun_Symbol (Sym_Form_Pr, lp) ->
+         let map = List.fold_left aux map lp in
+         Mid.remove mhr map
       | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
       | Pat_Axiom a -> axiom h map a
       | Pat_Instance _ -> assert false (* FIXME: instance *)
