@@ -1593,7 +1593,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
   let rec aux a     = match a with
     | Axiom_Local (id,ty) ->
        if Mid.mem id sbd
-       then let p = meta_var id None in Some (mk_pattern p.p_node (OGTty (Some ty)))
+       then Some (meta_var id None (OGTty (Some ty)))
        else Some (pat_axiom a)
     | Axiom_Form f -> begin
         let fty = f.f_ty in
@@ -1622,7 +1622,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
         | Fint _ -> None
         | Flocal id ->
            if Mid.mem id sbd
-           then Some (meta_var id None)
+           then Some (meta_var id None (OGTty (Some fty)))
            else if mem_ty_univar fty
            then Some (pat_local id fty)
            else None
@@ -1636,7 +1636,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            Some (pat_form f)
         | Fapp ({ f_node = Flocal id },args) when Mid.mem id sbd ->
            let p =
-             p_app (meta_var id None)
+             p_app (meta_var id None (OGTty (Some fty)))
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
            Some p
         | Fapp(fop,args) ->
@@ -1725,12 +1725,10 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Form pr_event])
       end
     | Axiom_Memory m when Mid.mem m sbd ->
-        let p = meta_var m None in
-        Some (mk_pattern p.p_node (OGTmem None))
+        Some (meta_var m None (OGTmem None))
 
     | Axiom_MemEnv m when Mid.mem (fst m) sbd ->
-        let p = meta_var (fst m) None in
-        Some (mk_pattern p.p_node (OGTmem (Some (snd m))))
+        Some (meta_var (fst m) None (OGTmem (Some (snd m))))
 
     | Axiom_Prog_Var pv ->
        omap (fun x -> p_prog_var x pv.pv_kind) (aux (Axiom_Xpath pv.pv_name))
@@ -1742,8 +1740,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            let ogty = match Mid.find_opt id sbd with
              | Some gty -> gty
              | None -> assert false in
-           let p = meta_var id None in
-           Some (mk_pattern p.p_node ogty)
+           Some (meta_var id None ogty)
         | _ -> None
       end
     | Axiom_Mpath m ->
@@ -1772,8 +1769,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
         | Sassert e ->
            omap (fun x -> p_assert x) (aux (axiom_expr e))
         | Sabstract id when Mid.mem id sbd ->
-           let p = meta_var id None in
-           Some (mk_pattern p.p_node OGTstmt)
+           Some (meta_var id None OGTstmt)
         | Sabstract _ -> None
       end
     | Axiom_Stmt s ->

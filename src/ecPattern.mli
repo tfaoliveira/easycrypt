@@ -124,7 +124,7 @@ val mk_pattern : p_node -> ogty -> pattern
 val pat_axiom      : axiom -> pattern
 val pat_fun_symbol : fun_symbol -> pattern list -> pattern
 val pat_meta       : pattern -> meta_name -> pbindings option -> pattern
-val meta_var       : meta_name -> pbindings option -> pattern
+val meta_var       : meta_name -> pbindings option -> ogty -> pattern
 
 val axiom_form    : form -> axiom
 val axiom_mpath   : mpath -> axiom

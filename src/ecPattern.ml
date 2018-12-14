@@ -166,7 +166,8 @@ let axiom_mpath m   = Axiom_Mpath m
 let pat_meta p name ob =
   mk_pattern (Pat_Meta_Name (p,name,ob)) p.p_ogty
 
-let meta_var name ob = pat_meta (mk_pattern Pat_Anything OGTany) name ob
+let meta_var name ob ogty = pat_meta (mk_pattern Pat_Anything ogty) name ob
+
 
 let pat_axiom x = match x with
   | Axiom_Form      f      -> pat_form f
