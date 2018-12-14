@@ -149,8 +149,9 @@ module RegexpBaseInstr = struct
             | Some e -> e.ne_env.env_match.me_matches in
           let args = List.map (form_of_expr mhr) args in
           let f = f_pr mleft f (f_tuple args) f_true in
-          let p = Pat_Fun_Symbol
-                    (Sym_Form_Pr,Pat_Anything::p2::pargs::Pat_Anything::[]) in
+          let p = pat_fun_symbol Sym_Form_Pr
+                    ((mk_pattern Pat_Anything OGTany)::p2::pargs::
+                       (mk_pattern Pat_Anything OGTany)::[]) in
           let unienv = EcUnify.UniEnv.create None in
           let mtch = EcFMatching.init_match_env ~mtch:map ~unienv () in
           let e = EcFMatching.mk_engine ~mtch f p eng.e_hyps

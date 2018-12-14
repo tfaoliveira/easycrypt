@@ -17,24 +17,32 @@ type ogty =
   | OGTty    of ty option
   | OGTmodty of (module_type * mod_restr) option
   | OGTmem   of EcMemory.memtype option
+  | OGTpv
+  | OGTxpath
+  | OGTinstr
+  | OGTstmt
+  | OGTlv
+  | OGThcmp
+  | OGTpath
+  | OGTany
 
 type pbinding  = ident * ogty
 type pbindings = pbinding list
 
 type axiom =
-  | Axiom_Form     of form
-  | Axiom_Memory   of memory
-  | Axiom_MemEnv   of memenv
-  | Axiom_Prog_Var of prog_var
-  | Axiom_Op       of path * ty list
-  | Axiom_Module   of mpath_top
-  | Axiom_Mpath    of mpath
-  | Axiom_Instr    of instr
-  | Axiom_Stmt     of stmt
-  | Axiom_Lvalue   of lvalue
-  | Axiom_Xpath    of xpath
-  | Axiom_Hoarecmp of hoarecmp
-  | Axiom_Local    of ident * ty
+  | Axiom_Form      of form
+  | Axiom_Memory    of memory
+  | Axiom_MemEnv    of memenv
+  | Axiom_Prog_Var  of prog_var
+  | Axiom_Op        of path * ty list
+  | Axiom_Mpath_top of mpath_top
+  | Axiom_Mpath     of mpath
+  | Axiom_Instr     of instr
+  | Axiom_Stmt      of stmt
+  | Axiom_Lvalue    of lvalue
+  | Axiom_Xpath     of xpath
+  | Axiom_Hoarecmp  of hoarecmp
+  | Axiom_Local     of ident * ty
 
 type fun_symbol =
   (* from type form *)
@@ -77,17 +85,21 @@ type fun_symbol =
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
-type pattern =
+type p_node =
   | Pat_Anything
   | Pat_Meta_Name  of pattern * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
-  | Pat_Instance   of pattern option * meta_name * path * pattern list
   | Pat_Red_Strat  of pattern * reduction_strategy
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
   | Pat_Axiom      of axiom
-  | Pat_Type       of pattern * ogty
+
+and pattern = {
+    p_node : p_node;
+    p_ogty : ogty;
+  }
+
 
 and reduction_strategy =
   EcReduction.reduction_info -> EcReduction.reduction_info ->
@@ -104,10 +116,15 @@ val ogty_equal : ogty -> ogty -> bool
 val ogty_of_gty : gty -> ogty
 val gty_of_ogty : ogty -> gty option
 
+val p_map      : (pattern -> pattern) -> pattern -> pattern
 val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
 (* -------------------------------------------------------------------------- *)
+val mk_pattern : p_node -> ogty -> pattern
 
-val pat_axiom : axiom -> pattern
+val pat_axiom      : axiom -> pattern
+val pat_fun_symbol : fun_symbol -> pattern list -> pattern
+val pat_meta       : pattern -> meta_name -> pbindings option -> pattern
+val meta_var       : meta_name -> pbindings option -> pattern
 
 val axiom_form    : form -> axiom
 val axiom_mpath   : mpath -> axiom
@@ -116,7 +133,6 @@ val pat_form      : form            -> pattern
 val pat_mpath     : mpath           -> pattern
 val pat_mpath_top : mpath_top       -> pattern
 val pat_xpath     : xpath           -> pattern
-val pat_op        : path -> ty list -> pattern
 val pat_lvalue    : lvalue          -> pattern
 val pat_instr     : instr           -> pattern
 val pat_stmt      : stmt            -> pattern
@@ -125,6 +141,7 @@ val pat_pv        : prog_var        -> pattern
 val pat_memory    : EcMemory.memory -> pattern
 val pat_memenv    : EcMemory.memenv -> pattern
 val pat_cmp       : hoarecmp        -> pattern
+val pat_op        : path -> ty list -> ty option -> pattern
 
 (* -------------------------------------------------------------------------- *)
 
@@ -138,7 +155,6 @@ val p_prog_var     : pattern -> pvar_kind -> pattern
 val p_lvalue_var   : pattern -> ty -> pattern
 val p_lvalue_tuple : pattern list -> pattern
 
-val p_type     : pattern -> ogty -> pattern
 
 val p_let      : lpattern -> pattern -> pattern -> pattern
 val p_if       : pattern -> pattern -> pattern -> pattern
@@ -176,7 +192,7 @@ val p_var_form : EcIdent.t -> ty -> pattern
 val p_destr_app : pattern -> pattern * pattern list
 
 (* -------------------------------------------------------------------------- *)
-val p_eq    : pattern -> pattern -> pattern
+val p_eq    : ty -> pattern -> pattern -> pattern
 val p_and   : pattern -> pattern -> pattern
 val p_ands  : pattern list -> pattern
 
@@ -186,7 +202,7 @@ val p_proj_simpl    : pattern -> int -> ty -> pattern
 val p_app_simpl_opt : pattern option -> pattern list -> ty option -> pattern option
 val p_forall_simpl  : bindings -> pattern -> pattern
 val p_exists_simpl  : bindings -> pattern -> pattern
-val p_eq_simpl      : pattern -> pattern -> pattern
+val p_eq_simpl      : ty -> pattern -> pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 val p_not_simpl      : pattern -> pattern
@@ -210,7 +226,7 @@ val p_real_inv_simpl : pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
-
+val p_real_split    : pattern -> pattern * pattern
 (* -------------------------------------------------------------------------- *)
 module FV : sig
   type fv = int Mid.t

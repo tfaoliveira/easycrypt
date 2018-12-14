@@ -58,8 +58,8 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
    *      let op = Pat_Red_Strat(op,fun_red) in
    *      Pat_Fun_Symbol(Sym_Form_App ty,op::lp)
    *   | _ -> p in *)
-  let p = Pat_Meta_Name (p, default_name, None) in
-  let p = Pat_Sub p in
+  let p = pat_meta p default_name None in
+  let p = mk_pattern (Pat_Sub p) OGTany in
 
   let f = tc1_goal tc in
 
@@ -79,7 +79,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
       | _, GTty ty -> Suid.union acc (EcTypes.Tuni.univars ty)
       | _,_ -> acc in
     let add_unity acc ty = Suid.union acc (EcTypes.Tuni.univars ty) in
-    let rec aux_a acc a = aux acc (Pat_Axiom a)
+    let rec aux_a acc a = aux acc (pat_axiom a)
     and aux_f acc f = aux_a acc (Axiom_Form f)
     and aux_i acc i = aux_a acc (Axiom_Instr i)
     and aux_lv acc (lv : lvalue) = match lv with
@@ -90,17 +90,12 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
          let acc = List.fold_left add_unity acc (ty::lty) in
          aux_f acc (form_of_expr mhr e)
     and aux (acc : Suid.t) (p : EcPattern.pattern) =
-      match p with
-      | Pat_Anything -> acc
+      match p.p_node with
+      | Pat_Anything          -> acc
       | Pat_Meta_Name (p,_,_) -> aux acc p
-      | Pat_Sub p -> aux acc p
-      | Pat_Or lp ->
-         List.fold_left aux acc lp
-      | Pat_Instance _ -> assert false
-      | Pat_Red_Strat (p,_) -> aux acc p
-      | Pat_Type (p,gty) ->
-         aux (odfl acc (omap (fun t -> add_unigty acc (t,t))
-                          (gty_of_ogty gty))) p
+      | Pat_Sub p             -> aux acc p
+      | Pat_Or lp             -> List.fold_left aux acc lp
+      | Pat_Red_Strat (p,_)   -> aux acc p
       | Pat_Axiom a -> begin
           match a with
           | Axiom_Form f -> begin
@@ -147,7 +142,7 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
           | Axiom_Prog_Var _ -> acc
           | Axiom_Op (_,lty) ->
              List.fold_left add_unity acc lty
-          | Axiom_Module _ | Axiom_Mpath _ -> acc
+          | Axiom_Mpath_top _ | Axiom_Mpath _ -> acc
           | Axiom_Instr i -> begin
               match i.i_node with
               | Sasgn (lv,e) | Srnd (lv,e) ->

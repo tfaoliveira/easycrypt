@@ -19,25 +19,37 @@ type ogty =
   | OGTty    of ty option
   | OGTmodty of (module_type * mod_restr) option
   | OGTmem   of EcMemory.memtype option
+  | OGTpv
+  | OGTxpath
+  | OGTinstr
+  | OGTstmt
+  | OGTlv
+  | OGThcmp
+  | OGTpath
+  | OGTany
+
 
 type pbinding  = ident * ogty
 type pbindings = pbinding list
 
+type reduction_strategy =
+  EcReduction.reduction_info -> EcReduction.reduction_info ->
+  EcReduction.reduction_info * EcReduction.reduction_info
 
 type axiom =
-  | Axiom_Form     of form
-  | Axiom_Memory   of memory
-  | Axiom_MemEnv   of memenv
-  | Axiom_Prog_Var of prog_var
-  | Axiom_Op       of path * ty list
-  | Axiom_Module   of mpath_top
-  | Axiom_Mpath    of mpath
-  | Axiom_Instr    of instr
-  | Axiom_Stmt     of stmt
-  | Axiom_Lvalue   of lvalue
-  | Axiom_Xpath    of xpath
-  | Axiom_Hoarecmp of hoarecmp
-  | Axiom_Local    of ident * ty
+  | Axiom_Form      of form
+  | Axiom_Memory    of memory
+  | Axiom_MemEnv    of memenv
+  | Axiom_Prog_Var  of prog_var
+  | Axiom_Op        of path * ty list
+  | Axiom_Mpath_top of mpath_top
+  | Axiom_Mpath     of mpath
+  | Axiom_Instr     of instr
+  | Axiom_Stmt      of stmt
+  | Axiom_Lvalue    of lvalue
+  | Axiom_Xpath     of xpath
+  | Axiom_Hoarecmp  of hoarecmp
+  | Axiom_Local     of ident * ty
 
 type fun_symbol =
   (* from type form *)
@@ -80,21 +92,20 @@ type fun_symbol =
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
-type pattern =
+type p_node =
   | Pat_Anything
   | Pat_Meta_Name  of pattern * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
-  | Pat_Instance   of pattern option * meta_name * path * pattern list
   | Pat_Red_Strat  of pattern * reduction_strategy
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
   | Pat_Axiom      of axiom
-  | Pat_Type       of pattern * ogty
 
-and reduction_strategy =
-  EcReduction.reduction_info -> EcReduction.reduction_info ->
-  EcReduction.reduction_info * EcReduction.reduction_info
+and pattern = {
+    p_node : p_node;
+    p_ogty : ogty;
+  }
 
 
 (* This is for EcTransMatching ---------------------------------------- *)
@@ -122,25 +133,6 @@ type map = pattern MName.t
 let my_mem = EcIdent.create "my_mem"
 let form_of_expr e = form_of_expr my_mem e
 
-let pat_axiom x = Pat_Axiom x
-
-let axiom_form f    = Axiom_Form f
-let axiom_mpath m   = Axiom_Mpath m
-
-let pat_form f      = pat_axiom (Axiom_Form f)
-let pat_memory m    = pat_axiom (Axiom_Memory m)
-let pat_memenv m    = pat_axiom (Axiom_MemEnv m)
-let pat_mpath m     = pat_axiom (Axiom_Mpath m)
-let pat_mpath_top m = pat_axiom (Axiom_Module m)
-let pat_xpath x     = pat_axiom (Axiom_Xpath x)
-let pat_op op lty   = pat_axiom (Axiom_Op (op,lty))
-let pat_lvalue lv   = pat_axiom (Axiom_Lvalue lv)
-let pat_instr i     = pat_axiom (Axiom_Instr i)
-let pat_stmt s      = pat_axiom (Axiom_Stmt s)
-let pat_local id ty = pat_axiom (Axiom_Local (id,ty))
-let pat_cmp cmp     = pat_axiom (Axiom_Hoarecmp cmp)
-let pat_pv pv       = pat_axiom (Axiom_Prog_Var pv)
-
 let ogty_of_gty (gty : gty) = match gty with
   | GTty ty -> OGTty (Some ty)
   | GTmem t -> OGTmem (Some t)
@@ -151,6 +143,87 @@ let gty_of_ogty (ogty : ogty) = match ogty with
   | OGTmem (Some t) -> Some (GTmem t)
   | OGTmodty (Some (t,r)) -> Some (GTmodty (t,r))
   | _ -> None
+
+let mk_pattern (p_node : p_node) (p_ogty : ogty) = { p_node; p_ogty; }
+
+let pat_form f      = mk_pattern (Pat_Axiom (Axiom_Form f))        (OGTty (Some f.f_ty))
+let pat_memory m    = mk_pattern (Pat_Axiom (Axiom_Memory m))      (OGTmem None)
+let pat_memenv m    = mk_pattern (Pat_Axiom (Axiom_MemEnv m))      (OGTmem (Some (snd m)))
+let pat_mpath m     = mk_pattern (Pat_Axiom (Axiom_Mpath m))       (OGTmodty None)
+let pat_mpath_top m = mk_pattern (Pat_Axiom (Axiom_Mpath_top m))   (OGTmodty None)
+let pat_xpath x     = mk_pattern (Pat_Axiom (Axiom_Xpath x))       OGTxpath
+let pat_op op lty o = mk_pattern (Pat_Axiom (Axiom_Op (op,lty)))   (OGTty o)
+let pat_lvalue lv   = mk_pattern (Pat_Axiom (Axiom_Lvalue lv))     OGTlv
+let pat_instr i     = mk_pattern (Pat_Axiom (Axiom_Instr i))       OGTinstr
+let pat_stmt s      = mk_pattern (Pat_Axiom (Axiom_Stmt s))        OGTstmt
+let pat_local id ty = mk_pattern (Pat_Axiom (Axiom_Local (id,ty))) (OGTty (Some ty))
+let pat_cmp cmp     = mk_pattern (Pat_Axiom (Axiom_Hoarecmp cmp))  OGThcmp
+let pat_pv pv       = mk_pattern (Pat_Axiom (Axiom_Prog_Var pv))   OGTpv
+
+let axiom_form f    = Axiom_Form f
+let axiom_mpath m   = Axiom_Mpath m
+
+let pat_meta p name ob =
+  mk_pattern (Pat_Meta_Name (p,name,ob)) p.p_ogty
+
+let meta_var name ob = pat_meta (mk_pattern Pat_Anything OGTany) name ob
+
+let pat_axiom x = match x with
+  | Axiom_Form      f      -> pat_form f
+  | Axiom_Memory    m      -> pat_memory m
+  | Axiom_MemEnv    m      -> pat_memenv m
+  | Axiom_Prog_Var  pv     -> pat_pv pv
+  | Axiom_Op        (op,l) -> pat_op op l None
+  | Axiom_Mpath_top mt     -> pat_mpath_top mt
+  | Axiom_Mpath     m      -> pat_mpath m
+  | Axiom_Instr     i      -> pat_instr i
+  | Axiom_Stmt      s      -> pat_stmt s
+  | Axiom_Lvalue    lv     -> pat_lvalue lv
+  | Axiom_Xpath     xp     -> pat_xpath xp
+  | Axiom_Hoarecmp  cmp    -> pat_cmp cmp
+  | Axiom_Local     (x,t)  -> pat_local x t
+
+let pat_fun_symbol s lp = match s, lp with
+  (* from type form *)
+  | Sym_Form_If, [_;p2;_]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) p2.p_ogty
+  | Sym_Form_App t, _::_    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
+  | Sym_Form_Tuple, _       -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+  | Sym_Form_Proj _, [_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+  | Sym_Form_Match t, _::_  -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
+  | Sym_Form_Quant _, [_]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+  | Sym_Form_Let _, [_;p2]  -> mk_pattern (Pat_Fun_Symbol(s,lp)) p2.p_ogty
+  | Sym_Form_Pvar t, [_;_]  -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
+  | Sym_Form_Prog_var _, [_]-> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTpv
+  | Sym_Form_Glob, [_;_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+  | Sym_Form_Hoare_F, _
+    | Sym_Form_Hoare_S, _
+    | Sym_Form_bd_Hoare_F, _
+    | Sym_Form_bd_Hoare_S, _
+    | Sym_Form_Equiv_F, _
+    | Sym_Form_Equiv_S, _
+    | Sym_Form_Eager_F, _   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
+  | Sym_Form_Pr, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some treal))
+  (* form type stmt*)
+  | Sym_Stmt_Seq, _         -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
+  (* from type instr *)
+  | (Sym_Instr_Assign
+    | Sym_Instr_Sample
+    | Sym_Instr_Call
+    | Sym_Instr_Call_Lv
+    | Sym_Instr_If
+    | Sym_Instr_While
+    | Sym_Instr_Assert), _ -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTinstr
+  (* from type xpath *)
+  | Sym_Xpath, _           -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTxpath
+  (* from type mpath *)
+  | Sym_Mpath, _           -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTmodty None)
+  (* generalized *)
+  | (Sym_App
+     | Sym_Quant _), _     -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTany
+  | _ -> assert false
+
+
+
 (* -------------------------------------------------------------------------- *)
 
 let pat_add_fv map (n : ident) =
@@ -162,15 +235,13 @@ let pat_fv_union m1 m2 =
   Mid.fold_left (fun m n _ -> pat_add_fv m n) m1 m2
 
 let pat_fv p =
-  let rec aux (map : int Mid.t) = function
+  let rec aux (map : int Mid.t) p = match p.p_node with
     | Pat_Anything -> map
     | Pat_Meta_Name (p,n,_) ->
        aux (pat_add_fv map n) p
     | Pat_Sub p -> aux map p
     | Pat_Or lp -> List.fold_left aux map lp
-    | Pat_Instance _ -> assert false
     | Pat_Red_Strat (p,_) -> aux map p
-    | Pat_Type (p,_) -> aux map p
     | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
        let map = List.fold_left aux Mid.empty lp in
        Mid.filter (fun x _ -> List.exists (fun (y,_) -> id_equal x y) b) map
@@ -190,8 +261,8 @@ let pat_fv p =
        | Axiom_Mpath mp ->
           List.fold_left aux (aux map (pat_mpath_top mp.m_top))
             (List.map pat_mpath mp.m_args)
-       | Axiom_Module (`Local id) -> pat_add_fv map id
-       | Axiom_Module _ -> map
+       | Axiom_Mpath_top (`Local id) -> pat_add_fv map id
+       | Axiom_Mpath_top _ -> map
        | Axiom_Local (id,_) -> pat_add_fv map id
        | Axiom_Op _ -> map
        | Axiom_Hoarecmp _ -> map
@@ -205,9 +276,10 @@ let pat_fv p =
   in aux Mid.empty p
 
 (* -------------------------------------------------------------------------- *)
-let p_equal = (==)
+let rec p_equal = (==)
 
 let ogty_equal o1 o2 = match o1, o2 with
+  | OGTany, _ | _, OGTany -> true
   | OGTty (Some t1), OGTty (Some t2) -> ty_equal t1 t2
   | OGTty _, OGTty _ -> true
   | (OGTty _, _) | (_, OGTty _) -> false
@@ -218,212 +290,211 @@ let ogty_equal o1 o2 = match o1, o2 with
      then EcModules.mr_equal mr1 mr2
      else false
   | OGTmodty _, OGTmodty _ -> true
+  | _ -> o1 = o2
 
 (* -------------------------------------------------------------------------- *)
-let p_type (p : pattern) (ogty : ogty) =
-  match p with
-  | Pat_Type(_,gty2) when ogty_equal ogty gty2 -> p
-  | Pat_Type _ -> assert false
-  | _ -> Pat_Type(p,ogty)
-
 let p_mpath (p : pattern) (args : pattern list) =
   if args = [] then p
   else
   let rec oget_mpaths acc = function
     | [] -> Some (List.rev acc)
-    | (Pat_Axiom(Axiom_Mpath m))::r ->
+    | ({ p_node = Pat_Axiom(Axiom_Mpath m)})::r ->
        oget_mpaths (m::acc) r
-    | (Pat_Axiom(Axiom_Module mt))::r ->
+    | ({ p_node = Pat_Axiom(Axiom_Mpath_top mt)})::r ->
        oget_mpaths ((mpath mt [])::acc) r
     | _ -> None in
   let oget_mpaths l = oget_mpaths [] l in
   let oget_mpath =
-    match p with
-    | Pat_Axiom(Axiom_Module mt) -> Some (mpath mt [])
+    match p.p_node with
+    | Pat_Axiom(Axiom_Mpath_top mt) -> Some (mpath mt [])
     | Pat_Axiom(Axiom_Mpath m)   -> Some m
     | _ -> None in
   match oget_mpath, oget_mpaths args with
   | Some m, Some args ->
-     Pat_Axiom(Axiom_Mpath (mpath m.m_top (m.m_args @ args)))
-  | _,_ -> Pat_Fun_Symbol(Sym_Mpath,p::args)
+     pat_mpath (mpath m.m_top (m.m_args @ args))
+  | _,_ -> mk_pattern (Pat_Fun_Symbol(Sym_Mpath,p::args)) (OGTmodty None)
 
 let p_xpath (p : pattern) (f : pattern) =
-  match p,f with
-  | Pat_Axiom(Axiom_Mpath m),Pat_Axiom(Axiom_Op (op,[])) ->
-     Pat_Axiom(Axiom_Xpath (EcPath.xpath m op))
-  | _ -> Pat_Fun_Symbol(Sym_Xpath,[p;f])
+  match p.p_node, f.p_node with
+  | Pat_Axiom(Axiom_Mpath m), Pat_Axiom(Axiom_Op (op,[])) ->
+     pat_xpath (EcPath.xpath m op)
+  | _ -> pat_fun_symbol Sym_Xpath [p;f]
 
 let p_prog_var (p : pattern) (k : pvar_kind) =
-  match p with
-  | Pat_Axiom(Axiom_Xpath x) -> Pat_Axiom(Axiom_Prog_Var (pv x k))
-  | _ -> Pat_Fun_Symbol(Sym_Form_Prog_var k,[p])
+  match p.p_node with
+  | Pat_Axiom (Axiom_Xpath x) -> pat_pv (pv x k)
+  | _ -> pat_fun_symbol (Sym_Form_Prog_var k) [p]
 
 let p_lvalue_var (p : pattern) (ty : ty) =
-  match p with
-  | Pat_Axiom(Axiom_Prog_Var pv) ->
-     Pat_Axiom(Axiom_Lvalue(LvVar(pv,ty)))
-  | p -> p_type p (OGTty (Some ty))
+  match p.p_node with
+  | Pat_Axiom(Axiom_Prog_Var pv) -> pat_lvalue (LvVar(pv,ty))
+  | p -> mk_pattern p (OGTty (Some ty))
 
 let p_lvalue_tuple (p : pattern list) =
   let rec oget_pv acc = function
     | [] -> Some (List.rev acc)
     | a :: r ->
        match a with
-       | Pat_Type(Pat_Axiom(Axiom_Prog_Var pv),OGTty (Some ty))
-         | Pat_Axiom(Axiom_Lvalue(LvVar (pv,ty))) ->
+       | { p_node = Pat_Axiom (Axiom_Prog_Var pv); p_ogty = OGTty (Some ty) }
+         | { p_node = Pat_Axiom (Axiom_Lvalue (LvVar (pv,ty))) ; p_ogty = OGTlv } ->
           oget_pv ((pv,ty)::acc) r
        | _ -> None
   in match oget_pv [] p with
-     | None -> Pat_Fun_Symbol(Sym_Form_Tuple,p)
-     | Some l -> Pat_Axiom(Axiom_Lvalue(LvTuple l))
+     | None -> mk_pattern (Pat_Fun_Symbol(Sym_Form_Tuple,p)) OGTlv
+     | Some l -> pat_lvalue (LvTuple l)
 
 let p_pvar (pv : pattern) (ty : ty) (m : pattern) =
-  match pv,m with
-  | Pat_Axiom(Axiom_Prog_Var pv),Pat_Axiom(Axiom_Memory m) ->
+  match pv.p_node, m.p_node with
+  | Pat_Axiom (Axiom_Prog_Var pv),Pat_Axiom (Axiom_Memory m) ->
      pat_form (f_pvar pv ty m)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Pvar ty, [pv;m])
+  | _ -> pat_fun_symbol (Sym_Form_Pvar ty) [pv;m]
 
 let p_glob (mp : pattern) (m : pattern) =
-  match mp, m with
-  | Pat_Axiom(Axiom_Mpath mp),Pat_Axiom(Axiom_Memory m) ->
+  match mp.p_node, m.p_node  with
+  | Pat_Axiom (Axiom_Mpath mp), Pat_Axiom (Axiom_Memory m) ->
      pat_form (f_glob mp m)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Glob, [mp;m])
+  | _ -> pat_fun_symbol Sym_Form_Glob [mp;m]
 
 let p_if (p1 : pattern) (p2 : pattern) (p3 : pattern) =
-  Pat_Fun_Symbol(Sym_Form_If,[p1;p2;p3])
+  pat_fun_symbol Sym_Form_If [p1;p2;p3]
 
 let p_match (p : pattern) (ty : ty) (lp : pattern list) =
-  match p, olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None) lp with
-  | Pat_Axiom(Axiom_Form op),Some lf ->
+  match p.p_node,
+        olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                          | _ -> None) lp with
+  | Pat_Axiom(Axiom_Form op), Some lf ->
      pat_form (mk_form (Fmatch (op,lf,ty)) ty)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Match ty,p::lp)
+  | _ -> pat_fun_symbol (Sym_Form_Match ty) (p::lp)
 
 let p_tuple (lp : pattern list) =
-  match olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None) lp with
+  match olist_all
+          (function { p_node = Pat_Axiom (Axiom_Form f) } -> Some f
+                  | _ -> None) lp with
   | Some l -> pat_form (f_tuple l)
-  | None -> Pat_Fun_Symbol(Sym_Form_Tuple,lp)
+  | None -> pat_fun_symbol Sym_Form_Tuple lp
 
 let p_proj (p1 : pattern) (i : int) (ty : ty) =
-  match p1 with
+  match p1.p_node with
   | Pat_Fun_Symbol(Sym_Form_Tuple,lp) ->
      List.nth lp i
-  | _ -> Pat_Fun_Symbol(Sym_Form_Proj (i,ty),[p1])
+  | _ -> pat_fun_symbol (Sym_Form_Proj (i,ty)) [p1]
 
 let p_let (l : lpattern) (p1 : pattern) (p2 : pattern) =
-  match p1,p2 with
-  | Pat_Axiom(Axiom_Form f1),Pat_Axiom(Axiom_Form f2) ->
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_let l f1 f2)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Let l,[p1;p2])
+  | _ -> pat_fun_symbol (Sym_Form_Let l) [p1;p2]
 
 let p_app (p : pattern) (args : pattern list) (ty : ty option) =
   match args,ty with
   | [],_ -> p
-  | _, None ->
-     Pat_Fun_Symbol(Sym_App,p::args)
-  | _,Some ty -> Pat_Fun_Symbol(Sym_Form_App ty,p::args)
+  | _, None -> mk_pattern (Pat_Fun_Symbol (Sym_App,p::args)) (OGTty ty)
+  | _, Some ty -> mk_pattern (Pat_Fun_Symbol(Sym_Form_App ty,p::args)) (OGTty (Some ty))
 
 let p_f_quant q bs p =
   match bs with
   | [] -> p
-  | _  -> Pat_Fun_Symbol(Sym_Form_Quant (q,bs),[p])
+  | _  -> mk_pattern (Pat_Fun_Symbol(Sym_Form_Quant (q,bs),[p])) (OGTty None)
 
 let p_quant q bs p =
   match bs with
   | [] -> p
-  | _  -> Pat_Fun_Symbol(Sym_Quant (q,bs),[p])
+  | _  -> mk_pattern (Pat_Fun_Symbol(Sym_Quant (q,bs),[p])) OGTany
 
 let p_f_forall b p = p_f_quant Llambda b p
 
 let p_f_exists b p = p_f_quant Lexists b p
 
 let p_stmt (lp : pattern list) =
-  match olist_all (function Pat_Axiom(Axiom_Instr i) -> Some i | _ -> None) lp with
+  match olist_all (function { p_node = Pat_Axiom (Axiom_Instr i) } -> Some i
+                          | _ -> None) lp with
   | Some l -> pat_stmt (stmt l)
-  | None -> Pat_Fun_Symbol(Sym_Stmt_Seq,lp)
+  | None -> mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Seq,lp)) OGTstmt
 
 let p_var_form x ty =
-  p_type (Pat_Meta_Name (Pat_Anything, x, None)) (OGTty (Some ty))
+  let t = OGTty (Some ty) in
+  mk_pattern (Pat_Meta_Name (mk_pattern Pat_Anything t, x, None)) t
 
-let p_assign (plv : pattern) (pe : pattern) = match plv, pe with
-  | Pat_Axiom(Axiom_Lvalue lv),Pat_Axiom(Axiom_Form f) -> begin
+let p_assign (plv : pattern) (pe : pattern) =
+  match plv.p_node, pe.p_node with
+  | Pat_Axiom (Axiom_Lvalue lv),Pat_Axiom (Axiom_Form f) -> begin
       match expr_of_form f with
-      | None ->
-         Pat_Fun_Symbol(Sym_Instr_Assign,[plv;pe])
-      | Some e -> Pat_Axiom(Axiom_Instr(i_asgn (lv,e)))
+      | None -> pat_fun_symbol Sym_Instr_Assign [plv;pe]
+      | Some e -> pat_instr (i_asgn (lv,e))
     end
-  | _ -> Pat_Fun_Symbol(Sym_Instr_Assign,[plv;pe])
+  | _ -> pat_fun_symbol Sym_Instr_Assign [plv;pe]
 
-let p_sample (plv : pattern) (pe : pattern) = match plv, pe with
-  | Pat_Axiom(Axiom_Lvalue lv),Pat_Axiom(Axiom_Form f) -> begin
+let p_sample (plv : pattern) (pe : pattern) =
+  match plv.p_node, pe.p_node with
+  | Pat_Axiom (Axiom_Lvalue lv), Pat_Axiom (Axiom_Form f) -> begin
       match expr_of_form f with
-      | None ->
-         Pat_Fun_Symbol(Sym_Instr_Sample,[plv;pe])
-      | Some e -> Pat_Axiom(Axiom_Instr(i_rnd (lv,e)))
+      | None -> pat_fun_symbol Sym_Instr_Sample [plv;pe]
+      | Some e -> pat_instr (i_rnd (lv,e))
     end
-  | _ -> Pat_Fun_Symbol(Sym_Instr_Sample,[plv;pe])
+  | _ -> pat_fun_symbol Sym_Instr_Sample [plv;pe]
 
 let p_call (olv : pattern option) (f : pattern) (args : pattern list) =
   let get_expr = function
-    | Pat_Axiom(Axiom_Form f) -> expr_of_form f
+    | { p_node = Pat_Axiom(Axiom_Form f) } -> expr_of_form f
     | _ -> None in
-  match olv,f with
-  | None,Pat_Axiom(Axiom_Xpath proc) -> begin
+  match olv, f.p_node with
+  | None, Pat_Axiom (Axiom_Xpath proc) -> begin
       match olist_all get_expr args with
-      | Some args -> Pat_Axiom(Axiom_Instr(i_call(None,proc,args)))
-      | None -> Pat_Fun_Symbol(Sym_Instr_Call,f::args)
+      | Some args -> pat_instr (i_call(None,proc,args))
+      | None -> pat_fun_symbol Sym_Instr_Call (f::args)
     end
-  | Some(Pat_Axiom(Axiom_Lvalue lv) as olv),Pat_Axiom(Axiom_Xpath proc) ->
+  | Some({ p_node = Pat_Axiom (Axiom_Lvalue lv) } as olv),
+    Pat_Axiom (Axiom_Xpath proc) ->
      begin
        match olist_all get_expr args with
-       | Some args -> Pat_Axiom(Axiom_Instr(i_call(Some lv,proc,args)))
-       | None -> Pat_Fun_Symbol(Sym_Instr_Call_Lv,olv::f::args)
+       | Some args -> pat_instr (i_call(Some lv,proc,args))
+       | None -> pat_fun_symbol Sym_Instr_Call_Lv (olv::f::args)
      end
-  | None,_ -> Pat_Fun_Symbol(Sym_Instr_Call,f::args)
-  | Some lv,_ -> Pat_Fun_Symbol(Sym_Instr_Call_Lv,lv::f::args)
+  | None,_ -> pat_fun_symbol  Sym_Instr_Call (f::args)
+  | Some lv,_ -> pat_fun_symbol Sym_Instr_Call_Lv (lv::f::args)
 
 let p_instr_if (pcond : pattern) (ps1 : pattern) (ps2 : pattern) =
-  match pcond, ps1, ps2 with
-  | Pat_Axiom(Axiom_Form f),Pat_Axiom(Axiom_Stmt s1),Pat_Axiom(Axiom_Stmt s2) ->
-     odfl (Pat_Fun_Symbol(Sym_Instr_If,[pcond;ps1;ps2]))
-       (omap (fun cond -> Pat_Axiom(Axiom_Instr(i_if(cond,s1,s2))))
-          (expr_of_form f))
-  | _ -> Pat_Fun_Symbol(Sym_Instr_If,[pcond;ps1;ps2])
+  match pcond.p_node, ps1.p_node, ps2.p_node with
+  | Pat_Axiom (Axiom_Form f), Pat_Axiom (Axiom_Stmt s1), Pat_Axiom (Axiom_Stmt s2) ->
+     odfl (pat_fun_symbol Sym_Instr_If [pcond;ps1;ps2])
+       (omap (fun cond -> pat_instr (i_if(cond,s1,s2))) (expr_of_form f))
+  | _ -> pat_fun_symbol Sym_Instr_If [pcond;ps1;ps2]
 
 let p_while (pcond : pattern) (ps : pattern) =
-  match pcond, ps with
-  | Pat_Axiom(Axiom_Form f),Pat_Axiom(Axiom_Stmt s) ->
-     odfl (Pat_Fun_Symbol(Sym_Instr_While,[pcond;ps]))
-       (omap (fun cond -> Pat_Axiom(Axiom_Instr(i_while(cond,s))))
+  match pcond.p_node, ps.p_node with
+  | Pat_Axiom (Axiom_Form f), Pat_Axiom (Axiom_Stmt s) ->
+     odfl (pat_fun_symbol Sym_Instr_While [pcond;ps])
+       (omap (fun cond -> pat_instr (i_while(cond,s)))
           (expr_of_form f))
-  | _ -> Pat_Fun_Symbol(Sym_Instr_While,[pcond;ps])
+  | _ -> pat_fun_symbol Sym_Instr_While [pcond;ps]
 
-let p_assert (p : pattern) = match p with
+let p_assert (p : pattern) = match p.p_node with
   | Pat_Axiom(Axiom_Form f) ->
-     odfl (Pat_Fun_Symbol(Sym_Instr_Assert,[p]))
-       (omap (fun e -> Pat_Axiom(Axiom_Instr(i_assert e))) (expr_of_form f))
-  | _ -> Pat_Fun_Symbol(Sym_Instr_Assert,[p])
+     odfl (pat_fun_symbol Sym_Instr_Assert [p])
+       (omap (fun e -> pat_instr (i_assert e)) (expr_of_form f))
+  | _ -> pat_fun_symbol Sym_Instr_Assert [p]
 
 
 let p_hoareF (pr : pattern) (f : pattern) (po : pattern) =
-  match pr,f,po with
+  match pr.p_node, f.p_node, po.p_node with
   | Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Xpath f),
     Pat_Axiom(Axiom_Form po) ->
      pat_form (f_hoareF pr f po)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[pr;f;po])
+  | _ -> pat_fun_symbol Sym_Form_Hoare_F [pr;f;po]
 
 let p_hoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern) =
-  match m,pr,s,po with
+  match m.p_node, pr.p_node, s.p_node, po.p_node with
   | Pat_Axiom(Axiom_MemEnv m),
     Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Stmt s),
     Pat_Axiom(Axiom_Form po) ->
      pat_form (f_hoareS m pr s po)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Hoare_F,[m;pr;s;po])
+  | _ -> pat_fun_symbol Sym_Form_Hoare_F [m;pr;s;po]
 
 let p_bdHoareF (pr : pattern) (f : pattern) (po : pattern) (cmp : pattern)
       (bd : pattern) =
-  match pr, f, po, cmp, bd with
+  match pr.p_node, f.p_node, po.p_node, cmp.p_node, bd.p_node with
   | Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Xpath f),
     Pat_Axiom(Axiom_Form po),
@@ -431,11 +502,11 @@ let p_bdHoareF (pr : pattern) (f : pattern) (po : pattern) (cmp : pattern)
     Pat_Axiom(Axiom_Form bd) ->
      pat_form(f_bdHoareF pr f po cmp bd)
   | _ ->
-     Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[pr;f;po;cmp;bd])
+     pat_fun_symbol Sym_Form_bd_Hoare_F [pr;f;po;cmp;bd]
 
 let p_bdHoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern)
       (cmp : pattern) (bd : pattern) =
-  match m, pr, s, po, cmp, bd with
+  match m.p_node, pr.p_node, s.p_node, po.p_node, cmp.p_node, bd.p_node with
   | Pat_Axiom(Axiom_MemEnv m),
     Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Stmt s),
@@ -444,21 +515,21 @@ let p_bdHoareS (m : pattern) (pr : pattern) (s : pattern) (po : pattern)
     Pat_Axiom(Axiom_Form bd) ->
      pat_form(f_bdHoareS m pr s po cmp bd)
   | _ ->
-     Pat_Fun_Symbol(Sym_Form_bd_Hoare_F,[m;pr;s;po;cmp;bd])
+     pat_fun_symbol Sym_Form_bd_Hoare_F [m;pr;s;po;cmp;bd]
 
 let p_equivF (pr : pattern) (fl : pattern) (fr : pattern) (po : pattern) =
-  match pr, fl, fr, po with
+  match pr.p_node, fl.p_node, fr.p_node, po.p_node with
   | Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Xpath fl),
     Pat_Axiom(Axiom_Xpath fr),
     Pat_Axiom(Axiom_Form po) ->
      pat_form (f_equivF pr fl fr po)
   | _ ->
-     Pat_Fun_Symbol(Sym_Form_Equiv_F,[pr;fl;fr;po])
+     pat_fun_symbol Sym_Form_Equiv_F [pr;fl;fr;po]
 
 let p_equivS (ml : pattern) (mr : pattern) (pr : pattern) (sl : pattern)
       (sr : pattern) (po : pattern) =
-  match ml, mr, pr, sl, sr, po with
+  match ml.p_node, mr.p_node, pr.p_node, sl.p_node, sr.p_node, po.p_node with
   | Pat_Axiom(Axiom_MemEnv ml),
     Pat_Axiom(Axiom_MemEnv mr),
     Pat_Axiom(Axiom_Form pr),
@@ -467,11 +538,11 @@ let p_equivS (ml : pattern) (mr : pattern) (pr : pattern) (sl : pattern)
     Pat_Axiom(Axiom_Form po) ->
      pat_form (f_equivS ml mr pr sl sr po)
   | _ ->
-     Pat_Fun_Symbol(Sym_Form_Equiv_F,[ml;mr;pr;sl;sr;po])
+     pat_fun_symbol Sym_Form_Equiv_F [ml;mr;pr;sl;sr;po]
 
 let p_eagerF (pr : pattern) (sl : pattern) (fl : pattern)
       (fr : pattern) (sr : pattern) (po : pattern) =
-  match pr, sl, fl, fr, sr, po with
+  match pr.p_node, sl.p_node, fl.p_node, fr.p_node, sr.p_node, po.p_node with
   | Pat_Axiom(Axiom_Form pr),
     Pat_Axiom(Axiom_Stmt sl),
     Pat_Axiom(Axiom_Xpath fl),
@@ -480,16 +551,16 @@ let p_eagerF (pr : pattern) (sl : pattern) (fl : pattern)
     Pat_Axiom(Axiom_Form po) ->
      pat_form (f_eagerF pr sl fl fr sr po)
   | _ ->
-     Pat_Fun_Symbol(Sym_Form_Eager_F,[pr;sl;fl;fr;sr;po])
+     pat_fun_symbol Sym_Form_Eager_F [pr;sl;fl;fr;sr;po]
 
 let p_pr (pm : pattern) (pf : pattern) (pargs : pattern) (pevent : pattern) =
-  match pm, pf, pargs, pevent with
+  match pm.p_node, pf.p_node, pargs.p_node, pevent.p_node with
   | Pat_Axiom(Axiom_Memory m),
     Pat_Axiom(Axiom_Xpath f),
     Pat_Axiom(Axiom_Form args),
     Pat_Axiom(Axiom_Form event) ->
      pat_form (f_pr m f args event)
-  | _ -> Pat_Fun_Symbol(Sym_Form_Pr,[pm;pf;pargs;pevent])
+  | _ -> pat_fun_symbol Sym_Form_Pr [pm;pf;pargs;pevent]
 
 (* -------------------------------------------------------------------------- *)
 let lv_ty (f_ty : ty -> ty) = function
@@ -499,33 +570,306 @@ let lv_ty (f_ty : ty -> ty) = function
      LvMap ((op,List.map f_ty lty),pv,e_map f_ty (fun x->x) e,f_ty ty)
 
 
+let rec p_map (f : pattern -> pattern) (p : pattern) : pattern =
+  match p.p_node with
+  | Pat_Anything -> p
+  | Pat_Meta_Name (p,n,ob) ->
+     let p = f p in mk_pattern (Pat_Meta_Name (p,n,ob)) p.p_ogty
+  | Pat_Sub p ->
+     let p = f p in mk_pattern (Pat_Sub p) OGTany
+  | Pat_Or lp ->
+     let lp = List.map f lp in mk_pattern (Pat_Or lp) OGTany
+  | Pat_Red_Strat (p, red) ->
+     let p = f p in mk_pattern (Pat_Red_Strat (p, red)) p.p_ogty
+  | Pat_Fun_Symbol (s, lp) ->
+     let lp = List.map f lp in pat_fun_symbol s lp
+  | Pat_Axiom axiom ->
+     match axiom with
+     | Axiom_Form fo -> begin
+         match fo.f_node with
+         | Fquant (q,b,f') ->
+            let p' = f (pat_form f') in
+            let p' = match p.p_node with
+              | Pat_Axiom(Axiom_Form f'') ->
+                 pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
+              | _ -> p_f_quant q b p' in
+            p'
+         | Fif (f1,f2,f3) ->
+            let p1 = f (pat_form f1) in
+            let p2 = f (pat_form f2) in
+            let p3 = f (pat_form f3) in
+            let p  = match p1.p_node, p2.p_node, p3.p_node with
+              | Pat_Axiom (Axiom_Form f1'),
+                Pat_Axiom (Axiom_Form f2'),
+                Pat_Axiom (Axiom_Form f3') ->
+                 pat_form (EcFol.FSmart.f_if (fo, (f1,f2,f3)) (f1',f2',f3'))
+              | _ -> p_if p1 p2 p3
+            in p
+         | Fmatch (f1,fargs,ty) ->
+            let p1   = f (pat_form f1) in
+            let args = List.map f (List.map pat_form fargs) in
+            let oargs   =
+              olist_all (function { p_node = Pat_Axiom (Axiom_Form f) } -> Some f
+                                | _ -> None) args in
+            let p = match p1.p_node, oargs with
+              | Pat_Axiom(Axiom_Form f1'),Some fargs' ->
+                 pat_form (EcFol.FSmart.f_match (fo,(f1,fargs,ty)) (f1',fargs',ty))
+              | _ -> p_match p1 ty args in
+            p
+         | Flet (lp,f1,f2) ->
+            let p1 = f (pat_form f1) in
+            let p2 = f (pat_form f2) in
+            let p  = match p1.p_node, p2.p_node with
+              | Pat_Axiom (Axiom_Form f1'),Pat_Axiom (Axiom_Form f2') ->
+                 pat_form (EcFol.FSmart.f_let (fo,(lp,f1,f2)) (lp,f1',f2'))
+              | _ -> p_let lp p1 p2 in
+            p
+         | Fpvar (pv,m) ->
+            let p1 = f (pat_pv pv) in
+            let p2 = f (pat_memory m) in
+            let p  = match p1.p_node, p2.p_node with
+              | Pat_Axiom (Axiom_Prog_Var pv'), Pat_Axiom (Axiom_Memory m') ->
+                 pat_form (EcFol.FSmart.f_pvar (fo,(pv,fo.f_ty,m)) (pv',fo.f_ty,m'))
+              | _ -> p_pvar p1 fo.f_ty p2
+            in p
+         | Fglob (mp,m) ->
+            let p1 = f (pat_mpath mp) in
+            let p2 = f (pat_memory m) in
+            let p  = match p1.p_node, p2.p_node with
+              | Pat_Axiom (Axiom_Mpath mp'), Pat_Axiom (Axiom_Memory m') ->
+                 pat_form (EcFol.FSmart.f_glob (fo,(mp,m)) (mp',m'))
+              | _ -> p_glob p1 p2 in
+            p
+         | Fapp (fop,fargs) ->
+            let pop   = f (pat_form fop) in
+            let pargs = List.map f (List.map pat_form fargs) in
+            let oargs    =
+              olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                                | _ -> None) pargs in
+            let p = match pop.p_node, oargs with
+              | Pat_Axiom (Axiom_Form fop'), Some fargs' ->
+                 pat_form (EcFol.FSmart.f_app (fo,(fop,fargs,fo.f_ty)) (fop',fargs',fo.f_ty))
+              | _ -> p_app pop pargs (Some fo.f_ty) in
+            p
+         | Ftuple t ->
+            let pt = List.map f (List.map pat_form t) in
+            let ot    =
+              olist_all (function { p_node = Pat_Axiom (Axiom_Form f) } -> Some f
+                                | _ -> None) pt in
+            let p = match ot with
+              | Some t' -> pat_form (EcFol.FSmart.f_tuple (fo,t) t')
+              | None    -> p_tuple pt in
+            p
+         | Fproj (f1,i) ->
+            let p1 = f (pat_form f1) in
+            let p = match p1.p_node with
+              | Pat_Axiom(Axiom_Form f1') ->
+                 pat_form (EcFol.FSmart.f_proj (fo,(f1,fo.f_ty)) (f1',fo.f_ty) i)
+              | _ -> p_proj p1 i fo.f_ty in
+            p
+         | FhoareF h ->
+            let pr = f (pat_form h.hf_pr) in
+            let xp = f (pat_xpath h.hf_f) in
+            let po = f (pat_form h.hf_po) in
+            let p = match pr.p_node, xp.p_node, po.p_node with
+              | Pat_Axiom(Axiom_Form hf_pr),
+                Pat_Axiom(Axiom_Xpath hf_f),
+                Pat_Axiom(Axiom_Form hf_po) ->
+                 pat_form (EcFol.FSmart.f_hoareF (fo,h) { hf_pr ; hf_f ; hf_po })
+              | _ -> p_hoareF pr xp po in
+            p
+         | FhoareS h ->
+            let mem = f (pat_memenv h.hs_m) in
+            let pr  = f (pat_form h.hs_pr) in
+            let s   = f (pat_stmt h.hs_s) in
+            let po  = f (pat_form h.hs_po) in
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node with
+              | Pat_Axiom(Axiom_MemEnv hs_m),
+                Pat_Axiom(Axiom_Form hs_pr),
+                Pat_Axiom(Axiom_Stmt hs_s),
+                Pat_Axiom(Axiom_Form hs_po) ->
+                 pat_form (EcFol.FSmart.f_hoareS (fo,h) { hs_m ; hs_pr ; hs_s ; hs_po })
+              | _ -> p_hoareS mem pr s po in
+            p
+         | FbdHoareF h ->
+            let pr  = f (pat_form h.bhf_pr) in
+            let xp  = f (pat_xpath h.bhf_f) in
+            let po  = f (pat_form h.bhf_po) in
+            let cmp = f (pat_cmp h.bhf_cmp) in
+            let bd  = f (pat_form h.bhf_bd) in
+            let p = match pr.p_node, xp.p_node, po.p_node, cmp.p_node, bd.p_node with
+              | Pat_Axiom(Axiom_Form bhf_pr),
+                Pat_Axiom(Axiom_Xpath bhf_f),
+                Pat_Axiom(Axiom_Form bhf_po),
+                Pat_Axiom(Axiom_Hoarecmp bhf_cmp),
+                Pat_Axiom(Axiom_Form bhf_bd) ->
+                 pat_form (EcFol.FSmart.f_bdHoareF (fo,h) { bhf_pr ; bhf_f ; bhf_po ; bhf_cmp ; bhf_bd })
+              | _ -> p_bdHoareF pr xp po cmp bd in
+            p
+         | FbdHoareS h ->
+            let mem = f (pat_memenv h.bhs_m) in
+            let pr  = f (pat_form h.bhs_pr) in
+            let s   = f (pat_stmt h.bhs_s) in
+            let po  = f (pat_form h.bhs_po) in
+            let cmp = f (pat_cmp h.bhs_cmp) in
+            let bd  = f (pat_form h.bhs_bd) in
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node, cmp.p_node, bd.p_node with
+              | Pat_Axiom(Axiom_MemEnv bhs_m),
+                Pat_Axiom(Axiom_Form bhs_pr),
+                Pat_Axiom(Axiom_Stmt bhs_s),
+                Pat_Axiom(Axiom_Form bhs_po),
+                Pat_Axiom(Axiom_Hoarecmp bhs_cmp),
+                Pat_Axiom(Axiom_Form bhs_bd) ->
+                 pat_form (EcFol.FSmart.f_bdHoareS (fo,h) { bhs_m ; bhs_pr ; bhs_s ; bhs_po ; bhs_cmp; bhs_bd })
+              | _ -> p_bdHoareS mem pr s po cmp bd in
+            p
+         | FequivF h ->
+            let pr = f (pat_form h.ef_pr) in
+            let xl = f (pat_xpath h.ef_fl) in
+            let xr = f (pat_xpath h.ef_fr) in
+            let po = f (pat_form h.ef_po) in
+            let p = match pr.p_node, xl.p_node, xr.p_node, po.p_node with
+              | Pat_Axiom(Axiom_Form ef_pr),
+                Pat_Axiom(Axiom_Xpath ef_fl),
+                Pat_Axiom(Axiom_Xpath ef_fr),
+                Pat_Axiom(Axiom_Form ef_po) ->
+                 pat_form (EcFol.FSmart.f_equivF (fo,h) { ef_pr ; ef_fl ; ef_fr ; ef_po })
+              | _ -> p_equivF pr xl xr po in
+            p
+         | FequivS h ->
+            let ml = f (pat_memenv h.es_ml) in
+            let mr = f (pat_memenv h.es_mr) in
+            let pr = f (pat_form h.es_pr) in
+            let sl = f (pat_stmt h.es_sl) in
+            let sr = f (pat_stmt h.es_sr) in
+            let po = f (pat_form h.es_po) in
+            let p = match ml.p_node, mr.p_node, pr.p_node, sl.p_node, sr.p_node, po.p_node with
+              | Pat_Axiom(Axiom_MemEnv es_ml),
+                Pat_Axiom(Axiom_MemEnv es_mr),
+                Pat_Axiom(Axiom_Form es_pr),
+                Pat_Axiom(Axiom_Stmt es_sl),
+                Pat_Axiom(Axiom_Stmt es_sr),
+                Pat_Axiom(Axiom_Form es_po) ->
+                 pat_form (EcFol.FSmart.f_equivS (fo,h) { es_ml; es_mr ; es_pr ; es_sl ; es_sr ; es_po })
+              | _ -> p_equivS ml mr pr sl sr po in
+            p
+         | FeagerF h ->
+            let pr = f (pat_form h.eg_pr) in
+            let sl = f (pat_stmt h.eg_sl) in
+            let fl = f (pat_xpath h.eg_fl) in
+            let fr = f (pat_xpath h.eg_fr) in
+            let sr = f (pat_stmt h.eg_sr) in
+            let po = f (pat_form h.eg_po) in
+            let p = match pr.p_node, sl.p_node, fl.p_node, fr.p_node, sr.p_node, po.p_node with
+              | Pat_Axiom(Axiom_Form eg_pr),
+                Pat_Axiom(Axiom_Stmt eg_sl),
+                Pat_Axiom(Axiom_Xpath eg_fl),
+                Pat_Axiom(Axiom_Xpath eg_fr),
+                Pat_Axiom(Axiom_Stmt eg_sr),
+                Pat_Axiom(Axiom_Form eg_po) ->
+                 pat_form (EcFol.FSmart.f_eagerF (fo,h) { eg_pr ; eg_sl; eg_fl ; eg_fr ; eg_sr ; eg_po })
+              | _ -> p_eagerF pr sl fl fr sr po in
+            p
+         | Fpr h ->
+            let m    = f (pat_memory h.pr_mem) in
+            let xp   = f (pat_xpath h.pr_fun) in
+            let args = f (pat_form h.pr_args) in
+            let ev   = f (pat_form h.pr_event) in
+            let p = match m.p_node, xp.p_node, args.p_node, ev.p_node with
+              | Pat_Axiom(Axiom_Memory pr_mem),
+                Pat_Axiom(Axiom_Xpath pr_fun),
+                Pat_Axiom(Axiom_Form pr_args),
+                Pat_Axiom(Axiom_Form pr_event) ->
+                 pat_form (EcFol.FSmart.f_pr (fo,h) { pr_mem ; pr_fun ; pr_args; pr_event })
+              | _ -> p_pr m xp args ev in
+            p
+         | Fint _ | Flocal _ | Fop _ -> p
+       end
+     | Axiom_Instr i -> begin
+         match i.i_node with
+         | Sasgn (lv,e) ->
+            let plv = f (pat_lvalue lv) in
+            let pe  = f (pat_form (form_of_expr e)) in
+            p_assign plv pe
+         | Srnd (lv,e) ->
+            let plv = f (pat_lvalue lv) in
+            let pe  = f (pat_form (form_of_expr e)) in
+            p_sample plv pe
+         | Scall (olv,xp,args) ->
+            let olv = match olv with
+              | Some lv -> let p = f (pat_lvalue lv) in Some p
+              | None -> None in
+            let xp = f (pat_xpath xp) in
+            let args =
+              List.map f (List.map (fun arg -> pat_form (form_of_expr arg)) args) in
+            p_call olv xp args
+         | Sif (e,s1,s2) ->
+            let pe = f (pat_form (form_of_expr e)) in
+            let s1 = f (pat_stmt s1) in
+            let s2 = f (pat_stmt s2) in
+            p_instr_if pe s1 s2
+         | Swhile (e,s) ->
+            let pe = f (pat_form (form_of_expr e)) in
+            let s  = f (pat_stmt s) in
+            p_while pe s
+         | Sassert e ->
+            let p = f (pat_form (form_of_expr e)) in
+            p_assert p
+         | Sabstract _ -> p
+       end
+     | Axiom_Stmt s ->
+        let s = List.map f (List.map pat_instr s.s_node) in
+        p_stmt s
+     | Axiom_Lvalue lv -> begin
+         match lv with
+         | LvVar (pv,ty) ->
+            let p = f (pat_pv pv) in p_lvalue_var p ty
+         | LvTuple t ->
+            let t = List.map f (List.map (fun (pv,ty) -> pat_lvalue (LvVar (pv,ty))) t) in
+            p_lvalue_tuple t
+         | LvMap _ -> p
+       end
+     | Axiom_Prog_Var pv ->
+        let p = f (pat_xpath pv.pv_name) in
+        p_prog_var p pv.pv_kind
+     | Axiom_Xpath xp ->
+        let p = f (pat_mpath xp.x_top) in
+        p_xpath p (pat_op xp.x_sub [] None)
+     | Axiom_Mpath mp ->
+        let m = f (pat_mpath_top mp.m_top) in
+        let margs = List.map f (List.map pat_mpath mp.m_args) in
+        p_mpath m margs
+     | Axiom_Op _ | Axiom_Local _ | Axiom_Memory _ | Axiom_MemEnv _
+       | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> p
+
+
 let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
         : 'a * pattern =
   let a, p' = f a p in
-  if not (p = p') then a, p' else
-  match p with
+  if not (p_equal p p') then a, p' else
+  match p.p_node with
   | Pat_Anything -> a, p
   | Pat_Meta_Name (p,n,ob) ->
-     let a, p = p_map_fold f a p in a, Pat_Meta_Name (p,n,ob)
+     let a, p = p_map_fold f a p in
+     a, mk_pattern (Pat_Meta_Name (p,n,ob)) p.p_ogty
   | Pat_Sub p ->
-     let a, p = p_map_fold f a p in a, Pat_Sub p
+     let a, p = p_map_fold f a p in
+     a, mk_pattern (Pat_Sub p) OGTany
   | Pat_Or lp ->
-     let a, lp = List.map_fold (p_map_fold f) a lp in a, Pat_Or lp
-  | Pat_Instance _ -> assert false
+     let a, lp = List.map_fold (p_map_fold f) a lp in
+     a, mk_pattern (Pat_Or lp) OGTany
   | Pat_Red_Strat (p, red) ->
-     let a, p = p_map_fold f a p in a, Pat_Red_Strat (p, red)
-  | Pat_Type(p,gty) ->
-     let a, p = p_map_fold f a p in a, p_type p gty
+     let a, p = p_map_fold f a p in a, mk_pattern (Pat_Red_Strat (p, red)) p.p_ogty
   | Pat_Fun_Symbol (s, lp) ->
      let a, lp = List.map_fold (p_map_fold f) a lp in
-     a, Pat_Fun_Symbol (s, lp)
+     a, pat_fun_symbol s lp
   | Pat_Axiom axiom ->
      match axiom with
      | Axiom_Form fo -> begin
          match fo.f_node with
          | Fquant (q,b,f') ->
             let a, p' = p_map_fold f a (pat_form f') in
-            let p' = match p with
+            let p' = match p.p_node with
               | Pat_Axiom(Axiom_Form f'') ->
                  pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
               | _ -> p_f_quant q b p' in
@@ -534,7 +878,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, p1 = p_map_fold f a (pat_form f1) in
             let a, p2 = p_map_fold f a (pat_form f2) in
             let a, p3 = p_map_fold f a (pat_form f3) in
-            let p = match p1,p2,p3 with
+            let p = match p1.p_node, p2.p_node, p3.p_node with
               | Pat_Axiom (Axiom_Form f1'),
                 Pat_Axiom (Axiom_Form f2'),
                 Pat_Axiom (Axiom_Form f3') ->
@@ -546,9 +890,9 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, args = List.map_fold (p_map_fold f) a
                             (List.map pat_form fargs) in
             let oargs   =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None)
-                args in
-            let p = match p1, oargs with
+              olist_all (function { p_node = Pat_Axiom (Axiom_Form f) } -> Some f
+                                | _ -> None) args in
+            let p = match p1.p_node, oargs with
               | Pat_Axiom(Axiom_Form f1'),Some fargs' ->
                  pat_form (EcFol.FSmart.f_match (fo,(f1,fargs,ty)) (f1',fargs',ty))
               | _ -> p_match p1 ty args in
@@ -556,15 +900,15 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
          | Flet (lp,f1,f2) ->
             let a, p1 = p_map_fold f a (pat_form f1) in
             let a, p2 = p_map_fold f a (pat_form f2) in
-            let p = match p1, p2 with
-              | Pat_Axiom(Axiom_Form f1'),Pat_Axiom(Axiom_Form f2') ->
+            let p = match p1.p_node, p2.p_node with
+              | Pat_Axiom (Axiom_Form f1'),Pat_Axiom (Axiom_Form f2') ->
                  pat_form (EcFol.FSmart.f_let (fo,(lp,f1,f2)) (lp,f1',f2'))
               | _ -> p_let lp p1 p2 in
             a, p
          | Fpvar (pv,m) ->
             let a, p1 = p_map_fold f a (pat_pv pv) in
             let a, p2 = p_map_fold f a (pat_memory m) in
-            let p = match p1, p2 with
+            let p = match p1.p_node, p2.p_node with
               | Pat_Axiom (Axiom_Prog_Var pv'), Pat_Axiom (Axiom_Memory m') ->
                  pat_form (EcFol.FSmart.f_pvar (fo,(pv,fo.f_ty,m)) (pv',fo.f_ty,m'))
               | _ -> p_pvar p1 fo.f_ty p2
@@ -572,7 +916,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
          | Fglob (mp,m) ->
             let a, p1 = p_map_fold f a (pat_mpath mp) in
             let a, p2 = p_map_fold f a (pat_memory m) in
-            let p = match p1, p2 with
+            let p = match p1.p_node, p2.p_node with
               | Pat_Axiom (Axiom_Mpath mp'), Pat_Axiom (Axiom_Memory m') ->
                  pat_form (EcFol.FSmart.f_glob (fo,(mp,m)) (mp',m'))
               | _ -> p_glob p1 p2 in
@@ -582,9 +926,9 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, pargs = List.map_fold (p_map_fold f) a
                              (List.map pat_form fargs) in
             let oargs    =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None)
-                pargs in
-            let p = match pop, oargs with
+              olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                                | _ -> None) pargs in
+            let p = match pop.p_node, oargs with
               | Pat_Axiom (Axiom_Form fop'), Some fargs' ->
                  pat_form (EcFol.FSmart.f_app (fo,(fop,fargs,fo.f_ty)) (fop',fargs',fo.f_ty))
               | _ -> p_app pop pargs (Some fo.f_ty) in
@@ -592,14 +936,15 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
          | Ftuple t ->
             let a, pt = List.map_fold (p_map_fold f) a (List.map pat_form t) in
             let ot    =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None) pt in
+              olist_all (function { p_node = Pat_Axiom (Axiom_Form f) } -> Some f
+                                | _ -> None) pt in
             let p = match ot with
               | Some t' -> pat_form (EcFol.FSmart.f_tuple (fo,t) t')
               | None    -> p_tuple pt in
             a, p
          | Fproj (f1,i) ->
             let a, p1 = p_map_fold f a (pat_form f1) in
-            let p = match p1 with
+            let p = match p1.p_node with
               | Pat_Axiom(Axiom_Form f1') ->
                  pat_form (EcFol.FSmart.f_proj (fo,(f1,fo.f_ty)) (f1',fo.f_ty) i)
               | _ -> p_proj p1 i fo.f_ty in
@@ -608,7 +953,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, pr = p_map_fold f a (pat_form h.hf_pr) in
             let a, xp = p_map_fold f a (pat_xpath h.hf_f) in
             let a, po = p_map_fold f a (pat_form h.hf_po) in
-            let p = match pr,xp,po with
+            let p = match pr.p_node, xp.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form hf_pr),
                 Pat_Axiom(Axiom_Xpath hf_f),
                 Pat_Axiom(Axiom_Form hf_po) ->
@@ -620,7 +965,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, pr  = p_map_fold f a (pat_form h.hs_pr) in
             let a, s   = p_map_fold f a (pat_stmt h.hs_s) in
             let a, po  = p_map_fold f a (pat_form h.hs_po) in
-            let p = match mem,pr,s,po with
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node with
               | Pat_Axiom(Axiom_MemEnv hs_m),
                 Pat_Axiom(Axiom_Form hs_pr),
                 Pat_Axiom(Axiom_Stmt hs_s),
@@ -634,7 +979,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, po  = p_map_fold f a (pat_form h.bhf_po) in
             let a, cmp = p_map_fold f a (pat_cmp h.bhf_cmp) in
             let a, bd  = p_map_fold f a (pat_form h.bhf_bd) in
-            let p = match pr,xp,po,cmp,bd with
+            let p = match pr.p_node, xp.p_node, po.p_node, cmp.p_node, bd.p_node with
               | Pat_Axiom(Axiom_Form bhf_pr),
                 Pat_Axiom(Axiom_Xpath bhf_f),
                 Pat_Axiom(Axiom_Form bhf_po),
@@ -650,7 +995,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, po  = p_map_fold f a (pat_form h.bhs_po) in
             let a, cmp = p_map_fold f a (pat_cmp h.bhs_cmp) in
             let a, bd  = p_map_fold f a (pat_form h.bhs_bd) in
-            let p = match mem,pr,s,po,cmp,bd with
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node, cmp.p_node, bd.p_node with
               | Pat_Axiom(Axiom_MemEnv bhs_m),
                 Pat_Axiom(Axiom_Form bhs_pr),
                 Pat_Axiom(Axiom_Stmt bhs_s),
@@ -665,7 +1010,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, xl = p_map_fold f a (pat_xpath h.ef_fl) in
             let a, xr = p_map_fold f a (pat_xpath h.ef_fr) in
             let a, po = p_map_fold f a (pat_form h.ef_po) in
-            let p = match pr,xl,xr,po with
+            let p = match pr.p_node, xl.p_node, xr.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form ef_pr),
                 Pat_Axiom(Axiom_Xpath ef_fl),
                 Pat_Axiom(Axiom_Xpath ef_fr),
@@ -680,7 +1025,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, sl = p_map_fold f a (pat_stmt h.es_sl) in
             let a, sr = p_map_fold f a (pat_stmt h.es_sr) in
             let a, po = p_map_fold f a (pat_form h.es_po) in
-            let p = match ml,mr,pr,sl,sr,po with
+            let p = match ml.p_node, mr.p_node, pr.p_node, sl.p_node, sr.p_node, po.p_node with
               | Pat_Axiom(Axiom_MemEnv es_ml),
                 Pat_Axiom(Axiom_MemEnv es_mr),
                 Pat_Axiom(Axiom_Form es_pr),
@@ -697,7 +1042,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, fr = p_map_fold f a (pat_xpath h.eg_fr) in
             let a, sr = p_map_fold f a (pat_stmt h.eg_sr) in
             let a, po = p_map_fold f a (pat_form h.eg_po) in
-            let p = match pr,sl,fl,fr,sr,po with
+            let p = match pr.p_node, sl.p_node, fl.p_node, fr.p_node, sr.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form eg_pr),
                 Pat_Axiom(Axiom_Stmt eg_sl),
                 Pat_Axiom(Axiom_Xpath eg_fl),
@@ -712,7 +1057,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let a, xp   = p_map_fold f a (pat_xpath h.pr_fun) in
             let a, args = p_map_fold f a (pat_form h.pr_args) in
             let a, ev   = p_map_fold f a (pat_form h.pr_event) in
-            let p = match m, xp, args, ev with
+            let p = match m.p_node, xp.p_node, args.p_node, ev.p_node with
               | Pat_Axiom(Axiom_Memory pr_mem),
                 Pat_Axiom(Axiom_Xpath pr_fun),
                 Pat_Axiom(Axiom_Form pr_args),
@@ -773,14 +1118,14 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
         a, p_prog_var p pv.pv_kind
      | Axiom_Xpath xp ->
         let a, p = p_map_fold f a (pat_mpath xp.x_top) in
-        a, p_xpath p (pat_op xp.x_sub [])
+        a, p_xpath p (pat_op xp.x_sub [] None)
      | Axiom_Mpath mp ->
         let a, m = p_map_fold f a (pat_mpath_top mp.m_top) in
         let a, margs = List.map_fold (p_map_fold f) a
                          (List.map pat_mpath mp.m_args) in
         a, p_mpath m margs
      | Axiom_Op _ | Axiom_Local _ | Axiom_Memory _ | Axiom_MemEnv _
-       | Axiom_Module _ | Axiom_Hoarecmp _ -> a, p
+       | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> a, p
 
 
 
@@ -789,22 +1134,23 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
   if f p then replacement
   else
   let replace p = if f p then replacement else p in
-  match p with
+  match p.p_node with
   | Pat_Anything -> p
-  | Pat_Meta_Name (p',n,ob) -> Pat_Meta_Name (replace p',n,ob)
-  | Pat_Sub p' -> Pat_Sub (replace p')
-  | Pat_Or lp -> Pat_Or (List.map replace lp)
-  | Pat_Instance _ -> assert false
-  | Pat_Red_Strat (p, red) -> Pat_Red_Strat (replace p, red)
-  | Pat_Type(p,gty) -> p_type (replace p) gty
-  | Pat_Fun_Symbol (s, lp) -> Pat_Fun_Symbol (s, List.map replace lp)
+  | Pat_Meta_Name (p',n,ob) ->
+     let p = replace p' in mk_pattern (Pat_Meta_Name (p,n,ob)) p.p_ogty
+  | Pat_Sub p' ->
+     let p = replace p' in mk_pattern (Pat_Sub p) OGTany
+  | Pat_Or lp -> mk_pattern (Pat_Or (List.map replace lp)) OGTany
+  | Pat_Red_Strat (p', red) ->
+     let p = replace p' in mk_pattern (Pat_Red_Strat (p, red)) p.p_ogty
+  | Pat_Fun_Symbol (s, lp) -> pat_fun_symbol s (List.map replace lp)
   | Pat_Axiom axiom ->
      match axiom with
      | Axiom_Form fo -> begin
          match fo.f_node with
          | Fquant (q,b,f') ->
             let p' = replace (pat_form f') in
-            let p' = match p with
+            let p' = match p.p_node with
               | Pat_Axiom(Axiom_Form f'') ->
                  pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
               | _ -> p_f_quant q b p' in
@@ -813,7 +1159,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let p1 = replace (pat_form f1) in
             let p2 = replace (pat_form f2) in
             let p3 = replace (pat_form f3) in
-            let p = match p1,p2,p3 with
+            let p = match p1.p_node, p2.p_node, p3.p_node with
               | Pat_Axiom (Axiom_Form f1'),
                 Pat_Axiom (Axiom_Form f2'),
                 Pat_Axiom (Axiom_Form f3') ->
@@ -824,25 +1170,25 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let p1   = replace (pat_form f1) in
             let args = List.map replace (List.map pat_form fargs) in
             let oargs   =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None)
-                args in
-            let p = match p1, oargs with
-              | Pat_Axiom(Axiom_Form f1'),Some fargs' ->
+              olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                                | _ -> None) args in
+            let p = match p1.p_node, oargs with
+              | Pat_Axiom (Axiom_Form f1'), Some fargs' ->
                  pat_form (EcFol.FSmart.f_match (fo,(f1,fargs,ty)) (f1',fargs',ty))
               | _ -> p_match p1 ty args in
             p
          | Flet (lp,f1,f2) ->
             let p1 = replace (pat_form f1) in
             let p2 = replace (pat_form f2) in
-            let p = match p1, p2 with
-              | Pat_Axiom(Axiom_Form f1'),Pat_Axiom(Axiom_Form f2') ->
+            let p = match p1.p_node, p2.p_node with
+              | Pat_Axiom (Axiom_Form f1'), Pat_Axiom (Axiom_Form f2') ->
                  pat_form (EcFol.FSmart.f_let (fo,(lp,f1,f2)) (lp,f1',f2'))
               | _ -> p_let lp p1 p2 in
             p
          | Fpvar (pv,m) ->
             let p1 = replace (pat_pv pv) in
             let p2 = replace (pat_memory m) in
-            let p = match p1, p2 with
+            let p = match p1.p_node, p2.p_node with
               | Pat_Axiom (Axiom_Prog_Var pv'), Pat_Axiom (Axiom_Memory m') ->
                  pat_form (EcFol.FSmart.f_pvar (fo,(pv,fo.f_ty,m)) (pv',fo.f_ty,m'))
               | _ -> p_pvar p1 fo.f_ty p2
@@ -850,7 +1196,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
          | Fglob (mp,m) ->
             let p1 = replace (pat_mpath mp) in
             let p2 = replace (pat_memory m) in
-            let p = match p1, p2 with
+            let p = match p1.p_node, p2.p_node with
               | Pat_Axiom (Axiom_Mpath mp'), Pat_Axiom (Axiom_Memory m') ->
                  pat_form (EcFol.FSmart.f_glob (fo,(mp,m)) (mp',m'))
               | _ -> p_glob p1 p2 in
@@ -859,9 +1205,9 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let pop   = replace (pat_form fop) in
             let pargs = List.map replace (List.map pat_form fargs) in
             let oargs    =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None)
-                pargs in
-            let p = match pop, oargs with
+              olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                                | _ -> None) pargs in
+            let p = match pop.p_node, oargs with
               | Pat_Axiom (Axiom_Form fop'), Some fargs' ->
                  pat_form (EcFol.FSmart.f_app (fo,(fop,fargs,fo.f_ty)) (fop',fargs',fo.f_ty))
               | _ -> p_app pop pargs (Some fo.f_ty) in
@@ -869,14 +1215,15 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
          | Ftuple t ->
             let pt = List.map replace (List.map pat_form t) in
             let ot    =
-              olist_all (function Pat_Axiom(Axiom_Form f) -> Some f | _ -> None) pt in
+              olist_all (function { p_node = Pat_Axiom(Axiom_Form f) } -> Some f
+                                | _ -> None) pt in
             let p = match ot with
               | Some t' -> pat_form (EcFol.FSmart.f_tuple (fo,t) t')
               | None    -> p_tuple pt in
             p
          | Fproj (f1,i) ->
             let p1 = replace (pat_form f1) in
-            let p = match p1 with
+            let p = match p1.p_node with
               | Pat_Axiom(Axiom_Form f1') ->
                  pat_form (EcFol.FSmart.f_proj (fo,(f1,fo.f_ty)) (f1',fo.f_ty) i)
               | _ -> p_proj p1 i fo.f_ty in
@@ -885,7 +1232,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let pr = replace (pat_form h.hf_pr) in
             let xp = replace (pat_xpath h.hf_f) in
             let po = replace (pat_form h.hf_po) in
-            let p = match pr,xp,po with
+            let p = match pr.p_node, xp.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form hf_pr),
                 Pat_Axiom(Axiom_Xpath hf_f),
                 Pat_Axiom(Axiom_Form hf_po) ->
@@ -897,7 +1244,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let pr  = replace (pat_form h.hs_pr) in
             let s   = replace (pat_stmt h.hs_s) in
             let po  = replace (pat_form h.hs_po) in
-            let p = match mem,pr,s,po with
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node with
               | Pat_Axiom(Axiom_MemEnv hs_m),
                 Pat_Axiom(Axiom_Form hs_pr),
                 Pat_Axiom(Axiom_Stmt hs_s),
@@ -911,7 +1258,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let po  = replace (pat_form h.bhf_po) in
             let cmp = replace (pat_cmp h.bhf_cmp) in
             let bd  = replace (pat_form h.bhf_bd) in
-            let p = match pr,xp,po,cmp,bd with
+            let p = match pr.p_node, xp.p_node, po.p_node, cmp.p_node, bd.p_node with
               | Pat_Axiom(Axiom_Form bhf_pr),
                 Pat_Axiom(Axiom_Xpath bhf_f),
                 Pat_Axiom(Axiom_Form bhf_po),
@@ -927,7 +1274,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let po  = replace (pat_form h.bhs_po) in
             let cmp = replace (pat_cmp h.bhs_cmp) in
             let bd  = replace (pat_form h.bhs_bd) in
-            let p = match mem,pr,s,po,cmp,bd with
+            let p = match mem.p_node, pr.p_node, s.p_node, po.p_node, cmp.p_node, bd.p_node with
               | Pat_Axiom(Axiom_MemEnv bhs_m),
                 Pat_Axiom(Axiom_Form bhs_pr),
                 Pat_Axiom(Axiom_Stmt bhs_s),
@@ -942,7 +1289,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let xl = replace (pat_xpath h.ef_fl) in
             let xr = replace (pat_xpath h.ef_fr) in
             let po = replace (pat_form h.ef_po) in
-            let p = match pr,xl,xr,po with
+            let p = match pr.p_node, xl.p_node, xr.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form ef_pr),
                 Pat_Axiom(Axiom_Xpath ef_fl),
                 Pat_Axiom(Axiom_Xpath ef_fr),
@@ -957,7 +1304,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let sl = replace (pat_stmt h.es_sl) in
             let sr = replace (pat_stmt h.es_sr) in
             let po = replace (pat_form h.es_po) in
-            let p = match ml,mr,pr,sl,sr,po with
+            let p = match ml.p_node, mr.p_node, pr.p_node, sl.p_node, sr.p_node, po.p_node with
               | Pat_Axiom(Axiom_MemEnv es_ml),
                 Pat_Axiom(Axiom_MemEnv es_mr),
                 Pat_Axiom(Axiom_Form es_pr),
@@ -974,7 +1321,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let fr = replace (pat_xpath h.eg_fr) in
             let sr = replace (pat_stmt h.eg_sr) in
             let po = replace (pat_form h.eg_po) in
-            let p = match pr,sl,fl,fr,sr,po with
+            let p = match pr.p_node, sl.p_node, fl.p_node, fr.p_node, sr.p_node, po.p_node with
               | Pat_Axiom(Axiom_Form eg_pr),
                 Pat_Axiom(Axiom_Stmt eg_sl),
                 Pat_Axiom(Axiom_Xpath eg_fl),
@@ -989,7 +1336,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let xp   = replace (pat_xpath h.pr_fun) in
             let args = replace (pat_form h.pr_args) in
             let ev   = replace (pat_form h.pr_event) in
-            let p = match m, xp, args, ev with
+            let p = match m.p_node, xp.p_node, args.p_node, ev.p_node with
               | Pat_Axiom(Axiom_Memory pr_mem),
                 Pat_Axiom(Axiom_Xpath pr_fun),
                 Pat_Axiom(Axiom_Form pr_args),
@@ -1049,13 +1396,13 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
         p_prog_var p pv.pv_kind
      | Axiom_Xpath xp ->
         let p = replace (pat_mpath xp.x_top) in
-        p_xpath p (pat_op xp.x_sub [])
+        p_xpath p (pat_op xp.x_sub [] None)
      | Axiom_Mpath mp ->
         let m = replace (pat_mpath_top mp.m_top) in
         let margs = List.map replace (List.map pat_mpath mp.m_args) in
         p_mpath m margs
      | Axiom_Op _ | Axiom_Local _ | Axiom_Memory _ | Axiom_MemEnv _
-       | Axiom_Module _ | Axiom_Hoarecmp _ -> p
+       | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> p
 
 
 (* -------------------------------------------------------------------------- *)
@@ -1111,8 +1458,8 @@ module Psubst = struct
   let p_rem_mod (s : p_subst) (m : ident) =
     let ps_patloc = Mid.remove m s.ps_patloc in
     let sty = s.ps_sty in
-    let smp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                ps_patloc in
+    let smp = Mid.map_filter (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                                     | _ -> None) ps_patloc in
     let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
     let ps_patloc =
       Mid.mapi (fun id a -> odfl a (omap pat_mpath (Mid.find_opt id smp)))
@@ -1165,8 +1512,8 @@ module Psubst = struct
 
     | GTmodty (p, (rx, r)) ->
         let sub  = s.ps_sty.ts_mp in
-        let mp   = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                     s.ps_patloc in
+        let mp   = Mid.map_filter (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                                          | _ -> None) s.ps_patloc in
         let xsub = EcPath.x_substm s.ps_sty.ts_p mp in
         let p'   = mty_subst s.ps_sty.ts_p sub p in
         let rx'  = Sx.fold (fun m rx' -> Sx.add (xsub m) rx') rx Sx.empty in
@@ -1177,8 +1524,8 @@ module Psubst = struct
         else GTmodty (p', (rx', r'))
 
     | GTmem mt ->
-        let mp  = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                    s.ps_patloc in
+        let mp  = Mid.map_filter (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                                         | _ -> None) s.ps_patloc in
         let mt' = EcMemory.mt_substm s.ps_sty.ts_p mp
                     (ty_subst s.ps_sty) mt in
         if mt == mt' then gty else GTmem mt'
@@ -1191,6 +1538,7 @@ module Psubst = struct
        let mt, mr = gty_as_mod (gty_subst s (GTmodty (mt,mr))) in
        OGTmodty (Some (mt, mr))
     | OGTmodty None -> ogty
+    | _ -> ogty
 
   (* ------------------------------------------------------------------------ *)
   let add_binding (s : p_subst) (x,gty as xt : binding) =
@@ -1216,6 +1564,7 @@ module Psubst = struct
         | OGTty _    -> p_rem_local s x
         | OGTmodty _ -> p_rem_mod   s x
         | OGTmem _   -> p_rem_mem   s x
+        | _ -> s
       in (s,xt)
     else
       (s, (x, gty'))
@@ -1224,19 +1573,17 @@ module Psubst = struct
 
   (* ------------------------------------------------------------------------ *)
   let rec p_subst (s : p_subst) (p : pattern) =
-    let p = match p with
-    | Pat_Anything -> Pat_Anything
-    | Pat_Sub p -> Pat_Sub (p_subst s p)
-    | Pat_Or lp -> Pat_Or (List.map (p_subst s) lp)
-    | Pat_Instance _ -> assert false
-    | Pat_Red_Strat (p,f) -> Pat_Red_Strat (p_subst s p,f)
-    | Pat_Type (p,gty) ->
-       let gty = ogty_subst s gty in
-       p_type (p_subst s p) gty
+    let p = match p.p_node with
+    | Pat_Anything -> mk_pattern Pat_Anything OGTany
+    | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) OGTany
+    | Pat_Or lp -> mk_pattern (Pat_Or (List.map (p_subst s) lp)) OGTany
+    | Pat_Red_Strat (p,f) ->
+       let p = p_subst s p in mk_pattern (Pat_Red_Strat (p,f)) p.p_ogty
     | Pat_Meta_Name (p,name,ob) -> begin
         match Mid.find_opt name s.ps_patloc with
         | Some p -> p
-        | None -> Pat_Meta_Name (p_subst s p,name,ob)
+        | None ->
+           let p = p_subst s p in mk_pattern (Pat_Meta_Name (p,name,ob)) p.p_ogty
       end
     | Pat_Axiom a -> begin
         match a with
@@ -1255,7 +1602,7 @@ module Psubst = struct
 
             | Flocal id -> begin
                 match Mid.find_opt id s.ps_patloc with
-                | Some (Pat_Axiom (Axiom_Local (id,ty))) -> pat_form (f_local id ty)
+                | Some ({ p_node = Pat_Axiom (Axiom_Local (id,ty))}) -> pat_form (f_local id ty)
                 | Some p -> p
                 | None ->
                    let ty = ty_subst s.ps_sty fp.f_ty in
@@ -1272,7 +1619,7 @@ module Psubst = struct
                let pv' = pv_subst s pv in
                let m'  = mem_subst s m in
                let ty' = ty_subst s.ps_sty fp.f_ty in
-               p_type (p_pvar pv' ty' m') (OGTty (Some ty'))
+               p_pvar pv' ty' m'
                (* pat_form (FSmart.f_pvar (fp, (pv, fp.f_ty, m)) (pv', ty', m')) *)
 
             | Fglob (mp, m) ->
@@ -1401,7 +1748,7 @@ module Psubst = struct
 
           end (* axiom_form *)
 
-        | Axiom_Module mtop -> mtop_subst s mtop
+        | Axiom_Mpath_top mtop -> mtop_subst s mtop
 
         | Axiom_Mpath m -> mp_subst s m
 
@@ -1415,7 +1762,10 @@ module Psubst = struct
 
         | Axiom_Op (op,lty) ->
            let lty = List.Smart.map (ty_subst s.ps_sty) lty in
-           pat_op op lty
+           let oty = match p.p_ogty with
+             | OGTty (Some ty) -> Some (ty_subst s.ps_sty ty)
+             | _ -> None in
+           pat_op op lty oty
 
         | Axiom_Instr i -> i_subst s i
 
@@ -1426,8 +1776,13 @@ module Psubst = struct
         | Axiom_Hoarecmp _ -> p
 
         | Axiom_Local (id,ty) ->
-           odfl p (omap (fun p -> p_type p (OGTty (Some ty)))
-                     (Mid.find_opt id s.ps_patloc))
+           match Mid.find_opt id s.ps_patloc with
+           | None -> p
+           | Some p' ->
+           match p'.p_ogty with
+           | OGTty (Some ty2) -> if ty_equal ty ty2 then p'
+                                 else assert false
+           | _ -> mk_pattern p.p_node (OGTty (Some ty))
 
       end (* pat_axiom *)
 
@@ -1517,11 +1872,13 @@ module Psubst = struct
 
     and pv_subst s pv =
       (* FIXME *)
-      let mp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                 s.ps_patloc in
+      let mp = Mid.map_filter
+                 (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                         | _ -> None) s.ps_patloc in
       let pv = EcTypes.pv_subst (EcPath.x_substm s.ps_sty.ts_p mp) pv in
       match xp_subst s pv.pv_name with
-      | Pat_Axiom (Axiom_Xpath xp) when x_equal xp pv.pv_name -> pat_pv pv
+      | { p_node = Pat_Axiom (Axiom_Xpath xp) }
+           when x_equal xp pv.pv_name -> pat_pv pv
       | p -> p_prog_var p pv.pv_kind
 
 
@@ -1539,7 +1896,7 @@ module Psubst = struct
       | _ ->
        let margs = List.map (mp_subst s) mp.m_args in
        let m_is_eq m1 = function
-         | Pat_Axiom(Axiom_Mpath m2) -> m_equal m1 m2
+         | { p_node = Pat_Axiom(Axiom_Mpath m2) } -> m_equal m1 m2
          | _ -> false in
        if List.for_all2 m_is_eq mp.m_args margs
        then pat_mpath mp
@@ -1551,20 +1908,22 @@ module Psubst = struct
       | _ -> pat_memory m
 
     and xp_subst s xp =
-      let mp = Mid.map_filter (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                 s.ps_patloc in
+      let mp = Mid.map_filter
+                 (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                         | _ -> None) s.ps_patloc in
       let xp = EcPath.x_substm s.ps_sty.ts_p mp xp in
       match mp_subst s xp.x_top with
-      | Pat_Axiom (Axiom_Mpath mp) when m_equal mp xp.x_top -> pat_xpath xp
-      | p -> p_xpath p (pat_op xp.x_sub [])
+      | { p_node = Pat_Axiom (Axiom_Mpath mp) }
+           when m_equal mp xp.x_top -> pat_xpath xp
+      | p -> p_xpath p (pat_op xp.x_sub [] None)
 
     and memenv_subst s m =
       let mp  = Mid.map_filter
-                  (function Pat_Axiom(Axiom_Mpath m) -> Some m | _ -> None)
-                  s.ps_patloc in
+                  (function { p_node = Pat_Axiom(Axiom_Mpath m) } -> Some m
+                            | _ -> None) s.ps_patloc in
       let mem = Mid.map_filter
-                  (function Pat_Axiom(Axiom_Memory m) -> Some m | _ -> None)
-                  s.ps_patloc in
+                  (function { p_node = Pat_Axiom(Axiom_Memory m) } -> Some m
+                          | _ -> None) s.ps_patloc in
       (* FIXME *)
       pat_memenv (EcMemory.me_substm s.ps_sty.ts_p mp mem (ty_subst s.ps_sty) m)
 
@@ -1606,26 +1965,23 @@ module Psubst = struct
          p_lvalue_tuple (List.map (fun x -> lv_subst s (LvVar x)) l)
       | LvMap ((op,lty),pv,e,ty) ->
       match pv_subst s pv with
-      | Pat_Axiom(Axiom_Prog_Var pv) ->
+      | { p_node = Pat_Axiom(Axiom_Prog_Var pv) } ->
          pat_lvalue
            (LvMap
               ((op,List.map (ty_subst s.ps_sty) lty),
                pv, e_map (ty_subst s.ps_sty) (fun x->x) e, ty_subst s.ps_sty ty))
       | _ -> assert false
 
-    and p_betared_opt = function
+    and p_betared_opt p = match p.p_node with
       | Pat_Anything -> None
       | Pat_Meta_Name (p,n,ob) ->
-         omap (fun p -> Pat_Meta_Name (p,n,ob)) (p_betared_opt p)
+         omap (fun p -> mk_pattern (Pat_Meta_Name (p,n,ob)) p.p_ogty) (p_betared_opt p)
       | Pat_Sub p ->
-         omap (fun p -> Pat_Sub p) (p_betared_opt p)
+         omap (fun p -> mk_pattern (Pat_Sub p) OGTany) (p_betared_opt p)
       | Pat_Or [p] -> p_betared_opt p
       | Pat_Or _ -> None
-      | Pat_Instance _ -> assert false
-      | Pat_Type (p,gty) ->
-         omap (fun p -> p_type p gty) (p_betared_opt p)
       | Pat_Red_Strat (p,f) ->
-         omap (fun p -> Pat_Red_Strat (p,f)) (p_betared_opt p)
+         omap (fun p -> mk_pattern (Pat_Red_Strat (p,f)) p.p_ogty) (p_betared_opt p)
       | Pat_Axiom (Axiom_Form f) ->
          let f2 = try EcFol.f_betared f with
                   | _ -> f in
@@ -1635,7 +1991,7 @@ module Psubst = struct
       | Pat_Fun_Symbol (s,lp) ->
       match s,lp with
       | Sym_Form_App ty,
-        (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+        ({ p_node = Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1643,7 +1999,7 @@ module Psubst = struct
              subst bs1 pargs1 in
          Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
       | Sym_App,
-        (Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p]))::pargs ->
+        ({ p_node = Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1651,7 +2007,7 @@ module Psubst = struct
              subst bs1 pargs1 in
          Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 None)
       | Sym_Form_App ty,
-        (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+        ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1659,7 +2015,7 @@ module Psubst = struct
              subst bs1 pargs1 in
          Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 (Some ty))
       | Sym_App,
-        (Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p]))::pargs ->
+        ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1667,7 +2023,7 @@ module Psubst = struct
              subst bs1 pargs1 in
          Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 None)
       | Sym_Form_App ty,
-        (Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) }))::pargs ->
+        ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) })})::pargs ->
          let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1676,7 +2032,7 @@ module Psubst = struct
          Some (p_app (p_f_quant Llambda bs2 (p_subst subst (pat_form f)))
                  pargs2 (Some ty))
       | Sym_App,
-        (Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) }))::pargs ->
+        ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) })})::pargs ->
          let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
@@ -1694,13 +2050,13 @@ let p_betared_opt = Psubst.p_betared_opt
 
 (* -------------------------------------------------------------------------- *)
 
-let p_destr_app = function
+let p_destr_app p = match p.p_node with
   | Pat_Axiom(Axiom_Form f) ->
      let p,lp = EcFol.destr_app f in
      pat_form p, List.map pat_form lp
   | Pat_Fun_Symbol(Sym_Form_App _,p::lp)
     | Pat_Fun_Symbol(Sym_App, p::lp) -> p,lp
-  | p -> p, []
+  | _ -> p, []
 
 (* -------------------------------------------------------------------------- *)
 let f_op_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
@@ -1709,12 +2065,16 @@ let f_op_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
 let p_true  = pat_form EcFol.f_true
 let p_false = pat_form EcFol.f_false
 
+let p_op (p : path) (lty : ty list) (ty : ty) = pat_form (f_op p lty ty)
+
+let pop_eq ty = p_op EcCoreLib.CI_Bool.p_eq [ty] (toarrow [ty; ty] tbool)
+
 let p_is_true = function
-  | Pat_Axiom(Axiom_Form f) -> EcCoreFol.is_true f
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> EcCoreFol.is_true f
   | _ -> false
 
 let p_is_false = function
-  | Pat_Axiom(Axiom_Form f) -> EcCoreFol.is_false f
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> EcCoreFol.is_false f
   | _ -> false
 
 let p_bool_val p =
@@ -1722,45 +2082,45 @@ let p_bool_val p =
   else if p_is_false p then Some false
   else None
 
-let p_eq (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_eq ty (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom(Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (f_eq f1 f2)
-  | _ -> assert false
+  | _ -> p_app (pop_eq ty) [p1;p2] (Some tbool)
 
 let p_not = function
-  | Pat_Axiom(Axiom_Form f) -> pat_form (EcFol.f_not f)
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> pat_form (EcFol.f_not f)
   | p -> p_app (pat_form EcFol.fop_not) [p] (Some EcTypes.tbool)
 
-let p_imp (p1 : pattern) (p2 : pattern) = match p1,p2 with
+let p_imp (p1 : pattern) (p2 : pattern) = match p1.p_node,p2.p_node with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
      pat_form (EcFol.f_imp f1 f2)
   | _ -> p_app (pat_form EcFol.fop_imp) [p1;p2]
            (Some EcTypes.tbool)
 
-let p_anda (p1 : pattern) (p2 : pattern) = match p1,p2 with
+let p_anda (p1 : pattern) (p2 : pattern) = match p1.p_node,p2.p_node with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
      pat_form  (EcFol.f_anda f1 f2)
   | _ -> p_app (pat_form EcFol.fop_anda) [p1;p2]
            (Some EcTypes.tbool)
 
-let p_ora (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_ora (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_ora f1 f2)
   | _ -> p_app (pat_form EcFol.fop_ora) [p1;p2] (Some EcTypes.tbool)
 
-let p_iff (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_iff (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_iff f1 f2)
   | _ -> p_app (pat_form EcFol.fop_iff) [p1;p2] (Some EcTypes.tbool)
 
-let p_and (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_and (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_and f1 f2)
   | _ -> p_app (pat_form EcFol.fop_and) [p1;p2] (Some EcTypes.tbool)
 
-let p_or (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_or (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_or f1 f2)
   | _ -> p_app (pat_form EcFol.fop_or) [p1;p2] (Some EcTypes.tbool)
@@ -1773,72 +2133,72 @@ let p_ands (ps : pattern list) = match List.rev ps with
 let p_int_0 = pat_form (f_i0)
 let p_real_0 = pat_form (f_r0)
 
-let p_destr_int (p : pattern) = match p with
+let p_destr_int (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint x } ) -> x
   | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [{f_node = Fint n}])})
        when f_equal op fop_int_opp ->
      EcBigInt.neg n
   | _ -> destr_error "p_destr_int"
 
-let p_int_le (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_int_le (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_le f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
-let p_int_lt (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_int_lt (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_lt f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
-let p_int_add (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_int_add (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_add f1 f2)
   | _ -> p_app (pat_form fop_int_add) [p1;p2] (Some EcTypes.tint)
 
-let p_int_opp (p : pattern) = match p with
+let p_int_opp (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
   | _ -> p_app (pat_form fop_int_opp) [p] (Some EcTypes.tint)
 
-let p_int_mul (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_int_mul (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_mul f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
 
-let p_real_le (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_real_le (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_le f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_le [] (toarrow [treal ; treal ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
-let p_real_lt (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_real_lt (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_lt f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_lt [] (toarrow [treal ; treal ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
-let p_real_add (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_real_add (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_add f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_add [] (toarrow [tint ; tint ] treal))) [p1;p2] (Some EcTypes.treal)
 
-let p_real_opp (p : pattern) = match p with
+let p_real_opp (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_opp [] (toarrow [treal] treal))) [p] (Some EcTypes.treal)
 
-let p_real_mul (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_real_mul (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_mul f1 f2)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_mul [] (toarrow [treal ; treal ] treal))) [p1;p2] (Some EcTypes.treal)
 
-let p_real_inv (p : pattern) = match p with
+let p_real_inv (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_real_inv f)
   | _ -> p_app (pat_form (f_op EcCoreLib.CI_Real.p_real_inv [] (toarrow [treal] treal))) [p] (Some EcTypes.treal)
 
 (* -------------------------------------------------------------------------- *)
 let p_is_not = function
-  | Pat_Axiom(Axiom_Form f) -> EcFol.is_not f
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> EcFol.is_not f
   | _ -> false
 
 let p_destr_not = function
-  | Pat_Axiom(Axiom_Form f) -> pat_form (EcFol.destr_not f)
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> pat_form (EcFol.destr_not f)
   | _ -> assert false
 
 (* -------------------------------------------------------------------------- *)
@@ -1876,11 +2236,12 @@ let rec p_iff_simpl (p1 : pattern) (p2 : pattern) =
   else if p_is_true  p2  then p1
   else if p_is_false p2  then p_not_simpl p1
   else
-    let aux p1 = match p1 with
+    let aux p1 = match p1.p_node with
       | Pat_Fun_Symbol
         ((Sym_Form_App _ | Sym_App),
-         [Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) }
-                     | Axiom_Op (op1,[]));p1]) ->
+         [{ p_node =
+              Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) }
+                         | Axiom_Op (op1,[]))};p1]) ->
          Some op1, p1
       | Pat_Axiom
           (Axiom_Form
@@ -1911,9 +2272,9 @@ let p_or_simpl (p1 : pattern) (p2 : pattern) =
 
 let p_andas_simpl = List.fold_right p_anda_simpl
 
-let rec p_eq_simpl (p1 : pattern) (p2 : pattern) =
+let rec p_eq_simpl ty (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true
-  else match p1, p2 with
+  else match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint _ } ),
     Pat_Axiom (Axiom_Form { f_node = Fint _ } ) -> p_false
 
@@ -1937,13 +2298,13 @@ let rec p_eq_simpl (p1 : pattern) (p2 : pattern) =
        when List.length fs1 = List.length fs2 ->
       p_andas_simpl (List.map2 (fun x y -> pat_form (f_eq_simpl x y)) fs1 fs2) p_true
 
-  | _ -> p_eq p1 p2
+  | _ -> p_eq ty p1 p2
 
 
 (* -------------------------------------------------------------------------- *)
 let p_int_le_simpl (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true
-  else match p1, p2 with
+  else match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
     Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
      pat_form (f_bool (EcBigInt.compare x1 x2 <= 0))
@@ -1951,7 +2312,7 @@ let p_int_le_simpl (p1 : pattern) (p2 : pattern) =
 
 let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true
-  else match p1, p2 with
+  else match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
     Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
      pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
@@ -1963,28 +2324,28 @@ let p_int_add_simpl (p1 : pattern) (p2 : pattern) =
   | DestrError _ ->
      if p_equal p_int_0 p1 then p2
      else if p_equal p_int_0 p2 then p1
-     else match p2 with
+     else match p2.p_node with
           | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f2]) })
                when f_equal op fop_int_opp && p_equal p1 (pat_form f2) ->
              p_int_0
           | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
-                            [Pat_Axiom (Axiom_Form op);p2])
+                            [{ p_node = Pat_Axiom (Axiom_Form op)};p2])
                when f_equal op fop_int_opp && p_equal p1 p2 ->
              p_int_0
           | _ -> p_int_add p1 p2
 
-let p_int_opp_simpl (p : pattern) = match p with
+let p_int_opp_simpl (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (f_int_opp_simpl f)
   | _ -> p_int_opp p
 
-let p_int_mul_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_int_mul_simpl (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (f_int_mul_simpl f1 f2)
   | _ -> p_int_mul p1 p2
 
 let p_real_le_simpl (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true else
-    let aux p = match p with
+    let aux p = match p.p_node with
       | Pat_Axiom (Axiom_Form { f_node = Fapp (op1,
                                                [{f_node = Fint x1}]) })
            when f_equal op1 f_op_real_of_int ->
@@ -1998,7 +2359,7 @@ let p_real_lt_simpl (p1 : pattern) (p2 : pattern) =
   let f_op_real_of_int =
     f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal) in
   if p_equal p1 p2 then p_true else
-    let aux p = match p with
+    let aux p = match p.p_node with
       | Pat_Axiom (Axiom_Form { f_node = Fapp (op1,
                                                [{f_node = Fint x1}]) })
            when f_equal op1 f_op_real_of_int ->
@@ -2008,28 +2369,160 @@ let p_real_lt_simpl (p1 : pattern) (p2 : pattern) =
     | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
     | _ -> p_real_lt p1 p2
 
-let p_real_add_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
+let p_real_add_simpl (p1 : pattern) (p2 : pattern) =
+  match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (f_real_add_simpl f1 f2)
   | _ -> p_real_add p1 p2
 
-let p_real_opp_simpl (p : pattern) = match p with
+let p_real_opp_simpl (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (f_real_opp_simpl f)
   | _ -> p_real_opp p
 
-let p_real_mul_simpl (p1 : pattern) (p2 : pattern) = match p1, p2 with
-  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-     pat_form (f_real_mul_simpl f1 f2)
-  | _ -> p_real_mul p1 p2
+(* -------------------------------------------------------------------- *)
+ (* CORELIB *)
+let fop_real_mul    = f_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
+let fop_real_inv    = f_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
 
-let p_real_inv_simpl (p : pattern) = match p with
-  | Pat_Axiom (Axiom_Form f) -> pat_form (f_real_inv_simpl f)
-  | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App),
-                    [Pat_Axiom (Axiom_Form { f_node = Fop (op,_) }
-                                | Axiom_Op (op,_));f])
-       when (op_kind op) = Some `Real_inv ->
-     f
-  | _ -> p_real_inv p
+let pop_real_mul    = p_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
+let pop_real_inv    = p_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
+let pop_real_of_int = p_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
+
+let p_int (i : EcBigInt.zint) = pat_form (f_int i)
+
+
+let p_real_of_int p  = p_app pop_real_of_int [p] (Some treal)
+let p_rint n         = p_real_of_int (p_int n)
+
+let p_r0 = p_rint EcBigInt.zero
+let p_r1 = p_rint EcBigInt.one
+
+let op_equal (p1 : pattern) (op : form) =
+  match p1, op with
+  | { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, lty1) ; f_ty = ty1 }) },
+    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
+     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
+                      && List.for_all2 ty_equal lty1 lty2
+  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty (Some ty1) },
+    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
+     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
+                      && List.for_all2 ty_equal lty1 lty2
+  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty None },
+    { f_node = Fop (op2, lty2) } ->
+     EcPath.p_equal op1 op2 && List.for_all2 ty_equal lty1 lty2
+  | _ -> false
+
+
+let p_destr_rint p =
+  match p_destr_app p with
+  | op, [p1] when op_equal op f_op_real_of_int ->
+     begin try p_destr_int p1 with DestrError _ -> destr_error "destr_rint" end
+
+  | _ -> destr_error "destr_rint"
+
+let rec p_real_split p =
+  match p.p_node with
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f1; { f_node = Fapp (subop, [f2]) }]) })
+      when f_equal    op fop_real_mul
+        && f_equal subop fop_real_inv  -> (pat_form f1, pat_form f2)
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    [op;p1;{ p_node =
+                               Pat_Axiom (Axiom_Form { f_node = Fapp (subop, [f2])})}])
+       when op_equal    op fop_real_mul
+         &&  f_equal subop fop_real_inv -> (p1, pat_form f2)
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    [op;p1;{ p_node =
+                               Pat_Fun_Symbol ((Sym_App | Sym_Form_App _), [subop;p2])}])
+       when op_equal    op fop_real_mul
+         &&  p_equal subop pop_real_inv -> (p1, p2)
+
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [{ f_node = Fapp (subop, [f1]) }; f2]) })
+      when f_equal    op fop_real_mul
+        && f_equal subop fop_real_inv -> (pat_form f2, pat_form f1)
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    [op;{ p_node = Pat_Axiom (Axiom_Form { f_node = Fapp (subop, [f1])})};
+                     p2])
+       when op_equal    op fop_real_mul
+         &&  f_equal subop fop_real_inv -> (p2, pat_form f1)
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    [op;{ p_node = Pat_Fun_Symbol ((Sym_App | Sym_Form_App _), [subop;p1])};
+                     p2])
+       when op_equal    op fop_real_mul
+         &&  p_equal subop pop_real_inv -> (p2, p1)
+
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f]) })
+       when f_equal op fop_real_inv -> (p_r1, pat_form f)
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _), [op;p])
+       when op_equal op fop_real_inv -> (p_r1, p)
+
+  | _ -> (p, p_r1)
+
+and p_real_is_zero p =
+  try  EcBigInt.equal EcBigInt.zero (p_destr_rint p)
+  with DestrError _ -> false
+
+and p_real_is_one p =
+  try  EcBigInt.equal EcBigInt.one (p_destr_rint p)
+  with DestrError _ -> false
+
+
+let rec p_real_mul_simpl p1 p2 =
+  let (n1, d1) = p_real_split p1 in
+  let (n2, d2) = p_real_split p2 in
+
+  p_real_div_simpl_r
+    (p_real_mul_simpl_r n1 n2)
+    (p_real_mul_simpl_r d1 d2)
+
+and p_real_div_simpl p1 p2 =
+  let (n1, d1) = p_real_split p1 in
+  let (n2, d2) = p_real_split p2 in
+
+  p_real_div_simpl_r
+    (p_real_mul_simpl_r n1 d2)
+    (p_real_mul_simpl_r d1 n2)
+
+and p_real_mul_simpl_r p1 p2 =
+  if p_real_is_zero p1 || p_real_is_zero p2 then p_r0 else
+
+  if p_real_is_one p1 then p2 else
+  if p_real_is_one p2 then p1 else
+
+  try
+    p_rint (EcBigInt.Notations.( *^ ) (p_destr_rint p1) (p_destr_rint p2))
+  with DestrError _ ->
+    p_real_mul p1 p2
+
+and p_real_div_simpl_r p1 p2 =
+  let (p1, p2) =
+    try
+      let n1 = p_destr_rint p1 in
+      let n2 = p_destr_rint p2 in
+      let gd = EcBigInt.gcd n1 n2 in
+
+      p_rint (EcBigInt.div n1 gd), p_rint (EcBigInt.div n2 gd)
+
+    with
+    | DestrError _ -> (p1, p2)
+    | Division_by_zero -> (p_r0, p_r1)
+
+  in p_real_mul_simpl_r p1 (p_real_inv_simpl p2)
+
+and p_real_inv_simpl p =
+  match p.p_node with
+  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f]) })
+       when f_equal op fop_real_inv -> pat_form f
+  | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App ),
+                    [{ p_node = Pat_Axiom (Axiom_Form op) };p])
+       when f_equal op fop_real_inv -> p
+
+  | _ ->
+     try
+       match p_destr_rint p with
+       | n when EcBigInt.equal n EcBigInt.zero -> p_r0
+       | n when EcBigInt.equal n EcBigInt.one  -> p_r1
+       | _ -> destr_error "destr_rint/inv"
+     with DestrError _ -> p_app pop_real_inv [p] (Some treal)
 
 
 (* -------------------------------------------------------------------------- *)
@@ -2045,15 +2538,15 @@ let p_if_simpl (p1 : pattern) (p2 : pattern) (p3 : pattern) =
   | _, _, _          -> p_if p1 p2 p3
 
 let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
-  match p1 with
+  match p1.p_node with
   | Pat_Fun_Symbol(Sym_Form_Tuple,pargs) -> List.nth pargs i
   | Pat_Axiom(Axiom_Form f) -> pat_form (f_proj_simpl f i ty)
   | _ -> p_proj p1 i ty
 
-let p_app_simpl_opt op pargs oty = match op,oty with
+let p_app_simpl_opt op pargs oty = match op, oty with
   | None, _ -> None
-  | Some p, Some ty -> p_betared_opt (Pat_Fun_Symbol(Sym_Form_App ty,p::pargs))
-  | Some p, None -> p_betared_opt (Pat_Fun_Symbol(Sym_App,p::pargs))
+  | Some p, Some ty -> p_betared_opt (pat_fun_symbol (Sym_Form_App ty) (p::pargs))
+  | Some p, None -> p_betared_opt (pat_fun_symbol Sym_App (p::pargs))
 
 let p_app_simpl op pargs oty =
   odfl (p_app op pargs oty) (p_app_simpl_opt (Some op) pargs oty)
@@ -2067,7 +2560,7 @@ let p_exists_simpl b p =
   p_f_exists b p
 
 let p_destr_app p =
-  match p with
+  match p.p_node with
   | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), p::lp) -> p,lp
   | Pat_Axiom (Axiom_Form { f_node = Fapp (f,args) }) ->
      pat_form f, List.map pat_form args
@@ -2110,8 +2603,8 @@ module FV = struct
             (pattern h map (pat_mpath_top mp.m_top))
             (List.map pat_mpath mp.m_args)
 
-      | Axiom_Module (`Local id) -> add_fv map id
-      | Axiom_Module _ -> map
+      | Axiom_Mpath_top (`Local id) -> add_fv map id
+      | Axiom_Mpath_top _ -> map
       | Axiom_Local (id,_) -> add_fv map id
       | Axiom_Op _ -> map
       | Axiom_Hoarecmp _ -> map
@@ -2120,13 +2613,12 @@ module FV = struct
     in fun m a -> aux m a
 
   and pattern h =
-    let rec aux (map : int Mid.t) = function
+    let rec aux (map : int Mid.t) p = match p.p_node with
       | Pat_Anything -> map
       | Pat_Meta_Name (p,n,_) -> aux (add_fv map n) p
       | Pat_Sub p -> aux map p
       | Pat_Or lp -> List.fold_left aux map lp
       | Pat_Red_Strat (p,_) -> aux map p
-      | Pat_Type (p,_) -> aux map p
       | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
          let map' = List.fold_left aux Mid.empty lp in
          let map' =
@@ -2146,7 +2638,6 @@ module FV = struct
          Mid.remove mhr map
       | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
       | Pat_Axiom a -> axiom h map a
-      | Pat_Instance _ -> assert false (* FIXME: instance *)
 
     in fun m p -> aux m p
 
@@ -2178,7 +2669,7 @@ module PReduction = struct
     | _ -> false
 
   let rec p_is_record (hyps : EcEnv.LDecl.hyps) (p : pattern) =
-    match p with
+    match p.p_node with
     | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), p::_) ->
        p_is_record hyps p
     | Pat_Axiom (Axiom_Form f) -> begin
@@ -2198,22 +2689,20 @@ module PReduction = struct
       if EcEnv.LDecl.can_unfold id hyps then
          Some (pat_form (EcEnv.LDecl.unfold id hyps))
       else
-        let p = Pat_Meta_Name (Pat_Anything,id,None) in
+        let p = mk_pattern (Pat_Meta_Name (mk_pattern Pat_Anything OGTany,id,None)) OGTany in
         let p' = Psubst.p_subst s p in
         if p = p' then None else Some p'
     else None
 
-  let rec is_delta_p ri pop = match pop with
+  let is_delta_p ri pop = match pop.p_node with
     | Pat_Axiom (Axiom_Form { f_node = Fop (op, _) } )
       | Pat_Axiom (Axiom_Op (op, _)) ->
        ri.delta_p op
-    | Pat_Type (op, OGTty _) -> is_delta_p ri op
     | _ -> false
 
-  let rec get_op = function
+  let get_op p = match p.p_node with
     | Pat_Axiom (Axiom_Form { f_node = Fop (op, lty) } )
       | Pat_Axiom (Axiom_Op (op, lty)) -> Some (op, lty)
-    | Pat_Type (op, OGTty _) -> get_op op
     | _ -> None
 
   let reduce_op ri env op =
@@ -2231,12 +2720,9 @@ module PReduction = struct
 
   let p_can_eta h x (f, args) =
     match List.rev args with
-    | (Pat_Axiom (Axiom_Form { f_node = Flocal y }
-                 | Axiom_Local (y,_))
-       | Pat_Meta_Name (Pat_Anything, y, _)
-      | Pat_Type (Pat_Axiom (Axiom_Form { f_node = Flocal y }
-                             | Axiom_Local (y,_)),_)
-      | Pat_Type (Pat_Meta_Name (Pat_Anything, y, _),_)) :: args ->
+    | { p_node = (Pat_Axiom (Axiom_Form { f_node = Flocal y }
+                             | Axiom_Local (y,_))
+                  | Pat_Meta_Name ({ p_node = Pat_Anything }, y, _))} :: args ->
        let check v = not (Mid.mem x (FV.pattern0 h v)) in
        id_equal x y && List.for_all check (f :: args)
     | _ -> false
@@ -2245,34 +2731,29 @@ module PReduction = struct
   let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
         (s : Psubst.p_subst) (p : pattern) =
     try
-      match p with
+      match p.p_node with
       | Pat_Anything -> None
       | Pat_Meta_Name (_,n,_) -> reduce_local_opt hyps ri s n
-      | Pat_Sub p -> omap (fun x -> Pat_Sub x) (h_red_pattern_opt hyps ri s p)
-      | Pat_Or _ -> assert false
-      | Pat_Instance _ -> assert false
+      | Pat_Sub p -> omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
+                       (h_red_pattern_opt hyps ri s p)
+      | Pat_Or _ -> None
       | Pat_Red_Strat _ -> None
-      | Pat_Type (p,gty) -> omap (fun x -> p_type x gty) (h_red_pattern_opt hyps ri s p)
       | Pat_Axiom a -> h_red_axiom_opt hyps ri s a
       | Pat_Fun_Symbol (symbol,lp) ->
       match symbol, lp with
       (* β-reduction *)
       | (Sym_Form_App _ | Sym_App),
-        (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                          | Sym_Quant (Llambda,_)),[_])
-         | Pat_Type (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                          | Sym_Quant (Llambda,_)),[_]),_)
-         | Pat_Axiom (Axiom_Form { f_node = Fapp (_,_)}))
+        { p_node = (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
+                                     | Sym_Quant (Llambda,_)),[_])
+                    | Pat_Axiom (Axiom_Form { f_node = Fapp (_,_)}))}
         ::_
            when ri.beta -> p_betared_opt p
 
       (* ζ-reduction *)
-      | Sym_Form_App ty, (Pat_Meta_Name (Pat_Anything,id,_)
-                         | Pat_Type (Pat_Meta_Name (Pat_Anything,id,_),_)
-                         | Pat_Axiom (Axiom_Form { f_node = Flocal id })
-                         | Pat_Type (Pat_Axiom (Axiom_Form { f_node = Flocal id }),_)
-                         | Pat_Axiom (Axiom_Local (id,_))
-                         | Pat_Type (Pat_Axiom (Axiom_Local (id,_)),_))::pargs ->
+      | Sym_Form_App ty,
+        { p_node = (Pat_Meta_Name ({ p_node = Pat_Anything },id,_)
+                   | Pat_Axiom (Axiom_Form { f_node = Flocal id })
+                   | Pat_Axiom (Axiom_Local (id,_)))}::pargs ->
          if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id) pargs (Some ty)
          else omap (fun x -> p_app x pargs (Some ty)) (reduce_local_opt hyps ri s id)
 
@@ -2282,7 +2763,8 @@ module PReduction = struct
          Some (Psubst.p_subst s p2)
 
       (* ι-reduction (let-tuple) *)
-      | Sym_Form_Let (LTuple ids), [Pat_Fun_Symbol (Sym_Form_Tuple, lp);p2]
+      | Sym_Form_Let (LTuple ids),
+        [{ p_node = Pat_Fun_Symbol (Sym_Form_Tuple, lp)};p2]
            when ri.zeta ->
          let s = List.fold_left2 (fun s (x,_) p -> Psubst.p_bind_local s x p)
                    Psubst.p_subst_id ids lp in
@@ -2303,15 +2785,14 @@ module PReduction = struct
 
       (* ι-reduction (records projection) *)
       | (Sym_Form_App _ | Sym_App),
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1))
-         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1)),_))
+        { p_node = Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1))}
         ::pargs
            when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
           let op =
             match pargs with
             | [mk] -> begin
                 match odfl mk (h_red_pattern_opt hyps ri s mk) with
-                | Pat_Axiom (Axiom_Form { f_node = Fapp ({ f_node = Fop (mkp, _)}, mkargs) } ) ->
+                | { p_node = Pat_Axiom (Axiom_Form { f_node = Fapp ({ f_node = Fop (mkp, _)}, mkargs) } ) } ->
                    if not (EcEnv.Op.is_record_ctor (EcEnv.LDecl.toenv hyps) mkp) then None
                    else
                      let v = oget (EcEnv.Op.by_path_opt op (EcEnv.LDecl.toenv hyps)) in
@@ -2323,10 +2804,10 @@ module PReduction = struct
                        | None -> None
                        | Some v -> h_red_form_opt hyps ri s v
                      end
-                | Pat_Fun_Symbol
-                   ((Sym_Form_App _ | Sym_App),
-                    (Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
-                                | Axiom_Op (mkp,_)))::pargs) ->
+                | { p_node = Pat_Fun_Symbol
+                               ((Sym_Form_App _ | Sym_App),
+                                { p_node = (Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
+                                                       | Axiom_Op (mkp,_)))}::pargs)} ->
                    if not (EcEnv.Op.is_record_ctor (EcEnv.LDecl.toenv hyps) mkp) then None
                    else
                      let v = oget (EcEnv.Op.by_path_opt op (EcEnv.LDecl.toenv hyps)) in
@@ -2363,8 +2844,7 @@ module PReduction = struct
 
       (* ι-reduction (match-fix) *)
       | Sym_Form_App ty,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))
-         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)),_))::args
+        { p_node = Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))}::args
            when ri.iota
                 && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
           try
@@ -2378,8 +2858,8 @@ module PReduction = struct
               let v = pargs.(v) in
               let v = odfl v (h_red_pattern_opt hyps ri s v) in
               match p_destr_app v with
-              | Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
-                           | Axiom_Op (op, _ )), cargs
+              | { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
+                                      | Axiom_Op (op, _ )) }, cargs
                    when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op -> begin
                   let idx = EcEnv.Op.by_path op (EcEnv.LDecl.toenv hyps) in
                   let idx = snd (EcDecl.operator_as_ctor idx) in
@@ -2424,8 +2904,7 @@ module PReduction = struct
 
       (* ι-reduction (match-fix) *)
       | Sym_App,
-        (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))
-         | Pat_Type (Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1)),_))::args
+        { p_node = Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))}::args
            when ri.iota
                 && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
           try
@@ -2439,8 +2918,8 @@ module PReduction = struct
               let v = pargs.(v) in
               let v = odfl v (h_red_pattern_opt hyps ri s v) in
               match p_destr_app v with
-              | Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
-                           | Axiom_Op (op, _ )), cargs
+              | { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op, _) }
+                                      | Axiom_Op (op, _ ))}, cargs
                    when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op -> begin
                   let idx = EcEnv.Op.by_path op (EcEnv.LDecl.toenv hyps) in
                   let idx = snd (EcDecl.operator_as_ctor idx) in
@@ -2485,7 +2964,7 @@ module PReduction = struct
 
       (* μ-reduction *)
       | Sym_Form_Glob, [mp;mem] when ri.modpath ->
-         let p' = match mp, mem with
+         let p' = match mp.p_node, mem.p_node with
            | Pat_Axiom (Axiom_Mpath mp), Pat_Axiom (Axiom_Memory m) ->
               let f  = f_glob mp m in
               let f' = EcEnv.NormMp.norm_glob (EcEnv.LDecl.toenv hyps) m mp in
@@ -2499,7 +2978,7 @@ module PReduction = struct
 
       (* μ-reduction *)
       | Sym_Form_Pvar ty, [ppv;m] ->
-         let pv = match ppv with
+         let pv = match ppv.p_node with
            | Pat_Axiom (Axiom_Prog_Var pv) ->
               let pv' = EcEnv.NormMp.norm_pvar (EcEnv.LDecl.toenv hyps) pv in
               if pv_equal pv pv' then
@@ -2513,8 +2992,7 @@ module PReduction = struct
 
     (* logical reduction *)
     | Sym_Form_App ty,
-      (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))
-       | Pat_Type (Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo)),_))::args
+      { p_node = Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))}::args
          when is_some ri.logic && is_logical_op op
       ->
        let pcompat =
@@ -2545,8 +3023,8 @@ module PReduction = struct
          | Some (`Real_inv ), [f]     -> Some (p_real_inv_simpl f)
          | Some (`Eq       ), [f1;f2] -> begin
              match (p_destr_app f1), (p_destr_app f2) with
-             | (Pat_Axiom (Axiom_Form { f_node = Fop (op1, _)}), args1),
-               (Pat_Axiom (Axiom_Form { f_node = Fop (op2, _)}), args2)
+             | ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, _)})}, args1),
+               ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op2, _)})}, args2)
                   when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op1
                        && EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op2 ->
 
@@ -2556,10 +3034,10 @@ module PReduction = struct
                 in
                 if   idx op1 <> idx op2
                 then Some p_false
-                else Some (p_ands (List.map2 p_eq args1 args2))
+                else Some (p_ands (List.map2 (p_eq tbool) args1 args2))
 
              | _ -> if p_equal f1 f2 then Some p_true
-                    else Some (p_eq_simpl f1 f2)
+                    else Some (p_eq_simpl (* FIXME *) tbool (* FIXME *) f1 f2)
            end
 
          | _ when ri.delta_p op ->
@@ -2578,6 +3056,72 @@ module PReduction = struct
          | None -> None
        end
 
+    (* logical reduction *)
+    | Sym_App,
+      { p_node = Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))}::args
+         when is_some ri.logic && is_logical_op op
+      ->
+       let pcompat =
+         match oget ri.logic with `Full -> true | `ProductCompat -> false
+       in
+
+       let p' =
+         match op_kind op, args with
+         | Some (`Not), [f1]    when pcompat -> Some (p_not_simpl f1)
+         | Some (`Imp), [f1;f2] when pcompat -> Some (p_imp_simpl f1 f2)
+         | Some (`Iff), [f1;f2] when pcompat -> Some (p_iff_simpl f1 f2)
+
+
+         | Some (`And `Asym), [f1;f2] -> Some (p_anda_simpl f1 f2)
+         | Some (`Or  `Asym), [f1;f2] -> Some (p_ora_simpl f1 f2)
+         | Some (`And `Sym ), [f1;f2] -> Some (p_and_simpl f1 f2)
+         | Some (`Or  `Sym ), [f1;f2] -> Some (p_or_simpl f1 f2)
+         | Some (`Int_le   ), [f1;f2] -> Some (p_int_le_simpl f1 f2)
+         | Some (`Int_lt   ), [f1;f2] -> Some (p_int_lt_simpl f1 f2)
+         | Some (`Real_le  ), [f1;f2] -> Some (p_real_le_simpl f1 f2)
+         | Some (`Real_lt  ), [f1;f2] -> Some (p_real_lt_simpl f1 f2)
+         | Some (`Int_add  ), [f1;f2] -> Some (p_int_add_simpl f1 f2)
+         | Some (`Int_opp  ), [f]     -> Some (p_int_opp_simpl f)
+         | Some (`Int_mul  ), [f1;f2] -> Some (p_int_mul_simpl f1 f2)
+         | Some (`Real_add ), [f1;f2] -> Some (p_real_add_simpl f1 f2)
+         | Some (`Real_opp ), [f]     -> Some (p_real_opp_simpl f)
+         | Some (`Real_mul ), [f1;f2] -> Some (p_real_mul_simpl f1 f2)
+         | Some (`Real_inv ), [f]     -> Some (p_real_inv_simpl f)
+         | Some (`Eq       ), [f1;f2] -> begin
+             match (p_destr_app f1), (p_destr_app f2) with
+             | ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, _)})}, args1),
+               ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op2, _)})}, args2)
+                  when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op1
+                       && EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op2 ->
+
+                let idx p =
+                  let idx = EcEnv.Op.by_path p (EcEnv.LDecl.toenv hyps) in
+                  snd (EcDecl.operator_as_ctor idx)
+                in
+                if   idx op1 <> idx op2
+                then Some p_false
+                else Some (p_ands (List.map2 (p_eq (* FIXME *) tbool) args1 args2))
+
+             | _ -> if p_equal f1 f2 then Some p_true
+                    else Some (p_eq_simpl (* FIXME *) tbool f1 f2)
+           end
+
+         | _ when ri.delta_p op ->
+            let op = h_red_op_opt hyps ri s op tys in
+            p_app_simpl_opt op args None
+
+         | _ -> Some p
+       in
+       begin
+         match p' with
+         | Some p' ->
+            if p_equal p p'
+            then omap (fun l -> p_app (pat_form fo) l None)
+                   (h_red_args (fun x -> x) h_red_pattern_opt hyps ri s args)
+            else Some p'
+         | None -> None
+       end
+
     (* δ-reduction *)
     | Sym_Form_App ty, pop::args when is_delta_p ri pop ->
        let op = reduce_op ri (EcEnv.LDecl.toenv hyps) pop in
@@ -2590,7 +3134,7 @@ module PReduction = struct
 
     (* η-reduction *)
     | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
-      [Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })]
+      [{ p_node = Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })}]
          when can_eta x (fn, args)
       -> Some (p_f_quant Llambda binds
                  (pat_form
@@ -2600,14 +3144,14 @@ module PReduction = struct
 
     (* η-reduction *)
     | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
-      [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
+      [{ p_node = Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_f_quant Llambda binds
                (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty)))
 
     (* η-reduction *)
     | Sym_Quant (Llambda, (x, OGTty _)::binds),
-      [Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)]
+      [{ p_node = Pat_Fun_Symbol (Sym_Form_App ty, pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_quant Llambda binds
                (p_app pn (List.take (List.length pargs - 1) pargs) (Some ty)))
@@ -2615,7 +3159,7 @@ module PReduction = struct
     (* η-reduction *)
     | (Sym_Form_Quant (Llambda, [x, GTty _])
        | Sym_Quant (Llambda, [x, OGTty _])),
-      [Pat_Fun_Symbol (Sym_App, pn::pargs)]
+      [{ p_node = Pat_Fun_Symbol (Sym_App, pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_app pn (List.take (List.length pargs - 1) pargs) None)
 
@@ -2718,7 +3262,7 @@ module PReduction = struct
       | Axiom_MemEnv m      -> h_red_memenv_opt hyps ri s m
       | Axiom_Prog_Var pv   -> h_red_prog_var_opt hyps ri s pv
       | Axiom_Op (op,lty)   -> h_red_op_opt hyps ri s op lty
-      | Axiom_Module m      -> h_red_mpath_top_opt hyps ri s m
+      | Axiom_Mpath_top m   -> h_red_mpath_top_opt hyps ri s m
       | Axiom_Mpath m       -> h_red_mpath_opt hyps ri s m
       | Axiom_Instr i       -> h_red_instr_opt hyps ri s i
       | Axiom_Stmt stmt     -> h_red_stmt_opt hyps ri s stmt
@@ -2829,7 +3373,7 @@ module PReduction = struct
        else None
 
   and h_red_stmt_opt hyps ri s stmt =
-    omap (fun l -> Pat_Fun_Symbol(Sym_Stmt_Seq,l))
+    omap (fun l -> pat_fun_symbol Sym_Stmt_Seq l)
       (h_red_args pat_instr h_red_instr_opt hyps ri s stmt.s_node)
 
   and h_red_lvalue_opt hyps ri s = function
@@ -2845,13 +3389,13 @@ module PReduction = struct
   and h_red_xpath_opt hyps ri s x =
     if ri.modpath
     then match h_red_mpath_opt hyps ri s x.x_top with
-         | Some p -> Some (p_xpath p (pat_op x.x_sub []))
+         | Some p -> Some (p_xpath p (pat_op x.x_sub [] None))
          | None -> None
     else None
 
   and h_red_local_opt hyps ri s id ty =
     match reduce_local_opt hyps ri s id with
-    | Some (Pat_Axiom (Axiom_Form f)) as op ->
+    | Some { p_node = Pat_Axiom (Axiom_Form f)} as op ->
        if ty_equal ty f.f_ty then op else None
     | _ -> None
 
@@ -2860,7 +3404,7 @@ module PReduction = struct
     (* β-reduction *)
     | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) when ri.beta ->
        begin
-         try Some (Pat_Axiom(Axiom_Form(f_betared f))) with
+         try Some (pat_form (f_betared f)) with
          | _ -> None
        end
 
@@ -2904,7 +3448,7 @@ module PReduction = struct
         let op =
           match args with
           | [mk] -> begin
-              match odfl (pat_form mk) (h_red_form_opt hyps ri s mk) with
+              match (odfl (pat_form mk) (h_red_form_opt hyps ri s mk)).p_node with
               | Pat_Axiom
                 (Axiom_Form
                    { f_node =
@@ -2923,8 +3467,8 @@ module PReduction = struct
                    end
               | Pat_Fun_Symbol
                   ((Sym_Form_App _ | Sym_App),
-                   (Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
-                               | Axiom_Op (mkp,_)))::pargs) ->
+                   { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (mkp,_)}
+                                         | Axiom_Op (mkp,_))}::pargs) ->
                  if not (EcEnv.Op.is_record_ctor (EcEnv.LDecl.toenv hyps) mkp) then None
                  else
                    let v = oget (EcEnv.Op.by_path_opt (* op *) mkp (EcEnv.LDecl.toenv hyps)) in
@@ -2979,7 +3523,7 @@ module PReduction = struct
             match p_destr_app v
               (* fst_map (fun x -> x.f_node) (EcFol.destr_app v) *)
             with
-            | Pat_Axiom(Axiom_Form { f_node = Fop (p, _)}), cargs
+            | { p_node = Pat_Axiom(Axiom_Form { f_node = Fop (p, _)})}, cargs
                  when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) p -> begin
                 let idx = EcEnv.Op.by_path p (EcEnv.LDecl.toenv hyps) in
                 let idx = snd (EcDecl.operator_as_ctor idx) in
@@ -3114,7 +3658,7 @@ module PReduction = struct
        in
        begin
          match f' with
-         | Some (Pat_Axiom(Axiom_Form f')) ->
+         | Some { p_node = Pat_Axiom(Axiom_Form f')} ->
             if f_equal f f'
             then omap (fun l -> p_app (pat_form fo) l (Some f.f_ty))
                    (h_red_args pat_form h_red_form_opt hyps ri s args)
@@ -3168,7 +3712,7 @@ module PReduction = struct
           omap (ctor b) (h_red_form_opt hyps ri s f1)
         with EcEnv.NotReducible ->
           let f' = ctor b (pat_form f1) in
-          if (match f' with | Pat_Axiom(Axiom_Form f') -> f_equal f f'
+          if (match f' with | { p_node = Pat_Axiom(Axiom_Form f')} -> f_equal f f'
                             | _ -> false)
           then None
           else Some f'
