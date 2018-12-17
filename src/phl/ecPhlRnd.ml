@@ -419,6 +419,7 @@ let process_inv pe hyps _es f ty1 ty2 =
   let f, st = EcAlgebra.toring ~gonly:true hyps cr st f in
 
   let module T = Solveq.Types in
+  let module I = Solveq.Inverter in
 
   let rec translate f =
     match f with
@@ -446,7 +447,7 @@ let process_inv pe hyps _es f ty1 ty2 =
 
   let f = translate f in
   let f =
-    match T.compute_inv xid f with
+    match I.compute_inv xid f with
     | None   -> tc_error pe "failed to compute inverse"
     | Some f -> f in
   let f = EcAlgebra.ofring acr st (itranslate f) in
