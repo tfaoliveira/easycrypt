@@ -1687,15 +1687,19 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
 
 and pp_form_r (ppe : PPEnv.t) outer fmt f =
   let printers =
-    [try_pp_notations;
-     try_pp_form_eqveq;
-     try_pp_chained_orderings;
-     try_pp_lossless]
+    [
+     (*  try_pp_notations;
+      * try_pp_form_eqveq;
+      * try_pp_chained_orderings;
+      * try_pp_lossless *)
+    ]
   in
 
   match List.ofind (fun pp -> pp ppe outer fmt f) printers with
   | Some _ -> ()
-  | None   -> pp_form_core_r ppe outer fmt f
+  | None   -> Format.fprintf fmt "(%a : %a)"
+                (pp_form_core_r ppe outer) f
+                (pp_type ppe) f.f_ty
 
 and pp_form ppe fmt f =
   pp_form_r ppe ([], (min_op_prec, `NonAssoc)) fmt f
