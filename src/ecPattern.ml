@@ -285,6 +285,7 @@ let ogty_equal o1 o2 = match o1, o2 with
   | OGTty _, OGTty _ -> true
   | (OGTty _, _) | (_, OGTty _) -> false
   | OGTmem (Some mt1), OGTmem (Some mt2) -> EcMemory.mt_equal mt1 mt2
+  | OGTmem _, OGTmem _ -> true
   | (OGTmem _, _) | (_, OGTmem _) -> false
   | OGTmodty (Some (mt1,mr1)), OGTmodty (Some (mt2,mr2)) ->
      if EcModules.mty_equal mt1 mt2

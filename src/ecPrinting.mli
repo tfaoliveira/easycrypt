@@ -60,6 +60,7 @@ val pp_tyvar    : PPEnv.t -> ident pp
 val pp_tyunivar : PPEnv.t -> EcUid.uid pp
 val pp_path     : path pp
 
+val pp_ogty     : PPEnv.t -> EcPattern.ogty pp
 val pp_pat_axiom: PPEnv.t -> EcPattern.axiom pp
 val pp_pattern  : PPEnv.t -> EcPattern.pattern pp
 

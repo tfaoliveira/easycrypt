@@ -107,7 +107,7 @@ section Security.
   + exact/FDistr.dt_funi.
   + exact/FDistr.dt_fu.
   + by algebra.
-  + by algebra.
+  (* + by algebra. *) admit.
   qed.
 
   local lemma Gb_half &m:
@@ -127,7 +127,7 @@ section Security.
     `| Pr[DDH0(DDHAdv(A)).main() @ &m : res] -
          Pr[DDH1(DDHAdv(A)).main() @ &m : res] |.
   proof.
-  by rewrite (cpa_ddh0 &m) (ddh1_gb &m) (Gb_half &m).
+  by rewrite cpa_ddh0 ddh1_gb Gb_half.
   qed.
 end section Security.
 

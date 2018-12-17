@@ -819,7 +819,7 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
       | None ->
          (* let _ = Format.fprintf e.ne_env.env_fmt "[W] adding %a <- %a\n"
           *           (EcPrinting.pp_pattern e.ne_env.env_ppe)
-          *           (meta_var name None)
+          *           (meta_var name None OGTany)
           *           (EcPrinting.pp_pattern e.ne_env.env_ppe) p
           * in *)
          Mid.add name p e.ne_env.env_match.me_matches
@@ -985,29 +985,36 @@ let try_reduce (e : engine) : engine =
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  let _ =
-    let ppe = e.e_env.env_ppe in
-    Format.fprintf e.e_env.env_fmt "[W]?? (%i left) : %a =? %a\n"
-      (match e.e_continuation with
-       | Zand (_,l,_) -> List.length l
-       | _ -> 0)
-      (* (if e.e_env.env_red_info_match.EcReduction.delta_p
-       *       (match e.e_pattern with
-       *        | Pat_Fun_Symbol
-       *          (Sym_Form_App _,
-       *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
-       *        | _ -> EcPath.psymbol "foobar")
-       *  then "with" else "without") *)
-      (* (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
-       *       (match e.e_head with
-       *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
-       *        | _ -> EcPath.psymbol "foobar")
-       *  then "with" else "without") *)
-      (EcPrinting.pp_pattern ppe) e.e_pattern
-      (EcPrinting.pp_pat_axiom ppe) e.e_head
-  in
+  (* let _ =
+   *   let ppe = e.e_env.env_ppe in
+   *   Format.fprintf e.e_env.env_fmt "[W]?? (%i left) : %a =? %a\n"
+   *     (match e.e_continuation with
+   *      | Zand (_,l,_) -> List.length l
+   *      | _ -> 0)
+   *     (\* (if e.e_env.env_red_info_match.EcReduction.delta_p
+   *      *       (match e.e_pattern with
+   *      *        | Pat_Fun_Symbol
+   *      *          (Sym_Form_App _,
+   *      *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
+   *      *        | _ -> EcPath.psymbol "foobar")
+   *      *  then "with" else "without") *\)
+   *     (\* (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
+   *      *       (match e.e_head with
+   *      *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
+   *      *        | _ -> EcPath.psymbol "foobar")
+   *      *  then "with" else "without") *\)
+   *     (EcPrinting.pp_pattern ppe) e.e_pattern
+   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+   * in *)
   if   not (EQ.ogty e.e_env e.e_pattern.p_ogty (pat_axiom e.e_head).p_ogty)
-  then next NoMatch e
+  then
+    (* let _ =
+     *   let ppe = e.e_env.env_ppe in
+     *   Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
+     *     (EcPrinting.pp_ogty ppe) e.e_pattern.p_ogty
+     *     (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty
+     * in *)
+    next NoMatch e
   else
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
@@ -1420,17 +1427,17 @@ let rec process (e : engine) : nengine =
      let e = try_reduce e in next NoMatch e
 
 and next (m : ismatch) (e : engine) : nengine =
-  let _ =
-    let ppe = e.e_env.env_ppe in
-    Format.fprintf e.e_env.env_fmt "[W] %s (%i left) %a %s %a\n"
-      (if m = Match then "++" else "--")
-      (match e.e_continuation with
-       | Zand (_,l,_) -> List.length l
-       | _ -> 0)
-      (EcPrinting.pp_pattern ppe) e.e_pattern
-      (if m = Match then "=" else "<>")
-      (EcPrinting.pp_pat_axiom ppe) e.e_head
-  in
+  (* let _ =
+   *   let ppe = e.e_env.env_ppe in
+   *   Format.fprintf e.e_env.env_fmt "[W] %s (%i left) %a %s %a\n"
+   *     (if m = Match then "++" else "--")
+   *     (match e.e_continuation with
+   *      | Zand (_,l,_) -> List.length l
+   *      | _ -> 0)
+   *     (EcPrinting.pp_pattern ppe) e.e_pattern
+   *     (if m = Match then "=" else "<>")
+   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
+   * in *)
   let e = if m = NoMatch then try_reduce e else e in
   next_n m (e_next e)
 
