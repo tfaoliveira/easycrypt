@@ -1578,7 +1578,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       pp_let ~fv:f2.f_fv ppe pp_form_r outer fmt (lp, f1, f2)
 
   | Fop (op, tvi) ->
-     pp_opapp ppe outer fmt (op, tvi, [])
+      pp_opapp ppe outer fmt (op, tvi, [])
 
   | Fapp ({f_node = Fop (op, _)},
             [{f_node = Fapp ({f_node = Fop (op', tys)}, [f1; f2])}])
@@ -1588,10 +1588,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       let negop = EcPath.pqoname (EcPath.prefix op') "<>" in
       pp_opapp ppe outer fmt (negop, tys, [f1; f2])
 
-  | Fapp ({f_node = Fop (p, tys) ; f_ty = ty}, args) ->
-     Format.fprintf fmt "(%a : op %a)"
-       (pp_opapp ppe outer) (p, tys, args)
-       (pp_type ppe) ty
+  | Fapp ({f_node = Fop (p, tys)}, args) ->
+      pp_opapp ppe outer fmt (p, tys, args)
 
   | Fapp (e, args) ->
       pp_app ppe (pp_form_r, pp_form_r) outer fmt (e, args)
