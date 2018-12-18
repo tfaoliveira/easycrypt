@@ -294,6 +294,21 @@ let ogty_equal o1 o2 = match o1, o2 with
   | OGTmodty _, OGTmodty _ -> true
   | _ -> o1 = o2
 
+let op_equal (p1 : pattern) (op : form) =
+  match p1, op with
+  | { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, lty1) ; f_ty = ty1 }) },
+    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
+     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
+                      && List.for_all2 ty_equal lty1 lty2
+  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty (Some ty1) },
+    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
+     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
+                      && List.for_all2 ty_equal lty1 lty2
+  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty None },
+    { f_node = Fop (op2, lty2) } ->
+     EcPath.p_equal op1 op2 && List.for_all2 ty_equal lty1 lty2
+  | _ -> false
+
 (* -------------------------------------------------------------------------- *)
 let p_mpath (p : pattern) (args : pattern list) =
   if args = [] then p
@@ -2211,66 +2226,57 @@ let p_not_simpl (p : pattern) =
   else p_not p
 
 let p_imp_simpl (p1 : pattern) (p2 : pattern) =
-  if p_is_true p1 then p2
-  else if p_is_false p1 || p_is_true p2 then p_true
-  else if p_is_false p2 then p_not_simpl p1
-  else if p_equal p1 p2 then p_true
-  else p_imp p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ -> p2
+  | Some false, _ | _, Some true -> p_true
+  | _, Some false -> p_not_simpl p1
+  | _ -> if p_equal p1 p2 then p_true
+         else p_imp p1 p2
 
 let p_anda_simpl (p1 : pattern) (p2 : pattern) =
-  if p_is_true p1 then p2
-  else if p_is_false p1 then p_false
-  else if p_is_true p2 then p1
-  else if p_is_false p2 then p_false
-  else p_anda p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ -> p2
+  | Some false, _ -> p_false
+  | _, Some true -> p1
+  | _, Some false -> p_false
+  | _ -> p_anda p1 p2
 
 let p_ora_simpl (p1 : pattern) (p2 : pattern) =
-  if p_is_true p1 then p_true
-  else if p_is_false p1 then p2
-  else if p_is_true p2 then p_true
-  else if p_is_false p2 then p1
-  else p_ora p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ -> p_true
+  | Some false, _ -> p2
+  | _, Some true -> p_true
+  | _, Some false -> p1
+  | _ -> p_ora p1 p2
 
 let rec p_iff_simpl (p1 : pattern) (p2 : pattern) =
-       if p_equal  p1 p2 then p_true
-  else if p_is_true  p1  then p2
-  else if p_is_false p1  then p_not_simpl p2
-  else if p_is_true  p2  then p1
-  else if p_is_false p2  then p_not_simpl p1
+  if p_equal  p1 p2 then p_true
   else
-    let aux p1 = match p1.p_node with
-      | Pat_Fun_Symbol
-        ((Sym_Form_App _ | Sym_App),
-         [{ p_node =
-              Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) }
-                         | Axiom_Op (op1,[]))};p1]) ->
-         Some op1, p1
-      | Pat_Axiom
-          (Axiom_Form
-             { f_node = Fapp ({f_node = Fop (op,[])}, [f1]) } ) ->
-         Some op, pat_form f1
-      | _ -> None, p1 in
-    match aux p1, aux p2 with
-    | (Some op1, p1), (Some op2, p2)
-         when
-           (EcPath.p_equal op1 EcCoreLib.CI_Bool.p_not &&
-              EcPath.p_equal op2 EcCoreLib.CI_Bool.p_not) ->
-       p_iff_simpl p1 p2
-    | _ -> p_iff p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ -> p2
+  | Some false, _ -> p_not_simpl p2
+  | _, Some true -> p1
+  | _, Some false -> p_not_simpl p1
+  | _ ->
+  match p_destr_app p1, p_destr_app p2 with
+  | (op1, [p1]), (op2, [p2])
+       when (op_equal op1 fop_not && op_equal op2 fop_not) ->
+     p_iff_simpl p1 p2
+  | _ -> p_iff p1 p2
 
 let p_and_simpl (p1 : pattern) (p2 : pattern) =
-  if      p_is_true p1  then p2
-  else if p_is_false p1 then p_false
-  else if p_is_true p2  then p1
-  else if p_is_false p2 then p_false
-  else p_and p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some false, _ | _, Some false -> p_false
+  | Some true, _ -> p2
+  | _, Some true -> p1
+  | _ -> p_and p1 p2
 
 let p_or_simpl (p1 : pattern) (p2 : pattern) =
-  if      p_is_true p1  then p_true
-  else if p_is_false p1 then p2
-  else if p_is_true p2  then p_true
-  else if p_is_false p2 then p1
-  else p_or p1 p2
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ | _, Some true -> p_true
+  | Some false, _ -> p2
+  | _, Some false -> p1
+  | _ -> p_or p1 p2
 
 let p_andas_simpl = List.fold_right p_anda_simpl
 
@@ -2398,21 +2404,6 @@ let p_rint n         = p_real_of_int (p_int n)
 
 let p_r0 = p_rint EcBigInt.zero
 let p_r1 = p_rint EcBigInt.one
-
-let op_equal (p1 : pattern) (op : form) =
-  match p1, op with
-  | { p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, lty1) ; f_ty = ty1 }) },
-    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
-     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
-                      && List.for_all2 ty_equal lty1 lty2
-  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty (Some ty1) },
-    { f_node = Fop (op2, lty2); f_ty = ty2 } ->
-     ty_equal ty1 ty2 && EcPath.p_equal op1 op2
-                      && List.for_all2 ty_equal lty1 lty2
-  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1)); p_ogty = OGTty None },
-    { f_node = Fop (op2, lty2) } ->
-     EcPath.p_equal op1 op2 && List.for_all2 ty_equal lty1 lty2
-  | _ -> false
 
 
 let p_destr_rint p =
