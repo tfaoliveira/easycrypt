@@ -8,8 +8,9 @@ open EcEnv
 open EcModules
 open EcPattern
 open Psubst
+open EcReduction
 
-let env_verbose_match      = false
+let env_verbose_match      = true
 let env_verbose_rule       = false
 let env_verbose_type       = false
 let env_verbose_bind_restr = false
@@ -789,79 +790,64 @@ end = struct
 
 end
 
+let reduce_axiom h s r a =
+  let o = match PReduction.h_red_axiom_opt h r s a with
+    | Some { p_node = Pat_Axiom a' } -> Some a'
+    | Some p' -> begin
+        match p'.p_ogty with
+        | OGTty _ -> begin
+            (* try  *)
+            let _ =
+              Some (axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv h) p'))
+            in None
+                 (* with Translate.Invalid_Type _ -> None *)
+          end
+        | OGTmem _ -> begin
+            (* try *)
+            let _ =
+              Some (Axiom_Memory (Translate.memory_of_pattern p'))
+            in None
+                 (* with Translate.Invalid_Type _ -> None *)
+          end
+        | OGTmodty _ -> begin
+            (* try *)
+            let _ =
+              Some (Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv h) p'))
+            in None
+                 (* with Translate.Invalid_Type _ -> None *)
+          end
+        | _ -> None
+      end
+    | None -> None in
+  match o with
+  | Some a' -> if a = a' then None else Some a'
+  | None -> None
+
+let reduce_pattern h s r p =
+  match PReduction.h_red_pattern_opt h r s p with
+  | Some p' -> if p = p' then None else Some p'
+  | None -> None
 
 (* -------------------------------------------------------------------------- *)
 let h_red_strat hyps s rp _ p a =
   match p.p_node, a with
   | Pat_Fun_Symbol (Sym_Form_App _, _::_), Axiom_Form ({ f_node = (Flocal _ | Fop _) }) -> begin
-      match PReduction.h_red_axiom_opt hyps rp s a with
-      | Some { p_node = Pat_Axiom a' } -> if a' = a then None else Some (p, a')
-      | Some p' -> begin
-          match p'.p_ogty with
-          | OGTty _ -> begin
-              (* try  *)
-              let _ =
-                Some (p, axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv hyps) p'))
-              in None
-                   (* with Translate.Invalid_Type _ -> None *)
-            end
-          | OGTmem _ -> begin
-              (* try *)
-              let _ =
-                Some (p, Axiom_Memory (Translate.memory_of_pattern p'))
-              in None
-                   (* with Translate.Invalid_Type _ -> None *)
-            end
-          | OGTmodty _ -> begin
-              (* try *)
-              let _ =
-                Some (p, Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv hyps) p'))
-              in None
-                   (* with Translate.Invalid_Type _ -> None *)
-            end
-          | _ -> None
-        end
+      let r = { rp with delta_p = (fun _ -> false); delta_h = (fun _ -> false) } in
+      match reduce_pattern hyps s r p with
+      | Some p' -> Some (p', a)
       | None ->
-         match PReduction.h_red_pattern_opt hyps rp s p with
-         | Some p' -> if p = p' then None else Some (p', a)
-         | None -> None
+      match reduce_axiom hyps s rp a with
+      | Some a' -> Some (p, a')
+      | None ->
+      match reduce_pattern hyps s rp p with
+      | Some p' -> Some (p', a)
+      | None    -> None
     end
 
   | _ ->
-     let op = match PReduction.h_red_pattern_opt hyps rp s p with
-       | Some p' -> if p = p' then None else Some (p', a)
-       | None -> None in
-     match op with
-     | Some _ -> op
-     | None ->
-        match PReduction.h_red_axiom_opt hyps rp s a with
-        | Some { p_node = Pat_Axiom a } -> Some (p, a)
-        | Some p' -> begin
-            match p'.p_ogty with
-            | OGTty _ -> begin
-                (* try  *)
-                let _ =
-                  Some (p, axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv hyps) p'))
-                in None
-                     (* with Translate.Invalid_Type _ -> None *)
-              end
-            | OGTmem _ -> begin
-                (* try *)
-                let _ =
-                  Some (p, Axiom_Memory (Translate.memory_of_pattern p'))
-                in None
-                     (* with Translate.Invalid_Type _ -> None *)
-              end
-            | OGTmodty _ -> begin
-                (* try *)
-                let _ =
-                  Some (p, Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv hyps) p'))
-                in None
-                     (* with Translate.Invalid_Type _ -> None *)
-              end
-            | _ -> None
-          end
-        | _ -> None
+     match reduce_pattern hyps s rp p with
+     | Some p' -> Some (p', a)
+     | None    -> omap (fun a -> (p, a)) (reduce_axiom hyps s rp a)
 
 
 (* -------------------------------------------------------------------------- *)
@@ -1027,7 +1013,8 @@ let rec abstract_opt
        let rec f env p =
          if eq_pat' env p a then
            match p.p_ogty, a.p_ogty with
-           | OGTty (Some ty), _ | _, OGTty (Some ty)->
+           | OGTty (Some ty), _ | _, OGTty (Some ty)
+                when not (Mid.mem arg e.e_env.env_match.me_meta_vars) ->
               pat_form (f_local arg ty)
            | _ -> meta_var arg None p.p_ogty
          else p_map (f env) p in
