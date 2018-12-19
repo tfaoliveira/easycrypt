@@ -107,7 +107,7 @@ section Security.
   + exact/FDistr.dt_funi.
   + exact/FDistr.dt_fu.
   + by algebra.
-  (* + by algebra. *) admit.
+  + by algebra.
   qed.
 
   local lemma Gb_half &m:

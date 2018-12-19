@@ -8,9 +8,8 @@ open EcEnv
 open EcModules
 open EcPattern
 open Psubst
-open EcReduction
 
-let env_verbose_match      = true
+let env_verbose_match      = false
 let env_verbose_rule       = false
 let env_verbose_type       = false
 let env_verbose_bind_restr = false
@@ -829,26 +828,31 @@ let reduce_pattern h s r p =
   | None -> None
 
 (* -------------------------------------------------------------------------- *)
-let h_red_strat hyps s rp _ p a =
-  match p.p_node, a with
-  | Pat_Fun_Symbol (Sym_Form_App _, _::_), Axiom_Form ({ f_node = (Flocal _ | Fop _) }) -> begin
-      let r = { rp with delta_p = (fun _ -> false); delta_h = (fun _ -> false) } in
-      match reduce_pattern hyps s r p with
-      | Some p' -> Some (p', a)
-      | None ->
-      match reduce_axiom hyps s rp a with
-      | Some a' -> Some (p, a')
-      | None ->
-      match reduce_pattern hyps s rp p with
-      | Some p' -> Some (p', a)
-      | None    -> None
-    end
+module X = struct
+  open EcReduction
 
-  | _ ->
-     match reduce_pattern hyps s rp p with
-     | Some p' -> Some (p', a)
-     | None    -> omap (fun a -> (p, a)) (reduce_axiom hyps s rp a)
+  let h_red_strat hyps s rp _ p a =
+    match p.p_node, a with
+    | Pat_Fun_Symbol (Sym_Form_App _, _::_), Axiom_Form ({ f_node = (Flocal _ | Fop _) }) -> begin
+        let r = { rp with delta_p = (fun _ -> false); delta_h = (fun _ -> false) } in
+        match reduce_pattern hyps s r p with
+        | Some p' -> Some (p', a)
+        | None ->
+           match reduce_axiom hyps s rp a with
+           | Some a' -> Some (p, a')
+           | None ->
+              match reduce_pattern hyps s rp p with
+              | Some p' -> Some (p', a)
+              | None    -> None
+      end
 
+    | _ ->
+       match reduce_pattern hyps s rp p with
+       | Some p' -> Some (p', a)
+       | None    -> omap (fun a -> (p, a)) (reduce_axiom hyps s rp a)
+end
+
+let h_red_strat = X.h_red_strat
 
 (* -------------------------------------------------------------------------- *)
 let rec merge_binds bs1 bs2 env = match bs1,bs2 with
