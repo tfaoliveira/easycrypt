@@ -25,6 +25,7 @@ type environment = {
     env_meta_restr_binds   : pbindings Mid.t;
     env_fmt                : Format.formatter;
     env_ppe                : EcPrinting.PPEnv.t;
+    env_verbose            : bool;
   }
 
 type pat_continuation =

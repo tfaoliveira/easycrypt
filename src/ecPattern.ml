@@ -1549,7 +1549,7 @@ module Psubst = struct
 
   let ogty_subst (s : p_subst) (ogty : ogty) =
     match ogty with
-    | OGTty ty -> OGTty (omap (fun ty -> gty_as_ty (gty_subst s (GTty ty))) ty)
+    | OGTty ty -> OGTty (omap (fun ty -> ty_subst s.ps_sty ty) ty)
     | OGTmem mt -> OGTmem (omap (fun mt -> gty_as_mem (gty_subst s (GTmem mt))) mt)
     | OGTmodty (Some (mt, mr)) ->
        let mt, mr = gty_as_mod (gty_subst s (GTmodty (mt,mr))) in

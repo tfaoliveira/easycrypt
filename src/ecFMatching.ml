@@ -31,6 +31,7 @@ type environment = {
     env_meta_restr_binds   : pbindings Mid.t;
     env_fmt                : Format.formatter;
     env_ppe                : EcPrinting.PPEnv.t;
+    env_verbose            : bool;
   }
 
 type pat_continuation =
@@ -386,9 +387,6 @@ end = struct
   let op (env : environment)
         ((op1, lty1) : EcPath.path * EcTypes.ty list)
         ((op2, lty2) : EcPath.path * EcTypes.ty list) =
-    (* let _ = Format.fprintf env.env_fmt "[W] op : %s =? %s"
-     *           (EcPath.tostring op1) (EcPath.tostring op2)
-     * in *)
     EcPath.p_equal op1 op2 && List.for_all2 (ty env) lty1 lty2
 
   let prog_var (env : environment) (x1 : prog_var) (x2 : prog_var) =
@@ -463,8 +461,6 @@ end = struct
       false
 
   let rec axiom (env : environment) ri (o1 : axiom) (o2 : axiom) : bool =
-    (* let _ = Format.fprintf env.env_fmt "[W] eq_axiom\n"
-     * in *)
     let aux o1 o2 =
       match o1,o2 with
       | Axiom_Form f1, Axiom_Form f2 ->
@@ -842,29 +838,29 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
     let me_matches =
       match Mid.find_opt name e.ne_env.env_match.me_matches with
       | None ->
-         (* let _ = Format.fprintf e.ne_env.env_fmt "[W] adding %a <- %a\n"
-          *           (EcPrinting.pp_pattern e.ne_env.env_ppe)
-          *           (meta_var name None OGTany)
-          *           (EcPrinting.pp_pattern e.ne_env.env_ppe) p
-          * in *)
+         if env.env_verbose then
+           Format.fprintf e.ne_env.env_fmt "[W] adding %a <- %a\n"
+             (EcPrinting.pp_pattern e.ne_env.env_ppe)
+             (meta_var name None OGTany)
+             (EcPrinting.pp_pattern e.ne_env.env_ppe) p;
          Mid.add name p e.ne_env.env_match.me_matches
       | Some p' ->
          (* raise CannotUnify *)
          if EQ.pattern e.ne_env e.ne_env.env_red_info_same_meta p p'
          then e.ne_env.env_match.me_matches
          else
-           (* let _ = Format.fprintf e.ne_env.env_fmt "[W] cannot unify (%a) and (%a)\n"
-            *           (EcPrinting.pp_pattern e.ne_env.env_ppe) p
-            *           (EcPrinting.pp_pattern e.ne_env.env_ppe) p'
-            * in *)
-           raise CannotUnify
+         (if env.env_verbose then
+            Format.fprintf e.ne_env.env_fmt "[W] cannot unify (%a) and (%a)\n"
+              (EcPrinting.pp_pattern e.ne_env.env_ppe) p
+              (EcPrinting.pp_pattern e.ne_env.env_ppe) p';
+          raise CannotUnify)
     in
     { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
   else
-    (* let _ = Format.fprintf e.ne_env.env_fmt
-     *           "[W] cannot unify because of binding restrictions\n"
-     * in *)
-    raise CannotUnify
+    (if env.env_verbose then
+       Format.fprintf e.ne_env.env_fmt
+         "[W] cannot unify because of binding restrictions\n";
+     raise CannotUnify)
 
 let e_next (e : engine) : nengine =
   { ne_continuation = e.e_continuation;
@@ -954,7 +950,10 @@ let rec abstract_opt
      in
      let aux env p a =
        let rec f env p =
-         if eq_pat' env p a then pat_meta (mk_pattern Pat_Anything p.p_ogty) arg None
+         if eq_pat' env p a then
+           match p.p_ogty with
+           | OGTty (Some ty) -> pat_form (f_local arg ty)
+           | _ -> pat_meta (mk_pattern Pat_Anything p.p_ogty) arg None
          else p_map (f env) p in
        let p' = f env p in
        if EQ.pattern env env.env_red_info_match p p' then None else Some p'
@@ -972,73 +971,63 @@ let try_reduce (e : engine) : engine =
   let e_env = saturate e.e_env in
   let e = { e with e_env } in
   let subst = psubst_of_menv e_env.env_match in
-  (* let _ = match e.e_pattern.p_node with
-   *   | Pat_Fun_Symbol
-   *     (Sym_Form_App _,
-   *      { p_node = Pat_Axiom (Axiom_Form ({f_node = Fop (op, _); }))}::_)
-   *        when i_red_match.EcReduction.delta_p op ->
-   *      Format.fprintf e.e_env.env_fmt
-   *        "[W] here, we can delta under application\n"
-   *   | _ -> ()
-   * in *)
   let o = try h_red_strat e.e_env.env_hyps subst i_red_match i_red_same_meta
                 e.e_pattern e.e_head
           with Translate.Invalid_Type _ ->
-            (* let _ = Format.fprintf e.e_env.env_fmt
-             *           "[W] Axiom has been reduced to pattern without being able to convert\n"
-             * in *)
-            None in
+                if e.e_env.env_verbose then
+                  Format.fprintf e.e_env.env_fmt
+                    "[W] Axiom has been reduced to pattern without being able to convert\n";
+                None in
   match o with
   | None -> e
   | Some (p,a) ->
      if   p = e.e_pattern && a = e.e_head
      then
-       (* let _ = Format.fprintf e.e_env.env_fmt
-        *           "[W] something was found but not reduced.\n" in *)
-       e
+       (if e.e_env.env_verbose then
+          Format.fprintf e.e_env.env_fmt
+            "[W] something was found but not reduced.\n";
+        e)
      else
-       (* let _ = Format.fprintf e.e_env.env_fmt "[W] something is reduced : (%a,%a).\n"
-        *           (EcPrinting.pp_pattern e.e_env.env_ppe) p
-        *           (EcPrinting.pp_pat_axiom e.e_env.env_ppe) a
-        * in *)
-       let e_or = { e with e_pattern = p; e_head = a } in
-       match e.e_continuation with
-       | Zor (cont,(_::_ as l),nomatch_cont) ->
-          { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
-       | _ -> { e with e_continuation = Zor (e.e_continuation,[e_or],e_next e)}
+       (if e.e_env.env_verbose then
+          Format.fprintf e.e_env.env_fmt "[W] something is reduced : (%a,%a).\n"
+            (EcPrinting.pp_pattern e.e_env.env_ppe) p
+            (EcPrinting.pp_pat_axiom e.e_env.env_ppe) a;
+        let e_or = { e with e_pattern = p; e_head = a } in
+        match e.e_continuation with
+        | Zor (cont,(_::_ as l),nomatch_cont) ->
+           { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
+        | _ -> { e with e_continuation = Zor (e.e_continuation,[e_or],e_next e)})
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  (* let _ =
-   *   let ppe = e.e_env.env_ppe in
-   *   Format.fprintf e.e_env.env_fmt "[W]?? (%i left) : %a =? %a\n"
-   *     (match e.e_continuation with
-   *      | Zand (_,l,_) -> List.length l
-   *      | _ -> 0)
-   *     (\* (if e.e_env.env_red_info_match.EcReduction.delta_p
-   *      *       (match e.e_pattern with
-   *      *        | Pat_Fun_Symbol
-   *      *          (Sym_Form_App _,
-   *      *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
-   *      *        | _ -> EcPath.psymbol "foobar")
-   *      *  then "with" else "without") *\)
-   *     (\* (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
-   *      *       (match e.e_head with
-   *      *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
-   *      *        | _ -> EcPath.psymbol "foobar")
-   *      *  then "with" else "without") *\)
-   *     (EcPrinting.pp_pattern ppe) e.e_pattern
-   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-   * in *)
+  (if e.e_env.env_verbose then
+     let ppe = e.e_env.env_ppe in
+     Format.fprintf e.e_env.env_fmt "[W]?? (%i left) : %a =? %a\n"
+       (match e.e_continuation with
+        | Zand (_,l,_) -> List.length l
+        | _ -> 0)
+       (* (if e.e_env.env_red_info_match.EcReduction.delta_p
+        *       (match e.e_pattern with
+        *        | Pat_Fun_Symbol
+        *          (Sym_Form_App _,
+        *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
+        *        | _ -> EcPath.psymbol "foobar")
+        *  then "with" else "without") *)
+       (* (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
+        *       (match e.e_head with
+        *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
+        *        | _ -> EcPath.psymbol "foobar")
+        *  then "with" else "without") *)
+       (EcPrinting.pp_pattern ppe) e.e_pattern
+       (EcPrinting.pp_pat_axiom ppe) e.e_head);
   if   not (EQ.ogty e.e_env e.e_pattern.p_ogty (pat_axiom e.e_head).p_ogty)
   then
-    (* let _ =
-     *   let ppe = e.e_env.env_ppe in
-     *   Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
-     *     (EcPrinting.pp_ogty ppe) e.e_pattern.p_ogty
-     *     (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty
-     * in *)
-    next NoMatch e
+    ((if e.e_env.env_verbose then
+       let ppe = e.e_env.env_ppe in
+       Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
+         (EcPrinting.pp_ogty ppe) e.e_pattern.p_ogty
+         (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty);
+       next NoMatch e)
   else
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
@@ -1104,6 +1093,45 @@ let rec process (e : engine) : nengine =
          e_continuation = Zand ([],zand,e.e_continuation);
        }
      in process e
+
+  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
+                    { p_node = Pat_Meta_Name({ p_node = Pat_Anything },name,ob)}
+                    ::pargs), axiom->
+     begin
+       (if e.e_env.env_verbose then
+          Format.fprintf e.e_env.env_fmt "[W] higher order : %a\n"
+            (EcPrinting.pp_pat_axiom e.e_env.env_ppe) axiom);
+       let e = try_reduce e in
+       (* higher order *)
+       let env = saturate e.e_env in
+       let subst = psubst_of_menv env.env_match in
+       let add_ident i x =
+         EcIdent.create (String.concat "$" ["s";string_of_int i]),
+         Psubst.p_subst subst x in
+       let args = List.mapi add_ident pargs in
+       let env_meta_restr_binds =
+         odfl env.env_meta_restr_binds
+           (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
+       let e = { e with e_env = { env with env_meta_restr_binds } } in
+       let abstract m e p arg =
+         let op = abstract_opt m e (Some p) arg in odfl p op in
+       let pat =
+         (* FIXME : add strategies to adapt the order of the arguments *)
+         List.fold_left (abstract (Sid.of_list (List.map fst args)) e)
+           (Psubst.p_subst subst (pat_axiom axiom)) args in
+       let f (name,p) = (name,p.p_ogty) in
+       let args = List.map f args in
+       (* let pat = omap (p_quant Llambda args) pat in *)
+       let pat = p_quant Llambda args pat in
+       let pat = Psubst.p_subst subst pat in
+       (* let (pat, e) = match rewrite_pattern_opt e pat with
+        *   | Some pat,e -> pat, e
+        *   | None, e -> pat, e in *)
+       let m,e =
+         try let e = add_match e name pat ob in Match, e
+         with CannotUnify -> NoMatch, e
+       in next m e
+     end
 
   | Pat_Fun_Symbol ((Sym_Form_App _ | Sym_App), pop :: pargs),
     Axiom_Form { f_node = Fapp (fop, fargs) } ->
@@ -1414,57 +1442,21 @@ let rec process (e : engine) : nengine =
          e_head = Axiom_Op (x.x_sub,[]);
          e_continuation = Zand ([],zand,e.e_continuation); }
 
-  | Pat_Fun_Symbol ((Sym_App | Sym_Form_App _),
-                    { p_node = Pat_Meta_Name({ p_node = Pat_Anything },name,ob)}
-                    ::pargs), axiom->
-     begin
-       let e = try_reduce e in
-       (* higher order *)
-       let env = saturate e.e_env in
-       let subst = psubst_of_menv env.env_match in
-       let add_ident i x =
-         EcIdent.create (String.concat "$" ["s";string_of_int i]),
-         Psubst.p_subst subst x in
-       let args = List.mapi add_ident pargs in
-       let env_meta_restr_binds =
-         odfl env.env_meta_restr_binds
-           (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
-       let e = { e with e_env = { env with env_meta_restr_binds } } in
-       let abstract m e p arg =
-         let op = abstract_opt m e (Some p) arg in odfl p op in
-       let pat =
-         (* FIXME : add strategies to adapt the order of the arguments *)
-         List.fold_left (abstract (Sid.of_list (List.map fst args)) e)
-           (Psubst.p_subst subst (pat_axiom axiom)) args in
-       let f (name,p) = (name,p.p_ogty) in
-       let args = List.map f args in
-       (* let pat = omap (p_quant Llambda args) pat in *)
-       let pat = p_quant Llambda args pat in
-       let pat = Psubst.p_subst subst pat in
-       (* let (pat, e) = match rewrite_pattern_opt e pat with
-        *   | Some pat,e -> pat, e
-        *   | None, e -> pat, e in *)
-       let m,e =
-         try let e = add_match e name pat ob in Match, e
-         with CannotUnify -> NoMatch, e
-       in next m e
-     end
-
   | Pat_Fun_Symbol _, _ ->
+
      let e = try_reduce e in next NoMatch e
 
 and next (m : ismatch) (e : engine) : nengine =
-  (* let _ =
-   *   let ppe = e.e_env.env_ppe in
-   *   Format.fprintf e.e_env.env_fmt "[W] %s (%i left) %a %s %a\n"
-   *     (if m = Match then "++" else "--")
-   *     (match e.e_continuation with
-   *      | Zand (_,l,_) -> List.length l
-   *      | _ -> 0)
-   *     (EcPrinting.pp_pattern ppe) e.e_pattern
-   *     (if m = Match then "=" else "<>")
-   *     (EcPrinting.pp_pat_axiom ppe) e.e_head
-   * in *)
+  (if e.e_env.env_verbose then
+     let ppe = e.e_env.env_ppe in
+     Format.fprintf e.e_env.env_fmt "[W] %s (%i left) %a %s %a\n"
+       (if m = Match then "++" else "--")
+       (match e.e_continuation with
+        | Zand (_,l,_) -> List.length l
+        | _ -> 0)
+       (EcPrinting.pp_pattern ppe) e.e_pattern
+       (if m = Match then "=" else "<>")
+       (EcPrinting.pp_pat_axiom ppe) e.e_head);
   let e = if m = NoMatch then try_reduce e else e in
   next_n m (e_next e)
 
@@ -1957,6 +1949,7 @@ let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps)
                                  me_unienv    = EcUnify.UniEnv.create None;
                                  me_meta_vars = Mid.empty;
                                } mtch;
+    env_verbose            = false;
   }
 
 let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
@@ -1985,7 +1978,8 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps
                                      me_matches   = Mid.empty;
                                      me_meta_vars = Mid.empty;
                                      me_unienv    = EcUnify.UniEnv.create None;
-                                   } mtch
+                                   } mtch;
+          env_verbose          = false;
         }
     } in e
 
