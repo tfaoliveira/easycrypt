@@ -821,7 +821,10 @@ let h_red_strat hyps s rp _ p a =
             end
           | _ -> None
         end
-      | None -> None
+      | None ->
+         match PReduction.h_red_pattern_opt hyps rp s p with
+         | Some p' -> if p = p' then None else Some (p', a)
+         | None -> None
     end
 
   | _ ->
