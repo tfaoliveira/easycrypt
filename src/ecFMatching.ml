@@ -9,7 +9,7 @@ open EcModules
 open EcPattern
 open Psubst
 
-let env_verbose_match      = false
+let env_verbose_match      = true
 let env_verbose_rule       = false
 let env_verbose_type       = false
 let env_verbose_bind_restr = false

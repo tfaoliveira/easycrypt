@@ -292,7 +292,8 @@ val default_name       : string
 module PReduction : sig
 
   val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                          Psubst.p_subst -> Name.t -> pattern option
+                          Psubst.p_subst -> Name.t -> pbindings option -> ogty ->
+                          pattern option
 
   val p_can_eta         : EcEnv.LDecl.hyps -> EcIdent.Mid.key ->
                           pattern * pattern list -> bool
