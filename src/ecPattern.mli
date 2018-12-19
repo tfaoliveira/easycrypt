@@ -44,10 +44,15 @@ type axiom =
   | Axiom_Hoarecmp  of hoarecmp
   | Axiom_Local     of ident * ty
 
+type is_higher_order =
+  | MaybeHO
+  | NoHO
+  | HO
+
 type fun_symbol =
   (* from type form *)
   | Sym_Form_If
-  | Sym_Form_App          of ty
+  | Sym_Form_App          of ty option * is_higher_order
   | Sym_Form_Tuple
   | Sym_Form_Proj         of int * ty
   | Sym_Form_Match        of ty
@@ -79,7 +84,6 @@ type fun_symbol =
   (* from type mpath *)
   | Sym_Mpath
   (* generalized *)
-  | Sym_App
   | Sym_Quant             of quantif * pbindings
 
 

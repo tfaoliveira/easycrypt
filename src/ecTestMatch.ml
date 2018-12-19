@@ -174,8 +174,9 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
              | Sym_Form_Equiv_S | Sym_Form_Eager_F | Sym_Form_Pr | Sym_Stmt_Seq
              | Sym_Instr_Assign | Sym_Instr_Sample | Sym_Instr_Call
              | Sym_Instr_Call_Lv | Sym_Instr_If | Sym_Instr_While
-             | Sym_Instr_Assert | Sym_Xpath | Sym_Mpath | Sym_App -> acc
-           | Sym_Form_App ty
+             | Sym_Instr_Assert | Sym_Xpath | Sym_Mpath
+             | Sym_Form_App (None, _) -> acc
+           | Sym_Form_App (Some ty,_)
              | Sym_Form_Match ty
              | Sym_Form_Pvar ty -> add_unity acc ty
            | Sym_Form_Quant (_,binds) ->

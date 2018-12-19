@@ -1534,7 +1534,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       Format.fprintf fmt "%a" BI.pp_print n
 
   | Flocal id ->
-      pp_local ppe fmt id
+     Format.fprintf fmt "%s" (EcIdent.tostring id)
 
   | Fpvar (x, i) -> begin
     match EcEnv.Memory.get_active ppe.PPEnv.ppe_env with
@@ -3025,11 +3025,18 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_pattern ppe) p3
      | Sym_Form_If, _ -> assert false
 
-     | Sym_Form_App ty,op::args ->
+     | Sym_Form_App (Some ty,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-        Format.fprintf fmt "PApp(@[%a : %a@])"
+        Format.fprintf fmt "PApp%s(@[%a : %a@])"
+          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
           (pp_list "@ " (pp_pattern ppe)) (op::args) (pp_type ppe) ty
+     | Sym_Form_App (None,i),op::args ->
+        (* Format.fprintf fmt "@[%a@]"
+         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
+        Format.fprintf fmt "PApp%s(@[%a@])"
+          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+          (pp_list "@ " (pp_pattern ppe)) (op::args)
      | Sym_Form_App _,_ -> assert false
 
      | Sym_Form_Tuple, t ->
@@ -3254,14 +3261,6 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_pattern ppe) m
           (pp_list "," (pp_pattern ppe)) args
      | Sym_Mpath, _ -> assert false
-
-     | Sym_App, op::args ->
-        Format.fprintf fmt "P_app(@[%a@])"
-          (pp_list "@ " (pp_pattern ppe)) (op::args)
-        (* Format.fprintf fmt "@[%a@ %a@]"
-         *   (pp_pattern ppe) op
-         *   (pp_list "@ " (pp_pattern ppe)) args *)
-     | Sym_App, _ -> assert false
 
      | Sym_Quant (q,binds), [pat] ->
         let subppe = PPEnv.add_locals ppe (List.map fst binds) in
