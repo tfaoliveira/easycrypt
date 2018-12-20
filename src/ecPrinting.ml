@@ -1533,8 +1533,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
   | Fint n ->
       Format.fprintf fmt "%a" BI.pp_print n
 
-  | Flocal id ->
-     Format.fprintf fmt "%s" (EcIdent.tostring id)
+  | Flocal id -> pp_local ppe fmt id
 
   | Fpvar (x, i) -> begin
     match EcEnv.Memory.get_active ppe.PPEnv.ppe_env with
@@ -1588,8 +1587,10 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       let negop = EcPath.pqoname (EcPath.prefix op') "<>" in
       pp_opapp ppe outer fmt (negop, tys, [f1; f2])
 
-  | Fapp ({f_node = Fop (p, tys)}, args) ->
-      pp_opapp ppe outer fmt (p, tys, args)
+  | Fapp ({f_node = Fop (p, tys) ; f_ty = ty}, args) ->
+     Format.fprintf fmt "(%a : op %a)"
+       (pp_opapp ppe outer) (p, tys, args)
+       (pp_type ppe) ty
 
   | Fapp (e, args) ->
       pp_app ppe (pp_form_r, pp_form_r) outer fmt (e, args)
