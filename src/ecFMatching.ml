@@ -1838,9 +1838,9 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
              (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
         | Fop (_,_) ->
            Some (pat_form f)
-        | Fapp ({ f_node = Flocal id },args) when Mid.mem id sbd ->
+        | Fapp ({ f_node = Flocal id ; f_ty = ty }, args) when Mid.mem id sbd ->
            let p =
-             p_app (meta_var id None (OGTty (Some fty)))
+             p_app (meta_var id None (OGTty (Some ty)))
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
            Some p
         | Fapp(fop,args) ->

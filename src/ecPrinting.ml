@@ -1533,7 +1533,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
   | Fint n ->
       Format.fprintf fmt "%a" BI.pp_print n
 
-  | Flocal id -> pp_local ppe fmt id
+  | Flocal id ->
+      pp_local ppe fmt id
 
   | Fpvar (x, i) -> begin
     match EcEnv.Memory.get_active ppe.PPEnv.ppe_env with
@@ -1588,7 +1589,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       pp_opapp ppe outer fmt (negop, tys, [f1; f2])
 
   | Fapp ({f_node = Fop (p, tys)}, args) ->
-      pp_opapp ppe outer fmt (p, tys, args)
+     pp_opapp ppe outer fmt (p, tys, args)
 
   | Fapp (e, args) ->
       pp_app ppe (pp_form_r, pp_form_r) outer fmt (e, args)
@@ -3011,8 +3012,8 @@ and pp_pattern ppe fmt p = match p.p_node with
   | Pat_Anything ->
      Format.fprintf fmt "_"
   | Pat_Meta_Name ({ p_node = Pat_Anything },name,_) ->
-     Format.fprintf fmt "#%a"
-       (pp_mem ppe) name
+     Format.fprintf fmt "(#%a : %a)"
+       (pp_mem ppe) name (pp_ogty ppe) p.p_ogty
   | Pat_Meta_Name (p,name,_) ->
      Format.fprintf fmt "(%a as %a)"
        (pp_pattern ppe) p

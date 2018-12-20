@@ -264,6 +264,13 @@ let pat_axiom x = match x with
   | Axiom_Hoarecmp  cmp    -> pat_cmp cmp
   | Axiom_Local     (x,t)  -> pat_local x t
 
+let get_tys (b : bindings) =
+  let rec aux acc = function
+    | [] -> Some (List.rev acc)
+    | (_, GTty ty)::rest -> aux (ty::acc) rest
+    | _ -> None in
+  aux [] b
+
 let pat_fun_symbol s lp = match s, lp with
   (* from type form *)
   | Sym_Form_If, [_;p2;p3]   -> begin
@@ -276,7 +283,12 @@ let pat_fun_symbol s lp = match s, lp with
   | Sym_Form_Tuple, _        -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
   | Sym_Form_Proj _, [_]     -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
   | Sym_Form_Match t, _::_   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
-  | Sym_Form_Quant _, [_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+  | Sym_Form_Quant (Llambda, bs), [p] ->
+     let ogty = match p.p_ogty with
+       | OGTty (Some ty) -> OGTty (omap (fun l -> EcTypes.toarrow l ty) (get_tys bs))
+       | t -> t in
+     mk_pattern (Pat_Fun_Symbol (s, [p])) ogty
+  | Sym_Form_Quant _, [_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
   | Sym_Form_Let _, [_;p2]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) p2.p_ogty
   | Sym_Form_Pvar t, [_;_]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
   | Sym_Form_Prog_var _, [_] -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTpv
@@ -460,21 +472,22 @@ let is_higher_order (p : pattern) = match p.p_node with
 let p_app (p : pattern) (args : pattern list) (ty : ty option) =
   match args with
   | [] -> p
-  | _  -> if is_higher_order p then
-            pat_fun_symbol (Sym_Form_App (ty,MaybeHO)) (p::args)
-          else pat_fun_symbol (Sym_Form_App (ty,NoHO)) (p::args)
+  | _  ->
+     if is_higher_order p then
+       pat_fun_symbol (Sym_Form_App (ty,MaybeHO)) (p::args)
+     else pat_fun_symbol (Sym_Form_App (ty,NoHO)) (p::args)
 
 let p_f_quant q bs p =
   match bs with
   | [] -> p
-  | _  -> mk_pattern (Pat_Fun_Symbol(Sym_Form_Quant (q,bs),[p])) (OGTty None)
+  | _  -> pat_fun_symbol (Sym_Form_Quant (q,bs)) [p]
 
 let p_quant q bs p =
   match bs with
   | [] -> p
-  | _  -> mk_pattern (Pat_Fun_Symbol(Sym_Quant (q,bs),[p])) OGTany
+  | _  -> pat_fun_symbol (Sym_Quant (q,bs)) [p]
 
-let p_f_forall b p = p_f_quant Llambda b p
+let p_f_forall b p = p_f_quant Lforall b p
 
 let p_f_exists b p = p_f_quant Lexists b p
 
