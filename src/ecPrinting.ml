@@ -1587,10 +1587,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       let negop = EcPath.pqoname (EcPath.prefix op') "<>" in
       pp_opapp ppe outer fmt (negop, tys, [f1; f2])
 
-  | Fapp ({f_node = Fop (p, tys) ; f_ty = ty}, args) ->
-     Format.fprintf fmt "(%a : op %a)"
-       (pp_opapp ppe outer) (p, tys, args)
-       (pp_type ppe) ty
+  | Fapp ({f_node = Fop (p, tys)}, args) ->
+      pp_opapp ppe outer fmt (p, tys, args)
 
   | Fapp (e, args) ->
       pp_app ppe (pp_form_r, pp_form_r) outer fmt (e, args)
@@ -2963,13 +2961,20 @@ end
 open EcPattern
 
 let pp_ogty ppe fmt = function
-  | OGTty (Some ty) -> pp_type ppe fmt ty
-  | OGTty None -> Format.fprintf fmt "ty"
-  | OGTmem (Some _) -> Format.fprintf fmt "Some mem"
-  | OGTmem None -> Format.fprintf fmt "mem"
-  | OGTmodty (Some _) -> Format.fprintf fmt "Some modty"
-  | OGTmodty None -> Format.fprintf fmt "modty"
-  | _ -> Format.fprintf fmt "other"
+  | OGTty (Some ty)   -> pp_type ppe fmt ty
+  | OGTty None        -> Format.fprintf fmt "None ty"
+  | OGTmem (Some _)   -> Format.fprintf fmt "mem"
+  | OGTmem None       -> Format.fprintf fmt "None mem"
+  | OGTmodty (Some _) -> Format.fprintf fmt "modty"
+  | OGTmodty None     -> Format.fprintf fmt "None modty"
+  | OGTany            -> Format.fprintf fmt "any"
+  | OGTinstr          -> Format.fprintf fmt "instr"
+  | OGTstmt           -> Format.fprintf fmt "stmt"
+  | OGTpv             -> Format.fprintf fmt "pv"
+  | OGTxpath          -> Format.fprintf fmt "xpath"
+  | OGTlv             -> Format.fprintf fmt "lv"
+  | OGTpath           -> Format.fprintf fmt "path"
+  | OGThcmp           -> Format.fprintf fmt "cmp"
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
@@ -3020,10 +3025,11 @@ and pp_pattern ppe fmt p = match p.p_node with
   | Pat_Fun_Symbol (symbol,args) ->
      match symbol,args with
      | Sym_Form_If, [p1;p2;p3] ->
-        Format.fprintf fmt "if %a@ then@ %a@ else@ %a"
+        Format.fprintf fmt "Pat([if %a@ then@ %a@ else@ %a] : %a) "
           (pp_pattern ppe) p1
           (pp_pattern ppe) p2
           (pp_pattern ppe) p3
+          (pp_ogty ppe) p.p_ogty
      | Sym_Form_If, _ -> assert false
 
      | Sym_Form_App (Some ty,i),op::args ->

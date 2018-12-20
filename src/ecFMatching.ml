@@ -9,7 +9,7 @@ open EcModules
 open EcPattern
 open Psubst
 
-let env_verbose_match      = true
+let env_verbose_match      = false
 let env_verbose_rule       = false
 let env_verbose_type       = false
 let env_verbose_bind_restr = false
@@ -426,20 +426,7 @@ end = struct
     else gty env gt1 gt2
 
   let pbinding env (id1,ogt1) (id2,ogt2) =
-    match ogt1,ogt2 with
-    | OGTty (Some gt1), OGTty (Some gt2) ->
-       binding env (id1,GTty gt1) (id2,GTty gt2)
-    | OGTty _, OGTty _ -> id_equal id1 id2
-    | OGTty _, _ | _, OGTty _ -> false
-    | OGTmem (Some t1), OGTmem (Some t2) ->
-       binding env (id1,GTmem t1) (id2, GTmem t2)
-    | OGTmem _, OGTmem _ -> id_equal id1 id2
-    | OGTmem _, _ | _, OGTmem _ -> false
-    | OGTmodty (Some (t1,r1)), OGTmodty (Some (t2,r2)) ->
-       binding env (id1, GTmodty (t1,r1)) (id2, GTmodty (t2,r2))
-    | OGTmodty _, OGTmodty _ -> true
-    | _ when name id1 id2 -> ogty_equal ogt1 ogt2
-    | _ -> false
+    id_equal id1 id2 && ogty env ogt1 ogt2
 
   let symbol (env : environment) (s1 : fun_symbol) (s2 : fun_symbol) : bool =
     match s1,s2 with
@@ -1079,27 +1066,18 @@ let rec process (e : engine) : nengine =
        (match e.e_continuation with
         | Zand (_,l,_) -> List.length l
         | _ -> 0)
-       (* (if e.e_env.env_red_info_match.EcReduction.delta_p
-        *       (match e.e_pattern with
-        *        | Pat_Fun_Symbol
-        *          (Sym_Form_App _,
-        *           (Pat_Axiom (Axiom_Form { f_node = Fop (op,_)}))::_) -> op
-        *        | _ -> EcPath.psymbol "foobar")
-        *  then "with" else "without") *)
-       (* (if e.e_env.env_red_info_same_meta.EcReduction.delta_p
-        *       (match e.e_head with
-        *        | Axiom_Form { f_node = Fapp ({ f_node = Fop (op,_)}, _)} -> op
-        *        | _ -> EcPath.psymbol "foobar")
-        *  then "with" else "without") *)
        (EcPrinting.pp_pattern ppe) e.e_pattern
        (EcPrinting.pp_pat_axiom ppe) e.e_head);
   if   not (EQ.ogty e.e_env e.e_pattern.p_ogty (pat_axiom e.e_head).p_ogty)
   then
     ((if e.e_env.env_verbose_type then
-       let ppe = e.e_env.env_ppe in
-       Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
-         (EcPrinting.pp_ogty ppe) e.e_pattern.p_ogty
-         (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty);
+        let s = psubst_of_menv e.e_env.env_match in
+        let s = Psubst.p_subst_init ~sty:s.Psubst.ps_sty () in
+        let p = Psubst.p_subst s e.e_pattern in
+        let ppe = e.e_env.env_ppe in
+          Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
+            (EcPrinting.pp_ogty ppe) p.p_ogty
+            (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty);
        next NoMatch_NoRed e)
   else
   match e.e_pattern.p_node, e.e_head with
@@ -1632,7 +1610,8 @@ let rec process (e : engine) : nengine =
        let _ = if e.e_env.env_verbose_rule then
                  Format.fprintf e.e_env.env_fmt
                    "[W] rule : default \n" in
-     next NoMatch e
+       let _ = restore_environment e.e_env in
+       next NoMatch e
 
 and next (m : ismatch) (e : engine) : nengine =
   (if e.e_env.env_verbose_match then
@@ -1645,7 +1624,9 @@ and next (m : ismatch) (e : engine) : nengine =
        (EcPrinting.pp_pattern ppe) e.e_pattern
        (if m = Match then "=" else "<>")
        (EcPrinting.pp_pat_axiom ppe) e.e_head);
-  let e = if m = NoMatch then try_reduce e else e in
+  let e = if m = NoMatch
+          then let _ = restore_environment e.e_env in try_reduce e
+          else e in
   next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =

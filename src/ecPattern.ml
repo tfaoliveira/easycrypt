@@ -158,14 +158,10 @@ let ogty_equal o1 o2 = match o1, o2 with
   | OGTany, _ | _, OGTany -> true
   | OGTty (Some t1), OGTty (Some t2) -> ty_equal t1 t2
   | OGTty _, OGTty _ -> true
-  | (OGTty _, _) | (_, OGTty _) -> false
   | OGTmem (Some mt1), OGTmem (Some mt2) -> EcMemory.mt_equal mt1 mt2
   | OGTmem _, OGTmem _ -> true
-  | (OGTmem _, _) | (_, OGTmem _) -> false
   | OGTmodty (Some (mt1,mr1)), OGTmodty (Some (mt2,mr2)) ->
-     if EcModules.mty_equal mt1 mt2
-     then EcModules.mr_equal mr1 mr2
-     else false
+     EcModules.mty_equal mt1 mt2 && EcModules.mr_equal mr1 mr2
   | OGTmodty _, OGTmodty _ -> true
   | _ -> o1 = o2
 
@@ -270,7 +266,12 @@ let pat_axiom x = match x with
 
 let pat_fun_symbol s lp = match s, lp with
   (* from type form *)
-  | Sym_Form_If, [_;p2;_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) p2.p_ogty
+  | Sym_Form_If, [_;p2;p3]   -> begin
+     match p2.p_ogty, p3.p_ogty with
+     | OGTty (Some t), _
+       | _, (OGTty (Some t)) -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
+     | _                     -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
+    end
   | Sym_Form_App (t,_), _::_ -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty t)
   | Sym_Form_Tuple, _        -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
   | Sym_Form_Proj _, [_]     -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
@@ -442,7 +443,7 @@ let p_tuple (lp : pattern list) =
 
 let p_proj (p1 : pattern) (i : int) (ty : ty) =
   match p1.p_node with
-  | Pat_Fun_Symbol(Sym_Form_Tuple,lp) ->
+  | Pat_Fun_Symbol(Sym_Form_Tuple,lp) when 0 <= i && i < List.length lp ->
      List.nth lp i
   | _ -> pat_fun_symbol (Sym_Form_Proj (i,ty)) [p1]
 
@@ -1645,10 +1646,11 @@ module Psubst = struct
 
   (* ------------------------------------------------------------------------ *)
   let rec p_subst (s : p_subst) (p : pattern) =
+    let p = mk_pattern p.p_node (ogty_subst s p.p_ogty) in
     let p = match p.p_node with
-    | Pat_Anything -> mk_pattern Pat_Anything OGTany
-    | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) OGTany
-    | Pat_Or lp -> mk_pattern (Pat_Or (List.map (p_subst s) lp)) OGTany
+    | Pat_Anything -> mk_pattern Pat_Anything p.p_ogty
+    | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) p.p_ogty
+    | Pat_Or lp -> mk_pattern (Pat_Or (List.map (p_subst s) lp)) p.p_ogty
     | Pat_Red_Strat (p,f) ->
        let p = p_subst s p in mk_pattern (Pat_Red_Strat (p,f)) p.p_ogty
     | Pat_Meta_Name (p,name,ob) -> begin
@@ -1854,7 +1856,7 @@ module Psubst = struct
            match p'.p_ogty with
            | OGTty (Some ty2) -> if ty_equal ty ty2 then p'
                                  else assert false
-           | _ -> mk_pattern p.p_node (OGTty (Some ty))
+           | _ -> mk_pattern p'.p_node (OGTty (Some ty))
 
       end (* pat_axiom *)
 
@@ -2730,7 +2732,8 @@ let p_if_simpl (p1 : pattern) (p2 : pattern) (p3 : pattern) =
 
 let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
   match p1.p_node with
-  | Pat_Fun_Symbol(Sym_Form_Tuple,pargs) -> List.nth pargs i
+  | Pat_Fun_Symbol(Sym_Form_Tuple,pargs) when 0 <= i && i < List.length pargs ->
+     List.nth pargs i
   | Pat_Axiom(Axiom_Form f) -> pat_form (f_proj_simpl f i ty)
   | _ -> p_proj p1 i ty
 
