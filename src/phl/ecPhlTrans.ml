@@ -165,7 +165,7 @@ let process_equiv_trans (tk, tf) tc =
         let veq = List.map (fun (x,ty) -> f_eq (f_pvar x ty mleft) (f_pvar x ty mright)) vfv in
         let geq = List.map (fun mp -> f_eqglob mp mleft mp mright) gfv in
         f_ands (veq @ geq) in
-      let pre = mk_eqs fvr in
+      let pre = mk_eqs (EcPV.PV.union fvr fv) in
       let post = mk_eqs fv in
       if side = `Left then (pre, post, es.es_pr, es.es_po)
       else (es.es_pr, es.es_po, pre, post) in
