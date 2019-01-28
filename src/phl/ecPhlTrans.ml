@@ -169,7 +169,12 @@ let process_equiv_trans (tk, tf) tc =
       let post = mk_eqs fv in
       if side = `Left then (pre, post, es.es_pr, es.es_po)
       else (es.es_pr, es.es_po, pre, post) in
+  let cont = function
+    | 0 when tf = TFeq -> Some t_smt
+    | 1 when tf = TFeq -> Some t_done
+    | _ -> None in
+
   match tk with
   | TKfun f -> process_trans_fun f p1 q1 p2 q2 tc
-  | TKstmt (s, c) -> process_trans_stmt s c p1 q1 p2 q2 tc
-  | TKparsedStmt (s, p, c) -> process_replace_stmt s p c p1 q1 p2 q2 tc
+  | TKstmt (s, c) -> FApi.t_onfsub cont (process_trans_stmt s c p1 q1 p2 q2 tc)
+  | TKparsedStmt (s, p, c) -> FApi.t_onfsub cont (process_replace_stmt s p c p1 q1 p2 q2 tc)
