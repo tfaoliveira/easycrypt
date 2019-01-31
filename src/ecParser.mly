@@ -1912,19 +1912,31 @@ theory_export: EXPORT xs=uqident* { xs }
 | PLUS     { (Some 1, None  ) }
 | QUESTION { (Some 0, Some 1) }
 
-| n=pbrace(word)
+| n=brace(word)
     { (Some n, Some n) }
 
-| x=pbrace(n1=word? COLON n2=word? { (n1, n2) })
+| x=brace(n1=word? COLON n2=word? { (n1, n2) })
     { x }
 
 pat_stmt_s_r:
 | UNDERSCORE
-               { SPat_anything }
+               { SPat_anything Stmt }
 | name=ident
                { SPat_meta_var (None, name) }
-| i=pat_instr
-               { SPat_instr i }
+| s=paren(pat_stmt_r) { s }
+| x=bracket(i1=pat_stmt_s? COLON i2=pat_stmt_s? { SPat_block (i1, i2) })
+    { x }
+| lv=pat_lvalue? LARROW e=pat_sform?
+               { SPat_asgn (lv, e) }
+| lv=pat_lvalue? LESAMPLE e=pat_sform?
+               { SPat_rnd (lv, e) }
+| lv=pat_lvalue? LEAT
+               { SPat_call (lv, None, None) }
+| lv=pat_lvalue? LEAT f=pat_xpath es=paren(loc(plist0(pat_sform, COMMA)))?
+               { SPat_call (lv, Some f, es) }
+| QUESTION     { SPat_anything Instr }
+| x=sword      { SPat_pos x }
+
 
 %inline pat_stmt_s: 
 | x=loc(pat_stmt_s_r) { x }
@@ -1932,53 +1944,33 @@ pat_stmt_s_r:
 pat_stmt_r:
 | s=pat_stmt_s_r
     { s }
-| x=pat_stmt AS name=ident
+| x=pat_stmt_s AS name=ident
     { SPat_meta_var (Some x, name) }
 | x=pat_stmt_s r=pat_repeat b=iboption(NOT)
     { SPat_repeat (x, (if b then `Lazy else `Greedy), r) }
 | x=pat_stmt_s y=offset_stmt
     { SPat_offset (x, y) }
-| x=bracket(i1=pat_instr_s? COLON i2=pat_instr_s? { SPat_block (i1, i2) })
-    { x }
+| s1=pat_stmt_s SEMICOLON s2=pat_stmt
+    { SPat_seq (s1,s2) }
+| s1=pat_stmt_s DSEMICOLON s2=pat_stmt
+    { SPat_new_context (s1,s2) } 
+| u=brace(word) i=pat_stmt_s
+    { SPat_occurrence (i, u) }
+| WHILE cond=paren(pat_sform)? s=pat_block?
+    { SPat_while (cond, s) }
+| IF cond=paren(pat_form)? s1=pat_block? s2=prefix(ELSE, pat_block)?
+    { SPat_if (cond, s1, s2) }
 
 %inline pat_stmt:
 | pat=loc(pat_stmt_r) { pat }
 
-offset_stmt:
+%inline offset_stmt:
 | r=bracket(x=offset? COLON y=offset? { (x, y) })
     { r }
+| r=bracket(offset) { (Some r, Some r) }
 
 pat_block:
-| x=loc(brace(s=plist0(plist1(pat_stmt, SEMICOLON), DSEMICOLON) { SPat_seq s }))
-    { x }
-
-pat_instr_s_r:
-| WHILE cond=paren(pat_sform)? s=pat_block?
-               { IPat_while (cond, s) }
-| IF cond=paren(pat_form)? s1=pat_block? s2=prefix(ELSE, pat_block)?
-               { IPat_if (cond, s1, s2) }
-| lv=pat_lvalue? LARROW e=pat_sform?
-               { IPat_asgn (lv, e) }
-| lv=pat_lvalue? LESAMPLE e=pat_sform?
-               { IPat_rnd (lv, e) }
-| lv=pat_lvalue? LEAT
-               { IPat_call (lv, None, None) }
-| lv=pat_lvalue? LEAT f=pat_xpath es=paren(loc(plist0(pat_sform, COMMA)))?
-               { IPat_call (lv, Some f, es) }
-
-
-pat_instr_r:
-| QUESTION     { IPat_anything }
-| x=sword      { IPat_pos x }
-| u=brace(word) i=pat_instr_s
-               { IPat_occurrence (i, u) }
-| i=pat_instr_s_r  { i }
-
-%inline pat_instr_s:
-| pat=loc(pat_instr_s_r) { pat }
-
-%inline pat_instr:
-| pat=loc(pat_instr_r) { pat }
+| x=brace(pat_stmt) { x }
 
 %inline pat_lvalue:
 | pat=loc(pat_lvalue_r) { pat}
@@ -1991,6 +1983,7 @@ pat_xpath:
 | UNDERSCORE              { XPat_anything }
 | SHARP x=ident           { XPat_meta_var x }
 | m=pat_mpath DOT p=ident { XPat_xpath (m, p) }
+
 (* -------------------------------------------------------------------- *)
 pat_mpath1_r:
 | x=uident

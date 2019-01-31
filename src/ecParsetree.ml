@@ -1041,26 +1041,26 @@ type phint = {
 (* -------------------------------------------------------------------- *)
 type pat_stmt_repeat_kind = [ `Greedy | `Lazy ]
 
+type stmt_or_instr =
+  | Stmt
+  | Instr
+
 type pat_stmt = pat_stmt_r located
 and pat_stmt_r =
-  | SPat_anything
-  | SPat_instr       of pat_instr
+  | SPat_anything    of stmt_or_instr
   | SPat_meta_var    of pat_stmt option * psymbol
   | SPat_repeat      of pat_stmt * pat_stmt_repeat_kind * int option pair
   | SPat_offset      of pat_stmt * int option pair
-  | SPat_block       of pat_instr option * pat_instr option
-  | SPat_seq         of pat_stmt list list
-
-and pat_instr = pat_instr_r located
-and pat_instr_r =
-  | IPat_anything
-  | IPat_pos        of int
-  | IPat_occurrence of pat_instr * int
-  | IPat_while      of pat_form option * pat_stmt option
-  | IPat_if         of pat_form option * pat_stmt option * pat_stmt option
-  | IPat_asgn       of pat_lvalue option * pat_form option
-  | IPat_rnd        of pat_lvalue option * pat_form option
-  | IPat_call       of pat_lvalue option * pat_xpath option * pat_form list located option
+  | SPat_block       of pat_stmt option * pat_stmt option
+  | SPat_seq         of pat_stmt pair
+  | SPat_new_context of pat_stmt pair
+  | SPat_pos         of int
+  | SPat_occurrence  of pat_stmt * int
+  | SPat_while       of pat_form option * pat_stmt option
+  | SPat_if          of pat_form option * pat_stmt option * pat_stmt option
+  | SPat_asgn        of pat_lvalue option * pat_form option
+  | SPat_rnd         of pat_lvalue option * pat_form option
+  | SPat_call        of pat_lvalue option * pat_xpath option * pat_form list located option
 
 and pat_lvalue = pat_lvalue_r located
 and pat_lvalue_r =
