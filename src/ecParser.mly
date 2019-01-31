@@ -1920,44 +1920,63 @@ theory_export: EXPORT xs=uqident* { xs }
 
 pat_stmt_s_r:
 | UNDERSCORE
-               { SPat_anything Stmt }
+    { SPat_anything Stmt }
+
+| QUESTION
+    { SPat_anything Instr }
+
+| x=sword
+    { SPat_pos x }
+
 | name=ident
-               { SPat_meta_var (None, name) }
-| s=paren(pat_stmt_r) { s }
+    { SPat_meta_var (None, name) }
+
+| s=paren(pat_stmt_r)
+    { s }
+
 | x=bracket(i1=pat_stmt_s? COLON i2=pat_stmt_s? { SPat_block (i1, i2) })
     { x }
-| lv=pat_lvalue? LARROW e=pat_sform?
-               { SPat_asgn (lv, e) }
-| lv=pat_lvalue? LESAMPLE e=pat_sform?
-               { SPat_rnd (lv, e) }
-| lv=pat_lvalue? LEAT
-               { SPat_call (lv, None, None) }
-| lv=pat_lvalue? LEAT f=pat_xpath es=paren(loc(plist0(pat_sform, COMMA)))?
-               { SPat_call (lv, Some f, es) }
-| QUESTION     { SPat_anything Instr }
-| x=sword      { SPat_pos x }
 
-
-%inline pat_stmt_s: 
+%inline pat_stmt_s:
 | x=loc(pat_stmt_s_r) { x }
 
 pat_stmt_r:
 | s=pat_stmt_s_r
     { s }
+
 | x=pat_stmt_s AS name=ident
     { SPat_meta_var (Some x, name) }
+
 | x=pat_stmt_s r=pat_repeat b=iboption(NOT)
     { SPat_repeat (x, (if b then `Lazy else `Greedy), r) }
+
 | x=pat_stmt_s y=offset_stmt
     { SPat_offset (x, y) }
+
 | s1=pat_stmt_s SEMICOLON s2=pat_stmt
     { SPat_seq (s1,s2) }
+
 | s1=pat_stmt_s DSEMICOLON s2=pat_stmt
-    { SPat_new_context (s1,s2) } 
+    { SPat_new_context (s1,s2) }
+
 | u=brace(word) i=pat_stmt_s
     { SPat_occurrence (i, u) }
+
+| lv=pat_lvalue? LARROW e=pat_sform?
+    { SPat_asgn (lv, e) }
+
+| lv=pat_lvalue? LESAMPLE e=pat_sform?
+    { SPat_rnd (lv, e) }
+
+| lv=pat_lvalue? LEAT
+    { SPat_call (lv, None) }
+
+| lv=pat_lvalue? LEAT f=pat_xpath es=paren(plist0(pat_sform, COMMA))?
+    { SPat_call (lv, Some (f, es)) }
+
 | WHILE cond=paren(pat_sform)? s=pat_block?
     { SPat_while (cond, s) }
+
 | IF cond=paren(pat_form)? s1=pat_block? s2=prefix(ELSE, pat_block)?
     { SPat_if (cond, s1, s2) }
 
@@ -1967,22 +1986,29 @@ pat_stmt_r:
 %inline offset_stmt:
 | r=bracket(x=offset? COLON y=offset? { (x, y) })
     { r }
-| r=bracket(offset) { (Some r, Some r) }
+
+| r=bracket(offset)
+    { (Some r, Some r) }
 
 pat_block:
 | x=brace(pat_stmt) { x }
 
+(* -------------------------------------------------------------------- *)
 %inline pat_lvalue:
-| pat=loc(pat_lvalue_r) { pat}
+| pat=loc(pat_lvalue_r) { pat }
 
 pat_lvalue_r:
-| UNDERSCORE { LVPat_anything }
-| x=lvalue   { LVPat_lvalue x } // ajouter des méta-variables ici
+| UNDERSCORE
+    { LVPat_anything }
 
+| SHARP x=lvalue
+    { LVPat_lvalue x } (* Add meta variables here *)
+
+(* -------------------------------------------------------------------- *)
 pat_xpath:
-| UNDERSCORE              { XPat_anything }
-| SHARP x=ident           { XPat_meta_var x }
-| m=pat_mpath DOT p=ident { XPat_xpath (m, p) }
+| UNDERSCORE               { XPat_anything }
+| SHARP x=ident            { XPat_meta_var x }
+| m=pat_mpath DOT p=lident { XPat_xpath (m, p) }
 
 (* -------------------------------------------------------------------- *)
 pat_mpath1_r:
@@ -2004,7 +2030,7 @@ pat_mpath1_r:
     { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
          EcCoreLib.i_self, None) :: x }
 
-pat_mpath:
+%inline pat_mpath:
 | x=loc(pat_mpath_r) { x }
 
 (* -------------------------------------------------------------------- *)

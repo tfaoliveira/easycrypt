@@ -1060,7 +1060,7 @@ and pat_stmt_r =
   | SPat_if          of pat_form option * pat_stmt option * pat_stmt option
   | SPat_asgn        of pat_lvalue option * pat_form option
   | SPat_rnd         of pat_lvalue option * pat_form option
-  | SPat_call        of pat_lvalue option * pat_xpath option * pat_form list located option
+  | SPat_call        of pat_lvalue option * (pat_xpath * pat_form list option) option
 
 and pat_lvalue = pat_lvalue_r located
 and pat_lvalue_r =
