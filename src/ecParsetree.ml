@@ -1039,6 +1039,87 @@ type phint = {
 }
 
 (* -------------------------------------------------------------------- *)
+type pat_stmt_repeat_kind = [ `Greedy | `Lazy ]
+
+type pat_stmt = pat_stmt_r located
+and pat_stmt_r =
+  | SPat_anything
+  | SPat_instr       of pat_instr
+  | SPat_meta_var    of pat_stmt option * psymbol
+  | SPat_repeat      of pat_stmt * pat_stmt_repeat_kind * int option pair
+  | SPat_offset      of pat_stmt * int option pair
+  | SPat_block       of pat_instr option * pat_instr option
+  | SPat_seq         of pat_stmt list list
+
+and pat_instr = pat_instr_r located
+and pat_instr_r =
+  | IPat_anything
+  | IPat_pos        of int
+  | IPat_occurrence of pat_instr * int
+  | IPat_while      of pat_form option * pat_stmt option
+  | IPat_if         of pat_form option * pat_stmt option * pat_stmt option
+  | IPat_asgn       of pat_lvalue option * pat_form option
+  | IPat_rnd        of pat_lvalue option * pat_form option
+  | IPat_call       of pat_lvalue option * pat_xpath option * pat_form list located option
+
+and pat_lvalue = pat_lvalue_r located
+and pat_lvalue_r =
+  | LVPat_anything
+  | LVPat_lvalue   of plvalue
+
+and pat_form = pat_form_r located
+and pat_form_r =
+  | FPat_anything
+  | FPat_meta_var  of pat_form option * psymbol
+  | FPat_scope     of pqsymbol * pat_form
+  | FPat_ident     of pqsymbol * ptyannot option
+  | FPat_app       of pat_form * pat_form list
+  | FPat_cast      of pat_form * pty
+  | FPat_int       of EcBigInt.zint
+  | FPat_mem       of pat_memory
+  | FPat_side      of pat_form * psymbol
+  | FPat_tuple     of pat_form list
+  | FPat_record    of pat_form option * pat_form rfield list
+  | FPat_proj      of pat_form * int
+  | FPat_glob      of pat_mpath
+  | FPat_if        of pat_form * pat_form * pat_form
+  | FPat_eqveq     of glob_or_var list * pat_mpath pair option
+  | FPat_eqf       of pat_form list
+  | FPat_lsless    of pat_xpath
+  | FPat_let       of plpattern * (pat_form * pty option) * pat_form
+  | FPat_forall    of (osymbol list * pgty) list * pat_form
+  | FPat_exists    of (osymbol list * pgty) list * pat_form
+  | FPat_lambda    of ptybindings * pat_form
+  | FPat_prob      of pat_xpath * pat_form list * pat_memory * pat_form
+  | FPat_hoareF    of pat_form * pat_xpath * pat_form
+  | FPat_BDhoareF  of pat_form * pat_xpath * pat_form * pat_cmp * pat_form
+  | FPat_equivF    of pat_form * (pat_xpath * pat_xpath) * pat_form
+  | FPat_eagerF    of pat_form * (pat_stmt * pat_xpath * pat_xpath * pat_stmt) * pat_form
+
+and pat_cmp = pat_cmp_r located
+and pat_cmp_r =
+  | HPat_anything
+  | HPat_meta_var  of psymbol
+  | HPat_BDcmp     of phoarecmp
+
+and pat_xpath =
+  | XPat_anything
+  | XPat_meta_var  of psymbol
+  | XPat_xpath     of pat_mpath * pat_path
+
+and pat_memory =
+  | MPat_anything
+  | MPat_meta_var  of psymbol
+  | MPat_memory    of pmemory
+
+and pat_mpath = pat_mpath_r located
+and pat_mpath_r =
+  (psymbol * pat_mpath list option) list
+
+and pat_path = psymbol
+
+
+(* -------------------------------------------------------------------- *)
 type global_action =
   | Gdeclare     of pdeclare
   | Gmodule      of pmodule_def
@@ -1072,6 +1153,7 @@ type global_action =
   | Gpragma      of psymbol
   | Goption      of (psymbol * [`Bool of bool | `Int of int])
   | GdumpWhy3    of string
+  | Gtest        of pat_stmt
 
 type global = {
   gl_action : global_action located;
@@ -1083,3 +1165,6 @@ type prog_r =
   | P_Undo of int
 
 type prog = prog_r located
+
+
+(* -------------------------------------------------------------------- *)

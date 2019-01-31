@@ -192,6 +192,7 @@
     "instance"    , INSTANCE   ;        (* KW: global *)
     "print"       , PRINT      ;        (* KW: global *)
     "search"      , SEARCH     ;        (* KW: global *)
+    "test"        , TEST       ;        (* KW: global *)
     "as"          , AS         ;        (* KW: global *)
     "Pr"          , PR         ;        (* KW: global *)
     "clone"       , CLONE      ;        (* KW: global *)
@@ -377,6 +378,7 @@ rule main = parse
   | ']'   { [RBRACKET  ] }
   | ','   { [COMMA     ] }
   | ';'   { [SEMICOLON ] }
+  | ";;"  { [DSEMICOLON] }
   | '?'   { [QUESTION  ] }
   | "$"   { [SAMPLE    ] }
   | "~"   { [TILD      ] }

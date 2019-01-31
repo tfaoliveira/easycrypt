@@ -2219,3 +2219,10 @@ let menv_has_form x menv =
 let menv_has_memory x menv =
   match Mid.find_opt x menv.me_meta_vars with
   | Some (OGTmem _) -> true | _ -> false
+
+
+(* -------------------------------------------------------------------------- *)
+let copy_environment (e : environment) =
+  { e with
+    env_restore_unienv = ref (Some e.env_match.me_unienv);
+  }

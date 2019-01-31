@@ -133,3 +133,6 @@ end
 
 val psubst_of_menv  : match_env -> Psubst.p_subst
 val fsubst_of_menv  : match_env -> env -> f_subst
+
+val restore_environment : environment -> unit
+val copy_environment    : environment -> environment

@@ -88,6 +88,48 @@
   let pflist loc ti (es : pformula    list) : pformula    =
     List.fold_right (fun e1 e2 -> pf_cons loc ti e1 e2) es (pf_nil loc ti)
 
+  let pat_mk_pfid_symb loc s ti =
+    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+
+  let pat_pfapp_symb loc s ti es =
+    FPat_app(pat_mk_pfid_symb loc s ti, es)
+
+  let pat_pfget loc ti e1 e2    =
+    pat_pfapp_symb loc EcCoreLib.s_get ti [e1;e2]
+
+  let pat_mk_peid_symb loc s ti =
+    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+
+  let pat_peapp_symb loc s ti es =
+    FPat_app (pat_mk_peid_symb loc s ti, es)
+
+  let pat_peget loc ti e1 e2    =
+    pat_peapp_symb loc EcCoreLib.s_get ti [e1;e2]
+
+  let pat_mk_pfid_symb loc s ti =
+    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+
+  let pat_pfapp_symb loc s ti es =
+    FPat_app(pat_mk_pfid_symb loc s ti, es)
+
+  let pat_pfset loc ti e1 e2 e3 =
+    pat_pfapp_symb loc EcCoreLib.s_set ti [e1;e2;e3]
+
+  let pat_mk_pfid_symb loc s ti =
+    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+
+  let pat_pfapp_symb loc s ti es =
+    FPat_app(pat_mk_pfid_symb loc s ti, es)
+
+  let pat_pf_nil loc ti =
+    pat_mk_pfid_symb loc EcCoreLib.s_nil ti
+
+  let pat_pf_cons loc ti e1 e2 =
+    mk_loc loc (pat_pfapp_symb loc EcCoreLib.s_cons ti [e1; e2])
+
+  let pat_pflist loc ti (es : pat_form list) : pat_form =
+    List.fold_right (fun e1 e2 -> pat_pf_cons loc ti e1 e2) es (pat_pf_nil loc ti)
+
   let mk_axiom ?(local = false) ?(nosmt = false) (x, ty, vd, f) k =
     { pa_name    = x;
       pa_tyvars  = ty;
@@ -411,6 +453,7 @@
 %token DOTDOT
 %token DOTTICK
 %token DROP
+%token DSEMICOLON
 %token DUMP
 %token EAGER
 %token ECALL
@@ -552,6 +595,7 @@
 %token SUFF
 %token SWAP
 %token SYMMETRY
+%token TEST
 %token THEN
 %token THEORY
 %token TICKPIPE
@@ -674,6 +718,10 @@ _lident:
 %inline sword:
 |       n=word {  n }
 | MINUS n=word { -n }
+
+%inline offset:
+| PLUS  n=word  {  n }
+| MINUS n=word  { -n }
 
 (* -------------------------------------------------------------------- *)
 %inline namespace:
@@ -1855,6 +1903,328 @@ theory_require :
 
 theory_import: IMPORT xs=uqident* { xs }
 theory_export: EXPORT xs=uqident* { xs }
+
+(* -------------------------------------------------------------------- *)
+(* Pattern for stmt, instr, formulas, modules.                          *)
+(* -------------------------------------------------------------------- *)
+%inline pat_repeat:
+| STAR     { (None  , None  ) }
+| PLUS     { (Some 1, None  ) }
+| QUESTION { (Some 0, Some 1) }
+
+| n=pbrace(word)
+    { (Some n, Some n) }
+
+| x=pbrace(n1=word? COLON n2=word? { (n1, n2) })
+    { x }
+
+pat_stmt_s_r:
+| UNDERSCORE
+               { SPat_anything }
+| name=ident
+               { SPat_meta_var (None, name) }
+| i=pat_instr
+               { SPat_instr i }
+
+%inline pat_stmt_s: 
+| x=loc(pat_stmt_s_r) { x }
+
+pat_stmt_r:
+| s=pat_stmt_s_r
+    { s }
+| x=pat_stmt AS name=ident
+    { SPat_meta_var (Some x, name) }
+| x=pat_stmt_s r=pat_repeat b=iboption(NOT)
+    { SPat_repeat (x, (if b then `Lazy else `Greedy), r) }
+| x=pat_stmt_s y=offset_stmt
+    { SPat_offset (x, y) }
+| x=bracket(i1=pat_instr_s? COLON i2=pat_instr_s? { SPat_block (i1, i2) })
+    { x }
+
+%inline pat_stmt:
+| pat=loc(pat_stmt_r) { pat }
+
+offset_stmt:
+| r=bracket(x=offset? COLON y=offset? { (x, y) })
+    { r }
+
+pat_block:
+| x=loc(brace(s=plist0(plist1(pat_stmt, SEMICOLON), DSEMICOLON) { SPat_seq s }))
+    { x }
+
+pat_instr_s_r:
+| WHILE cond=paren(pat_sform)? s=pat_block?
+               { IPat_while (cond, s) }
+| IF cond=paren(pat_form)? s1=pat_block? s2=prefix(ELSE, pat_block)?
+               { IPat_if (cond, s1, s2) }
+| lv=pat_lvalue? LARROW e=pat_sform?
+               { IPat_asgn (lv, e) }
+| lv=pat_lvalue? LESAMPLE e=pat_sform?
+               { IPat_rnd (lv, e) }
+| lv=pat_lvalue? LEAT
+               { IPat_call (lv, None, None) }
+| lv=pat_lvalue? LEAT f=pat_xpath es=paren(loc(plist0(pat_sform, COMMA)))?
+               { IPat_call (lv, Some f, es) }
+
+
+pat_instr_r:
+| QUESTION     { IPat_anything }
+| x=sword      { IPat_pos x }
+| u=brace(word) i=pat_instr_s
+               { IPat_occurrence (i, u) }
+| i=pat_instr_s_r  { i }
+
+%inline pat_instr_s:
+| pat=loc(pat_instr_s_r) { pat }
+
+%inline pat_instr:
+| pat=loc(pat_instr_r) { pat }
+
+%inline pat_lvalue:
+| pat=loc(pat_lvalue_r) { pat}
+
+pat_lvalue_r:
+| UNDERSCORE { LVPat_anything }
+| x=lvalue   { LVPat_lvalue x } // ajouter des méta-variables ici
+
+pat_xpath:
+| UNDERSCORE              { XPat_anything }
+| SHARP x=ident           { XPat_meta_var x }
+| m=pat_mpath DOT p=ident { XPat_xpath (m, p) }
+(* -------------------------------------------------------------------- *)
+pat_mpath1_r:
+| x=uident
+    { (x, None) }
+
+| x=uident LPAREN args=plist1(pat_mpath, COMMA) RPAREN
+    { (x, Some args) }
+
+%inline pat_mpath_r:
+| x=rlist1(pat_mpath1_r, DOT)
+    { x }
+
+| _l=TOP DOT x=rlist1(pat_mpath1_r, DOT)
+    { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
+         EcCoreLib.i_top, None) :: x }
+
+| _l=SELF DOT x=rlist1(pat_mpath1_r, DOT)
+    { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
+         EcCoreLib.i_self, None) :: x }
+
+pat_mpath:
+| x=loc(pat_mpath_r) { x }
+
+(* -------------------------------------------------------------------- *)
+(* Pattern for formulas                                                 *)
+
+%inline pat_sform: x=loc(pat_sform_u) { x }
+%inline  pat_form: x=loc( pat_form_u) { x }
+
+pat_sform_u:
+| UNDERSCORE
+   { FPat_anything }
+
+| SHARP name=ident
+   { FPat_meta_var (None, name) }
+
+| f=pat_sform AS name=ident
+   { FPat_meta_var (Some f, name) }
+
+| f=pat_sform PCENT p=uqident
+   { FPat_scope (p, f) }
+
+| f=pat_sform p=loc(prefix(PCENT, lident))
+   { let { pl_loc = lc; pl_desc = p; } = p in
+     if unloc p = "r" then
+       let id =
+         FPat_ident (mk_loc lc EcCoreLib.s_real_of_int, None)
+       in FPat_app (mk_loc lc id, [f])
+     else begin
+       if unloc p <> "top" then
+         parse_error p.pl_loc (Some "invalid scope name");
+       FPat_scope (pqsymb_of_symb p.pl_loc "<top>", f)
+     end }
+
+| LPAREN f=pat_form COLONTILD ty=loc(type_exp) RPAREN
+   { FPat_cast (f, ty) }
+
+| n=uint
+   { FPat_int n }
+
+| x=loc(RES)
+   { FPat_ident (mk_loc x.pl_loc ([], "res"), None) }
+
+| x=qoident ti=tvars_app?
+   { FPat_ident (x, ti) }
+
+(* | x=pat_memory
+   { FPat_mem x } *)
+
+| se=pat_sform DLBRACKET ti=tvars_app? e=pat_form RBRACKET
+   { pat_pfget (EcLocation.make $startpos $endpos) ti se e }
+
+| se=pat_sform DLBRACKET ti=tvars_app? e1=pat_form LARROW e2=pat_form RBRACKET
+   { pat_pfset (EcLocation.make $startpos $endpos) ti se e1 e2 }
+
+| x=pat_sform s=loc(pside)
+   { FPat_side (x, s) }
+
+| TICKPIPE ti=tvars_app? e =pat_form PIPE
+   { pat_pfapp_symb e.pl_loc EcCoreLib.s_abs ti [e] }
+
+| LPAREN fs=plist0(pat_form, COMMA) RPAREN
+   { FPat_tuple fs }
+
+| LPBRACE fields=rlist1(pat_form_field, SEMICOLON) SEMICOLON? RPBRACE
+   { FPat_record (None, fields) }
+
+| LPBRACE b=pat_sform WITH fields=rlist1(pat_form_field, SEMICOLON) SEMICOLON? RPBRACE
+   { FPat_record (Some b, fields) }
+
+| LBRACKET ti=tvars_app? es=loc(plist0(pat_form, SEMICOLON)) RBRACKET
+   { (pat_pflist es.pl_loc ti es.pl_desc).pl_desc }
+
+(* | f=pat_sform DOTTICK x=word
+    { FPat_proj (f, x) } *)
+
+| f=pat_sform DOTTICK n=loc(word)
+   { if n.pl_desc = 0 then
+       parse_error n.pl_loc (Some "tuple projection start at 1");
+     FPat_proj(f,n.pl_desc - 1) }
+
+| HOARE LBRACKET hb=pat_hoare_body RBRACKET { hb }
+
+| EQUIV LBRACKET eb=pat_equiv_body RBRACKET { eb }
+
+| EAGER LBRACKET eb=pat_eager_body RBRACKET { eb }
+
+| PR LBRACKET
+    mp=pat_xpath args=paren(plist0(pat_form, COMMA)) AT pn=pat_memory
+    COLON event=pat_form
+  RBRACKET
+    { FPat_prob (mp, args, pn, event) }
+
+| r=loc(RBOOL)
+    { FPat_ident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }
+
+| LBRACKET ti=tvars_app? e1=pat_form op=loc(DOTDOT) e2=pat_form RBRACKET
+    { let id = FPat_ident(mk_loc op.pl_loc EcCoreLib.s_dinter, ti) in
+      FPat_app(mk_loc op.pl_loc id, [e1; e2]) }
+
+pat_form_u:
+| GLOB mp=pat_mpath { FPat_glob mp }
+
+| e=pat_sform_u { e }
+
+| e=pat_sform args=pat_sform+ { FPat_app (e, args) }
+
+| op=loc(uniop) ti=tvars_app? e=pat_form
+   { pat_pfapp_symb op.pl_loc op.pl_desc ti [e] }
+
+| f=pat_form_chained_orderings %prec prec_below_order
+    { fst f }
+
+| e1=pat_form op=loc(NE) ti=tvars_app? e2=pat_form
+    { pat_pfapp_symb op.pl_loc "[!]" None
+      [ mk_loc op.pl_loc (pat_pfapp_symb op.pl_loc "=" ti [e1; e2])] }
+
+| e1=pat_form op=loc(binop) ti=tvars_app? e2=pat_form
+    { pat_pfapp_symb op.pl_loc op.pl_desc ti [e1; e2] }
+
+| c=pat_form QUESTION e1=pat_form COLON e2=pat_form %prec LOP2
+    { FPat_if (c, e1, e2) }
+
+| EQ LBRACE xs=plist1(qident_or_res_or_glob, COMMA) RBRACE
+    { FPat_eqveq (xs, None) }
+
+| EQ LBRACE xs=plist1(qident_or_res_or_glob, COMMA) RBRACE
+    LPAREN  m1=pat_mpath COMMA m2=pat_mpath RPAREN
+    { FPat_eqveq (xs, Some (m1, m2)) }
+
+| EQ LPBRACE xs=plist1(pat_form, COMMA) RPBRACE
+    { FPat_eqf xs }
+
+| IF c=pat_form THEN e1=pat_form ELSE e2=pat_form
+    { FPat_if (c, e1, e2) }
+
+| LET p=lpattern EQ e1=pat_form IN e2=pat_form
+    { FPat_let (p, (e1, None), e2) }
+
+| LET p=lpattern COLON ty=loc(type_exp) EQ e1=pat_form IN e2=pat_form
+    { FPat_let (p, (e1, Some ty), e2) }
+
+| FORALL pd=pgtybindings COMMA e=pat_form { FPat_forall (pd, e) }
+| EXIST  pd=pgtybindings COMMA e=pat_form { FPat_exists (pd, e) }
+| FUN    pd=ptybindings  COMMA e=pat_form { FPat_lambda (pd, e) }
+| FUN    pd=ptybindings  IMPL  e=pat_form { FPat_lambda (pd, e) }
+
+| r=loc(RBOOL) TILD e=pat_sform
+    { let id  = FPat_ident (mk_loc r.pl_loc EcCoreLib.s_dbitstring, None) in
+      let loc = EcLocation.make $startpos $endpos in
+        FPat_app (mk_loc loc id, [e]) }
+
+| PHOARE pb=pat_phoare_body { pb }
+
+| LOSSLESS mp=pat_xpath
+    { FPat_lsless mp }
+
+pat_form_field:
+| x=qident EQ f=pat_form
+    { { rf_name = x; rf_tvi = None; rf_value = f; } }
+
+pat_form_ordering:
+| f1=pat_form op=loc(ordering_op) ti=tvars_app? f2=pat_form
+    { (op, ti, f1, f2) }
+
+pat_form_chained_orderings:
+| f=pat_form_ordering
+    { let (op, ti, f1, f2) = f in
+        (pat_pfapp_symb op.pl_loc (unloc op) ti [f1; f2], f2) }
+
+| f1=loc(pat_form_chained_orderings) op=loc(ordering_op) ti=tvars_app? f2=pat_form
+    { let (lcf1, (f1, le)) = (f1.pl_loc, unloc f1) in
+      let loc = EcLocation.make $startpos $endpos in
+        (pat_pfapp_symb loc "&&" None
+           [EcLocation.mk_loc lcf1 f1;
+            EcLocation.mk_loc loc
+              (pat_pfapp_symb op.pl_loc (unloc op) ti [le; f2])],
+         f2) }
+
+pat_hoare_bd_cmp: x=loc(pat_hoare_bd_cmp_r) { x }
+pat_hoare_bd_cmp_r:
+| UNDERSCORE     { HPat_anything }
+| x=ident        { HPat_meta_var x }
+| h=hoare_bd_cmp { HPat_BDcmp h }
+
+pat_hoare_body:
+  mp=pat_xpath COLON pre=pat_form LONGARROW post=pat_form
+    { FPat_hoareF (pre, mp, post) }
+
+pat_phoare_body:
+  LBRACKET mp=pat_xpath COLON
+    pre=pat_form LONGARROW post=pat_form
+  RBRACKET
+    cmp=pat_hoare_bd_cmp bd=pat_sform
+  { FPat_BDhoareF (pre, mp, post, cmp, bd) }
+
+pat_equiv_body:
+  mp1=pat_xpath TILD mp2=pat_xpath
+  COLON pre=pat_form LONGARROW post=pat_form
+    { FPat_equivF (pre, (mp1, mp2), post) }
+
+pat_eager_body:
+| s1=pat_stmt COMMA  mp1=pat_xpath TILD mp2=pat_xpath COMMA s2=pat_stmt
+    COLON pre=pat_form LONGARROW post=pat_form
+    { FPat_eagerF (pre, (s1, mp1, mp2,s2), post) }
+
+
+pat_memory:
+| x=pat_mem_r { x }
+
+pat_mem_r:
+| UNDERSCORE    { MPat_anything }
+| SHARP x=ident { MPat_meta_var x }
+| x=mident      { MPat_memory x }
 
 (* -------------------------------------------------------------------- *)
 (* Instruction matching                                                 *)
@@ -3457,6 +3827,7 @@ global_action:
 | PRINT p=print    { Gprint       p  }
 | SEARCH x=search+ { Gsearch      x  }
 | WHY3 x=STRING    { GdumpWhy3    x  }
+| TEST s=pat_block { Gtest        s  }
 
 | PRAGMA       x=pragma { Gpragma x }
 | PRAGMA PLUS  x=pragma { Goption (x, `Bool true ) }
@@ -3539,6 +3910,9 @@ __rlist1(X, S):                         (* left-recursive *)
 
 %inline brace(X):
 | LBRACE x=X RBRACE { x }
+
+%inline pbrace(X):
+| LPBRACE x=X RPBRACE { x }
 
 %inline bracket(X):
 | LBRACKET x=X RBRACKET { x }
