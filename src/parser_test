@@ -1,0 +1,94 @@
+_                                         | any stmt
+?                                         | any instr
+<-                                        | any <-
+<$                                        | any <$
+<@                                        | any call to a procedure, even though lvalue option is None
+while                                     | any while
+if                                        | any if
+{2}if                                     | second if
+{-2}if                                    | second to last if
+{5}<-                                     | 5th <-
+[{1}if:{4}while]                          | stmt from the 1st if to the 4th while (both included)
+[{1}if:{4}while]{+1,-2}                   | 
+[:if]                                     | stmt from beginning to first if
+[:if]{2}                                  | stmt from beginning to first if, shifted by 2 to the right
+s1 ; s2                                   | s1 directly followed by s2
+s1 ;; s2                                  | s1 directly followed by s2, modifying brother context
+[while:] as name                          | affect name to the value matched
+{ if ; <@ ; <- ; <$ ; while } as name     | 
+if*                                       | 
+<-+                                       | 
+(<- | <$) *                               | 
+<@?                                       | 
+<$ *!                                     | 
+(<$ ; <$ ; <@) {1..3}!                    | 
+{5}( _ <- #expression)                    | 
+(_,#x) <$ _                               | 
+_ <@ #f(_)                                | matches also A.guess(g^x,g^y,g^z)
+_ <@ A.#procname(#args1,#args2)           | 
+#y <@ G(#A)._ (_,_,_)                     | 
+if (_ <= _ as cond) _ else _              | 
+if #cond #strue else #sfalse              | 
+if #cond _                                | 
+if _ #strue                               | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
+                                          | 
