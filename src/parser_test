@@ -15,7 +15,7 @@ if                                        | any if
 s1 ; s2                                   | s1 directly followed by s2
 s1 ;; s2                                  | s1 directly followed by s2, modifying brother context
 [while:] as name                          | affect name to the value matched
-( if ; <@ ; <- ; <$ ; while as name )     | 
+( if ; <@ ; <- ; <$ ; while ) as name     | 
 if*                                       | 
 <-+                                       | 
 (<- | <$) *                               | 
