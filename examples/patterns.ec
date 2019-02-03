@@ -23,7 +23,7 @@ module Test = {
 lemma adv : equiv [ Test.toto ~ Test.toto : true ==> ={res} ].
 proof.
 proc.
-test { _ } .
+test _ .
 test { #name }.
 test { ? }.
 test { <- }.
@@ -33,7 +33,7 @@ test { {2}if }.
 test { {-2}if }.
 test { {5}<- }.
 test { [{1}if:{4}while] }.
-test { [{1}if:{4}while]{+1,-2} }.
+test { [{1}if:{4}while]{<+1:-2>} }.
 test { x <- 3 ; <- }.
 test { if ; while (true) _ ; <- ; while ; if }.
 test { if (false) }. (* match a if (false) with no condition on its branches *)
@@ -45,26 +45,24 @@ test { [:if]{2} }.
 test { s1 ; s2 }.
 test { s1 ;; s2 }.
 test { [while:] as name }.
-test { ( if ; <@ ; <- ; <$ ; while ) as name }.
+test { { if ; <@ ; <- ; <$ ; while } as name }.
 test { if* }.
 test { <-+ }.
-test { (<- | <$) * }.
+test { { <- | <$ } * }.
 test { <@? }.
 test { <$ *! }.
-test { (<$ ; <$ ; <@) {1..3}! }.
-test { {5}( _ <- #expression) }.
-test { (_,#x) <$ _ }.
+test { { <$ ; <$ ; <@ } {1:3}! }.
+test { {5}{ _ <- #expression } }.
+(* test { (_,#x) <$ _ }. *)
 test { _ <@ #f(_) }.  (* matches also A.guess(g^x,g^y,g^z) *)
-test { _ <@ A.#procname(#args1,#args2) }.
-test { #y <@ G(#A)._ (_,_,_) }.
+(* test { _ <@ A.#procname(#args1,#args2) }. *)
+(* test { #y <@ G(#A)._ (_,_,_) }. *)
 test { if (_ <= _ as cond) _ else _ }.
-test { if #cond #strue else #sfalse }.
-test { if #cond #strue }.
-test { if #cond else #sfalse }.
+test { if (#cond) #strue else #sfalse }.
+test { if (#cond) #strue }.
+test { if (#cond) else #sfalse }.
 test { if _ #strue }.
-test { if #cond _ else #sfalse }.
+test { if (#cond) _ else #sfalse }.
 test { if _ #strue }.
 test { if _ else #sfalse }.
-
-admit.
-qed.
+admitted.

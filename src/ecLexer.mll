@@ -386,6 +386,8 @@ rule main = parse
   | "@"   { [AT        ] }
   | "{|"  { [LPBRACE   ] }
   | "|}"  { [RPBRACE   ] }
+  | "{<"  { [LGBRACE   ] }
+  | ">}"  { [RGBRACE   ] }
   | "`|"  { [TICKPIPE  ] }
   | "<$"  { [LESAMPLE  ] }
   | "<@"  { [LEAT      ] }

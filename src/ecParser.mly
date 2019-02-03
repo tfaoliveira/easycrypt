@@ -508,6 +508,7 @@
 %token LEMMA
 %token LESAMPLE
 %token LET
+%token LGBRACE
 %token LLARROW
 %token LOCAL
 %token LOGIC
@@ -558,6 +559,7 @@
 %token RES
 %token RETURN
 %token REWRITE
+%token RGBRACE
 %token RIGHT
 %token RND
 %token RPAREN
@@ -651,7 +653,7 @@
 
 %nonassoc LBRACE
 
-%right SEMICOLON
+%right SEMICOLON DSEMICOLON PIPE
 
 %nonassoc prec_tactic
 
@@ -1907,6 +1909,7 @@ theory_export: EXPORT xs=uqident* { xs }
 (* -------------------------------------------------------------------- *)
 (* Pattern for stmt, instr, formulas, modules.                          *)
 (* -------------------------------------------------------------------- *)
+
 %inline pat_repeat:
 | STAR     { (None  , None  ) }
 | PLUS     { (Some 1, None  ) }
@@ -1918,80 +1921,121 @@ theory_export: EXPORT xs=uqident* { xs }
 | x=brace(n1=word? COLON n2=word? { (n1, n2) })
     { x }
 
-pat_stmt_s_r:
+spat_stmt_r:
 | UNDERSCORE
-    { SPat_anything Stmt }
+    { SPat_anything `Stmt }
 
 | QUESTION
-    { SPat_anything Instr }
+    { SPat_anything `Instr }
 
-| x=sword
-    { SPat_pos x }
-
-| name=ident
+| ioption(SHARP) name=lident
     { SPat_meta_var (None, name) }
 
-| s=paren(pat_stmt_r)
+| s=brace(pat_stmt_r)
     { s }
 
-| x=bracket(i1=pat_stmt_s? COLON i2=pat_stmt_s? { SPat_block (i1, i2) })
+| x=bracket(i1=pat_stmt? COLON i2=pat_stmt? { SPat_range (i1, i2) })
     { x }
 
-%inline pat_stmt_s:
-| x=loc(pat_stmt_s_r) { x }
+| IF
+    { SPat_if (None, None, None) }
+
+| WHILE
+    { SPat_while (None, None) }
+
+| LARROW
+    { SPat_asgn (None, None) }
+
+| LESAMPLE
+    { SPat_rnd (None, None) }
+
+| LEAT
+    { SPat_call (None, None) }
+
+%inline spat_stmt:
+| x=loc(spat_stmt_r) { x }
 
 pat_stmt_r:
-| s=pat_stmt_s_r
+| s=spat_stmt_r
     { s }
 
-| x=pat_stmt_s AS name=ident
+| x=spat_stmt AS name=lident
     { SPat_meta_var (Some x, name) }
 
-| x=pat_stmt_s r=pat_repeat b=iboption(NOT)
+| x=spat_stmt r=pat_repeat b=iboption(NOT)
     { SPat_repeat (x, (if b then `Lazy else `Greedy), r) }
 
-| x=pat_stmt_s y=offset_stmt
+| x=spat_stmt y=offset_stmt
     { SPat_offset (x, y) }
 
-| s1=pat_stmt_s SEMICOLON s2=pat_stmt
-    { SPat_seq (s1,s2) }
+| s1=pat_stmt SEMICOLON s2=pat_stmt
+    { SPat_seq ((s1, s2), `Keep) }
 
-| s1=pat_stmt_s DSEMICOLON s2=pat_stmt
-    { SPat_new_context (s1,s2) }
+| s1=pat_stmt DSEMICOLON s2=pat_stmt
+    { SPat_seq ((s1, s2), `Change) }
 
-| u=brace(word) i=pat_stmt_s
+| s1=pat_stmt PIPE s2=pat_stmt
+    { SPat_or (s1, s2) }
+
+| u=brace(sword) i=spat_stmt
     { SPat_occurrence (i, u) }
 
-| lv=pat_lvalue? LARROW e=pat_sform?
-    { SPat_asgn (lv, e) }
+| lv=pat_lvalue LARROW e=pat_sform?
+    { SPat_asgn (Some lv, e) }
 
-| lv=pat_lvalue? LESAMPLE e=pat_sform?
-    { SPat_rnd (lv, e) }
+| LARROW e=pat_sform
+    { SPat_asgn (None, Some e) }
 
-| lv=pat_lvalue? LEAT
-    { SPat_call (lv, None) }
+| lv=pat_lvalue LESAMPLE e=pat_sform?
+    { SPat_rnd (Some lv, e) }
 
-| lv=pat_lvalue? LEAT f=pat_xpath es=paren(plist0(pat_sform, COMMA))?
+| LESAMPLE e=pat_sform
+    { SPat_rnd (None, Some e) }
+
+| lv=pat_lvalue LEAT
+    { SPat_call (Some lv, None) }
+
+| lv=ioption(pat_lvalue) LEAT f=pat_xpath es=paren(plist0(pat_sform, COMMA))?
     { SPat_call (lv, Some (f, es)) }
 
-| WHILE cond=paren(pat_sform)? s=pat_block?
+| WHILE cond=pat_maybe(paren(pat_sform)) s=pat_block?
     { SPat_while (cond, s) }
 
-| IF cond=paren(pat_form)? s1=pat_block? s2=prefix(ELSE, pat_block)?
+| IF cond=pat_maybe(paren(pat_form)) s1=pat_block? s2=prefix(ELSE, pat_block)?
     { SPat_if (cond, s1, s2) }
 
 %inline pat_stmt:
 | pat=loc(pat_stmt_r) { pat }
 
 %inline offset_stmt:
-| r=bracket(x=offset? COLON y=offset? { (x, y) })
+| r=gbrace(x=offset? COLON y=offset? { (x, y) })
     { r }
 
-| r=bracket(offset)
+| r=gbrace(offset)
     { (Some r, Some r) }
 
-pat_block:
-| x=brace(pat_stmt) { x }
+(* -------------------------------------------------------------------- *)
+pat_block_r:
+| x=brace(pat_stmt_r)
+    { x }
+
+| UNDERSCORE
+    { SPat_anything `Stmt }
+
+| ioption(SHARP) x=lident
+    { SPat_meta_var (None, x) }
+
+%inline pat_block:
+| p=loc(pat_block_r)
+    { p }
+
+(* -------------------------------------------------------------------- *)
+%inline pat_maybe(X):
+| UNDERSCORE
+    { None }
+
+| x=X
+    { Some x }
 
 (* -------------------------------------------------------------------- *)
 %inline pat_lvalue:
@@ -1999,16 +2043,24 @@ pat_block:
 
 pat_lvalue_r:
 | UNDERSCORE
-    { LVPat_anything }
+    { LVPat_anything None }
 
-| SHARP x=lvalue
+| SHARP x=lident
+    { LVPat_anything (Some x) }
+
+| x=lvalue
     { LVPat_lvalue x } (* Add meta variables here *)
 
 (* -------------------------------------------------------------------- *)
 pat_xpath:
-| UNDERSCORE               { XPat_anything }
-| SHARP x=ident            { XPat_meta_var x }
-| m=pat_mpath DOT p=lident { XPat_xpath (m, p) }
+| UNDERSCORE
+    { XPat_anything }
+
+| SHARP x=lident
+    { XPat_meta_var x }
+
+| m=pat_mpath DOT p=lident
+    { XPat_xpath (m, p) }
 
 (* -------------------------------------------------------------------- *)
 pat_mpath1_r:
@@ -3932,6 +3984,9 @@ __rlist1(X, S):                         (* left-recursive *)
 
 %inline pbrace(X):
 | LPBRACE x=X RPBRACE { x }
+
+%inline gbrace(X):
+| LGBRACE x=X RGBRACE { x }
 
 %inline bracket(X):
 | LBRACKET x=X RBRACKET { x }

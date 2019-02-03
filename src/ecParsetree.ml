@@ -1041,20 +1041,16 @@ type phint = {
 (* -------------------------------------------------------------------- *)
 type pat_stmt_repeat_kind = [ `Greedy | `Lazy ]
 
-type stmt_or_instr =
-  | Stmt
-  | Instr
-
 type pat_stmt = pat_stmt_r located
+
 and pat_stmt_r =
-  | SPat_anything    of stmt_or_instr
+  | SPat_anything    of [`Stmt | `Instr]
   | SPat_meta_var    of pat_stmt option * psymbol
   | SPat_repeat      of pat_stmt * pat_stmt_repeat_kind * int option pair
   | SPat_offset      of pat_stmt * int option pair
-  | SPat_block       of pat_stmt option * pat_stmt option
-  | SPat_seq         of pat_stmt pair
-  | SPat_new_context of pat_stmt pair
-  | SPat_pos         of int
+  | SPat_range       of pat_stmt option * pat_stmt option
+  | SPat_seq         of pat_stmt pair * [`Keep | `Change]
+  | SPat_or          of pat_stmt pair
   | SPat_occurrence  of pat_stmt * int
   | SPat_while       of pat_form option * pat_stmt option
   | SPat_if          of pat_form option * pat_stmt option * pat_stmt option
@@ -1064,7 +1060,7 @@ and pat_stmt_r =
 
 and pat_lvalue = pat_lvalue_r located
 and pat_lvalue_r =
-  | LVPat_anything
+  | LVPat_anything of psymbol option
   | LVPat_lvalue   of plvalue
 
 and pat_form = pat_form_r located
@@ -1105,7 +1101,7 @@ and pat_cmp_r =
 and pat_xpath =
   | XPat_anything
   | XPat_meta_var  of psymbol
-  | XPat_xpath     of pat_mpath * pat_path
+  | XPat_xpath     of pat_mpath * psymbol
 
 and pat_memory =
   | MPat_anything
@@ -1115,9 +1111,6 @@ and pat_memory =
 and pat_mpath = pat_mpath_r located
 and pat_mpath_r =
   (psymbol * pat_mpath list option) list
-
-and pat_path = psymbol
-
 
 (* -------------------------------------------------------------------- *)
 type global_action =
