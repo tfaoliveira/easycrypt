@@ -240,6 +240,7 @@ module List : sig
 
   (* Aliases to exception-less functions *)
   val ocons   : 'a option -> 'a list -> 'a list
+  val orcons  : 'a option -> 'a list -> 'a list
   val ohead   : 'a list -> 'a option
   val otail   : 'a list -> 'a list option
   val olast   : 'a list -> 'a option

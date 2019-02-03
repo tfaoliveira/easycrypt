@@ -16,12 +16,16 @@ module Map = struct
   module type S = sig
     include Why3.Extmap.S
 
+    val has_key : key -> 'a t -> bool
     val odup : ('a -> key) -> 'a list -> ('a * 'a) option
     val to_stream : 'a t -> (key * 'a) Stream.t
   end
 
   module Make(O : OrderedType) : S with type key = O.t = struct
     include Why3.Extmap.Make(O)
+
+    let has_key (k : key) (xs : 'a t) =
+      is_some (find_opt k xs)
 
     let odup (type a) (f : a -> key) (xs : a list) =
       let module E = struct exception Found of a * a end in

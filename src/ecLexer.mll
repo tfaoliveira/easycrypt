@@ -147,6 +147,7 @@
     "byphoare"    , BYPHOARE   ;        (* KW: tactic *)
     "byequiv"     , BYEQUIV    ;        (* KW: tactic *)
     "fel"         , FEL        ;        (* KW: tactic *)
+    "dernd"       , DERND      ;        (* KW: tactic *)
 
     "conseq"      , CONSEQ     ;        (* KW: tactic *)
     "exfalso"     , EXFALSO    ;        (* KW: tactic *)

@@ -388,7 +388,8 @@ module List = struct
   let ofind = Exceptionless.find
   let opick = Exceptionless.find_map
 
-  let ocons o xs = match o with None -> xs | Some x -> x :: xs
+  let ocons  o xs = match o with None -> xs | Some x -> x :: xs
+  let orcons o xs = match o with None -> xs | Some x -> xs @ [x]
 
   (* ------------------------------------------------------------------ *)
   let oindex (f : 'a -> bool) (xs : 'a list) : int option =

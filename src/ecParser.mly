@@ -404,6 +404,7 @@
 %token DEBUG
 %token DECLARE
 %token DELTA
+%token DERND
 %token DLBRACKET
 %token DO
 %token DONE
@@ -2810,6 +2811,9 @@ phltactic:
 
 | SIM info=eqobs_in
     { Psim info }
+
+| DERND
+    { Pdernd }
 
 | REPLACE rk=repl_kind h1=repl_hyp h2=repl_hyp
     { Ptrans_stmt (rk, fst h1, snd h1, fst h2, snd h2) }

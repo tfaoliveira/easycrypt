@@ -228,6 +228,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pauto                     -> EcPhlAuto.t_auto
     | Plossless                 -> EcPhlHiAuto.t_lossless
     | Prepl_stmt infos          -> EcPhlTrans.process_equiv_trans infos
+    | Pdernd                    -> EcPhlDerandomize.t_derandomize
   in
 
   try  tx tc

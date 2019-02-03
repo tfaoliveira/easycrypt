@@ -28,42 +28,6 @@ type i_pat =
 
 and s_pat = (int * i_pat) list
 
-(* -------------------------------------------------------------------- *)
-module LowSubst = struct
-  let pvsubst m pv =
-    odfl pv (PVMap.find pv m)
-
-  let rec esubst m e =
-    match e.e_node with
-    | Evar pv -> e_var (pvsubst m pv) e.e_ty
-    | _ -> EcTypes.e_map (fun ty -> ty) (esubst m) e
-
-  let lvsubst m lv =
-    match lv with
-    | LvVar   (pv, ty)       -> LvVar (pvsubst m pv, ty)
-    | LvTuple pvs            -> LvTuple (List.map (fst_map (pvsubst m)) pvs)
-    | LvMap   (p, pv, e, ty) -> LvMap (p, pvsubst m pv, esubst m e, ty)
-
-  let rec isubst m (i : instr) =
-    let esubst = esubst m in
-    let ssubst = ssubst m in
-
-    match i.i_node with
-    | Sasgn  (lv, e)     -> i_asgn   (lvsubst m lv, esubst e)
-    | Srnd   (lv, e)     -> i_rnd    (lvsubst m lv, esubst e)
-    | Scall  (lv, f, es) -> i_call   (lv |> omap (lvsubst m), f, List.map esubst es)
-    | Sif    (c, s1, s2) -> i_if     (esubst c, ssubst s1, ssubst s2)
-    | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
-    | Sassert e          -> i_assert (esubst e)
-    | Sabstract _        -> i
-
-  and issubst m (is : instr list) =
-    List.map (isubst m) is
-
-  and ssubst m (st : stmt) =
-    stmt (issubst m st.s_node)
-end
-
 (* --------------------------------------------------------------------- *)
 module LowInternal = struct
   let inline tc me sp s =
@@ -119,13 +83,13 @@ module LowInternal = struct
           | _   -> [i_asgn(LvTuple newpv, e_tuple args)]
       in
 
-      let body = LowSubst.ssubst subst fdef.f_body in
+      let body = PVSubst.ssubst subst fdef.f_body in
 
       let resasgn =
         match fdef.f_ret with
         | None -> None
         | Some _ when is_none lv -> None
-        | Some r -> Some (i_asgn (oget lv, LowSubst.esubst subst r)) in
+        | Some r -> Some (i_asgn (oget lv, PVSubst.esubst subst r)) in
 
       me, prelude @ body.s_node @ (otolist resasgn) in
 
