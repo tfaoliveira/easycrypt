@@ -23,7 +23,7 @@ module Test = {
 lemma adv : equiv [ Test.toto ~ Test.toto : true ==> ={res} ].
 proof.
 proc.
-test _ .
+test { _ } .
 test { #name }.
 test { ? }.
 test { <- }.

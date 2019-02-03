@@ -556,6 +556,10 @@ and process_dump scope (source, tc) =
   scope
 
 (* -------------------------------------------------------------------- *)
+and process_pattern (scope : EcScope.scope) (_p : pat_stmt) =
+  scope
+
+(* -------------------------------------------------------------------- *)
 and process (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in
 
@@ -594,6 +598,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gaddrw       hint -> `Fct   (fun scope -> process_addrw      scope hint)
       | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
       | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
+      | Gtest        p    -> `Fct   (fun scope -> process_pattern    scope p)
     with
     | `Fct   f -> Some (f scope)
     | `State f -> f scope; None
