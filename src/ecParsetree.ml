@@ -1060,8 +1060,10 @@ and pat_stmt_r =
 
 and pat_lvalue = pat_lvalue_r located
 and pat_lvalue_r =
-  | LVPat_anything of psymbol option
-  | LVPat_lvalue   of plvalue
+  | LVPat_meta_var of pat_lvalue * psymbol
+  | LVPat_var      of pat_xpath
+  | LVPat_tuple    of pat_xpath list
+  | LVPat_map      of pat_xpath * ptyannot option * pat_form
 
 and pat_form = pat_form_r located
 and pat_form_r =
@@ -1098,19 +1100,30 @@ and pat_cmp_r =
   | HPat_meta_var  of psymbol
   | HPat_BDcmp     of phoarecmp
 
-and pat_xpath =
-  | XPat_anything
-  | XPat_meta_var  of psymbol
-  | XPat_xpath     of pat_mpath * psymbol
+and pat_xpath = pat_xpath_r located
+and pat_xpath_r =
+  | XPat_var       of pat_path
+  | XPat_xpath     of pat_mpath * pat_path
 
 and pat_memory =
   | MPat_anything
   | MPat_meta_var  of psymbol
   | MPat_memory    of pmemory
 
+and pat_mpath1 =
+  | MTPat_anything
+  | MTPat_meta_var  of psymbol
+  | MTPat_mpath_top of psymbol
+  | MTPat_mpath     of pat_mpath1 * pat_mpath list
+
 and pat_mpath = pat_mpath_r located
-and pat_mpath_r =
-  (psymbol * pat_mpath list option) list
+and pat_mpath_r = pat_mpath1 list
+
+and pat_path = pat_path_r located
+and pat_path_r =
+  | PPat_anything
+  | PPat_meta_var of psymbol
+  | PPat_var      of psymbol
 
 (* -------------------------------------------------------------------- *)
 type global_action =

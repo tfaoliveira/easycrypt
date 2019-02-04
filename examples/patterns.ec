@@ -23,7 +23,7 @@ module Test = {
 lemma adv : equiv [ Test.toto ~ Test.toto : true ==> ={res} ].
 proof.
 proc.
-test _ .
+test { _ } .
 test { #name }.
 test { ? }.
 test { <- }.
@@ -53,10 +53,13 @@ test { <@? }.
 test { <$ *! }.
 test { { <$ ; <$ ; <@ } {1:3}! }.
 test { {5}{ _ <- #expression } }.
-(* test { (_,#x) <$ _ }. *)
+test { (_,#x) <$ _ }.
 test { _ <@ #f(_) }.  (* matches also A.guess(g^x,g^y,g^z) *)
-(* test { _ <@ A.#procname(#args1,#args2) }. *)
-(* test { #y <@ G(#A)._ (_,_,_) }. *)
+test { (_,_) as toto <- _ }.
+test { #y <@ #G(#A,P)._ (_,_,_) }.
+test { #C.counter <- _.counter + 1 }. (* matches a global variable that is named counter, but the module may be anything *)
+test { _.counter <- _.counter + 1 }. (* matches a global variable that is named counter, but the module may be anything *)
+test { _ <@ _.#procname(#args1,#args2) }.
 test { if (_ <= _ as cond) _ else _ }.
 test { if (#cond) #strue else #sfalse }.
 test { if (#cond) #strue }.

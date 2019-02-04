@@ -2041,46 +2041,78 @@ pat_block_r:
 %inline pat_lvalue:
 | pat=loc(pat_lvalue_r) { pat }
 
+pat_lvalue_s:
+| x=pat_xpath
+    { LVPat_var x }
+
+| x=pat_xpath DLBRACKET ti=tvars_app? e=pat_form RBRACKET
+    { LVPat_map (x, ti, e) }
+
+pat_lvtuple:
+| p=paren(plist2(pat_xpath, COMMA))
+    { LVPat_tuple p }
+
+pat_lvalue_paren:
+| x=paren(pat_lvalue_s) { x }
+| x=pat_lvtuple         { x }
+
 pat_lvalue_r:
-| UNDERSCORE
-    { LVPat_anything None }
-
-| SHARP x=lident
-    { LVPat_anything (Some x) }
-
-| x=lvalue
-    { LVPat_lvalue x } (* Add meta variables here *)
+| x=pat_lvalue_s
+    { x }
+| x=pat_lvtuple
+    { x }
+| x=loc(pat_lvalue_paren) AS name=lident
+    { LVPat_meta_var (x, name) }
 
 (* -------------------------------------------------------------------- *)
-pat_xpath:
-| UNDERSCORE
-    { XPat_anything }
+%inline pat_xpath: x=loc(pat_xpath_r) { x }
+pat_xpath_r:
+| x=pat_path
+    { XPat_var x }
 
-| SHARP x=lident
-    { XPat_meta_var x }
-
-| m=pat_mpath DOT p=lident
+| m=pat_mpath DOT p=pat_path
     { XPat_xpath (m, p) }
 
-(* -------------------------------------------------------------------- *)
-pat_mpath1_r:
-| x=uident
-    { (x, None) }
+%inline pat_path: x=loc(pat_path_r) { x }
+pat_path_r:
+| UNDERSCORE
+    { PPat_anything }
 
-| x=uident LPAREN args=plist1(pat_mpath, COMMA) RPAREN
-    { (x, Some args) }
+| SHARP x=lident
+    { PPat_meta_var x }
+
+| x=lident
+    { PPat_var x }
+
+
+(* -------------------------------------------------------------------- *)
+pat_mpath1_s:
+| UNDERSCORE
+    { MTPat_anything }
+
+| SHARP x=uident 
+    { MTPat_meta_var x }
+
+| x=uident
+    { MTPat_mpath_top x }
+
+pat_mpath1_r:
+| x=pat_mpath1_s args=paren(plist1(pat_mpath, COMMA))
+    { MTPat_mpath (x, args) }
 
 %inline pat_mpath_r:
 | x=rlist1(pat_mpath1_r, DOT)
     { x }
 
 | _l=TOP DOT x=rlist1(pat_mpath1_r, DOT)
-    { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
-         EcCoreLib.i_top, None) :: x }
+    { (MTPat_mpath_top 
+        (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
+          EcCoreLib.i_top)) :: x }
 
 | _l=SELF DOT x=rlist1(pat_mpath1_r, DOT)
-    { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
-         EcCoreLib.i_self, None) :: x }
+    { (MTPat_mpath_top 
+        (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
+          EcCoreLib.i_self)) :: x }
 
 %inline pat_mpath:
 | x=loc(pat_mpath_r) { x }
