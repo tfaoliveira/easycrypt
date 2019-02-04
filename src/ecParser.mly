@@ -783,12 +783,8 @@ qoident:
 
 (* -------------------------------------------------------------------- *)
 mod_ident1:
-| x=uident
-    { (x, None) }
-
-| x=uident LPAREN args=plist1(loc(mod_qident), COMMA) RPAREN
-    { (x, Some args) }
-
+| x=uident args=paren(plist1(loc(mod_qident), COMMA))?
+    { (x, args) }
 
 %inline mod_qident:
 | x=rlist1(mod_ident1, DOT)
@@ -2059,13 +2055,17 @@ pat_lvalue_paren:
 pat_lvalue_r:
 | x=pat_lvalue_s
     { x }
+
 | x=pat_lvtuple
     { x }
+
 | x=loc(pat_lvalue_paren) AS name=lident
     { LVPat_meta_var (x, name) }
 
 (* -------------------------------------------------------------------- *)
-%inline pat_xpath: x=loc(pat_xpath_r) { x }
+%inline pat_xpath:
+  x=loc(pat_xpath_r) { x }
+
 pat_xpath_r:
 | x=pat_path
     { XPat_var x }
@@ -2073,7 +2073,9 @@ pat_xpath_r:
 | m=pat_mpath DOT p=pat_path
     { XPat_xpath (m, p) }
 
-%inline pat_path: x=loc(pat_path_r) { x }
+%inline pat_path:
+  x=loc(pat_path_r) { x }
+
 pat_path_r:
 | UNDERSCORE
     { PPat_anything }
@@ -2084,20 +2086,19 @@ pat_path_r:
 | x=lident
     { PPat_var x }
 
-
 (* -------------------------------------------------------------------- *)
-pat_mpath1_s:
-| UNDERSCORE
+%inline pat_mpath1_s:
+| SHARP UNDERSCORE
     { MTPat_anything }
 
-| SHARP x=uident 
+| SHARP x=uident
     { MTPat_meta_var x }
 
 | x=uident
     { MTPat_mpath_top x }
 
 pat_mpath1_r:
-| x=pat_mpath1_s args=paren(plist1(pat_mpath, COMMA))
+| x=pat_mpath1_s args=paren(plist1(pat_mpath, COMMA))?
     { MTPat_mpath (x, args) }
 
 %inline pat_mpath_r:
@@ -2105,12 +2106,12 @@ pat_mpath1_r:
     { x }
 
 | _l=TOP DOT x=rlist1(pat_mpath1_r, DOT)
-    { (MTPat_mpath_top 
+    { (MTPat_mpath_top
         (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
           EcCoreLib.i_top)) :: x }
 
 | _l=SELF DOT x=rlist1(pat_mpath1_r, DOT)
-    { (MTPat_mpath_top 
+    { (MTPat_mpath_top
         (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
           EcCoreLib.i_self)) :: x }
 

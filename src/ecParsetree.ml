@@ -1114,7 +1114,7 @@ and pat_mpath1 =
   | MTPat_anything
   | MTPat_meta_var  of psymbol
   | MTPat_mpath_top of psymbol
-  | MTPat_mpath     of pat_mpath1 * pat_mpath list
+  | MTPat_mpath     of pat_mpath1 * (pat_mpath list) option
 
 and pat_mpath = pat_mpath_r located
 and pat_mpath_r = pat_mpath1 list

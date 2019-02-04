@@ -1,6 +1,5 @@
 require import AllCore DBool.
 
-
 module Test = {
   proc t () : int = { return 5; }
   proc toto () = {
@@ -18,7 +17,6 @@ module Test = {
     return f;
   }
 }.
-
 
 lemma adv : equiv [ Test.toto ~ Test.toto : true ==> ={res} ].
 proof.
@@ -58,7 +56,7 @@ test { _ <@ #f(_) }.  (* matches also A.guess(g^x,g^y,g^z) *)
 test { (_,_) as toto <- _ }.
 test { #y <@ #G(#A,P)._ (_,_,_) }.
 test { #C.counter <- _.counter + 1 }. (* matches a global variable that is named counter, but the module may be anything *)
-test { _.counter <- _.counter + 1 }. (* matches a global variable that is named counter, but the module may be anything *)
+test { #_.counter <- _.counter + 1 }. (* matches a global variable that is named counter, but the module may be anything *) *)
 test { _ <@ _.#procname(#args1,#args2) }.
 test { if (_ <= _ as cond) _ else _ }.
 test { if (#cond) #strue else #sfalse }.
