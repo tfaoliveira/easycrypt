@@ -75,7 +75,7 @@ let derandomize hyps =
           let body2 = List.rev body2 in
 
           me, ((rnds2 @ rnds1 @ rnds), (ll2 @ ll1 @ ll),
-               i_if (e, stmt body1, stmt body2) :: body)
+               i_if (e, stmt (List.rev body1), stmt (List.rev body2)) :: body)
 
       | Swhile (e, wbody) -> begin
           let vari =
@@ -138,7 +138,7 @@ let derandomize hyps =
 
           let wrnds, asgn = List.split wrnds in
 
-          me, (wrnds @ rnds, wll @ ll, i_while (e, stmt (asgn @ wbody)) :: body)
+          me, (wrnds @ rnds, wll @ ll, i_while (e, stmt (asgn @ List.rev wbody)) :: body)
         end
 
       | _ -> raise Failure
