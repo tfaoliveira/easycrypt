@@ -126,6 +126,14 @@ module CI_Distr : sig
   val p_lossless: path
   val p_uniform : path
   val p_full    : path
+  val p_dlist   : path
+end
+
+(* -------------------------------------------------------------------- *)
+module CI_List : sig
+  val i_List : symbol
+  val p_List : path
+  val p_list : path
 end
 
 (* -------------------------------------------------------------------- *)

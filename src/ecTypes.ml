@@ -129,6 +129,7 @@ let tunit      = tconstr EcCoreLib.CI_Unit .p_unit  []
 let tbool      = tconstr EcCoreLib.CI_Bool .p_bool  []
 let tint       = tconstr EcCoreLib.CI_Int  .p_int   []
 let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr [ty]
+let tlist  ty  = tconstr EcCoreLib.CI_List.p_list   [ty]
 let treal      = tconstr EcCoreLib.CI_Real .p_real  []
 let tcpred ty  = tfun ty tbool
 
@@ -678,6 +679,13 @@ let e_app x args ty =
     match x.e_node with
     | Eapp(x', args') -> mk_expr (Eapp (x', (args'@args))) ty
     | _ -> mk_expr (Eapp (x, args)) ty
+
+let e_dlist (ty : ty) (mu : expr) (n : expr) =
+  let dlist =
+    let tyfun = toarrow [tdistr ty; tint] (tdistr (tlist ty)) in
+    e_op EcCoreLib.CI_Distr.p_dlist [ty] tyfun in
+
+  e_app dlist [mu; n] (tdistr (tlist ty))
 
 (* -------------------------------------------------------------------- *)
 module ExprSmart = struct

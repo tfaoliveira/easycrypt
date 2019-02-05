@@ -121,6 +121,16 @@ module CI_Distr = struct
   let p_lossless = _Distr "is_lossless"
   let p_uniform  = _Distr "is_uniform"
   let p_full     = _Distr "is_full"
+  let p_dlist    = EcPath.extend p_top ["DList"; "dlist"]
+end
+
+(* -------------------------------------------------------------------- *)
+module CI_List = struct
+  let i_List = "List"
+  let p_List = EcPath.pqname p_top i_List
+  let _List  = fun x -> EcPath.pqname p_List x
+
+  let p_list = _List "list"
 end
 
 (* -------------------------------------------------------------------- *)

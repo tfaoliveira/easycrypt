@@ -136,6 +136,13 @@ let f_weight ty d =
 let f_lossless ty d =
   f_app (fop_lossless ty) [d] tbool
 
+let f_dlist (ty : ty) (mu : form) (n : form) =
+  let dlist =
+    let tyfun = toarrow [tdistr ty; tint] (tdistr (tlist ty)) in
+    f_op EcCoreLib.CI_Distr.p_dlist [ty] tyfun in
+
+  f_app dlist [mu; n] (tdistr (tlist ty))
+
 (* -------------------------------------------------------------------- *)
 let f_losslessF f = f_bdHoareF f_true f f_true FHeq f_r1
 

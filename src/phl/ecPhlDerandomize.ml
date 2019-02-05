@@ -19,7 +19,9 @@ open EcLowPhlGoal
 exception Failure
 
 (* -------------------------------------------------------------------- *)
-let derandomize env =
+let derandomize hyps =
+  let env = EcEnv.LDecl.toenv hyps in
+
   let rec aux0 ?(top = false) infos s =
     aux top infos (List.rev s.s_node)
 
@@ -72,8 +74,72 @@ let derandomize env =
           let body1 = List.rev body1 in
           let body2 = List.rev body2 in
 
-          me, ((rnds1 @ rnds2 @ rnds), (ll1 @ ll2 @ ll),
+          me, ((rnds2 @ rnds1 @ rnds), (ll2 @ ll1 @ ll),
                i_if (e, stmt body1, stmt body2) :: body)
+
+      | Swhile (e, wbody) -> begin
+          let vari =
+            match omap i_node (List.ohead s) with
+            | Some (Sasgn (LvVar (x, _), { e_node = Eint z }))
+                when EcBigInt.equal z EcBigInt.zero -> x
+            | _ -> raise Failure in
+
+          let bound =
+            match e.e_node with
+            | Eapp ({ e_node = Eop (p, _) }, [e1; e2]) ->
+                if not (EcPath.p_equal p EcCoreLib.CI_Int.p_int_lt) then
+                  raise Failure;
+                if not (Mid.is_empty e2.e_fv) then
+                  raise Failure;
+                if not (EcReduction.EqTest.for_expr env e1 (e_var vari tint)) then
+                  raise Failure;
+                e2
+            | _ -> raise Failure in
+
+          begin
+            match List.rev wbody.s_node with
+            | { i_node = Sasgn (LvVar (pv, _), incr) } :: body -> begin
+                if not (EcEnv.NormMp.pv_equal env vari pv) then
+                  raise Failure;
+                match incr.e_node with
+                | Eapp ({ e_node = Eop (p, _) }, [ei1; ei2]) ->
+                    if not (EcPath.p_equal p EcCoreLib.CI_Int.p_int_add) then
+                      raise Failure;
+                    if not (EcReduction.EqTest.for_expr env ei1 (e_var vari tint)) then
+                      raise Failure;
+                    if not (EcReduction.EqTest.for_expr env ei2 (e_int EcBigInt.one)) then
+                      raise Failure;
+                    if EcPV.PV.mem_pv env vari (EcPV.is_write env body) then
+                      raise Failure
+
+                | _ -> raise Failure
+              end
+
+            | _ -> raise Failure
+          end;
+
+          let me, (rnds  , ll,  body) = aux top (me, (rd0, wr0)) s in
+          let me, (wrnds, wll, wbody) = aux0 (me, (rd0, wr0)) wbody in
+
+          let lsplit ety e =
+            let rty = ttuple [ety; tlist ety] in
+            let op  = e_op (EcPath.pqname EcCoreLib.CI_List.p_List "lsplit") in
+            let op  = op [ety] (tfun (tlist ety) rty) in
+            e_app op [e] rty in
+
+          let me, wrnds = List.fold_left_map (fun me ((pv, ty), e) ->
+              let vr     = EcPath.xbasename pv.pv_name ^ "_s" in
+              let vr     = { v_name = vr; v_type = ty; } in
+              let me, vr = fresh_pv me vr in
+              let vr     = pv_loc (EcMemory.xpath me) vr in
+              let asgn   = i_asgn (LvVar (pv, ty), lsplit ty (e_var vr (tlist ty))) in
+              let rnd    = EcTypes.e_dlist ty e bound in
+              (me, (((vr, tlist ty), rnd), asgn))) me wrnds in
+
+          let wrnds, asgn = List.split wrnds in
+
+          me, (wrnds @ rnds, wll @ ll, i_while (e, stmt (asgn @ wbody)) :: body)
+        end
 
       | _ -> raise Failure
 
@@ -95,12 +161,13 @@ let derandomize env =
 (* -------------------------------------------------------------------- *)
 let t_derandomize tc =
   let concl = FApi.tc1_goal tc in
-  let env   = FApi.tc1_env  tc in
+  let hyps  = FApi.tc1_hyps tc in
+  let env   = EcEnv.LDecl.toenv hyps in
 
   match concl.f_node with
   | FhoareS hs -> begin
       try
-        let me, ll, body = derandomize env hs.hs_m hs.hs_s in
+        let me, ll, body = derandomize hyps hs.hs_m hs.hs_s in
         let ll =
           List.map
             (fun e ->
