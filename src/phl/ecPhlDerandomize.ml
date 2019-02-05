@@ -20,69 +20,74 @@ exception Failure
 
 (* -------------------------------------------------------------------- *)
 let derandomize env =
-  let rec aux (me, subst, (rd0, wr0)) s =
-    match List.rev s.s_node with [] -> (me, subst), ([], []) | i :: s ->
+  let rec aux0 infos s =
+    aux infos (List.rev s.s_node)
 
-    let s = stmt s in
+  and aux (me, (rd0, wr0)) s =
+    match s with [] -> me, ([], []) | i :: s ->
 
-    match i.i_node with
-    | Srnd (lv, e) -> begin
-        if not (Mid.is_empty e.e_fv) then (* FIXME: check for PV only *)
-          raise Failure;
+    try
+      match i.i_node with
+      | Srnd (lv, e) -> begin
+          if not (Mid.is_empty e.e_fv) then
+            raise Failure;
 
-        let pv, pvty = match lv with LvVar (pv, ty) -> pv, ty | _ -> raise Failure in
+          let pv, pvty = match lv with LvVar (pv, ty) -> pv, ty | _ -> raise Failure in
 
-        if pv.pv_kind <> PVloc then raise Failure;
+          if pv.pv_kind <> PVloc then raise Failure;
 
-        let rd = EcPV.s_read_r  env rd0 s in
-        let wr = EcPV.s_write_r env wr0 s in
+          let me, (rnds, body) = aux (me, (rd0, wr0)) s in
 
-        let me, subst, pv' =
-          if EcPV.PV.mem_pv env pv rd || EcPV.PV.mem_pv env pv wr then
-            let vr = { v_name = EcPath.xbasename pv.pv_name; v_type = pvty; } in
-            let me, vr = fresh_pv me vr in
-            let vr = pv_loc (EcMemory.xpath me) vr in
-            (me, EcPV.PVMap.add vr pv subst, vr)
-          else (me, subst, pv) in
+          let rd = EcPV.s_read_r  env rd0 (stmt s) in
+          let wr = EcPV.s_write_r env wr0 (stmt s) in
 
-        let s = PVSubst.ssubst subst s in
+          let me, pv' =
+            if EcPV.PV.mem_pv env pv rd || EcPV.PV.mem_pv env pv wr then
+              let vr = { v_name = EcPath.xbasename pv.pv_name; v_type = pvty; } in
+              let me, vr = fresh_pv me vr in
+              let vr = pv_loc (EcMemory.xpath me) vr in
+              (me, vr)
+            else (me, pv) in
 
-        let (me, subst), (rnds, body) = aux (me, subst, (rd0, wr0)) s in
+          let asgn =
+            if pv_equal pv pv' then None else
+            Some (i_asgn (LvVar (pv, pvty), e_var pv' pvty)) in
 
-        let asgn =
-          if pv_equal pv pv' then None else
-          Some (i_asgn (LvVar (pv, pvty), e_var pv' pvty)) in
+          me, (((pv', pvty), e) :: rnds, List.ocons asgn body)
+        end
 
-        (me, subst), (((pv', pvty), e) :: rnds, List.orcons asgn body)
-      end
+      | Sif (e, s1, s2) ->
+          let rd1 = EcPV.PV.union rd0 (EcPV.s_read  env s2) in
+          let wr1 = EcPV.PV.union rd0 (EcPV.s_write env s2) in
+          let rd2 = EcPV.PV.union rd0 (EcPV.s_read  env s1) in
+          let wr2 = EcPV.PV.union rd0 (EcPV.s_write env s1) in
 
-    | Sif (e, s1, s2) ->
-        let rd1 = EcPV.PV.union rd0 (EcPV.s_read  env s2) in
-        let wr1 = EcPV.PV.union rd0 (EcPV.s_write env s2) in
-        let rd2 = EcPV.PV.union rd0 (EcPV.s_read  env s1) in
-        let wr2 = EcPV.PV.union rd0 (EcPV.s_write env s1) in
+          let me, (rnds, body) = aux (me, (rd0, wr0)) s in
 
-        let (me, subst), (rnds1, body1) = aux (me, subst, (rd1, wr1)) s1 in
-        let (me, subst), (rnds2, body2) = aux (me, subst, (rd2, wr2)) s2 in
+          let me, (rnds1, body1) = aux0 (me, (rd1, wr1)) s1 in
+          let me, (rnds2, body2) = aux0 (me, (rd2, wr2)) s2 in
 
-        let (me, subst), (rnds, body) = aux (me, subst, (rd0, wr0)) s in
+          let body1 = List.rev body1 in
+          let body2 = List.rev body2 in
 
-        (me, subst), ((rnds1 @ rnds2 @ rnds), body @ [i_if (e, stmt body1, stmt body2)])
+          me, ((rnds1 @ rnds2 @ rnds), i_if (e, stmt body1, stmt body2) :: body)
 
-    | _ ->
-        let (me, subst), (rnds, body) = aux (me, subst, (rd0, wr0)) s in
-        (me, subst), (rnds, i :: body) in
+      | _ -> raise Failure
+
+    with Failure ->
+      let me, (rnds, body) = aux (me, (rd0, wr0)) s in
+      me, (rnds, i :: body)
+
+  in
 
   fun me s ->
-    let (me, _), (rnds, body) =
-      let rd0 = EcPV.PV.empty in
-      let wr0 = EcPV.PV.empty in
-      aux (me, EcPV.PVMap.create env, (rd0, wr0)) s in
+    let me, (rnds, body) =
+      aux0 (me, (EcPV.PV.empty, EcPV.PV.empty)) s in
 
     let rnds = List.map (fun ((pv, pvty), e) ->
       i_rnd (LvVar (pv, pvty), e)) (List.rev rnds) in
 
-    (me, stmt (rnds @ body))
+    (me, stmt (rnds @ List.rev body))
 
 (* -------------------------------------------------------------------- *)
 let t_derandomize tc =
