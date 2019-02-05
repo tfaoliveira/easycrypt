@@ -8,7 +8,6 @@
 
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcIdent
 open EcTypes
 open EcFol
 open EcModules
@@ -31,7 +30,7 @@ let derandomize hyps =
     try
       match i.i_node with
       | Srnd (lv, e) -> begin
-          if not (Mid.is_empty e.e_fv) then
+          if not (EcPV.PV.is_empty (EcPV.e_read env e)) then
             raise Failure;
 
           let pv, pvty = match lv with LvVar (pv, ty) -> pv, ty | _ -> raise Failure in
@@ -89,7 +88,7 @@ let derandomize hyps =
             | Eapp ({ e_node = Eop (p, _) }, [e1; e2]) ->
                 if not (EcPath.p_equal p EcCoreLib.CI_Int.p_int_lt) then
                   raise Failure;
-                if not (Mid.is_empty e2.e_fv) then
+                if not (EcPV.PV.is_empty (EcPV.e_read env e2)) then
                   raise Failure;
                 if not (EcReduction.EqTest.for_expr env e1 (e_var vari tint)) then
                   raise Failure;
