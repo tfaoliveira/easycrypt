@@ -286,7 +286,7 @@ lemma eqboolP (b1 b2 : bool) : (b1 = b2) <=> (b1 <=> b2) by [].
 op (^) b1 b2  = if b1 then !b2 else b2.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt negP: forall (x:bool), (x => false) <=> !x by [].
+lemma nosmt negP: forall (x:bool), !x <=> (x => false) by [].
 
 lemma nosmt eqT : forall (x:bool), (x = true) <=> x by [].
 lemma nosmt neqF : forall (x:bool), (x = false) <=> !x by [].
