@@ -3771,7 +3771,7 @@ module PReduction = struct
 
     (* Contextual rule - bindings *)
     | Fquant (Lforall as t, b, f1)
-      | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full -> begin
+    | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full -> begin
         let ctor = match t with
           | Lforall -> p_forall_simpl
           | Lexists -> p_exists_simpl
@@ -3784,7 +3784,9 @@ module PReduction = struct
             | GTmodty (mt,mr) -> id,EcBaseLogic.LD_modty (mt,mr)
             | GTmem mt -> id,EcBaseLogic.LD_mem mt in
           let b' = List.map localkind_of_binding b in
-          let hyps = List.fold_left (fun h (id,k) -> EcEnv.LDecl.add_local id k h)
+          let hyps =
+            List.fold_left
+              (fun h (id,k) -> EcEnv.LDecl.add_local ~check_id_only:true id k h)
               hyps b' in
           omap (ctor b) (h_red_form_opt hyps ri s f1)
         with EcEnv.NotReducible ->

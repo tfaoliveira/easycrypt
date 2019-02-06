@@ -88,35 +88,38 @@
   let pflist loc ti (es : pformula    list) : pformula    =
     List.fold_right (fun e1 e2 -> pf_cons loc ti e1 e2) es (pf_nil loc ti)
 
+  let pat_qsymb_of_qsymb loc (nm, x) =
+    mk_loc loc (Some (QOPat_namespace nm), x)
+
   let pat_mk_pfid_symb loc s ti =
-    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+    mk_loc loc (FPat_ident (mk_loc loc (None, s), ti))
 
   let pat_pfapp_symb loc s ti es =
-    FPat_app(pat_mk_pfid_symb loc s ti, es)
+    FPat_app (pat_mk_pfid_symb loc s ti, es)
 
   let pat_pfget loc ti e1 e2    =
-    pat_pfapp_symb loc EcCoreLib.s_get ti [e1;e2]
+    pat_pfapp_symb loc EcCoreLib.s_get ti [e1; e2]
 
   let pat_mk_peid_symb loc s ti =
-    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+    mk_loc loc (FPat_ident (mk_loc loc (None, s), ti))
 
   let pat_peapp_symb loc s ti es =
     FPat_app (pat_mk_peid_symb loc s ti, es)
 
   let pat_peget loc ti e1 e2    =
-    pat_peapp_symb loc EcCoreLib.s_get ti [e1;e2]
+    pat_peapp_symb loc EcCoreLib.s_get ti [e1; e2]
 
   let pat_mk_pfid_symb loc s ti =
-    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+    mk_loc loc (FPat_ident (mk_loc loc (None, s), ti))
 
   let pat_pfapp_symb loc s ti es =
-    FPat_app(pat_mk_pfid_symb loc s ti, es)
+    FPat_app (pat_mk_pfid_symb loc s ti, es)
 
   let pat_pfset loc ti e1 e2 e3 =
     pat_pfapp_symb loc EcCoreLib.s_set ti [e1;e2;e3]
 
   let pat_mk_pfid_symb loc s ti =
-    mk_loc loc (FPat_ident (pqsymb_of_symb loc s, ti))
+    mk_loc loc (FPat_ident (mk_loc loc (None, s), ti))
 
   let pat_pfapp_symb loc s ti es =
     FPat_app(pat_mk_pfid_symb loc s ti, es)
@@ -413,6 +416,7 @@
 %token ALGNORM
 %token ALIAS
 %token AMP
+%token AMPUNDERSCORE
 %token APPLY
 %token AS
 %token ASSERT
@@ -947,8 +951,8 @@ sexpr_u:
 
 | e=sexpr DOTTICK n=loc(word)
    { if n.pl_desc = 0 then
-       parse_error n.pl_loc (Some "tuple projection start at 1");
-     PEproji(e,n.pl_desc - 1) }
+       parse_error n.pl_loc (Some "tuple projection must start at 1");
+     PEproji (e, n.pl_desc - 1) }
 
 expr_u:
 | e=sexpr_u { e }
@@ -1130,8 +1134,8 @@ sform_u(P):
 
 | f=sform_r(P) DOTTICK n=loc(word)
    { if n.pl_desc = 0 then
-       parse_error n.pl_loc (Some "tuple projection start at 1");
-     PFproji(f,n.pl_desc - 1) }
+       parse_error n.pl_loc (Some "tuple projection must start at 1");
+     PFproji (f, n.pl_desc - 1) }
 
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 
@@ -2133,10 +2137,29 @@ pat_mpath1_r:
 
 %inline pat_mpath:
 | mp=loc(pat_mpath_r)
-    { (mp : pat_mpath) }
+    { mp }
 
 (* -------------------------------------------------------------------- *)
 (* Pattern for formulas                                                 *)
+
+pat_qoident:
+| x=boident
+    { mk_loc x.pl_loc (None, unloc x) }
+
+| xs=namespace DOT x=oident
+| xs=namespace DOT x=loc(NOP) {
+    { pl_desc = (Some (QOPat_namespace xs), unloc x);
+      pl_loc  = EcLocation.make $startpos $endpos;
+    }
+  }
+
+| UNDERSCORE DOT x=oident
+| UNDERSCORE DOT x=loc(NOP) {
+    { pl_desc = (Some QOPat_anything, unloc x);
+      pl_loc  = EcLocation.make $startpos $endpos;
+    }
+  }
+
 
 %inline pat_sform: x=loc(pat_sform_u) { x }
 %inline  pat_form: x=loc( pat_form_u) { x }
@@ -2157,8 +2180,7 @@ pat_sform_u:
 | f=pat_sform p=loc(prefix(PCENT, lident))
    { let { pl_loc = lc; pl_desc = p; } = p in
      if unloc p = "r" then
-       let id =
-         FPat_ident (mk_loc lc EcCoreLib.s_real_of_int, None)
+       let id = FPat_ident (pat_qsymb_of_qsymb lc EcCoreLib.s_real_of_int, None)
        in FPat_app (mk_loc lc id, [f])
      else begin
        if unloc p <> "top" then
@@ -2173,13 +2195,13 @@ pat_sform_u:
    { FPat_int n }
 
 | x=loc(RES)
-   { FPat_ident (mk_loc x.pl_loc ([], "res"), None) }
+   { FPat_ident (mk_loc x.pl_loc (None, "res"), None) }
 
-| x=qoident ti=tvars_app?
+| x=pat_qoident ti=tvars_app?
    { FPat_ident (x, ti) }
 
-(* | x=pat_memory
-   { FPat_mem x } *)
+| x=pat_memory
+   { FPat_mem x }
 
 | se=pat_sform DLBRACKET ti=tvars_app? e=pat_form RBRACKET
    { pat_pfget (EcLocation.make $startpos $endpos) ti se e }
@@ -2205,13 +2227,13 @@ pat_sform_u:
 | LBRACKET ti=tvars_app? es=loc(plist0(pat_form, SEMICOLON)) RBRACKET
    { (pat_pflist es.pl_loc ti es.pl_desc).pl_desc }
 
-(* | f=pat_sform DOTTICK x=word
-    { FPat_proj (f, x) } *)
+| f=pat_sform DOTTICK x=qident
+    { FPat_proj (f, x) }
 
 | f=pat_sform DOTTICK n=loc(word)
    { if n.pl_desc = 0 then
-       parse_error n.pl_loc (Some "tuple projection start at 1");
-     FPat_proj(f,n.pl_desc - 1) }
+       parse_error n.pl_loc (Some "tuple projection must start at 1");
+     FPat_proji (f, n.pl_desc - 1) }
 
 | HOARE LBRACKET hb=pat_hoare_body RBRACKET { hb }
 
@@ -2226,11 +2248,12 @@ pat_sform_u:
     { FPat_prob (mp, args, pn, event) }
 
 | r=loc(RBOOL)
-    { FPat_ident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }
+    { let id = pat_qsymb_of_qsymb r.pl_loc EcCoreLib.s_dbool in
+      FPat_ident (id, None) }
 
 | LBRACKET ti=tvars_app? e1=pat_form op=loc(DOTDOT) e2=pat_form RBRACKET
-    { let id = FPat_ident(mk_loc op.pl_loc EcCoreLib.s_dinter, ti) in
-      FPat_app(mk_loc op.pl_loc id, [e1; e2]) }
+    { let id = pat_qsymb_of_qsymb op.pl_loc EcCoreLib.s_dinter in
+      FPat_app (mk_loc op.pl_loc (FPat_ident (id, ti)), [e1; e2]) }
 
 pat_form_u:
 | GLOB mp=pat_mpath { FPat_glob mp }
@@ -2280,9 +2303,10 @@ pat_form_u:
 | FUN    pd=ptybindings  IMPL  e=pat_form { FPat_lambda (pd, e) }
 
 | r=loc(RBOOL) TILD e=pat_sform
-    { let id  = FPat_ident (mk_loc r.pl_loc EcCoreLib.s_dbitstring, None) in
+    { let id  = pat_qsymb_of_qsymb r.pl_loc EcCoreLib.s_dbitstring in
+      let id  = FPat_ident (id, None) in
       let loc = EcLocation.make $startpos $endpos in
-        FPat_app (mk_loc loc id, [e]) }
+      FPat_app (mk_loc loc id, [e]) }
 
 | PHOARE pb=pat_phoare_body { pb }
 
@@ -2334,15 +2358,15 @@ pat_equiv_body:
     { FPat_equivF (pre, (mp1, mp2), post) }
 
 pat_eager_body:
-| s1=pat_stmt COMMA  mp1=pat_fpath TILD mp2=pat_fpath COMMA s2=pat_stmt
+| s1=pat_stmt COMMA mp1=pat_fpath TILD mp2=pat_fpath COMMA s2=pat_stmt
     COLON pre=pat_form LONGARROW post=pat_form
     { FPat_eagerF (pre, (s1, mp1, mp2,s2), post) }
 
-pat_mem_r:
-| UNDERSCORE
+%inline pat_mem_r:
+| AMPUNDERSCORE
     { MPat_anything None }
 
-| SHARP x=ident
+| SHARP x=mident
     { MPat_anything (Some x) }
 
 | x=mident

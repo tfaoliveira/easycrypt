@@ -237,6 +237,7 @@
     ("!"   , (NOT              , false));
     ("^"   , (HAT              , false));
     ("&"   , (AMP              , false));
+    ("&_"  , (AMPUNDERSCORE    , false));
     ("&&"  , (ANDA             , false));
     ("/\\" , (AND              , false));
     ("||"  , (ORA              , false));

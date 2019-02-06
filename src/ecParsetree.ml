@@ -1060,7 +1060,7 @@ and pat_form_r =
   | FPat_anything
   | FPat_meta_var  of pat_form option * psymbol
   | FPat_scope     of pqsymbol * pat_form
-  | FPat_ident     of pqsymbol * ptyannot option
+  | FPat_ident     of pat_qsymbol * ptyannot option
   | FPat_app       of pat_form * pat_form list
   | FPat_cast      of pat_form * pty
   | FPat_int       of EcBigInt.zint
@@ -1068,7 +1068,8 @@ and pat_form_r =
   | FPat_side      of pat_form * psymbol
   | FPat_tuple     of pat_form list
   | FPat_record    of pat_form option * pat_form rfield list
-  | FPat_proj      of pat_form * int
+  | FPat_proj      of pat_form * pqsymbol
+  | FPat_proji     of pat_form * int
   | FPat_glob      of pat_mpath
   | FPat_if        of pat_form * pat_form * pat_form
   | FPat_eqveq     of glob_or_var list * pat_mpath pair option
@@ -1113,14 +1114,22 @@ and pat_symbol_r =
   | PS_anything of psymbol option
   | PS_symbol   of psymbol
 
-and pat_stmt   = pat_stmt_r   located
-and pat_form   = pat_form_r   located
-and pat_lvalue = pat_lvalue_r located
-and pat_cmp    = pat_cmp_r    located
-and pat_xpath  = pat_xpath_r  located
-and pat_mpath1 = pat_mpath1_r located
-and pat_mpath  = pat_mpath_r  located
-and pat_symbol = pat_symbol_r located
+and pat_qsymbol_r =
+  pat_namespace option * symbol
+
+and pat_namespace =
+  | QOPat_anything
+  | QOPat_namespace of symbol list
+
+and pat_stmt    = pat_stmt_r    located
+and pat_form    = pat_form_r    located
+and pat_lvalue  = pat_lvalue_r  located
+and pat_cmp     = pat_cmp_r     located
+and pat_xpath   = pat_xpath_r   located
+and pat_mpath1  = pat_mpath1_r  located
+and pat_mpath   = pat_mpath_r   located
+and pat_symbol  = pat_symbol_r  located
+and pat_qsymbol = pat_qsymbol_r located
 
 (* -------------------------------------------------------------------- *)
 type global_action =
