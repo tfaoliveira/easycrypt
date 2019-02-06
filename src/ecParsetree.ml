@@ -157,7 +157,6 @@ and pfunction_decl = {
 }
 
 (* -------------------------------------------------------------------- *)
-
 and pmodule_def = {
   ptm_header : pmodule_header;
   ptm_body   : pmodule_expr;
@@ -616,6 +615,7 @@ type phltactic =
 
 (* -------------------------------------------------------------------- *)
 type include_exclude = [ `Include | `Exclude ]
+
 type pdbmap1 = {
   pht_flag : include_exclude;
   pht_kind : [ `Theory  | `Lemma   ];
@@ -1041,9 +1041,7 @@ type phint = {
 (* -------------------------------------------------------------------- *)
 type pat_stmt_repeat_kind = [ `Greedy | `Lazy ]
 
-type pat_stmt = pat_stmt_r located
-
-and pat_stmt_r =
+type pat_stmt_r =
   | SPat_anything    of [`Stmt | `Instr]
   | SPat_meta_var    of pat_stmt option * psymbol
   | SPat_repeat      of pat_stmt * pat_stmt_repeat_kind * int option pair
@@ -1058,14 +1056,6 @@ and pat_stmt_r =
   | SPat_rnd         of pat_lvalue option * pat_form option
   | SPat_call        of pat_lvalue option * (pat_xpath * pat_form list option) option
 
-and pat_lvalue = pat_lvalue_r located
-and pat_lvalue_r =
-  | LVPat_meta_var of pat_lvalue * psymbol
-  | LVPat_var      of pat_xpath
-  | LVPat_tuple    of pat_xpath list
-  | LVPat_map      of pat_xpath * ptyannot option * pat_form
-
-and pat_form = pat_form_r located
 and pat_form_r =
   | FPat_anything
   | FPat_meta_var  of pat_form option * psymbol
@@ -1094,36 +1084,43 @@ and pat_form_r =
   | FPat_equivF    of pat_form * (pat_xpath * pat_xpath) * pat_form
   | FPat_eagerF    of pat_form * (pat_stmt * pat_xpath * pat_xpath * pat_stmt) * pat_form
 
-and pat_cmp = pat_cmp_r located
+and pat_lvalue_r =
+  | LVPat_meta_var of pat_lvalue * psymbol
+  | LVPat_var      of pat_xpath
+  | LVPat_tuple    of pat_xpath list
+  | LVPat_map      of pat_xpath * ptyannot option * pat_form
+
+and pat_memory =
+  | MPat_anything of psymbol option
+  | MPat_memory   of pmemory
+
 and pat_cmp_r =
   | HPat_anything
   | HPat_meta_var  of psymbol
   | HPat_BDcmp     of phoarecmp
 
-and pat_xpath = pat_xpath_r located
 and pat_xpath_r =
-  | XPat_var       of pat_path
-  | XPat_xpath     of pat_mpath * pat_path
+  pat_mpath_r * pat_symbol_r
 
-and pat_memory =
-  | MPat_anything
-  | MPat_meta_var  of psymbol
-  | MPat_memory    of pmemory
+and pat_mpath1_r =
+  | MTPat_anything of psymbol option
+  | MTPat_named    of psymbol
 
-and pat_mpath1 =
-  | MTPat_anything
-  | MTPat_meta_var  of psymbol
-  | MTPat_mpath_top of psymbol
-  | MTPat_mpath     of pat_mpath1 * (pat_mpath list) option
+and pat_mpath_r =
+  (pat_mpath1 * (pat_mpath list) option) list
 
-and pat_mpath = pat_mpath_r located
-and pat_mpath_r = pat_mpath1 list
+and pat_symbol_r =
+  | PS_anything of psymbol option
+  | PS_symbol   of psymbol
 
-and pat_path = pat_path_r located
-and pat_path_r =
-  | PPat_anything
-  | PPat_meta_var of psymbol
-  | PPat_var      of psymbol
+and pat_stmt   = pat_stmt_r   located
+and pat_form   = pat_form_r   located
+and pat_lvalue = pat_lvalue_r located
+and pat_cmp    = pat_cmp_r    located
+and pat_xpath  = pat_xpath_r  located
+and pat_mpath1 = pat_mpath1_r located
+and pat_mpath  = pat_mpath_r  located
+and pat_symbol = pat_symbol_r located
 
 (* -------------------------------------------------------------------- *)
 type global_action =

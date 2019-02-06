@@ -1976,22 +1976,16 @@ pat_stmt_r:
 | u=brace(sword) i=spat_stmt
     { SPat_occurrence (i, u) }
 
-| lv=pat_lvalue LARROW e=pat_sform?
+| lv=pat_lvalue LARROW e=pat_form?
     { SPat_asgn (Some lv, e) }
 
-| LARROW e=pat_sform
-    { SPat_asgn (None, Some e) }
-
-| lv=pat_lvalue LESAMPLE e=pat_sform?
+| lv=pat_lvalue LESAMPLE e=pat_form?
     { SPat_rnd (Some lv, e) }
-
-| LESAMPLE e=pat_sform
-    { SPat_rnd (None, Some e) }
 
 | lv=pat_lvalue LEAT
     { SPat_call (Some lv, None) }
 
-| lv=ioption(pat_lvalue) LEAT f=pat_xpath es=paren(plist0(pat_sform, COMMA))?
+| lv=ioption(pat_lvalue) LEAT f=pat_fpath es=paren(plist0(pat_sform, COMMA))?
     { SPat_call (lv, Some (f, es)) }
 
 | WHILE cond=pat_maybe(paren(pat_sform)) s=pat_block?
@@ -2049,8 +2043,11 @@ pat_lvtuple:
     { LVPat_tuple p }
 
 pat_lvalue_paren:
-| x=paren(pat_lvalue_s) { x }
-| x=pat_lvtuple         { x }
+| x=paren(pat_lvalue_s)
+    { x }
+
+| x=pat_lvtuple
+    { x }
 
 pat_lvalue_r:
 | x=pat_lvalue_s
@@ -2063,60 +2060,80 @@ pat_lvalue_r:
     { LVPat_meta_var (x, name) }
 
 (* -------------------------------------------------------------------- *)
-%inline pat_xpath:
-  x=loc(pat_xpath_r) { x }
+%inline pat_fxpath(X):
+  x=loc(pat_fxpath_r(X)) { x }
 
-pat_xpath_r:
-| x=pat_path
-    { XPat_var x }
+pat_fxpath_r(X):
+| x=pat_symbol_r(X)
+    { ([], x) }
 
-| m=pat_mpath DOT p=pat_path
-    { XPat_xpath (m, p) }
+| m=pat_mpath_r DOT x=pat_symbol_r(X)
+    { (m, x) }
 
-%inline pat_path:
-  x=loc(pat_path_r) { x }
-
-pat_path_r:
-| UNDERSCORE
-    { PPat_anything }
+%inline pat_symbol_r(X):
+| X
+    { PS_anything None}
 
 | SHARP x=lident
-    { PPat_meta_var x }
+    { PS_anything (Some x) }
 
 | x=lident
-    { PPat_var x }
+    { PS_symbol x }
+
+%inline pat_xpath:
+| p=pat_fxpath(UNDERSCORE)
+    { p }
+
+%inline pat_fpath:
+| p=pat_fxpath(QUESTION)
+    { p }
 
 (* -------------------------------------------------------------------- *)
-%inline pat_mpath1_s:
-| SHARP UNDERSCORE
-    { MTPat_anything }
+%inline pat_mpath_ident1:
+| x=uident
+    { x }
+
+%inline pat_mpath_ident1_wd_r:
+| UNDERSCORE
+    { MTPat_anything None }
 
 | SHARP x=uident
-    { MTPat_meta_var x }
+    { MTPat_anything (Some x) }
 
-| x=uident
-    { MTPat_mpath_top x }
+%inline pat_mpath_ident1_wd:
+| x=loc(pat_mpath_ident1_wd_r)
+    { x }
+
+%inline pat_mpath_args:
+| args=paren(plist1(pat_mpath, COMMA))
+    { (args : pat_mpath list) }
+
+%inline pat_mpath_wd_r:
+| x=pat_mpath_ident1_wd args=pat_mpath_args?
+    { (x, args) }
 
 pat_mpath1_r:
-| x=pat_mpath1_s args=paren(plist1(pat_mpath, COMMA))?
-    { MTPat_mpath (x, args) }
+| x=loc(pat_mpath_ident1) args=pat_mpath_args?
+    { (mk_loc x.pl_loc (MTPat_named (unloc x)), args) }
 
 %inline pat_mpath_r:
+| mp=pat_mpath_wd_r
+    { [mp] }
+
 | x=rlist1(pat_mpath1_r, DOT)
     { x }
 
-| _l=TOP DOT x=rlist1(pat_mpath1_r, DOT)
-    { (MTPat_mpath_top
-        (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
-          EcCoreLib.i_top)) :: x }
+| l=loc(TOP) DOT x=rlist1(pat_mpath1_r, DOT)
+    { (mk_loc (EcLocation.make $startpos(l) $endpos(l))
+         (MTPat_named (mk_loc l.pl_loc EcCoreLib.i_top)), None) :: x }
 
-| _l=SELF DOT x=rlist1(pat_mpath1_r, DOT)
-    { (MTPat_mpath_top
-        (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
-          EcCoreLib.i_self)) :: x }
+| l=loc(SELF) DOT x=rlist1(pat_mpath1_r, DOT)
+    { (mk_loc (EcLocation.make $startpos(l) $endpos(l))
+         (MTPat_named (mk_loc l.pl_loc EcCoreLib.i_self)), None) :: x }
 
 %inline pat_mpath:
-| x=loc(pat_mpath_r) { x }
+| mp=loc(pat_mpath_r)
+    { (mp : pat_mpath) }
 
 (* -------------------------------------------------------------------- *)
 (* Pattern for formulas                                                 *)
@@ -2203,7 +2220,7 @@ pat_sform_u:
 | EAGER LBRACKET eb=pat_eager_body RBRACKET { eb }
 
 | PR LBRACKET
-    mp=pat_xpath args=paren(plist0(pat_form, COMMA)) AT pn=pat_memory
+    mp=pat_fpath args=paren(plist0(pat_form, COMMA)) AT pn=pat_memory
     COLON event=pat_form
   RBRACKET
     { FPat_prob (mp, args, pn, event) }
@@ -2269,7 +2286,7 @@ pat_form_u:
 
 | PHOARE pb=pat_phoare_body { pb }
 
-| LOSSLESS mp=pat_xpath
+| LOSSLESS mp=pat_fpath
     { FPat_lsless mp }
 
 pat_form_field:
@@ -2301,34 +2318,38 @@ pat_hoare_bd_cmp_r:
 | h=hoare_bd_cmp { HPat_BDcmp h }
 
 pat_hoare_body:
-  mp=pat_xpath COLON pre=pat_form LONGARROW post=pat_form
+  mp=pat_fpath COLON pre=pat_form LONGARROW post=pat_form
     { FPat_hoareF (pre, mp, post) }
 
 pat_phoare_body:
-  LBRACKET mp=pat_xpath COLON
+  LBRACKET mp=pat_fpath COLON
     pre=pat_form LONGARROW post=pat_form
   RBRACKET
     cmp=pat_hoare_bd_cmp bd=pat_sform
   { FPat_BDhoareF (pre, mp, post, cmp, bd) }
 
 pat_equiv_body:
-  mp1=pat_xpath TILD mp2=pat_xpath
+  mp1=pat_fpath TILD mp2=pat_fpath
   COLON pre=pat_form LONGARROW post=pat_form
     { FPat_equivF (pre, (mp1, mp2), post) }
 
 pat_eager_body:
-| s1=pat_stmt COMMA  mp1=pat_xpath TILD mp2=pat_xpath COMMA s2=pat_stmt
+| s1=pat_stmt COMMA  mp1=pat_fpath TILD mp2=pat_fpath COMMA s2=pat_stmt
     COLON pre=pat_form LONGARROW post=pat_form
     { FPat_eagerF (pre, (s1, mp1, mp2,s2), post) }
 
-
-pat_memory:
-| x=pat_mem_r { x }
-
 pat_mem_r:
-| UNDERSCORE    { MPat_anything }
-| SHARP x=ident { MPat_meta_var x }
-| x=mident      { MPat_memory x }
+| UNDERSCORE
+    { MPat_anything None }
+
+| SHARP x=ident
+    { MPat_anything (Some x) }
+
+| x=mident
+    { MPat_memory x }
+
+%inline pat_memory:
+| x=pat_mem_r { x }
 
 (* -------------------------------------------------------------------- *)
 (* Instruction matching                                                 *)
