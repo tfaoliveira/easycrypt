@@ -56,6 +56,9 @@ type pat_continuation =
 
   | Zbinds     of pat_continuation * pbindings
 
+  | ZReduce    of pat_continuation * engine * nengine
+
+
 and engine = {
     e_head         : axiom;
     e_pattern      : pattern;

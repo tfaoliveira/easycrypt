@@ -71,6 +71,8 @@ type pat_continuation =
 
   | Zbinds     of pat_continuation * pbindings
 
+  | ZReduce    of pat_continuation * engine * nengine
+
 
 and engine = {
     e_head         : axiom;
@@ -839,7 +841,7 @@ module X = struct
        | None    -> omap (fun a -> (p, a)) (reduce_axiom hyps s rp a)
 end
 
-let h_red_strat = X.h_red_strat
+let h_red_strat h s r p a = X.h_red_strat h s r r p a
 
 (* -------------------------------------------------------------------------- *)
 let rec merge_binds bs1 bs2 env = match bs1,bs2 with
@@ -1018,45 +1020,25 @@ let rec abstract_opt
      let parg  = Psubst.p_subst subst parg in
      aux e.e_env p parg
 
+let copy_match e =
+  { e with me_unienv = EcUnify.UniEnv.copy e.me_unienv }
+
+let copy_env e =
+  { e with
+    env_match = copy_match e.env_match;
+    env_restore_unienv = ref (! (e.env_restore_unienv));
+  }
+
+let copy_engine e =
+  { e with e_env = copy_env e.e_env }
 
 let try_reduce (e : engine) : engine =
-  let i_red_match, i_red_same_meta =
-    e.e_env.env_red_info_match, e.e_env.env_red_info_same_meta in
   let e_env = saturate e.e_env in
-  let e = { e with e_env } in
-  let subst = psubst_of_menv e_env.env_match in
-  let o = try h_red_strat e.e_env.env_hyps subst i_red_match i_red_same_meta
-                e.e_pattern e.e_head
-          with Translate.Invalid_Type _ ->
-                if e.e_env.env_verbose_reduce then
-                  Format.fprintf e.e_env.env_fmt
-                    "[W] Axiom has been reduced to pattern without being able to convert\n";
-                None in
-  match o with
-  | None -> e
-  | Some (p,a) ->
-     let l = match e.e_continuation with
-       | Zor (_,l,_) -> List.map (fun e -> e.e_pattern,e.e_head) (e::l)
-       | _ -> [e.e_pattern,e.e_head] in
-     if   List.mem (p,a) l
-     then
-       (if e.e_env.env_verbose_reduce then
-          Format.fprintf e.e_env.env_fmt
-            "[W] something was found but not reduced.\n";
-        e)
-     else
-       (if e.e_env.env_verbose_reduce then
-          Format.fprintf e.e_env.env_fmt "[W] something is reduced : (%a,%a).\n"
-            (EcPrinting.pp_pattern e.e_env.env_ppe) p
-            (EcPrinting.pp_pat_axiom e.e_env.env_ppe) a;
-        (* let p = match p.p_ogty with
-         *   | OGTty (Some _) -> mk_pattern p.p_node (OGTty None)
-         *   | _ -> p in *)
-        let e_or = { e with e_pattern = p; e_head = a } in
-        match e.e_continuation with
-        | Zor (cont,(_::_ as l),nomatch_cont) ->
-           { e with e_continuation = Zor (cont,e_or::l,nomatch_cont) }
-        | _ -> { e with e_continuation = Zor (e.e_continuation,[e_or],e_next e)})
+  let ne = let e = copy_engine e in
+           { ne_continuation = e.e_continuation; ne_env = e.e_env } in
+  let e_continuation = ZReduce (e.e_continuation, copy_engine e, ne) in
+  { e with e_env; e_continuation }
+
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
@@ -1083,17 +1065,12 @@ let rec process (e : engine) : nengine =
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
 
-  | Pat_Meta_Name (_,n1,_), (Axiom_Form { f_node = Flocal n2 }
-                             | Axiom_Local (n2,_))
-       when EQ.name n1 n2 -> next Match e
-
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
        odfl e.e_env.env_meta_restr_binds
          (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
      let e_env = { e.e_env with env_meta_restr_binds; } in
      let e = { e with e_env } in
-     let e = try_reduce e in
      let _ = if e.e_env.env_verbose_rule then
        Format.fprintf e.e_env.env_fmt "[W] rule : meta variable\n" in
      process { e with
@@ -1138,12 +1115,6 @@ let rec process (e : engine) : nengine =
      let _ = if e.e_env.env_verbose_rule then
        Format.fprintf e.e_env.env_fmt "[W] rule : same axiom\n" in
      next Match e
-
-  | Pat_Axiom _, _ ->
-     let _ = if e.e_env.env_verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : different axiom\n" in
-     let e = try_reduce e in
-     next NoMatch e
 
   | Pat_Fun_Symbol (Sym_Form_If, p1::p2::p3::[]),
     Axiom_Form { f_node = Fif (f1,f2,f3) } ->
@@ -1262,9 +1233,10 @@ let rec process (e : engine) : nengine =
   | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [e_pattern]),
     Axiom_Form ({ f_node = Fproj (f1,j) } as f)
        when i = j  && EQ.ty e.e_env ty f.f_ty ->
-       let _ = if e.e_env.env_verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : proj \n" in
+     let _ = if e.e_env.env_verbose_rule then
+               Format.fprintf e.e_env.env_fmt
+                 "[W] rule : form : proj \n" in
+     let e = try_reduce e in
      process { e with e_pattern; e_head = Axiom_Form f1 }
 
   | Pat_Fun_Symbol (Sym_Form_Match ty, p::pl),
@@ -1456,11 +1428,12 @@ let rec process (e : engine) : nengine =
 
   | Pat_Fun_Symbol (Sym_Form_Pr, [pmem;pf;pargs;pevent]),
     Axiom_Form { f_node = Fpr pr } ->
-       let _ = if e.e_env.env_verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : pr \n" in
+     let _ = if e.e_env.env_verbose_rule then
+               Format.fprintf e.e_env.env_fmt
+                 "[W] rule : form : pr \n" in
      let fmem,ff,fargs,fevent =
        pr.pr_mem,pr.pr_fun,pr.pr_args,pr.pr_event in
+     let e = try_reduce e in
      let zand = [
          Axiom_Xpath ff,pf;
          Axiom_Form fargs,pargs;
@@ -1473,9 +1446,10 @@ let rec process (e : engine) : nengine =
            Zand ([Axiom_Memory fmem,pmem],zand,e.e_continuation); }
 
   | Pat_Fun_Symbol (Sym_Mpath, [p]), Axiom_Mpath_top _ ->
-       let _ = if e.e_env.env_verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : mpath_top \n" in
+     let _ = if e.e_env.env_verbose_rule then
+               Format.fprintf e.e_env.env_fmt
+                 "[W] rule : mpath_top \n" in
+     let e = try_reduce e in
      process { e with e_pattern = p }
 
   | Pat_Fun_Symbol (Sym_Mpath, p::rest), Axiom_Mpath m ->
@@ -1613,6 +1587,8 @@ let rec process (e : engine) : nengine =
        let _ = restore_environment e.e_env in
        next NoMatch e
 
+  | Pat_Axiom _, _ -> next NoMatch_NoRed e
+
 and next (m : ismatch) (e : engine) : nengine =
   (if e.e_env.env_verbose_match then
      let ppe = e.e_env.env_ppe in
@@ -1681,13 +1657,25 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      let ne_env = { e.ne_env with env_current_binds } in
      next_n NoMatch { e with ne_continuation; ne_env; }
 
+  | Match, ZReduce (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
+
+  | NoMatch_NoRed, ZReduce (_, _, e) ->
+     let _ = restore_environment e.ne_env in next_n NoMatch_NoRed e
+
+  | NoMatch, ZReduce (_, e, ne) ->
+     let s = psubst_of_menv e.e_env.env_match in
+     match h_red_strat e.e_env.env_hyps s e.e_env.env_red_info_match
+             e.e_pattern e.e_head with
+     | None -> next_n NoMatch ne
+     | Some (e_pattern, e_head) -> process { e with e_pattern; e_head }
+
 and sub_engines (e : engine) (p : pattern) : engine list =
   match e.e_head with
   | Axiom_Memory _   -> []
   | Axiom_MemEnv _   -> []
   | Axiom_Prog_Var _ -> []
   | Axiom_Op _       -> []
-  | Axiom_Mpath_top _   -> []
+  | Axiom_Mpath_top _ -> []
   | Axiom_Lvalue _   -> []
   | Axiom_Xpath _    -> []
   | Axiom_Hoarecmp _ -> []
