@@ -42,7 +42,7 @@ proof. by rewrite {1}/big /= (@fun_if (map F)); case (P x). qed.
 
 lemma big_consT (F : 'a -> t) x s:
   big predT F (x :: s) = F x + big predT F s.
-proof. by apply/big_cons. qed.
+proof. by rewrite big_cons. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt big_rec (K : t -> bool) r P (F : 'a -> t):

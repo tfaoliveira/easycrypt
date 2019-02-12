@@ -87,8 +87,6 @@ type pat_continuation =
                   * (axiom * pattern) list
                   * pat_continuation
 
-  | Zbinds     of pat_continuation * pbindings
-
   | ZReduce    of pat_continuation * engine * nengine
 
 
@@ -1650,14 +1648,6 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   | NoMatch, Zor (_, e'::engines, ne) ->
      let _ = restore_environment e'.e_env in
      process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
-
-  | Match, Zbinds (ne_continuation, env_current_binds) ->
-     next_n Match { e with ne_continuation; ne_env = { e.ne_env with env_current_binds } }
-
-  | NoMatch, Zbinds (ne_continuation, env_current_binds) ->
-     let _ = restore_environment e.ne_env in
-     let ne_env = { e.ne_env with env_current_binds } in
-     next_n NoMatch { e with ne_continuation; ne_env; }
 
   | Match, ZReduce (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
 

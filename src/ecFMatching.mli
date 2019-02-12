@@ -58,8 +58,6 @@ type pat_continuation =
                   * (axiom * pattern) list
                   * pat_continuation
 
-  | Zbinds     of pat_continuation * pbindings
-
   | ZReduce    of pat_continuation * engine * nengine
 
 
