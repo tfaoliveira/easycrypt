@@ -179,8 +179,6 @@ let process_match (x : pqsymbol) (tc : tcenv1)  =
            | Sym_Form_App (Some ty,_)
              | Sym_Form_Match ty
              | Sym_Form_Pvar ty -> add_unity acc ty
-           | Sym_Form_Quant (_,binds) ->
-              List.fold_left add_unigty acc binds
            | Sym_Quant (_,binds) ->
               let f acc (_,ogty) = match ogty with
                 | OGTty (Some ty) -> add_unity acc ty

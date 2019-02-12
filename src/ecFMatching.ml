@@ -10,37 +10,51 @@ open EcPattern
 open Psubst
 
 type verbose = {
-    verbose_match      : bool;
-    verbose_rule       : bool;
-    verbose_type       : bool;
-    verbose_bind_restr : bool;
-    verbose_add_meta   : bool;
-    verbose_abstract   : bool;
-    verbose_reduce     : bool;
+    verbose_match           : bool;
+    verbose_rule            : bool;
+    verbose_type            : bool;
+    verbose_bind_restr      : bool;
+    verbose_add_meta        : bool;
+    verbose_abstract        : bool;
+    verbose_reduce          : bool;
+    verbose_show_ignored_or : bool;
   }
 
 
 let no_verbose : verbose = {
-    verbose_match      = false;
-    verbose_rule       = false;
-    verbose_type       = false;
-    verbose_bind_restr = false;
-    verbose_add_meta   = false;
-    verbose_abstract   = false;
-    verbose_reduce     = false;
+    verbose_match           = false;
+    verbose_rule            = false;
+    verbose_type            = false;
+    verbose_bind_restr      = false;
+    verbose_add_meta        = false;
+    verbose_abstract        = false;
+    verbose_reduce          = false;
+    verbose_show_ignored_or = false;
   }
 
 let full_verbose : verbose = {
-    verbose_match      = true;
-    verbose_rule       = true;
-    verbose_type       = false;
-    verbose_bind_restr = true;
-    verbose_add_meta   = true;
-    verbose_abstract   = false;
-    verbose_reduce     = true;
+    verbose_match           = true;
+    verbose_rule            = true;
+    verbose_type            = true;
+    verbose_bind_restr      = true;
+    verbose_add_meta        = true;
+    verbose_abstract        = true;
+    verbose_reduce          = true;
+    verbose_show_ignored_or = true;
   }
 
-let env_verbose = no_verbose
+let debug_verbose : verbose = {
+    verbose_match           = true;
+    verbose_rule            = false;
+    verbose_type            = false;
+    verbose_bind_restr      = true;
+    verbose_add_meta        = true;
+    verbose_abstract        = false;
+    verbose_reduce          = true;
+    verbose_show_ignored_or = true;
+  }
+
+let env_verbose = debug_verbose
 
 (* ---------------------------------------------------------------------- *)
 exception Matches
@@ -69,20 +83,19 @@ type environment = {
 
 type pat_continuation =
   | ZTop
+
   | Znamed     of pattern * meta_name * pbindings option * pat_continuation
 
   (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
        - e_list : if not, the sorted list of next engines to try matching with
-       - ne     : if no match at all, then take the nengine to go up
-   *)
+       - ne     : if no match at all, then take the nengine to go up *)
   | Zor        of pat_continuation * engine list * nengine
 
   (* Zand (before, after, cont) :
        - before : list of couples (form, pattern) that has already been checked
        - after  : list of couples (form, pattern) to check in the following
-       - cont   : continuation if all the matches succeed
-   *)
+       - cont   : continuation if all the matches succeed *)
   | Zand       of (axiom * pattern) list
                   * (axiom * pattern) list
                   * pat_continuation
@@ -105,32 +118,6 @@ and nengine = {
 type ismatch =
   | Match
   | NoMatch
-
-
-(* -------------------------------------------------------------------- *)
-module Debug : sig
-  val debug_type : environment -> ty -> ty -> unit
-  val debug_bind_restr : environment -> ident -> unit
-end = struct
-  let debug_type menv ty1 ty2 =
-    if menv.env_verbose.verbose_type then
-      let env = LDecl.toenv menv.env_hyps in
-      let ppe = EcPrinting.PPEnv.ofenv env in
-
-      EcEnv.notify env `Warning
-        "=== types are unified %a in %a"
-          (EcPrinting.pp_type ppe) ty1
-          (EcPrinting.pp_type ppe) ty2
-
-  let debug_bind_restr menv x =
-    if menv.env_verbose.verbose_bind_restr then
-      let env = LDecl.toenv menv.env_hyps in
-      let ppe = EcPrinting.PPEnv.ofenv env in
-
-      EcEnv.notify env `Warning
-        "Binding restrictions prevents using : %a"
-        (EcPrinting.pp_local ppe) x
-end
 
 (* -------------------------------------------------------------------- *)
 let menv_copy (me : match_env) =
@@ -183,6 +170,174 @@ let psubst_of_menv env =
                 ts_u = EcUnify.UniEnv.assubst env.me_unienv } in
   { ps_patloc = env.me_matches; ps_sty = sty }
 
+
+(* -------------------------------------------------------------------- *)
+module Debug : sig
+  val debug_type                     : environment -> ty -> ty -> unit
+  val debug_ogty                     : environment -> pattern -> pattern -> unit
+  val debug_bind_restr               : environment -> ident -> unit
+  val debug_add_match                : environment -> bool -> ident -> pattern -> unit
+  val debug_higher_order_abstract_eq : environment -> bool -> pattern -> pattern -> unit
+  val debug_higher_order_to_abstract : environment -> pattern -> pattern -> unit
+  val debug_try_match                : environment -> pattern -> axiom -> pat_continuation -> unit
+  val debug_which_rule               : environment -> string -> unit
+  val debug_result_match             : environment -> ismatch -> unit
+  val debug_try_reduce               : environment -> pattern -> axiom -> unit
+  val debug_reduce                   : environment -> pattern -> axiom -> unit
+  val debug_no_reduce                : environment -> pattern -> axiom -> unit
+  val debug_found_match              : environment -> unit
+  val debug_ignore_ors               : environment -> unit
+end = struct
+  let debug_type menv ty1 ty2 =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "=== types are unified %a in %a"
+        (EcPrinting.pp_type ppe) ty1
+        (EcPrinting.pp_type ppe) ty2
+
+  let debug_ogty menv p1 p2 =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let s = psubst_of_menv menv.env_match in
+      let s = Psubst.p_subst_init ~sty:s.Psubst.ps_sty () in
+      let p1 = Psubst.p_subst s p1 in
+
+      EcEnv.notify env `Warning
+        "=!= types cannot be unified %a in %a"
+        (EcPrinting.pp_ogty ppe) p1.p_ogty
+        (EcPrinting.pp_ogty ppe) p2.p_ogty
+
+  let debug_bind_restr menv x =
+    if menv.env_verbose.verbose_bind_restr then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "Binding restrictions prevents using : %a"
+        (EcPrinting.pp_local ppe) x
+
+  let debug_add_match menv b name p =
+    if menv.env_verbose.verbose_add_meta then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      if b then
+        EcEnv.notify env `Warning
+          "=== Name %a binded to %a"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p
+      else
+        EcEnv.notify env `Warning
+          "=!= Name %a already exists and cannot be unified with %a"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p
+
+  let debug_higher_order_abstract_eq menv b p1 p2 =
+    if menv.env_verbose.verbose_abstract then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      if b then
+        EcEnv.notify env `Warning
+          "=== %a is convertible to %a\n"
+          (EcPrinting.pp_pattern ppe) p1
+          (EcPrinting.pp_pattern ppe) p2
+      else
+        EcEnv.notify env `Warning
+          "=!= %a is not convertible to %a\n"
+          (EcPrinting.pp_pattern ppe) p1
+          (EcPrinting.pp_pattern ppe) p2
+
+  let debug_higher_order_to_abstract menv p1 p2 =
+    if menv.env_verbose.verbose_abstract then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "try to abstract (%a) in : %a"
+        (EcPrinting.pp_pattern ppe) p1
+        (EcPrinting.pp_pattern ppe) p2
+
+  let debug_try_match menv p a c =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "(%i left) : try match : %a ?= %a"
+        (match c with
+        | Zand (_,l,_) -> List.length l
+        | _ -> 0)
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pat_axiom ppe) a
+
+  let debug_which_rule menv s =
+    if menv.env_verbose.verbose_rule then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning "rule %s" s
+
+  let debug_result_match menv m =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning (match m with
+                                 | Match -> "Match"
+                                 | NoMatch -> "No match")
+
+  let debug_try_reduce menv p a =
+    if menv.env_verbose.verbose_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning "Later : try reduce (%a,%a)"
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pat_axiom ppe) a
+
+  let debug_reduce menv p a =
+    if menv.env_verbose.verbose_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning "No reduction for (%a,%a)"
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pat_axiom ppe) a
+
+  let debug_no_reduce menv p a =
+    if menv.env_verbose.verbose_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning "Ignore reduction for (%a,%a)"
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pat_axiom ppe) a
+
+  let debug_found_match menv =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let pp_names ppe fmt (name,p) =
+        Format.fprintf fmt "%a <- %a"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p in
+
+      EcEnv.notify env `Warning "Matching successful: %a"
+        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
+        (Mid.bindings menv.env_match.me_matches)
+
+  let debug_ignore_ors menv =
+    if menv.env_verbose.verbose_show_ignored_or then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning "Ignore some Or"
+end
+
 (* -------------------------------------------------------------------------- *)
 
 let restore_environment (env : environment) : unit =
@@ -224,7 +379,8 @@ module Translate = struct
 
   exception Invalid_Type of string
 
-  let rec form_of_pattern env (p : pattern) = match p.p_node with
+  let rec form_of_pattern env (p : pattern) =
+    match p.p_node with
     | Pat_Anything            -> raise (Invalid_Type "formula")
     | Pat_Meta_Name (_,_,_)   -> raise (Invalid_Type "formula")
     | Pat_Sub _               -> raise (Invalid_Type "sub in form")
@@ -235,55 +391,54 @@ module Translate = struct
     | Pat_Axiom (Axiom_Local (id,ty)) -> f_local id ty
     | Pat_Axiom _             -> raise (Invalid_Type "formula")
     | Pat_Fun_Symbol (s, lp)  ->
-    match s, lp with
-    | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
-                                     (form_of_pattern env p2)
-                                     (form_of_pattern env p3)
-    | Sym_Form_App _, p::lp    -> f_ty_app env (form_of_pattern env p)
-                                     (List.map (form_of_pattern env) lp)
-    | Sym_Form_Tuple, t         -> f_tuple (List.map (form_of_pattern env) t)
-    | Sym_Form_Proj (i,ty), [p] -> f_proj (form_of_pattern env p) i ty
-    | Sym_Form_Match ty, p::lp  -> mk_form (Fmatch (form_of_pattern env p,
-                                                    List.map (form_of_pattern env) lp,
-                                                    ty)) ty
-    | Sym_Form_Quant (q,b), [p] -> f_quant q b (form_of_pattern env p)
-    | Sym_Form_Let lp, [p1;p2]  -> f_let lp (form_of_pattern env p1)
-                                     (form_of_pattern env p2)
-    | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern env pv) ty
-                                     (memory_of_pattern pm)
-    | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula")
-    | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp) (memory_of_pattern mem)
-    | Sym_Form_Hoare_F, [pr;xp;po] ->
-       f_hoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
-    | Sym_Form_Hoare_S, [pm;pr;s;po] ->
-       f_hoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
-         (form_of_pattern env po)
-    | Sym_Form_bd_Hoare_F, [pr;xp;po;cmp;bd] ->
-       f_bdHoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
-         (cmp_of_pattern cmp) (form_of_pattern env bd)
-    | Sym_Form_bd_Hoare_S, [pm;pr;s;po;cmp;bd] ->
-       f_bdHoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
-         (form_of_pattern env po) (cmp_of_pattern cmp) (form_of_pattern env bd)
-    | Sym_Form_Equiv_F, [pr;f1;f2;po] ->
-       f_equivF (form_of_pattern env pr) (xpath_of_pattern env f1) (xpath_of_pattern env f2)
-         (form_of_pattern env po)
-    | Sym_Form_Equiv_S, [pm1;pm2;pr;s1;s2;po] ->
-       f_equivS (memenv_of_pattern pm1) (memenv_of_pattern pm2) (form_of_pattern env pr)
-         (stmt_of_pattern env s1) (stmt_of_pattern env s2) (form_of_pattern env po)
-    | Sym_Form_Eager_F, [po;s1;f1;f2;s2;pr] ->
-       f_eagerF (form_of_pattern env po) (stmt_of_pattern env s1) (xpath_of_pattern env f1)
-         (xpath_of_pattern env f2) (stmt_of_pattern env s2) (form_of_pattern env pr)
-    | Sym_Form_Pr, [pm;f;args;event] ->
-       f_pr (memory_of_pattern pm) (xpath_of_pattern env f) (form_of_pattern env args)
-         (form_of_pattern env event)
-    | Sym_Quant (q,pb), [p] ->
-       let f (id,ogt) = match ogt with
-         | OGTty (Some ty) -> id, GTty ty
-         | OGTmem (Some t) -> id, GTmem t
-         | OGTmodty (Some (t,r)) -> id, GTmodty (t,r)
-         | _ -> raise (Invalid_Type "formula") in
-       f_quant q (List.map f pb) (form_of_pattern env p)
-    | _ -> raise (Invalid_Type "formula")
+       match s, lp with
+       | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
+                                        (form_of_pattern env p2)
+                                        (form_of_pattern env p3)
+       | Sym_Form_App _, p::lp    -> f_ty_app env (form_of_pattern env p)
+                                       (List.map (form_of_pattern env) lp)
+       | Sym_Form_Tuple, t         -> f_tuple (List.map (form_of_pattern env) t)
+       | Sym_Form_Proj (i,ty), [p] -> f_proj (form_of_pattern env p) i ty
+       | Sym_Form_Match ty, p::lp  -> mk_form (Fmatch (form_of_pattern env p,
+                                                       List.map (form_of_pattern env) lp,
+                                                       ty)) ty
+       | Sym_Form_Let lp, [p1;p2]  -> f_let lp (form_of_pattern env p1)
+                                        (form_of_pattern env p2)
+       | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern env pv) ty
+                                        (memory_of_pattern pm)
+       | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula")
+       | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp) (memory_of_pattern mem)
+       | Sym_Form_Hoare_F, [pr;xp;po] ->
+          f_hoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
+       | Sym_Form_Hoare_S, [pm;pr;s;po] ->
+          f_hoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
+            (form_of_pattern env po)
+       | Sym_Form_bd_Hoare_F, [pr;xp;po;cmp;bd] ->
+          f_bdHoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
+            (cmp_of_pattern cmp) (form_of_pattern env bd)
+       | Sym_Form_bd_Hoare_S, [pm;pr;s;po;cmp;bd] ->
+          f_bdHoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
+            (form_of_pattern env po) (cmp_of_pattern cmp) (form_of_pattern env bd)
+       | Sym_Form_Equiv_F, [pr;f1;f2;po] ->
+          f_equivF (form_of_pattern env pr) (xpath_of_pattern env f1) (xpath_of_pattern env f2)
+            (form_of_pattern env po)
+       | Sym_Form_Equiv_S, [pm1;pm2;pr;s1;s2;po] ->
+          f_equivS (memenv_of_pattern pm1) (memenv_of_pattern pm2) (form_of_pattern env pr)
+            (stmt_of_pattern env s1) (stmt_of_pattern env s2) (form_of_pattern env po)
+       | Sym_Form_Eager_F, [po;s1;f1;f2;s2;pr] ->
+          f_eagerF (form_of_pattern env po) (stmt_of_pattern env s1) (xpath_of_pattern env f1)
+            (xpath_of_pattern env f2) (stmt_of_pattern env s2) (form_of_pattern env pr)
+       | Sym_Form_Pr, [pm;f;args;event] ->
+          f_pr (memory_of_pattern pm) (xpath_of_pattern env f) (form_of_pattern env args)
+            (form_of_pattern env event)
+       | Sym_Quant (q,pb), [p] ->
+          let f (id,ogt) = match ogt with
+            | OGTty (Some ty) -> id, GTty ty
+            | OGTmem (Some t) -> id, GTmem t
+            | OGTmodty (Some (t,r)) -> id, GTmodty (t,r)
+            | _ -> raise (Invalid_Type "formula") in
+          f_quant q (List.map f pb) (form_of_pattern env p)
+       | _ -> raise (Invalid_Type "formula")
 
   and memory_of_pattern p = match p.p_node with
     | Pat_Axiom (Axiom_Memory m) -> m
@@ -367,12 +522,22 @@ module Translate = struct
     | Pat_Axiom (Axiom_Hoarecmp cmp) -> cmp
     | _ -> raise (Invalid_Type "hoarecmp")
 
-  let form_of_pattern env p = match p.p_node with
+  let form_of_pattern env p =
+    match p.p_node with
     | Pat_Sub p -> begin
         try form_of_pattern env p with
         | Invalid_Type "sub in form" -> assert false
       end
     | _ -> form_of_pattern env p
+
+  let form_of_pattern env p =
+    match p.p_ogty with
+    | OGTany -> form_of_pattern env p
+    | OGTty (Some ty) ->
+       if mem_ty_univar ty then raise (Invalid_Type "type univar")
+       else form_of_pattern env p
+    | OGTty None -> form_of_pattern env p
+    | _ -> raise (Invalid_Type "wrong ogty")
 
 end
 
@@ -475,9 +640,6 @@ end = struct
     | Sym_Form_Pvar t1, Sym_Form_Pvar t2
       | Sym_Form_App (Some t1, _), Sym_Form_App (Some t2, _)
       | Sym_Form_Match t1, Sym_Form_Match t2 -> ty env t1 t2
-    | Sym_Form_Quant (q1, b1), Sym_Form_Quant (q2, b2) ->
-       if not (q1 = q2) then false
-       else List.for_all2 (binding env) b1 b2
     | Sym_Form_Let lp1, Sym_Form_Let lp2 -> lp_equal lp1 lp2
     | Sym_Form_Prog_var k1, Sym_Form_Prog_var k2 -> k1 = k2
     | Sym_Quant (q1,b1), Sym_Quant (q2,b2) ->
@@ -634,12 +796,6 @@ end = struct
              if not (ty env pty fty) then false
              else if not (pattern env ri pop (pat_form fop)) then false
              else List.for_all2 (pattern env ri) pargs (List.map pat_form fargs)
-
-          | Sym_Form_Quant (pq,pb), [p1],
-            Axiom_Form { f_node = Fquant (fq,fb,f1) }
-               when pq = fq ->
-             if not (List.for_all2 (binding env) pb fb) then false
-             else pattern env ri p1 (pat_form f1)
 
           | Sym_Form_Let plp, [p1;p2],
             Axiom_Form { f_node = Flet (flp,f1,f2) } ->
@@ -876,8 +1032,19 @@ end
 let h_red_strat env p a =
   let h = env.env_hyps in
   let r = env.env_red_info_match in
+  let env = saturate env in
   let s = psubst_of_menv env.env_match in
-  X.h_red_strat h s r r p a
+  let s' = { s with ps_patloc = Mid.empty } in
+  let p' =
+    try pat_form (Translate.form_of_pattern (LDecl.toenv h) (p_subst s' p))
+    with Translate.Invalid_Type _ -> p in
+  match X.h_red_strat h s r r p' a with
+  | None -> None
+  | Some (p'',a') ->
+     if (p_equal p'' p') && p_equal (pat_axiom a) (pat_axiom a') then
+       None
+     else
+       Some (p'', a')
 
 
 (* -------------------------------------------------------------------------- *)
@@ -904,7 +1071,7 @@ let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
                    (mpath (`Local x) [])
                    (LDecl.toenv env.env_hyps)) in
 
-      LDecl.has_id x env.env_hyps && lookup () in
+      LDecl.has_id x env.env_hyps || lookup () in
 
     if not aout then
       Debug.debug_bind_restr env x;
@@ -924,30 +1091,19 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
     let me_matches =
       match Mid.find_opt name e.ne_env.env_match.me_matches with
       | None ->
-         if env.env_verbose.verbose_add_meta then
-           Format.fprintf e.ne_env.env_fmt "[W] adding %a <- %a\n"
-             (EcPrinting.pp_pattern e.ne_env.env_ppe)
-             (meta_var name None OGTany)
-             (EcPrinting.pp_pattern e.ne_env.env_ppe) p;
+         Debug.debug_add_match e.ne_env true name p;
          Mid.add name p e.ne_env.env_match.me_matches
       | Some p' ->
          (* raise CannotUnify *)
          if EQ.pattern e.ne_env e.ne_env.env_red_info_same_meta p p'
          then e.ne_env.env_match.me_matches
-         else
-         (if env.env_verbose.verbose_add_meta then
-            Format.fprintf e.ne_env.env_fmt "[W] cannot unify (%a) and (%a)\n"
-              (EcPrinting.pp_pattern e.ne_env.env_ppe) p
-              (EcPrinting.pp_pattern e.ne_env.env_ppe) p';
-          raise CannotUnify)
+         else begin
+             Debug.debug_add_match e.ne_env false name p;
+             raise CannotUnify
+           end
     in
     { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
-  else
-    (if env.env_verbose.verbose_add_meta then
-       Format.fprintf e.ne_env.env_fmt
-         "[W] cannot add because of binding restrictions : %a\n"
-         (EcPrinting.pp_pattern env.env_ppe) p;
-     raise CannotUnify)
+  else raise CannotUnify
 
 let e_next (e : engine) : nengine =
   { ne_continuation = e.e_continuation;
@@ -1034,12 +1190,9 @@ let rec abstract_opt
        | _, Pat_Meta_Name (_,n,_)
             when Mid.mem n other_args -> false
        | _,_ ->
-          let _ = if e.e_env.env_verbose.verbose_abstract then
-                    Format.fprintf e.e_env.env_fmt
-                      "[W] === try abstract %a in %a\n"
-                      (EcPrinting.pp_pattern e.e_env.env_ppe) pp
-                      (EcPrinting.pp_pattern e.e_env.env_ppe) p in
-          EQ.pattern env env.env_red_info_match p pp
+          let b = EQ.pattern env env.env_red_info_match p pp in
+          Debug.debug_higher_order_abstract_eq e.e_env b pp p;
+          b
      in
      let aux env p a =
        let rec f env p =
@@ -1072,6 +1225,7 @@ let copy_engine e =
   { e with e_env = copy_env e.e_env }
 
 let try_reduce (e : engine) : engine =
+  Debug.debug_try_reduce e.e_env e.e_pattern e.e_head;
   let e_env = saturate e.e_env in
   let ne = let e = copy_engine e in
            { ne_continuation = e.e_continuation; ne_env = e.e_env } in
@@ -1081,25 +1235,12 @@ let try_reduce (e : engine) : engine =
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
-  (if e.e_env.env_verbose.verbose_match then
-     let ppe = e.e_env.env_ppe in
-     Format.fprintf e.e_env.env_fmt "[W]?? (%i left) : %a =? %a\n"
-       (match e.e_continuation with
-        | Zand (_,l,_) -> List.length l
-        | _ -> 0)
-       (EcPrinting.pp_pattern ppe) e.e_pattern
-       (EcPrinting.pp_pat_axiom ppe) e.e_head);
+  Debug.debug_try_match e.e_env e.e_pattern e.e_head e.e_continuation;
   if   not (EQ.ogty e.e_env e.e_pattern.p_ogty (pat_axiom e.e_head).p_ogty)
-  then
-    ((if e.e_env.env_verbose.verbose_type then
-        let s = psubst_of_menv e.e_env.env_match in
-        let s = Psubst.p_subst_init ~sty:s.Psubst.ps_sty () in
-        let p = Psubst.p_subst s e.e_pattern in
-        let ppe = e.e_env.env_ppe in
-          Format.fprintf e.e_env.env_fmt "[W] wrong type %a <> %a\n"
-            (EcPrinting.pp_ogty ppe) p.p_ogty
-            (EcPrinting.pp_ogty ppe) (pat_axiom e.e_head).p_ogty);
-       next NoMatch e)
+  then begin
+      Debug.debug_ogty e.e_env e.e_pattern (pat_axiom e.e_head);
+      next NoMatch e
+    end
   else
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
@@ -1110,8 +1251,7 @@ let rec process (e : engine) : nengine =
          (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
      let e_env = { e.e_env with env_meta_restr_binds; } in
      let e = { e with e_env } in
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : meta variable\n" in
+     Debug.debug_which_rule e.e_env "meta variable";
      process { e with
          e_pattern = p; e_env;
          e_continuation = Znamed(pat_axiom e.e_head,name,ob,e.e_continuation);
@@ -1119,8 +1259,7 @@ let rec process (e : engine) : nengine =
 
   | Pat_Sub p, _ ->
      let le = sub_engines e p in
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : sub\n" in
+     Debug.debug_which_rule e.e_env "sub";
      let e_continuation = match e.e_continuation with
        | Zor (c1, l, c2) -> Zor (c1, le @ l, c2)
        | _ -> Zor (e.e_continuation,le,e_next e) in
@@ -1129,8 +1268,7 @@ let rec process (e : engine) : nengine =
   | Pat_Or [], _ -> next NoMatch e
 
   | Pat_Or (p::pl), _ ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : or\n" in
+     Debug.debug_which_rule e.e_env "or";
      let f p = { e with
                  e_pattern = p;
                  e_env = { e.e_env with
@@ -1142,24 +1280,22 @@ let rec process (e : engine) : nengine =
      process { e with e_pattern = p; e_continuation; }
 
   | Pat_Red_Strat (e_pattern,f),_ ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : reduction strategy\n" in
+     Debug.debug_which_rule e.e_env "reduction strategy";
      let env_red_info_match, env_red_info_same_meta =
        f e.e_env.env_red_info_match e.e_env.env_red_info_same_meta in
      let e_env = { e.e_env with env_red_info_match; env_red_info_same_meta } in
      process { e with e_pattern; e_env }
 
   | Pat_Axiom o1, o2 ->
-     if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 then
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt "[W] rule : same axiom\n" in
-       next Match e
+     if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 then begin
+         Debug.debug_which_rule e.e_env "same axiom";
+         next Match e
+       end
      else next NoMatch e
 
   | Pat_Fun_Symbol (Sym_Form_If, p1::p2::p3::[]),
     Axiom_Form { f_node = Fif (f1,f2,f3) } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : form : if\n" in
+     Debug.debug_which_rule e.e_env "form : if";
      let zand = [(Axiom_Form f2,p2);(Axiom_Form f3,p3)] in
      let e = try_reduce e in
      let e =
@@ -1171,8 +1307,7 @@ let rec process (e : engine) : nengine =
      in process e
 
   | Pat_Fun_Symbol (Sym_Form_App (_, MaybeHO), pop :: pargs), _ ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : form : application : test both without and with higher order\n" in
+     Debug.debug_which_rule e.e_env "form : application : test both without and with higher order";
      let e_pattern = pat_fun_symbol (Sym_Form_App (None, HO)) (pop::pargs) in
      let e_or = { e with e_pattern; } in
      let e_pattern = pat_fun_symbol (Sym_Form_App (None, NoHO)) (pop::pargs) in
@@ -1183,8 +1318,7 @@ let rec process (e : engine) : nengine =
 
   | Pat_Fun_Symbol (Sym_Form_App (_, NoHO), pop :: pargs),
     Axiom_Form { f_node = Fapp (fop, fargs) } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-       Format.fprintf e.e_env.env_fmt "[W] rule : form : application : without higher order \n" in
+     Debug.debug_which_rule e.e_env "form : application : without higher order";
      let e = try_reduce e in
      (* let _ = Format.fprintf e.e_env.env_fmt "[W] ?? application matched.\n" in *)
      let (fargs1,fargs2),(pargs1,pargs2) = suffix2 fargs pargs in
@@ -1203,12 +1337,7 @@ let rec process (e : engine) : nengine =
                     { p_node = Pat_Meta_Name({ p_node = Pat_Anything },name,ob)}
                     ::pargs), axiom ->
      begin
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : application : with higher order \n" in
-       (if e.e_env.env_verbose.verbose_abstract then
-          Format.fprintf e.e_env.env_fmt "[W] higher order : %a\n"
-            (EcPrinting.pp_pat_axiom e.e_env.env_ppe) axiom);
+       Debug.debug_which_rule e.e_env "form : application : with higher order";
        let e = try_reduce e in
        (* higher order *)
        let env = saturate e.e_env in
@@ -1220,23 +1349,16 @@ let rec process (e : engine) : nengine =
            (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
        let e = { e with e_env = { env with env_meta_restr_binds } } in
        let abstract m e p arg =
-         let _ = if e.e_env.env_verbose.verbose_abstract then
-                   Format.fprintf e.e_env.env_fmt
-                     "[W] try to abstract (%a) in : %a\n"
-                     (EcPrinting.pp_pattern e.e_env.env_ppe) (snd arg)
-                     (EcPrinting.pp_pattern e.e_env.env_ppe) p in
-         let op = abstract_opt m e (Some p) arg in odfl p op in
+         Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
+         let op = abstract_opt m e (Some p) arg in
+         odfl p op in
        let pat =
          (* FIXME : add strategies to adapt the order of the arguments *)
          List.fold_left (abstract (Sid.of_list (List.map fst args)) e)
            (pat_axiom axiom) args in
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
-       (* let pat = omap (p_quant Llambda args) pat in *)
        let pat = p_quant Llambda args pat in
-       (* let (pat, e) = match rewrite_pattern_opt e pat with
-        *   | Some pat,e -> pat, e
-        *   | None, e -> pat, e in *)
        let m,e =
          try let e = add_match e name pat ob in Match, e
          with CannotUnify -> NoMatch, e
@@ -1245,9 +1367,7 @@ let rec process (e : engine) : nengine =
 
   | Pat_Fun_Symbol (Sym_Form_Tuple, lp),
     Axiom_Form { f_node = Ftuple lf } -> begin
-      let _ = if e.e_env.env_verbose.verbose_rule then
-                Format.fprintf e.e_env.env_fmt
-                  "[W] rule : form : tuple \n" in
+      Debug.debug_which_rule e.e_env "form : tuple \n";
       match lp, lf with
       | [], _::_ | _::_,[] -> next NoMatch e
       | [], [] -> next Match e
@@ -1264,29 +1384,24 @@ let rec process (e : engine) : nengine =
   | Pat_Fun_Symbol (Sym_Form_Tuple, lp), Axiom_Lvalue (LvTuple lv) ->
      if 0 <> List.compare_lengths lp lv then
        next NoMatch e
-     else
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : lvalue : tuple \n" in
-       let zand = List.map2 (fun x y -> Axiom_Lvalue (LvVar x), y) lv lp in
-       let e_continuation = Zand ([], zand, e.e_continuation) in
-       next Match { e with e_continuation }
+     else begin
+         Debug.debug_which_rule e.e_env "lvalue : tuple";
+         let zand = List.map2 (fun x y -> Axiom_Lvalue (LvVar x), y) lv lp in
+         let e_continuation = Zand ([], zand, e.e_continuation) in
+         next Match { e with e_continuation }
+       end
 
   | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [e_pattern]),
     Axiom_Form ({ f_node = Fproj (f1,j) } as f)
        when i = j  && EQ.ty e.e_env ty f.f_ty ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : form : proj \n" in
+     Debug.debug_which_rule e.e_env "form : proj";
      let e = try_reduce e in
      process { e with e_pattern; e_head = Axiom_Form f1 }
 
   | Pat_Fun_Symbol (Sym_Form_Match ty, p::pl),
     Axiom_Form ({ f_node = Fmatch (fmatch,fl,_) } as f)
        when 0 = List.compare_lengths pl fl && EQ.ty e.e_env ty f.f_ty ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : match \n" in
+       Debug.debug_which_rule e.e_env "form : match";
      let e = try_reduce e in
      let zand = List.map2 (fun x y -> Axiom_Form x, y) fl pl in
      process { e with
@@ -1295,344 +1410,310 @@ let rec process (e : engine) : nengine =
          e_continuation = Zand ([],zand,e.e_continuation);
        }
 
-  | Pat_Fun_Symbol (Sym_Form_Quant (q1,bs1), [p]),
+  | Pat_Fun_Symbol (Sym_Quant (q1,bs1), [p]),
     Axiom_Form { f_node = Fquant (q2,bs2,f2) } when q1 = q2 ->
      begin
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : quantif \n" in
-      let e = try_reduce e in
-      let (pbs1,pbs2), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
-      if not (List.for_all2 (EQ.gty e.e_env) (List.map snd pbs1) (List.map snd fbs1))
-      then  next NoMatch e
-      else
-        let fs = Fsubst.f_subst_id in
-        (* let fs = List.fold_left f fs bs2 in *)
-        let f s (id1,gty1) (id2,_) = Psubst.p_bind_gty s id1 id2 gty1 in
-        let e_env     = saturate e.e_env in
-        let subst     = Psubst.p_subst_id in
-        let s         = List.fold_left2 f subst pbs1 fbs1 in
-        let p         = p_f_quant q1 pbs2 p in
-        let e_pattern = Psubst.p_subst s p in
-        let e_head    = Axiom_Form (f_quant q2 fbs2 (Fsubst.f_subst fs f2)) in
-        process { e with e_pattern; e_env; e_head; }
-    end
+       Debug.debug_which_rule e.e_env "form : quantif";
+       let e = try_reduce e in
+       let (pbs1,pbs2), (fbs1,fbs2) = List.prefix2 bs1 bs2 in
+       if not (List.for_all2 (EQ.ogty e.e_env) (List.map snd pbs1)
+                 (List.map (fun (_,t) -> ogty_of_gty t) fbs1))
+       then  next NoMatch e
+       else
+         let fs = Fsubst.f_subst_id in
+         let f s (id1,_) (id2,gty1) = Psubst.p_bind_gty s id1 id2 gty1 in
+         let e_env     = saturate e.e_env in
+         let subst     = Psubst.p_subst_id in
+         let s         = List.fold_left2 f subst pbs1 fbs1 in
+         let p         = p_quant q1 pbs2 p in
+         let e_pattern = Psubst.p_subst s p in
+         let e_head    = Axiom_Form (f_quant q2 fbs2 (Fsubst.f_subst fs f2)) in
+         process { e with e_pattern; e_env; e_head; }
+     end
 
   | Pat_Fun_Symbol (Sym_Form_Pvar ty, p1::p2::[]),
     Axiom_Form ({ f_node = Fpvar (pv,m) } as f) when EQ.ty e.e_env f.f_ty ty ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : form : pvar \n" in
-     process { e with
-         e_pattern = p2;
-         e_head = Axiom_Memory m;
-         e_continuation = Zand ([],[Axiom_Prog_Var pv,p1],e.e_continuation);
-       }
+     begin
+       Debug.debug_which_rule e.e_env "form : pvar";
+       process { e with
+           e_pattern = p2;
+           e_head = Axiom_Memory m;
+           e_continuation = Zand ([],[Axiom_Prog_Var pv,p1],e.e_continuation);
+         }
+     end
 
   | Pat_Fun_Symbol (Sym_Form_Prog_var k, [p]),
-    Axiom_Prog_Var x2 when k = x2.pv_kind ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : form : prog_var \n" in
+    Axiom_Prog_Var x2 when k = x2.pv_kind -> begin
+     Debug.debug_which_rule e.e_env "form : prog_var";
      process { e with e_pattern = p; e_head = Axiom_Xpath x2.pv_name; }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_Glob, p1::p2::[]),
-    Axiom_Form { f_node = Fglob (x,m) } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : form : glob \n" in
-     let zand = [Axiom_Mpath x,p1] in
-     process { e with
-         e_pattern = p2;
-         e_head = Axiom_Memory m;
-         e_continuation = Zand ([],zand,e.e_continuation);
-       }
+    Axiom_Form { f_node = Fglob (x,m) } -> begin
+      Debug.debug_which_rule e.e_env "form : glob";
+      let zand = [Axiom_Mpath x,p1] in
+      process { e with
+          e_pattern = p2;
+          e_head = Axiom_Memory m;
+          e_continuation = Zand ([],zand,e.e_continuation);
+        }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_Hoare_F, [ppre;px;ppost]),
-    Axiom_Form { f_node = FhoareF hF } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : hoareF \n" in
-     let fpre,fx,fpost = hF.hf_pr,hF.hf_f,hF.hf_po in
-     let zand = [Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost] in
-     process { e with
-         e_pattern = px;
-         e_head = Axiom_Xpath fx;
-         e_continuation = Zand ([],zand,e.e_continuation);
-       }
+    Axiom_Form { f_node = FhoareF hF } -> begin
+      Debug.debug_which_rule e.e_env "form : hoareF";
+      let fpre,fx,fpost = hF.hf_pr,hF.hf_f,hF.hf_po in
+      let zand = [Axiom_Form fpre,ppre;
+                  Axiom_Form fpost,ppost] in
+      process { e with
+          e_pattern = px;
+          e_head = Axiom_Xpath fx;
+          e_continuation = Zand ([],zand,e.e_continuation);
+        }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_Hoare_S, [pmem;ppre;ps;ppost]),
-    Axiom_Form { f_node = FhoareS hs } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : hoareS \n" in
-     let fmem,fpre,fs,fpost = hs.hs_m,hs.hs_pr,hs.hs_s,hs.hs_po in
-     let zand = [Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost;
-                 Axiom_Stmt fs,ps] in
-     process { e with
-         e_pattern = pmem;
-         e_head = Axiom_MemEnv fmem;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+    Axiom_Form { f_node = FhoareS hs } -> begin
+      Debug.debug_which_rule e.e_env "form : hoareS";
+      let fmem,fpre,fs,fpost = hs.hs_m,hs.hs_pr,hs.hs_s,hs.hs_po in
+      let zand = [Axiom_Form fpre,ppre;
+                  Axiom_Form fpost,ppost;
+                  Axiom_Stmt fs,ps] in
+      process { e with
+          e_pattern = pmem;
+          e_head = Axiom_MemEnv fmem;
+          e_continuation = Zand ([],zand,e.e_continuation); }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, [ppre;pf;ppost;pcmp;pbd]),
-    Axiom_Form { f_node = FbdHoareF bhf } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : bd hoareF \n" in
-     let fpre,ff,fpost,fcmp,fbd =
-       bhf.bhf_pr,bhf.bhf_f,bhf.bhf_po,bhf.bhf_cmp,bhf.bhf_bd in
-     let zand = [Axiom_Hoarecmp fcmp,pcmp;
-                 Axiom_Form fbd,pbd;
-                 Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost] in
-     process { e with
-         e_pattern = pf;
-         e_head = Axiom_Xpath ff;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+    Axiom_Form { f_node = FbdHoareF bhf } -> begin
+      Debug.debug_which_rule e.e_env "form : bd hoareF";
+      let fpre,ff,fpost,fcmp,fbd =
+        bhf.bhf_pr,bhf.bhf_f,bhf.bhf_po,bhf.bhf_cmp,bhf.bhf_bd in
+      let zand = [Axiom_Hoarecmp fcmp,pcmp;
+                  Axiom_Form fbd,pbd;
+                  Axiom_Form fpre,ppre;
+                  Axiom_Form fpost,ppost] in
+      process { e with
+          e_pattern = pf;
+          e_head = Axiom_Xpath ff;
+          e_continuation = Zand ([],zand,e.e_continuation); }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_bd_Hoare_S, [pmem;ppre;ps;ppost;pcmp;pbd]),
-    Axiom_Form { f_node = FbdHoareS bhs } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : bd hoareS \n" in
-     let fmem,fpre,fs,fpost,fcmp,fbd =
-       bhs.bhs_m,bhs.bhs_pr,bhs.bhs_s,bhs.bhs_po,bhs.bhs_cmp,bhs.bhs_bd in
-     let zand = [Axiom_Hoarecmp fcmp,pcmp;
-                 Axiom_Form fbd,pbd;
-                 Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost;
-                 Axiom_Stmt fs,ps] in
-     process { e with
-         e_pattern = pmem;
-         e_head = Axiom_MemEnv fmem;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+    Axiom_Form { f_node = FbdHoareS bhs } -> begin
+      Debug.debug_which_rule e.e_env "form : bd hoareS";
+      let fmem,fpre,fs,fpost,fcmp,fbd =
+        bhs.bhs_m,bhs.bhs_pr,bhs.bhs_s,bhs.bhs_po,bhs.bhs_cmp,bhs.bhs_bd in
+      let zand = [Axiom_Hoarecmp fcmp,pcmp;
+                  Axiom_Form fbd,pbd;
+                  Axiom_Form fpre,ppre;
+                  Axiom_Form fpost,ppost;
+                  Axiom_Stmt fs,ps] in
+      process { e with
+          e_pattern = pmem;
+          e_head = Axiom_MemEnv fmem;
+          e_continuation = Zand ([],zand,e.e_continuation); }
+    end
 
   | Pat_Fun_Symbol (Sym_Form_Equiv_F, [ppre;pf1;pf2;ppost]),
     Axiom_Form { f_node = FequivF ef } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : equivF \n" in
-     let fpre,ff1,ff2,fpost =
-       ef.ef_pr,ef.ef_fl,ef.ef_fr,ef.ef_po in
-     let zand = [Axiom_Xpath ff2,pf2;
-                 Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost] in
-     process { e with
-         e_pattern = pf1;
-         e_head = Axiom_Xpath ff1;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "form : equivF";
+           let fpre,ff1,ff2,fpost =
+             ef.ef_pr,ef.ef_fl,ef.ef_fr,ef.ef_po in
+           let zand = [Axiom_Xpath ff2,pf2;
+                       Axiom_Form fpre,ppre;
+                       Axiom_Form fpost,ppost] in
+           process { e with
+               e_pattern = pf1;
+               e_head = Axiom_Xpath ff1;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Form_Equiv_S, [pmem1;pmem2;ppre;ps1;ps2;ppost]),
     Axiom_Form { f_node = FequivS es } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : equivS \n" in
-     let fmem1,fmem2,fpre,fs1,fs2,fpost =
-       es.es_ml,es.es_mr,es.es_pr,es.es_sl,es.es_sr,es.es_po in
-     let zand = [Axiom_MemEnv fmem2,pmem2;
-                 Axiom_Stmt fs1,ps1;
-                 Axiom_Stmt fs2,ps2;
-                 Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost] in
-     process { e with
-         e_pattern = pmem1;
-         e_head = Axiom_MemEnv fmem1;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "form : equivS";
+           let fmem1,fmem2,fpre,fs1,fs2,fpost =
+             es.es_ml,es.es_mr,es.es_pr,es.es_sl,es.es_sr,es.es_po in
+           let zand = [Axiom_MemEnv fmem2,pmem2;
+                       Axiom_Stmt fs1,ps1;
+                       Axiom_Stmt fs2,ps2;
+                       Axiom_Form fpre,ppre;
+                       Axiom_Form fpost,ppost] in
+           process { e with
+               e_pattern = pmem1;
+               e_head = Axiom_MemEnv fmem1;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Form_Eager_F, [ppre;ps1;pf1;pf2;ps2;ppost]),
     Axiom_Form { f_node = FeagerF eg } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : form : eagerF \n" in
-     let fpre,fs1,ff1,ff2,fs2,fpost =
-       eg.eg_pr,eg.eg_sl,eg.eg_fl,eg.eg_fr,eg.eg_sr,eg.eg_po in
-     let zand = [Axiom_Xpath ff2,pf2;
-                 Axiom_Stmt fs1,ps1;
-                 Axiom_Stmt fs2,ps2;
-                 Axiom_Form fpre,ppre;
-                 Axiom_Form fpost,ppost] in
-     process { e with
-         e_pattern = pf1;
-         e_head = Axiom_Xpath ff1;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "form : eagerF";
+           let fpre,fs1,ff1,ff2,fs2,fpost =
+             eg.eg_pr,eg.eg_sl,eg.eg_fl,eg.eg_fr,eg.eg_sr,eg.eg_po in
+           let zand = [Axiom_Xpath ff2,pf2;
+                       Axiom_Stmt fs1,ps1;
+                       Axiom_Stmt fs2,ps2;
+                       Axiom_Form fpre,ppre;
+                       Axiom_Form fpost,ppost] in
+           process { e with
+               e_pattern = pf1;
+               e_head = Axiom_Xpath ff1;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Form_Pr, [pmem;pf;pargs;pevent]),
     Axiom_Form { f_node = Fpr pr } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : form : pr \n" in
-     let fmem,ff,fargs,fevent =
-       pr.pr_mem,pr.pr_fun,pr.pr_args,pr.pr_event in
-     let e = try_reduce e in
-     let zand = [
-         Axiom_Xpath ff,pf;
-         Axiom_Form fargs,pargs;
-         Axiom_Form fevent,pevent
-       ] in
-     process { e with
-         e_pattern = pmem;
-         e_head = Axiom_Memory fmem;
-         e_continuation =
-           Zand ([Axiom_Memory fmem,pmem],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "form : pr";
+           let fmem,ff,fargs,fevent =
+             pr.pr_mem,pr.pr_fun,pr.pr_args,pr.pr_event in
+           let e = try_reduce e in
+           let zand = [
+               Axiom_Xpath ff,pf;
+               Axiom_Form fargs,pargs;
+               Axiom_Form fevent,pevent
+             ] in
+           process { e with
+               e_pattern = pmem;
+               e_head = Axiom_Memory fmem;
+               e_continuation =
+                 Zand ([Axiom_Memory fmem,pmem],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Mpath, [p]), Axiom_Mpath_top _ ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : mpath_top \n" in
-     let e = try_reduce e in
-     process { e with e_pattern = p }
-
+     begin Debug.debug_which_rule e.e_env "mpath_top";
+           let e = try_reduce e in
+           process { e with e_pattern = p }
+     end
   | Pat_Fun_Symbol (Sym_Mpath, p::rest), Axiom_Mpath m ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : mpath \n" in
-     let e = try_reduce e in
-     let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
-     let zand = List.map2 (fun x y -> (Axiom_Mpath x),y) margs2 pargs2 in
-     let e_continuation = match zand with
-       | [] -> e.e_continuation
-       | _  -> Zand ([],zand,e.e_continuation) in
-     let m = match margs1 with
-       | [] ->
-          Axiom_Mpath_top m.m_top
-       | _  -> if margs2 = [] then Axiom_Mpath m
-               else Axiom_Mpath (mpath m.m_top margs1)
-     in
-     let p = match pargs1 with
-       | [] -> p
-       | _ -> pat_fun_symbol Sym_Mpath (p::pargs1)
-     in
-     process { e with e_pattern = p; e_head = m; e_continuation; }
+     begin Debug.debug_which_rule e.e_env "mpath";
+           let e = try_reduce e in
+           let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
+           let zand = List.map2 (fun x y -> (Axiom_Mpath x),y) margs2 pargs2 in
+           let e_continuation = match zand with
+             | [] -> e.e_continuation
+             | _  -> Zand ([],zand,e.e_continuation) in
+           let m = match margs1 with
+             | [] ->
+                Axiom_Mpath_top m.m_top
+             | _  -> if margs2 = [] then Axiom_Mpath m
+                     else Axiom_Mpath (mpath m.m_top margs1)
+           in
+           let p = match pargs1 with
+             | [] -> p
+             | _ -> pat_fun_symbol Sym_Mpath (p::pargs1)
+           in
+           process { e with e_pattern = p; e_head = m; e_continuation; }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_Assign, [plv;prv]),
     Axiom_Instr { i_node = Sasgn (flv,fe) }
     | Pat_Fun_Symbol (Sym_Instr_Sample, [plv;prv]),
       Axiom_Instr { i_node = Srnd (flv,fe) } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : instr : assign / rnd \n" in
-     let frv = form_of_expr fe in
-     let zand = [Axiom_Form frv,prv] in
-     process { e with
-         e_pattern = plv;
-         e_head = Axiom_Lvalue flv;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "instr : assign / rnd";
+           let frv = form_of_expr fe in
+           let zand = [Axiom_Form frv,prv] in
+           process { e with
+               e_pattern = plv;
+               e_head = Axiom_Lvalue flv;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_Call, pf::pargs),
     Axiom_Instr { i_node = Scall (None,ff,fargs) }
        when 0 = List.compare_lengths pargs fargs ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : instr : call no lv \n" in
-     let fmap x y = (Axiom_Form (form_of_expr x),y) in
-     let zand = List.map2 fmap fargs pargs in
-     process { e with
-         e_pattern = pf;
-         e_head = Axiom_Xpath ff;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "instr : call no lv";
+           let fmap x y = (Axiom_Form (form_of_expr x),y) in
+           let zand = List.map2 fmap fargs pargs in
+           process { e with
+               e_pattern = pf;
+               e_head = Axiom_Xpath ff;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_Call_Lv, plv::pf::pargs),
     Axiom_Instr { i_node = Scall (Some flv,ff,fargs) } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : instr : call with lv \n" in
-     let fmap x y = (Axiom_Form (form_of_expr x),y) in
-     let zand = List.map2 fmap fargs pargs in
-     let zand = (Axiom_Lvalue flv,plv)::zand in
-     process { e with
-         e_pattern = pf;
-         e_head = Axiom_Xpath ff;
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "instr : call with lv";
+           let fmap x y = (Axiom_Form (form_of_expr x),y) in
+           let zand = List.map2 fmap fargs pargs in
+           let zand = (Axiom_Lvalue flv,plv)::zand in
+           process { e with
+               e_pattern = pf;
+               e_head = Axiom_Xpath ff;
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_If, [pe;ptrue;pfalse]),
     Axiom_Instr { i_node = Sif (fe,strue,sfalse) } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : instr : if \n" in
-     let zand = [Axiom_Stmt strue,ptrue;
-                 Axiom_Stmt sfalse,pfalse] in
-     process { e with
-         e_pattern = pe;
-         e_head = Axiom_Form (form_of_expr fe);
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "instr : if";
+           let zand = [Axiom_Stmt strue,ptrue;
+                       Axiom_Stmt sfalse,pfalse] in
+           process { e with
+               e_pattern = pe;
+               e_head = Axiom_Form (form_of_expr fe);
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_While, [pe;pbody]),
     Axiom_Instr { i_node = Swhile (fe,fbody) } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : instr : while \n" in
-     let zand = [Axiom_Stmt fbody,pbody] in
-     process { e with
-         e_pattern = pe;
-         e_head = Axiom_Form (form_of_expr fe);
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "instr : while";
+           let zand = [Axiom_Stmt fbody,pbody] in
+           process { e with
+               e_pattern = pe;
+               e_head = Axiom_Form (form_of_expr fe);
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol (Sym_Instr_Assert, [pe]),
     Axiom_Instr { i_node = Sassert fe } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : instr : assert \n" in
-     process { e with e_pattern = pe; e_head = Axiom_Form (form_of_expr fe); }
+     begin Debug.debug_which_rule e.e_env "instr : assert";
+           process { e with e_pattern = pe; e_head = Axiom_Form (form_of_expr fe); }
+     end
 
   | Pat_Fun_Symbol (Sym_Stmt_Seq,[]), Axiom_Stmt { s_node = [] } ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : stmt : empty \n" in
-     next Match e
+     begin Debug.debug_which_rule e.e_env "stmt : empty";
+           next Match e
+     end
 
   | Pat_Fun_Symbol (Sym_Stmt_Seq,pi::pl), Axiom_Stmt { s_node = fi::fl } ->
-     let _ = if e.e_env.env_verbose.verbose_rule then
-               Format.fprintf e.e_env.env_fmt
-                 "[W] rule : stmt : to instr \n" in
-     let e = try_reduce e in
-     let pl = pat_fun_symbol Sym_Stmt_Seq pl in
-     let zand = [Axiom_Stmt (stmt fl),pl] in
-     process { e with
-         e_pattern = pi;
-         e_head = Axiom_Instr fi;
-         e_continuation = Zand ([],zand,e.e_continuation);
-       }
+     begin Debug.debug_which_rule e.e_env "stmt : to instr";
+           let e = try_reduce e in
+           let pl = pat_fun_symbol Sym_Stmt_Seq pl in
+           let zand = [Axiom_Stmt (stmt fl),pl] in
+           process { e with
+               e_pattern = pi;
+               e_head = Axiom_Instr fi;
+               e_continuation = Zand ([],zand,e.e_continuation);
+             }
+     end
 
   | Pat_Fun_Symbol (Sym_Xpath, [pm;pf]), Axiom_Xpath x ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : xpath \n" in
-     let zand = [Axiom_Mpath x.x_top,pm] in
-     process { e with
-         e_pattern = pf;
-         e_head = Axiom_Op (x.x_sub,[]);
-         e_continuation = Zand ([],zand,e.e_continuation); }
+     begin Debug.debug_which_rule e.e_env "xpath";
+           let zand = [Axiom_Mpath x.x_top,pm] in
+           process { e with
+               e_pattern = pf;
+               e_head = Axiom_Op (x.x_sub,[]);
+               e_continuation = Zand ([],zand,e.e_continuation); }
+     end
 
   | Pat_Fun_Symbol _, _ ->
-       let _ = if e.e_env.env_verbose.verbose_rule then
-                 Format.fprintf e.e_env.env_fmt
-                   "[W] rule : default \n" in
-       let _ = restore_environment e.e_env in
-       let e = try_reduce e in
-       next NoMatch e
-
+     begin Debug.debug_which_rule e.e_env "default";
+           let _ = restore_environment e.e_env in
+           let e = try_reduce e in
+           next NoMatch e
+     end
 
 and next (m : ismatch) (e : engine) : nengine =
-  (if e.e_env.env_verbose.verbose_match then
-     (* let ppe = e.e_env.env_ppe in *)
-     Format.fprintf e.e_env.env_fmt "[W] %s\n"
-       (if m = Match then "++ matches" else "-- no match")
-       (* (match e.e_continuation with
-        *  | Zand (_,l,_) -> List.length l
-        *  | _ -> 0)
-        * (EcPrinting.pp_pattern ppe) e.e_pattern
-        * (if m = Match then "=" else "<>")
-        * (EcPrinting.pp_pat_axiom ppe) e.e_head *)
-  );
+  Debug.debug_result_match e.e_env m;
   next_n m (e_next e)
 
 and next_n (m : ismatch) (e : nengine) : nengine =
   match m,e.ne_continuation with
   | NoMatch, ZTop -> raise NoMatches
 
-  | Match, ZTop   -> e
+  | Match, ZTop   ->
+     Debug.debug_found_match e.ne_env;
+     e
 
   | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
      let _ = restore_environment e.ne_env in
@@ -1662,7 +1743,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
-  | Match, Zor (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
+  | Match, Zor (ne_continuation, _, _) ->
+     Debug.debug_ignore_ors e.ne_env;
+     next_n Match { e with ne_continuation }
 
   | NoMatch, Zor (_, [], ne) ->
      let _ = restore_environment e.ne_env in
@@ -1672,11 +1755,15 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      let _ = restore_environment e'.e_env in
      process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
 
-  | Match, ZReduce (ne_continuation, _, _) -> next_n Match { e with ne_continuation }
+  | Match, ZReduce (ne_continuation, e', _) ->
+     Debug.debug_no_reduce e.ne_env e'.e_pattern e'.e_head;
+     next_n Match { e with ne_continuation }
 
   | NoMatch, ZReduce (_, e, ne) ->
      match h_red_strat e.e_env e.e_pattern e.e_head with
-     | None -> next_n NoMatch ne
+     | None ->
+        Debug.debug_reduce e.e_env e.e_pattern e.e_head;
+        next_n NoMatch ne
      | Some (e_pattern, e_head) -> process { e with e_pattern; e_head }
 
 and sub_engines (e : engine) (p : pattern) : engine list =
@@ -1802,7 +1889,8 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
         match f.f_node with
         | Fquant(quant,binds,f)
              when Mid.set_disjoint (Sid.of_list (List.map fst binds)) sbd ->
-           omap (fun fi -> p_f_quant quant binds fi) (aux_f f)
+           omap (p_quant quant (List.map (fun (n,t) -> n, ogty_of_gty t) binds))
+             (aux_f f)
         | Fquant _ -> assert false
         | Fif(f1,f2,f3) ->
            omap (function [p1;p2;p3] -> p_if p1 p2 p3 | _ -> assert false)
@@ -2065,8 +2153,7 @@ let get_meta_bindings (p : pattern) : pbindings Mid.t =
      let b = List.map (snd_map ogty_of_gty) b in
      aux (current_bds @ b) meta_bds (pat_form f)
   | Pat_Axiom _ -> meta_bds
-  | Pat_Fun_Symbol (Sym_Form_Quant (_,b),[p]) ->
-     let b = List.map (snd_map ogty_of_gty) b in
+  | Pat_Fun_Symbol (Sym_Quant (_,b),[p]) ->
      aux (current_bds @ b) meta_bds p
   | Pat_Fun_Symbol (_,lp) -> List.fold_left (aux current_bds) meta_bds lp
   in aux [] Mid.empty p

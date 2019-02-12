@@ -16,13 +16,14 @@ type match_env = {
   }
 
 type verbose = {
-    verbose_match      : bool;
-    verbose_rule       : bool;
-    verbose_type       : bool;
-    verbose_bind_restr : bool;
-    verbose_add_meta   : bool;
-    verbose_abstract   : bool;
-    verbose_reduce     : bool;
+    verbose_match           : bool;
+    verbose_rule            : bool;
+    verbose_type            : bool;
+    verbose_bind_restr      : bool;
+    verbose_add_meta        : bool;
+    verbose_abstract        : bool;
+    verbose_reduce          : bool;
+    verbose_show_ignored_or : bool;
   }
 
 type environment = {

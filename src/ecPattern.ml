@@ -63,7 +63,6 @@ type fun_symbol =
   | Sym_Form_Tuple
   | Sym_Form_Proj         of int * ty
   | Sym_Form_Match        of ty
-  | Sym_Form_Quant        of quantif * bindings
   | Sym_Form_Let          of lpattern
   | Sym_Form_Pvar         of ty
   | Sym_Form_Prog_var     of pvar_kind
@@ -207,10 +206,6 @@ let symbol_equal (s1 : fun_symbol) (s2 : fun_symbol) = match s1, s2 with
      i1 = i2 && ty_equal ty1 ty2
   | Sym_Form_Match ty1, Sym_Form_Match ty2 ->
      ty_equal ty1 ty2
-  | Sym_Form_Quant (q1,b1), Sym_Form_Quant (q2,b2) ->
-     q1 = q2
-     && List.for_all2 (fun (i1,t1) (i2,t2) ->
-            id_equal i1 i2 && gty_equal t1 t2) b1 b2
   | Sym_Form_Let lp1, Sym_Form_Let lp2 ->
      lp_equal lp1 lp2
   | Sym_Form_Pvar ty1, Sym_Form_Pvar ty2 ->
@@ -283,12 +278,6 @@ let pat_fun_symbol s lp = match s, lp with
   | Sym_Form_Tuple, _        -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
   | Sym_Form_Proj _, [_]     -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty None)
   | Sym_Form_Match t, _::_   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
-  | Sym_Form_Quant (Llambda, bs), [p] ->
-     let ogty = match p.p_ogty with
-       | OGTty (Some ty) -> OGTty (omap (fun l -> EcTypes.toarrow l ty) (get_tys bs))
-       | t -> t in
-     mk_pattern (Pat_Fun_Symbol (s, [p])) ogty
-  | Sym_Form_Quant _, [_]    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
   | Sym_Form_Let _, [_;p2]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) p2.p_ogty
   | Sym_Form_Pvar t, [_;_]   -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some t))
   | Sym_Form_Prog_var _, [_] -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTpv
@@ -316,9 +305,20 @@ let pat_fun_symbol s lp = match s, lp with
   (* from type mpath *)
   | Sym_Mpath, _            -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTmodty None)
   (* generalized *)
+  | Sym_Quant (Lforall, _), _ -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
+  | Sym_Quant (Lexists, _), _ -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
   | Sym_Quant _, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTany
   | _ -> assert false
 
+
+(* -------------------------------------------------------------------------- *)
+
+let p_destr_app p = match p.p_node with
+  | Pat_Axiom(Axiom_Form f) ->
+     let p,lp = EcFol.destr_app f in
+     pat_form p, List.map pat_form lp
+  | Pat_Fun_Symbol(Sym_Form_App _,p::lp) -> p,lp
+  | _ -> p, []
 
 
 (* -------------------------------------------------------------------------- *)
@@ -339,9 +339,6 @@ let pat_fv p =
     | Pat_Sub p -> aux map p
     | Pat_Or lp -> List.fold_left aux map lp
     | Pat_Red_Strat (p,_) -> aux map p
-    | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
-       let map = List.fold_left aux Mid.empty lp in
-       Mid.filter (fun x _ -> List.exists (fun (y,_) -> id_equal x y) b) map
     | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
        let map = List.fold_left aux Mid.empty lp in
        Mid.filter (fun x _ -> List.exists (fun (y,_) -> id_equal x y) b) map
@@ -469,7 +466,30 @@ let is_higher_order (p : pattern) = match p.p_node with
   | Pat_Meta_Name ({ p_node = Pat_Anything }, _, _) -> true
   | _ -> false
 
+let is_form (p : pattern) = match p.p_ogty with
+  | OGTany | OGTty _ -> begin
+      match p.p_node with
+      | Pat_Axiom (Axiom_Form _) -> true
+      | _ -> false
+    end
+  | _ -> false
+
+let form_of_pattern (p : pattern) = match p.p_ogty with
+  | OGTany | OGTty _ -> begin
+      match p.p_node with
+      | Pat_Axiom (Axiom_Form f) -> f
+      | _ -> raise Not_found
+    end
+  | _ -> raise Not_found
+
 let p_app (p : pattern) (args : pattern list) (ty : ty option) =
+  let p, args1 = p_destr_app p in
+  let args = args1 @ args in
+  match ty with
+  | Some ty when List.for_all is_form (p::args) ->
+     let f, fargs = form_of_pattern p, List.map form_of_pattern args in
+     pat_form (f_app f fargs ty)
+  | _ ->
   match args with
   | [] -> p
   | _  ->
@@ -477,19 +497,14 @@ let p_app (p : pattern) (args : pattern list) (ty : ty option) =
        pat_fun_symbol (Sym_Form_App (ty,MaybeHO)) (p::args)
      else pat_fun_symbol (Sym_Form_App (ty,NoHO)) (p::args)
 
-let p_f_quant q bs p =
-  match bs with
-  | [] -> p
-  | _  -> pat_fun_symbol (Sym_Form_Quant (q,bs)) [p]
-
 let p_quant q bs p =
   match bs with
   | [] -> p
   | _  -> pat_fun_symbol (Sym_Quant (q,bs)) [p]
 
-let p_f_forall b p = p_f_quant Lforall b p
+let p_forall b p = p_quant Lforall b p
 
-let p_f_exists b p = p_f_quant Lexists b p
+let p_exists b p = p_quant Lexists b p
 
 let p_stmt (lp : pattern list) =
   match olist_all (function { p_node = Pat_Axiom (Axiom_Instr i) } -> Some i
@@ -678,7 +693,7 @@ let p_map (f : pattern -> pattern) (p : pattern) : pattern =
             let p' = match p.p_node with
               | Pat_Axiom(Axiom_Form f'') ->
                  pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
-              | _ -> p_f_quant q b p' in
+              | _ -> p_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b) p' in
             p'
          | Fif (f1,f2,f3) ->
             let p1 = f (pat_form f1) in
@@ -958,7 +973,7 @@ let rec p_map_fold (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern)
             let p' = match p.p_node with
               | Pat_Axiom(Axiom_Form f'') ->
                  pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
-              | _ -> p_f_quant q b p' in
+              | _ -> p_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b) p' in
             a, p'
          | Fif (f1,f2,f3) ->
             let a, p1 = p_map_fold f a (pat_form f1) in
@@ -1239,7 +1254,7 @@ let rec p_replace_if (f : pattern -> bool) (replacement : pattern) (p : pattern)
             let p' = match p.p_node with
               | Pat_Axiom(Axiom_Form f'') ->
                  pat_form (EcFol.FSmart.f_quant (fo, (q,b,f')) (q, b, f''))
-              | _ -> p_f_quant q b p' in
+              | _ -> p_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b) p' in
             p'
          | Fif (f1,f2,f3) ->
             let p1 = replace (pat_form f1) in
@@ -1679,7 +1694,7 @@ module Psubst = struct
             | Fquant (q, b, f) ->
                let s, b' = add_bindings s b in
                let p     = p_subst s (pat_form f) in
-               p_f_quant q b' p
+               p_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b') p
 
             | Flet (lp, f1, f2) ->
                let f1'    = p_subst s (pat_form f1) in
@@ -1886,10 +1901,6 @@ module Psubst = struct
            p_proj (p_subst s p) i (ty_subst s.ps_sty ty)
         | Sym_Form_Match ty, op::args ->
            p_match (p_subst s op) (ty_subst s.ps_sty ty) (List.map (p_subst s) args)
-        | Sym_Form_Quant (q,bs), [p] ->
-           let s, b' = add_bindings s bs in
-           let p'    = p_subst s p in
-           p_f_quant q b' p'
         | Sym_Form_Let lp, [p1;p2] ->
            let p1'    = p_subst s p1 in
            let s, lp' = subst_lpattern s lp in
@@ -2060,7 +2071,7 @@ module Psubst = struct
     and p_betared_opt p = match p.p_node with
       | Pat_Anything -> None
       | Pat_Meta_Name (p,n,ob) ->
-         omap (fun p -> mk_pattern (Pat_Meta_Name (p,n,ob)) p.p_ogty) (p_betared_opt p)
+         omap (fun p -> pat_meta p n ob) (p_betared_opt p)
       | Pat_Sub p ->
          omap (fun p -> mk_pattern (Pat_Sub p) OGTany) (p_betared_opt p)
       | Pat_Or [p] -> p_betared_opt p
@@ -2076,14 +2087,6 @@ module Psubst = struct
       | Pat_Fun_Symbol (s,lp) ->
       match s,lp with
       | Sym_Form_App (ty,_),
-        ({ p_node = Pat_Fun_Symbol(Sym_Form_Quant(Llambda, bds),[p])})::pargs ->
-         let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
-         let subst = p_subst_id in
-         let subst =
-           List.fold_left2 (fun s (id,gty) p -> p_bind_local s id (mk_pattern p.p_node (ogty_of_gty gty)))
-             subst bs1 pargs1 in
-         Some (p_app (p_f_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
-      | Sym_Form_App (ty,_),
         ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
@@ -2098,7 +2101,8 @@ module Psubst = struct
          let subst =
            List.fold_left2 (fun s (id,gty) p -> p_bind_local s id (mk_pattern p.p_node (ogty_of_gty gty)))
              subst bs1 pargs1 in
-         Some (p_app (p_f_quant Llambda bs2 (p_subst subst (pat_form f))) pargs2 ty)
+         Some (p_app (p_quant Llambda (List.map (fun (id,t) -> id, ogty_of_gty t) bs2)
+                        (p_subst subst (pat_form f))) pargs2 ty)
       | _ -> None
 
 end
@@ -2106,15 +2110,6 @@ end
 (* -------------------------------------------------------------------------- *)
 
 let p_betared_opt = Psubst.p_betared_opt
-
-(* -------------------------------------------------------------------------- *)
-
-let p_destr_app p = match p.p_node with
-  | Pat_Axiom(Axiom_Form f) ->
-     let p,lp = EcFol.destr_app f in
-     pat_form p, List.map pat_form lp
-  | Pat_Fun_Symbol(Sym_Form_App _,p::lp) -> p,lp
-  | _ -> p, []
 
 (* -------------------------------------------------------------------------- *)
 let f_op_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
@@ -2677,8 +2672,6 @@ let rec reduce_pat p = match p.p_node with
      p_proj (reduce_pat p) i ty
   | Pat_Fun_Symbol (Sym_Form_Match ty, pop::l) ->
      p_match (reduce_pat pop) ty (List.map reduce_pat l)
-  | Pat_Fun_Symbol (Sym_Form_Quant (q,b), [p]) ->
-     p_f_quant q b (reduce_pat p)
   | Pat_Fun_Symbol (Sym_Form_Let lp, [p1;p2]) ->
      p_let lp (reduce_pat p1) (reduce_pat p2)
   | Pat_Fun_Symbol (Sym_Form_Pvar ty, [p1;p2]) ->
@@ -2759,11 +2752,11 @@ let p_app_simpl op pargs oty =
 
 let p_forall_simpl b p =
   let b = List.filter (fun (id,_) -> Mid.mem id (pat_fv p)) b in
-  p_f_forall b p
+  p_forall b p
 
 let p_exists_simpl b p =
   let b = List.filter (fun (id,_) -> Mid.mem id (pat_fv p)) b in
-  p_f_exists b p
+  p_exists b p
 
 let p_destr_app p =
   match p.p_node with
@@ -2831,13 +2824,6 @@ module FV = struct
       | Pat_Sub p -> aux map p
       | Pat_Or lp -> List.fold_left aux map lp
       | Pat_Red_Strat (p,_) -> aux map p
-      | Pat_Fun_Symbol (Sym_Form_Quant (_,b),lp) ->
-         let map' = List.fold_left aux Mid.empty lp in
-         let map' =
-           Mid.filter
-             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-             map' in
-         union map map'
       | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
          let map' = List.fold_left aux Mid.empty lp in
          let map' =
@@ -2954,8 +2940,7 @@ module PReduction = struct
       match symbol, lp with
       (* β-reduction *)
       | Sym_Form_App _,
-        { p_node = (Pat_Fun_Symbol ((Sym_Form_Quant (Llambda, _)
-                                     | Sym_Quant (Llambda,_)),[_])
+        { p_node = (Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])
                     | Pat_Axiom (Axiom_Form { f_node = Fapp (_,_)}))}
         ::_
            when ri.beta -> p_betared_opt p
@@ -3218,21 +3203,14 @@ module PReduction = struct
        omap (fun op -> p_app_simpl op args ty) op
 
     (* η-reduction *)
-    | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
+    | Sym_Quant (Llambda, (x, OGTty _)::binds),
       [{ p_node = Pat_Axiom (Axiom_Form { f_node = Fapp (fn, args) })}]
          when can_eta x (fn, args)
-      -> Some (p_f_quant Llambda binds
+      -> Some (p_quant Llambda binds
                  (pat_form
                     (EcFol.f_ty_app
                        (EcEnv.LDecl.toenv hyps) fn
                        (List.take (List.length args - 1) args))))
-
-    (* η-reduction *)
-    | Sym_Form_Quant (Llambda, (x, GTty _)::binds),
-      [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,_), pn::pargs)}]
-         when p_can_eta hyps x (pn, pargs) ->
-       Some (p_f_quant Llambda binds
-               (p_app pn (List.take (List.length pargs - 1) pargs) ty))
 
     (* η-reduction *)
     | Sym_Quant (Llambda, (x, OGTty _)::binds),
@@ -3772,9 +3750,11 @@ module PReduction = struct
     (* Contextual rule - bindings *)
     | Fquant (Lforall as t, b, f1)
     | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full -> begin
-        let ctor = match t with
-          | Lforall -> p_forall_simpl
-          | Lexists -> p_exists_simpl
+        let ctor b =
+          let b = List.map (fun (id,t) -> id, ogty_of_gty t) b in
+          match t with
+          | Lforall -> p_forall_simpl b
+          | Lexists -> p_exists_simpl b
           | _       -> assert false in
 
         try

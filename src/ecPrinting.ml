@@ -3031,7 +3031,7 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_ogty ppe) p.p_ogty
      | Sym_Form_If, _ -> assert false
 
-     | Sym_Form_App (Some ty,i),op::args ->
+     | Sym_Form_App (Some _,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
         Format.fprintf fmt "PApp%s(@[%a@])"
@@ -3056,22 +3056,6 @@ and pp_pattern ppe fmt p = match p.p_node with
 
      | Sym_Form_Match _, _ ->
         Format.fprintf fmt "no-syntax-yet"
-
-     | Sym_Form_Quant (q,binds), [p] ->
-        let fv = pat_fv p in
-        let (subppe, pp) = pp_bindings ppe ~fv:fv binds in
-        let pp fmt () =
-          match q with
-          | Llambda ->
-             Format.fprintf fmt "@[<hov 2>%s %t =>@ %a@]"
-               (string_of_quant q) pp
-               (pp_pattern subppe) p
-          | _ ->
-             Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
-               (string_of_quant q) pp
-               (pp_pattern subppe) p in
-        pp fmt ()
-     | Sym_Form_Quant _,_ -> assert false
 
      | Sym_Form_Let _, _ ->
         Format.fprintf fmt "no-syntax-yet"

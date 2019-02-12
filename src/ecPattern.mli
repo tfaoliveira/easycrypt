@@ -56,7 +56,6 @@ type fun_symbol =
   | Sym_Form_Tuple
   | Sym_Form_Proj         of int * ty
   | Sym_Form_Match        of ty
-  | Sym_Form_Quant        of quantif * bindings
   | Sym_Form_Let          of lpattern
   | Sym_Form_Pvar         of ty
   | Sym_Form_Prog_var     of pvar_kind
@@ -165,7 +164,6 @@ val p_if       : pattern -> pattern -> pattern -> pattern
 val p_proj     : pattern -> int -> ty -> pattern
 val p_tuple    : pattern list -> pattern
 val p_app      : pattern -> pattern list -> ty option -> pattern
-val p_f_quant  : quantif -> bindings -> pattern -> pattern
 val p_quant    : quantif -> pbindings -> pattern -> pattern
 val p_pvar     : pattern -> ty -> pattern -> pattern
 val p_glob     : pattern -> pattern -> pattern
@@ -204,8 +202,8 @@ val p_ands  : pattern list -> pattern
 val p_if_simpl      : pattern -> pattern -> pattern -> pattern
 val p_proj_simpl    : pattern -> int -> ty -> pattern
 val p_app_simpl_opt : pattern option -> pattern list -> ty option -> pattern option
-val p_forall_simpl  : bindings -> pattern -> pattern
-val p_exists_simpl  : bindings -> pattern -> pattern
+val p_forall_simpl  : pbindings -> pattern -> pattern
+val p_exists_simpl  : pbindings -> pattern -> pattern
 val p_eq_simpl      : ty -> pattern -> pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
