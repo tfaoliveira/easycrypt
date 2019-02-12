@@ -15,6 +15,16 @@ type match_env = {
     me_matches   : pattern Mid.t;
   }
 
+type verbose = {
+    verbose_match      : bool;
+    verbose_rule       : bool;
+    verbose_type       : bool;
+    verbose_bind_restr : bool;
+    verbose_add_meta   : bool;
+    verbose_abstract   : bool;
+    verbose_reduce     : bool;
+  }
+
 type environment = {
     env_hyps               : EcEnv.LDecl.hyps;
     env_match              : match_env;
@@ -25,13 +35,7 @@ type environment = {
     env_meta_restr_binds   : pbindings Mid.t;
     env_fmt                : Format.formatter;
     env_ppe                : EcPrinting.PPEnv.t;
-    env_verbose_match      : bool;
-    env_verbose_rule       : bool;
-    env_verbose_type       : bool;
-    env_verbose_bind_restr : bool;
-    env_verbose_add_meta   : bool;
-    env_verbose_abstract   : bool;
-    env_verbose_reduce     : bool;
+    env_verbose            : verbose;
   }
 
 type pat_continuation =

@@ -80,7 +80,7 @@ cut:= introOrs A &m ev _=> //= ->.
 elim/fset_ind (oflist (to_seq (support d))).
   rewrite Mrplus.sum_empty.
   byphoare (_ : true ==> false)=> //.
-  by rewrite /cpOrs image0 Mbor.sum_empty.
+  by move=> ?; rewrite /cpOrs image0 Mbor.sum_empty.
   move=> x s Hx Hrec.
   rewrite Mrplus.sum_add //=.
   cut ->: Pr[Rand(A).main() @ &m:

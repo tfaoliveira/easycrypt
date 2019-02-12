@@ -187,7 +187,7 @@ proof.
 pose s := to_seq (fun x => (tomap m).[x] <> None).
 rewrite /"_.[_<-_]" ofmapK //; apply/finiteP; exists (x :: s).
 move=> y /=; rewrite Map.get_setE; case: (y = x) => //=.
-by move=> ne_yx h; apply/mem_to_seq/h/isfmap_offmap.
+by move=> ne_yx h; rewrite mem_to_seq //= isfmap_offmap.
 qed.
 
 (* -------------------------------------------------------------------- *)

@@ -2979,8 +2979,7 @@ let pp_ogty ppe fmt = function
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
-     Format.fprintf fmt "Form(%a : %a)"
-       (pp_form ppe) f (pp_type ppe) f.f_ty
+     Format.fprintf fmt "%a" (pp_form ppe) f
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
@@ -3003,17 +3002,16 @@ let rec pp_pat_axiom ppe fmt a = match a with
      pp_lvalue ppe fmt lv
   | Axiom_Hoarecmp h ->
      Format.fprintf fmt "%s" (string_of_hrcmp h)
-  | Axiom_Local (id,ty) ->
-     Format.fprintf fmt "@[(%a@ :@ %a)@]"
+  | Axiom_Local (id,_) ->
+     Format.fprintf fmt "%a"
        (pp_mem ppe) id
-       (pp_type ppe) ty
 
 and pp_pattern ppe fmt p = match p.p_node with
   | Pat_Anything ->
      Format.fprintf fmt "_"
   | Pat_Meta_Name ({ p_node = Pat_Anything },name,_) ->
-     Format.fprintf fmt "(#%a : %a)"
-       (pp_mem ppe) name (pp_ogty ppe) p.p_ogty
+     Format.fprintf fmt "#%a"
+       (pp_mem ppe) name
   | Pat_Meta_Name (p,name,_) ->
      Format.fprintf fmt "(%a as %a)"
        (pp_pattern ppe) p
@@ -3036,9 +3034,9 @@ and pp_pattern ppe fmt p = match p.p_node with
      | Sym_Form_App (Some ty,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-        Format.fprintf fmt "PApp%s(@[%a : %a@])"
+        Format.fprintf fmt "PApp%s(@[%a@])"
           (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
-          (pp_list "@ " (pp_pattern ppe)) (op::args) (pp_type ppe) ty
+          (pp_list "@ " (pp_pattern ppe)) (op::args)
      | Sym_Form_App (None,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
