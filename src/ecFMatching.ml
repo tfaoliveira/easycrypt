@@ -108,6 +108,32 @@ type ismatch =
   | Match
   | NoMatch
 
+
+(* -------------------------------------------------------------------- *)
+module Debug : sig
+  val debug_type : environment -> ty -> ty -> unit
+  val debug_bind_restr : environment -> ident -> unit
+end = struct
+  let debug_type menv ty1 ty2 =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "=== types are unified %a in %a"
+          (EcPrinting.pp_type ppe) ty1
+          (EcPrinting.pp_type ppe) ty2
+
+  let debug_bind_restr menv x =
+    if menv.env_verbose.verbose_bind_restr then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "Binding restrictions prevents using : %a"
+        (EcPrinting.pp_local ppe) x
+end
+
 (* -------------------------------------------------------------------- *)
 let menv_copy (me : match_env) =
   { me with me_unienv = EcUnify.UniEnv.copy me.me_unienv }
@@ -465,13 +491,8 @@ end = struct
     let env_restore_unienv = !(env.env_restore_unienv) in
     env.env_restore_unienv := None;
     let eq = ty env f1.f_ty f2.f_ty in
-    if eq
-    then
-      let _ = if env.env_verbose.verbose_type then
-                Format.fprintf env.env_fmt
-                  "[W] === types are unified %a in %a\n"
-                  (EcPrinting.pp_type env.env_ppe) f1.f_ty
-                  (EcPrinting.pp_type env.env_ppe) f2.f_ty in
+    if eq then begin
+      Debug.debug_type env f1.f_ty f2.f_ty;
       let sty    = { EcTypes.ty_subst_id with
                      ts_u = EcUnify.UniEnv.assubst env.env_match.me_unienv } in
       let sf     = Fsubst.f_subst_init ~sty () in
@@ -481,7 +502,7 @@ end = struct
       else
         let _ = restore_environment env in
         let _ = env.env_restore_unienv := env_restore_unienv in false
-    else
+    end else
       let _ = restore_environment env in
       let _ = env.env_restore_unienv := env_restore_unienv in
       false
@@ -876,20 +897,22 @@ let rec merge_binds bs1 bs2 env = match bs1,bs2 with
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
-  let m = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
-  Mid.for_all (fun x _ ->
-      if LDecl.has_id x env.env_hyps then true
-      else if is_some (EcEnv.Mod.by_mpath_opt (mpath (`Local x) [])
-                         (LDecl.toenv env.env_hyps))
-      then true
-      else
-        let _ =
-          if env.env_verbose.verbose_bind_restr then
-            Format.fprintf env.env_fmt
-              "[W] Binding restrictions prevents using : %s\n"
-              (EcIdent.tostring x) in
-        false) m
+  let m  = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
 
+  let check1 (x : ident) =
+    let aout =
+      let lookup () =
+        is_some (EcEnv.Mod.by_mpath_opt
+                   (mpath (`Local x) [])
+                   (LDecl.toenv env.env_hyps)) in
+
+      LDecl.has_id x env.env_hyps && lookup () in
+
+    if not aout then
+      Debug.debug_bind_restr env x;
+    aout
+
+  in Mid.for_all (fun x _ -> check1 x) m
 
 (* add_match can raise the exception : CannotUnify *)
 let nadd_match (e : nengine) (name : meta_name) (p : pattern)
