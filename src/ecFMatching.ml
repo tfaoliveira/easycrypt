@@ -1893,10 +1893,10 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
              (aux_f f)
         | Fquant _ -> assert false
         | Fif(f1,f2,f3) ->
-           omap (function [p1;p2;p3] -> p_if p1 p2 p3 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3 = as_seq3 l in p_if p1 p2 p3)
              (omap_list pat_form aux_f [f1;f2;f3])
         | Fmatch(f,args,ty) ->
-           omap (function op::l -> p_match op ty l | _ -> assert false)
+           omap (fun l -> p_match (List.hd l) ty (List.tl l))
              (omap_list pat_form aux_f (f::args))
         | Flet (lp,f1,f2) -> begin
             match lp with
@@ -1906,7 +1906,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                assert false
             | LRecord _ -> assert false
             | _ ->
-               omap (function [p1;p2] -> p_let lp p1 p2 | _ -> assert false)
+               omap (fun l -> let p1,p2 = as_seq2 l in p_let lp p1 p2)
                  (omap_list pat_form aux_f [f1;f2])
           end
         | Fint _ -> None
@@ -1917,10 +1917,10 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            then Some (pat_local id fty)
            else None
         | Fpvar(x,m) ->
-           omap (function [p1;p2] -> p_pvar p1 fty p2 | _ -> assert false)
+           omap (fun l -> let p1,p2 = as_seq2 l in p_pvar p1 fty p2)
              (omap_list pat_axiom aux [Axiom_Prog_Var x;Axiom_Memory m])
         | Fglob(mp, m) ->
-           omap (function [p1;p2] -> p_glob p1 p2 | _ -> assert false)
+           omap (fun l -> let p1,p2 = as_seq2 l in p_glob p1 p2)
              (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
         | Fop (_,_) ->
            Some (pat_form f)
@@ -1949,20 +1949,20 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            else
              omap (fun p -> p_proj p i fty) (aux_f f1)
         | FhoareF h ->
-           omap (function [p1;p2;p3] -> p_hoareF p1 p2 p3 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3 = as_seq3 l in p_hoareF p1 p2 p3)
              (omap_list pat_axiom aux
                 [Axiom_Form h.hf_pr;
                  Axiom_Xpath h.hf_f;
                  Axiom_Form h.hf_po])
         | FhoareS h ->
-           omap (function [p1;p2;p3;p4] -> p_hoareS p1 p2 p3 p4 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_hoareS p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.hs_m;
                  Axiom_Form h.hs_pr;
                  Axiom_Stmt h.hs_s;
                  Axiom_Form h.hs_po])
         | FbdHoareF h ->
-           omap (function [p1;p2;p3;p4;p5] -> p_bdHoareF p1 p2 p3 p4 p5 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4,p5 = as_seq5 l in p_bdHoareF p1 p2 p3 p4 p5)
              (omap_list pat_axiom aux
                 [Axiom_Form h.bhf_pr;
                  Axiom_Xpath h.bhf_f;
@@ -1970,7 +1970,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Hoarecmp h.bhf_cmp;
                  Axiom_Form h.bhf_bd])
         | FbdHoareS h ->
-           omap (function [p1;p2;p3;p4;p5;p6] -> p_bdHoareS p1 p2 p3 p4 p5 p6 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_bdHoareS p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.bhs_m;
                  Axiom_Form h.bhs_pr;
@@ -1979,14 +1979,14 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Hoarecmp h.bhs_cmp;
                  Axiom_Form h.bhs_bd])
         | FequivF h ->
-           omap (function [p1;p2;p3;p4] -> p_equivF p1 p2 p3 p4 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_equivF p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_Form h.ef_pr;
                  Axiom_Xpath h.ef_fl;
                  Axiom_Xpath h.ef_fr;
                  Axiom_Form h.ef_po])
         | FequivS h ->
-           omap (function [p1;p2;p3;p4;p5;p6] -> p_equivS p1 p2 p3 p4 p5 p6 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_equivS p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.es_ml;
                  Axiom_MemEnv h.es_mr;
@@ -1995,7 +1995,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Stmt h.es_sr;
                  Axiom_Form h.es_po])
         | FeagerF h ->
-           omap (function [p1;p2;p3;p4;p5;p6] -> p_eagerF p1 p2 p3 p4 p5 p6 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_eagerF p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_Form h.eg_pr;
                  Axiom_Stmt h.eg_sl;
@@ -2005,9 +2005,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Form h.eg_po])
         | Fpr pr ->
            let pr_event = pr.pr_event in
-           (* let mhr,memty = EcMemory.empty_local mhr pr.pr_fun in
-            * let pr_event = mk_form (Fquant (Llambda,[mhr, GTmem memty],pr_event)) pr_event.f_ty in *)
-           omap (function [p1;p2;p3;p4] -> p_pr p1 p2 p3 p4 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_pr p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_Memory pr.pr_mem;
                  Axiom_Xpath pr.pr_fun;
@@ -2034,27 +2032,29 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
         | _ -> None
       end
     | Axiom_Mpath m ->
-       omap (function mt::margs -> p_mpath mt margs | _ -> assert false)
+       omap (fun l -> p_mpath (List.hd l) (List.tl l))
          (omap_list pat_axiom aux ((Axiom_Mpath_top m.m_top)::(List.map axiom_mpath m.m_args)))
     | Axiom_Instr i -> begin
         match i.i_node with
         | Sasgn (lv,e) ->
-           omap (function [p1;p2] -> p_assign p1 p2 | _ -> assert false)
+           omap (fun l -> let p1,p2 = as_seq2 l in p_assign p1 p2)
              (omap_list pat_axiom aux [Axiom_Lvalue lv; Axiom_Form (form_of_expr e)])
         | Srnd (lv,e) ->
-           omap (function [p1;p2] -> p_sample p1 p2 | _ -> assert false)
+           omap (fun l -> let p1,p2 = as_seq2 l in p_sample p1 p2)
              (omap_list pat_axiom aux [Axiom_Lvalue lv; Axiom_Form (form_of_expr e)])
         | Scall (None,f,args) ->
-           omap (function p1::pargs -> p_call None p1 pargs | _ -> assert false)
+           omap (fun l -> let p1,pargs = List.hd l,List.tl l in p_call None p1 pargs)
              (omap_list pat_axiom aux ((Axiom_Xpath f)::(List.map axiom_expr args)))
         | Scall (Some lv,f,args) ->
-           omap (function p1::p2::pargs -> p_call (Some p1) p2 pargs | _ -> assert false)
+           omap (fun l -> let p1, l     = List.hd l, List.tl l in
+                          let p2, pargs =  List.hd l, List.tl l in
+                          p_call (Some p1) p2 pargs)
              (omap_list pat_axiom aux ((Axiom_Lvalue lv)::(Axiom_Xpath f)::(List.map axiom_expr args)))
         | Sif (e,strue,sfalse) ->
-           omap (function [p1;p2;p3] -> p_instr_if p1 p2 p3 | _ -> assert false)
+           omap (fun l -> let p1,p2,p3 = as_seq3 l in p_instr_if p1 p2 p3)
              (omap_list pat_axiom aux [axiom_expr e;Axiom_Stmt strue;Axiom_Stmt sfalse])
         | Swhile (e,sbody) ->
-           omap (function [p1;p2] -> p_while p1 p2 | _ -> assert false)
+           omap (fun l -> let p1,p2 = as_seq2 l in p_while p1 p2)
              (omap_list pat_axiom aux [axiom_expr e;Axiom_Stmt sbody])
         | Sassert e ->
            omap (fun x -> p_assert x) (aux (axiom_expr e))
