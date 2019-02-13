@@ -18,6 +18,7 @@ type verbose = {
     verbose_abstract        : bool;
     verbose_reduce          : bool;
     verbose_show_ignored_or : bool;
+    verbose_show_or         : bool;
   }
 
 
@@ -30,6 +31,7 @@ let no_verbose : verbose = {
     verbose_abstract        = false;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
+    verbose_show_or         = false;
   }
 
 let full_verbose : verbose = {
@@ -41,6 +43,7 @@ let full_verbose : verbose = {
     verbose_abstract        = true;
     verbose_reduce          = true;
     verbose_show_ignored_or = true;
+    verbose_show_or         = true;
   }
 
 let debug_verbose : verbose = {
@@ -52,6 +55,7 @@ let debug_verbose : verbose = {
     verbose_abstract        = false;
     verbose_reduce          = true;
     verbose_show_ignored_or = false;
+    verbose_show_or         = true;
   }
 
 let env_verbose = no_verbose
@@ -187,6 +191,7 @@ module Debug : sig
   val debug_no_reduce                : environment -> pattern -> axiom -> unit
   val debug_found_match              : environment -> unit
   val debug_ignore_ors               : environment -> unit
+  val debug_another_or               : environment -> unit
 end = struct
   let debug_type menv ty1 ty2 =
     if menv.env_verbose.verbose_type then
@@ -336,6 +341,12 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
 
       EcEnv.notify env `Warning "Ignore some Or"
+
+  let debug_another_or menv =
+    if menv.env_verbose.verbose_show_or then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning "Another Or's case"
 end
 
 (* -------------------------------------------------------------------------- *)
@@ -1743,6 +1754,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      next_n NoMatch ne
 
   | NoMatch, Zor (_, e'::engines, ne) ->
+     Debug.debug_another_or e.ne_env;
      let _ = restore_environment e'.e_env in
      process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
 
@@ -1752,10 +1764,12 @@ and next_n (m : ismatch) (e : nengine) : nengine =
 
   | NoMatch, ZReduce (_, e, ne) ->
      match h_red_strat e.e_env e.e_pattern e.e_head with
-     | None ->
-        Debug.debug_reduce e.e_env e.e_pattern e.e_head;
-        next_n NoMatch ne
-     | Some (e_pattern, e_head) -> process { e with e_pattern; e_head }
+     | None -> Debug.debug_reduce e.e_env e.e_pattern e.e_head;
+               next_n NoMatch ne
+     | Some (e_pattern, e_head) ->
+        if e_pattern = e.e_pattern && e_head = e.e_head then
+          next_n NoMatch ne
+        else process { e with e_pattern; e_head }
 
 and sub_engines (e : engine) (p : pattern) : engine list =
   match e.e_head with

@@ -149,7 +149,7 @@ let gty_of_ogty (ogty : ogty) = match ogty with
 
 (* -------------------------------------------------------------------------- *)
 
-let rec p_equal = (==)
+let rec p_equal = (=)
 
 let ogty_equal o1 o2 = match o1, o2 with
   | OGTany, _ | _, OGTany -> true
@@ -1527,7 +1527,8 @@ module Psubst = struct
          let subst =
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
              subst bs1 pargs1 in
-         Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
+         if bs1 = [] then None
+         else Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
       | Sym_Form_App (ty,_),
         ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) })})::pargs ->
          let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
@@ -1535,8 +1536,9 @@ module Psubst = struct
          let subst =
            List.fold_left2 (fun s (id,gty) p -> p_bind_local s id (mk_pattern p.p_node (ogty_of_gty gty)))
              subst bs1 pargs1 in
-         Some (p_app (p_quant Llambda (List.map (fun (id,t) -> id, ogty_of_gty t) bs2)
-                        (p_subst subst (pat_form f))) pargs2 ty)
+         if bs1 = [] then None
+         else Some (p_app (p_quant Llambda (List.map (snd_map ogty_of_gty) bs2)
+                             (p_subst subst (pat_form f))) pargs2 ty)
       | _ -> None
 
 end
@@ -2323,7 +2325,7 @@ module PReduction = struct
       else
         let p = meta_var id ob ogty in
         let p' = Psubst.p_subst s p in
-        if p = p' then None else Some p'
+        if p_equal p p' then None else Some p'
     else None
 
   let is_delta_p ri pop = match pop.p_node with
@@ -2375,13 +2377,14 @@ module PReduction = struct
       (* β-reduction *)
       | Sym_Form_App _,
         { p_node = (Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])
-                    | Pat_Axiom (Axiom_Form { f_node = Fapp (_,_)}))}
-        ::_
+                    | Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,_,_)}))}::_
            when ri.beta -> p_betared_opt p
 
       (* ζ-reduction *)
       | Sym_Form_App (ty,_),
-        { p_node = (Pat_Meta_Name ({ p_node = Pat_Anything },id,ob)) ; p_ogty = ogty}::pargs ->
+        { p_node =
+            (Pat_Meta_Name ({ p_node = Pat_Anything }, id, ob)) ;
+          p_ogty = ogty} :: pargs ->
          if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id ob ogty) pargs ty
          else omap (fun x -> p_app x pargs ty) (reduce_local_opt hyps ri s id ob ogty)
 
@@ -3212,5 +3215,15 @@ module PReduction = struct
       end
 
     | _ -> None
+
+  let h_red_pattern_opt h r s p = match h_red_pattern_opt h r s p with
+    | None -> None
+    | Some p' ->
+       if p = p' then None else Some p'
+
+  let h_red_axiom_opt h r s a = match h_red_axiom_opt h r s a with
+    | None -> None
+    | Some p' ->
+       if pat_axiom a = p' then None else Some p'
 
 end

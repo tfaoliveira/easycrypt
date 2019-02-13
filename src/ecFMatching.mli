@@ -24,6 +24,7 @@ type verbose = {
     verbose_abstract        : bool;
     verbose_reduce          : bool;
     verbose_show_ignored_or : bool;
+    verbose_show_or         : bool;
   }
 
 type environment = {
