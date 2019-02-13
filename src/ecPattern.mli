@@ -5,13 +5,11 @@ open EcMemory
 open EcIdent
 open EcModules
 
-module Name = EcIdent
-
+module Name  = EcIdent
 module MName = Mid
 
 (* -------------------------------------------------------------------------- *)
 type meta_name = Name.t
-
 
 type ogty =
   | OGTty    of ty option
@@ -120,7 +118,7 @@ val ogty_of_gty : gty -> ogty
 val gty_of_ogty : ogty -> gty option
 
 val p_map      : (pattern -> pattern) -> pattern -> pattern
-val p_map_fold : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
+
 (* -------------------------------------------------------------------------- *)
 val mk_pattern : p_node -> ogty -> pattern
 
