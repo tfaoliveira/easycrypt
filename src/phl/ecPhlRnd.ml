@@ -424,7 +424,7 @@ let process_inv pe hyps _es f ty1 ty2 =
   let rec translate f =
     match f with
     | EcRing.PEX x ->
-        T.Var x
+        T.Var (T.Var.of_id x)
     | EcRing.PEadd (f1, f2) ->
         T.Add (translate f1, translate f2)
     | EcRing.PEopp f ->
@@ -436,7 +436,7 @@ let process_inv pe hyps _es f ty1 ty2 =
   and itranslate f =
     match f with
     | T.Var x ->
-        EcRing.PEX x
+        EcRing.PEX (T.Var.to_int x)
     | T.Add (f1, f2) ->
         EcRing.PEadd (itranslate f1, itranslate f2)
     | T.Opp f ->
@@ -447,7 +447,7 @@ let process_inv pe hyps _es f ty1 ty2 =
 
   let f = translate f in
   let f =
-    match I.compute_inv xid f with
+    match I.compute_inv (T.Var.of_id xid) f with
     | None   -> tc_error pe "failed to compute inverse"
     | Some f -> f in
   let f = EcAlgebra.ofring acr st (itranslate f) in
