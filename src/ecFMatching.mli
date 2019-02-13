@@ -46,15 +46,13 @@ type pat_continuation =
   (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
        - e_list : if not, the sorted list of next engines to try matching with
-       - ne     : if no match at all, then take the nengine to go up
-   *)
+       - ne     : if no match at all, then take the nengine to go up *)
   | Zor        of pat_continuation * engine list * nengine
 
   (* Zand (before, after, cont) :
        - before : list of couples (form, pattern) that has already been checked
        - after  : list of couples (form, pattern) to check in the following
-       - cont   : continuation if all the matches succeed
-   *)
+       - cont   : continuation if all the matches succeed *)
   | Zand       of (axiom * pattern) list
                   * (axiom * pattern) list
                   * pat_continuation

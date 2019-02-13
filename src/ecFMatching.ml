@@ -51,10 +51,10 @@ let debug_verbose : verbose = {
     verbose_add_meta        = true;
     verbose_abstract        = false;
     verbose_reduce          = true;
-    verbose_show_ignored_or = true;
+    verbose_show_ignored_or = false;
   }
 
-let env_verbose = debug_verbose
+let env_verbose = no_verbose
 
 (* ---------------------------------------------------------------------- *)
 exception Matches
@@ -529,15 +529,6 @@ module Translate = struct
         | Invalid_Type "sub in form" -> assert false
       end
     | _ -> form_of_pattern env p
-
-  let form_of_pattern env p =
-    match p.p_ogty with
-    | OGTany -> form_of_pattern env p
-    | OGTty (Some ty) ->
-       if mem_ty_univar ty then raise (Invalid_Type "type univar")
-       else form_of_pattern env p
-    | OGTty None -> form_of_pattern env p
-    | _ -> raise (Invalid_Type "wrong ogty")
 
 end
 
