@@ -683,6 +683,7 @@ and rwarg1 =
   | RWSmt    of (bool * pprover_infos)
   | RWApp    of ppterm
   | RWTactic of rwtactic
+  | RWVerbose of (rwoptions * (rwside * ppterm) list)
 
 and rwoptions = rwside * trepeat option * rwocc
 and rwside    = [`LtoR | `RtoL]
@@ -745,12 +746,13 @@ type prevert = {
 }
 
 type prevertv = {
-  pr_rev  : prevert;
-  pr_view : ppterm list;
+  pr_rev     : prevert;
+  pr_view    : ppterm list;
+  pr_verbose : bool;
 }
 
 let prevert0  = { pr_clear = []; pr_genp = []; }
-let prevertv0 = { pr_rev = prevert0; pr_view = []; }
+let prevertv0 = { pr_rev = prevert0; pr_view = []; pr_verbose = false; }
 
 (* -------------------------------------------------------------------- *)
 type ppgoption = [
@@ -801,7 +803,6 @@ type logtactic =
   | Pchange     of pformula
   | Ppose       of (psymbol * ptybinding list * rwocc * pformula)
   | Pwlog       of (psymbol list * pformula)
-  | Ptest_match of pqsymbol
 
 (* -------------------------------------------------------------------- *)
 and ptactic_core_r =

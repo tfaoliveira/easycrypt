@@ -35,10 +35,12 @@ type environment = {
     env_restore_unienv     : EcUnify.unienv option ref;
     env_current_binds      : pbindings;
     env_meta_restr_binds   : pbindings Mid.t;
-    env_fmt                : Format.formatter;
-    env_ppe                : EcPrinting.PPEnv.t;
     env_verbose            : verbose;
   }
+
+val no_verbose    : verbose
+val full_verbose  : verbose
+val debug_verbose : verbose
 
 type pat_continuation =
   | ZTop
@@ -90,24 +92,10 @@ val menv_has_memory : ident -> match_env -> bool
 val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
                       ?metas:ogty Mid.t -> unit -> match_env
 
-val search          : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:match_env -> EcFol.form -> EcPattern.pattern ->
-                      EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                      EcReduction.reduction_info ->
-                      (match_env * environment) option
-
 val search_eng      : engine -> nengine option
 
-val mkenv           : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:match_env -> LDecl.hyps ->
-                      EcReduction.reduction_info ->
-                      EcReduction.reduction_info -> environment
-
-val mkengine        : axiom -> pattern -> environment -> engine
-
-val mk_engine       : ?ppe:EcPrinting.PPEnv.t -> ?fmt:Format.formatter ->
-                      ?mtch:match_env -> form -> pattern -> LDecl.hyps ->
-                      EcReduction.reduction_info ->
+val mk_engine       : ?verbose:bool -> ?mtch:match_env -> form -> pattern ->
+                      LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info -> engine
 
 val pattern_of_form : match_env -> form -> pattern

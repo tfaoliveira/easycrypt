@@ -49,16 +49,16 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = true;
-    verbose_type            = true;
+    verbose_type            = false;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
-    verbose_show_or         = true;
+    verbose_show_or         = false;
   }
 
-let env_verbose = no_verbose
+let env_verbose = debug_verbose
 
 (* ---------------------------------------------------------------------- *)
 exception Matches
@@ -80,8 +80,6 @@ type environment = {
     env_restore_unienv     : EcUnify.unienv option ref;
     env_current_binds      : pbindings;
     env_meta_restr_binds   : pbindings Mid.t;
-    env_fmt                : Format.formatter;
-    env_ppe                : EcPrinting.PPEnv.t;
     env_verbose            : verbose;
   }
 
@@ -1954,15 +1952,15 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
            Some p
         | Fapp(fop,args) ->
-           (* if mem_ty_univar fty
-            * then *)
+           if mem_ty_univar fty
+           then
              let pargs = List.map (fun arg -> odfl (pat_form arg) (aux_f arg)) args in
              let pop = odfl (pat_form fop) (aux_f fop) in
              Some (p_app pop pargs (Some fty))
-           (* else
-            *   omap (fun l -> let pop, pargs = List.hd l, List.tl l in
-            *                  p_app pop pargs (Some fty))
-            *     (omap_list pat_form aux_f (fop::args)) *)
+           else
+             omap (fun l -> let pop, pargs = List.hd l, List.tl l in
+                            p_app pop pargs (Some fty))
+               (omap_list pat_form aux_f (fop::args))
         | Ftuple args ->
            omap (fun l -> p_tuple l) (omap_list pat_form aux_f args)
         | Fproj(f1,i) ->
@@ -2208,35 +2206,7 @@ let init_match_env ?mtch ?unienv ?metas () =
     me_meta_vars = odfl Mid.empty metas;
   }
 
-(* val mkengine    : base -> engine *)
-let mkenv ?ppe ?fmt ?mtch (h : LDecl.hyps)
-      (red_info_match : EcReduction.reduction_info)
-      (red_info_same_meta : EcReduction.reduction_info)
-    : environment = {
-    env_hyps               = h;
-    env_red_info_match     = red_info_match;
-    env_red_info_same_meta = red_info_same_meta;
-    env_restore_unienv     = ref None;
-    env_current_binds      = [] ;
-    env_meta_restr_binds   = Mid.empty;
-    env_ppe                = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv h)) ppe;
-    env_fmt                = odfl Format.std_formatter fmt;
-    env_match              = odfl {
-                                 me_matches   = Mid.empty;
-                                 me_unienv    = EcUnify.UniEnv.create None;
-                                 me_meta_vars = Mid.empty;
-                               } mtch;
-    env_verbose;
-  }
-
-let mkengine (a : axiom) (p : pattern) (env : environment) : engine =
-  { e_head = a;
-    e_pattern = p;
-    e_env = env;
-    e_continuation = ZTop;
-  }
-
-let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps
+let mk_engine ?(verbose=false) ?mtch f e_pattern env_hyps
       env_red_info_match env_red_info_same_meta =
   let e = {
       e_pattern;
@@ -2249,26 +2219,14 @@ let mk_engine ?ppe ?fmt ?mtch f e_pattern env_hyps
           env_restore_unienv   = ref None;
           env_current_binds    = [];
           env_meta_restr_binds = Mid.empty;
-          env_ppe              = odfl (EcPrinting.PPEnv.ofenv (LDecl.toenv env_hyps)) ppe;
-          env_fmt              = odfl Format.std_formatter fmt;
           env_match            = odfl {
                                      me_matches   = Mid.empty;
                                      me_meta_vars = Mid.empty;
                                      me_unienv    = EcUnify.UniEnv.create None;
                                    } mtch;
-          env_verbose;
+          env_verbose = if verbose then debug_verbose else no_verbose;
         }
     } in e
-
-let search ?ppe ?fmt ?mtch (f : form) (p : pattern) (h : LDecl.hyps)
-      (red_info_p : EcReduction.reduction_info)
-      (red_info_a : EcReduction.reduction_info) =
-  try
-    let env = mkenv ?ppe ?fmt ?mtch h red_info_p red_info_a in
-    let ne = process (mkengine (axiom_form f) p env) in
-    Some (get_n_matches ne, ne.ne_env)
-  with
-  | NoMatches -> None
 
 
 (* -------------------------------------------------------------------- *)

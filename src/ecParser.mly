@@ -624,7 +624,7 @@
 %token WP
 %token ZETA
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4
-%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
+%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT LTLTSTARGTGT
 
 
 %nonassoc prec_below_comma
@@ -2730,6 +2730,9 @@ rwarg1:
 | s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
    { RWRw ((s, r, o), fp) }
 
+| LTLTSTARGTGT s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
+   { RWVerbose ((s, r, o), fp) }
+
 | s=rwside r=rwrepeat? o=rwocc? SLASH x=sform_h %prec prec_tactic
    { RWDelta ((s, r, o), x); }
 
@@ -2756,6 +2759,7 @@ rwarg1:
         let msg = "invalid rw-tactic: " ^ (unloc x) in
         parse_error (loc x) (Some msg)
   }
+
 
 rwpterms:
 | f=pterm
@@ -2992,7 +2996,10 @@ logtactic:
     { Passumption }
 
 | MOVE vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
-   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; } }
+   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = false; } }
+
+| MOVE LTLTSTARGTGT vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
+   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = true; } }
 
 | CLEAR l=loc(ipcore_name)+
    { Pclear l }
@@ -3098,9 +3105,6 @@ logtactic:
 
 | WLOG COLON ids=loc(ipcore_name)* SLASH f=form
    { Pwlog (ids, f) }
-
-| REWRITE LTSTARGT  a=qident
-  { Ptest_match a }
 
 eager_info:
 | h=ident
@@ -3524,7 +3528,7 @@ tactic_core_r:
      gp=revert
 
     { Pcase (odfl false eq, odfl [] opts,
-             { pr_view = vw; pr_rev = gp; } ) }
+             { pr_view = vw; pr_rev = gp; pr_verbose = false } ) }
 
 | PROGRESS opts=pgoptions? t=tactic_core? {
     Pprogress (odfl [] opts, t)

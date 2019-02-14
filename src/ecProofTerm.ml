@@ -247,7 +247,7 @@ let pattern_form ?name hyps ~ptn subject =
   in (x, body)
 
 (* -------------------------------------------------------------------- *)
-let pf_form_match (pt : pt_env) ?mode ~ptn subject =
+let pf_form_match ?(verbose=false) (pt : pt_env) ?mode ~ptn subject =
   let mode = mode |> odfl EcMatching.fmrigid in
 
   let ri =
@@ -266,7 +266,7 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
   try
     let ptn = EcFMatching.pattern_of_form !(pt.pte_mc) ptn in
     let eng =
-      EcFMatching.mk_engine
+      EcFMatching.mk_engine ~verbose
         ~mtch:!(pt.pte_mc) subject ptn pt.pte_hy
         ri EcReduction.full_red in
 
@@ -681,7 +681,7 @@ and check_pterm_arg ?loc pe (x, xty) f arg =
   check_pterm_oarg ?loc pe (x, xty) f (Some arg)
 
 (* -------------------------------------------------------------------- *)
-and apply_pterm_to_oarg ?loc ({ ptev_env = pe; ptev_pt = rawpt; } as pt) oarg =
+and apply_pterm_to_oarg ?(verbose=false) ?loc ({ ptev_env = pe; ptev_pt = rawpt; } as pt) oarg =
   assert (odfl true (oarg |> omap (fun arg -> pe == arg.ptea_env)));
 
   let oarg = oarg |> omap (fun arg -> arg.ptea_arg) in
@@ -696,7 +696,7 @@ and apply_pterm_to_oarg ?loc ({ ptev_env = pe; ptev_pt = rawpt; } as pt) oarg =
             match dfl_arg_for_impl pe f1 oarg with
             | PVASub arg -> begin
               try
-                pf_form_match ~mode:EcMatching.fmdelta pe ~ptn:f1 arg.ptev_ax;
+                pf_form_match ~verbose ~mode:EcMatching.fmdelta pe ~ptn:f1 arg.ptev_ax;
                 (f2, PASub (Some arg.ptev_pt))
               with EcMatching.MatchFailure ->
                 tc_pterm_apperror ?loc pe (AE_InvalidArgProof (arg.ptev_ax, f1))
@@ -714,13 +714,13 @@ and apply_pterm_to_oarg ?loc ({ ptev_env = pe; ptev_pt = rawpt; } as pt) oarg =
       { pt with ptev_ax = newax; ptev_pt = { rawpt with pt_args = rawargs } }
 
 (* -------------------------------------------------------------------- *)
-and apply_pterm_to_arg ?loc pt arg =
-  apply_pterm_to_oarg ?loc pt (Some arg)
+and apply_pterm_to_arg ?(verbose=false) ?loc pt arg =
+  apply_pterm_to_oarg ~verbose ?loc pt (Some arg)
 
 (* -------------------------------------------------------------------- *)
-and apply_pterm_to_arg_r ?loc pt arg =
+and apply_pterm_to_arg_r ?(verbose=false) ?loc pt arg =
   let arg = { ptea_arg = arg; ptea_env = pt.ptev_env; } in
-  apply_pterm_to_arg ?loc pt arg
+  apply_pterm_to_arg ~verbose ?loc pt arg
 
 (* -------------------------------------------------------------------- *)
 and apply_pterm_to_hole ?loc pt =
