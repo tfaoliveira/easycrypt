@@ -3221,3 +3221,56 @@ module PReduction = struct
        if pat_axiom a = p' then None else Some p'
 
 end
+
+(* (\* -------------------------------------------------------------------------- *\)
+ * let rec simplify p = match p.p_node with
+ *   | Pat_Anything -> p
+ *   | Pat_Meta_Name (p1,n,ob) ->
+ *      let p2 = simplify p1 in
+ *      if p_equal p1 p2 then p else pat_meta p2 n ob
+ *   | Pat_Sub p1 ->
+ *      let p2 = simplify p1 in
+ *      if p_equal p1 p2 then p else mk_pattern (Pat_Sub p2) OGTany
+ *   | Pat_Or [] -> p
+ *   | Pat_Or [p] -> simplify p
+ *   | Pat_Or l ->
+ *      let l1 = List.map simplify l in
+ *      if List.for_all2 p_equal l l1 then p else mk_pattern (Pat_Or l1) p.p_ogty
+ *   | Pat_Red_Strat (p1,f) ->
+ *      let p2 = simplify p1 in
+ *      if p_equal p1 p2 then p else mk_pattern (Pat_Red_Strat (p2,f)) p.p_ogty
+ *   | Pat_Axiom _ -> p
+ *   | Pat_Fun_Symbol (s, lp) ->
+ *   match s, lp with
+ *   | Sym_Form_If, [p1;p2;p3] ->
+ *      p_if_simpl (simplify p1) (simplify p2) (simplify p3)
+ *   | Sym_Form_App (t,_), op::args ->
+ *      p_app_simpl (simplify op) (List.map simplify args) t
+ *   | Sym_Form_Tuple, l ->
+ *      let l1 = List.map simplify l in
+ *      if List.for_all2 p_equal l l1 then p else p_tuple l1
+ *   | Sym_Form_Proj (i,ty), [p1] ->
+ *   | Sym_Form_Match ty, op::args ->
+ *   | Sym_Form_Let lp, [p1;p2] ->
+ *   | Sym_Form_Pvar ty, [pv;mem] ->
+ *   | Sym_Form_Prog_var k, [
+ *   | Sym_Form_Glob
+ *   | Sym_Form_Hoare_F
+ *   | Sym_Form_Hoare_S
+ *   | Sym_Form_bd_Hoare_F
+ *   | Sym_Form_bd_Hoare_S
+ *   | Sym_Form_Equiv_F
+ *   | Sym_Form_Equiv_S
+ *   | Sym_Form_Eager_F
+ *   | Sym_Form_Pr
+ *   | Sym_Stmt_Seq
+ *   | Sym_Instr_Assign
+ *   | Sym_Instr_Sample
+ *   | Sym_Instr_Call
+ *   | Sym_Instr_Call_Lv
+ *   | Sym_Instr_If
+ *   | Sym_Instr_While
+ *   | Sym_Instr_Assert
+ *   | Sym_Xpath
+ *   | Sym_Mpath
+ *   | Sym_Quant of EcFol.quantif * pbindings *)

@@ -50,15 +50,15 @@ let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = true;
     verbose_type            = false;
-    verbose_bind_restr      = false;
-    verbose_add_meta        = false;
+    verbose_bind_restr      = true;
+    verbose_add_meta        = true;
     verbose_abstract        = false;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
   }
 
-let env_verbose = debug_verbose
+let env_verbose = no_verbose
 
 (* ---------------------------------------------------------------------- *)
 exception Matches
@@ -1264,6 +1264,9 @@ let rec process (e : engine) : nengine =
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
 
+  | Pat_Meta_Name (_,name,_), Axiom_Form { f_node = Flocal name2 }
+       when EQ.name name name2 -> next Match e
+
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
        odfl e.e_env.env_meta_restr_binds
@@ -2224,7 +2227,7 @@ let mk_engine ?(verbose=false) ?mtch f e_pattern env_hyps
                                      me_meta_vars = Mid.empty;
                                      me_unienv    = EcUnify.UniEnv.create None;
                                    } mtch;
-          env_verbose = if verbose then debug_verbose else no_verbose;
+          env_verbose = if verbose then debug_verbose else env_verbose;
         }
     } in e
 
