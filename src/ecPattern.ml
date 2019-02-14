@@ -482,13 +482,7 @@ let form_of_pattern (p : pattern) = match p.p_ogty with
 
 let p_app (p : pattern) (args : pattern list) (ty : ty option) =
   let p, args1 = p_destr_app p in
-  let args = args1 @ args in
-  match ty with
-  | Some ty when List.for_all is_form (p::args) ->
-     let f, fargs = form_of_pattern p, List.map form_of_pattern args in
-     pat_form (f_app f fargs ty)
-  | _ ->
-  match args with
+  match args1 @ args with
   | [] -> p
   | _  ->
      if is_higher_order p then

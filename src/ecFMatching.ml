@@ -48,12 +48,12 @@ let full_verbose : verbose = {
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = false;
-    verbose_type            = false;
-    verbose_bind_restr      = true;
-    verbose_add_meta        = true;
+    verbose_rule            = true;
+    verbose_type            = true;
+    verbose_bind_restr      = false;
+    verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = true;
   }
@@ -192,6 +192,7 @@ module Debug : sig
   val debug_found_match              : environment -> unit
   val debug_ignore_ors               : environment -> unit
   val debug_another_or               : environment -> unit
+  val debug_different_forms          : environment -> form -> form -> unit
 end = struct
   let debug_type menv ty1 ty2 =
     if menv.env_verbose.verbose_type then
@@ -347,6 +348,17 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
 
       EcEnv.notify env `Warning "Another Or's case"
+
+  let debug_different_forms menv f1 f2 =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning "form(%a : %a) != form(%a : %a)"
+          (EcPrinting.pp_form ppe) f1
+          (EcPrinting.pp_type ppe) f1.f_ty
+          (EcPrinting.pp_form ppe) f2
+          (EcPrinting.pp_type ppe) f2.f_ty
 end
 
 (* -------------------------------------------------------------------------- *)
@@ -659,15 +671,22 @@ end = struct
                      ts_u = EcUnify.UniEnv.assubst env.env_match.me_unienv } in
       let sf     = Fsubst.f_subst_init ~sty () in
       let f1, f2 = Fsubst.f_subst sf f1, Fsubst.f_subst sf f2 in
-      if EcReduction.is_conv_param ri env.env_hyps f1 f2 then
-        let _ = env.env_restore_unienv := env_restore_unienv in true
-      else
-        let _ = restore_environment env in
-        let _ = env.env_restore_unienv := env_restore_unienv in false
-    end else
-      let _ = restore_environment env in
-      let _ = env.env_restore_unienv := env_restore_unienv in
-      false
+      if EcReduction.is_conv_param ri env.env_hyps f1 f2 then begin
+          env.env_restore_unienv := env_restore_unienv;
+          true
+        end
+      else begin
+          Debug.debug_different_forms env f1 f2;
+          restore_environment env;
+          env.env_restore_unienv := env_restore_unienv;
+          false
+        end
+      end
+    else begin
+        restore_environment env;
+        env.env_restore_unienv := env_restore_unienv;
+        false
+      end
 
   let rec axiom (env : environment) ri (o1 : axiom) (o2 : axiom) : bool =
     let aux o1 o2 =
@@ -1289,8 +1308,8 @@ let rec process (e : engine) : nengine =
      process { e with e_pattern; e_env }
 
   | Pat_Axiom o1, o2 ->
+     Debug.debug_which_rule e.e_env "same axiom";
      if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 then begin
-         Debug.debug_which_rule e.e_env "same axiom";
          next Match e
        end
      else next NoMatch e
@@ -1935,16 +1954,15 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
            Some p
         | Fapp(fop,args) ->
-           if mem_ty_univar fty
-           then
+           (* if mem_ty_univar fty
+            * then *)
              let pargs = List.map (fun arg -> odfl (pat_form arg) (aux_f arg)) args in
              let pop = odfl (pat_form fop) (aux_f fop) in
              Some (p_app pop pargs (Some fty))
-           else
-             omap (function
-                 | pop::pargs -> p_app pop pargs (Some fty)
-                 | _ -> assert false)
-               (omap_list pat_form aux_f (fop::args))
+           (* else
+            *   omap (fun l -> let pop, pargs = List.hd l, List.tl l in
+            *                  p_app pop pargs (Some fty))
+            *     (omap_list pat_form aux_f (fop::args)) *)
         | Ftuple args ->
            omap (fun l -> p_tuple l) (omap_list pat_form aux_f args)
         | Fproj(f1,i) ->
