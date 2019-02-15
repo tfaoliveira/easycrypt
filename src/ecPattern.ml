@@ -464,18 +464,16 @@ let is_higher_order (p : pattern) = match p.p_node with
   | Pat_Meta_Name ({ p_node = Pat_Anything }, _, _) -> true
   | _ -> false
 
-let is_form (p : pattern) = match p.p_ogty with
-  | OGTany | OGTty _ -> begin
-      match p.p_node with
-      | Pat_Axiom (Axiom_Form _) -> true
-      | _ -> false
-    end
+let is_form (p : pattern) = match p.p_node with
+  | Pat_Axiom (Axiom_Form _) -> true
+  | Pat_Axiom (Axiom_Local _) -> true
   | _ -> false
 
 let form_of_pattern (p : pattern) = match p.p_ogty with
   | OGTany | OGTty _ -> begin
       match p.p_node with
       | Pat_Axiom (Axiom_Form f) -> f
+      | Pat_Axiom (Axiom_Local (id,t)) -> f_local id t
       | _ -> raise Not_found
     end
   | _ -> raise Not_found
@@ -936,6 +934,16 @@ let p_map (f : pattern -> pattern) (p : pattern) : pattern =
        | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> p
 
 (* -------------------------------------------------------------------------- *)
+let pf_app p1 pargs ot = match ot with
+  | None -> p_app p1 pargs ot
+  | Some t ->
+     if List.for_all is_form (p1::pargs)
+     then pat_form (f_app (form_of_pattern p1)
+                      (List.map form_of_pattern pargs) t)
+     else p_app p1 pargs ot
+
+
+(* -------------------------------------------------------------------------- *)
 module Psubst = struct
 
   type p_subst = {
@@ -1132,7 +1140,8 @@ module Psubst = struct
 
             | Flocal id -> begin
                 match Mid.find_opt id s.ps_patloc with
-                | Some ({ p_node = Pat_Axiom (Axiom_Local (id,ty))}) -> pat_form (f_local id ty)
+                | Some ({ p_node = Pat_Axiom (Axiom_Local (id,ty))}) ->
+                   pat_form (f_local id ty)
                 | Some p -> p
                 | None ->
                    let ty = ty_subst s.ps_sty fp.f_ty in
@@ -1265,7 +1274,7 @@ module Psubst = struct
             | Fint _ -> pat_form fp
 
             | Fapp (op,args) ->
-               let p = p_app (p_subst s (pat_form op))
+               let p = pf_app (p_subst s (pat_form op))
                          (List.map (fun x -> p_subst s (pat_form x)) args)
                          (Some (ty_subst s.ps_sty fp.f_ty)) in
                odfl p (p_betared_opt p)
@@ -1322,7 +1331,7 @@ module Psubst = struct
            let cond, p1, p2 = p_subst s cond, p_subst s p1, p_subst s p2 in
            p_if cond p1 p2
         | Sym_Form_App (ty,_), op::args ->
-           p_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
+           pf_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
         | Sym_Form_Tuple, t ->
            p_tuple (List.map (p_subst s) t)
         | Sym_Form_Proj (i,ty), [p] ->
@@ -1522,7 +1531,7 @@ module Psubst = struct
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p)
              subst bs1 pargs1 in
          if bs1 = [] then None
-         else Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
+         else Some (pf_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
       | Sym_Form_App (ty,_),
         ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) })})::pargs ->
          let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
@@ -1531,8 +1540,8 @@ module Psubst = struct
            List.fold_left2 (fun s (id,gty) p -> p_bind_local s id (mk_pattern p.p_node (ogty_of_gty gty)))
              subst bs1 pargs1 in
          if bs1 = [] then None
-         else Some (p_app (p_quant Llambda (List.map (snd_map ogty_of_gty) bs2)
-                             (p_subst subst (pat_form f))) pargs2 ty)
+         else Some (pf_app (p_quant Llambda (List.map (snd_map ogty_of_gty) bs2)
+                              (p_subst subst (pat_form f))) pargs2 ty)
       | _ -> None
 
 end
@@ -1568,45 +1577,45 @@ let p_bool_val p =
 let p_eq ty (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom(Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (f_eq f1 f2)
-  | _ -> p_app (pop_eq ty) [p1;p2] (Some tbool)
+  | _ -> pf_app (pop_eq ty) [p1;p2] (Some tbool)
 
 let p_not = function
   | { p_node = Pat_Axiom(Axiom_Form f) } -> pat_form (EcFol.f_not f)
-  | p -> p_app (pat_form EcFol.fop_not) [p] (Some EcTypes.tbool)
+  | p -> pf_app (pat_form EcFol.fop_not) [p] (Some EcTypes.tbool)
 
 let p_imp (p1 : pattern) (p2 : pattern) = match p1.p_node,p2.p_node with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
      pat_form (EcFol.f_imp f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_imp) [p1;p2]
+  | _ -> pf_app (pat_form EcFol.fop_imp) [p1;p2]
            (Some EcTypes.tbool)
 
 let p_anda (p1 : pattern) (p2 : pattern) = match p1.p_node,p2.p_node with
   | Pat_Axiom(Axiom_Form f1),
     Pat_Axiom(Axiom_Form f2) ->
      pat_form  (EcFol.f_anda f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_anda) [p1;p2]
+  | _ -> pf_app (pat_form EcFol.fop_anda) [p1;p2]
            (Some EcTypes.tbool)
 
 let p_ora (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_ora f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_ora) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form EcFol.fop_ora) [p1;p2] (Some EcTypes.tbool)
 
 let p_iff (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_iff f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_iff) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form EcFol.fop_iff) [p1;p2] (Some EcTypes.tbool)
 
 let p_and (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_and f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_and) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form EcFol.fop_and) [p1;p2] (Some EcTypes.tbool)
 
 let p_or (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_or f1 f2)
-  | _ -> p_app (pat_form EcFol.fop_or) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form EcFol.fop_or) [p1;p2] (Some EcTypes.tbool)
 
 let p_ands (ps : pattern list) = match List.rev ps with
   | [] -> p_true
@@ -1626,26 +1635,26 @@ let p_destr_int (p : pattern) = match p.p_node with
 let p_int_le (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_le f1 f2)
-  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_lt (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_lt f1 f2)
-  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_add (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_add f1 f2)
-  | _ -> p_app (pat_form fop_int_add) [p1;p2] (Some EcTypes.tint)
+  | _ -> pf_app (pat_form fop_int_add) [p1;p2] (Some EcTypes.tint)
 
 let p_int_opp (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
-  | _ -> p_app (pat_form fop_int_opp) [p] (Some EcTypes.tint)
+  | _ -> pf_app (pat_form fop_int_opp) [p] (Some EcTypes.tint)
 
 let p_int_mul (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_mul f1 f2)
-  | _ -> p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
+  | _ -> pf_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
 
 (* -------------------------------------------------------------------------- *)
  (* CORELIB *)
@@ -1663,7 +1672,7 @@ let pop_real_of_int = p_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
 let p_int (i : EcBigInt.zint) = pat_form (f_int i)
 
 
-let p_real_of_int p  = p_app pop_real_of_int [p] (Some treal)
+let p_real_of_int p  = pf_app pop_real_of_int [p] (Some treal)
 let p_rint n         = p_real_of_int (p_int n)
 
 let p_r0 = pat_form f_r0
@@ -1683,30 +1692,30 @@ let get_real_of_int (p : pattern) =
 let p_real_le (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_le f1 f2)
-  | _ -> p_app (pat_form fop_real_le) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form fop_real_le) [p1;p2] (Some EcTypes.tbool)
 
 let p_real_lt (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_lt f1 f2)
-  | _ -> p_app (pat_form fop_real_lt) [p1;p2] (Some EcTypes.tbool)
+  | _ -> pf_app (pat_form fop_real_lt) [p1;p2] (Some EcTypes.tbool)
 
 let p_real_add (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_add f1 f2)
-  | _ -> p_app (pat_form fop_real_add) [p1;p2] (Some EcTypes.treal)
+  | _ -> pf_app (pat_form fop_real_add) [p1;p2] (Some EcTypes.treal)
 
 let p_real_opp (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
-  | _ -> p_app (pat_form fop_real_opp) [p] (Some EcTypes.treal)
+  | _ -> pf_app (pat_form fop_real_opp) [p] (Some EcTypes.treal)
 
 let p_real_mul (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_real_mul f1 f2)
-  | _ -> p_app (pat_form fop_real_mul) [p1;p2] (Some EcTypes.treal)
+  | _ -> pf_app (pat_form fop_real_mul) [p1;p2] (Some EcTypes.treal)
 
 let p_real_inv (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_real_inv f)
-  | _ -> p_app (pat_form fop_real_inv) [p] (Some EcTypes.treal)
+  | _ -> pf_app (pat_form fop_real_inv) [p] (Some EcTypes.treal)
 
 let p_real_div (p1 : pattern) (p2 : pattern) =
   p_real_mul p1 (p_real_inv p2)
@@ -2080,7 +2089,7 @@ and p_real_inv_simpl p =
        | n when EcBigInt.equal n EcBigInt.zero -> p_r0
        | n when EcBigInt.equal n EcBigInt.one  -> p_r1
        | _ -> destr_error "destr_rint/inv"
-     with DestrError _ -> p_app pop_real_inv [p] (Some treal)
+     with DestrError _ -> pf_app pop_real_inv [p] (Some treal)
 
 (* -------------------------------------------------------------------------- *)
 let rec reduce_pat p = match p.p_node with
@@ -2095,7 +2104,7 @@ let rec reduce_pat p = match p.p_node with
   | Pat_Fun_Symbol (Sym_Form_If, [p1;p2;p3]) ->
      p_if (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
   | Pat_Fun_Symbol (Sym_Form_App (ty,_), pop::pargs) ->
-     p_app (reduce_pat pop) (List.map reduce_pat pargs) ty
+     pf_app (reduce_pat pop) (List.map reduce_pat pargs) ty
   | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
      p_tuple (List.map reduce_pat t)
   | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [p]) ->
@@ -2173,9 +2182,18 @@ let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
   | Pat_Axiom(Axiom_Form f) -> pat_form (f_proj_simpl f i ty)
   | _ -> p_proj p1 i ty
 
+let try_form ot p =
+  match ot with
+  | None -> p
+  | Some t ->
+     let p1, args = p_destr_app p in
+     if List.for_all is_form (p1::args)
+     then pat_form (f_app (form_of_pattern p1) (List.map form_of_pattern args) t)
+     else p
+
 let p_app_simpl_opt op pargs oty = match op with
   | None -> None
-  | Some p -> omap reduce_pat (p_betared_opt (p_app p pargs oty))
+  | Some p -> omap reduce_pat (omap (try_form oty) (p_betared_opt (pf_app p pargs oty)))
 
 let p_app_simpl op pargs oty =
   odfl (p_app op pargs oty) (p_app_simpl_opt (Some op) pargs oty)
@@ -2380,14 +2398,14 @@ module PReduction = struct
             (Pat_Meta_Name ({ p_node = Pat_Anything }, id, ob)) ;
           p_ogty = ogty} :: pargs ->
          if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id ob ogty) pargs ty
-         else omap (fun x -> p_app x pargs ty) (reduce_local_opt hyps ri s id ob ogty)
+         else omap (fun x -> pf_app x pargs ty) (reduce_local_opt hyps ri s id ob ogty)
 
       (* ζ-reduction *)
       | Sym_Form_App (oty,_),
         { p_node = (Pat_Axiom (Axiom_Form { f_node = Flocal id ; f_ty = ty})
                     | Pat_Axiom (Axiom_Local (id,ty)))}::pargs ->
          if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id None (OGTty (Some ty))) pargs oty
-         else omap (fun x -> p_app x pargs oty) (reduce_local_opt hyps ri s id None (OGTty (Some ty)))
+         else omap (fun x -> pf_app x pargs oty) (reduce_local_opt hyps ri s id None (OGTty (Some ty)))
 
       (* ζ-reduction *)
       | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
@@ -2456,7 +2474,7 @@ module PReduction = struct
             | _ -> None
           in match op with
              | None ->
-                omap (fun x -> p_app x pargs (Some fty)) (h_red_form_opt hyps ri s f1)
+                omap (fun x -> pf_app x pargs (Some fty)) (h_red_form_opt hyps ri s f1)
              | _ -> op
         end
 
@@ -2530,7 +2548,7 @@ module PReduction = struct
 
           with
           | EcEnv.NotReducible ->
-             omap (fun x -> p_app x args ty)
+             omap (fun x -> pf_app x args ty)
                (h_red_form_opt hyps ri s f1)
         end
 
@@ -2622,7 +2640,7 @@ module PReduction = struct
          match p' with
          | Some p' ->
             if p_equal p p'
-            then omap (fun l -> p_app (pat_form fo) l ty)
+            then omap (fun l -> pf_app (pat_form fo) l ty)
                    (h_red_args (fun x -> x) h_red_pattern_opt hyps ri s args)
             else Some p'
          | None -> None
@@ -2648,7 +2666,7 @@ module PReduction = struct
       [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,_), pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_quant Llambda binds
-               (p_app pn (List.take (List.length pargs - 1) pargs) ty))
+               (pf_app pn (List.take (List.length pargs - 1) pargs) ty))
 
     (* contextual rule - let *)
     | Sym_Form_Let lp, [p1;p2] ->
@@ -2656,7 +2674,7 @@ module PReduction = struct
 
     (* Contextual rule - application args. *)
     | Sym_Form_App (ty,_), p1::args ->
-       omap (fun p1 -> p_app p1 args ty) (h_red_pattern_opt hyps ri s p1)
+       omap (fun p1 -> pf_app p1 args ty) (h_red_pattern_opt hyps ri s p1)
 
     (* (\* Contextual rule - bindings *\)
      * | Sym_Form_Quant (Lforall as t, b), [p1]
@@ -2971,7 +2989,7 @@ module PReduction = struct
           | _ -> None
         in match op with
            | None ->
-              omap (fun x -> p_app x (List.map pat_form args) (Some ty))
+              omap (fun x -> pf_app x (List.map pat_form args) (Some ty))
                 (h_red_form_opt hyps ri s f1)
            | _ -> op
       end
@@ -3051,7 +3069,7 @@ module PReduction = struct
           Some (Psubst.p_subst subst (pat_form body))
 
         with EcEnv.NotReducible ->
-          omap (fun x -> p_app x (List.map pat_form fargs) (Some f.f_ty))
+          omap (fun x -> pf_app x (List.map pat_form fargs) (Some f.f_ty))
             (h_red_form_opt hyps ri s f1)
       end
 
@@ -3146,7 +3164,7 @@ module PReduction = struct
          match f' with
          | Some { p_node = Pat_Axiom(Axiom_Form f')} ->
             if f_equal f f'
-            then omap (fun l -> p_app (pat_form fo) l (Some f.f_ty))
+            then omap (fun l -> pf_app (pat_form fo) l (Some f.f_ty))
                    (h_red_args pat_form h_red_form_opt hyps ri s args)
             else Some (pat_form f')
          | Some _ -> f'
@@ -3165,7 +3183,7 @@ module PReduction = struct
     (* η-reduction *)
     | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
          when can_eta x (fn, args)
-      -> Some (p_app (pat_form fn)
+      -> Some (pf_app (pat_form fn)
                  (List.map pat_form (List.take (List.length args - 1) args))
                  (Some f.f_ty))
 
@@ -3175,7 +3193,7 @@ module PReduction = struct
 
     (* Contextual rule - application args. *)
     | Fapp (f1, args) ->
-       omap (fun x -> p_app x (List.map pat_form args) (Some f.f_ty))
+       omap (fun x -> pf_app x (List.map pat_form args) (Some f.f_ty))
          (h_red_form_opt hyps ri s f1)
 
     (* Contextual rule - bindings *)
@@ -3222,55 +3240,126 @@ module PReduction = struct
 
 end
 
-(* (\* -------------------------------------------------------------------------- *\)
- * let rec simplify p = match p.p_node with
- *   | Pat_Anything -> p
- *   | Pat_Meta_Name (p1,n,ob) ->
- *      let p2 = simplify p1 in
- *      if p_equal p1 p2 then p else pat_meta p2 n ob
- *   | Pat_Sub p1 ->
- *      let p2 = simplify p1 in
- *      if p_equal p1 p2 then p else mk_pattern (Pat_Sub p2) OGTany
- *   | Pat_Or [] -> p
- *   | Pat_Or [p] -> simplify p
- *   | Pat_Or l ->
- *      let l1 = List.map simplify l in
- *      if List.for_all2 p_equal l l1 then p else mk_pattern (Pat_Or l1) p.p_ogty
- *   | Pat_Red_Strat (p1,f) ->
- *      let p2 = simplify p1 in
- *      if p_equal p1 p2 then p else mk_pattern (Pat_Red_Strat (p2,f)) p.p_ogty
- *   | Pat_Axiom _ -> p
- *   | Pat_Fun_Symbol (s, lp) ->
- *   match s, lp with
- *   | Sym_Form_If, [p1;p2;p3] ->
- *      p_if_simpl (simplify p1) (simplify p2) (simplify p3)
- *   | Sym_Form_App (t,_), op::args ->
- *      p_app_simpl (simplify op) (List.map simplify args) t
- *   | Sym_Form_Tuple, l ->
- *      let l1 = List.map simplify l in
- *      if List.for_all2 p_equal l l1 then p else p_tuple l1
- *   | Sym_Form_Proj (i,ty), [p1] ->
- *   | Sym_Form_Match ty, op::args ->
- *   | Sym_Form_Let lp, [p1;p2] ->
- *   | Sym_Form_Pvar ty, [pv;mem] ->
- *   | Sym_Form_Prog_var k, [
- *   | Sym_Form_Glob
- *   | Sym_Form_Hoare_F
- *   | Sym_Form_Hoare_S
- *   | Sym_Form_bd_Hoare_F
- *   | Sym_Form_bd_Hoare_S
- *   | Sym_Form_Equiv_F
- *   | Sym_Form_Equiv_S
- *   | Sym_Form_Eager_F
- *   | Sym_Form_Pr
- *   | Sym_Stmt_Seq
- *   | Sym_Instr_Assign
- *   | Sym_Instr_Sample
- *   | Sym_Instr_Call
- *   | Sym_Instr_Call_Lv
- *   | Sym_Instr_If
- *   | Sym_Instr_While
- *   | Sym_Instr_Assert
- *   | Sym_Xpath
- *   | Sym_Mpath
- *   | Sym_Quant of EcFol.quantif * pbindings *)
+(* -------------------------------------------------------------------------- *)
+let rec p_simplify p = match p.p_node with
+  | Pat_Anything -> p
+  | Pat_Meta_Name ({ p_node = Pat_Anything ; p_ogty = OGTty (Some ty) }, n, _)
+    | Pat_Axiom (Axiom_Local (n, ty)) ->
+     pat_form (f_local n ty)
+  | Pat_Meta_Name (p1,n,ob) ->
+     let p2 = p_simplify p1 in
+     if p_equal p1 p2 then p else pat_meta p2 n ob
+  | Pat_Sub p1 ->
+     let p2 = p_simplify p1 in
+     if p_equal p1 p2 then p else mk_pattern (Pat_Sub p2) OGTany
+  | Pat_Or [] -> p
+  | Pat_Or [p] -> p_simplify p
+  | Pat_Or l ->
+     let l1 = List.map p_simplify l in
+     if List.for_all2 p_equal l l1 then p else mk_pattern (Pat_Or l1) p.p_ogty
+  | Pat_Red_Strat (p1,f) ->
+     let p2 = p_simplify p1 in
+     if p_equal p1 p2 then p else mk_pattern (Pat_Red_Strat (p2,f)) p.p_ogty
+  | Pat_Axiom _ -> p
+  | Pat_Fun_Symbol (s, lp) ->
+  match s, lp with
+  | Sym_Form_If, [p1;p2;p3] ->
+     p_if_simpl (p_simplify p1) (p_simplify p2) (p_simplify p3)
+  | Sym_Form_App (t,_), op::args ->
+     p_app_simpl (p_simplify op) (List.map p_simplify args) t
+  | Sym_Form_Tuple, l ->
+     let l1 = List.map p_simplify l in
+     if List.for_all2 p_equal l l1 then p else p_tuple l1
+  | Sym_Form_Proj (i,ty), [p1] ->
+     let p2 = p_simplify p1 in
+     if p_equal p2 p1 then p else p_proj_simpl p2 i ty
+  | Sym_Form_Match ty, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p else p_match (List.hd l) ty (List.tl l)
+  | Sym_Form_Let lp, [p1;p2] ->
+     let p3, p4 = p_simplify p1, p_simplify p2 in
+     if p_equal p1 p3 && p_equal p2 p4 then p else p_let lp p3 p4
+  | Sym_Form_Pvar ty, [pv;mem] ->
+     let p1, p2 = p_simplify pv, p_simplify mem in
+     if p_equal pv p1 && p_equal mem p2 then p else p_pvar p1 ty p2
+  | Sym_Form_Prog_var k, [xp] ->
+     let p1 = p_simplify xp in
+     if p_equal xp p1 then p else p_prog_var p1 k
+  | Sym_Form_Glob, [mp;mem] ->
+     let p1, p2 = p_simplify mp, p_simplify mem in
+     if p_equal mp p1 && p_equal p2 mem then p else p_glob p1 p2
+  | Sym_Form_Hoare_F, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3 = as_seq3 l in p_hoareF p1 p2 p3
+  | Sym_Form_Hoare_S, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4 = as_seq4 l in p_hoareS p1 p2 p3 p4
+  | Sym_Form_bd_Hoare_F, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4, p5 = as_seq5 l in p_bdHoareF p1 p2 p3 p4 p5
+  | Sym_Form_bd_Hoare_S, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4, p5, p6 = as_seq6 l in p_bdHoareS p1 p2 p3 p4 p5 p6
+  | Sym_Form_Equiv_F, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4 = as_seq4 l in p_equivF p1 p2 p3 p4
+  | Sym_Form_Equiv_S, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4, p5, p6 = as_seq6 l in p_equivS p1 p2 p3 p4 p5 p6
+  | Sym_Form_Eager_F, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4, p5, p6 = as_seq6 l in p_eagerF p1 p2 p3 p4 p5 p6
+  | Sym_Form_Pr, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3, p4 = as_seq4 l in p_pr p1 p2 p3 p4
+  | Sym_Stmt_Seq, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p else p_stmt l
+  | Sym_Instr_Assign, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2 = as_seq2 l in p_assign p1 p2
+  | Sym_Instr_Sample, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2 = as_seq2 l in p_sample p1 p2
+  | Sym_Instr_Call, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, args = List.hd l, List.tl l in p_call None p1 args
+  | Sym_Instr_Call_Lv, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, l    = List.hd l, List.tl l in
+          let p2, args = List.hd l, List.tl l in p_call (Some p1) p2 args
+  | Sym_Instr_If, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2, p3 = as_seq3 l in p_instr_if p1 p2 p3
+  | Sym_Instr_While, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2 = as_seq2 l in p_while p1 p2
+  | Sym_Instr_Assert, [p1] ->
+     let p2 = p_simplify p1 in
+     if p_equal p1 p2 then p else p_assert p2
+  | Sym_Xpath, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, p2 = as_seq2 l in p_xpath p1 p2
+  | Sym_Mpath, _ ->
+     let l = List.map p_simplify lp in
+     if List.for_all2 p_equal l lp then p
+     else let p1, args = List.hd l, List.tl l in p_mpath p1 args
+  | Sym_Quant (q, b), [p1] ->
+     let p2 = p_simplify p1 in
+     if p_equal p1 p2 then p else p_quant q b p2
+  | _ -> assert false

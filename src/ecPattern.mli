@@ -224,6 +224,8 @@ val p_real_mul_simpl : pattern -> pattern -> pattern
 val p_real_opp_simpl : pattern -> pattern
 val p_real_inv_simpl : pattern -> pattern
 
+val p_simplify       : pattern -> pattern
+
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
 val p_real_split    : pattern -> pattern * pattern

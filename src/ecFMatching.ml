@@ -52,7 +52,7 @@ let debug_verbose : verbose = {
     verbose_type            = false;
     verbose_bind_restr      = true;
     verbose_add_meta        = true;
-    verbose_abstract        = false;
+    verbose_abstract        = true;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
@@ -181,6 +181,7 @@ module Debug : sig
   val debug_add_match                : environment -> bool -> ident -> pattern -> unit
   val debug_higher_order_abstract_eq : environment -> bool -> pattern -> pattern -> unit
   val debug_higher_order_to_abstract : environment -> pattern -> pattern -> unit
+  val debug_higher_order_is_abstract : environment -> pattern -> pattern -> unit
   val debug_try_match                : environment -> pattern -> axiom -> pat_continuation -> unit
   val debug_which_rule               : environment -> string -> unit
   val debug_result_match             : environment -> ismatch -> unit
@@ -267,6 +268,16 @@ end = struct
         (EcPrinting.pp_pattern ppe) p1
         (EcPrinting.pp_pattern ppe) p2
 
+  let debug_higher_order_is_abstract menv p1 p2 =
+    if menv.env_verbose.verbose_abstract then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "Abstracted (%a) in : %a"
+        (EcPrinting.pp_pattern ppe) p1
+        (EcPrinting.pp_pattern ppe) p2
+
   let debug_try_match menv p a c =
     if menv.env_verbose.verbose_match then
       let env = LDecl.toenv menv.env_hyps in
@@ -327,9 +338,10 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       let pp_names ppe fmt (name,p) =
-        Format.fprintf fmt "%a <- %a"
+        Format.fprintf fmt "%a <- (%a : %a)"
           (EcPrinting.pp_local ppe) name
-          (EcPrinting.pp_pattern ppe) p in
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_ogty ppe) p.p_ogty in
 
       EcEnv.notify env `Warning "Matching successful: %a"
         (EcPrinting.pp_list "@ and@ " (pp_names ppe))
@@ -453,13 +465,11 @@ module Translate = struct
           f_pr (memory_of_pattern pm) (xpath_of_pattern env f) (form_of_pattern env args)
             (form_of_pattern env event)
        | Sym_Quant (q,pb), [p] ->
-          let f (id,ogt) = match ogt with
-            | OGTty (Some ty) -> id, GTty ty
-            | OGTmem (Some t) -> id, GTmem t
-            | OGTmodty (Some (t,r)) -> id, GTmodty (t,r)
-            | _ -> raise (Invalid_Type "formula") in
+          let f (id,ogt) = match gty_of_ogty ogt with
+            | Some gty -> id, gty
+            | _        -> raise (Invalid_Type "formula") in
           f_quant q (List.map f pb) (form_of_pattern env p)
-       | _ -> raise (Invalid_Type "formula")
+       | _ -> assert false
 
   and memory_of_pattern p = match p.p_node with
     | Pat_Axiom (Axiom_Memory m) -> m
@@ -1192,6 +1202,8 @@ let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
        | true, a -> aux a1 a lb lc
   in aux a a lb lc
 
+let change_ogty ogty p = mk_pattern p.p_node ogty
+
 (* ---------------------------------------------------------------------- *)
 let rec abstract_opt
           (other_args : Sid.t)
@@ -1229,7 +1241,8 @@ let rec abstract_opt
      let subst = psubst_of_menv env.env_match in
      let p     = Psubst.p_subst subst p in
      let parg  = Psubst.p_subst subst parg in
-     aux e.e_env p parg
+     let ogty  = p.p_ogty in
+     omap (change_ogty ogty) (aux e.e_env p parg)
 
 let copy_match e =
   { e with me_unienv = EcUnify.UniEnv.copy e.me_unienv }
@@ -1250,6 +1263,11 @@ let try_reduce (e : engine) : engine =
            { ne_continuation = e.e_continuation; ne_env = e.e_env } in
   let e_continuation = ZReduce (e.e_continuation, copy_engine e, ne) in
   { e with e_env; e_continuation }
+
+
+let p_simplify env p =
+  try pat_form (Translate.form_of_pattern env p)
+  with Translate.Invalid_Type _ -> p_simplify p
 
 
 (* ---------------------------------------------------------------------- *)
@@ -1364,7 +1382,7 @@ let rec process (e : engine) : nengine =
        (* higher order *)
        let env = saturate e.e_env in
        let add_ident i x =
-         EcIdent.create (String.concat "$" ["s";string_of_int i]), x in
+         EcIdent.create (String.concat "" ["s";string_of_int i]), x in
        let args = List.mapi add_ident pargs in
        let env_meta_restr_binds =
          odfl env.env_meta_restr_binds
@@ -1373,14 +1391,17 @@ let rec process (e : engine) : nengine =
        let abstract m e p arg =
          Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
          let op = abstract_opt m e (Some p) arg in
-         odfl p op in
+         let p = p_simplify (LDecl.toenv e.e_env.env_hyps) (odfl p op) in
+         Debug.debug_higher_order_is_abstract e.e_env (snd arg) p;
+         p
+       in
        let pat =
          (* FIXME : add strategies to adapt the order of the arguments *)
          List.fold_left (abstract (Sid.of_list (List.map fst args)) e)
            (pat_axiom axiom) args in
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
-       let pat = p_quant Llambda args pat in
+       let pat = p_simplify (LDecl.toenv e.e_env.env_hyps) (p_quant Llambda args pat) in
        let m,e =
          try let e = add_match e name pat ob in Match, e
          with CannotUnify -> NoMatch, e
