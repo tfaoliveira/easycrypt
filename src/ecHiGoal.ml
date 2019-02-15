@@ -281,7 +281,7 @@ module LowRewrite = struct
 
   let find_rewrite_patterns = find_rewrite_patterns ~inpred:false
 
-  let t_rewrite_r ?(verbose=false) ?target (s, o) pt tc =
+  let t_rewrite_r ?target (s, o) pt tc =
     let hyps, tgfp = FApi.tc1_flat ?target tc in
 
     let for1 (pt, mode, (f1, f2)) =
@@ -309,7 +309,7 @@ module LowRewrite = struct
         with InvalidOccurence -> raise (RewriteError (LRW_InvalidOccurence))
       in
 
-      EcLowGoal.t_rewrite ~verbose ?target ~mode pt (s, Some cpos) tc in
+      EcLowGoal.t_rewrite ?target ~mode pt (s, Some cpos) tc in
 
     let rec do_first = function
       | [] -> raise (RewriteError LRW_NothingToRewrite)
@@ -463,11 +463,11 @@ let process_apply_top tc =
   | _ -> tc_error !!tc "no top assumption"
 
 (* -------------------------------------------------------------------- *)
-let process_rewrite1_core ?(verbose = false) ?(close = true) ?target (s, o) pt tc =
+let process_rewrite1_core ?(close = true) ?target (s, o) pt tc =
   let o = norm_rwocc o in
 
   try
-    let tc = LowRewrite.t_rewrite_r ~verbose ?target (s, o) pt tc in
+    let tc = LowRewrite.t_rewrite_r ?target (s, o) pt tc in
     let cl = fun tc ->
       if EcFol.f_equal f_true (FApi.tc1_goal tc) then
         t_true tc
@@ -659,7 +659,7 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       | Some (b, n) -> t_do b n do1 tc
   end
 
-  | RWRw (((s : rwside), r, o), pts) -> begin
+  | RWRw (verbose, ((s : rwside), r, o), pts) -> begin
       let do1 ((subs : rwside), pt) tc =
         let hyps   = FApi.tc1_hyps tc in
         let target = target |> omap (fst |- LDecl.hyp_by_name^~ hyps |- unloc) in
@@ -717,72 +717,13 @@ let rec process_rewrite1_r ttenv ?target ri tc =
 
       let doall tc = t_ors (List.map do1 pts) tc in
 
-      match r with
-      | None -> doall tc
-      | Some (b, n) -> t_do b n doall tc
-  end
+      let doit () =
+        match r with
+        | None -> doall tc
+        | Some (b, n) -> t_do b n doall tc in
 
-  | RWVerbose (((s : rwside), r, o), pts) -> begin
-      let do1 ((subs : rwside), pt) tc =
-        let hyps   = FApi.tc1_hyps tc in
-        let target = target |> omap (fst |- LDecl.hyp_by_name^~ hyps |- unloc) in
-        let hyps   = FApi.tc1_hyps ?target tc in
-
-        let theside =
-          match s, subs with
-          | `LtoR, _     -> (subs  :> rwside)
-          | _    , `LtoR -> (s     :> rwside)
-          | `RtoL, `RtoL -> (`LtoR :> rwside) in
-
-        let is_baserw p tc =
-          EcEnv.BaseRw.is_base p.pl_desc (FApi.tc1_env tc) in
-
-        match pt with
-        | { fp_head = FPNamed (p, None); fp_args = []; }
-              when pt.fp_mode = `Implicit && is_baserw p tc
-        ->
-          let env = FApi.tc1_env tc in
-          let ls  = snd (EcEnv.BaseRw.lookup p.pl_desc env) in
-          let ls  = EcPath.Sp.elements ls in
-
-          let do1 lemma tc =
-            let pt = PT.pt_of_uglobal !!tc hyps lemma in
-              process_rewrite1_core ~verbose:true ?target (theside, o) pt tc in
-            t_ors (List.map do1 ls) tc
-
-        | { fp_head = FPNamed (p, None); fp_args = []; }
-              when pt.fp_mode = `Implicit
-        ->
-          let env = FApi.tc1_env tc in
-          let pt  =
-            PT.process_full_pterm ~implicits
-              (PT.ptenv_of_penv hyps !!tc) pt
-          in
-
-          if    is_ptglobal pt.PT.ptev_pt.pt_head
-             && List.is_empty pt.PT.ptev_pt.pt_args
-          then begin
-            let ls = EcEnv.Ax.all ~name:(unloc p) env in
-
-            let do1 (lemma, _) tc =
-              let pt = PT.pt_of_uglobal !!tc hyps lemma in
-                process_rewrite1_core ?target (theside, o) pt tc in
-              t_ors (List.map do1 ls) tc
-          end else
-            process_rewrite1_core ?target (theside, o) pt tc
-
-        | _ ->
-          let pt =
-            PT.process_full_pterm ~implicits
-              (PT.ptenv_of_penv hyps !!tc) pt
-          in process_rewrite1_core ?target (theside, o) pt tc
-        in
-
-      let doall tc = t_ors (List.map do1 pts) tc in
-
-      match r with
-      | None -> doall tc
-      | Some (b, n) -> t_do b n doall tc
+      let gstate = EcEnv.gstate (FApi.tc1_env tc) in
+      EcGState.tmpset "debug" verbose doit () gstate
   end
 
   | RWPr (x, f) -> begin
@@ -832,7 +773,7 @@ let process_rewrite ttenv ?target ri tc =
   List.fold_lefti do1 (tcenv_of_tcenv1 tc) ri
 
 (* -------------------------------------------------------------------- *)
-let process_view1 ?(verbose=false) pe tc =
+let process_view1 pe tc =
   let module E = struct
     exception NoInstance
     exception NoTopAssumption
@@ -860,17 +801,17 @@ let process_view1 ?(verbose=false) pe tc =
 
     | Some (`Imp (f1, f2)) -> begin
         try
-          PT.pf_form_match ~verbose ~mode:fmdelta pte.PT.ptev_env ~ptn:f1 fp;
+          PT.pf_form_match ~mode:fmdelta pte.PT.ptev_env ~ptn:f1 fp;
           (pte, ids, f2, `None)
         with MatchFailure -> raise E.NoInstance
     end
 
     | Some (`Iff (f1, f2)) -> begin
         try
-          PT.pf_form_match ~verbose ~mode:fmdelta pte.PT.ptev_env ~ptn:f1 fp;
+          PT.pf_form_match ~mode:fmdelta pte.PT.ptev_env ~ptn:f1 fp;
           (pte, ids, f2, `IffLR (f1, f2))
         with MatchFailure -> try
-          PT.pf_form_match ~verbose ~mode:fmdelta pte.PT.ptev_env ~ptn:f2 fp;
+          PT.pf_form_match ~mode:fmdelta pte.PT.ptev_env ~ptn:f2 fp;
           (pte, ids, f1, `IffRL (f1, f2))
         with MatchFailure ->
           raise E.NoInstance
@@ -1020,8 +961,8 @@ let process_view1 ?(verbose=false) pe tc =
       tc_error !!tc "no top assumption"
 
 (* -------------------------------------------------------------------- *)
-let process_view ?(verbose=false) pes tc =
-  let views = List.map (t_last |- process_view1 ~verbose) pes in
+let process_view pes tc =
+  let views = List.map (t_last |- process_view1) pes in
   List.fold_left (fun tc tt -> tt tc) (FApi.tcenv_of_tcenv1 tc) views
 
 (* -------------------------------------------------------------------- *)
@@ -1595,12 +1536,12 @@ let process_genintros ?cf ttenv pis tc =
   process_mgenintros ?cf ttenv pis (FApi.tcenv_of_tcenv1 tc)
 
 (* -------------------------------------------------------------------- *)
-let process_move ?(verbose=false) ?doeq views pr (tc : tcenv1) =
+let process_move ?doeq views pr (tc : tcenv1) =
   t_seqs
     [process_clear pr.pr_clear;
      process_generalize ?doeq pr.pr_genp;
-     process_view ~verbose views]
-    tc
+     process_view views]
+  tc
 
 (* -------------------------------------------------------------------- *)
 let process_pose xsym bds o p (tc : tcenv1) =

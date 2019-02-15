@@ -52,7 +52,7 @@ module LowRewrite : sig
   val find_rewrite_patterns:
     rwside -> pt_ev -> (pt_ev * rwmode * (form * form)) list
 
-  val t_rewrite_r: ?verbose:bool -> ?target:EcIdent.t ->
+  val t_rewrite_r: ?target:EcIdent.t ->
     rwside * EcMatching.occ option -> pt_ev -> backward
 
   val t_rewrite:?target:EcIdent.t ->
@@ -73,7 +73,7 @@ val process_intros      : ?cf:bool -> ttenv -> intropattern list -> backward
 val process_mgenintros  : ?cf:bool -> ttenv -> introgenpattern list -> tactical
 val process_genintros   : ?cf:bool -> ttenv -> introgenpattern list -> backward
 val process_generalize  : ?doeq:bool -> genpattern list -> backward
-val process_move        : ?verbose:bool -> ?doeq:bool -> ppterm list -> prevert -> backward
+val process_move        : ?doeq:bool -> ppterm list -> prevert -> backward
 val process_clear       : psymbol list -> backward
 val process_smt         : ?loc:EcLocation.t -> ttenv -> pprover_infos -> backward
 val process_apply       : implicits:bool -> apply_t * prevert option -> backward

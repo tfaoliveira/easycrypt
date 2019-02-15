@@ -2727,11 +2727,8 @@ rwarg1:
 | SLASHTILDEQ
    { RWSimpl `Variant }
 
-| s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
-   { RWRw ((s, r, o), fp) }
-
-| LTLTSTARGTGT s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
-   { RWVerbose ((s, r, o), fp) }
+| v=iboption(LTLTSTARGTGT) s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
+   { RWRw (v, (s, r, o), fp) }
 
 | s=rwside r=rwrepeat? o=rwocc? SLASH x=sform_h %prec prec_tactic
    { RWDelta ((s, r, o), x); }
@@ -2995,11 +2992,8 @@ logtactic:
 | ASSUMPTION
     { Passumption }
 
-| MOVE vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
-   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = false; } }
-
-| MOVE LTLTSTARGTGT vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
-   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = true; } }
+| MOVE v=iboption(LTLTSTARGTGT) vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
+   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = v; } }
 
 | CLEAR l=loc(ipcore_name)+
    { Pclear l }

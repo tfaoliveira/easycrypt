@@ -2209,28 +2209,32 @@ let init_match_env ?mtch ?unienv ?metas () =
     me_meta_vars = odfl Mid.empty metas;
   }
 
-let mk_engine ?(verbose=false) ?mtch f e_pattern env_hyps
-      env_red_info_match env_red_info_same_meta =
-  let e = {
-      e_pattern;
-      e_head         = axiom_form f;
-      e_continuation = ZTop;
-      e_env          = {
-          env_hyps;
-          env_red_info_match;
-          env_red_info_same_meta;
-          env_restore_unienv   = ref None;
-          env_current_binds    = [];
-          env_meta_restr_binds = Mid.empty;
-          env_match            = odfl {
-                                     me_matches   = Mid.empty;
-                                     me_meta_vars = Mid.empty;
-                                     me_unienv    = EcUnify.UniEnv.create None;
-                                   } mtch;
-          env_verbose = if verbose then debug_verbose else env_verbose;
-        }
-    } in e
+let empty_matches_env () =
+  { me_matches   = Mid.empty;
+    me_meta_vars = Mid.empty;
+    me_unienv    = EcUnify.UniEnv.create None; }
 
+let mk_engine ?mtch f pattern hyps rim ris =
+  let gstate  = EcEnv.gstate (EcEnv.LDecl.toenv hyps) in
+  let verbose = EcGState.getflag "debug" gstate in
+
+  let env_match = ofdfl empty_matches_env mtch in
+  let verbose   = if verbose then debug_verbose else env_verbose in
+  let e_env     = {
+    env_hyps               = hyps;
+    env_red_info_match     = rim;
+    env_red_info_same_meta = ris;
+    env_restore_unienv     = ref None;
+    env_current_binds      = [];
+    env_meta_restr_binds   = Mid.empty;
+    env_match              = env_match;
+    env_verbose            = verbose;
+  } in
+
+  { e_pattern      = pattern;
+    e_head         = axiom_form f;
+    e_continuation = ZTop;
+    e_env          = e_env; }
 
 (* -------------------------------------------------------------------- *)
 let menv_is_full (e : match_env) h =

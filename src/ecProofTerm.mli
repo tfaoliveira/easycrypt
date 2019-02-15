@@ -108,13 +108,13 @@ val check_pterm_arg :
   -> pt_ev_arg_r
  -> form * pt_arg
 
-val apply_pterm_to_arg   : ?verbose:bool -> ?loc:EcLocation.t -> pt_ev -> pt_ev_arg -> pt_ev
-val apply_pterm_to_arg_r : ?verbose:bool -> ?loc:EcLocation.t -> pt_ev -> pt_ev_arg_r -> pt_ev
+val apply_pterm_to_arg   : ?loc:EcLocation.t -> pt_ev -> pt_ev_arg -> pt_ev
+val apply_pterm_to_arg_r : ?loc:EcLocation.t -> pt_ev -> pt_ev_arg_r -> pt_ev
 val apply_pterm_to_hole  : ?loc:EcLocation.t -> pt_ev -> pt_ev
 val apply_pterm_to_holes : ?loc:EcLocation.t -> int -> pt_ev -> pt_ev
 
 (* pattern matching - raise [MatchFailure] on failure. *)
-val pf_form_match : ?verbose:bool -> pt_env -> ?mode:fmoptions -> ptn:form -> form -> unit
+val pf_form_match : pt_env -> ?mode:fmoptions -> ptn:form -> form -> unit
 val pf_unify : pt_env -> ty -> ty -> unit
 
 (* pattern matching - raise [FindOccFailure] on failure. *)

@@ -94,7 +94,7 @@ val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
 
 val search_eng      : engine -> nengine option
 
-val mk_engine       : ?verbose:bool -> ?mtch:match_env -> form -> pattern ->
+val mk_engine       : ?mtch:match_env -> form -> pattern ->
                       LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info -> engine
 

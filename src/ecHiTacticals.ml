@@ -76,6 +76,13 @@ and process1_idtac (_ : ttenv) (msg : string option) (tc : tcenv1) =
   EcLowGoal.t_id tc
 
 (* -------------------------------------------------------------------- *)
+and process_move pr (tc : tcenv1) =
+  let gstate = EcEnv.gstate (FApi.tc1_env tc) in
+  EcGState.tmpset "debug" pr.pr_verbose
+    (EcHiGoal.process_move pr.pr_view pr.pr_rev)
+    tc gstate
+
+(* -------------------------------------------------------------------- *)
 and process1_case (_ : ttenv) (doeq, opts, gp) (tc : tcenv1) =
   let opts = CaseOptions.merge CaseOptions.default opts in
 
@@ -156,7 +163,7 @@ and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
     | Papply pe           -> process_apply ~implicits:ttenv.tt_implicits pe
     | Pcut (m, ip, f, t)  -> process_cut ~mode:m engine ttenv (ip, f, t)
     | Pcutdef (ip, f)     -> process_cutdef ttenv (ip, f)
-    | Pmove pr            -> process_move ~verbose:pr.pr_verbose pr.pr_view pr.pr_rev
+    | Pmove pr            -> process_move pr
     | Pclear l            -> process_clear l
     | Prewrite (ri, x)    -> process_rewrite ttenv ?target:x ri
     | Psubst   ri         -> process_subst ri

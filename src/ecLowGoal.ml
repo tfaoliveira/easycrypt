@@ -1395,7 +1395,7 @@ type rwmode = [`Bool | `Eq]
 
 (* -------------------------------------------------------------------- *)
 let t_rewrite
-  ?(verbose=false) ?xconv ?target ?(mode : rwmode option)
+  ?xconv ?target ?(mode : rwmode option)
   ?(donot=false)(pt : proofterm)
     (s, pos) (tc : tcenv1)
 =
@@ -1414,8 +1414,8 @@ let t_rewrite
         let ptev_env = ptenv_of_penv hyps (RApi.tc_penv tc) in
         let pt = { ptev_env; ptev_pt = pt; ptev_ax = ax } in
         let pt' = pt_of_global_r ptev_env LG.p_negeqF [] in
-        let pt' = apply_pterm_to_arg_r ~verbose pt' (PVAFormula f) in
-        let pt' = apply_pterm_to_arg_r ~verbose pt' (PVASub pt) in
+        let pt' = apply_pterm_to_arg_r pt' (PVAFormula f) in
+        let pt' = apply_pterm_to_arg_r pt' (PVASub pt) in
         let pt, _ = concretize pt' in
         pt, f, f_false
 
