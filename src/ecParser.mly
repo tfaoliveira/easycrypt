@@ -624,7 +624,7 @@
 %token WP
 %token ZETA
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4
-%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT LTLTSTARGTGT
+%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
 
 
 %nonassoc prec_below_comma
@@ -2727,8 +2727,8 @@ rwarg1:
 | SLASHTILDEQ
    { RWSimpl `Variant }
 
-| v=iboption(LTLTSTARGTGT) s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
-   { RWRw (v, (s, r, o), fp) }
+| s=rwside r=rwrepeat? o=rwocc? fp=rwpterms
+   { RWRw ((s, r, o), fp) }
 
 | s=rwside r=rwrepeat? o=rwocc? SLASH x=sform_h %prec prec_tactic
    { RWDelta ((s, r, o), x); }
@@ -2992,8 +2992,8 @@ logtactic:
 | ASSUMPTION
     { Passumption }
 
-| MOVE v=iboption(LTLTSTARGTGT) vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
-   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; pr_verbose = v; } }
+| MOVE vw=prefix(SLASH, pterm)* gp=prefix(COLON, revert)?
+   { Pmove { pr_rev = odfl prevert0 gp; pr_view = vw; } }
 
 | CLEAR l=loc(ipcore_name)+
    { Pclear l }
@@ -3522,7 +3522,7 @@ tactic_core_r:
      gp=revert
 
     { Pcase (odfl false eq, odfl [] opts,
-             { pr_view = vw; pr_rev = gp; pr_verbose = false } ) }
+             { pr_view = vw; pr_rev = gp; } ) }
 
 | PROGRESS opts=pgoptions? t=tactic_core? {
     Pprogress (odfl [] opts, t)
@@ -3533,10 +3533,6 @@ tactic_core_r:
 
 | x=phltactic
    { PPhl x }
-
-(* DEBUG *)
-| DEBUG
-    { Pdebug }
 
 %inline tactic_core:
 | x=loc(tactic_core_r) { x }
@@ -3998,8 +3994,8 @@ stop:
 | DROP DOT { }
 
 global:
-| tm=boption(TIME) g=loc(global_action) FINAL
-  { { gl_action = g; gl_timed = tm; } }
+| tm=boption(TIME) d=boption(DEBUG) g=loc(global_action) FINAL
+  { { gl_action = g; gl_timed = tm; gl_debug=d; } }
 
 prog_r:
 | g=global { P_Prog ([g], false) }

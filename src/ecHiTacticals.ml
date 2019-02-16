@@ -39,11 +39,7 @@ module CaseOptions = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let rec process1_debug (_ttenv : ttenv) (tc : tcenv1) =
-  FApi.tcenv_of_tcenv1 tc
-
-(* -------------------------------------------------------------------- *)
-and process1_by (ttenv : ttenv) (t : ptactic list option) (tc : tcenv1) =
+let rec process1_by (ttenv : ttenv) (t : ptactic list option) (tc : tcenv1) =
   t_onall process_done (process1_seq ttenv (odfl [] t) tc)
 
 (* -------------------------------------------------------------------- *)
@@ -77,10 +73,7 @@ and process1_idtac (_ : ttenv) (msg : string option) (tc : tcenv1) =
 
 (* -------------------------------------------------------------------- *)
 and process_move pr (tc : tcenv1) =
-  let gstate = EcEnv.gstate (FApi.tc1_env tc) in
-  EcGState.tmpset "debug" pr.pr_verbose
-    (EcHiGoal.process_move pr.pr_view pr.pr_rev)
-    tc gstate
+  EcHiGoal.process_move pr.pr_view pr.pr_rev tc
 
 (* -------------------------------------------------------------------- *)
 and process1_case (_ : ttenv) (doeq, opts, gp) (tc : tcenv1) =
@@ -323,7 +316,6 @@ and process_core (ttenv : ttenv) ({ pl_loc = loc } as t : ptactic_core) (tc : tc
     | Pseq      ts          -> `One (process1_seq      ttenv ts)
     | Pcase     es          -> `One (process1_case     ttenv es)
     | Pprogress (o, t)      -> `One (process1_progress ttenv o t)
-    | Pdebug                -> `One (process1_debug    ttenv)
     | Psubgoal  tt          -> `All (process_chain     ttenv tt)
     | Pnstrict  t           -> `One (process1_nstrict  ttenv t)
   in

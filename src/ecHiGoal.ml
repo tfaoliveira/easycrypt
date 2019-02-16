@@ -659,7 +659,7 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       | Some (b, n) -> t_do b n do1 tc
   end
 
-  | RWRw (verbose, ((s : rwside), r, o), pts) -> begin
+  | RWRw (((s : rwside), r, o), pts) -> begin
       let do1 ((subs : rwside), pt) tc =
         let hyps   = FApi.tc1_hyps tc in
         let target = target |> omap (fst |- LDecl.hyp_by_name^~ hyps |- unloc) in
@@ -717,13 +717,9 @@ let rec process_rewrite1_r ttenv ?target ri tc =
 
       let doall tc = t_ors (List.map do1 pts) tc in
 
-      let doit () =
-        match r with
-        | None -> doall tc
-        | Some (b, n) -> t_do b n doall tc in
-
-      let gstate = EcEnv.gstate (FApi.tc1_env tc) in
-      EcGState.tmpset "debug" verbose doit () gstate
+      match r with
+      | None -> doall tc
+      | Some (b, n) -> t_do b n doall tc
   end
 
   | RWPr (x, f) -> begin
@@ -1522,7 +1518,9 @@ let rec process_mgenintros ?cf ttenv pis tc =
   match pis with [] -> tc | pi :: pis ->
     let tc =
       match pi with
-      | `Ip  pi -> process_mintros_1 ?cf ttenv pi tc
+      | `Ip pi ->
+          process_mintros_1 ?cf ttenv pi tc
+
       | `Gen gn ->
          t_onall (
            t_seqs [

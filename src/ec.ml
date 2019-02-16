@@ -340,7 +340,10 @@ let main () =
               List.iter
                 (fun p ->
                    let loc = p.EP.gl_action.EcLocation.pl_loc in
-                     try  EcCommands.process ~timed:p.EP.gl_timed p.EP.gl_action
+                     try
+                       EcCommands.process
+                         ~timed:p.EP.gl_timed ~debug:p.EP.gl_debug
+                         p.EP.gl_action
                      with
                      | EcCommands.Restart ->
                          raise EcCommands.Restart

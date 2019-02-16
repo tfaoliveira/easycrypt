@@ -677,7 +677,7 @@ type rwarg = (tfocus located) option * rwarg1 located
 and rwarg1 =
   | RWSimpl  of [`Default | `Variant]
   | RWDelta  of (rwoptions * pformula)
-  | RWRw     of (bool * rwoptions * (rwside * ppterm) list)
+  | RWRw     of (rwoptions * (rwside * ppterm) list)
   | RWPr     of (psymbol * pformula option)
   | RWDone   of [`Default | `Variant] option
   | RWSmt    of (bool * pprover_infos)
@@ -747,11 +747,10 @@ type prevert = {
 type prevertv = {
   pr_rev     : prevert;
   pr_view    : ppterm list;
-  pr_verbose : bool;
 }
 
 let prevert0  = { pr_clear = []; pr_genp = []; }
-let prevertv0 = { pr_rev = prevert0; pr_view = []; pr_verbose = false; }
+let prevertv0 = { pr_rev = prevert0; pr_view = []; }
 
 (* -------------------------------------------------------------------- *)
 type ppgoption = [
@@ -819,7 +818,6 @@ and ptactic_core_r =
   | Psubgoal    of ptactic_chain
   | Pnstrict    of ptactic_core
   | Padmit
-  | Pdebug
 
 (* -------------------------------------------------------------------- *)
 and ptactic_core = ptactic_core_r located
@@ -1170,6 +1168,7 @@ type global_action =
 type global = {
   gl_action : global_action located;
   gl_timed  : bool;
+  gl_debug  : bool;
 }
 
 type prog_r =

@@ -560,50 +560,53 @@ and process_pattern (scope : EcScope.scope) (_p : pat_stmt) =
   scope
 
 (* -------------------------------------------------------------------- *)
-and process (ld : Loader.loader) (scope : EcScope.scope) g =
+and process ?(debug = true) (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in
 
-  let scope =
-    match
-      match g.pl_desc with
-      | Gtype        t    -> `Fct   (fun scope -> process_types      scope  (List.map (mk_loc loc) t))
-      | Gtypeclass   t    -> `Fct   (fun scope -> process_typeclass  scope  (mk_loc loc t))
-      | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
-      | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
-      | Gdeclare     m    -> `Fct   (fun scope -> process_declare    scope  m)
-      | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
-      | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  (mk_loc loc o))
-      | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
-      | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
-      | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
-      | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      scope  (mk_loc loc a))
-      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  (snd_map unloc name))
-      | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
-      | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
-      | GthRequire   name -> `Fct   (fun scope -> process_th_require ld scope name)
-      | GthImport    name -> `Fct   (fun scope -> process_th_import  scope  name)
-      | GthExport    name -> `Fct   (fun scope -> process_th_export  scope  name)
-      | GthClone     thcl -> `Fct   (fun scope -> process_th_clone   scope  thcl)
-      | GsctOpen     name -> `Fct   (fun scope -> process_sct_open   scope  name)
-      | GsctClose    name -> `Fct   (fun scope -> process_sct_close  scope  name)
-      | Gprint       p    -> `Fct   (fun scope -> process_print      scope  p; scope)
-      | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
-      | Gtactics     t    -> `Fct   (fun scope -> process_tactics    scope  t)
-      | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
-      | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
-      | Gprover_info pi   -> `Fct   (fun scope -> process_proverinfo scope  pi)
-      | Gsave        ed   -> `Fct   (fun scope -> process_save       scope  ed)
-      | Gpragma      opt  -> `State (fun scope -> process_pragma     scope  opt)
-      | Goption      opt  -> `Fct   (fun scope -> process_option     scope  opt)
-      | Gaddrw       hint -> `Fct   (fun scope -> process_addrw      scope hint)
-      | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
-      | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
-      | Gtest        p    -> `Fct   (fun scope -> process_pattern    scope p)
-    with
-    | `Fct   f -> Some (f scope)
-    | `State f -> f scope; None
-  in
-    scope
+  EcGState.tmpset "debug" debug (fun () ->
+    let scope =
+      match
+        match g.pl_desc with
+        | Gtype        t    -> `Fct   (fun scope -> process_types      scope  (List.map (mk_loc loc) t))
+        | Gtypeclass   t    -> `Fct   (fun scope -> process_typeclass  scope  (mk_loc loc t))
+        | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
+        | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
+        | Gdeclare     m    -> `Fct   (fun scope -> process_declare    scope  m)
+        | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
+        | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  (mk_loc loc o))
+        | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
+        | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
+        | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
+        | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      scope  (mk_loc loc a))
+        | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  (snd_map unloc name))
+        | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
+        | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
+        | GthRequire   name -> `Fct   (fun scope -> process_th_require ld scope name)
+        | GthImport    name -> `Fct   (fun scope -> process_th_import  scope  name)
+        | GthExport    name -> `Fct   (fun scope -> process_th_export  scope  name)
+        | GthClone     thcl -> `Fct   (fun scope -> process_th_clone   scope  thcl)
+        | GsctOpen     name -> `Fct   (fun scope -> process_sct_open   scope  name)
+        | GsctClose    name -> `Fct   (fun scope -> process_sct_close  scope  name)
+        | Gprint       p    -> `Fct   (fun scope -> process_print      scope  p; scope)
+        | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
+        | Gtactics     t    -> `Fct   (fun scope -> process_tactics    scope  t)
+        | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
+        | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
+        | Gprover_info pi   -> `Fct   (fun scope -> process_proverinfo scope  pi)
+        | Gsave        ed   -> `Fct   (fun scope -> process_save       scope  ed)
+        | Gpragma      opt  -> `State (fun scope -> process_pragma     scope  opt)
+        | Goption      opt  -> `Fct   (fun scope -> process_option     scope  opt)
+        | Gaddrw       hint -> `Fct   (fun scope -> process_addrw      scope hint)
+        | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
+        | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
+        | Gtest        p    -> `Fct   (fun scope -> process_pattern    scope p)
+      with
+      | `Fct   f -> Some (f scope)
+      | `State f -> f scope; None
+    in
+      scope)
+
+  () (EcEnv.gstate (EcScope.env scope))
 
 (* -------------------------------------------------------------------- *)
 and process_internal ld scope g =
@@ -736,13 +739,13 @@ let reset () =
   context := Some (rootctxt (oget !context).ct_root)
 
 (* -------------------------------------------------------------------- *)
-let process ?(timed = false) (g : global_action located) : unit =
+let process ?(timed = false) ?debug (g : global_action located) : unit =
   let current = oget !context in
   let scope   = current.ct_current in
   let timed   = if timed then EcUtils.timed else (fun f x -> (-1.0, f  x)) in
 
   try
-    let (tdelta, oscope) = timed (process loader scope) g in
+    let (tdelta, oscope) = timed (process ?debug loader scope) g in
     oscope |> oiter (fun scope -> context := Some (push_context scope current));
     if tdelta >= 0. then
       EcScope.notify scope `Info "time: %f" tdelta
