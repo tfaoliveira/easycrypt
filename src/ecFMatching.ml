@@ -19,8 +19,8 @@ type verbose = {
     verbose_reduce          : bool;
     verbose_show_ignored_or : bool;
     verbose_show_or         : bool;
+    verbose_begin_match     : bool;
   }
-
 
 let no_verbose : verbose = {
     verbose_match           = false;
@@ -32,6 +32,7 @@ let no_verbose : verbose = {
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
+    verbose_begin_match     = false;
   }
 
 let full_verbose : verbose = {
@@ -44,18 +45,20 @@ let full_verbose : verbose = {
     verbose_reduce          = true;
     verbose_show_ignored_or = true;
     verbose_show_or         = true;
+    verbose_begin_match     = true;
   }
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = true;
+    verbose_rule            = false;
     verbose_type            = false;
-    verbose_bind_restr      = true;
+    verbose_bind_restr      = false;
     verbose_add_meta        = true;
-    verbose_abstract        = true;
+    verbose_abstract        = false;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
+    verbose_begin_match     = false;
   }
 
 let env_verbose = no_verbose
@@ -78,7 +81,6 @@ type environment = {
     env_red_info_match     : EcReduction.reduction_info;
     env_red_info_same_meta : EcReduction.reduction_info;
     env_restore_unienv     : EcUnify.unienv option ref;
-    env_current_binds      : pbindings;
     env_meta_restr_binds   : pbindings Mid.t;
     env_verbose            : verbose;
   }
@@ -192,7 +194,20 @@ module Debug : sig
   val debug_ignore_ors               : environment -> unit
   val debug_another_or               : environment -> unit
   val debug_different_forms          : environment -> form -> form -> unit
+  val debug_try_translate_higher_order : environment -> pattern -> string -> unit
+  val debug_begin_match              : environment -> unit
+  val debug_show_pattern             : environment -> pattern -> unit
 end = struct
+
+  let debug_show_pattern menv p =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "### pattern is %a"
+        (EcPrinting.pp_pattern ppe) p
+
   let debug_type menv ty1 ty2 =
     if menv.env_verbose.verbose_type then
       let env = LDecl.toenv menv.env_hyps in
@@ -202,6 +217,13 @@ end = struct
         "=== types are unified %a in %a"
         (EcPrinting.pp_type ppe) ty1
         (EcPrinting.pp_type ppe) ty2
+
+  let debug_begin_match menv =
+    if menv.env_verbose.verbose_begin_match then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning
+        "------------ Begin new match -------------------"
 
   let debug_ogty menv p1 p2 =
     if menv.env_verbose.verbose_type then
@@ -277,6 +299,15 @@ end = struct
         "Abstracted (%a) in : %a"
         (EcPrinting.pp_pattern ppe) p1
         (EcPrinting.pp_pattern ppe) p2
+
+  let debug_try_translate_higher_order menv p s  =
+    if menv.env_verbose.verbose_abstract then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning
+        "Try to translate to form (%s) : %a" s
+        (EcPrinting.pp_pattern ppe) p
 
   let debug_try_match menv p a c =
     if menv.env_verbose.verbose_match then
@@ -381,9 +412,6 @@ let restore_environment (env : environment) : unit =
      let src = unienv in
      EcUnify.UniEnv.restore dst src
 
-let add_binds (env : environment) (env_current_binds : pbindings) : environment =
-  { env with env_current_binds }
-
 let my_mem = EcIdent.create "new_mem"
 
 let form_of_expr = EcFol.form_of_expr my_mem
@@ -467,7 +495,8 @@ module Translate = struct
        | Sym_Quant (q,pb), [p] ->
           let f (id,ogt) = match gty_of_ogty ogt with
             | Some gty -> id, gty
-            | _        -> raise (Invalid_Type "formula") in
+            | _        -> raise (Invalid_Type "formula")
+          in
           f_quant q (List.map f pb) (form_of_pattern env p)
        | _ -> assert false
 
@@ -533,13 +562,18 @@ module Translate = struct
        List.flatten (List.map (instr_of_pattern env) lp)
     | _ -> raise (Invalid_Type "instr")
 
-  and lvalue_of_pattern env p = match p.p_node with
-    | Pat_Axiom (Axiom_Lvalue lv) -> lv
-    | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
-       let t = List.map (lvalue_of_pattern env) t in
-       let t = List.map (function LvVar (x,t) -> (x,t)
-                                | _ -> raise (Invalid_Type "lvalue tuple")) t in
-       LvTuple t
+  and lvalue_of_pattern env p =
+    match p.p_ogty with
+    | OGTlv -> begin
+        match p.p_node with
+        | Pat_Axiom (Axiom_Lvalue lv) -> lv
+        | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
+           let t = List.map (lvalue_of_pattern env) t in
+           let t = List.map (function LvVar (x,t) -> (x,t)
+                                    | _ -> raise (Invalid_Type "lvalue tuple")) t in
+           LvTuple t
+        | _ -> raise (Invalid_Type "lvalue")
+      end
     | _ -> raise (Invalid_Type "lvalue")
 
   and expr_of_pattern env p =
@@ -1062,11 +1096,8 @@ let h_red_strat env p a =
   let h = env.env_hyps in
   let r = env.env_red_info_match in
   let env = saturate env in
-  let s = psubst_of_menv env.env_match in
-  let s' = { s with ps_patloc = Mid.empty } in
-  let p' =
-    try pat_form (Translate.form_of_pattern (LDecl.toenv h) (p_subst s' p))
-    with Translate.Invalid_Type _ -> p in
+  let s = psubst_of_menv { env.env_match with me_matches = Mid.empty } in
+  let p' = p_simplify (p_subst s p) in
   match X.h_red_strat h s r r p' a with
   | None -> None
   | Some (p'',a') ->
@@ -1075,18 +1106,16 @@ let h_red_strat env p a =
      else
        Some (p'', a')
 
-
 (* -------------------------------------------------------------------------- *)
-let rec merge_binds bs1 bs2 env = match bs1,bs2 with
-  | [], _ | _,[] -> Some (env,bs1,bs2)
-  | (x,_)::_, (y,_)::_
-       when List.mem_assoc x env.env_current_binds
-            || List.mem_assoc y env.env_current_binds ->
-     None
-  | (x,ty1)::r1, (y,ty2)::r2 when EQ.name x y && EQ.gty env ty1 ty2 ->
-     let env = { env with env_current_binds = env.env_current_binds @ [y, ogty_of_gty ty2]; }
-     in merge_binds r1 r2 env
-  | _ -> None
+let p_simplify env p =
+  try
+    let f = pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p) in
+    Debug.debug_try_translate_higher_order env f "valid form";
+    f
+  with
+  | Translate.Invalid_Type s ->
+     Debug.debug_try_translate_higher_order env p s;
+     p_simplify p
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
@@ -1114,7 +1143,11 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = e.ne_env in
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
+  Debug.debug_show_pattern e.ne_env p;
   let p = Psubst.p_subst subst p in
+  Debug.debug_show_pattern e.ne_env p;
+  let p = p_simplify e.ne_env p in
+  Debug.debug_show_pattern e.ne_env p;
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
     let me_matches =
@@ -1149,9 +1182,8 @@ let n_engine (a : axiom) (e_pattern : pattern) (n : nengine) =
 let add_match (e : engine) n p b =
   n_engine e.e_head e.e_pattern (nadd_match (e_next e) n p b)
 
-let sub_engine e p b f =
-  { e with e_head = f; e_pattern = mk_pattern (Pat_Sub p) OGTany;
-           e_env = { e.e_env with env_current_binds = b; }; }
+let sub_engine e p f =
+  { e with e_head = f; e_pattern = mk_pattern (Pat_Sub p) OGTany; }
 
 let omap_list (default : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   let rec aux acc there_is_Some = function
@@ -1214,6 +1246,13 @@ let rec abstract_opt
   match ep with
   | None -> None
   | Some p ->
+  match parg.p_node with
+  | Pat_Axiom (Axiom_Form { f_node = Flocal id; f_ty = ty })
+    | Pat_Axiom (Axiom_Local (id,ty)) ->
+     let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
+     let s = p_bind_rename s id arg (ty_subst s.ps_sty ty) in
+     Some (Psubst.p_subst s p)
+  | _ ->
      let eq_pat' env p pp =
        match p.p_node, pp.p_node with
        | Pat_Meta_Name (_,n,_), _
@@ -1237,10 +1276,6 @@ let rec abstract_opt
        let p' = f env p in
        if EQ.pattern env env.env_red_info_match p p' then None else Some p'
      in
-     let env   = saturate e.e_env in
-     let subst = psubst_of_menv env.env_match in
-     let p     = Psubst.p_subst subst p in
-     let parg  = Psubst.p_subst subst parg in
      let ogty  = p.p_ogty in
      omap (change_ogty ogty) (aux e.e_env p parg)
 
@@ -1265,10 +1300,6 @@ let try_reduce (e : engine) : engine =
   { e with e_env; e_continuation }
 
 
-let p_simplify env p =
-  try pat_form (Translate.form_of_pattern env p)
-  with Translate.Invalid_Type _ -> p_simplify p
-
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
@@ -1281,9 +1312,6 @@ let rec process (e : engine) : nengine =
   else
   match e.e_pattern.p_node, e.e_head with
   | Pat_Anything, _ -> next Match e
-
-  | Pat_Meta_Name (_,name,_), Axiom_Form { f_node = Flocal name2 }
-       when EQ.name name name2 -> next Match e
 
   | Pat_Meta_Name (p,name,ob), _ ->
      let env_meta_restr_binds =
@@ -1328,9 +1356,8 @@ let rec process (e : engine) : nengine =
 
   | Pat_Axiom o1, o2 ->
      Debug.debug_which_rule e.e_env "same axiom";
-     if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2 then begin
-         next Match e
-       end
+     if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2
+     then next   Match e
      else next NoMatch e
 
   | Pat_Fun_Symbol (Sym_Form_If, p1::p2::p3::[]),
@@ -1391,8 +1418,7 @@ let rec process (e : engine) : nengine =
        let abstract m e p arg =
          Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
          let op = abstract_opt m e (Some p) arg in
-         let p = p_simplify (LDecl.toenv e.e_env.env_hyps) (odfl p op) in
-         Debug.debug_higher_order_is_abstract e.e_env (snd arg) p;
+         let p = odfl p op in
          p
        in
        let pat =
@@ -1401,7 +1427,11 @@ let rec process (e : engine) : nengine =
            (pat_axiom axiom) args in
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
-       let pat = p_simplify (LDecl.toenv e.e_env.env_hyps) (p_quant Llambda args pat) in
+       let pat' = p_quant Llambda args pat in
+       let pat = p_simplify e.e_env pat' in
+       let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
+       let pat = p_subst s pat in
+       Debug.debug_higher_order_is_abstract e.e_env pat' pat;
        let m,e =
          try let e = add_match e name pat ob in Match, e
          with CannotUnify -> NoMatch, e
@@ -1466,7 +1496,7 @@ let rec process (e : engine) : nengine =
          let fs = Fsubst.f_subst_id in
          let f s (id1,_) (id2,gty1) = Psubst.p_bind_gty s id1 id2 gty1 in
          let e_env     = saturate e.e_env in
-         let subst     = Psubst.p_subst_id in
+         let subst     = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
          let s         = List.fold_left2 f subst pbs1 fbs1 in
          let p         = p_quant q1 pbs2 p in
          let e_pattern = Psubst.p_subst s p in
@@ -1827,27 +1857,23 @@ and sub_engines (e : engine) (p : pattern) : engine list =
   | Axiom_Instr i    -> begin
       match i.i_node with
       | Sasgn (_,expr) | Srnd (_,expr) ->
-         [sub_engine e p e.e_env.env_current_binds
-            (Axiom_Form (form_of_expr expr))]
+         [sub_engine e p (Axiom_Form (form_of_expr expr))]
       | Scall (_,_,args) ->
-         List.map (fun x -> sub_engine e p e.e_env.env_current_binds
+         List.map (fun x -> sub_engine e p
                               (Axiom_Form (form_of_expr x))) args
       | Sif (cond,strue,sfalse) ->
-         [sub_engine e p e.e_env.env_current_binds
-            (Axiom_Form (form_of_expr cond));
-          sub_engine e p e.e_env.env_current_binds (Axiom_Stmt strue);
-          sub_engine e p e.e_env.env_current_binds (Axiom_Stmt sfalse)]
+         [sub_engine e p (Axiom_Form (form_of_expr cond));
+          sub_engine e p (Axiom_Stmt strue);
+          sub_engine e p (Axiom_Stmt sfalse)]
       | Swhile (cond,body) ->
-         [sub_engine e p e.e_env.env_current_binds
-            (Axiom_Form (form_of_expr cond));
-          sub_engine e p e.e_env.env_current_binds (Axiom_Stmt body)]
+         [sub_engine e p (Axiom_Form (form_of_expr cond));
+          sub_engine e p (Axiom_Stmt body)]
       | Sassert cond ->
-         [sub_engine e p e.e_env.env_current_binds
-            (Axiom_Form (form_of_expr cond))]
+         [sub_engine e p (Axiom_Form (form_of_expr cond))]
       | _ -> []
     end
   | Axiom_Stmt s ->
-     List.map (fun x -> sub_engine e p e.e_env.env_current_binds (Axiom_Instr x)) s.s_node
+     List.map (fun x -> sub_engine e p (Axiom_Instr x)) s.s_node
   | Axiom_Form f -> begin
       match f.f_node with
       | Fint _
@@ -1855,60 +1881,58 @@ and sub_engines (e : engine) (p : pattern) : engine list =
         | Fop _-> []
 
       | Flet (_,f1,f2) ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
-           [axiom_form f1;axiom_form f2]
+         List.map (sub_engine e p) [axiom_form f1;axiom_form f2]
       | FhoareF h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [axiom_form h.hf_pr; Axiom_Xpath h.hf_f; Axiom_Form h.hf_po]
       | FhoareS h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_MemEnv h.hs_m; axiom_form h.hs_pr; Axiom_Stmt h.hs_s;
             axiom_form h.hs_po]
       | FbdHoareF h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [axiom_form h.bhf_pr; Axiom_Xpath h.bhf_f; Axiom_Form h.bhf_po;
             Axiom_Hoarecmp h.bhf_cmp; Axiom_Form h.bhf_bd]
       | FbdHoareS h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_MemEnv h.bhs_m; axiom_form h.bhs_pr; Axiom_Stmt h.bhs_s;
             axiom_form h.bhs_po; Axiom_Hoarecmp h.bhs_cmp; Axiom_Form h.bhs_bd]
       | FequivF h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_Form h.ef_pr; Axiom_Xpath h.ef_fl; Axiom_Xpath h.ef_fr;
             Axiom_Form h.ef_po]
       | FequivS h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_MemEnv h.es_ml; Axiom_MemEnv h.es_mr; Axiom_Form h.es_pr;
             Axiom_Stmt h.es_sl; Axiom_Stmt h.es_sr; Axiom_Form h.es_po]
       | FeagerF h ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_Form h.eg_pr; Axiom_Stmt h.eg_sl; Axiom_Xpath h.eg_fl;
             Axiom_Xpath h.eg_fr; Axiom_Stmt h.eg_sr; Axiom_Form h.eg_po]
       | Fif (cond,f1,f2) ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_Form cond;Axiom_Form f1;Axiom_Form f2]
       | Fapp (f, args) ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            ((Axiom_Form f)::(List.map (fun x -> Axiom_Form x) args))
       | Ftuple args ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            (List.map (fun x -> Axiom_Form x) args)
-      | Fproj (f,_) -> [sub_engine e p e.e_env.env_current_binds (Axiom_Form f)]
+      | Fproj (f,_) -> [sub_engine e p (Axiom_Form f)]
       | Fmatch (f,fl,_) ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            ((Axiom_Form f)::(List.map (fun x -> Axiom_Form x) fl))
       | Fpr pr ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
+         List.map (sub_engine e p)
            [Axiom_Memory pr.pr_mem;
             Axiom_Form pr.pr_args;
             Axiom_Form pr.pr_event]
-      | Fquant (_,bs,f) ->
-         [sub_engine e p (List.map (snd_map ogty_of_gty) bs) (Axiom_Form f)]
+      | Fquant (_,_,f) ->
+         [sub_engine e p (Axiom_Form f)]
       | Fglob (mp,mem) ->
-         List.map (sub_engine e p e.e_env.env_current_binds)
-           [Axiom_Mpath_top mp.m_top;Axiom_Memory mem]
+         List.map (sub_engine e p) [Axiom_Mpath_top mp.m_top;Axiom_Memory mem]
       | Fpvar (_pv,mem) ->
-         [sub_engine e p e.e_env.env_current_binds (Axiom_Memory mem)]
+         [sub_engine e p (Axiom_Memory mem)]
     end
 
 
@@ -1916,6 +1940,7 @@ let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
 
 let search_eng e =
+  Debug.debug_begin_match e.e_env;
   try
     Some (process e)
   with
@@ -2246,7 +2271,6 @@ let mk_engine ?mtch f pattern hyps rim ris =
     env_red_info_match     = rim;
     env_red_info_same_meta = ris;
     env_restore_unienv     = ref None;
-    env_current_binds      = [];
     env_meta_restr_binds   = Mid.empty;
     env_match              = env_match;
     env_verbose            = verbose;

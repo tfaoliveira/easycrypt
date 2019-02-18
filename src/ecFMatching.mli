@@ -25,6 +25,7 @@ type verbose = {
     verbose_reduce          : bool;
     verbose_show_ignored_or : bool;
     verbose_show_or         : bool;
+    verbose_begin_match     : bool;
   }
 
 type environment = {
@@ -33,7 +34,6 @@ type environment = {
     env_red_info_match     : EcReduction.reduction_info;
     env_red_info_same_meta : EcReduction.reduction_info;
     env_restore_unienv     : EcUnify.unienv option ref;
-    env_current_binds      : pbindings;
     env_meta_restr_binds   : pbindings Mid.t;
     env_verbose            : verbose;
   }
