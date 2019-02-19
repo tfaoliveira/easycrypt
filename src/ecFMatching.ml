@@ -52,13 +52,13 @@ let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = false;
     verbose_type            = false;
-    verbose_bind_restr      = false;
+    verbose_bind_restr      = true;
     verbose_add_meta        = true;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
-    verbose_begin_match     = false;
+    verbose_begin_match     = true;
   }
 
 let env_verbose = no_verbose
@@ -214,7 +214,7 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
-        "=== types are unified %a in %a"
+        "--- types are unified %a in %a"
         (EcPrinting.pp_type ppe) ty1
         (EcPrinting.pp_type ppe) ty2
 
@@ -223,7 +223,7 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
 
       EcEnv.notify env `Warning
-        "------------ Begin new match -------------------"
+        "========================= Begin new match ==========================="
 
   let debug_ogty menv p1 p2 =
     if menv.env_verbose.verbose_type then
@@ -235,7 +235,7 @@ end = struct
       let p1 = Psubst.p_subst s p1 in
 
       EcEnv.notify env `Warning
-        "=!= types cannot be unified %a in %a"
+        "-!- types cannot be unified %a in %a"
         (EcPrinting.pp_ogty ppe) p1.p_ogty
         (EcPrinting.pp_ogty ppe) p2.p_ogty
 
@@ -255,12 +255,12 @@ end = struct
 
       if b then
         EcEnv.notify env `Warning
-          "=== Name %a binded to %a"
+          "--- Name %a binded to %a"
           (EcPrinting.pp_local ppe) name
           (EcPrinting.pp_pattern ppe) p
       else
         EcEnv.notify env `Warning
-          "=!= Name %a already exists and cannot be unified with %a"
+          "-!- Name %a already exists and cannot be unified with %a"
           (EcPrinting.pp_local ppe) name
           (EcPrinting.pp_pattern ppe) p
 
@@ -271,12 +271,12 @@ end = struct
 
       if b then
         EcEnv.notify env `Warning
-          "=== %a is convertible to %a\n"
+          "--- %a is convertible to %a\n"
           (EcPrinting.pp_pattern ppe) p1
           (EcPrinting.pp_pattern ppe) p2
       else
         EcEnv.notify env `Warning
-          "=!= %a is not convertible to %a\n"
+          "-!- %a is not convertible to %a\n"
           (EcPrinting.pp_pattern ppe) p1
           (EcPrinting.pp_pattern ppe) p2
 
@@ -350,7 +350,8 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
-      EcEnv.notify env `Warning "No reduction for (%a,%a)"
+      EcEnv.notify env `Warning "No reduction (%s beta) for (%a,%a)"
+        (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pat_axiom ppe) a
 
@@ -1840,7 +1841,8 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      | Some (e_pattern, e_head) ->
         if e_pattern = e.e_pattern && e_head = e.e_head then
           next_n NoMatch ne
-        else process { e with e_pattern; e_head }
+        else
+          process { e with e_pattern; e_head }
 
 and sub_engines (e : engine) (p : pattern) : engine list =
   match e.e_head with
