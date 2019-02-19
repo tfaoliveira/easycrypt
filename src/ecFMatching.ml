@@ -1103,7 +1103,7 @@ let h_red_strat env p a =
   let r = env.env_red_info_match in
   let env = saturate env in
   let s = psubst_of_menv { env.env_match with me_matches = Mid.empty } in
-  let p' = simplify env (p_subst s p) in
+  let p' = p_simplify (p_subst s p) in
   match X.h_red_strat h s r r p' a with
   | None -> None
   | Some (p'',a') ->
@@ -1139,7 +1139,7 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
   let p = Psubst.p_subst subst p in
-  let p = simplify env p in
+  let p = p_simplify p in
   let p = try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
           with Translate.Invalid_Type _ -> p in
   Debug.debug_show_pattern e.ne_env p;
@@ -1423,7 +1423,6 @@ let rec process (e : engine) : nengine =
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
        let pat' = p_quant Llambda args pat in
-       let pat = p_simplify pat' in
        let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
        let pat = p_subst s pat in
        Debug.debug_higher_order_is_abstract e.e_env pat' pat;
@@ -1944,7 +1943,6 @@ let search_eng e =
   | NoMatches -> None
 
 let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
-  let p_app = Simplify.ps_app in
   let axiom_expr e  = Axiom_Form (form_of_expr e) in
   let axiom_mpath m = Axiom_Mpath m in
 
