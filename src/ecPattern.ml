@@ -489,14 +489,17 @@ let form_of_pattern (p : pattern) = match p.p_ogty with
     end
   | _ -> raise Not_found
 
-let p_app (p : pattern) (args : pattern list) (ty : ty option) =
+let p_app ?ho (p : pattern) (args : pattern list) (ty : ty option) =
   let p, args1 = p_destr_app p in
   match args1 @ args with
   | [] -> p
   | args ->
+  match ho with
+  | None ->
      if is_higher_order p then
        pat_fun_symbol (Sym_Form_App (ty,MaybeHO)) (p::args)
      else pat_fun_symbol (Sym_Form_App (ty,NoHO)) (p::args)
+  | Some ho -> pat_fun_symbol (Sym_Form_App (ty,ho)) (p::args)
 
 let p_quant q bs p =
   match bs with
@@ -959,13 +962,13 @@ let p_map (f : pattern -> pattern) (p : pattern) : pattern =
 (* -------------------------------------------------------------------------- *)
 module Simplify = struct
 
-  let ps_app p1 pargs ot = match ot with
-    | None -> p_app p1 pargs ot
+  let ps_app ?ho p1 pargs ot = match ot with
+    | None -> p_app ?ho p1 pargs ot
     | Some t ->
        if List.for_all is_form (p1::pargs)
        then pat_form (f_app (form_of_pattern p1)
                         (List.map form_of_pattern pargs) t)
-       else p_app p1 pargs ot
+       else p_app ?ho p1 pargs ot
 
   let ps_quant q b p =
     if is_form p then
@@ -1719,8 +1722,8 @@ module Psubst = struct
           | Sym_Form_If, [cond;p1;p2] ->
              let cond, p1, p2 = p_subst s cond, p_subst s p1, p_subst s p2 in
              p_if cond p1 p2
-          | Sym_Form_App (ty,_), op::args ->
-             p_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
+          | Sym_Form_App (ty,ho), op::args ->
+             p_app ~ho (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
           | Sym_Form_Tuple, t ->
              p_tuple (List.map (p_subst s) t)
           | Sym_Form_Proj (i,ty), [p] ->
@@ -1911,21 +1914,21 @@ module Psubst = struct
       | Pat_Axiom _ -> None
       | Pat_Fun_Symbol (s,lp) ->
       match s,lp with
-      | Sym_Form_App (ty,_),
+      | Sym_Form_App (ty,ho),
         ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p) subst bs1 pargs1 in
-         Some (p_app (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
-      | Sym_Form_App (ty,_),
+         Some (p_app ~ho (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
+      | Sym_Form_App (ty,ho),
         ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fquant (Llambda,bds,f) })})::pargs ->
          let (bs1,bs2), (pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p) subst bs1 pargs1 in
          let bs2 = List.map (snd_map ogty_of_gty) bs2 in
-         Some (p_app (p_quant Llambda bs2 (p_subst subst (pat_form f))) pargs2 ty)
+         Some (p_app ~ho (p_quant Llambda bs2 (p_subst subst (pat_form f))) pargs2 ty)
       | _ -> None
 
 end
@@ -2512,8 +2515,8 @@ let rec reduce_pat p = match p.p_node with
   | Pat_Axiom _ -> p
   | Pat_Fun_Symbol (Sym_Form_If, [p1;p2;p3]) ->
      p_if (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-  | Pat_Fun_Symbol (Sym_Form_App (ty,_), pop::pargs) ->
-     p_app (reduce_pat pop) (List.map reduce_pat pargs) ty
+  | Pat_Fun_Symbol (Sym_Form_App (ty,ho), pop::pargs) ->
+     p_app ~ho (reduce_pat pop) (List.map reduce_pat pargs) ty
   | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
      p_tuple (List.map reduce_pat t)
   | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [p]) ->
@@ -2600,12 +2603,15 @@ let try_form ot p =
      then pat_form (f_app (form_of_pattern p1) (List.map form_of_pattern args) t)
      else p
 
-let p_app_simpl_opt op pargs oty = match op with
+let p_app_simpl_opt ?ho op pargs oty = match op with
   | None -> None
-  | Some p -> omap reduce_pat (p_betared_opt (reduce_pat (p_app p pargs oty)))
+  | Some p ->
+     omap reduce_pat (
+         p_betared_opt (reduce_pat (p_app ?ho p pargs oty))
+       )
 
-let p_app_simpl op pargs oty =
-  odfl (p_app op pargs oty) (p_app_simpl_opt (Some op) pargs oty)
+let p_app_simpl ?ho op pargs oty =
+  odfl (p_app ?ho op pargs oty) (p_app_simpl_opt ?ho (Some op) pargs oty)
 
 let p_forall_simpl b p =
   let b = List.filter (fun (id,_) -> Mid.mem id (pat_fv p)) b in
@@ -2802,19 +2808,19 @@ module PReduction = struct
            when ri.beta -> p_betared_opt p
 
       (* ζ-reduction *)
-      | Sym_Form_App (ty,_),
+      | Sym_Form_App (ty,ho),
         { p_node =
             (Pat_Meta_Name ({ p_node = Pat_Anything }, id, ob)) ;
           p_ogty = ogty} :: pargs ->
-         if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id ob ogty) pargs ty
-         else omap (fun x -> p_app x pargs ty) (reduce_local_opt hyps ri s id ob ogty)
+         if ri.beta then p_app_simpl_opt ~ho (reduce_local_opt hyps ri s id ob ogty) pargs ty
+         else omap (fun x -> p_app ~ho x pargs ty) (reduce_local_opt hyps ri s id ob ogty)
 
       (* ζ-reduction *)
-      | Sym_Form_App (oty,_),
+      | Sym_Form_App (oty,ho),
         { p_node = (Pat_Axiom (Axiom_Form { f_node = Flocal id ; f_ty = ty})
                     | Pat_Axiom (Axiom_Local (id,ty)))}::pargs ->
-         if ri.beta then p_app_simpl_opt (reduce_local_opt hyps ri s id None (OGTty (Some ty))) pargs oty
-         else omap (fun x -> p_app x pargs oty) (reduce_local_opt hyps ri s id None (OGTty (Some ty)))
+         if ri.beta then p_app_simpl_opt ~ho (reduce_local_opt hyps ri s id None (OGTty (Some ty))) pargs oty
+         else omap (fun x -> p_app ~ho x pargs oty) (reduce_local_opt hyps ri s id None (OGTty (Some ty)))
 
       (* ζ-reduction *)
       | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
@@ -2843,7 +2849,7 @@ module PReduction = struct
          Some (Psubst.p_subst subst p2)
 
       (* ι-reduction (records projection) *)
-      | Sym_Form_App _ ,
+      | Sym_Form_App (_,ho),
         { p_node = Pat_Axiom (Axiom_Form ({ f_node = Fop (op, _) ; f_ty = fty } as f1))}
         ::pargs
            when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
@@ -2883,7 +2889,7 @@ module PReduction = struct
             | _ -> None
           in match op with
              | None ->
-                omap (fun x -> p_app x pargs (Some fty)) (h_red_form_opt hyps ri s f1)
+                omap (fun x -> p_app ~ho x pargs (Some fty)) (h_red_form_opt hyps ri s f1)
              | _ -> op
         end
 
@@ -2902,7 +2908,7 @@ module PReduction = struct
          else Some p'
 
       (* ι-reduction (match-fix) *)
-      | Sym_Form_App (ty,_),
+      | Sym_Form_App (ty,ho),
         { p_node = Pat_Axiom (Axiom_Form ({ f_node = Fop (op, lty) } as f1))}::args
            when ri.iota
                 && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
@@ -2957,7 +2963,7 @@ module PReduction = struct
 
           with
           | EcEnv.NotReducible ->
-             omap (fun x -> p_app x args ty)
+             omap (fun x -> p_app ~ho x args ty)
                (h_red_form_opt hyps ri s f1)
         end
 
@@ -2990,7 +2996,7 @@ module PReduction = struct
          pv
 
     (* logical reduction *)
-    | Sym_Form_App (ty,_),
+    | Sym_Form_App (ty,ho),
       { p_node = Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))}::args
          when is_some ri.logic && is_logical_op op
       ->
@@ -3041,7 +3047,7 @@ module PReduction = struct
 
          | _ when ri.delta_p op ->
             let op = h_red_op_opt hyps ri s op tys in
-            p_app_simpl_opt op args ty
+            p_app_simpl_opt ~ho op args ty
 
          | _ -> Some p
        in
@@ -3049,16 +3055,16 @@ module PReduction = struct
          match p' with
          | Some p' ->
             if p_equal p p'
-            then omap (fun l -> p_app (pat_form fo) l ty)
+            then omap (fun l -> p_app ~ho (pat_form fo) l ty)
                    (h_red_args (fun x -> x) h_red_pattern_opt hyps ri s args)
             else Some p'
          | None -> None
        end
 
     (* δ-reduction *)
-    | Sym_Form_App (ty,_), pop::args when is_delta_p ri pop ->
+    | Sym_Form_App (ty,ho), pop::args when is_delta_p ri pop ->
        let op = reduce_op ri (EcEnv.LDecl.toenv hyps) pop in
-       omap (fun op -> p_app_simpl op args ty) op
+       omap (fun op -> p_app_simpl ~ho op args ty) op
 
     (* η-reduction *)
     | Sym_Quant (Llambda, (x, OGTty _)::binds),
@@ -3072,18 +3078,18 @@ module PReduction = struct
 
     (* η-reduction *)
     | Sym_Quant (Llambda, (x, OGTty _)::binds),
-      [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,_), pn::pargs)}]
+      [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,ho), pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_quant Llambda binds
-               (p_app pn (List.take (List.length pargs - 1) pargs) ty))
+               (p_app ~ho pn (List.take (List.length pargs - 1) pargs) ty))
 
     (* contextual rule - let *)
     | Sym_Form_Let lp, [p1;p2] ->
        omap (fun p1 -> p_let lp p1 p2) (h_red_pattern_opt hyps ri s p1)
 
     (* Contextual rule - application args. *)
-    | Sym_Form_App (ty,_), p1::args ->
-       omap (fun p1 -> p_app p1 args ty) (h_red_pattern_opt hyps ri s p1)
+    | Sym_Form_App (ty,ho), p1::args ->
+       omap (fun p1 -> p_app ~ho p1 args ty) (h_red_pattern_opt hyps ri s p1)
 
     (* (\* Contextual rule - bindings *\)
      * | Sym_Form_Quant (Lforall as t, b), [p1]

@@ -58,7 +58,7 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = true;
     verbose_add_meta        = true;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -1053,33 +1053,7 @@ end
 let reduce_axiom h s r a =
   let o = match PReduction.h_red_axiom_opt h r s a with
     | Some { p_node = Pat_Axiom a' } -> Some a'
-    | Some p' -> None
-      (*              begin
-       *   match p'.p_ogty with
-       *   | OGTty _ -> begin
-       *       (\* try  *\)
-       *       let _ =
-       *         Some (axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv h) p'))
-       *       in None
-       *            (\* with Translate.Invalid_Type _ -> None *\)
-       *     end
-       *   | OGTmem _ -> begin
-       *       (\* try *\)
-       *       let _ =
-       *         Some (Axiom_Memory (Translate.memory_of_pattern p'))
-       *       in None
-       *            (\* with Translate.Invalid_Type _ -> None *\)
-       *     end
-       *   | OGTmodty _ -> begin
-       *       (\* try *\)
-       *       let _ =
-       *         Some (Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv h) p'))
-       *       in None
-       *            (\* with Translate.Invalid_Type _ -> None *\)
-       *     end
-       *   | _ -> None
-       * end *)
-    | None -> None in
+    | _ -> None in
   match o with
   | Some a' -> if a = a' then None else Some a'
   | None -> None
@@ -1154,11 +1128,8 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = e.ne_env in
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
-  Debug.debug_show_pattern env p;
   let p = Psubst.p_subst subst p in
-  Debug.debug_show_pattern env p;
   let p = p_simplify p in
-  Debug.debug_show_pattern env p;
   let p = simplify env p in
   Debug.debug_show_pattern env p;
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)

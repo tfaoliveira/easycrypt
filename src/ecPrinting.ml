@@ -2979,7 +2979,7 @@ let pp_ogty ppe fmt = function
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
-     Format.fprintf fmt "%a" (pp_form ppe) f
+     Format.fprintf fmt "Form(%a)" (pp_form ppe) f
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
