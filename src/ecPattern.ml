@@ -1549,247 +1549,245 @@ module Psubst = struct
           | None ->
              let p = p_subst s p in mk_pattern (Pat_Meta_Name (p,name,ob)) p.p_ogty
         end
-      | Pat_Axiom a ->
-         let p =
-           match a with
-           | Axiom_Form fp -> begin
-               match fp.f_node with
-               | Fquant (q, b, f) ->
-                  let s, b' = add_bindings s b in
-                  let p     = p_subst s (pat_form f) in
-                  p_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b') p
-               | Flet (lp, f1, f2) ->
-                  let f1'    = p_subst s (pat_form f1) in
-                  let s, lp' = subst_lpattern s lp in
-                  let f2'    = p_subst s (pat_form f2) in
-                  p_let lp' f1' f2'
-               | Flocal id -> begin
-                   match Mid.find_opt id s.ps_patloc with
-                   | Some ({ p_node = Pat_Axiom (Axiom_Local (id,ty))}) ->
-                      pat_form (f_local id ty)
-                   | Some p -> p
-                   | None ->
-                      let ty = ty_subst s.ps_sty fp.f_ty in
-                      pat_form (FSmart.f_local (fp, (id, fp.f_ty)) (id, ty))
-                 end
-               | Fop (op, lty) ->
-                  let ty'  = ty_subst s.ps_sty fp.f_ty in
-                  let lty' = List.Smart.map (ty_subst s.ps_sty) lty in
-                  let op'  = s.ps_sty.ts_p op in
-                  pat_form (FSmart.f_op (fp, (op, lty, fp.f_ty)) (op', lty', ty'))
-               | Fpvar (pv, m) ->
-                  let pv' = pv_subst s pv in
-                  let m'  = mem_subst s m in
-                  let ty' = ty_subst s.ps_sty fp.f_ty in
-                  p_pvar pv' ty' m'
-               (* pat_form (FSmart.f_pvar (fp, (pv, fp.f_ty, m)) (pv', ty', m')) *)
-               | Fglob (mp, m) ->
-                  let m'  = mem_subst s m in
-                  let mp' = mp_subst s mp in
-                  p_glob mp' m'
-               (* pat_form (FSmart.f_glob (fp, (mp, m)) (mp', m')) *)
-               | FhoareF hf ->
-                  assert (not (Mid.mem mhr s.ps_patloc)
-                          && not (Mid.mem mhr s.ps_patloc));
-                  let pr' = p_subst s (pat_form hf.hf_pr) in
-                  let po' = p_subst s (pat_form hf.hf_po) in
-                  let mp' = xp_subst s hf.hf_f in
-                  p_hoareF pr' mp' po'
-               (* FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; } *)
-               | FhoareS hs ->
-                  assert (not (Mid.mem (fst hs.hs_m) s.ps_patloc));
-                  let pr' = p_subst s (pat_form hs.hs_pr) in
-                  let po' = p_subst s (pat_form hs.hs_po) in
-                  let st' = stmt_subst s hs.hs_s in
-                  let me' = memenv_subst s hs.hs_m in
-                  p_hoareS  me' pr' st' po'
-               (* FSmart.f_hoareS (fp, hs)
-                *   { hs_pr = pr'; hs_po = po'; hs_s = st'; hs_m = me'; } *)
-               | FbdHoareF bhf ->
-                  assert (not (Mid.mem mhr s.ps_patloc)
-                          && not (Mid.mem mhr s.ps_patloc));
-                  let pr' = p_subst s (pat_form bhf.bhf_pr) in
-                  let po' = p_subst s (pat_form bhf.bhf_po) in
-                  let mp' = xp_subst s bhf.bhf_f in
-                  let bd' = p_subst s (pat_form bhf.bhf_bd) in
-                  p_bdHoareF pr' mp' po' (pat_cmp bhf.bhf_cmp) bd'
-               (* FSmart.f_bdHoareF (fp, bhf)
-                *   { bhf with bhf_pr = pr'; bhf_po = po';
-                *              bhf_f  = mp'; bhf_bd = bd'; } *)
-               | FbdHoareS bhs ->
-                  assert (not (Mid.mem (fst bhs.bhs_m) s.ps_patloc));
-                  let pr' = p_subst s (pat_form bhs.bhs_pr) in
-                  let po' = p_subst s (pat_form bhs.bhs_po) in
-                  let st' = stmt_subst s bhs.bhs_s in
-                  let me' = memenv_subst s bhs.bhs_m in
-                  let bd' = p_subst s (pat_form bhs.bhs_bd) in
-                  p_bdHoareS me' pr' st' po'
-                    (pat_cmp bhs.bhs_cmp) bd'
-               (* FSmart.f_bdHoareS (fp, bhs)
-                *   { bhs with bhs_pr = pr'; bhs_po = po'; bhs_s = st';
-                *              bhs_bd = bd'; bhs_m  = me'; } *)
-               | FequivF ef ->
-                  assert (not (Mid.mem mleft s.ps_patloc)
-                          && not (Mid.mem mright s.ps_patloc));
-                  let pr' = p_subst s (pat_form ef.ef_pr) in
-                  let po' = p_subst s (pat_form ef.ef_po) in
-                  let fl' = xp_subst s ef.ef_fl in
-                  let fr' = xp_subst s ef.ef_fr in
-                  p_equivF pr' fl' fr' po'
-               (* FSmart.f_equivF (fp, ef)
-                *   { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; } *)
-               | FequivS eqs ->
-                  assert (not (Mid.mem (fst eqs.es_ml) s.ps_patloc)
-                          && not (Mid.mem (fst eqs.es_mr) s.ps_patloc));
-                  let pr' = p_subst s (pat_form eqs.es_pr) in
-                  let po' = p_subst s (pat_form eqs.es_po) in
-                  let sl' = stmt_subst s eqs.es_sl in
-                  let sr' = stmt_subst s eqs.es_sr in
-                  let ml' = memenv_subst s eqs.es_ml in
-                  let mr' = memenv_subst s eqs.es_mr in
-                  p_equivS ml' mr' pr' sl' sr' po'
-               (* FSmart.f_equivS (fp, eqs)
-                *   { es_ml = ml'; es_mr = mr';
-                *     es_pr = pr'; es_po = po';
-                *     es_sl = sl'; es_sr = sr'; } *)
-               | FeagerF eg ->
-                  assert (not (Mid.mem mleft s.ps_patloc)
-                          && not (Mid.mem mright s.ps_patloc));
-                  let pr' = p_subst s (pat_form eg.eg_pr) in
-                  let po' = p_subst s (pat_form eg.eg_po) in
-                  let fl' = xp_subst s eg.eg_fl in
-                  let fr' = xp_subst s eg.eg_fr in
-                  let sl' = stmt_subst s eg.eg_sl in
-                  let sr' = stmt_subst s eg.eg_sr in
-                  p_eagerF pr' sl' fl' fr' sr' po'
-               (* FSmart.f_eagerF (fp, eg)
-                *   { eg_pr = pr'; eg_sl = sl';eg_fl = fl';
-                *     eg_fr = fr'; eg_sr = sr'; eg_po = po'; } *)
-               | Fpr pr ->
-                  assert (not (Mid.mem mhr s.ps_patloc));
-                  let pr_mem   = mem_subst s pr.pr_mem in
-                  let pr_fun   = xp_subst s pr.pr_fun in
-                  let pr_args  = p_subst s (pat_form pr.pr_args) in
-                  let pr_event = p_subst s (pat_form pr.pr_event) in
-                  p_pr pr_mem pr_fun pr_args pr_event
-               (* FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; } *)
-               | Fif (f1, f2, f3) ->
-                  p_if (p_subst s (pat_form f1)) (p_subst s (pat_form f2))
-                    (p_subst s (pat_form f3))
-               | Fmatch (f1, fargs, ty) ->
-                  p_match (p_subst s (pat_form f1)) (ty_subst s.ps_sty ty)
-                    (List.map (fun x -> p_subst s (pat_form x)) fargs)
-               | Fint _ -> pat_form fp
-               | Fapp (op,args) ->
-                  let p = p_app (p_subst s (pat_form op))
-                            (List.map (fun x -> p_subst s (pat_form x)) args)
-                            (Some (ty_subst s.ps_sty fp.f_ty)) in
-                  odfl p (p_betared_opt p)
-               | Ftuple t ->
-                  p_tuple (List.map (fun x -> p_subst s (pat_form x)) t)
-               | Fproj (f1,i) ->
-                  p_proj (p_subst s (pat_form f1)) i (ty_subst s.ps_sty fp.f_ty)
-             end (* axiom_form *)
-           | Axiom_Mpath_top mtop -> mtop_subst s mtop
-           | Axiom_Mpath m -> mp_subst s m
-           | Axiom_Xpath xp -> xp_subst s xp
-           | Axiom_Memory m -> mem_subst s m
-           | Axiom_MemEnv m -> memenv_subst s m
-           | Axiom_Prog_Var pv -> pv_subst s pv
-           | Axiom_Op (op,lty) ->
-              let lty = List.Smart.map (ty_subst s.ps_sty) lty in
-              let oty = match p.p_ogty with
-                | OGTty (Some ty) -> Some (ty_subst s.ps_sty ty)
-                | _ -> None in
-              pat_op op lty oty
-           | Axiom_Instr i -> i_subst s i
-           | Axiom_Stmt st -> stmt_subst s st
-           | Axiom_Lvalue lv -> lv_subst s lv
-           | Axiom_Hoarecmp _ -> p
-           | Axiom_Local (id,ty) ->
-              match Mid.find_opt id s.ps_patloc with
-              | None -> p
-              | Some p' ->
-                 match p'.p_ogty with
-                 | OGTty (Some ty2) -> if ty_equal ty ty2 then p'
-                                       else assert false
-                 | _ -> mk_pattern p'.p_node (OGTty (Some ty))
-         in p_simplify p
-
-    | Pat_Fun_Symbol (sym,lp) -> begin
-        match sym,lp with
-        | Sym_Form_If, [cond;p1;p2] ->
-           let cond, p1, p2 = p_subst s cond, p_subst s p1, p_subst s p2 in
-           p_if cond p1 p2
-        | Sym_Form_App (ty,_), op::args ->
-           p_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
-        | Sym_Form_Tuple, t ->
-           p_tuple (List.map (p_subst s) t)
-        | Sym_Form_Proj (i,ty), [p] ->
-           p_proj (p_subst s p) i (ty_subst s.ps_sty ty)
-        | Sym_Form_Match ty, op::args ->
-           p_match (p_subst s op) (ty_subst s.ps_sty ty) (List.map (p_subst s) args)
-        | Sym_Form_Let lp, [p1;p2] ->
-           let p1'    = p_subst s p1 in
-           let s, lp' = subst_lpattern s lp in
-           let p2'    = p_subst s p2 in
-           p_let lp' p1' p2'
-        | Sym_Form_Pvar ty, [p;m] ->
-           p_pvar (p_subst s p) (ty_subst s.ps_sty ty) (p_subst s m)
-        | Sym_Form_Prog_var k, [p] ->
-           p_prog_var (p_subst s p) k
-        | Sym_Form_Glob, [mp;m] ->
-           p_glob (p_subst s mp) (p_subst s m)
-        | Sym_Form_Hoare_F, [pr;pf;po] ->
-           p_hoareF (p_subst s pr) (p_subst s pf) (p_subst s po)
-        | Sym_Form_Hoare_S, [m;pr;ps;po] ->
-           p_hoareS (p_subst s m) (p_subst s pr) (p_subst s ps) (p_subst s po)
-        | Sym_Form_bd_Hoare_F, [pr;pf;po;cmp;bd] ->
-           p_bdHoareF (p_subst s pr) (p_subst s pf) (p_subst s po)
-             (p_subst s cmp) (p_subst s bd)
-        | Sym_Form_bd_Hoare_S, [pm;pr;ps;po;cmp;bd] ->
-           p_bdHoareS (p_subst s pm) (p_subst s pr)
-             (p_subst s ps) (p_subst s po)
-             (p_subst s cmp) (p_subst s bd)
-        | Sym_Form_Equiv_F, [pr;fl;fr;po] ->
-           p_equivF (p_subst s pr) (p_subst s fl)
-             (p_subst s fr) (p_subst s po)
-        | Sym_Form_Equiv_S, [ml;mr;pr;sl;sr;po] ->
-           p_equivS (p_subst s ml) (p_subst s mr)
-             (p_subst s pr) (p_subst s sl)
-             (p_subst s sr) (p_subst s po)
-        | Sym_Form_Eager_F, [pr;sl;fl;fr;sr;po] ->
-           p_eagerF (p_subst s pr) (p_subst s sl)
-             (p_subst s fl) (p_subst s fr)
-             (p_subst s sr) (p_subst s po)
-        | Sym_Form_Pr, [pm;pf;pargs;pevent] ->
-           p_pr (p_subst s pm) (p_subst s pf)
-             (p_subst s pargs) (p_subst s pevent)
-        | Sym_Stmt_Seq, lp -> p_stmt (List.map (p_subst s) lp)
-        | Sym_Instr_Assign, [lv;e] ->
-           p_assign (p_subst s lv) (p_subst s e)
-        | Sym_Instr_Sample, [lv;e] ->
-           p_sample (p_subst s lv) (p_subst s e)
-        | Sym_Instr_Call, p::args ->
-           p_call None (p_subst s p) (List.map (p_subst s) args)
-        | Sym_Instr_Call_Lv, lv::p::args ->
-           p_call (Some (p_subst s lv)) (p_subst s p) (List.map (p_subst s) args)
-        | Sym_Instr_If, [cond;s1;s2] ->
-           p_instr_if (p_subst s cond) (p_subst s s1) (p_subst s s2)
-        | Sym_Instr_While, [cond;body] ->
-           p_while (p_subst s cond) (p_subst s body)
-        | Sym_Instr_Assert, [cond] ->
-           p_assert (p_subst s cond)
-        | Sym_Xpath, [mp;p] ->
-           p_xpath (p_subst s mp) (p_subst s p)
-        | Sym_Mpath, mtop::margs ->
-           p_mpath (p_subst s mtop) (List.map (p_subst s) margs)
-        | Sym_Quant (q,bs), [p] ->
-           let s, b' = add_pbindings s bs in
-           let p'    = p_subst s p in
-           p_quant q b' p'
-        | _ -> assert false
-      end (* pat_fun_symbol *)
+      | Pat_Axiom a -> begin
+          match a with
+          | Axiom_Form fp -> begin
+              match fp.f_node with
+              | Fquant (q, b, f) ->
+                 let s, b' = add_bindings s b in
+                 let p     = p_subst s (pat_form f) in
+                 Simplify.ps_quant q (List.map (fun (id,t) -> id, ogty_of_gty t) b') p
+              | Flet (lp, f1, f2) ->
+                 let f1'    = p_subst s (pat_form f1) in
+                 let s, lp' = subst_lpattern s lp in
+                 let f2'    = p_subst s (pat_form f2) in
+                 Simplify.ps_let lp' f1' f2'
+              | Flocal id -> begin
+                  match Mid.find_opt id s.ps_patloc with
+                  | Some ({ p_node = Pat_Axiom (Axiom_Local (id,ty))}) ->
+                     pat_form (f_local id ty)
+                  | Some p -> p
+                  | None ->
+                     let ty = ty_subst s.ps_sty fp.f_ty in
+                     pat_form (FSmart.f_local (fp, (id, fp.f_ty)) (id, ty))
+                end
+              | Fop (op, lty) ->
+                 let ty'  = ty_subst s.ps_sty fp.f_ty in
+                 let lty' = List.Smart.map (ty_subst s.ps_sty) lty in
+                 let op'  = s.ps_sty.ts_p op in
+                 pat_form (FSmart.f_op (fp, (op, lty, fp.f_ty)) (op', lty', ty'))
+              | Fpvar (pv, m) ->
+                 let pv' = pv_subst s pv in
+                 let m'  = mem_subst s m in
+                 let ty' = ty_subst s.ps_sty fp.f_ty in
+                 Simplify.ps_pvar pv' ty' m'
+              (* pat_form (FSmart.f_pvar (fp, (pv, fp.f_ty, m)) (pv', ty', m')) *)
+              | Fglob (mp, m) ->
+                 let m'  = mem_subst s m in
+                 let mp' = mp_subst s mp in
+                 Simplify.ps_glob mp' m'
+              (* pat_form (FSmart.f_glob (fp, (mp, m)) (mp', m')) *)
+              | FhoareF hf ->
+                 assert (not (Mid.mem mhr s.ps_patloc)
+                         && not (Mid.mem mhr s.ps_patloc));
+                 let pr' = p_subst s (pat_form hf.hf_pr) in
+                 let po' = p_subst s (pat_form hf.hf_po) in
+                 let mp' = xp_subst s hf.hf_f in
+                 Simplify.ps_hoareF pr' mp' po'
+              (* FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; } *)
+              | FhoareS hs ->
+                 assert (not (Mid.mem (fst hs.hs_m) s.ps_patloc));
+                 let pr' = p_subst s (pat_form hs.hs_pr) in
+                 let po' = p_subst s (pat_form hs.hs_po) in
+                 let st' = stmt_subst s hs.hs_s in
+                 let me' = memenv_subst s hs.hs_m in
+                 Simplify.ps_hoareS  me' pr' st' po'
+              (* FSmart.f_hoareS (fp, hs)
+               *   { hs_pr = pr'; hs_po = po'; hs_s = st'; hs_m = me'; } *)
+              | FbdHoareF bhf ->
+                 assert (not (Mid.mem mhr s.ps_patloc)
+                         && not (Mid.mem mhr s.ps_patloc));
+                 let pr' = p_subst s (pat_form bhf.bhf_pr) in
+                 let po' = p_subst s (pat_form bhf.bhf_po) in
+                 let mp' = xp_subst s bhf.bhf_f in
+                 let bd' = p_subst s (pat_form bhf.bhf_bd) in
+                 Simplify.ps_bdHoareF pr' mp' po' (pat_cmp bhf.bhf_cmp) bd'
+              (* FSmart.f_bdHoareF (fp, bhf)
+               *   { bhf with bhf_pr = pr'; bhf_po = po';
+               *              bhf_f  = mp'; bhf_bd = bd'; } *)
+              | FbdHoareS bhs ->
+                 assert (not (Mid.mem (fst bhs.bhs_m) s.ps_patloc));
+                 let pr' = p_subst s (pat_form bhs.bhs_pr) in
+                 let po' = p_subst s (pat_form bhs.bhs_po) in
+                 let st' = stmt_subst s bhs.bhs_s in
+                 let me' = memenv_subst s bhs.bhs_m in
+                 let bd' = p_subst s (pat_form bhs.bhs_bd) in
+                 Simplify.ps_bdHoareS me' pr' st' po'
+                   (pat_cmp bhs.bhs_cmp) bd'
+              (* FSmart.f_bdHoareS (fp, bhs)
+               *   { bhs with bhs_pr = pr'; bhs_po = po'; bhs_s = st';
+               *              bhs_bd = bd'; bhs_m  = me'; } *)
+              | FequivF ef ->
+                 assert (not (Mid.mem mleft s.ps_patloc)
+                         && not (Mid.mem mright s.ps_patloc));
+                 let pr' = p_subst s (pat_form ef.ef_pr) in
+                 let po' = p_subst s (pat_form ef.ef_po) in
+                 let fl' = xp_subst s ef.ef_fl in
+                 let fr' = xp_subst s ef.ef_fr in
+                 Simplify.ps_equivF pr' fl' fr' po'
+              (* FSmart.f_equivF (fp, ef)
+               *   { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; } *)
+              | FequivS eqs ->
+                 assert (not (Mid.mem (fst eqs.es_ml) s.ps_patloc)
+                         && not (Mid.mem (fst eqs.es_mr) s.ps_patloc));
+                 let pr' = p_subst s (pat_form eqs.es_pr) in
+                 let po' = p_subst s (pat_form eqs.es_po) in
+                 let sl' = stmt_subst s eqs.es_sl in
+                 let sr' = stmt_subst s eqs.es_sr in
+                 let ml' = memenv_subst s eqs.es_ml in
+                 let mr' = memenv_subst s eqs.es_mr in
+                 Simplify.ps_equivS ml' mr' pr' sl' sr' po'
+              (* FSmart.f_equivS (fp, eqs)
+               *   { es_ml = ml'; es_mr = mr';
+               *     es_pr = pr'; es_po = po';
+               *     es_sl = sl'; es_sr = sr'; } *)
+              | FeagerF eg ->
+                 assert (not (Mid.mem mleft s.ps_patloc)
+                         && not (Mid.mem mright s.ps_patloc));
+                 let pr' = p_subst s (pat_form eg.eg_pr) in
+                 let po' = p_subst s (pat_form eg.eg_po) in
+                 let fl' = xp_subst s eg.eg_fl in
+                 let fr' = xp_subst s eg.eg_fr in
+                 let sl' = stmt_subst s eg.eg_sl in
+                 let sr' = stmt_subst s eg.eg_sr in
+                 Simplify.ps_eagerF pr' sl' fl' fr' sr' po'
+              (* FSmart.f_eagerF (fp, eg)
+               *   { eg_pr = pr'; eg_sl = sl';eg_fl = fl';
+               *     eg_fr = fr'; eg_sr = sr'; eg_po = po'; } *)
+              | Fpr pr ->
+                 assert (not (Mid.mem mhr s.ps_patloc));
+                 let pr_mem   = mem_subst s pr.pr_mem in
+                 let pr_fun   = xp_subst s pr.pr_fun in
+                 let pr_args  = p_subst s (pat_form pr.pr_args) in
+                 let pr_event = p_subst s (pat_form pr.pr_event) in
+                 Simplify.ps_pr pr_mem pr_fun pr_args pr_event
+              (* FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; } *)
+              | Fif (f1, f2, f3) ->
+                 Simplify.ps_if (p_subst s (pat_form f1)) (p_subst s (pat_form f2))
+                   (p_subst s (pat_form f3))
+              | Fmatch (f1, fargs, ty) ->
+                 Simplify.ps_match (p_subst s (pat_form f1)) (ty_subst s.ps_sty ty)
+                   (List.map (fun x -> p_subst s (pat_form x)) fargs)
+              | Fint _ -> pat_form fp
+              | Fapp (op,args) ->
+                 let p = Simplify.ps_app (p_subst s (pat_form op))
+                           (List.map (fun x -> p_subst s (pat_form x)) args)
+                           (Some (ty_subst s.ps_sty fp.f_ty)) in
+                 odfl p (p_betared_opt p)
+              | Ftuple t ->
+                 Simplify.ps_tuple (List.map (fun x -> p_subst s (pat_form x)) t)
+              | Fproj (f1,i) ->
+                 Simplify.ps_proj (p_subst s (pat_form f1)) i (ty_subst s.ps_sty fp.f_ty)
+            end (* axiom_form *)
+          | Axiom_Mpath_top mtop -> mtop_subst s mtop
+          | Axiom_Mpath m -> mp_subst s m
+          | Axiom_Xpath xp -> xp_subst s xp
+          | Axiom_Memory m -> mem_subst s m
+          | Axiom_MemEnv m -> memenv_subst s m
+          | Axiom_Prog_Var pv -> pv_subst s pv
+          | Axiom_Op (op,lty) ->
+             let lty = List.Smart.map (ty_subst s.ps_sty) lty in
+             let oty = match p.p_ogty with
+               | OGTty (Some ty) -> Some (ty_subst s.ps_sty ty)
+               | _ -> None in
+             pat_op op lty oty
+          | Axiom_Instr i -> i_subst s i
+          | Axiom_Stmt st -> stmt_subst s st
+          | Axiom_Lvalue lv -> lv_subst s lv
+          | Axiom_Hoarecmp _ -> p
+          | Axiom_Local (id,ty) ->
+             match Mid.find_opt id s.ps_patloc with
+             | None -> p
+             | Some p' ->
+                match p'.p_ogty with
+                | OGTty (Some ty2) -> if ty_equal ty ty2 then p'
+                                      else assert false
+                | _ -> mk_pattern p'.p_node (OGTty (Some ty))
+        end
+      | Pat_Fun_Symbol (sym,lp) -> begin
+          match sym,lp with
+          | Sym_Form_If, [cond;p1;p2] ->
+             let cond, p1, p2 = p_subst s cond, p_subst s p1, p_subst s p2 in
+             p_if cond p1 p2
+          | Sym_Form_App (ty,_), op::args ->
+             p_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
+          | Sym_Form_Tuple, t ->
+             p_tuple (List.map (p_subst s) t)
+          | Sym_Form_Proj (i,ty), [p] ->
+             p_proj (p_subst s p) i (ty_subst s.ps_sty ty)
+          | Sym_Form_Match ty, op::args ->
+             p_match (p_subst s op) (ty_subst s.ps_sty ty) (List.map (p_subst s) args)
+          | Sym_Form_Let lp, [p1;p2] ->
+             let p1'    = p_subst s p1 in
+             let s, lp' = subst_lpattern s lp in
+             let p2'    = p_subst s p2 in
+             p_let lp' p1' p2'
+          | Sym_Form_Pvar ty, [p;m] ->
+             p_pvar (p_subst s p) (ty_subst s.ps_sty ty) (p_subst s m)
+          | Sym_Form_Prog_var k, [p] ->
+             p_prog_var (p_subst s p) k
+          | Sym_Form_Glob, [mp;m] ->
+             p_glob (p_subst s mp) (p_subst s m)
+          | Sym_Form_Hoare_F, [pr;pf;po] ->
+             p_hoareF (p_subst s pr) (p_subst s pf) (p_subst s po)
+          | Sym_Form_Hoare_S, [m;pr;ps;po] ->
+             p_hoareS (p_subst s m) (p_subst s pr) (p_subst s ps) (p_subst s po)
+          | Sym_Form_bd_Hoare_F, [pr;pf;po;cmp;bd] ->
+             p_bdHoareF (p_subst s pr) (p_subst s pf) (p_subst s po)
+               (p_subst s cmp) (p_subst s bd)
+          | Sym_Form_bd_Hoare_S, [pm;pr;ps;po;cmp;bd] ->
+             p_bdHoareS (p_subst s pm) (p_subst s pr)
+               (p_subst s ps) (p_subst s po)
+               (p_subst s cmp) (p_subst s bd)
+          | Sym_Form_Equiv_F, [pr;fl;fr;po] ->
+             p_equivF (p_subst s pr) (p_subst s fl)
+               (p_subst s fr) (p_subst s po)
+          | Sym_Form_Equiv_S, [ml;mr;pr;sl;sr;po] ->
+             p_equivS (p_subst s ml) (p_subst s mr)
+               (p_subst s pr) (p_subst s sl)
+               (p_subst s sr) (p_subst s po)
+          | Sym_Form_Eager_F, [pr;sl;fl;fr;sr;po] ->
+             p_eagerF (p_subst s pr) (p_subst s sl)
+               (p_subst s fl) (p_subst s fr)
+               (p_subst s sr) (p_subst s po)
+          | Sym_Form_Pr, [pm;pf;pargs;pevent] ->
+             p_pr (p_subst s pm) (p_subst s pf)
+               (p_subst s pargs) (p_subst s pevent)
+          | Sym_Stmt_Seq, lp -> p_stmt (List.map (p_subst s) lp)
+          | Sym_Instr_Assign, [lv;e] ->
+             p_assign (p_subst s lv) (p_subst s e)
+          | Sym_Instr_Sample, [lv;e] ->
+             p_sample (p_subst s lv) (p_subst s e)
+          | Sym_Instr_Call, p::args ->
+             p_call None (p_subst s p) (List.map (p_subst s) args)
+          | Sym_Instr_Call_Lv, lv::p::args ->
+             p_call (Some (p_subst s lv)) (p_subst s p) (List.map (p_subst s) args)
+          | Sym_Instr_If, [cond;s1;s2] ->
+             p_instr_if (p_subst s cond) (p_subst s s1) (p_subst s s2)
+          | Sym_Instr_While, [cond;body] ->
+             p_while (p_subst s cond) (p_subst s body)
+          | Sym_Instr_Assert, [cond] ->
+             p_assert (p_subst s cond)
+          | Sym_Xpath, [mp;p] ->
+             p_xpath (p_subst s mp) (p_subst s p)
+          | Sym_Mpath, mtop::margs ->
+             p_mpath (p_subst s mtop) (List.map (p_subst s) margs)
+          | Sym_Quant (q,bs), [p] ->
+             let s, b' = add_pbindings s bs in
+             let p'    = p_subst s p in
+             p_quant q b' p'
+          | _ -> assert false
+        end (* pat_fun_symbol *)
     in p
 
     and pv_subst s pv =

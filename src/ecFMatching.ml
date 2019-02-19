@@ -20,6 +20,7 @@ type verbose = {
     verbose_show_ignored_or : bool;
     verbose_show_or         : bool;
     verbose_begin_match     : bool;
+    verbose_translate_error : bool;
   }
 
 let no_verbose : verbose = {
@@ -33,6 +34,7 @@ let no_verbose : verbose = {
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = false;
+    verbose_translate_error = false;
   }
 
 let full_verbose : verbose = {
@@ -46,19 +48,21 @@ let full_verbose : verbose = {
     verbose_show_ignored_or = true;
     verbose_show_or         = true;
     verbose_begin_match     = true;
+    verbose_translate_error = true;
   }
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = false;
+    verbose_rule            = true;
     verbose_type            = true;
-    verbose_bind_restr      = false;
+    verbose_bind_restr      = true;
     verbose_add_meta        = true;
     verbose_abstract        = false;
     verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
+    verbose_translate_error = true;
   }
 
 let env_verbose = no_verbose
@@ -197,7 +201,15 @@ module Debug : sig
   val debug_try_translate_higher_order : environment -> pattern -> string -> unit
   val debug_begin_match              : environment -> unit
   val debug_show_pattern             : environment -> pattern -> unit
+  val debug_translate_error          : environment -> string -> unit
+
 end = struct
+
+  let debug_translate_error menv s =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning "--! Translate error %s" s
 
   let debug_show_pattern menv p =
     if menv.env_verbose.verbose_type then
@@ -315,7 +327,7 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
-        "(%i left) : try match : %a ?= %a"
+        "(%i) try match : %a ?= %a"
         (match c with
         | Zand (_,l,_) -> List.length l
         | _ -> 0)
@@ -600,7 +612,9 @@ end
 
 let simplify env p =
   try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
-  with Translate.Invalid_Type _ -> p_simplify p
+  with Translate.Invalid_Type s ->
+    Debug.debug_translate_error env s;
+    p_simplify p
 
 
 module EQ : sig
@@ -784,7 +798,8 @@ end = struct
     let env_restore_unienv = !(env.env_restore_unienv) in
     env.env_restore_unienv := None;
     let try_translate_eq eq trans p1 p2 =
-      try eq (trans p1) (trans p2) with Translate.Invalid_Type _ -> false in
+      try eq (trans p1) (trans p2)
+      with Translate.Invalid_Type _ -> false in
     let eq =
       if      (try_translate_eq (form env ri)
                  (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
@@ -1038,31 +1053,32 @@ end
 let reduce_axiom h s r a =
   let o = match PReduction.h_red_axiom_opt h r s a with
     | Some { p_node = Pat_Axiom a' } -> Some a'
-    | Some p' -> begin
-        match p'.p_ogty with
-        | OGTty _ -> begin
-            (* try  *)
-            let _ =
-              Some (axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv h) p'))
-            in None
-                 (* with Translate.Invalid_Type _ -> None *)
-          end
-        | OGTmem _ -> begin
-            (* try *)
-            let _ =
-              Some (Axiom_Memory (Translate.memory_of_pattern p'))
-            in None
-                 (* with Translate.Invalid_Type _ -> None *)
-          end
-        | OGTmodty _ -> begin
-            (* try *)
-            let _ =
-              Some (Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv h) p'))
-            in None
-                 (* with Translate.Invalid_Type _ -> None *)
-          end
-        | _ -> None
-      end
+    | Some p' -> None
+      (*              begin
+       *   match p'.p_ogty with
+       *   | OGTty _ -> begin
+       *       (\* try  *\)
+       *       let _ =
+       *         Some (axiom_form (Translate.form_of_pattern (EcEnv.LDecl.toenv h) p'))
+       *       in None
+       *            (\* with Translate.Invalid_Type _ -> None *\)
+       *     end
+       *   | OGTmem _ -> begin
+       *       (\* try *\)
+       *       let _ =
+       *         Some (Axiom_Memory (Translate.memory_of_pattern p'))
+       *       in None
+       *            (\* with Translate.Invalid_Type _ -> None *\)
+       *     end
+       *   | OGTmodty _ -> begin
+       *       (\* try *\)
+       *       let _ =
+       *         Some (Axiom_Mpath (Translate.mpath_of_pattern (EcEnv.LDecl.toenv h) p'))
+       *       in None
+       *            (\* with Translate.Invalid_Type _ -> None *\)
+       *     end
+       *   | _ -> None
+       * end *)
     | None -> None in
   match o with
   | Some a' -> if a = a' then None else Some a'
@@ -1138,11 +1154,13 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = e.ne_env in
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
+  Debug.debug_show_pattern env p;
   let p = Psubst.p_subst subst p in
+  Debug.debug_show_pattern env p;
   let p = p_simplify p in
-  let p = try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
-          with Translate.Invalid_Type _ -> p in
-  Debug.debug_show_pattern e.ne_env p;
+  Debug.debug_show_pattern env p;
+  let p = simplify env p in
+  Debug.debug_show_pattern env p;
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
     let me_matches =
@@ -1422,10 +1440,9 @@ let rec process (e : engine) : nengine =
            (pat_axiom axiom) args in
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
-       let pat' = p_quant Llambda args pat in
+       let pat = p_quant Llambda args pat in
        let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
        let pat = p_subst s pat in
-       Debug.debug_higher_order_is_abstract e.e_env pat' pat;
        let m,e =
          try let e = add_match e name pat ob in Match, e
          with CannotUnify -> NoMatch, e
