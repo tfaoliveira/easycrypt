@@ -2979,7 +2979,7 @@ let pp_ogty ppe fmt = function
 
 let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Form f ->
-     Format.fprintf fmt "form(%a)" (pp_form ppe) f
+     Format.fprintf fmt "%a" (pp_form ppe) f
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
@@ -3031,7 +3031,7 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_ogty ppe) p.p_ogty
      | Sym_Form_If, _ -> assert false
 
-     | Sym_Form_App (Some _,i),op::args ->
+     | Sym_Form_App (Some _ty,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
         Format.fprintf fmt "PApp%s(@[%a@])"

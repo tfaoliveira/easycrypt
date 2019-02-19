@@ -51,11 +51,11 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = false;
-    verbose_type            = false;
-    verbose_bind_restr      = true;
+    verbose_type            = true;
+    verbose_bind_restr      = false;
     verbose_add_meta        = true;
-    verbose_abstract        = true;
-    verbose_reduce          = true;
+    verbose_abstract        = false;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -598,6 +598,11 @@ module Translate = struct
 
 end
 
+let simplify env p =
+  try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
+  with Translate.Invalid_Type _ -> p_simplify p
+
+
 module EQ : sig
   val ty        : environment -> ty -> ty -> bool
   val memtype   : environment -> EcMemory.memtype -> EcMemory.memtype -> bool
@@ -1098,7 +1103,7 @@ let h_red_strat env p a =
   let r = env.env_red_info_match in
   let env = saturate env in
   let s = psubst_of_menv { env.env_match with me_matches = Mid.empty } in
-  let p' = p_simplify (p_subst s p) in
+  let p' = simplify env (p_subst s p) in
   match X.h_red_strat h s r r p' a with
   | None -> None
   | Some (p'',a') ->
@@ -1134,7 +1139,7 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
   let p = Psubst.p_subst subst p in
-  let p = p_simplify p in
+  let p = simplify env p in
   let p = try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
           with Translate.Invalid_Type _ -> p in
   Debug.debug_show_pattern e.ne_env p;
