@@ -3040,7 +3040,7 @@ and pp_pattern ppe fmt p = match p.p_node with
      | Sym_Form_App (None,i),op::args ->
         (* Format.fprintf fmt "@[%a@]"
          *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-        Format.fprintf fmt "P_App%s(@[%a@])"
+        Format.fprintf fmt "PApp%s(@[%a@])"
           (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
           (pp_list "@ " (pp_pattern ppe)) (op::args)
      | Sym_Form_App _,_ -> assert false

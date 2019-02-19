@@ -54,7 +54,7 @@ let debug_verbose : verbose = {
     verbose_type            = false;
     verbose_bind_restr      = true;
     verbose_add_meta        = true;
-    verbose_abstract        = false;
+    verbose_abstract        = true;
     verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
@@ -1107,17 +1107,6 @@ let h_red_strat env p a =
      else
        Some (p'', a')
 
-(* -------------------------------------------------------------------------- *)
-let p_simplify env p =
-  try
-    let f = pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p) in
-    Debug.debug_try_translate_higher_order env f "valid form";
-    f
-  with
-  | Translate.Invalid_Type s ->
-     Debug.debug_try_translate_higher_order env p s;
-     p_simplify p
-
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
@@ -1144,10 +1133,10 @@ let nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let env = e.ne_env in
   let env = saturate env in
   let subst = psubst_of_menv env.env_match in
-  Debug.debug_show_pattern e.ne_env p;
   let p = Psubst.p_subst subst p in
-  Debug.debug_show_pattern e.ne_env p;
-  let p = p_simplify e.ne_env p in
+  let p = p_simplify p in
+  let p = try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
+          with Translate.Invalid_Type _ -> p in
   Debug.debug_show_pattern e.ne_env p;
   if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
@@ -1429,7 +1418,7 @@ let rec process (e : engine) : nengine =
        let f (name,p) = (name,p.p_ogty) in
        let args = List.map f args in
        let pat' = p_quant Llambda args pat in
-       let pat = p_simplify e.e_env pat' in
+       let pat = p_simplify pat' in
        let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
        let pat = p_subst s pat in
        Debug.debug_higher_order_is_abstract e.e_env pat' pat;
@@ -1842,6 +1831,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
         if e_pattern = e.e_pattern && e_head = e.e_head then
           next_n NoMatch ne
         else
+          let e_pattern = p_simplify e_pattern in
           process { e with e_pattern; e_head }
 
 and sub_engines (e : engine) (p : pattern) : engine list =
@@ -1949,6 +1939,7 @@ let search_eng e =
   | NoMatches -> None
 
 let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
+  let p_app = Simplify.ps_app in
   let axiom_expr e  = Axiom_Form (form_of_expr e) in
   let axiom_mpath m = Axiom_Mpath m in
 
@@ -1987,7 +1978,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            if Mid.mem id sbd
            then Some (meta_var id None (OGTty (Some fty)))
            else if mem_ty_univar fty
-           then Some (pat_local id fty)
+           then Some (pat_form f)
            else None
         | Fpvar(x,m) ->
            omap (fun l -> let p1,p2 = as_seq2 l in p_pvar p1 fty p2)

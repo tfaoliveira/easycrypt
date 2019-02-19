@@ -226,6 +226,42 @@ val p_real_inv_simpl : pattern -> pattern
 
 
 (* -------------------------------------------------------------------------- *)
+module Simplify : sig
+  val ps_app : pattern -> pattern list -> EcTypes.ty option -> pattern
+  val ps_quant : EcFol.quantif -> pbindings -> pattern -> pattern
+  val ps_mpath : pattern -> pattern list -> pattern
+  val ps_xpath : pattern -> pattern -> pattern
+  val ps_prog_var : pattern -> EcTypes.pvar_kind -> pattern
+  val ps_lvalue_var : pattern -> EcTypes.ty -> pattern
+  val ps_lvalue_tuple : pattern list -> pattern
+  val ps_pvar : pattern -> EcTypes.ty -> pattern -> pattern
+  val ps_glob : pattern -> pattern -> pattern
+  val ps_if : pattern -> pattern -> pattern -> pattern
+  val ps_match : pattern -> EcTypes.ty -> pattern list -> pattern
+  val ps_tuple : pattern list -> pattern
+  val ps_proj : pattern -> int -> EcTypes.ty -> pattern
+  val ps_let : EcTypes.lpattern -> pattern -> pattern -> pattern
+  val ps_stmt : pattern list -> pattern
+  val ps_assign : pattern -> pattern -> pattern
+  val ps_sample : pattern -> pattern -> pattern
+  val ps_call : pattern option -> pattern -> pattern list -> pattern
+  val ps_instr_if : pattern -> pattern -> pattern -> pattern
+  val ps_while : pattern -> pattern -> pattern
+  val ps_assert : pattern -> pattern
+  val ps_hoareF : pattern -> pattern -> pattern -> pattern
+  val ps_hoareS : pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_bdHoareF :
+    pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_bdHoareS :
+    pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_equivF : pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_equivS :
+    pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_eagerF :
+    pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
+  val ps_pr : pattern -> pattern -> pattern -> pattern -> pattern
+end
+
 val p_simplify       : pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
