@@ -1962,61 +1962,61 @@ let p_bool_val p =
   else None
 
 let p_eq ty (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom(Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (f_eq f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom(Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (f_eq f1 f2)
+  | _ ->
      p_app (pop_eq ty) [p1;p2] (Some tbool)
 
 let p_not p =
-  (* match p with
-   * | { p_node = Pat_Axiom(Axiom_Form f) } -> pat_form (EcFol.f_not f)
-   * | p -> *)
+  match p with
+  | { p_node = Pat_Axiom(Axiom_Form f) } -> pat_form (EcFol.f_not f)
+  | p ->
      p_app (pat_form EcFol.fop_not) [p] (Some EcTypes.tbool)
 
 let p_imp (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node,p2.p_node with
-   * | Pat_Axiom(Axiom_Form f1),
-   *   Pat_Axiom(Axiom_Form f2) ->
-   *    pat_form (EcFol.f_imp f1 f2)
-   * | _ -> *)
+  match p1.p_node,p2.p_node with
+  | Pat_Axiom(Axiom_Form f1),
+    Pat_Axiom(Axiom_Form f2) ->
+     pat_form (EcFol.f_imp f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_imp) [p1;p2] (Some EcTypes.tbool)
 
 let p_anda (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node,p2.p_node with
-   * | Pat_Axiom(Axiom_Form f1),
-   *   Pat_Axiom(Axiom_Form f2) ->
-   *    pat_form  (EcFol.f_anda f1 f2)
-   * | _ -> *)
+  match p1.p_node,p2.p_node with
+  | Pat_Axiom(Axiom_Form f1),
+    Pat_Axiom(Axiom_Form f2) ->
+     pat_form  (EcFol.f_anda f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_anda) [p1;p2]
        (Some EcTypes.tbool)
 
 let p_ora (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_ora f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_ora f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_ora) [p1;p2] (Some EcTypes.tbool)
 
 let p_iff (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_iff f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_iff f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_iff) [p1;p2] (Some EcTypes.tbool)
 
 let p_and (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_and f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_and f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_and) [p1;p2] (Some EcTypes.tbool)
 
 let p_or (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_or f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_or f1 f2)
+  | _ ->
      p_app (pat_form EcFol.fop_or) [p1;p2] (Some EcTypes.tbool)
 
 let p_ands (ps : pattern list) = match List.rev ps with
@@ -2035,37 +2035,37 @@ let p_destr_int (p : pattern) = match p.p_node with
   | _ -> destr_error "p_destr_int"
 
 let p_int_le (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_int_le f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_le f1 f2)
+  | _ ->
      p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_lt (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_int_lt f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_lt f1 f2)
+  | _ ->
      p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_add (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_int_add f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_add f1 f2)
+  | _ ->
      p_app (pat_form fop_int_add) [p1;p2] (Some EcTypes.tint)
 
 let p_int_opp (p : pattern) =
-  (* match p.p_node with
-   * | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
-   * | _ -> *)
+  match p.p_node with
+  | Pat_Axiom (Axiom_Form f) -> pat_form (EcFol.f_int_opp f)
+  | _ ->
      p_app (pat_form fop_int_opp) [p] (Some EcTypes.tint)
 
 let p_int_mul (p1 : pattern) (p2 : pattern) =
-  (* match p1.p_node, p2.p_node with
-   * | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-   *    pat_form (EcFol.f_int_mul f1 f2)
-   * | _ -> *)
+  match p1.p_node, p2.p_node with
+  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
+     pat_form (EcFol.f_int_mul f1 f2)
+  | _ ->
      p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
 
 (* -------------------------------------------------------------------------- *)
@@ -2612,6 +2612,9 @@ let p_app_simpl_opt ?ho op pargs oty = match op with
 
 let p_app_simpl ?ho op pargs oty =
   odfl (p_app ?ho op pargs oty) (p_app_simpl_opt ?ho (Some op) pargs oty)
+
+let ps_app_simpl ?ho op pargs oty =
+  odfl (p_app ?ho op pargs oty) (p_betared_opt (Simplify.ps_app ?ho op pargs oty))
 
 let p_forall_simpl b p =
   let b = List.filter (fun (id,_) -> Mid.mem id (pat_fv p)) b in
@@ -3234,30 +3237,30 @@ module PReduction = struct
         match h_red_lvalue_opt hyps ri s lv with
         | Some lv -> Some (p_assign lv (pat_form (form_of_expr e)))
         | None ->
-           omap (fun p -> p_assign (pat_lvalue lv) p)
+           omap (fun p -> Simplify.ps_assign (pat_lvalue lv) p)
              (h_red_form_opt hyps ri s (form_of_expr e))
       end
     | Srnd (lv,e) -> begin
         match h_red_lvalue_opt hyps ri s lv with
         | Some lv -> Some (p_sample lv (pat_form (form_of_expr e)))
         | None ->
-           omap (fun p -> p_sample (pat_lvalue lv) p)
+           omap (fun p -> Simplify.ps_sample (pat_lvalue lv) p)
              (h_red_form_opt hyps ri s (form_of_expr e))
       end
     | Scall (olv,f,args) -> begin
         match omap (h_red_lvalue_opt hyps ri s) olv with
         | Some (Some lv) ->
-           Some (p_call (Some lv) (pat_xpath f)
+           Some (Simplify.ps_call (Some lv) (pat_xpath f)
                    (List.map (fun x -> pat_form (form_of_expr x)) args))
         | Some None | None ->
         match h_red_xpath_opt hyps ri s f with
         | Some f ->
-           Some (p_call (omap pat_lvalue olv) f
+           Some (Simplify.ps_call (omap pat_lvalue olv) f
                    (List.map (fun x -> pat_form (form_of_expr x)) args))
         | None ->
            let olv = omap pat_lvalue olv in
            omap
-             (fun args -> p_call olv (pat_xpath f) args)
+             (fun args -> Simplify.ps_call olv (pat_xpath f) args)
              (h_red_args (fun e -> pat_form (form_of_expr e))
                 (fun hyps ri s e -> h_red_form_opt hyps ri s (form_of_expr e))
                 hyps ri s args)
@@ -3265,21 +3268,21 @@ module PReduction = struct
     | Sif (cond,s1,s2) -> begin
         match h_red_form_opt hyps ri s (form_of_expr cond) with
         | Some cond ->
-           Some (p_instr_if cond (pat_stmt s1) (pat_stmt s2))
+           Some (Simplify.ps_instr_if cond (pat_stmt s1) (pat_stmt s2))
         | None ->
         match h_red_stmt_opt hyps ri s s1 with
         | Some s1 ->
-           Some (p_instr_if (pat_form(form_of_expr cond)) s1 (pat_stmt s2))
+           Some (Simplify.ps_instr_if (pat_form(form_of_expr cond)) s1 (pat_stmt s2))
         | None ->
            omap
-             (fun s2 -> p_instr_if (pat_form(form_of_expr cond)) (pat_stmt s1) s2)
+             (fun s2 -> Simplify.ps_instr_if (pat_form(form_of_expr cond)) (pat_stmt s1) s2)
              (h_red_stmt_opt hyps ri s s2)
       end
     | Swhile (cond,body) -> begin
         match h_red_form_opt hyps ri s (form_of_expr cond) with
-        | Some cond -> Some (p_while cond (pat_stmt body))
+        | Some cond -> Some (Simplify.ps_while cond (pat_stmt body))
         | None ->
-           omap (fun s -> p_while (pat_form(form_of_expr cond)) s)
+           omap (fun s -> Simplify.ps_while (pat_form(form_of_expr cond)) s)
              (h_red_stmt_opt hyps ri s body)
       end
     | Sassert e -> omap p_assert (h_red_form_opt hyps ri s (form_of_expr e))
@@ -3294,7 +3297,7 @@ module PReduction = struct
 
   and h_red_lvalue_opt hyps ri s = function
     | LvVar (pv,ty) ->
-       omap (fun x -> p_lvalue_var x ty) (h_red_prog_var_opt hyps ri s pv)
+       omap (fun x -> Simplify.ps_lvalue_var x ty) (h_red_prog_var_opt hyps ri s pv)
     | LvTuple l ->
        omap p_lvalue_tuple
          (h_red_args (fun (pv,ty) -> pat_lvalue (LvVar(pv,ty)))
@@ -3305,7 +3308,7 @@ module PReduction = struct
   and h_red_xpath_opt hyps ri s x =
     if ri.modpath
     then match h_red_mpath_opt hyps ri s x.x_top with
-         | Some p -> Some (p_xpath p (pat_op x.x_sub [] None))
+         | Some p -> Some (Simplify.ps_xpath p (pat_op x.x_sub [] None))
          | None -> None
     else None
 
@@ -3333,7 +3336,8 @@ module PReduction = struct
     (* ζ-reduction *)
     | Fapp ({ f_node = Flocal x ; f_ty = ty }, args) ->
        let pargs = List.map pat_form args in
-       p_app_simpl_opt (h_red_local_opt hyps ri s x ty) pargs (Some f.f_ty)
+       omap (fun o -> ps_app_simpl o pargs (Some f.f_ty))
+         (h_red_local_opt hyps ri s x ty)
 
     (* ζ-reduction *)
     | Flet (LSymbol(x,_), e1, e2) when ri.zeta ->
@@ -3404,7 +3408,7 @@ module PReduction = struct
           | _ -> None
         in match op with
            | None ->
-              omap (fun x -> p_app x (List.map pat_form args) (Some ty))
+              omap (fun x -> Simplify.ps_app x (List.map pat_form args) (Some ty))
                 (h_red_form_opt hyps ri s f1)
            | _ -> op
       end
@@ -3413,14 +3417,14 @@ module PReduction = struct
     | Fproj(f1, i) when ri.iota ->
        let f' = f_proj_simpl f1 i f.f_ty in
        if f_equal f f'
-       then omap (fun x -> p_proj x i f.f_ty) (h_red_form_opt hyps ri s f1)
+       then omap (fun x -> Simplify.ps_proj x i f.f_ty) (h_red_form_opt hyps ri s f1)
        else Some (pat_form f')
 
     (* ι-reduction (if-then-else) *)
     | Fif (f1, f2, f3) when ri.iota ->
        let f' = f_if_simpl f1 f2 f3 in
        if f_equal f f'
-       then omap (fun x -> p_if x (pat_form f2) (pat_form f3)) (h_red_form_opt hyps ri s f1)
+       then omap (fun x -> Simplify.ps_if x (pat_form f2) (pat_form f3)) (h_red_form_opt hyps ri s f1)
        else Some (pat_form f')
 
     (* ι-reduction (match-fix) *)
@@ -3484,7 +3488,7 @@ module PReduction = struct
           Some (Psubst.p_subst subst (pat_form body))
 
         with EcEnv.NotReducible ->
-          omap (fun x -> p_app x (List.map pat_form fargs) (Some f.f_ty))
+          omap (fun x -> Simplify.ps_app x (List.map pat_form fargs) (Some f.f_ty))
             (h_red_form_opt hyps ri s f1)
       end
 
@@ -3498,7 +3502,7 @@ module PReduction = struct
     | Fpvar (pv, m) when ri.modpath ->
        let pv' = EcEnv.NormMp.norm_pvar (EcEnv.LDecl.toenv hyps) pv in
        if pv_equal pv pv' then None
-       else Some (p_pvar (pat_pv pv') f.f_ty (pat_memory m))
+       else Some (Simplify.ps_pvar (pat_pv pv') f.f_ty (pat_memory m))
 
     (* logical reduction *)
     | Fapp ({f_node = Fop (p, tys); } as fo, args)
@@ -3570,8 +3574,8 @@ module PReduction = struct
            end
 
          | _ when ri.delta_p p ->
-            let op = h_red_op_opt hyps ri s p tys in
-            p_app_simpl_opt op (List.map pat_form args) (Some f.f_ty)
+            omap (fun o -> ps_app_simpl o (List.map pat_form args) (Some f.f_ty))
+              (h_red_op_opt hyps ri s p tys)
 
          | _ -> Some (pat_form f)
        in
@@ -3592,23 +3596,23 @@ module PReduction = struct
 
     (* δ-reduction *)
     | Fapp ({ f_node = Fop (p, tys) }, args) when ri.delta_p p ->
-       omap (fun op -> p_app_simpl op (List.map pat_form args) (Some f.f_ty))
+       omap (fun op -> ps_app_simpl op (List.map pat_form args) (Some f.f_ty))
          (h_red_op_opt hyps ri s p tys)
 
     (* η-reduction *)
     | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
          when can_eta x (fn, args) ->
-       Some (p_app (pat_form fn)
+       Some (Simplify.ps_app (pat_form fn)
                (List.map pat_form (List.take (List.length args - 1) args))
                (Some f.f_ty))
 
     (* contextual rule - let *)
     | Flet (lp, f1, f2) ->
-       omap (fun x -> p_let lp x (pat_form f2)) (h_red_form_opt hyps ri s f1)
+       omap (fun x -> Simplify.ps_let lp x (pat_form f2)) (h_red_form_opt hyps ri s f1)
 
     (* Contextual rule - application args. *)
     | Fapp (f1, args) ->
-       omap (fun x -> p_app x (List.map pat_form args) (Some f.f_ty))
+       omap (fun x -> Simplify.ps_app x (List.map pat_form args) (Some f.f_ty))
          (h_red_form_opt hyps ri s f1)
 
     (* Contextual rule - bindings *)

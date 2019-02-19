@@ -1102,6 +1102,14 @@ let h_red_strat env p a =
      else
        Some (p'', a')
 
+let h_red_strat env p a =
+  match p_destr_app p, p_destr_app (pat_axiom a) with
+  | (_, []), _ | _, (_, []) -> h_red_strat env p a
+  | ({ p_node = Pat_Axiom a1 }, _), ({ p_node = Pat_Axiom a2 }, _) ->
+     if EQ.axiom env env.env_red_info_match a1 a2 then None
+     else h_red_strat env p a
+  | _ -> h_red_strat env p a
+
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
