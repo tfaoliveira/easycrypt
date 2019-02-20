@@ -31,6 +31,7 @@ module UniEnv : sig
   val copy       : unienv -> unienv                 (* constant time *)
   val restore    : dst:unienv -> src:unienv -> unit (* constant time *)
   val fresh      : ?tc:EcPath.Sp.t -> ?ty:ty -> unienv -> ty
+  val uvars      : unienv -> Suid.t
   val getnamed   : unienv -> symbol -> EcIdent.t
   val repr       : unienv -> ty -> ty
   val opentvi    : unienv -> ty_params -> tvi -> ty EcIdent.Mid.t

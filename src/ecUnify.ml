@@ -334,6 +334,9 @@ module UniEnv = struct
     let (uf, uid) = UnifyCore.fresh ?tc ?ty (!ue).ue_uf in
       ue := { !ue with ue_uf = uf }; uid
 
+  let uvars ue =
+    Suid.of_list (UF.domain (!ue).ue_uf)
+
   let opentvi ue (params : ty_params) tvi =
     match tvi with
     | None ->
