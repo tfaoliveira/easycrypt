@@ -1424,7 +1424,9 @@ let t_rewrite
           -> (pt, ax, f_true)
 
       | _ -> raise TTC.NoMatch
-    in oget ~exn:InvalidProofTerm (TTC.lazy_destruct hyps doit ax)
+    in
+
+    oget ~exn:InvalidProofTerm (TTC.lazy_destruct hyps doit ax)
   in
 
   let (left, right) =

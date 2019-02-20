@@ -34,7 +34,6 @@ type environment = {
     env_match              : match_env;
     env_red_info_match     : EcReduction.reduction_info;
     env_red_info_same_meta : EcReduction.reduction_info;
-    env_restore_unienv     : EcUnify.unienv option ref;
     env_meta_restr_binds   : pbindings Mid.t;
     env_verbose            : verbose;
   }
@@ -127,6 +126,3 @@ end
 
 val psubst_of_menv  : match_env -> Psubst.p_subst
 val fsubst_of_menv  : match_env -> env -> f_subst
-
-val restore_environment : environment -> unit
-val copy_environment    : environment -> environment
