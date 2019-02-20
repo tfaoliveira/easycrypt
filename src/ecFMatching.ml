@@ -202,8 +202,23 @@ module Debug : sig
   val debug_begin_match              : environment -> unit
   val debug_show_pattern             : environment -> pattern -> unit
   val debug_translate_error          : environment -> string -> unit
+  val debug_eta_expansion            : environment -> meta_name -> ogty -> unit
 
 end = struct
+
+  let debug_eta_expansion menv i t =
+    if menv.env_verbose.verbose_type then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let p = p_quant Llambda [i,t] (meta_var (EcIdent.create "") None OGTany) in
+      let f = match t with
+        | OGTty (Some t) -> f_quant Llambda [i,GTty t] (f_local (EcIdent.create "") t)
+        | _ -> f_local (EcIdent.create "no type") tbool in
+
+      EcEnv.notify env `Warning "--! Eta-expansion with bindings : %a != %a"
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_form ppe) f
 
   let debug_translate_error menv s =
     if menv.env_verbose.verbose_type then
@@ -362,7 +377,7 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
-      EcEnv.notify env `Warning "No reduction (%s beta) for (%a,%a)"
+      EcEnv.notify env `Warning "Reduction (%s beta) for (%a,%a)"
         (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pat_axiom ppe) a
@@ -1292,6 +1307,11 @@ let try_reduce (e : engine) : engine =
   { e with e_env; e_continuation }
 
 
+let rec check_arrow e b t = match b, t.ty_node with
+  | [], _ -> true
+  | (_,OGTty (Some t1)) :: b, Tfun (t2, t) ->
+     EQ.ty e.e_env t1 t2 && check_arrow e b t
+  | _ -> false
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
@@ -1759,6 +1779,20 @@ let rec process (e : engine) : nengine =
                e_continuation = Zand ([],zand,e.e_continuation); }
      end
 
+  (* eta-expansion in the case where the types of f is some tarrow *)
+  | Pat_Fun_Symbol (Sym_Quant (Llambda, b1), [e_pattern]), Axiom_Form f
+       when check_arrow e b1 f.f_ty ->
+     Debug.debug_which_rule e.e_env "eta-expansion";
+     let gty_of_ogty i = function
+       | OGTty (Some t) -> i, GTty t
+       | o -> Debug.debug_eta_expansion e.e_env i o;
+              assert false in
+     let b = List.map (fun (i,o) -> gty_of_ogty i o) b1 in
+     let f = f_ty_app (LDecl.toenv e.e_env.env_hyps)
+               f (List.map (fun (i,t) -> f_local i (gty_as_ty t)) b) in
+     let e_head = Axiom_Form f in
+     process { e with e_pattern; e_head }
+
   | Pat_Fun_Symbol _, _ ->
      begin Debug.debug_which_rule e.e_env "default";
            let _ = restore_environment e.e_env in
@@ -1825,9 +1859,11 @@ and next_n (m : ismatch) (e : nengine) : nengine =
 
   | NoMatch, ZReduce (_, e, ne) ->
      match h_red_strat e.e_env e.e_pattern e.e_head with
-     | None -> Debug.debug_reduce e.e_env e.e_pattern e.e_head;
-               next_n NoMatch ne
+     | None ->
+        Debug.debug_reduce e.e_env e.e_pattern e.e_head;
+        next_n NoMatch ne
      | Some (e_pattern, e_head) ->
+        Debug.debug_reduce e.e_env e_pattern e_head;
         if e_pattern = e.e_pattern && e_head = e.e_head then
           next_n NoMatch ne
         else
