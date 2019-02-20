@@ -2247,7 +2247,7 @@ let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
   | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
     Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
      pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
-  | _, _ -> p_int_le p1 p2
+  | _, _ -> p_int_lt p1 p2
 
 let p_int_add_simpl (p1 : pattern) (p2 : pattern) =
   try pat_form (f_int (EcBigInt.add (p_destr_int p1) (p_destr_int p2)))
