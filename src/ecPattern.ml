@@ -2024,8 +2024,36 @@ let p_ands (ps : pattern list) = match List.rev ps with
   | p::ps -> List.fold_left ((^~) p_and) p ps
 
 (* -------------------------------------------------------------------------- *)
-let p_int_0 = pat_form (f_i0)
-let p_real_0 = pat_form (f_r0)
+
+(* -------------------------------------------------------------------------- *)
+ (* CORELIB *)
+let fop_int_le      = f_op EcCoreLib.CI_Int.p_int_le      [] (toarrow [tint; tint] tbool)
+let fop_int_lt      = f_op EcCoreLib.CI_Int.p_int_lt      [] (toarrow [tint; tint] tbool)
+let fop_int_opp     = f_op EcCoreLib.CI_Int.p_int_opp     [] (toarrow [tint]       tint)
+let fop_int_add     = f_op EcCoreLib.CI_Int.p_int_add     [] (toarrow [tint; tint] tint)
+let fop_int_mul     = f_op EcCoreLib.CI_Int.p_int_mul     [] (toarrow [tint; tint] tint)
+
+let fop_real_le     = f_op EcCoreLib.CI_Real.p_real_le     [] (toarrow [treal; treal] tbool)
+let fop_real_lt     = f_op EcCoreLib.CI_Real.p_real_lt     [] (toarrow [treal; treal] tbool)
+let fop_real_opp    = f_op EcCoreLib.CI_Real.p_real_opp    [] (toarrow [treal]        treal)
+let fop_real_add    = f_op EcCoreLib.CI_Real.p_real_add    [] (toarrow [treal; treal] treal)
+let fop_real_mul    = f_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
+let fop_real_inv    = f_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
+
+let pop_real_mul    = p_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
+let pop_real_inv    = p_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
+let pop_real_of_int = p_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
+
+let p_int (i : EcBigInt.zint) = pat_form (f_int i)
+
+
+let p_real_of_int p  = p_app pop_real_of_int [p] (Some treal)
+let p_rint n         = p_real_of_int (p_int n)
+
+let p_i0 = pat_form f_i0
+let p_i1 = pat_form f_i1
+let p_r0 = pat_form f_r0
+let p_r1 = pat_form f_r1
 
 let p_destr_int (p : pattern) = match p.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint x } ) -> x
@@ -2033,6 +2061,13 @@ let p_destr_int (p : pattern) = match p.p_node with
        when f_equal op fop_int_opp ->
      EcBigInt.neg n
   | _ -> destr_error "p_destr_int"
+
+let p_destr_rint p =
+  match p_destr_app p with
+  | op, [p1] when op_equal op f_op_real_of_int ->
+     begin try p_destr_int p1 with DestrError _ -> destr_error "destr_rint" end
+
+  | _ -> destr_error "destr_rint"
 
 let p_int_le (p1 : pattern) (p2 : pattern) =
   match p1.p_node, p2.p_node with
@@ -2067,35 +2102,6 @@ let p_int_mul (p1 : pattern) (p2 : pattern) =
      pat_form (EcFol.f_int_mul f1 f2)
   | _ ->
      p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
-
-(* -------------------------------------------------------------------------- *)
- (* CORELIB *)
-let fop_real_le     = f_op EcCoreLib.CI_Real.p_real_le     [] (toarrow [treal; treal] tbool)
-let fop_real_lt     = f_op EcCoreLib.CI_Real.p_real_lt     [] (toarrow [treal; treal] tbool)
-let fop_real_opp    = f_op EcCoreLib.CI_Real.p_real_opp    [] (toarrow [treal]        treal)
-let fop_real_add    = f_op EcCoreLib.CI_Real.p_real_add    [] (toarrow [treal; treal] treal)
-let fop_real_mul    = f_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
-let fop_real_inv    = f_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
-
-let pop_real_mul    = p_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
-let pop_real_inv    = p_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
-let pop_real_of_int = p_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
-
-let p_int (i : EcBigInt.zint) = pat_form (f_int i)
-
-
-let p_real_of_int p  = p_app pop_real_of_int [p] (Some treal)
-let p_rint n         = p_real_of_int (p_int n)
-
-let p_r0 = pat_form f_r0
-let p_r1 = pat_form f_r1
-
-let p_destr_rint p =
-  match p_destr_app p with
-  | op, [p1] when op_equal op f_op_real_of_int ->
-     begin try p_destr_int p1 with DestrError _ -> destr_error "destr_rint" end
-
-  | _ -> destr_error "destr_rint"
 
 let get_real_of_int (p : pattern) =
   try Some (p_destr_rint p) with DestrError _ -> None
@@ -2235,44 +2241,74 @@ let rec p_eq_simpl ty (p1 : pattern) (p2 : pattern) =
 (* -------------------------------------------------------------------------- *)
 let p_int_le_simpl (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true
-  else match p1.p_node, p2.p_node with
-  | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
-    Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
-     pat_form (f_bool (EcBigInt.compare x1 x2 <= 0))
-  | _, _ -> p_int_le p1 p2
+  else
+    try pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) <= 0))
+    with DestrError _ -> p_int_le p1 p2
 
 let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
   if p_equal p1 p2 then p_true
-  else match p1.p_node, p2.p_node with
-  | Pat_Axiom (Axiom_Form { f_node = Fint x1 } ),
-    Pat_Axiom (Axiom_Form { f_node = Fint x2 } ) ->
-     pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
-  | _, _ -> p_int_lt p1 p2
+  else
+    try pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) < 0))
+    with DestrError _ -> p_int_lt p1 p2
 
-let p_int_add_simpl (p1 : pattern) (p2 : pattern) =
-  try pat_form (f_int (EcBigInt.add (p_destr_int p1) (p_destr_int p2)))
-  with
-  | DestrError _ ->
-     if p_equal p_int_0 p1 then p2
-     else if p_equal p_int_0 p2 then p1
-     else match p2.p_node with
-          | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f2]) })
-               when f_equal op fop_int_opp && p_equal p1 (pat_form f2) ->
-             p_int_0
-          | Pat_Fun_Symbol (Sym_Form_App _,
-                            [{ p_node = Pat_Axiom (Axiom_Form op)};p2])
-               when f_equal op fop_int_opp && p_equal p1 p2 ->
-             p_int_0
-          | _ -> p_int_add p1 p2
-
-let p_int_opp_simpl (p : pattern) = match p.p_node with
-  | Pat_Axiom (Axiom_Form f) -> pat_form (f_int_opp_simpl f)
+let p_int_opp_simpl (p : pattern) =
+  match p_destr_app p with
+  | op, [p] when op_equal op fop_int_opp -> p
   | _ -> p_int_opp p
 
-let p_int_mul_simpl (p1 : pattern) (p2 : pattern) = match p1.p_node, p2.p_node with
-  | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
-     pat_form (f_int_mul_simpl f1 f2)
-  | _ -> p_int_mul p1 p2
+let p_int_add_simpl =
+  let try_add_opp p1 p2 =
+    try
+      let p2 = match p_destr_app p2 with
+        | op, [p] when op_equal op fop_int_opp -> p
+        | _ -> destr_error "" in
+      if p_equal p1 p2 then Some p_i0 else None
+    with DestrError _ -> None in
+
+  let try_addc i p =
+    try
+      let c1, c2 = match p_destr_app p with
+        | op, [p1; p2] when op_equal op fop_int_add -> p1, p2
+        | _ -> destr_error "" in
+
+      try  let c = p_destr_int c1 in
+           Some (p_int_add (p_int (EcBigInt.add c i)) c2)
+      with DestrError _ ->
+      try  let c = p_destr_int c2 in
+           Some (p_int_add c1 (p_int (EcBigInt.add c i)))
+      with DestrError _ -> None
+
+    with DestrError _ -> None in
+
+  fun p1 p2 ->
+    let i1 = try Some (p_destr_int p1) with DestrError _ -> None in
+    let i2 = try Some (p_destr_int p1) with DestrError _ -> None in
+
+    match i1, i2 with
+    | Some i1, Some i2 -> p_int (EcBigInt.add i1 i2)
+
+    | Some i1, _ when EcBigInt.equal i1 EcBigInt.zero -> p2
+    | _, Some i2 when EcBigInt.equal i2 EcBigInt.zero -> p1
+
+    | _, _ ->
+        let simpls = [
+           (fun () -> try_add_opp p1 p2);
+           (fun () -> try_add_opp p2 p1);
+           (fun () -> i1 |> obind (try_addc^~ p2));
+           (fun () -> i2 |> obind (try_addc^~ p1));
+        ] in
+
+        ofdfl
+          (fun () -> p_int_add p1 p2)
+          (List.Exceptionless.find_map (fun f -> f ()) simpls)
+
+let p_int_mul_simpl (p1 : pattern) (p2 : pattern) =
+  try  p_int (EcBigInt.mul (p_destr_int p1) (p_destr_int p2))
+  with DestrError _ ->
+    if p_equal p_i0 p1 || p_equal p_i0 p2 then p_i0
+    else if p_equal p_i1 p1 then p2
+    else if p_equal p_i1 p2 then p1
+    else p_int_mul p1 p2
 
 (* -------------------------------------------------------------------- *)
 let p_real_le_simpl (p1 : pattern) (p2 : pattern) =
@@ -2287,11 +2323,9 @@ let p_real_lt_simpl (p1 : pattern) (p2 : pattern) =
     | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
     | _ -> p_real_lt p1 p2
 
-let p_remove_opp (p : pattern) = match p.p_node with
-  | Pat_Fun_Symbol (Sym_Form_App _, [op;p])
-       when op_equal op fop_real_opp -> Some p
-  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f1])})
-       when op_equal (pat_form op) fop_real_opp -> Some (pat_form f1)
+let p_remove_opp (p : pattern) =
+  match p_destr_app p with
+  | op, [p] when op_equal op fop_real_opp -> Some p
   | _ -> None
 
 let p_remove_add (p : pattern) =

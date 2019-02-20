@@ -195,6 +195,7 @@ module Debug : sig
   val debug_reduce                   : environment -> pattern -> axiom -> unit
   val debug_no_reduce                : environment -> pattern -> axiom -> unit
   val debug_found_match              : environment -> unit
+  val debug_no_match_found           : environment -> unit
   val debug_ignore_ors               : environment -> unit
   val debug_another_or               : environment -> unit
   val debug_different_forms          : environment -> form -> form -> unit
@@ -405,6 +406,13 @@ end = struct
       EcEnv.notify env `Warning "Matching successful: %a"
         (EcPrinting.pp_list "@ and@ " (pp_names ppe))
         (Mid.bindings menv.env_match.me_matches)
+
+  let debug_no_match_found menv =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+
+      EcEnv.notify env `Warning
+        "--- Matching unsuccessful"
 
   let debug_ignore_ors menv =
     if menv.env_verbose.verbose_show_ignored_or then
@@ -1806,7 +1814,9 @@ and next (m : ismatch) (e : engine) : nengine =
 
 and next_n (m : ismatch) (e : nengine) : nengine =
   match m,e.ne_continuation with
-  | NoMatch, ZTop -> raise NoMatches
+  | NoMatch, ZTop ->
+     Debug.debug_no_match_found e.ne_env;
+     raise NoMatches
 
   | Match, ZTop   ->
      Debug.debug_found_match e.ne_env;
