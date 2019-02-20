@@ -54,7 +54,7 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = true;
-    verbose_type            = true;
+    verbose_type            = false;
     verbose_bind_restr      = true;
     verbose_add_meta        = true;
     verbose_abstract        = false;
@@ -62,7 +62,7 @@ let debug_verbose : verbose = {
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
-    verbose_translate_error = true;
+    verbose_translate_error = false;
   }
 
 let env_verbose = no_verbose
@@ -1764,19 +1764,19 @@ let rec process (e : engine) : nengine =
                  e_continuation = Zand ([],zand,e.e_continuation); }
        end
 
-    (* eta-expansion in the case where the types of f is some tarrow *)
-    | Pat_Fun_Symbol (Sym_Quant (Llambda, b1), [e_pattern]), Axiom_Form f
-         when check_arrow e b1 f.f_ty ->
-       Debug.debug_which_rule e.e_env "eta-expansion";
-       let gty_of_ogty i = function
-         | OGTty (Some t) -> i, GTty t
-         | o -> Debug.debug_eta_expansion e.e_env i o;
-                assert false in
-       let b = List.map (fun (i,o) -> gty_of_ogty i o) b1 in
-       let f = f_ty_app (LDecl.toenv e.e_env.env_hyps)
-                 f (List.map (fun (i,t) -> f_local i (gty_as_ty t)) b) in
-       let e_head = Axiom_Form f in
-       process { e with e_pattern; e_head }
+    (* (\* eta-expansion in the case where the types of f is some tarrow *\)
+     * | Pat_Fun_Symbol (Sym_Quant (Llambda, b1), [e_pattern]), Axiom_Form f
+     *      when check_arrow e b1 f.f_ty ->
+     *    Debug.debug_which_rule e.e_env "eta-expansion";
+     *    let gty_of_ogty i = function
+     *      | OGTty (Some t) -> i, GTty t
+     *      | o -> Debug.debug_eta_expansion e.e_env i o;
+     *             assert false in
+     *    let b = List.map (fun (i,o) -> gty_of_ogty i o) b1 in
+     *    let f = f_ty_app (LDecl.toenv e.e_env.env_hyps)
+     *              f (List.map (fun (i,t) -> f_local i (gty_as_ty t)) b) in
+     *    let e_head = Axiom_Form f in
+     *    process { e with e_pattern; e_head } *)
 
     | Pat_Fun_Symbol _, _ ->
        begin Debug.debug_which_rule e.e_env "default";
@@ -2181,7 +2181,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
     | Axiom_MemEnv _ | Axiom_Memory _ -> None
   and aux_f f = aux (Axiom_Form f)
   and aux_i i = aux (Axiom_Instr i)
-  in aux a
+  in omap p_simplify (aux a)
 
 let rec prefix_binds bs1 bs2 =
   let rec aux acc bs1 bs2 = match bs1,bs2 with

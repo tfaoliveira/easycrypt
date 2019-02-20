@@ -2052,6 +2052,7 @@ let p_rint n         = p_real_of_int (p_int n)
 
 let p_i0 = pat_form f_i0
 let p_i1 = pat_form f_i1
+
 let p_r0 = pat_form f_r0
 let p_r1 = pat_form f_r1
 
@@ -2254,7 +2255,7 @@ let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
 let p_int_opp_simpl (p : pattern) =
   match p_destr_app p with
   | op, [p] when op_equal op fop_int_opp -> p
-  | _ -> p_int_opp p
+  | _ -> if p_equal p_i0 p then p_i0 else p_int_opp p
 
 let p_int_add_simpl =
   let try_add_opp p1 p2 =
@@ -2282,7 +2283,7 @@ let p_int_add_simpl =
 
   fun p1 p2 ->
     let i1 = try Some (p_destr_int p1) with DestrError _ -> None in
-    let i2 = try Some (p_destr_int p1) with DestrError _ -> None in
+    let i2 = try Some (p_destr_int p2) with DestrError _ -> None in
 
     match i1, i2 with
     | Some i1, Some i2 -> p_int (EcBigInt.add i1 i2)
