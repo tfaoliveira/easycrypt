@@ -2060,8 +2060,10 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
        omap (fun l -> let p1,p2 = as_seq2 l in p_glob p1 p2)
          (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
     | Fop (_,lty) ->
-       if List.exists mem_ty_univar lty then Some (pat_form f)
-       else None
+       (* if List.exists mem_ty_univar lty
+        * then *)
+         Some (pat_form f)
+       (* else None *)
     | Fapp(fop,args) ->
        omap (fun l -> let pop, pargs = List.hd l, List.tl l in
                       p_app pop pargs (Some fty))
