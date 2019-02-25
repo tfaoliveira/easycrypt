@@ -57,7 +57,7 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = false;
-    verbose_type            = false;
+    verbose_type            = true;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
@@ -1146,24 +1146,9 @@ let h_red_strat env p a =
   let h = env.env_hyps in
   let r = env.env_red_info_match in
   let env = saturate env in
-  let s = psubst_of_menv { env.env_match with me_matches = Mid.empty } in
-  let p' = p_simplify (p_subst s p) in
-  match X.h_red_strat h s r r p' a with
-  | None -> None
-  | Some (p'',a') ->
-     (* if (EQ.pattern env EcReduction.no_red p'' p')
-      *    && EQ.pattern env EcReduction.no_red (pat_axiom a) (pat_axiom a')
-      * then None
-      * else  *)
-       Some (p'', a')
-
-(* let h_red_strat env p a =
- *   match p_destr_app p, p_destr_app (pat_axiom a) with
- *   | (_, []), _ | _, (_, []) -> h_red_strat env p a
- *   (\* | ({ p_node = Pat_Axiom a1 }, _), ({ p_node = Pat_Axiom a2 }, _) ->
- *    *    if EQ.axiom env env.env_red_info_match a1 a2 then None
- *    *    else h_red_strat env p a *\)
- *   | _ -> h_red_strat env p a *)
+  let s = psubst_of_menv env.env_match in
+  let p' = simplify env (p_subst s p) in
+  X.h_red_strat h s r r p' a
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
@@ -1906,6 +1891,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
           ~src:ne.ne_env.env_match.me_unienv
           ~dst: e.ne_env.env_match.me_unienv;
         next_n NoMatch ne
+
      | Some (e_pattern, e_head) ->
         (* if EQ.pattern e'.e_env EcReduction.no_red e_pattern e'.e_pattern
          *    && EQ.axiom e'.e_env EcReduction.no_red e_head e'.e_head then begin
@@ -1917,9 +1903,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
          *   end
          * else begin *)
             Debug.debug_reduce e'.e_env e_pattern e_head true;
-            EcUnify.UniEnv.restore
-              ~src:e'.e_env.env_match.me_unienv
-              ~dst:e.ne_env.env_match.me_unienv;
+            (* EcUnify.UniEnv.restore
+             *   ~src:e'.e_env.env_match.me_unienv
+             *   ~dst:e.ne_env.env_match.me_unienv; *)
             let e_pattern = p_simplify e_pattern in
             process { e' with e_pattern; e_head }
           (* end *)
@@ -2024,7 +2010,10 @@ let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
 let search_eng e =
   Debug.debug_begin_match e.e_env e.e_pattern e.e_head;
   try
-    Some (process e)
+    let unienv = e.e_env.env_match.me_unienv in
+    let e' = process e in
+    EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
+    Some e'
   with
   | NoMatches -> None
 
