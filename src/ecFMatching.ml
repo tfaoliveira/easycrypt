@@ -205,8 +205,8 @@ module Debug : sig
   val debug_which_rule               : environment -> string -> unit
   val debug_result_match             : environment -> ismatch -> unit
   val debug_try_reduce               : environment -> pattern -> axiom -> unit
-  val debug_reduce                   : environment -> pattern -> axiom -> unit
-  val debug_no_reduce                : environment -> pattern -> axiom -> unit
+  val debug_reduce                   : environment -> pattern -> axiom -> bool -> unit
+  val debug_reduce_incorrect         : environment -> pattern -> axiom -> unit
   val debug_found_match              : environment -> unit
   val debug_no_match_found           : environment -> unit
   val debug_ignore_ors               : environment -> unit
@@ -379,22 +379,27 @@ end = struct
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pat_axiom ppe) a
 
-  let debug_reduce menv p a =
+  let debug_reduce menv p a b =
     if menv.env_verbose.verbose_reduce then
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
-      EcEnv.notify env `Warning "Reduction (%s beta) for (%a,%a)"
-        (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
-        (EcPrinting.pp_pattern ppe) p
-        (EcPrinting.pp_pat_axiom ppe) a
+      if b then
+        EcEnv.notify env `Warning "Reduction (%s beta) for (%a,%a)"
+          (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_pat_axiom ppe) a
+      else
+        EcEnv.notify env `Warning "Ignore reduction for (%a,%a)"
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_pat_axiom ppe) a
 
-  let debug_no_reduce menv p a =
+  let debug_reduce_incorrect menv p a =
     if menv.env_verbose.verbose_reduce then
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
-      EcEnv.notify env `Warning "Ignore reduction for (%a,%a)"
+      EcEnv.notify env `Warning "Incorrect reduction for (%a,%a)"
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pat_axiom ppe) a
 
@@ -1285,14 +1290,17 @@ let rec abstract_opt
         let aux env p a =
           let rec f env p =
             if eq_pat' env p a then
-              match p.p_ogty, a.p_ogty with
-              | OGTty (Some ty), _ | _, OGTty (Some ty)
-                   when not (Mid.mem arg e.e_env.env_match.me_meta_vars) ->
-                 pat_form (f_local arg ty)
-              | _ -> meta_var arg None p.p_ogty
+              (* match p.p_ogty, a.p_ogty with
+               * | OGTty (Some ty), _ | _, OGTty (Some ty)
+               *      when not (Mid.mem arg e.e_env.env_match.me_meta_vars) ->
+               *    pat_form (f_local arg ty)
+               * | _ ->  *)
+                 meta_var arg None p.p_ogty
             else p_map (f env) p in
           let p' = f env p in
-          if EQ.pattern env env.env_red_info_match p p' then None else Some p'
+          (* if EQ.pattern env env.env_red_info_match p p' then None
+           * else *)
+            Some p'
         in
         let ogty  = p.p_ogty in
         omap (change_ogty ogty) (aux e.e_env p parg)
@@ -1377,12 +1385,19 @@ let rec process (e : engine) : nengine =
        in process e
 
     | Pat_Fun_Symbol (Sym_Form_App (_, MaybeHO), pop :: pargs), _ ->
-       Debug.debug_which_rule e.e_env "form : application : test both without and with higher order";
-       let e_pattern = pat_fun_symbol (Sym_Form_App (None, HO)) (pop::pargs) in
-       let e_or = { e with e_pattern; } in
-       let e_pattern = pat_fun_symbol (Sym_Form_App (None, NoHO)) (pop::pargs) in
-       let e = { e with e_pattern; } in
-       process (zor e [e_or])
+       let s = psubst_of_menv e.e_env.env_match in
+       let p' = Psubst.p_subst s e.e_pattern in
+       if p_equal e.e_pattern p' then begin
+           Debug.debug_which_rule e.e_env
+             "form : application : test both without and with higher order";
+           let e_pattern = pat_fun_symbol (Sym_Form_App (None, HO)) (pop::pargs) in
+           let e_or = { e with e_pattern; } in
+           let e_pattern = pat_fun_symbol (Sym_Form_App (None, NoHO)) (pop::pargs) in
+           let e = { e with e_pattern; } in
+           process (zor e [e_or])
+         end
+       else
+         process { e with e_pattern = p' }
 
     | Pat_Fun_Symbol (Sym_Form_App (_, NoHO), pop :: pargs),
       Axiom_Form { f_node = Fapp (fop, fargs) } ->
@@ -1393,7 +1408,7 @@ let rec process (e : engine) : nengine =
        let zand = List.map2 (fun x y -> Axiom_Form x, y) fargs2 pargs2 in
        let fop' = f_ty_app (EcEnv.LDecl.toenv e.e_env.env_hyps) fop fargs1 in
        let pop = p_app pop pargs1 None in
-       let e_head, e_pattern, zand = Axiom_Form fop', pop, List.rev zand in
+       let e_head, e_pattern, zand = Axiom_Form fop', pop, zand in
        let e_continuation = Zand ([e_head,e_pattern],zand,e.e_continuation) in
        process { e with e_pattern; e_head; e_continuation; }
 
@@ -1838,26 +1853,27 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
 
   | Match, ZReduce (ne_continuation, e', _) ->
-     Debug.debug_no_reduce e.ne_env e'.e_pattern e'.e_head;
+     Debug.debug_reduce e.ne_env e'.e_pattern e'.e_head false;
      next_n Match { e with ne_continuation }
 
   | NoMatch, ZReduce (_, e', ne) ->
      match h_red_strat e'.e_env e'.e_pattern e'.e_head with
      | None ->
-        Debug.debug_reduce e'.e_env e'.e_pattern e'.e_head;
+        Debug.debug_reduce e'.e_env e'.e_pattern e'.e_head false;
         EcUnify.UniEnv.restore
           ~src:ne.ne_env.env_match.me_unienv
           ~dst: e.ne_env.env_match.me_unienv;
         next_n NoMatch ne
      | Some (e_pattern, e_head) ->
-        Debug.debug_reduce e'.e_env e_pattern e_head;
         if e_pattern = e'.e_pattern && e_head = e'.e_head then begin
+            Debug.debug_reduce_incorrect e'.e_env e_pattern e_head;
             EcUnify.UniEnv.restore
               ~src:ne.ne_env.env_match.me_unienv
               ~dst: e.ne_env.env_match.me_unienv;
             next_n NoMatch ne
           end
         else begin
+            Debug.debug_reduce e'.e_env e_pattern e_head true;
             EcUnify.UniEnv.restore
               ~src:e'.e_env.env_match.me_unienv
               ~dst:e.ne_env.env_match.me_unienv;
@@ -1977,7 +1993,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
     | Axiom_Local (id,ty) ->
        if Mid.mem id sbd
        then Some (meta_var id None (OGTty (Some ty)))
-       else Some (pat_axiom a)
+       else None
     | Axiom_Form f -> begin
         let fty = f.f_ty in
         match f.f_node with
@@ -2016,46 +2032,40 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
         | Fglob(mp, m) ->
            omap (fun l -> let p1,p2 = as_seq2 l in p_glob p1 p2)
              (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
-        | Fop (_,_) ->
-           Some (pat_form f)
+        | Fop (_,lty) ->
+           if List.exists mem_ty_univar lty then Some (pat_form f)
+           else None
         | Fapp ({ f_node = Flocal id ; f_ty = ty }, args) when Mid.mem id sbd ->
            let p =
              p_app (meta_var id None (OGTty (Some ty)))
                (List.map (fun x ->  odfl (pat_form x) (aux_f x)) args) (Some fty) in
            Some p
         | Fapp(fop,args) ->
-           if mem_ty_univar fty
-           then
-             let pargs = List.map (fun arg -> odfl (pat_form arg) (aux_f arg)) args in
-             let pop = odfl (pat_form fop) (aux_f fop) in
-             Some (p_app pop pargs (Some fty))
-           else
-             omap (fun l -> let pop, pargs = List.hd l, List.tl l in
-                            p_app pop pargs (Some fty))
-               (omap_list pat_form aux_f (fop::args))
+           omap (fun l -> let pop, pargs = List.hd l, List.tl l in
+                          p_app pop pargs (Some fty))
+             (omap_list pat_form aux_f (fop::args))
         | Ftuple args ->
            omap (fun l -> p_tuple l) (omap_list pat_form aux_f args)
         | Fproj(f1,i) ->
-           if mem_ty_univar fty
-           then
-             Some (p_proj (odfl (pat_form f1) (aux_f f1)) i fty)
-           else
-             omap (fun p -> p_proj p i fty) (aux_f f1)
+           omap (fun p -> p_proj p i fty) (aux_f f1)
         | FhoareF h ->
-           omap (fun l -> let p1,p2,p3 = as_seq3 l in p_hoareF p1 p2 p3)
+           omap (fun l -> let p1,p2,p3 = as_seq3 l in
+                          p_hoareF p1 p2 p3)
              (omap_list pat_axiom aux
                 [Axiom_Form h.hf_pr;
                  Axiom_Xpath h.hf_f;
                  Axiom_Form h.hf_po])
         | FhoareS h ->
-           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_hoareS p1 p2 p3 p4)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in
+                          p_hoareS p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.hs_m;
                  Axiom_Form h.hs_pr;
                  Axiom_Stmt h.hs_s;
                  Axiom_Form h.hs_po])
         | FbdHoareF h ->
-           omap (fun l -> let p1,p2,p3,p4,p5 = as_seq5 l in p_bdHoareF p1 p2 p3 p4 p5)
+           omap (fun l -> let p1,p2,p3,p4,p5 = as_seq5 l in
+                          p_bdHoareF p1 p2 p3 p4 p5)
              (omap_list pat_axiom aux
                 [Axiom_Form h.bhf_pr;
                  Axiom_Xpath h.bhf_f;
@@ -2063,7 +2073,8 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Hoarecmp h.bhf_cmp;
                  Axiom_Form h.bhf_bd])
         | FbdHoareS h ->
-           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_bdHoareS p1 p2 p3 p4 p5 p6)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in
+                          p_bdHoareS p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.bhs_m;
                  Axiom_Form h.bhs_pr;
@@ -2072,14 +2083,16 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Hoarecmp h.bhs_cmp;
                  Axiom_Form h.bhs_bd])
         | FequivF h ->
-           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_equivF p1 p2 p3 p4)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in
+                          p_equivF p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_Form h.ef_pr;
                  Axiom_Xpath h.ef_fl;
                  Axiom_Xpath h.ef_fr;
                  Axiom_Form h.ef_po])
         | FequivS h ->
-           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_equivS p1 p2 p3 p4 p5 p6)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in
+                          p_equivS p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_MemEnv h.es_ml;
                  Axiom_MemEnv h.es_mr;
@@ -2088,7 +2101,8 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Stmt h.es_sr;
                  Axiom_Form h.es_po])
         | FeagerF h ->
-           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in p_eagerF p1 p2 p3 p4 p5 p6)
+           omap (fun l -> let p1,p2,p3,p4,p5,p6 = as_seq6 l in
+                          p_eagerF p1 p2 p3 p4 p5 p6)
              (omap_list pat_axiom aux
                 [Axiom_Form h.eg_pr;
                  Axiom_Stmt h.eg_sl;
@@ -2098,7 +2112,8 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
                  Axiom_Form h.eg_po])
         | Fpr pr ->
            let pr_event = pr.pr_event in
-           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in p_pr p1 p2 p3 p4)
+           omap (fun l -> let p1,p2,p3,p4 = as_seq4 l in
+                          p_pr p1 p2 p3 p4)
              (omap_list pat_axiom aux
                 [Axiom_Memory pr.pr_mem;
                  Axiom_Xpath pr.pr_fun;
@@ -2136,13 +2151,15 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
            omap (fun l -> let p1,p2 = as_seq2 l in p_sample p1 p2)
              (omap_list pat_axiom aux [Axiom_Lvalue lv; Axiom_Form (form_of_expr e)])
         | Scall (None,f,args) ->
-           omap (fun l -> let p1,pargs = List.hd l,List.tl l in p_call None p1 pargs)
+           omap (fun l -> let p1,pargs = List.hd l,List.tl l in
+                          p_call None p1 pargs)
              (omap_list pat_axiom aux ((Axiom_Xpath f)::(List.map axiom_expr args)))
         | Scall (Some lv,f,args) ->
            omap (fun l -> let p1, l     = List.hd l, List.tl l in
                           let p2, pargs =  List.hd l, List.tl l in
                           p_call (Some p1) p2 pargs)
-             (omap_list pat_axiom aux ((Axiom_Lvalue lv)::(Axiom_Xpath f)::(List.map axiom_expr args)))
+             (omap_list pat_axiom aux
+                ((Axiom_Lvalue lv)::(Axiom_Xpath f)::(List.map axiom_expr args)))
         | Sif (e,strue,sfalse) ->
            omap (fun l -> let p1,p2,p3 = as_seq3 l in p_instr_if p1 p2 p3)
              (omap_list pat_axiom aux [axiom_expr e;Axiom_Stmt strue;Axiom_Stmt sfalse])

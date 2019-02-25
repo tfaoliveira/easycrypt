@@ -257,8 +257,8 @@ val f_eqs : form list -> form list -> form
 (* soft-constructors - integers *)
 val fop_int_opp : form
 val fop_int_add : form
-val fop_int_opp : form
 val fop_int_pow : form
+val fop_int_mul : form
 
 val f_i0 : form
 val f_i1 : form

@@ -54,10 +54,10 @@ let f_eqglob mp1 m1 mp2 m2 =
   f_eq (f_glob mp1 m1) (f_glob mp2 m2)
 
 (* -------------------------------------------------------------------- *)
-let f_op_real_of_int = (* CORELIB *)
+let fop_real_of_int = (* CORELIB *)
   f_op CI.CI_Real.p_real_of_int [] (tfun tint treal)
 
-let f_real_of_int f  = f_app f_op_real_of_int [f] treal
+let f_real_of_int f  = f_app fop_real_of_int [f] treal
 let f_rint n         = f_real_of_int (f_int n)
 
 let f_r0 = f_rint BI.zero
@@ -65,7 +65,7 @@ let f_r1 = f_rint BI.one
 
 let destr_rint f =
   match f.f_node with
-  | Fapp (op, [f1]) when f_equal f_op_real_of_int op -> begin
+  | Fapp (op, [f1]) when f_equal fop_real_of_int op -> begin
       try destr_int f1 with DestrError _ -> destr_error "destr_rint"
   end
 
@@ -612,8 +612,8 @@ let rec f_eq_simpl f1 f2 =
   | Fint _ , Fint _ -> f_false
 
   | Fapp (op1, [{f_node = Fint _}]), Fapp (op2, [{f_node = Fint _}])
-      when f_equal op1 f_op_real_of_int &&
-           f_equal op2 f_op_real_of_int
+      when f_equal op1 fop_real_of_int &&
+           f_equal op2 fop_real_of_int
     -> f_false
 
   | Fop (op1, []), Fop (op2, []) when

@@ -1938,7 +1938,7 @@ end
 let p_betared_opt = Psubst.p_betared_opt
 
 (* -------------------------------------------------------------------------- *)
-let f_op_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
+let fop_real_of_int = f_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
 
 (* -------------------------------------------------------------------------- *)
 let p_true  = pat_form EcFol.f_true
@@ -2027,21 +2027,8 @@ let p_ands (ps : pattern list) = match List.rev ps with
 
 (* -------------------------------------------------------------------------- *)
  (* CORELIB *)
-let fop_int_le      = f_op EcCoreLib.CI_Int.p_int_le      [] (toarrow [tint; tint] tbool)
-let fop_int_lt      = f_op EcCoreLib.CI_Int.p_int_lt      [] (toarrow [tint; tint] tbool)
-let fop_int_opp     = f_op EcCoreLib.CI_Int.p_int_opp     [] (toarrow [tint]       tint)
-let fop_int_add     = f_op EcCoreLib.CI_Int.p_int_add     [] (toarrow [tint; tint] tint)
-let fop_int_mul     = f_op EcCoreLib.CI_Int.p_int_mul     [] (toarrow [tint; tint] tint)
-
-let fop_real_le     = f_op EcCoreLib.CI_Real.p_real_le     [] (toarrow [treal; treal] tbool)
-let fop_real_lt     = f_op EcCoreLib.CI_Real.p_real_lt     [] (toarrow [treal; treal] tbool)
-let fop_real_opp    = f_op EcCoreLib.CI_Real.p_real_opp    [] (toarrow [treal]        treal)
-let fop_real_add    = f_op EcCoreLib.CI_Real.p_real_add    [] (toarrow [treal; treal] treal)
-let fop_real_mul    = f_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
-let fop_real_inv    = f_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
-
-let pop_real_mul    = p_op EcCoreLib.CI_Real.p_real_mul    [] (toarrow [treal; treal] treal)
-let pop_real_inv    = p_op EcCoreLib.CI_Real.p_real_inv    [] (toarrow [treal]        treal)
+let pop_real_mul    = pat_form fop_real_mul
+let pop_real_inv    = pat_form fop_real_inv
 let pop_real_of_int = p_op EcCoreLib.CI_Real.p_real_of_int [] (tfun tint treal)
 
 let p_int (i : EcBigInt.zint) = pat_form (f_int i)
@@ -2065,7 +2052,7 @@ let p_destr_int (p : pattern) = match p.p_node with
 
 let p_destr_rint p =
   match p_destr_app p with
-  | op, [p1] when op_equal op f_op_real_of_int ->
+  | op, [p1] when op_equal op fop_real_of_int ->
      begin try p_destr_int p1 with DestrError _ -> destr_error "destr_rint" end
 
   | _ -> destr_error "destr_rint"
@@ -2075,14 +2062,14 @@ let p_int_le (p1 : pattern) (p2 : pattern) =
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_le f1 f2)
   | _ ->
-     p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_le [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+     p_app (pat_form fop_int_le) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_lt (p1 : pattern) (p2 : pattern) =
   match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_lt f1 f2)
   | _ ->
-     p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_lt [] (toarrow [tint ; tint ] tbool))) [p1;p2] (Some EcTypes.tbool)
+     p_app (pat_form fop_int_lt) [p1;p2] (Some EcTypes.tbool)
 
 let p_int_add (p1 : pattern) (p2 : pattern) =
   match p1.p_node, p2.p_node with
@@ -2102,7 +2089,7 @@ let p_int_mul (p1 : pattern) (p2 : pattern) =
   | Pat_Axiom (Axiom_Form f1), Pat_Axiom (Axiom_Form f2) ->
      pat_form (EcFol.f_int_mul f1 f2)
   | _ ->
-     p_app (pat_form (f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint ; tint ] tint))) [p1;p2] (Some EcTypes.tint)
+     p_app (pat_form fop_int_mul) [p1;p2] (Some EcTypes.tint)
 
 let get_real_of_int (p : pattern) =
   try Some (p_destr_rint p) with DestrError _ -> None
@@ -2218,8 +2205,8 @@ let rec p_eq_simpl ty (p1 : pattern) (p2 : pattern) =
 
   | Pat_Axiom (Axiom_Form { f_node = Fapp (op1, [{f_node = Fint _}]) }),
     Pat_Axiom (Axiom_Form { f_node = Fapp (op2, [{f_node = Fint _}]) })
-      when f_equal op1 f_op_real_of_int &&
-           f_equal op2 f_op_real_of_int
+      when f_equal op1 fop_real_of_int &&
+           f_equal op2 fop_real_of_int
     -> p_false
 
   | Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) } ),

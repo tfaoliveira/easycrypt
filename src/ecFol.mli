@@ -34,9 +34,15 @@ val f_eqglob:
   -> mpath -> memory
   -> form
 
+(* operators *)
+
+
 (* soft-constructors - ordering *)
-val f_int_le  : form -> form -> form
-val f_int_lt  : form -> form -> form
+val fop_int_le : form
+val fop_int_lt : form
+
+val f_int_le : form -> form -> form
+val f_int_lt : form -> form -> form
 
 (* soft-constructors - reals *)
 val f_rint : zint -> form
@@ -46,8 +52,19 @@ val f_r0 : form
 val f_r1 : form
 
 (* soft-constructor - numbers *)
+val fop_real_of_int : form
+
+val fop_real_le : form
+val fop_real_lt : form
+
 val f_real_le : form -> form -> form
 val f_real_lt : form -> form -> form
+
+val fop_real_add : form
+val fop_real_opp : form
+val fop_real_mul : form
+val fop_real_inv : form
+val fop_real_abs : form
 
 val f_real_add : form -> form -> form
 val f_real_opp : form -> form
