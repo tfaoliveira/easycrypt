@@ -1147,8 +1147,13 @@ let h_red_strat env p a =
   let r = env.env_red_info_match in
   let env = saturate env in
   let s = psubst_of_menv env.env_match in
-  let p' = simplify env (p_subst s p) in
-  X.h_red_strat h s r r p' a
+  let p1 = simplify env (p_subst s p) in
+  match X.h_red_strat h s r r p1 a with
+  | Some (p2, a2) ->
+     let p2 = simplify env p2 in
+     if p1 = p2 && a = a2 then None
+     else Some (p2, a2)
+  | None -> None
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
