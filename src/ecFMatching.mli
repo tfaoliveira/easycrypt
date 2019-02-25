@@ -27,6 +27,7 @@ type verbose = {
     verbose_show_or         : bool;
     verbose_begin_match     : bool;
     verbose_translate_error : bool;
+    verbose_subst           : bool;
   }
 
 type environment = {

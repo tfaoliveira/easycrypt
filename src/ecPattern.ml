@@ -962,6 +962,11 @@ let p_map (f : pattern -> pattern) (p : pattern) : pattern =
 (* -------------------------------------------------------------------------- *)
 module Simplify = struct
 
+  let mem_ty_univar (ty : ty) =
+    try ty_check_uni ty; true
+    with
+    | FoundUnivar -> false
+
   let ps_app ?ho p1 pargs ot = match ot with
     | None -> p_app ?ho p1 pargs ot
     | Some t ->
@@ -975,7 +980,8 @@ module Simplify = struct
       let o (id,t) = omap (fun x -> id,x) (gty_of_ogty t) in
       match olist_all o b with
       | None -> p_quant q b p
-      | Some b -> pat_form (f_quant q b (form_of_pattern p))
+      | Some b ->
+         pat_form (f_quant q b (form_of_pattern p))
     else p_quant q b p
 
   let ps_mpath (p : pattern) (args : pattern list) =
@@ -1225,11 +1231,6 @@ module Simplify = struct
        pat_form (f_pr m f args event)
     | _ ->
        pat_fun_symbol Sym_Form_Pr [pm;pf;pargs;pevent]
-
-  let mem_ty_univar (ty : ty) =
-    try ty_check_uni ty; true
-    with
-    | FoundUnivar -> false
 
 (* -------------------------------------------------------------------------- *)
   let rec p_simplify p =
