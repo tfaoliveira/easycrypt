@@ -56,12 +56,12 @@ let full_verbose : verbose = {
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = true;
-    verbose_type            = true;
+    verbose_rule            = false;
+    verbose_type            = false;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -217,7 +217,7 @@ module Debug : sig
   val debug_another_or               : environment -> unit
   val debug_different_forms          : environment -> form -> form -> unit
   val debug_try_translate_higher_order : environment -> pattern -> string -> unit
-  val debug_begin_match              : environment -> unit
+  val debug_begin_match              : environment -> pattern -> axiom -> unit
   val debug_show_pattern             : environment -> pattern -> unit
   val debug_translate_error          : environment -> string -> unit
   val debug_eta_expansion            : environment -> meta_name -> ogty -> unit
@@ -485,13 +485,20 @@ end = struct
           (EcPrinting.pp_form ppe) f2
           (EcPrinting.pp_type ppe) f2.f_ty
 
-  let debug_begin_match menv =
+  let debug_begin_match menv p a =
     if menv.env_verbose.verbose_begin_match then
       let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
         "========================= Begin new match ===========================";
-      debug_unienv menv
+
+      EcEnv.notify env `Warning "=== %a ?= %a ==="
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pat_axiom ppe) a
+
+
+
 end
 
 (* -------------------------------------------------------------------------- *)
@@ -1144,18 +1151,19 @@ let h_red_strat env p a =
   match X.h_red_strat h s r r p' a with
   | None -> None
   | Some (p'',a') ->
-     if (p_equal p'' p') && p_equal (pat_axiom a) (pat_axiom a') then
-       None
-     else
+     (* if (EQ.pattern env EcReduction.no_red p'' p')
+      *    && EQ.pattern env EcReduction.no_red (pat_axiom a) (pat_axiom a')
+      * then None
+      * else  *)
        Some (p'', a')
 
-let h_red_strat env p a =
-  match p_destr_app p, p_destr_app (pat_axiom a) with
-  | (_, []), _ | _, (_, []) -> h_red_strat env p a
-  | ({ p_node = Pat_Axiom a1 }, _), ({ p_node = Pat_Axiom a2 }, _) ->
-     if EQ.axiom env env.env_red_info_match a1 a2 then None
-     else h_red_strat env p a
-  | _ -> h_red_strat env p a
+(* let h_red_strat env p a =
+ *   match p_destr_app p, p_destr_app (pat_axiom a) with
+ *   | (_, []), _ | _, (_, []) -> h_red_strat env p a
+ *   (\* | ({ p_node = Pat_Axiom a1 }, _), ({ p_node = Pat_Axiom a2 }, _) ->
+ *    *    if EQ.axiom env env.env_red_info_match a1 a2 then None
+ *    *    else h_red_strat env p a *\)
+ *   | _ -> h_red_strat env p a *)
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
@@ -1899,21 +1907,22 @@ and next_n (m : ismatch) (e : nengine) : nengine =
           ~dst: e.ne_env.env_match.me_unienv;
         next_n NoMatch ne
      | Some (e_pattern, e_head) ->
-        if e_pattern = e'.e_pattern && e_head = e'.e_head then begin
-            Debug.debug_reduce_incorrect e'.e_env e_pattern e_head;
-            EcUnify.UniEnv.restore
-              ~src:ne.ne_env.env_match.me_unienv
-              ~dst: e.ne_env.env_match.me_unienv;
-            next_n NoMatch ne
-          end
-        else begin
+        (* if EQ.pattern e'.e_env EcReduction.no_red e_pattern e'.e_pattern
+         *    && EQ.axiom e'.e_env EcReduction.no_red e_head e'.e_head then begin
+         *     Debug.debug_reduce_incorrect e'.e_env e_pattern e_head;
+         *     EcUnify.UniEnv.restore
+         *       ~src:ne.ne_env.env_match.me_unienv
+         *       ~dst: e.ne_env.env_match.me_unienv;
+         *     next_n NoMatch ne
+         *   end
+         * else begin *)
             Debug.debug_reduce e'.e_env e_pattern e_head true;
             EcUnify.UniEnv.restore
               ~src:e'.e_env.env_match.me_unienv
               ~dst:e.ne_env.env_match.me_unienv;
             let e_pattern = p_simplify e_pattern in
             process { e' with e_pattern; e_head }
-          end
+          (* end *)
 
 and sub_engines (e : engine) (p : pattern) : engine list =
   match e.e_head with
@@ -2013,7 +2022,7 @@ let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
 
 let search_eng e =
-  Debug.debug_begin_match e.e_env;
+  Debug.debug_begin_match e.e_env e.e_pattern e.e_head;
   try
     Some (process e)
   with
@@ -2059,11 +2068,7 @@ let pattern_of_axiom (sbd: ogty Mid.t) (a : axiom) =
     | Fglob(mp, m) ->
        omap (fun l -> let p1,p2 = as_seq2 l in p_glob p1 p2)
          (omap_list pat_axiom aux [Axiom_Mpath mp;Axiom_Memory m])
-    | Fop (_,lty) ->
-       (* if List.exists mem_ty_univar lty
-        * then *)
-         Some (pat_form f)
-       (* else None *)
+    | Fop (_,_) -> Some (pat_form f)
     | Fapp(fop,args) ->
        omap (fun l -> let pop, pargs = List.hd l, List.tl l in
                       p_app pop pargs (Some fty))
