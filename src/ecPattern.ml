@@ -149,7 +149,7 @@ let gty_of_ogty (ogty : ogty) = match ogty with
 
 (* -------------------------------------------------------------------------- *)
 
-let rec p_equal = (=)
+let rec p_equal : pattern -> pattern -> bool = (=)
 
 let ogty_equal o1 o2 = match o1, o2 with
   | OGTany, _ | _, OGTany -> true
@@ -2137,78 +2137,95 @@ let p_destr_not = function
   | _ -> assert false
 
 (* -------------------------------------------------------------------------- *)
-let p_not_simpl (p : pattern) =
-  if p_is_not p then p_destr_not p
-  else if p_is_true p then p_false
-  else if p_is_false p then p_true
-  else p_not p
+let p_not_simpl_opt (p : pattern) =
+  if p_is_not p then Some (p_destr_not p)
+  else if p_is_true p then Some p_false
+  else if p_is_false p then Some p_true
+  else None
 
-let p_imp_simpl (p1 : pattern) (p2 : pattern) =
+let p_not_simpl p = odfl (p_not p) (p_not_simpl_opt p)
+
+let p_imp_simpl_opt (p1 : pattern) (p2 : pattern) =
   match p_bool_val p1, p_bool_val p2 with
-  | Some true, _ -> p2
-  | Some false, _ | _, Some true -> p_true
-  | _, Some false -> p_not_simpl p1
-  | _ -> if p_equal p1 p2 then p_true
-         else p_imp p1 p2
+  | Some true, _ -> Some p2
+  | Some false, _ | _, Some true -> Some p_true
+  | _, Some false -> Some (p_not_simpl p1)
+  | _ -> if p_equal p1 p2 then Some p_true
+         else None
 
-let p_anda_simpl (p1 : pattern) (p2 : pattern) =
+let p_imp_simpl p1 p2 = odfl (p_imp p1 p2) (p_imp_simpl_opt p1 p2)
+
+let p_anda_simpl_opt (p1 : pattern) (p2 : pattern) =
   match p_bool_val p1, p_bool_val p2 with
-  | Some true, _ -> p2
-  | Some false, _ -> p_false
-  | _, Some true -> p1
-  | _, Some false -> p_false
-  | _ -> p_anda p1 p2
+  | Some true , _          -> Some p2
+  | Some false, _          -> Some p_false
+  | _         , Some true  -> Some p1
+  | _         , Some false -> Some p_false
+  | _                      -> None
 
-let p_ora_simpl (p1 : pattern) (p2 : pattern) =
+let p_anda_simpl p1 p2 = odfl (p_anda p1 p2) (p_anda_simpl_opt p1 p2)
+
+let p_ora_simpl_opt (p1 : pattern) (p2 : pattern) =
   match p_bool_val p1, p_bool_val p2 with
-  | Some true, _ -> p_true
-  | Some false, _ -> p2
-  | _, Some true -> p_true
-  | _, Some false -> p1
-  | _ -> p_ora p1 p2
+  | Some true , _          -> Some p_true
+  | Some false, _          -> Some p2
+  | _         , Some true  -> Some p_true
+  | _         , Some false -> Some p1
+  | _                      -> None
 
-let rec p_iff_simpl (p1 : pattern) (p2 : pattern) =
-  if p_equal  p1 p2 then p_true
+let p_ora_simpl p1 p2 = odfl (p_ora p1 p2) (p_ora_simpl_opt p1 p2)
+
+let rec p_iff_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal  p1 p2 then Some p_true
   else
   match p_bool_val p1, p_bool_val p2 with
-  | Some true, _ -> p2
-  | Some false, _ -> p_not_simpl p2
-  | _, Some true -> p1
-  | _, Some false -> p_not_simpl p1
+  | Some true , _          -> Some p2
+  | Some false, _          -> Some (p_not_simpl p2)
+  | _         , Some true  -> Some p1
+  | _         , Some false -> Some (p_not_simpl p1)
   | _ ->
   match p_destr_app p1, p_destr_app p2 with
   | (op1, [p1]), (op2, [p2])
        when (op_equal op1 fop_not && op_equal op2 fop_not) ->
-     p_iff_simpl p1 p2
-  | _ -> p_iff p1 p2
+     Some (p_iff_simpl p1 p2)
+  | _ -> None
 
-let p_and_simpl (p1 : pattern) (p2 : pattern) =
-  match p_bool_val p1, p_bool_val p2 with
-  | Some false, _ | _, Some false -> p_false
-  | Some true, _ -> p2
-  | _, Some true -> p1
-  | _ -> p_and p1 p2
+and p_iff_simpl (p1 : pattern) (p2 : pattern) =
+  match p_iff_simpl_opt p1 p2 with
+  | Some p -> p
+  | None -> p_iff p1 p2
 
-let p_or_simpl (p1 : pattern) (p2 : pattern) =
+let p_and_simpl_opt (p1 : pattern) (p2 : pattern) =
   match p_bool_val p1, p_bool_val p2 with
-  | Some true, _ | _, Some true -> p_true
-  | Some false, _ -> p2
-  | _, Some false -> p1
-  | _ -> p_or p1 p2
+  | Some false, _ | _, Some false -> Some p_false
+  | Some true, _ -> Some p2
+  | _, Some true -> Some p1
+  | _ -> None
+
+let p_and_simpl p1 p2 = odfl (p_and p1 p2) (p_and_simpl_opt p1 p2)
+
+let p_or_simpl_opt (p1 : pattern) (p2 : pattern) =
+  match p_bool_val p1, p_bool_val p2 with
+  | Some true, _ | _, Some true -> Some p_true
+  | Some false, _ -> Some p2
+  | _, Some false -> Some p1
+  | _ -> None
+
+let p_or_simpl p1 p2 = odfl (p_or p1 p2) (p_or_simpl_opt p1 p2)
 
 let p_andas_simpl = List.fold_right p_anda_simpl
 
-let rec p_eq_simpl ty (p1 : pattern) (p2 : pattern) =
-  if p_equal p1 p2 then p_true
+let rec p_eq_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then Some p_true
   else match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Form { f_node = Fint _ } ),
-    Pat_Axiom (Axiom_Form { f_node = Fint _ } ) -> p_false
+    Pat_Axiom (Axiom_Form { f_node = Fint _ } ) -> Some p_false
 
   | Pat_Axiom (Axiom_Form { f_node = Fapp (op1, [{f_node = Fint _}]) }),
     Pat_Axiom (Axiom_Form { f_node = Fapp (op2, [{f_node = Fint _}]) })
       when f_equal op1 fop_real_of_int &&
            f_equal op2 fop_real_of_int
-    -> p_false
+    -> Some p_false
 
   | Pat_Axiom (Axiom_Form { f_node = Fop (op1, []) } ),
     Pat_Axiom (Axiom_Form { f_node = Fop (op2, []) } )
@@ -2217,35 +2234,43 @@ let rec p_eq_simpl ty (p1 : pattern) (p2 : pattern) =
           EcPath.p_equal op2 EcCoreLib.CI_Bool.p_false  )
       || (EcPath.p_equal op2 EcCoreLib.CI_Bool.p_true  &&
           EcPath.p_equal op1 EcCoreLib.CI_Bool.p_false  )
-    -> p_false
+    -> Some p_false
 
   | Pat_Axiom (Axiom_Form { f_node = Ftuple fs1 } ),
     Pat_Axiom (Axiom_Form { f_node = Ftuple fs2 } )
        when List.length fs1 = List.length fs2 ->
-      p_andas_simpl (List.map2 (fun x y -> pat_form (f_eq_simpl x y)) fs1 fs2) p_true
+      Some (p_andas_simpl (List.map2 (fun x y -> pat_form (f_eq_simpl x y)) fs1 fs2) p_true)
 
-  | _ -> p_eq ty p1 p2
+  | _ -> None
+
+let p_eq_simpl ty p1 p2 = odfl (p_eq ty p1 p2) (p_eq_simpl_opt p1 p2)
 
 
 (* -------------------------------------------------------------------------- *)
-let p_int_le_simpl (p1 : pattern) (p2 : pattern) =
-  if p_equal p1 p2 then p_true
+let p_int_le_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then Some p_true
   else
-    try pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) <= 0))
-    with DestrError _ -> p_int_le p1 p2
+    try Some (pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) <= 0)))
+    with DestrError _ -> None
 
-let p_int_lt_simpl (p1 : pattern) (p2 : pattern) =
-  if p_equal p1 p2 then p_true
+let p_int_le_simpl p1 p2 = odfl (p_int_le p1 p2) (p_int_le_simpl_opt p1 p2)
+
+let p_int_lt_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then Some p_true
   else
-    try pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) < 0))
-    with DestrError _ -> p_int_lt p1 p2
+    try Some (pat_form (f_bool (EcBigInt.compare (p_destr_int p1) (p_destr_int p2) < 0)))
+    with DestrError _ -> None
 
-let p_int_opp_simpl (p : pattern) =
+let p_int_lt_simpl p1 p2 = odfl (p_int_lt p1 p2) (p_int_lt_simpl_opt p1 p2)
+
+let p_int_opp_simpl_opt (p : pattern) =
   match p_destr_app p with
-  | op, [p] when op_equal op fop_int_opp -> p
-  | _ -> if p_equal p_i0 p then p_i0 else p_int_opp p
+  | op, [p] when op_equal op fop_int_opp -> Some p
+  | _ -> if p_equal p_i0 p then Some p_i0 else None
 
-let p_int_add_simpl =
+let p_int_opp_simpl p = odfl (p_int_opp p) (p_int_opp_simpl_opt p)
+
+let p_int_add_simpl_opt =
   let try_add_opp p1 p2 =
     try
       let p2 = match p_destr_app p2 with
@@ -2274,10 +2299,10 @@ let p_int_add_simpl =
     let i2 = try Some (p_destr_int p2) with DestrError _ -> None in
 
     match i1, i2 with
-    | Some i1, Some i2 -> p_int (EcBigInt.add i1 i2)
+    | Some i1, Some i2 -> Some (p_int (EcBigInt.add i1 i2))
 
-    | Some i1, _ when EcBigInt.equal i1 EcBigInt.zero -> p2
-    | _, Some i2 when EcBigInt.equal i2 EcBigInt.zero -> p1
+    | Some i1, _ when EcBigInt.equal i1 EcBigInt.zero -> Some p2
+    | _, Some i2 when EcBigInt.equal i2 EcBigInt.zero -> Some p1
 
     | _, _ ->
         let simpls = [
@@ -2288,29 +2313,37 @@ let p_int_add_simpl =
         ] in
 
         ofdfl
-          (fun () -> p_int_add p1 p2)
-          (List.Exceptionless.find_map (fun f -> f ()) simpls)
+          (fun () -> None)
+          (List.Exceptionless.find_map (fun f -> Some (f ())) simpls)
 
-let p_int_mul_simpl (p1 : pattern) (p2 : pattern) =
-  try  p_int (EcBigInt.mul (p_destr_int p1) (p_destr_int p2))
+let p_int_add_simpl p1 p2 = odfl (p_int_add p1 p2) (p_int_add_simpl_opt p1 p2)
+
+let p_int_mul_simpl_opt (p1 : pattern) (p2 : pattern) =
+  try  Some (p_int (EcBigInt.mul (p_destr_int p1) (p_destr_int p2)))
   with DestrError _ ->
-    if p_equal p_i0 p1 || p_equal p_i0 p2 then p_i0
-    else if p_equal p_i1 p1 then p2
-    else if p_equal p_i1 p2 then p1
-    else p_int_mul p1 p2
+    if p_equal p_i0 p1 || p_equal p_i0 p2 then Some p_i0
+    else if p_equal p_i1 p1 then Some p2
+    else if p_equal p_i1 p2 then Some p1
+    else None
+
+let p_int_mul_simpl p1 p2 = odfl (p_int_mul p1 p2) (p_int_mul_simpl_opt p1 p2)
 
 (* -------------------------------------------------------------------- *)
-let p_real_le_simpl (p1 : pattern) (p2 : pattern) =
-  if p_equal p1 p2 then p_true else
+let p_real_le_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then Some p_true else
     match get_real_of_int p1, get_real_of_int p2 with
-    | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 <= 0))
-    | _ -> p_real_le p1 p2
+    | Some x1, Some x2 -> Some (pat_form (f_bool (EcBigInt.compare x1 x2 <= 0)))
+    | _ -> None
 
-let p_real_lt_simpl (p1 : pattern) (p2 : pattern) =
-  if p_equal p1 p2 then p_true else
+let p_real_le_simpl p1 p2 = odfl (p_real_le p1 p2) (p_real_le_simpl_opt p1 p2)
+
+let p_real_lt_simpl_opt (p1 : pattern) (p2 : pattern) =
+  if p_equal p1 p2 then Some p_true else
     match get_real_of_int p1, get_real_of_int p2 with
-    | Some x1, Some x2 -> pat_form (f_bool (EcBigInt.compare x1 x2 < 0))
-    | _ -> p_real_lt p1 p2
+    | Some x1, Some x2 -> Some (pat_form (f_bool (EcBigInt.compare x1 x2 < 0)))
+    | _ -> None
+
+let p_real_lt_simpl p1 p2 = odfl (p_real_lt p1 p2) (p_real_lt_simpl_opt p1 p2)
 
 let p_remove_opp (p : pattern) =
   match p_destr_app p with
@@ -2406,7 +2439,7 @@ let p_norm_real_int_div n1 n2 =
     if BI.equal n2 BI.one then p_rint n1
     else p_real_div (p_rint n1) (p_rint n2)
 
-let p_real_add_simpl (p1 : pattern) (p2 : pattern) =
+let p_real_add_simpl_opt (p1 : pattern) (p2 : pattern) =
   let module BI = EcBigInt in
   let try_add_opp p1 p2 =
     match p_remove_opp p2 with
@@ -2436,10 +2469,10 @@ let p_real_add_simpl (p1 : pattern) (p2 : pattern) =
   let r2 = try Some (p_destr_rint p2) with DestrError _ -> None in
 
   match r1, r2 with
-  | Some i1, Some i2 -> p_rint (BI.add i1 i2)
+  | Some i1, Some i2 -> Some (p_rint (BI.add i1 i2))
 
-  | Some i1, _ when BI.equal i1 BI.zero -> p2
-  | _, Some i2 when BI.equal i2 BI.zero -> p1
+  | Some i1, _ when BI.equal i1 BI.zero -> Some p2
+  | _, Some i2 when BI.equal i2 BI.zero -> Some p1
 
   | _ ->
      let simpls = [
@@ -2451,13 +2484,13 @@ let p_real_add_simpl (p1 : pattern) (p2 : pattern) =
        ] in
 
      ofdfl
-       (fun () -> p_real_add p1 p2)
-       (List.Exceptionless.find_map (fun f -> f ()) simpls)
+       (fun () -> None)
+       (List.Exceptionless.find_map (fun f -> Some (f ())) simpls)
 
-let p_real_opp_simpl (p : pattern) =
+let p_real_opp_simpl_opt (p : pattern) =
   match p_destr_app p with
-  | op, [p] when op_equal op fop_real_opp -> p
-  | _ -> p_real_opp p
+  | op, [p] when op_equal op fop_real_opp -> Some p
+  | _ -> None
 
 let p_real_is_zero p =
   try  EcBigInt.equal EcBigInt.zero (p_destr_rint p)
@@ -2468,32 +2501,41 @@ let p_real_is_one p =
   with DestrError _ -> false
 
 
-let rec p_real_mul_simpl p1 p2 =
+let rec p_real_mul_simpl_opt p1 p2 =
   let (n1, d1) = p_real_split p1 in
   let (n2, d2) = p_real_split p2 in
 
-  p_real_div_simpl_r
+  p_real_div_simpl_r_opt
     (p_real_mul_simpl_r n1 n2)
     (p_real_mul_simpl_r d1 d2)
+    n1 n2 d1 d2
 
-and p_real_div_simpl p1 p2 =
+and p_real_div_simpl_opt p1 p2 =
   let (n1, d1) = p_real_split p1 in
   let (n2, d2) = p_real_split p2 in
 
-  p_real_div_simpl_r
+  p_real_div_simpl_r_opt
     (p_real_mul_simpl_r n1 d2)
     (p_real_mul_simpl_r d1 n2)
+    n1 d2 d1 n2
 
 and p_real_mul_simpl_r p1 p2 =
-  if p_real_is_zero p1 || p_real_is_zero p2 then p_r0 else
+  if p_real_is_zero p1 || p_real_is_zero p2 then Some p_r0 else
 
-  if p_real_is_one p1 then p2 else
-  if p_real_is_one p2 then p1 else
+  if p_real_is_one p1 then Some p2 else
+  if p_real_is_one p2 then Some p1 else
 
   try
-    p_rint (EcBigInt.Notations.( *^ ) (p_destr_rint p1) (p_destr_rint p2))
-  with DestrError _ ->
-    p_real_mul p1 p2
+    Some (p_rint (EcBigInt.Notations.( *^ ) (p_destr_rint p1) (p_destr_rint p2)))
+  with DestrError _ -> None
+
+and p_real_div_simpl_r_opt op1 op2 n1 n2 d1 d2 =
+  match op1, op2 with
+  | None   , None    -> None
+  | Some p1, None    -> p_real_div_simpl_r p1 (p_real_mul d1 d2)
+  | None   , Some p2 -> p_real_div_simpl_r (p_real_mul n1 n2) p2
+  | Some p1, Some p2 -> p_real_div_simpl_r p1 p2
+
 
 and p_real_div_simpl_r p1 p2 =
   let (p1, p2) =
@@ -2508,23 +2550,20 @@ and p_real_div_simpl_r p1 p2 =
     | DestrError _ -> (p1, p2)
     | Division_by_zero -> (p_r0, p_r1)
 
-  in p_real_mul_simpl_r p1 (p_real_inv_simpl p2)
+  in match p_real_inv_simpl_opt p2 with
+     | None -> p_real_mul_simpl_r p1 (p_real_inv p2)
+     | Some p2 -> p_real_mul_simpl_r p1 p2
 
-and p_real_inv_simpl p =
-  match p.p_node with
-  | Pat_Axiom (Axiom_Form { f_node = Fapp (op, [f]) })
-       when f_equal op fop_real_inv -> pat_form f
-  | Pat_Fun_Symbol (Sym_Form_App _,
-                    [{ p_node = Pat_Axiom (Axiom_Form op) };p])
-       when f_equal op fop_real_inv -> p
-
+and p_real_inv_simpl_opt p =
+  match p_destr_app p with
+  | op, [p1] when op_equal op fop_real_inv -> Some p1
   | _ ->
      try
        match p_destr_rint p with
-       | n when EcBigInt.equal n EcBigInt.zero -> p_r0
-       | n when EcBigInt.equal n EcBigInt.one  -> p_r1
+       | n when EcBigInt.equal n EcBigInt.zero -> Some p_r0
+       | n when EcBigInt.equal n EcBigInt.one  -> Some p_r1
        | _ -> destr_error "destr_rint/inv"
-     with DestrError _ -> p_app pop_real_inv [p] (Some treal)
+     with DestrError _ -> None
 
 (* -------------------------------------------------------------------------- *)
 let rec reduce_pat p = match p.p_node with
@@ -2599,16 +2638,16 @@ let rec reduce_pat p = match p.p_node with
   | _ -> assert false
 
 (* -------------------------------------------------------------------------- *)
-let p_if_simpl (p1 : pattern) (p2 : pattern) (p3 : pattern) =
-  if p_equal p2 p3 then p2
+let p_if_simpl_opt (p1 : pattern) (p2 : pattern) (p3 : pattern) =
+  if p_equal p2 p3 then Some p2
   else match p_bool_val p1, p_bool_val p2, p_bool_val p3 with
-  | Some true, _, _  -> p2
-  | Some false, _, _ -> p3
-  | _, Some true, _  -> p_imp_simpl (p_not_simpl p1) p3
-  | _, Some false, _ -> p_anda_simpl (p_not_simpl p1) p3
-  | _, _, Some true  -> p_imp_simpl p1 p2
-  | _, _, Some false -> p_anda_simpl p1 p2
-  | _, _, _          -> p_if p1 p2 p3
+  | Some true, _, _  -> Some p2
+  | Some false, _, _ -> Some p3
+  | _, Some true, _  -> Some (p_imp_simpl (p_not_simpl p1) p3)
+  | _, Some false, _ -> Some (p_anda_simpl (p_not_simpl p1) p3)
+  | _, _, Some true  -> Some (p_imp_simpl p1 p2)
+  | _, _, Some false -> Some (p_anda_simpl p1 p2)
+  | _, _, _          -> None
 
 let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
   match p1.p_node with
@@ -2927,11 +2966,11 @@ module PReduction = struct
          else Some p'
 
       (* ι-reduction (if-then-else) *)
-      | Sym_Form_If, [p1;p2;p3] when ri.iota ->
-         let p' = p_if_simpl p1 p2 p3 in
-         if   p_equal p p'
-         then omap (fun x -> p_if x p2 p3) (h_red_pattern_opt hyps ri s p1)
-         else Some p'
+      | Sym_Form_If, [p1;p2;p3] when ri.iota -> begin
+          match p_if_simpl_opt p1 p2 p3 with
+          | None -> omap (fun x -> p_if x p2 p3) (h_red_pattern_opt hyps ri s p1)
+          | Some _ as p -> p
+        end
 
       (* ι-reduction (match-fix) *)
       | Sym_Form_App (ty,ho),
@@ -3023,7 +3062,7 @@ module PReduction = struct
 
     (* logical reduction *)
     | Sym_Form_App (ty,ho),
-      { p_node = Pat_Axiom (Axiom_Form ({f_node = Fop (op, tys); } as fo))}::args
+      { p_node = Pat_Axiom (Axiom_Form {f_node = Fop (op, tys); })}::args
          when is_some ri.logic && is_logical_op op
       ->
        let pcompat =
@@ -3032,26 +3071,26 @@ module PReduction = struct
 
        let p' =
          match op_kind op, args with
-         | Some (`Not), [f1]    when pcompat -> Some (p_not_simpl f1)
-         | Some (`Imp), [f1;f2] when pcompat -> Some (p_imp_simpl f1 f2)
-         | Some (`Iff), [f1;f2] when pcompat -> Some (p_iff_simpl f1 f2)
+         | Some (`Not), [f1]    when pcompat -> p_not_simpl_opt f1
+         | Some (`Imp), [f1;f2] when pcompat -> p_imp_simpl_opt f1 f2
+         | Some (`Iff), [f1;f2] when pcompat -> p_iff_simpl_opt f1 f2
 
 
-         | Some (`And `Asym), [f1;f2] -> Some (p_anda_simpl f1 f2)
-         | Some (`Or  `Asym), [f1;f2] -> Some (p_ora_simpl f1 f2)
-         | Some (`And `Sym ), [f1;f2] -> Some (p_and_simpl f1 f2)
-         | Some (`Or  `Sym ), [f1;f2] -> Some (p_or_simpl f1 f2)
-         | Some (`Int_le   ), [f1;f2] -> Some (p_int_le_simpl f1 f2)
-         | Some (`Int_lt   ), [f1;f2] -> Some (p_int_lt_simpl f1 f2)
-         | Some (`Real_le  ), [f1;f2] -> Some (p_real_le_simpl f1 f2)
-         | Some (`Real_lt  ), [f1;f2] -> Some (p_real_lt_simpl f1 f2)
-         | Some (`Int_add  ), [f1;f2] -> Some (p_int_add_simpl f1 f2)
-         | Some (`Int_opp  ), [f]     -> Some (p_int_opp_simpl f)
-         | Some (`Int_mul  ), [f1;f2] -> Some (p_int_mul_simpl f1 f2)
-         | Some (`Real_add ), [f1;f2] -> Some (p_real_add_simpl f1 f2)
-         | Some (`Real_opp ), [f]     -> Some (p_real_opp_simpl f)
-         | Some (`Real_mul ), [f1;f2] -> Some (p_real_mul_simpl f1 f2)
-         | Some (`Real_inv ), [f]     -> Some (p_real_inv_simpl f)
+         | Some (`And `Asym), [f1;f2] ->     p_anda_simpl_opt f1 f2
+         | Some (`Or  `Asym), [f1;f2] ->      p_ora_simpl_opt f1 f2
+         | Some (`And `Sym ), [f1;f2] ->      p_and_simpl_opt f1 f2
+         | Some (`Or  `Sym ), [f1;f2] ->       p_or_simpl_opt f1 f2
+         | Some (`Int_le   ), [f1;f2] ->   p_int_le_simpl_opt f1 f2
+         | Some (`Int_lt   ), [f1;f2] ->   p_int_lt_simpl_opt f1 f2
+         | Some (`Real_le  ), [f1;f2] ->  p_real_le_simpl_opt f1 f2
+         | Some (`Real_lt  ), [f1;f2] ->  p_real_lt_simpl_opt f1 f2
+         | Some (`Int_add  ), [f1;f2] ->  p_int_add_simpl_opt f1 f2
+         | Some (`Int_opp  ), [f]     ->  p_int_opp_simpl_opt f
+         | Some (`Int_mul  ), [f1;f2] ->  p_int_mul_simpl_opt f1 f2
+         | Some (`Real_add ), [f1;f2] -> p_real_add_simpl_opt f1 f2
+         | Some (`Real_opp ), [f]     -> p_real_opp_simpl_opt f
+         | Some (`Real_mul ), [f1;f2] -> p_real_mul_simpl_opt f1 f2
+         | Some (`Real_inv ), [f]     -> p_real_inv_simpl_opt f
          | Some (`Eq       ), [f1;f2] -> begin
              match (p_destr_app f1), (p_destr_app f2) with
              | ({ p_node = Pat_Axiom (Axiom_Form { f_node = Fop (op1, _)})}, args1),
@@ -3076,16 +3115,7 @@ module PReduction = struct
             p_app_simpl_opt ~ho op args ty
 
          | _ -> Some p
-       in
-       begin
-         match p' with
-         | Some p' ->
-            if p_equal p p'
-            then omap (fun l -> p_app ~ho (pat_form fo) l ty)
-                   (h_red_args (fun x -> x) h_red_pattern_opt hyps ri s args)
-            else Some p'
-         | None -> None
-       end
+       in p'
 
     (* δ-reduction *)
     | Sym_Form_App (ty,ho), pop::args when is_delta_p ri pop ->
@@ -3537,26 +3567,26 @@ module PReduction = struct
 
        let f' =
          match op_kind p, args with
-         | Some (`Not), [f1]    when pcompat -> Some (pat_form (f_not_simpl f1))
-         | Some (`Imp), [f1;f2] when pcompat -> Some (pat_form (f_imp_simpl f1 f2))
-         | Some (`Iff), [f1;f2] when pcompat -> Some (pat_form (f_iff_simpl f1 f2))
+         | Some (`Not), [f1]    when pcompat -> p_not_simpl_opt (pat_form f1)
+         | Some (`Imp), [f1;f2] when pcompat -> p_imp_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Iff), [f1;f2] when pcompat -> p_iff_simpl_opt (pat_form f1) (pat_form f2)
 
 
-         | Some (`And `Asym), [f1;f2] -> Some (pat_form (f_anda_simpl f1 f2))
-         | Some (`Or  `Asym), [f1;f2] -> Some (pat_form (f_ora_simpl f1 f2))
-         | Some (`And `Sym ), [f1;f2] -> Some (pat_form (f_and_simpl f1 f2))
-         | Some (`Or  `Sym ), [f1;f2] -> Some (pat_form (f_or_simpl f1 f2))
-         | Some (`Int_le   ), [f1;f2] -> Some (pat_form (f_int_le_simpl f1 f2))
-         | Some (`Int_lt   ), [f1;f2] -> Some (pat_form (f_int_lt_simpl f1 f2))
-         | Some (`Real_le  ), [f1;f2] -> Some (pat_form (f_real_le_simpl f1 f2))
-         | Some (`Real_lt  ), [f1;f2] -> Some (pat_form (f_real_lt_simpl f1 f2))
-         | Some (`Int_add  ), [f1;f2] -> Some (pat_form (f_int_add_simpl f1 f2))
-         | Some (`Int_opp  ), [f]     -> Some (pat_form (f_int_opp_simpl f))
-         | Some (`Int_mul  ), [f1;f2] -> Some (pat_form (f_int_mul_simpl f1 f2))
-         | Some (`Real_add ), [f1;f2] -> Some (pat_form (f_real_add_simpl f1 f2))
-         | Some (`Real_opp ), [f]     -> Some (pat_form (f_real_opp_simpl f))
-         | Some (`Real_mul ), [f1;f2] -> Some (pat_form (f_real_mul_simpl f1 f2))
-         | Some (`Real_inv ), [f]     -> Some (pat_form (f_real_inv_simpl f))
+         | Some (`And `Asym), [f1;f2] ->     p_anda_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Or  `Asym), [f1;f2] ->      p_ora_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`And `Sym ), [f1;f2] ->      p_and_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Or  `Sym ), [f1;f2] ->       p_or_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Int_le   ), [f1;f2] ->   p_int_le_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Int_lt   ), [f1;f2] ->   p_int_lt_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Real_le  ), [f1;f2] ->  p_real_le_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Real_lt  ), [f1;f2] ->  p_real_lt_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Int_add  ), [f1;f2] ->  p_int_add_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Int_opp  ), [f]     ->  p_int_opp_simpl_opt (pat_form f)
+         | Some (`Int_mul  ), [f1;f2] ->  p_int_mul_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Real_add ), [f1;f2] -> p_real_add_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Real_opp ), [f]     -> p_real_opp_simpl_opt (pat_form f)
+         | Some (`Real_mul ), [f1;f2] -> p_real_mul_simpl_opt (pat_form f1) (pat_form f2)
+         | Some (`Real_inv ), [f]     -> p_real_inv_simpl_opt (pat_form f)
          | Some (`Eq       ), [f1;f2] -> begin
              match fst_map f_node (destr_app f1), fst_map f_node (destr_app f2) with
              | (Fop (p1, _), args1), (Fop (p2, _), args2)
@@ -3600,10 +3630,10 @@ module PReduction = struct
             omap (fun o -> ps_app_simpl o (List.map pat_form args) (Some f.f_ty))
               (h_red_op_opt hyps ri s p tys)
 
-         | _ -> Some (pat_form f)
+         | _ -> None
        in
        begin
-         match f' with
+         match omap p_simplify f' with
          | Some { p_node = Pat_Axiom(Axiom_Form f')} ->
             if f_equal f f'
             then omap (fun l -> p_app (pat_form fo) l (Some f.f_ty))

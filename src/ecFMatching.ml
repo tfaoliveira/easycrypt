@@ -57,8 +57,8 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = false;
-    verbose_type            = true;
-    verbose_bind_restr      = false;
+    verbose_type            = false;
+    verbose_bind_restr      = true;
     verbose_add_meta        = false;
     verbose_abstract        = false;
     verbose_reduce          = true;
@@ -66,7 +66,7 @@ let debug_verbose : verbose = {
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
-    verbose_subst           = true;
+    verbose_subst           = false;
   }
 
 let env_verbose = no_verbose

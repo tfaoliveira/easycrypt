@@ -197,35 +197,6 @@ val p_eq    : ty -> pattern -> pattern -> pattern
 val p_and   : pattern -> pattern -> pattern
 val p_ands  : pattern list -> pattern
 
-(* -------------------------------------------------------------------------- *)
-val p_if_simpl      : pattern -> pattern -> pattern -> pattern
-val p_proj_simpl    : pattern -> int -> ty -> pattern
-val p_app_simpl_opt : ?ho:is_higher_order ->
-                      pattern option -> pattern list -> ty option -> pattern option
-val p_forall_simpl  : pbindings -> pattern -> pattern
-val p_exists_simpl  : pbindings -> pattern -> pattern
-val p_eq_simpl      : ty -> pattern -> pattern -> pattern
-
-(* -------------------------------------------------------------------------- *)
-val p_not_simpl      : pattern -> pattern
-val p_imp_simpl      : pattern -> pattern -> pattern
-val p_anda_simpl     : pattern -> pattern -> pattern
-val p_ora_simpl      : pattern -> pattern -> pattern
-val p_iff_simpl      : pattern -> pattern -> pattern
-val p_and_simpl      : pattern -> pattern -> pattern
-val p_or_simpl       : pattern -> pattern -> pattern
-val p_int_le_simpl   : pattern -> pattern -> pattern
-val p_int_lt_simpl   : pattern -> pattern -> pattern
-val p_int_add_simpl  : pattern -> pattern -> pattern
-val p_int_mul_simpl  : pattern -> pattern -> pattern
-val p_int_opp_simpl  : pattern -> pattern
-val p_real_le_simpl  : pattern -> pattern -> pattern
-val p_real_lt_simpl  : pattern -> pattern -> pattern
-val p_real_add_simpl : pattern -> pattern -> pattern
-val p_real_mul_simpl : pattern -> pattern -> pattern
-val p_real_opp_simpl : pattern -> pattern
-val p_real_inv_simpl : pattern -> pattern
-
 
 (* -------------------------------------------------------------------------- *)
 module Simplify : sig
