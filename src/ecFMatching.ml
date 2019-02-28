@@ -57,11 +57,11 @@ let full_verbose : verbose = {
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = false;
-    verbose_type            = false;
-    verbose_bind_restr      = true;
+    verbose_type            = true;
+    verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -269,7 +269,7 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
-        "--- types are unified %a in %a"
+        "-ty %a ?= %a"
         (EcPrinting.pp_type ppe) ty1
         (EcPrinting.pp_type ppe) ty2
 
@@ -283,7 +283,7 @@ end = struct
       let p1 = Psubst.p_subst s p1 in
 
       EcEnv.notify env `Warning
-        "-t- types : %a <?- %a"
+        "-ot ogty : %a <?- %a"
         (EcPrinting.pp_ogty ppe) p1.p_ogty
         (EcPrinting.pp_ogty ppe) p2.p_ogty
 
@@ -417,21 +417,6 @@ end = struct
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pat_axiom ppe) a
 
-  let debug_found_match menv =
-    if menv.env_verbose.verbose_match then
-      let env = LDecl.toenv menv.env_hyps in
-      let ppe = EcPrinting.PPEnv.ofenv env in
-
-      let pp_names ppe fmt (name,p) =
-        Format.fprintf fmt "%a <- (%a : %a)"
-          (EcPrinting.pp_local ppe) name
-          (EcPrinting.pp_pattern ppe) p
-          (EcPrinting.pp_ogty ppe) p.p_ogty in
-
-      EcEnv.notify env `Warning "Matching successful: %a"
-        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
-        (Mid.bindings menv.env_match.me_matches)
-
   let debug_unienv menv =
     if menv.env_verbose.verbose_type then
       let env = LDecl.toenv menv.env_hyps in
@@ -454,6 +439,22 @@ end = struct
 
       EcEnv.notify env `Warning "Unienv: %a"
         (EcPrinting.pp_list "@ and@ " (pp_names ppe)) vars
+
+  let debug_found_match menv =
+    if menv.env_verbose.verbose_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let pp_names ppe fmt (name,p) =
+        Format.fprintf fmt "%a <- (%a : %a)"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_ogty ppe) p.p_ogty in
+
+      EcEnv.notify env `Warning "Matching successful: %a"
+        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
+        (Mid.bindings menv.env_match.me_matches);
+      debug_unienv menv
 
   let debug_no_match_found menv =
     if menv.env_verbose.verbose_match then
@@ -1262,6 +1263,15 @@ let rewrite_term e f =
   Debug.debug_subst env p1 p2;
   p2
 
+let rec pattern_contain_meta_var p = match p.p_node with
+  | Pat_Anything -> false
+  | Pat_Axiom _ -> false
+  | Pat_Sub p -> pattern_contain_meta_var p
+  | Pat_Or lp -> List.exists pattern_contain_meta_var lp
+  | Pat_Meta_Name _ -> true
+  | Pat_Red_Strat (p,_) -> pattern_contain_meta_var p
+  | Pat_Fun_Symbol (_, lp) -> List.exists pattern_contain_meta_var lp
+
 let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
       (lc : 'c list) : bool * 'a =
   let rec aux a1 a lb lc =
@@ -1346,11 +1356,19 @@ let rec check_arrow e b t = match b, t.ty_node with
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
   Debug.debug_try_match e.e_env e.e_pattern e.e_head e.e_continuation;
-  Debug.debug_ogty e.e_env e.e_pattern (pat_axiom e.e_head);
-  Debug.debug_unienv e.e_env;
   if   not (EQ.ogty e.e_env e.e_pattern.p_ogty (pat_axiom e.e_head).p_ogty)
   then next NoMatch e
   else
+    let e_head =
+      let me = e.e_env.env_match in
+      let p = Psubst.p_subst (psubst_of_menv me) (pat_axiom e.e_head) in
+      match p.p_node with
+      | Pat_Axiom a -> a
+      | _ -> e.e_head in
+    let e = { e with e_head } in
+    Debug.debug_try_match e.e_env e.e_pattern e.e_head e.e_continuation;
+    Debug.debug_ogty e.e_env e.e_pattern (pat_axiom e.e_head);
+    Debug.debug_unienv e.e_env;
     match e.e_pattern.p_node, e.e_head with
     | Pat_Anything, _ -> next Match e
 
@@ -1450,7 +1468,22 @@ let rec process (e : engine) : nengine =
            let p2 = Psubst.p_subst s p in
            Debug.debug_subst env p p2;
            p2 in
-         let pargs = List.map (p_subst s) pargs in
+         let pargs, env =
+           let pargs = List.map (p_subst s) pargs in
+           let meta_pargs = List.filter pattern_contain_meta_var pargs in
+           if meta_pargs <> [] then
+             let find_sub env p =
+               try let ne = process { e_env = env;
+                                      e_pattern = mk_pattern (Pat_Sub p) OGTany;
+                                      e_head = axiom;
+                                      e_continuation = ZTop; } in
+                   ne.ne_env
+               with NoMatches -> env
+             in
+             let env = List.fold_left find_sub env meta_pargs in
+             let s = psubst_of_menv env.env_match in
+             List.map (Psubst.p_subst s) pargs, env
+           else pargs, env in
          let add_ident i x =
            EcIdent.create (String.concat "" ["s";string_of_int i]), x in
          let args = List.mapi add_ident pargs in
@@ -1892,9 +1925,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      match h_red_strat e'.e_env e'.e_pattern e'.e_head with
      | None ->
         Debug.debug_reduce e'.e_env e'.e_pattern e'.e_head false;
-        EcUnify.UniEnv.restore
-          ~src:ne.ne_env.env_match.me_unienv
-          ~dst: e.ne_env.env_match.me_unienv;
+        (* EcUnify.UniEnv.restore
+         *   ~src:ne.ne_env.env_match.me_unienv
+         *   ~dst: e.ne_env.env_match.me_unienv; *)
         next_n NoMatch ne
 
      | Some (e_pattern, e_head) ->
