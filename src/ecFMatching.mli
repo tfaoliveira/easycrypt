@@ -57,16 +57,16 @@ type pat_continuation =
        - before : list of couples (form, pattern) that has already been checked
        - after  : list of couples (form, pattern) to check in the following
        - cont   : continuation if all the matches succeed *)
-  | Zand       of (axiom * pattern) list
-                  * (axiom * pattern) list
+  | Zand       of (pattern * pattern) list
+                  * (pattern * pattern) list
                   * pat_continuation
 
   | ZReduce    of pat_continuation * engine * nengine
 
 
 and engine = {
-    e_head         : axiom;
-    e_pattern      : pattern;
+    e_pattern1     : pattern;
+    e_pattern2     : pattern;
     e_continuation : pat_continuation;
     e_env          : environment;
   }
@@ -95,7 +95,7 @@ val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
 
 val search_eng      : engine -> nengine option
 
-val mk_engine       : ?mtch:match_env -> form -> pattern ->
+val mk_engine       : ?mtch:match_env -> pattern -> pattern ->
                       LDecl.hyps -> EcReduction.reduction_info ->
                       EcReduction.reduction_info -> engine
 

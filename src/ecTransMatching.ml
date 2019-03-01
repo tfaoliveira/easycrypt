@@ -49,7 +49,7 @@ let add_anchors (at_begin, at_end) pattern_sequence =
   if at_end = With_anchor then pattern @ [Anchor End]
   else pattern
 
-let pat_anything = mk_pattern Pat_Anything OGTany
+let pat_anything () = meta_var (EcIdent.create "") None OGTany
 (*-------------------------------------------------------------------- *)
 let rec trans_block (anchors, pattern_parsed) =
   let pattern = trans_stmt pattern_parsed in
@@ -61,19 +61,19 @@ let rec trans_block (anchors, pattern_parsed) =
 and trans_stmt = function
   | IM_Any      -> any_stmt
   | IM_Parens r -> trans_stmt r
-  | IM_Assign   -> Base (RAssign (pat_anything,pat_anything))
-  | IM_Sample   -> Base (RSample (pat_anything,pat_anything))
-  | IM_Call     -> Base (RCall (pat_anything,pat_anything,pat_anything))
+  | IM_Assign   -> Base (RAssign (pat_anything(),pat_anything()))
+  | IM_Sample   -> Base (RSample (pat_anything(),pat_anything()))
+  | IM_Call     -> Base (RCall (pat_anything(),pat_anything(),pat_anything()))
 
   | IM_If (bt, bf)  ->
      let branch_true  = trans_block (odfl any_block bt) in
      let branch_false = trans_block (odfl any_block bf) in
-     Base (RIf (pat_anything,branch_true, branch_false))
+     Base (RIf (pat_anything(),branch_true, branch_false))
 
   | IM_While b     ->
      let branch = odfl any_block b in
      let branch = trans_block branch in
-     Base (RWhile (pat_anything,branch))
+     Base (RWhile (pat_anything(),branch))
 
   | IM_Named (s, r) ->
      let r = odfl IM_Any r in

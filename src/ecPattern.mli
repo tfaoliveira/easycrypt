@@ -28,19 +28,19 @@ type pbinding  = ident * ogty
 type pbindings = pbinding list
 
 type axiom =
-  | Axiom_Form      of form
+  | Axiom_Int       of EcBigInt.zint
+  | Axiom_Local     of ident * ty
+  | Axiom_Op        of path * ty list * ty option
+
   | Axiom_Memory    of memory
   | Axiom_MemEnv    of memenv
   | Axiom_Prog_Var  of prog_var
-  | Axiom_Op        of path * ty list
   | Axiom_Mpath_top of mpath_top
   | Axiom_Mpath     of mpath
-  | Axiom_Instr     of instr
   | Axiom_Stmt      of stmt
   | Axiom_Lvalue    of lvalue
   | Axiom_Xpath     of xpath
   | Axiom_Hoarecmp  of hoarecmp
-  | Axiom_Local     of ident * ty
 
 type is_higher_order =
   | MaybeHO
@@ -87,8 +87,7 @@ type fun_symbol =
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
 type p_node =
-  | Pat_Anything
-  | Pat_Meta_Name  of pattern * meta_name * pbindings option
+  | Pat_Meta_Name  of pattern option * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
   | Pat_Red_Strat  of pattern * reduction_strategy
@@ -127,10 +126,10 @@ val pat_fun_symbol : fun_symbol -> pattern list -> pattern
 val pat_meta       : pattern -> meta_name -> pbindings option -> pattern
 val meta_var       : meta_name -> pbindings option -> ogty -> pattern
 
-val axiom_form    : form -> axiom
 val axiom_mpath   : mpath -> axiom
 
 val pat_form      : form            -> pattern
+val pat_int       : EcBigInt.zint   -> pattern
 val pat_mpath     : mpath           -> pattern
 val pat_mpath_top : mpath_top       -> pattern
 val pat_xpath     : xpath           -> pattern
@@ -193,46 +192,10 @@ val p_var_form : EcIdent.t -> ty -> pattern
 val p_destr_app : pattern -> pattern * pattern list
 
 (* -------------------------------------------------------------------------- *)
-val p_eq    : ty -> pattern -> pattern -> pattern
+val p_eq    : pattern -> pattern -> pattern
 val p_and   : pattern -> pattern -> pattern
 val p_ands  : pattern list -> pattern
 
-
-(* -------------------------------------------------------------------------- *)
-module Simplify : sig
-  val ps_app          : ?ho:is_higher_order ->
-                        pattern -> pattern list -> EcTypes.ty option -> pattern
-  val ps_quant        : EcFol.quantif -> pbindings -> pattern -> pattern
-  val ps_mpath        : pattern -> pattern list -> pattern
-  val ps_xpath        : pattern -> pattern -> pattern
-  val ps_prog_var     : pattern -> EcTypes.pvar_kind -> pattern
-  val ps_lvalue_var   : pattern -> EcTypes.ty -> pattern
-  val ps_lvalue_tuple : pattern list -> pattern
-  val ps_pvar         : pattern -> EcTypes.ty -> pattern -> pattern
-  val ps_glob         : pattern -> pattern -> pattern
-  val ps_if           : pattern -> pattern -> pattern -> pattern
-  val ps_match        : pattern -> EcTypes.ty -> pattern list -> pattern
-  val ps_tuple        : pattern list -> pattern
-  val ps_proj         : pattern -> int -> EcTypes.ty -> pattern
-  val ps_let          : EcTypes.lpattern -> pattern -> pattern -> pattern
-  val ps_stmt         : pattern list -> pattern
-  val ps_assign       : pattern -> pattern -> pattern
-  val ps_sample       : pattern -> pattern -> pattern
-  val ps_call         : pattern option -> pattern -> pattern list -> pattern
-  val ps_instr_if     : pattern -> pattern -> pattern -> pattern
-  val ps_while        : pattern -> pattern -> pattern
-  val ps_assert       : pattern -> pattern
-  val ps_hoareF       : pattern -> pattern -> pattern -> pattern
-  val ps_hoareS       : pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_bdHoareF     : pattern -> pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_bdHoareS     : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_equivF       : pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_equivS       : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_eagerF       : pattern -> pattern -> pattern -> pattern -> pattern -> pattern -> pattern
-  val ps_pr           : pattern -> pattern -> pattern -> pattern -> pattern
-end
-
-val p_simplify       : pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
@@ -267,6 +230,7 @@ module Psubst : sig
   val p_bind_mod    : p_subst -> ident -> mpath -> p_subst
   val p_bind_rename : p_subst -> ident -> ident -> ty -> p_subst
   val p_bind_gty    : p_subst -> ident -> ident -> gty -> p_subst
+  val p_bind_ogty   : p_subst -> ident -> ident -> ogty -> p_subst
 
   val p_rem_local   : p_subst -> ident -> p_subst
   val p_rem_mem     : p_subst -> memory -> p_subst

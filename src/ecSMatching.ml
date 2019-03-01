@@ -92,7 +92,7 @@ module RegexpBaseInstr = struct
          | Srnd  (x1,e1), RSample (x2,p2) ->
            let map = match x1 with
            | LvVar (pv,ty) ->
-              let fx1 = f_pvar pv ty mhr in
+              let fx1 = pat_form (f_pvar pv ty mhr) in
               let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
               let e = EcFMatching.mk_engine ~mtch fx1 x2 eng.e_hyps
@@ -104,7 +104,7 @@ module RegexpBaseInstr = struct
 
            | LvTuple tuple ->
               let f x = f_pvar (fst x) (snd x) mhr in
-              let fx1 = f_tuple (List.map f tuple) in
+              let fx1 = pat_form (f_tuple (List.map f tuple)) in
               let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
               let e = EcFMatching.mk_engine ~mtch fx1 x2 eng.e_hyps
@@ -119,7 +119,7 @@ module RegexpBaseInstr = struct
               raise NoMatch
            in
 
-           let f1 = form_of_expr mhr e1 in
+           let f1 = pat_form (form_of_expr mhr e1) in
            let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:map ~unienv () in
            let e = EcFMatching.mk_engine ~mtch f1 p2 eng.e_hyps EcReduction.full_red
@@ -140,6 +140,7 @@ module RegexpBaseInstr = struct
                let _fop = f_op op tys ty in
                raise NoMatch
           in
+          let fx1 = pat_form fx1 in
           let unienv = EcUnify.UniEnv.create None in
           let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
           let e = EcFMatching.mk_engine ~mtch fx1 p1 eng.e_hyps
@@ -148,10 +149,10 @@ module RegexpBaseInstr = struct
             | None -> raise NoMatch
             | Some e -> e.ne_env.env_match.me_matches in
           let args = List.map (form_of_expr mhr) args in
-          let f = f_pr mleft f (f_tuple args) f_true in
+          let f = pat_form (f_pr mleft f (f_tuple args) f_true) in
           let p = pat_fun_symbol Sym_Form_Pr
-                    ((mk_pattern Pat_Anything OGTany)::p2::pargs::
-                       (mk_pattern Pat_Anything OGTany)::[]) in
+                    ((meta_var (EcIdent.create "") None OGTany)::p2::pargs::
+                       (meta_var (EcIdent.create "") None OGTany)::[]) in
           let unienv = EcUnify.UniEnv.create None in
           let mtch = EcFMatching.init_match_env ~mtch:map ~unienv () in
           let e = EcFMatching.mk_engine ~mtch f p eng.e_hyps
@@ -162,7 +163,7 @@ module RegexpBaseInstr = struct
           { eng with e_map = map }, []
 
        | Sif (cond, st, sf), RIf (pcond, stn, sfn) -> begin
-           let fcond = form_of_expr mhr cond in
+           let fcond = pat_form (form_of_expr mhr cond) in
            let unienv = EcUnify.UniEnv.create None in
            let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
            let e' = EcFMatching.mk_engine ~mtch fcond pcond eng.e_hyps
@@ -189,7 +190,7 @@ module RegexpBaseInstr = struct
          end
 
        | Swhile (e, s), RWhile (pcond,sn) -> begin
-           let fcond = form_of_expr mhr e in
+           let fcond = pat_form (form_of_expr mhr e) in
            let unienv = EcUnify.UniEnv.create None in
            let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
            let e' = EcFMatching.mk_engine ~mtch fcond pcond eng.e_hyps

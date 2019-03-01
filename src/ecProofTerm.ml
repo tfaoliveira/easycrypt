@@ -264,8 +264,9 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
   in
 
   try
-    let ptn = EcFMatching.pattern_of_form !(pt.pte_mc) ptn in
-    let eng =
+    let ptn     = EcFMatching.pattern_of_form !(pt.pte_mc) ptn in
+    let subject = EcFMatching.pattern_of_form !(pt.pte_mc) subject in
+    let eng     =
       EcFMatching.mk_engine
         ~mtch:!(pt.pte_mc) subject ptn pt.pte_hy
         ri EcReduction.full_red in

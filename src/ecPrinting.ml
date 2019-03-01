@@ -2978,14 +2978,14 @@ let pp_ogty ppe fmt = function
   | OGThcmp           -> Format.fprintf fmt "cmp"
 
 let rec pp_pat_axiom ppe fmt a = match a with
-  | Axiom_Form f ->
-     Format.fprintf fmt "Form(%a)" (pp_form ppe) f
+  | Axiom_Int z ->
+     pp_form ppe fmt (f_int z)
   | Axiom_Memory m ->
      pp_mem ppe fmt m
   | Axiom_MemEnv _ -> assert false
   | Axiom_Prog_Var pv ->
      pp_pv ppe fmt pv
-  | Axiom_Op (path,_) ->
+  | Axiom_Op (path,_,_) ->
      pp_path fmt path
      (* Format.fprintf fmt "Op(%a)" pp_path path *)
   | Axiom_Mpath_top m ->
@@ -2994,8 +2994,6 @@ let rec pp_pat_axiom ppe fmt a = match a with
      pp_topmod ppe fmt m
   | Axiom_Xpath x ->
      pp_funname ppe fmt x
-  | Axiom_Instr i ->
-     pp_instr ppe fmt i
   | Axiom_Stmt s ->
      pp_stmt ppe fmt s
   | Axiom_Lvalue lv ->
@@ -3007,12 +3005,10 @@ let rec pp_pat_axiom ppe fmt a = match a with
        (pp_mem ppe) id
 
 and pp_pattern ppe fmt p = match p.p_node with
-  | Pat_Anything ->
-     Format.fprintf fmt "_"
-  | Pat_Meta_Name ({ p_node = Pat_Anything },name,_) ->
+  | Pat_Meta_Name (None, name, _) ->
      Format.fprintf fmt "#%a"
        (pp_mem ppe) name
-  | Pat_Meta_Name (p,name,_) ->
+  | Pat_Meta_Name (Some p,name,_) ->
      Format.fprintf fmt "(%a as %a)"
        (pp_pattern ppe) p
        (pp_form ppe) (f_local name tbool)
@@ -3181,15 +3177,9 @@ and pp_pattern ppe fmt p = match p.p_node with
           | Pat_Axiom(Axiom_Xpath f) ->
              PPEnv.create_and_push_mem ppe ~active:true (EcFol.mhr, f)
           | _ -> ppe in
-      Format.fprintf fmt "Pr[@[%a@[%t@] @@ %a :@ %a@]]"
+      Format.fprintf fmt "Pr[@[%a@[%a@] @@ %a :@ %a@]]"
         (pp_pattern ppe) pfun
-        (match args.p_node with
-         | Pat_Axiom(Axiom_Form ({ f_node = Ftuple _} as f)) ->
-            (fun fmt -> pp_form ppe fmt f)
-         | Pat_Axiom(Axiom_Form f) when EcFol.f_equal f_tt f ->
-             (fun fmt -> pp_string fmt "()")
-         | _ ->
-             (fun fmt -> Format.fprintf fmt "(%a)" (pp_pattern ppe) args))
+        (pp_pattern ppe) args
         (pp_pattern ppe) mem
         (pp_pattern ppe) event
      | Sym_Form_Pr, _ -> assert false
