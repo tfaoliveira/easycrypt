@@ -487,7 +487,7 @@ let p_equivF (pr : pattern) (fl : pattern) (fr : pattern) (po : pattern) =
 
 let p_equivS (ml : pattern) (mr : pattern) (pr : pattern) (sl : pattern)
       (sr : pattern) (po : pattern) =
-  pat_fun_symbol Sym_Form_Equiv_F [ml;mr;pr;sl;sr;po]
+  pat_fun_symbol Sym_Form_Equiv_S [ml;mr;pr;sl;sr;po]
 
 let p_eagerF (pr : pattern) (sl : pattern) (fl : pattern)
       (fr : pattern) (sr : pattern) (po : pattern) =
