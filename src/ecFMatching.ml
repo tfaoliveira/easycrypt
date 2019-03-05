@@ -1749,7 +1749,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
             EcUnify.UniEnv.restore
               ~src:e'.e_env.env_match.me_unienv
               ~dst:e.ne_env.env_match.me_unienv;
-            process { e' with e_pattern1; e_pattern2 }
+            let e = { e' with e_pattern1; e_pattern2 } in
+            let e = try_reduce e in
+            process e
           (* end *)
 
 and sub_engines2 e p =
