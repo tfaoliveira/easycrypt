@@ -22,6 +22,7 @@ type verbose = {
     verbose_begin_match     : bool;
     verbose_translate_error : bool;
     verbose_subst           : bool;
+    verbose_unienv          : bool;
   }
 
 let no_verbose : verbose = {
@@ -37,6 +38,7 @@ let no_verbose : verbose = {
     verbose_begin_match     = false;
     verbose_translate_error = false;
     verbose_subst           = false;
+    verbose_unienv          = false;
   }
 
 let full_verbose : verbose = {
@@ -52,6 +54,7 @@ let full_verbose : verbose = {
     verbose_begin_match     = true;
     verbose_translate_error = true;
     verbose_subst           = true;
+    verbose_unienv          = true;
   }
 
 let debug_verbose : verbose = {
@@ -61,12 +64,13 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
+    verbose_unienv          = false;
   }
 
 let env_verbose = no_verbose
@@ -523,7 +527,7 @@ end = struct
         (EcPrinting.pp_pattern ppe) a
 
   let debug_unienv menv =
-    if menv.env_verbose.verbose_type then
+    if menv.env_verbose.verbose_unienv then
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
@@ -1159,57 +1163,6 @@ let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
 
 let change_ogty ogty p = mk_pattern p.p_node ogty
 
-(* ---------------------------------------------------------------------- *)
-let rec abstract_opt
-          (other_args : Sid.t)
-          (e : engine)
-          (ep : pattern option)
-          ((arg,parg) : Name.t * pattern) :
-          pattern option =
-  match ep with
-  | None -> None
-  | Some p ->
-     match parg.p_node with
-     | Pat_Axiom (Axiom_Local (id,ty)) ->
-        let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
-        let s = p_bind_rename s id arg (ty_subst s.ps_sty ty) in
-        let p2 = Psubst.p_subst s p in
-        Debug.debug_subst e.e_env p p2;
-        Some p2
-     | _ ->
-        let eq_pat' env p pp =
-          match p.p_node, pp.p_node with
-          | Pat_Meta_Name (_,n,_), _
-               when Mid.mem n other_args -> false
-          | _, Pat_Meta_Name (_,n,_)
-               when Mid.mem n other_args -> false
-          | _,_ ->
-             let b = EQ.pattern env env.env_red_info_match p pp in
-             Debug.debug_higher_order_abstract_eq e.e_env b pp p;
-             b
-        in
-        let aux env p a =
-          let rec f env p =
-            if eq_pat' env p a then
-              match p.p_ogty, a.p_ogty with
-              | OGTty (Some ty), _
-                   when not (Mid.mem arg e.e_env.env_match.me_meta_vars)
-                        && not (mem_ty_univar ty) ->
-                 pat_form (f_local arg ty)
-              | _, OGTty (Some ty)
-                   when not (Mid.mem arg e.e_env.env_match.me_meta_vars)
-                        && not (mem_ty_univar ty) ->
-                 pat_form (f_local arg ty)
-              | _ ->
-                 meta_var arg None p.p_ogty
-            else p_map (f env) p in
-          let p' = f env p in
-          if EQ.pattern env env.env_red_info_match p p' then None
-          else Some p'
-        in
-        let ogty  = p.p_ogty in
-        omap (change_ogty ogty) (aux e.e_env p parg)
-
 let try_reduce (e : engine) : engine =
   Debug.debug_try_reduce e.e_env e.e_pattern1 e.e_pattern2;
   let e_env = saturate e.e_env in
@@ -1250,15 +1203,9 @@ let rec process (e : engine) : nengine =
   then next NoMatch e
   else
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
-    (* | Pat_Meta_Name (_,name,_), _
-     *      when Mid.mem name e.e_env.env_match.me_matches ->
-     *    Debug.debug_which_rule e.e_env "replace meta variable 1";
-     *    process { e with e_pattern1 = Mid.find name e.e_env.env_match.me_matches }
-     *
-     * | _, Pat_Meta_Name (_,name,_)
-     *      when Mid.mem name e.e_env.env_match.me_matches ->
-     *    Debug.debug_which_rule e.e_env "replace meta variable 2";
-     *    process { e with e_pattern2 = Mid.find name e.e_env.env_match.me_matches } *)
+    | Pat_Meta_Name (None, n1, _), Pat_Meta_Name (None, n2, _) when EQ.name n1 n2 ->
+       Debug.debug_which_rule e.e_env "same meta variable";
+       next Match e
 
    | Pat_Meta_Name (None, name, ob), _ ->
        let env_meta_restr_binds =
@@ -1436,20 +1383,21 @@ let rec process (e : engine) : nengine =
          let add_ident i x =
            EcIdent.create (String.concat "" ["s";string_of_int i]), x in
          let args = List.mapi add_ident pargs in
+         let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in
          let env_meta_restr_binds =
            odfl env.env_meta_restr_binds
              (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
          let e = { e with e_env = { env with env_meta_restr_binds } } in
-         let abstract m e p arg =
+         let abstract (e, p) arg =
            Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
-           let op = abstract_opt m e (Some p) arg in
-           let p = odfl p op in
-           p
+           let env, p = abstract_opt e p ob arg in
+           { e with e_env = env}, p
          in
-         let pat =
+         let e', pat =
            (* FIXME : add strategies to adapt the order of the arguments *)
-           List.fold_left (abstract (Sid.of_list (List.map fst args)) e)
-             e.e_pattern2 args in
+           List.fold_left abstract (e, e.e_pattern2) args in
+         EcUnify.UniEnv.restore ~src:e'.e_env.env_match.me_unienv
+           ~dst:e.e_env.env_match.me_unienv;
          let f (name,p) = (name,p.p_ogty) in
          let args = List.map f args in
          let pat = p_quant Llambda args pat in
@@ -1808,6 +1756,35 @@ and nadd_match (e : nengine) (name : meta_name) (p : pattern)
 and add_match (e : engine) n p b =
   n_engine e.e_pattern1 e.e_pattern2 (nadd_match (e_next e) n p b)
 
+and abstract_opt (e : engine) (p : pattern) (ob : pbindings option)
+                 ((arg,parg) : Name.t * pattern) : environment * pattern =
+  match parg.p_node with
+  | Pat_Axiom (Axiom_Local (id,ty)) ->
+     let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
+     let s = p_bind_rename s id arg (ty_subst s.ps_sty ty) in
+     let p2 = Psubst.p_subst s p in
+     Debug.debug_subst e.e_env p p2;
+     e.e_env, p2
+  | _ ->
+     let rec f env p =
+       let eng_unif = e_copy { e_env = env; e_continuation = ZTop;
+                               e_pattern1 = parg; e_pattern2 = p; } in
+       try let ne = process eng_unif in
+           let env = ne.ne_env in
+           let s = psubst_of_menv
+                     (saturate { env with
+                          env_match = { env.env_match with
+                                        me_matches = Mid.empty }}).env_match in
+           let p = meta_var arg ob p.p_ogty in
+           let p = Psubst.p_subst s p in
+           let p = match p.p_ogty with
+             | OGTty (Some ty) -> pat_local arg ty
+             | _ -> p in
+           env, p
+       with NoMatches -> p_fold_map f env p
+     in
+     f e.e_env p
+
 
 let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
@@ -1816,8 +1793,9 @@ let search_eng e =
   Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2;
   try
     let unienv = e.e_env.env_match.me_unienv in
-    let e' = process e in
+    let e' = process (e_copy e) in
     EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
+    Debug.debug_unienv e'.ne_env;
     Some e'
   with
   | NoMatches -> None
@@ -1903,6 +1881,10 @@ let rec write_meta_bindings (m : pbindings Mid.t) (p : pattern) =
   | Pat_Red_Strat (p,f)        -> let p = aux p in
                                   mk_pattern (Pat_Red_Strat (p,f)) p.p_ogty
   | Pat_Axiom _                -> p
+  | Pat_Fun_Symbol
+      (Sym_Form_App (ty,_),
+       ({ p_node = Pat_Meta_Name (None, _, _) } :: _ as args)) ->
+     pat_fun_symbol (Sym_Form_App (ty,MaybeHO)) args
   | Pat_Fun_Symbol (s,lp)      -> pat_fun_symbol s (List.map aux lp)
 
 let abstract_pattern b a =

@@ -116,6 +116,7 @@ val ogty_equal : ogty -> ogty -> bool
 val ogty_of_gty : gty -> ogty
 val gty_of_ogty : ogty -> gty option
 
+val p_fold_map : ('a -> pattern -> 'a * pattern) -> 'a -> pattern -> 'a * pattern
 val p_map      : (pattern -> pattern) -> pattern -> pattern
 
 (* -------------------------------------------------------------------------- *)

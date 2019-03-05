@@ -552,46 +552,51 @@ let lv_ty (f_ty : ty -> ty) = function
      LvMap ((op,List.map f_ty lty),pv,e_map f_ty (fun x->x) e,f_ty ty)
 
 
-let p_map (f : pattern -> pattern) (p : pattern) : pattern =
+let p_fold_map (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern) : 'a * pattern =
   match p.p_node with
-  | Pat_Meta_Name (None,_,_) -> p
+  | Pat_Meta_Name (None,_,_) -> a, p
   | Pat_Meta_Name (Some p,n,ob) ->
-     let p = f p in pat_meta p n ob
+     let a, p = f a p in a, pat_meta p n ob
   | Pat_Sub p ->
-     let p = f p in mk_pattern (Pat_Sub p) OGTany
+     let a, p = f a p in a, mk_pattern (Pat_Sub p) OGTany
   | Pat_Or lp ->
-     let lp = List.map f lp in mk_pattern (Pat_Or lp) OGTany
+     let a, lp = List.fold_left_map f a lp in a, mk_pattern (Pat_Or lp) OGTany
   | Pat_Red_Strat (p, red) ->
-     let p = f p in mk_pattern (Pat_Red_Strat (p, red)) p.p_ogty
+     let a, p = f a p in a, mk_pattern (Pat_Red_Strat (p, red)) p.p_ogty
   | Pat_Fun_Symbol (s, lp) ->
-     let lp = List.map f lp in pat_fun_symbol s lp
+     let a, lp = List.fold_left_map f a lp in a, pat_fun_symbol s lp
   | Pat_Axiom axiom ->
      match axiom with
-     | Axiom_Int _ -> p
+     | Axiom_Int _ -> a, p
      | Axiom_Stmt s ->
-        let s = List.map f (List.map pat_instr s.s_node) in
-        p_stmt s
+        let a, s = List.fold_left_map f a (List.map pat_instr s.s_node) in
+        a, p_stmt s
      | Axiom_Lvalue lv -> begin
          match lv with
          | LvVar (pv,ty) ->
-            let p = f (pat_pv pv) in p_lvalue_var p ty
+            let a, p = f a (pat_pv pv) in a, p_lvalue_var p ty
          | LvTuple t ->
-            let t = List.map f (List.map (fun (pv,ty) -> pat_lvalue (LvVar (pv,ty))) t) in
-            p_lvalue_tuple t
-         | LvMap _ -> p
+            let a, t =
+              List.fold_left_map f a
+                (List.map (fun (pv,ty) -> pat_lvalue (LvVar (pv,ty))) t) in
+            a, p_lvalue_tuple t
+         | LvMap _ -> a, p
        end
      | Axiom_Prog_Var pv ->
-        let p = f (pat_xpath pv.pv_name) in
-        p_prog_var p pv.pv_kind
+        let a, p = f a (pat_xpath pv.pv_name) in
+        a, p_prog_var p pv.pv_kind
      | Axiom_Xpath xp ->
-        let p = f (pat_mpath xp.x_top) in
-        p_xpath p (pat_op xp.x_sub [] None)
+        let a, p = f a (pat_mpath xp.x_top) in
+        a, p_xpath p (pat_op xp.x_sub [] None)
      | Axiom_Mpath mp ->
-        let m = f (pat_mpath_top mp.m_top) in
-        let margs = List.map f (List.map pat_mpath mp.m_args) in
-        p_mpath m margs
+        let a, m = f a (pat_mpath_top mp.m_top) in
+        let a, margs = List.fold_left_map f a (List.map pat_mpath mp.m_args) in
+        a, p_mpath m margs
      | Axiom_Op _ | Axiom_Local _ | Axiom_Memory _ | Axiom_MemEnv _
-       | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> p
+       | Axiom_Mpath_top _ | Axiom_Hoarecmp _ -> a, p
+
+let p_map (f : pattern -> pattern) (p : pattern) : pattern =
+  snd (p_fold_map (fun () p -> (), f p) () p)
 
 (* -------------------------------------------------------------------------- *)
 module Psubst = struct

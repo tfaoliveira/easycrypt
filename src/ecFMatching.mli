@@ -28,6 +28,7 @@ type verbose = {
     verbose_begin_match     : bool;
     verbose_translate_error : bool;
     verbose_subst           : bool;
+    verbose_unienv          : bool;
   }
 
 type environment = {
