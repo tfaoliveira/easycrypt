@@ -56,12 +56,12 @@ let full_verbose : verbose = {
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = false;
-    verbose_type            = true;
+    verbose_rule            = true;
+    verbose_type            = false;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -198,6 +198,7 @@ let zor e l =
 
 (* -------------------------------------------------------------------- *)
 module Debug : sig
+  val debug_h_red_strat              : environment -> pattern -> pattern -> int -> unit
   val debug_type                     : environment -> ty -> ty -> unit
   val debug_ogty                     : environment -> pattern -> pattern -> unit
   val debug_bind_restr               : environment -> ident -> unit
@@ -224,6 +225,101 @@ module Debug : sig
   val debug_unienv                   : environment -> unit
   val debug_subst                    : environment -> pattern -> pattern -> unit
 end = struct
+
+  let debug_h_red_strat menv p1 p2 i =
+    if menv.env_verbose.verbose_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      match i with
+      | 3 -> begin
+          match p1.p_node, p2.p_node with
+          | _, Pat_Fun_Symbol
+                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _)
+               when menv.env_red_info_match.EcReduction.delta_p p -> begin
+              let op = EcEnv.Op.by_path p env in
+              match op.EcDecl.op_kind with
+              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
+                           (form_of_expr mhr e) in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 1
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 2
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | _ ->
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 3
+            end
+
+            | Pat_Fun_Symbol
+                (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _), _
+               when menv.env_red_info_match.EcReduction.delta_p p -> begin
+              let op = EcEnv.Op.by_path p env in
+              match op.EcDecl.op_kind with
+              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
+                           (form_of_expr mhr e) in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 4
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 5
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | _ ->
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 6
+            end
+
+          | _, Pat_Fun_Symbol
+                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _)
+               when menv.env_red_info_same_meta.EcReduction.delta_p p -> begin
+              let op = EcEnv.Op.by_path p env in
+              match op.EcDecl.op_kind with
+              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
+                           (form_of_expr mhr e) in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 8
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 9
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | _ ->
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 10
+            end
+
+            | Pat_Fun_Symbol
+                (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _), _
+               when menv.env_red_info_same_meta.EcReduction.delta_p p -> begin
+              let op = EcEnv.Op.by_path p env in
+              match op.EcDecl.op_kind with
+              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
+                           (form_of_expr mhr e) in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 11
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
+                 let f = EcCoreFol.Fsubst.subst_tvar
+                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 12
+                   (EcPrinting.pp_pattern ppe) (pat_form f)
+              | _ ->
+                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 13
+            end
+
+          | _ ->
+             EcEnv.notify env `Warning "hr- h_red_strat step %i : %i" i 7
+        end
+      | _ ->
+         EcEnv.notify env `Warning "hr- h_red_strat step %i" i
+
 
   let debug_subst menv p1 p2 =
     if menv.env_verbose.verbose_subst then
@@ -356,6 +452,13 @@ end = struct
       EcEnv.notify env `Warning
         "Try to translate to form (%s) : %a" s
         (EcPrinting.pp_pattern ppe) p
+
+  let rec compute_zands c = function
+    | ZTop -> c
+    | Zor (ct,_,_) -> compute_zands c ct
+    | Zand (_,l,ct) -> compute_zands (c + List.length l) ct
+    | ZReduce (ct,_,_) -> compute_zands c ct
+    | Znamed (_,_,_,ct) -> compute_zands c ct
 
   let debug_try_match menv p a c =
     if menv.env_verbose.verbose_match then
@@ -541,8 +644,10 @@ module Translate = struct
     | Pat_Or [p]              -> form_of_pattern env p
     | Pat_Or _                -> raise (Invalid_Type "formula")
     | Pat_Red_Strat (p,_)     -> form_of_pattern env p
+    | Pat_Axiom (Axiom_Int z) -> f_int z
     | Pat_Axiom (Axiom_Local (id,ty)) -> f_local id ty
-    | Pat_Axiom _             -> raise (Invalid_Type "formula")
+    | Pat_Axiom (Axiom_Op (op,lty, Some ty)) -> f_op op lty ty
+    | Pat_Axiom _             -> raise (Invalid_Type "formula : other axiom")
     | Pat_Fun_Symbol (s, lp)  ->
        match s, lp with
        | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
@@ -559,7 +664,7 @@ module Translate = struct
                                         (form_of_pattern env p2)
        | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern env pv) ty
                                         (memory_of_pattern pm)
-       | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula")
+       | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula : prog_var")
        | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp) (memory_of_pattern mem)
        | Sym_Form_Hoare_F, [pr;xp;po] ->
           f_hoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
@@ -587,7 +692,7 @@ module Translate = struct
        | Sym_Quant (q,pb), [p] ->
           let f (id,ogt) = match gty_of_ogty ogt with
             | Some gty -> id, gty
-            | _        -> raise (Invalid_Type "formula")
+            | _        -> raise (Invalid_Type "formula : quant binds")
           in
           f_quant q (List.map f pb) (form_of_pattern env p)
        | _ -> assert false
@@ -932,40 +1037,30 @@ end = struct
 
 end
 
-let reduce_axiom h s r a =
-  let o = match PReduction.h_red_axiom_opt h r s a with
-    | Some { p_node = Pat_Axiom a' } -> Some a'
-    | _ -> None in
-  match o with
-  | Some a' -> if a = a' then None else Some a'
-  | None -> None
-
-let reduce_pattern h s r p =
-  match PReduction.h_red_pattern_opt h r s p with
-  | Some p' -> if p = p' then None else Some p'
-  | None -> None
-
 (* -------------------------------------------------------------------------- *)
-module X = struct
-  open EcReduction
+let get_ty = function
+  | OGTty (Some ty) -> ty
+  | _ -> raise NoMatches
 
-  let h_red_strat hyps s rp _ p a =
-    match reduce_pattern hyps s rp p with
-    | Some p' -> Some (p', a)
-    | None    -> omap (fun a -> (p, a)) (reduce_pattern hyps s rp a)
-end
-
-let h_red_strat env p a =
-  let h = env.env_hyps in
-  let r = env.env_red_info_match in
+let h_red_strat env p1 p2 =
   let env = saturate env in
-  let s = psubst_of_menv env.env_match in
-  let p1 = simplify env (p_subst s p) in
-  match X.h_red_strat h s r r p1 a with
-  | Some (p2, a2) ->
-     if p1 = p2 && a = a2 then None
-     else Some (p2, a2)
-  | None -> None
+  let s   = psubst_of_menv env.env_match in
+  let h   = env.env_hyps in
+  let r   = env.env_red_info_match in
+  (* let p1  = Psubst.p_subst s p1 in
+   * let p2  = Psubst.p_subst s p2 in *)
+  match PReduction.h_red_pattern_opt h r s p1 with
+  | Some p1 ->
+     Debug.debug_h_red_strat env p1 p2 1;
+     Some (p1, p2)
+  | None ->
+     match PReduction.h_red_pattern_opt h r s p2 with
+     | Some p2 ->
+        Debug.debug_h_red_strat env p1 p2 2;
+        Some (p1, p2)
+     | None ->
+        Debug.debug_h_red_strat env p1 p2 3;
+        None
 
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
@@ -987,35 +1082,6 @@ let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
 
   in Mid.for_all (fun x _ -> check1 x) m
 
-(* add_match can raise the exception : CannotUnify *)
-let nadd_match (e : nengine) (name : meta_name) (p : pattern)
-      (orb : pbindings option) : nengine =
-  let env = e.ne_env in
-  let env = saturate env in
-  let subst = psubst_of_menv env.env_match in
-  let p' = Psubst.p_subst subst p in
-  Debug.debug_subst env p p';
-  let p = simplify env p' in
-  Debug.debug_show_pattern env p;
-  if odfl true (omap (fun r -> restr_bds_check env p r) orb)
-  then
-    let me_matches =
-      match Mid.find_opt name e.ne_env.env_match.me_matches with
-      | None ->
-         Debug.debug_add_match e.ne_env true name p;
-         Mid.add name p e.ne_env.env_match.me_matches
-      | Some p' ->
-         (* raise CannotUnify *)
-         if EQ.pattern e.ne_env e.ne_env.env_red_info_same_meta p p'
-         then e.ne_env.env_match.me_matches
-         else begin
-             Debug.debug_add_match e.ne_env false name p;
-             raise CannotUnify
-           end
-    in
-    { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
-  else raise CannotUnify
-
 let e_next (e : engine) : nengine =
   { ne_continuation = e.e_continuation;
     ne_env = e.e_env;
@@ -1027,9 +1093,6 @@ let n_engine (e_pattern1) (e_pattern2 : pattern) (n : nengine) =
     e_continuation = n.ne_continuation;
     e_env = n.ne_env;
   }
-
-let add_match (e : engine) n p b =
-  n_engine e.e_pattern1 e.e_pattern2 (nadd_match (e_next e) n p b)
 
 let sub_engine1 e p f =
   e_copy { e with e_pattern1 = f; e_pattern2 = mk_pattern (Pat_Sub p) OGTany; }
@@ -1166,6 +1229,18 @@ let check_arrow e b o = match o with
   | OGTty (Some ty) -> check_arrow e b ty
   | _ -> false
 
+let rec parrow (args : pattern list) = function
+  | None -> None
+  | Some ty ->
+     match args with
+     | [] -> Some ty
+     | p :: args ->
+        match p.p_ogty with
+        | OGTty (Some t1) -> parrow args (Some (tfun t1 ty))
+        | _ -> None
+
+let parrow args t = parrow (List.rev args) t
+
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
   Debug.debug_try_match e.e_env e.e_pattern1 e.e_pattern2 e.e_continuation;
@@ -1175,16 +1250,36 @@ let rec process (e : engine) : nengine =
   then next NoMatch e
   else
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
-    | Pat_Meta_Name (None, name, ob), _
-      | _ , Pat_Meta_Name (None, name, ob) ->
+    (* | Pat_Meta_Name (_,name,_), _
+     *      when Mid.mem name e.e_env.env_match.me_matches ->
+     *    Debug.debug_which_rule e.e_env "replace meta variable 1";
+     *    process { e with e_pattern1 = Mid.find name e.e_env.env_match.me_matches }
+     *
+     * | _, Pat_Meta_Name (_,name,_)
+     *      when Mid.mem name e.e_env.env_match.me_matches ->
+     *    Debug.debug_which_rule e.e_env "replace meta variable 2";
+     *    process { e with e_pattern2 = Mid.find name e.e_env.env_match.me_matches } *)
+
+   | Pat_Meta_Name (None, name, ob), _ ->
        let env_meta_restr_binds =
          odfl e.e_env.env_meta_restr_binds
            (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
        let e_env = { e.e_env with env_meta_restr_binds; } in
        let e = { e with e_env } in
-       Debug.debug_which_rule e.e_env "meta variable";
+       Debug.debug_which_rule e.e_env "meta variable : 1 none";
        next Match { e with
            e_continuation = Znamed (e.e_pattern2, name, ob, e.e_continuation) }
+
+    | _ , Pat_Meta_Name (None, name, ob) ->
+       let env_meta_restr_binds =
+         odfl e.e_env.env_meta_restr_binds
+           (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
+       let e_env = { e.e_env with env_meta_restr_binds; } in
+       let e = { e with e_env } in
+       Debug.debug_which_rule e.e_env "meta variable : 2 none";
+       next Match { e with
+           e_continuation = Znamed (e.e_pattern1, name, ob, e.e_continuation) }
+
 
     | Pat_Meta_Name (Some p,name,ob), _ ->
        let env_meta_restr_binds =
@@ -1192,7 +1287,7 @@ let rec process (e : engine) : nengine =
            (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
        let e_env = { e.e_env with env_meta_restr_binds; } in
        let e = { e with e_env } in
-       Debug.debug_which_rule e.e_env "meta variable";
+       Debug.debug_which_rule e.e_env "meta variable : 1 some";
        process { e with
            e_pattern1 = p; e_env;
            e_continuation = Znamed(e.e_pattern2, name, ob, e.e_continuation);
@@ -1204,7 +1299,7 @@ let rec process (e : engine) : nengine =
            (omap (fun b -> Mid.add name b e.e_env.env_meta_restr_binds) ob) in
        let e_env = { e.e_env with env_meta_restr_binds; } in
        let e = { e with e_env } in
-       Debug.debug_which_rule e.e_env "meta variable";
+       Debug.debug_which_rule e.e_env "meta variable : 2 some";
        process { e with
            e_pattern2 = p; e_env;
            e_continuation = Znamed(e.e_pattern1, name, ob, e.e_continuation);
@@ -1218,7 +1313,7 @@ let rec process (e : engine) : nengine =
 
     | _, Pat_Sub p ->
        let le = sub_engines2 e p in
-       Debug.debug_which_rule e.e_env "sub";
+       Debug.debug_which_rule e.e_env "sub 2";
        let e    = { e with e_pattern2 = p } in
        process (zor e le)
 
@@ -1241,21 +1336,21 @@ let rec process (e : engine) : nengine =
        process (zor e l)
 
     | Pat_Red_Strat (e_pattern1, f),_ ->
-       Debug.debug_which_rule e.e_env "reduction strategy";
+       Debug.debug_which_rule e.e_env "reduction strategy : 1";
        let env_red_info_match, env_red_info_same_meta =
          f e.e_env.env_red_info_match e.e_env.env_red_info_same_meta in
        let e_env = { e.e_env with env_red_info_match; env_red_info_same_meta } in
        process { e with e_pattern1; e_env }
 
     | _, Pat_Red_Strat (e_pattern2, f) ->
-       Debug.debug_which_rule e.e_env "reduction strategy";
+       Debug.debug_which_rule e.e_env "reduction strategy : 2";
        let env_red_info_match, env_red_info_same_meta =
          f e.e_env.env_red_info_match e.e_env.env_red_info_same_meta in
        let e_env = { e.e_env with env_red_info_match; env_red_info_same_meta } in
        process { e with e_pattern2; e_env }
 
     | Pat_Axiom o1, Pat_Axiom o2 ->
-       Debug.debug_which_rule e.e_env "same axiom";
+       Debug.debug_which_rule e.e_env "axiom 1&2";
        if EQ.axiom e.e_env e.e_env.env_red_info_match o1 o2
        then next   Match e
        else next NoMatch e
@@ -1263,6 +1358,7 @@ let rec process (e : engine) : nengine =
     | Pat_Fun_Symbol (Sym_Form_App (t, _),
                       { p_node = Pat_Meta_Name(None, name, _)} :: pargs), _
          when Mid.mem name e.e_env.env_match.me_matches ->
+       Debug.debug_which_rule e.e_env "replace in app meta variable 1";
        let e_env = saturate e.e_env in
        let e_pattern1 = p_app (Mid.find name e_env.env_match.me_matches) pargs t in
        process { e with e_env; e_pattern1; }
@@ -1270,28 +1366,39 @@ let rec process (e : engine) : nengine =
     | _, Pat_Fun_Symbol (Sym_Form_App (t, _),
                          { p_node = Pat_Meta_Name(None, name, _)} :: pargs)
          when Mid.mem name e.e_env.env_match.me_matches ->
+       Debug.debug_which_rule e.e_env "replace in app meta variable 2";
        let e_env = saturate e.e_env in
        let e_pattern2 = p_app (Mid.find name e_env.env_match.me_matches) pargs t in
        process { e with e_env; e_pattern2; }
 
     | Pat_Fun_Symbol (Sym_Form_App (_, MaybeHO), pop :: pargs), _ ->
        Debug.debug_which_rule e.e_env
-         "form : application : test both without and with higher order";
+         "application 1 : test both without and with higher order";
        let e_pattern1 = pat_fun_symbol (Sym_Form_App (None, HO)) (pop::pargs) in
        let e_or = { e with e_pattern1; } in
        let e_pattern1 = pat_fun_symbol (Sym_Form_App (None, NoHO)) (pop::pargs) in
        let e = { e with e_pattern1; } in
        process (zor e [e_or])
 
+    | _ ,Pat_Fun_Symbol (Sym_Form_App (_, MaybeHO), pop :: pargs) ->
+       Debug.debug_which_rule e.e_env
+         "application 2 : test both without and with higher order";
+       let e_pattern2 = pat_fun_symbol (Sym_Form_App (None, HO)) (pop::pargs) in
+       let e_or = { e with e_pattern2; } in
+       let e_pattern2 = pat_fun_symbol (Sym_Form_App (None, NoHO)) (pop::pargs) in
+       let e = { e with e_pattern2; } in
+       process (zor e [e_or])
+
     | Pat_Fun_Symbol (Sym_Form_App (ot1, NoHO), op1 :: args1),
       Pat_Fun_Symbol (Sym_Form_App (ot2, NoHO), op2 :: args2) ->
-       Debug.debug_which_rule e.e_env "form : application : without higher order";
+       Debug.debug_which_rule e.e_env
+         "application 1&2 : without higher order";
        let e = try_reduce e in
        let (args11,args12),(args21,args22) = suffix2 args1 args2 in
        if args12 = [] && args22 = [] then assert false;
        let zand = List.combine args12 args22 in
-       let op1 = p_app op1 args11 ot1 in
-       let op2 = p_app op2 args21 ot2 in
+       let op1 = p_app op1 args11 (parrow args12 ot1) in
+       let op2 = p_app op2 args21 (parrow args22 ot2) in
        let e_pattern1, e_pattern2, zand = op1, op2, zand in
        let e_continuation = Zand ([e_pattern1,e_pattern2],zand,e.e_continuation) in
        process { e with e_pattern1; e_pattern2; e_continuation; }
@@ -1358,7 +1465,7 @@ let rec process (e : engine) : nengine =
     | Pat_Fun_Symbol (Sym_Quant (q1,bs1), [p1]),
       Pat_Fun_Symbol (Sym_Quant (q2,bs2), [p2]) when q1 = q2 ->
        begin
-         Debug.debug_which_rule e.e_env "form : quantif";
+         Debug.debug_which_rule e.e_env "quantif 1&2";
          let e = try_reduce e in
          let (b11,b12), (b21,b22) = List.prefix2 bs1 bs2 in
          if   not (List.for_all2
@@ -1378,7 +1485,7 @@ let rec process (e : engine) : nengine =
 
     | Pat_Fun_Symbol (Sym_Mpath, p1 :: args1),
       Pat_Fun_Symbol (Sym_Mpath, p2 :: args2) ->
-       begin Debug.debug_which_rule e.e_env "mpath";
+       begin Debug.debug_which_rule e.e_env "mpath 1&2";
              let e = try_reduce e in
              let (args11,args12),(args21,args22) = suffix2 args1 args2 in
              let zand = List.combine args12 args22 in
@@ -1390,19 +1497,6 @@ let rec process (e : engine) : nengine =
              process { e with e_pattern1; e_pattern2; e_continuation; }
        end
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq,pi::pl),
-      Pat_Axiom (Axiom_Stmt { s_node = fi::fl }) ->
-       begin Debug.debug_which_rule e.e_env "stmt : to instr";
-             let e = try_reduce e in
-             let pl = p_stmt pl in
-             let zand = [pat_stmt (stmt fl),pl] in
-             process { e with
-                 e_pattern1 = pi;
-                 e_pattern2 = pat_instr fi;
-                 e_continuation = Zand ([],zand,e.e_continuation);
-               }
-       end
-
     | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
        if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
        then begin
@@ -1410,23 +1504,31 @@ let rec process (e : engine) : nengine =
            let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
            next Match { e with e_continuation }
          end
-       else next NoMatch e
+       else let e = try_reduce e in next NoMatch e
 
-    (* eta-expansion in the case where the types of f is some tarrow *)
-    | Pat_Fun_Symbol (Sym_Quant (Llambda, b1), [e_pattern1]), _
-         when check_arrow e b1 e.e_pattern2.p_ogty ->
-       Debug.debug_which_rule e.e_env "eta-expansion";
-       let ty_of_ogty i = function
-         | OGTty (Some t) -> t
-         | o -> Debug.debug_eta_expansion e.e_env i o;
-                assert false in
-       let args = List.map (fun (i,o) -> pat_local i (ty_of_ogty i o)) b1 in
-       let e_pattern2 = p_app e.e_pattern2 args None in
+    (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
+    | Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some ty) as b1)::bs), [p1]), _
+         when check_arrow e [b1] e.e_pattern2.p_ogty ->
+       Debug.debug_which_rule e.e_env "eta-expansion 1";
+       let x = pat_local (EcIdent.create "_") ty in
+       let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p1.p_ogty) in
+       let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
+       let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
+       process { e with e_pattern1; e_pattern2 }
+
+    (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
+    | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some ty) as b2)::bs), [p2])
+         when check_arrow e [b2] e.e_pattern1.p_ogty ->
+       Debug.debug_which_rule e.e_env "eta-expansion 1";
+       let x = pat_local (EcIdent.create "_") ty in
+       let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p2.p_ogty) in
+       let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
+       let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
        process { e with e_pattern1; e_pattern2 }
 
     (* Pattern / Axiom *)
     | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
-       begin Debug.debug_which_rule e.e_env "mpath";
+       begin Debug.debug_which_rule e.e_env "mpath : pat ax";
              let e = try_reduce e in
              let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
              let zand = List.map2 (fun x y -> (pat_mpath x),y) margs2 pargs2 in
@@ -1446,7 +1548,7 @@ let rec process (e : engine) : nengine =
        end
 
     | Pat_Axiom (Axiom_Mpath m), Pat_Fun_Symbol (Sym_Mpath, p::rest) ->
-       begin Debug.debug_which_rule e.e_env "mpath";
+       begin Debug.debug_which_rule e.e_env "mpath : ax pat";
              let e = try_reduce e in
              let (pargs1,pargs2),(margs1,margs2) = suffix2 rest m.m_args in
              let zand = List.map2 (fun x y -> (pat_mpath x),y) margs2 pargs2 in
@@ -1465,41 +1567,89 @@ let rec process (e : engine) : nengine =
              process { e with e_pattern2 = p; e_pattern1 = m; e_continuation; }
        end
 
-    | Pat_Fun_Symbol (Sym_Form_Prog_var k, [p]),
-      Pat_Axiom (Axiom_Prog_Var x2) when k = x2.pv_kind -> begin
-        Debug.debug_which_rule e.e_env "form : prog_var";
-        process { e with e_pattern1 = p; e_pattern2 = pat_xpath x2.pv_name; }
-      end
-
-    | Pat_Axiom (Axiom_Prog_Var x2), Pat_Fun_Symbol (Sym_Form_Prog_var k, [p])
-         when k = x2.pv_kind -> begin
-        Debug.debug_which_rule e.e_env "form : prog_var";
-        process { e with e_pattern2 = p; e_pattern1 = pat_xpath x2.pv_name; }
-      end
-
-    | Pat_Fun_Symbol (Sym_Mpath, [p]), Pat_Axiom (Axiom_Mpath_top _) ->
-       begin Debug.debug_which_rule e.e_env "mpath_top";
+    | Pat_Fun_Symbol (Sym_Mpath, [p]),
+      Pat_Axiom (Axiom_Mpath_top _) ->
+       begin Debug.debug_which_rule e.e_env "mpath_top : 1";
              let e = try_reduce e in
              process { e with e_pattern1 = p }
        end
 
-    | Pat_Axiom (Axiom_Mpath_top _), Pat_Fun_Symbol (Sym_Mpath, [p]) ->
-       begin Debug.debug_which_rule e.e_env "mpath_top";
+    | Pat_Axiom (Axiom_Mpath_top _),
+      Pat_Fun_Symbol (Sym_Mpath, [p]) ->
+       begin Debug.debug_which_rule e.e_env "mpath_top : 2";
              let e = try_reduce e in
              process { e with e_pattern2 = p }
        end
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq,[]), Pat_Axiom (Axiom_Stmt { s_node = [] }) ->
-       begin Debug.debug_which_rule e.e_env "stmt : empty";
+    | Pat_Fun_Symbol (Sym_Stmt_Seq,[]),
+      Pat_Axiom (Axiom_Stmt { s_node = [] }) ->
+       begin Debug.debug_which_rule e.e_env "stmt : empty : pat ax";
              next Match e
        end
 
-    | Pat_Fun_Symbol (Sym_Xpath, [pm;pf]), Pat_Axiom (Axiom_Xpath x) ->
-       begin Debug.debug_which_rule e.e_env "xpath";
+    | Pat_Axiom (Axiom_Stmt { s_node = [] }),
+      Pat_Fun_Symbol (Sym_Stmt_Seq,[]) ->
+       begin Debug.debug_which_rule e.e_env "stmt : empty : ax pat";
+             next Match e
+       end
+
+    | Pat_Fun_Symbol (Sym_Stmt_Seq,pi::pl),
+      Pat_Axiom (Axiom_Stmt { s_node = fi::fl }) ->
+       begin Debug.debug_which_rule e.e_env "stmt : to instr 1";
+             let e = try_reduce e in
+             let pl = p_stmt pl in
+             let zand = [pat_stmt (stmt fl),pl] in
+             process { e with
+                 e_pattern1 = pi;
+                 e_pattern2 = pat_instr fi;
+                 e_continuation = Zand ([],zand,e.e_continuation);
+               }
+       end
+
+    | Pat_Axiom (Axiom_Stmt { s_node = fi::fl }),
+      Pat_Fun_Symbol (Sym_Stmt_Seq,pi::pl) ->
+       begin Debug.debug_which_rule e.e_env "stmt : to instr 2";
+             let e = try_reduce e in
+             let pl = p_stmt pl in
+             let zand = [pat_stmt (stmt fl),pl] in
+             process { e with
+                 e_pattern2 = pi;
+                 e_pattern1 = pat_instr fi;
+                 e_continuation = Zand ([],zand,e.e_continuation);
+               }
+       end
+
+    | Pat_Fun_Symbol (Sym_Form_Prog_var k, [p]),
+      Pat_Axiom (Axiom_Prog_Var x2)
+         when k = x2.pv_kind -> begin
+        Debug.debug_which_rule e.e_env "form : prog_var 1";
+        process { e with e_pattern1 = p; e_pattern2 = pat_xpath x2.pv_name; }
+      end
+
+    | Pat_Axiom (Axiom_Prog_Var x2),
+      Pat_Fun_Symbol (Sym_Form_Prog_var k, [p])
+         when k = x2.pv_kind -> begin
+        Debug.debug_which_rule e.e_env "form : prog_var 2";
+        process { e with e_pattern2 = p; e_pattern1 = pat_xpath x2.pv_name; }
+      end
+
+    | Pat_Fun_Symbol (Sym_Xpath, [pm;pf]),
+      Pat_Axiom (Axiom_Xpath x) ->
+       begin Debug.debug_which_rule e.e_env "xpath 1";
              let zand = [pat_mpath x.x_top,pm] in
              process { e with
                  e_pattern1 = pf;
                  e_pattern2 = pat_op x.x_sub [] None;
+                 e_continuation = Zand ([],zand,e.e_continuation); }
+       end
+
+    | Pat_Axiom (Axiom_Xpath x),
+      Pat_Fun_Symbol (Sym_Xpath, [pm;pf]) ->
+       begin Debug.debug_which_rule e.e_env "xpath 2";
+             let zand = [pat_mpath x.x_top,pm] in
+             process { e with
+                 e_pattern2 = pf;
+                 e_pattern1 = pat_op x.x_sub [] None;
                  e_continuation = Zand ([],zand,e.e_continuation); }
        end
 
@@ -1524,6 +1674,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      e
 
   | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
+     Debug.debug_which_rule e.ne_env "next : no match in named";
      next_n NoMatch { e with ne_continuation; }
 
   | Match, Znamed (f, name, ob, ne_continuation) ->
@@ -1533,26 +1684,34 @@ and next_n (m : ismatch) (e : nengine) : nengine =
          Match, { ne with ne_continuation; }
        with
        | CannotUnify ->
+          Debug.debug_which_rule e.ne_env "next : cannot unify in named";
           NoMatch, { e with ne_continuation; } in
      next_n m e
 
   | NoMatch, Zand (_,_,ne_continuation) ->
+     Debug.debug_which_rule e.ne_env "next : no match in zand";
      next_n NoMatch { e with ne_continuation; }
 
   | Match, Zand (_before,[],ne_continuation) ->
+     Debug.debug_which_rule e.ne_env "next : all match in zand";
      next_n Match { e with ne_continuation }
 
   | Match, Zand (before,(f,p)::after,z) ->
-     let ne_env = saturate e.ne_env in
-     let e      = { e with ne_env } in
+     Debug.debug_which_rule e.ne_env "next : next match in zand";
+     (* let ne_env = saturate e.ne_env in
+      * let e      = { e with ne_env } in
+      * let s      = psubst_of_menv e.ne_env.env_match in
+      * let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in *)
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
   | Match, Zor (ne_continuation, _, _) ->
+     Debug.debug_which_rule e.ne_env "next : match in zor";
      Debug.debug_ignore_ors e.ne_env;
      next_n Match { e with ne_continuation }
 
   | NoMatch, Zor (_, [], ne) ->
+     Debug.debug_which_rule e.ne_env "next : no match in zor, no more matches";
      next_n NoMatch ne
 
   | NoMatch, Zor (_, e'::engines, ne) ->
@@ -1567,6 +1726,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      next_n Match { e with ne_continuation }
 
   | NoMatch, ZReduce (_, e', ne) ->
+     Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
      match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
      | None ->
         Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern2 false;
@@ -1607,6 +1767,44 @@ and sub_engines1 (e : engine) (p : pattern) : engine list =
      List.map (fun x -> sub_engine1 e p (pat_instr x)) s.s_node
   | Pat_Axiom _              -> []
   | Pat_Fun_Symbol (_, lp)   -> List.map (sub_engine1 e p) lp
+
+(* add_match can raise the exception : CannotUnify *)
+and nadd_match (e : nengine) (name : meta_name) (p : pattern)
+      (orb : pbindings option) : nengine =
+  let env = e.ne_env in
+  let env = saturate env in
+  let subst = psubst_of_menv env.env_match in
+  let p' = Psubst.p_subst subst p in
+  Debug.debug_subst env p p';
+  let p = p' in
+  if odfl true (omap (fun r -> restr_bds_check env p r) orb)
+  then
+    let me_matches =
+      match Mid.find_opt name e.ne_env.env_match.me_matches with
+      | None ->
+         Debug.debug_which_rule e.ne_env "nadd_match for the first time";
+         Debug.debug_add_match e.ne_env true name p;
+         Mid.add name p e.ne_env.env_match.me_matches
+      | Some p' ->
+         (* raise CannotUnify *)
+         Debug.debug_which_rule e.ne_env "start new unification";
+         let engine_try_unification =
+           let env = env_copy e.ne_env in
+           let env = { env with env_red_info_match = env.env_red_info_same_meta } in
+           n_engine p p' { e with ne_env = env; ne_continuation = ZTop } in
+         try
+           let ne_unification = process engine_try_unification in
+           ne_unification.ne_env.env_match.me_matches
+         with
+         | NoMatches ->
+             Debug.debug_add_match e.ne_env false name p;
+             raise CannotUnify
+    in
+    { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
+  else raise CannotUnify
+
+and add_match (e : engine) n p b =
+  n_engine e.e_pattern1 e.e_pattern2 (nadd_match (e_next e) n p b)
 
 
 let get_matches (e : engine) : match_env = (saturate e.e_env).env_match

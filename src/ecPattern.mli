@@ -200,6 +200,10 @@ val p_ands  : pattern list -> pattern
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
 val p_real_split    : pattern -> pattern * pattern
+
+
+val p_app_simpl : ?ho:is_higher_order ->
+                  pattern -> pattern list -> ty option -> pattern
 (* -------------------------------------------------------------------------- *)
 module FV : sig
   type fv = int Mid.t
@@ -274,6 +278,4 @@ module PReduction : sig
                           Psubst.p_subst -> pattern -> pattern option
   val h_red_axiom_opt   : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
                           Psubst.p_subst -> axiom -> pattern option
-  val h_red_form_opt    : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                          Psubst.p_subst -> form -> pattern option
 end

@@ -2985,8 +2985,10 @@ let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_MemEnv _ -> assert false
   | Axiom_Prog_Var pv ->
      pp_pv ppe fmt pv
-  | Axiom_Op (path,_,_) ->
-     pp_path fmt path
+  | Axiom_Op (p,lty,Some ty) ->
+     pp_form ppe fmt (f_op p lty ty)
+  | Axiom_Op (p,_,None) ->
+     pp_path fmt p
      (* Format.fprintf fmt "Op(%a)" pp_path path *)
   | Axiom_Mpath_top m ->
      pp_topmod ppe fmt (EcPath.mpath m [])
@@ -3028,17 +3030,17 @@ and pp_pattern ppe fmt p = match p.p_node with
      | Sym_Form_If, _ -> assert false
 
      | Sym_Form_App (Some _ty,i),op::args ->
-        (* Format.fprintf fmt "@[%a@]"
-         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-        Format.fprintf fmt "PApp%s(@[%a@])"
-          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+        Format.fprintf fmt "(@[%a@])"
           (pp_list "@ " (pp_pattern ppe)) (op::args)
+        (* Format.fprintf fmt "PApp%s(@[%a@])"
+         *   (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
      | Sym_Form_App (None,i),op::args ->
-        (* Format.fprintf fmt "@[%a@]"
-         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-        Format.fprintf fmt "PApp%s(@[%a@])"
-          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+        Format.fprintf fmt "(@[%a@])"
           (pp_list "@ " (pp_pattern ppe)) (op::args)
+        (* Format.fprintf fmt "PApp%s(@[%a@])"
+         *   (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
      | Sym_Form_App _,_ -> assert false
 
      | Sym_Form_Tuple, t ->
