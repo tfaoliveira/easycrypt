@@ -221,7 +221,7 @@ end
 (* -------------------------------------------------------------------------- *)
 module Psubst : sig
   type p_subst = {
-      ps_patloc  : pattern             Mid.t;
+      ps_patloc  : pattern Mid.t;
       ps_sty     : ty_subst;
     }
 
@@ -251,7 +251,7 @@ module Psubst : sig
   val add_pbinding  : p_subst -> pbinding -> p_subst * pbinding
   val add_pbindings : p_subst -> pbindings -> p_subst * pbindings
 
-  val p_subst       : p_subst -> pattern -> pattern
+  val p_subst       : ?keep_ho:bool -> p_subst -> pattern -> pattern
 end
 
 (* -------------------------------------------------------------------- *)

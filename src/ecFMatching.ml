@@ -64,7 +64,7 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -235,91 +235,79 @@ end = struct
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
 
+      let pcompat =
+        match oget menv.env_red_info_match.EcReduction.logic
+        with `Full -> true | `ProductCompat -> false
+      in
+      let f op args =
+        match op_kind op, args with
+        | Some (`Not), [_]    when pcompat ->
+           EcEnv.notify env `Warning "try to reduce !"
+        | Some (`Imp), [_;_] when pcompat ->
+           EcEnv.notify env `Warning "try to reduce =>"
+        | Some (`Iff), [_;_] when pcompat ->
+           EcEnv.notify env `Warning "try to reduce <=>"
+
+
+        | Some (`And `Asym), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce a&&"
+        | Some (`Or  `Asym), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce a||"
+        | Some (`And `Sym ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce &&"
+        | Some (`Or  `Sym ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce ||"
+        | Some (`Int_le   ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce i <="
+        | Some (`Int_lt   ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce i <"
+        | Some (`Real_le  ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce r <="
+        | Some (`Real_lt  ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce r <"
+        | Some (`Int_add  ), [f1;f2] ->
+           EcEnv.notify env `Warning "try to reduce i : (%a) + (%a)"
+             (EcPrinting.pp_pattern ppe) f1
+             (EcPrinting.pp_pattern ppe) f2
+        | Some (`Int_opp  ), [_]     ->
+           EcEnv.notify env `Warning "try to reduce i -"
+        | Some (`Int_mul  ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce i *"
+        | Some (`Real_add ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce r +"
+        | Some (`Real_opp ), [_]     ->
+           EcEnv.notify env `Warning "try to reduce r -"
+        | Some (`Real_mul ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce r *"
+        | Some (`Real_inv ), [_]     ->
+           EcEnv.notify env `Warning "try to reduce inv"
+        | Some (`Eq       ), [_;_] ->
+           EcEnv.notify env `Warning "try to reduce ="
+        | _ ->
+           EcEnv.notify env `Warning "try to reduce other"
+      in
+
       match i with
       | 3 -> begin
-          match p1.p_node, p2.p_node with
-          | _, Pat_Fun_Symbol
-                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _)
-               when menv.env_red_info_match.EcReduction.delta_p p -> begin
-              let op = EcEnv.Op.by_path p env in
-              match op.EcDecl.op_kind with
-              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
-                           (form_of_expr mhr e) in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 1
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 2
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | _ ->
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 3
-            end
-
-            | Pat_Fun_Symbol
-                (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _), _
-               when menv.env_red_info_match.EcReduction.delta_p p -> begin
-              let op = EcEnv.Op.by_path p env in
-              match op.EcDecl.op_kind with
-              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
-                           (form_of_expr mhr e) in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 4
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 5
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | _ ->
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 6
-            end
-
-          | _, Pat_Fun_Symbol
-                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _)
-               when menv.env_red_info_same_meta.EcReduction.delta_p p -> begin
-              let op = EcEnv.Op.by_path p env in
-              match op.EcDecl.op_kind with
-              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
-                           (form_of_expr mhr e) in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 8
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 9
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | _ ->
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 10
-            end
-
-            | Pat_Fun_Symbol
-                (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,tys,_))} :: _), _
-               when menv.env_red_info_same_meta.EcReduction.delta_p p -> begin
-              let op = EcEnv.Op.by_path p env in
-              match op.EcDecl.op_kind with
-              | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys)
-                           (form_of_expr mhr e) in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 11
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | EcDecl.OB_pred (Some (EcDecl.PR_Plain e)) ->
-                 let f = EcCoreFol.Fsubst.subst_tvar
-                           (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) e in
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i : %a" i 12
-                   (EcPrinting.pp_pattern ppe) (pat_form f)
-              | _ ->
-                 EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 13
-            end
-
+          match p1.p_node with
+          | Pat_Fun_Symbol
+                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,_tys,_))} :: args)
+               when is_some menv.env_red_info_match.EcReduction.logic
+                    && is_logical_op p ->
+             f p args;
+             EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 3
           | _ ->
-             EcEnv.notify env `Warning "hr- h_red_strat step %i : %i" i 7
+             EcEnv.notify env `Warning "hr- h_red_strat step %i : %i" i 5;
+          match p2.p_node with
+          | Pat_Fun_Symbol
+                 (Sym_Form_App _, { p_node = Pat_Axiom (Axiom_Op (p,_tys,_))} :: args)
+               when is_some menv.env_red_info_match.EcReduction.logic
+                    && is_logical_op p ->
+             f p args;
+             EcEnv.notify env `Warning "hr- h_red_strat step %i,%i" i 4
+          | _ ->
+             EcEnv.notify env `Warning "hr- h_red_strat step %i : %i" i 6
+
         end
       | _ ->
          EcEnv.notify env `Warning "hr- h_red_strat step %i" i
@@ -1383,7 +1371,7 @@ let rec process (e : engine) : nengine =
          let add_ident i x =
            EcIdent.create (String.concat "" ["s";string_of_int i]), x in
          let args = List.mapi add_ident pargs in
-         let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in
+         (* let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in *)
          let env_meta_restr_binds =
            odfl env.env_meta_restr_binds
              (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
@@ -1455,20 +1443,20 @@ let rec process (e : engine) : nengine =
        else let e = try_reduce e in next NoMatch e
 
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
-    | Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some ty) as b1)::bs), [p1]), _
+    | Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b1)::bs), [p1]), _
          when check_arrow e [b1] e.e_pattern2.p_ogty ->
        Debug.debug_which_rule e.e_env "eta-expansion 1";
-       let x = pat_local (EcIdent.create "_") ty in
+       let x = pat_local (EcIdent.create (EcIdent.tostring id)) ty in
        let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p1.p_ogty) in
        let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
        let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
        process { e with e_pattern1; e_pattern2 }
 
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
-    | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some ty) as b2)::bs), [p2])
+    | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b2)::bs), [p2])
          when check_arrow e [b2] e.e_pattern1.p_ogty ->
        Debug.debug_which_rule e.e_env "eta-expansion 1";
-       let x = pat_local (EcIdent.create "_") ty in
+       let x = pat_local (EcIdent.create (EcIdent.tostring id)) ty in
        let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p2.p_ogty) in
        let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
        let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
@@ -1790,6 +1778,10 @@ let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
 
 let search_eng e =
+  let s = psubst_of_menv e.e_env.env_match in
+  let e_pattern1 = Psubst.p_subst s e.e_pattern1 in
+  let e_pattern2 = Psubst.p_subst s e.e_pattern2 in
+  let e = { e with e_pattern1; e_pattern2; } in
   Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2;
   try
     let unienv = e.e_env.env_match.me_unienv in
@@ -1894,7 +1886,8 @@ let abstract_pattern b a =
 
 let pattern_of_form me f = abstract_pattern me.me_meta_vars (pat_form f)
 
-let pattern_of_memory me m = abstract_pattern me.me_meta_vars (pat_memory m)
+let pattern_of_memory me m =
+  abstract_pattern me.me_meta_vars (pat_memory m)
 
 let init_match_env ?mtch ?unienv ?metas () =
   { me_matches   = odfl Mid.empty mtch;

@@ -3029,14 +3029,15 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_ogty ppe) p.p_ogty
      | Sym_Form_If, _ -> assert false
 
-     | Sym_Form_App (Some _ty,_),op::args ->
-        Format.fprintf fmt "(@[%a@])"
+     | Sym_Form_App (Some _ty,i),op::args ->
+        Format.fprintf fmt "%s(@[%a@])"
+          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
           (pp_list "@ " (pp_pattern ppe)) (op::args)
-        (* Format.fprintf fmt "PApp%s(@[%a@])"
-         *   (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
-         *   (pp_list "@ " (pp_pattern ppe)) (op::args) *)
-     | Sym_Form_App (None,_),op::args ->
-        Format.fprintf fmt "(@[%a@])"
+        (* Format.fprintf fmt "PApp%s(@[%a@])" *)
+          (* (pp_list "@ " (pp_pattern ppe)) (op::args) *)
+     | Sym_Form_App (None,i),op::args ->
+        Format.fprintf fmt "%s(@[%a@])"
+          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
           (pp_list "@ " (pp_pattern ppe)) (op::args)
         (* Format.fprintf fmt "PApp%s(@[%a@])"
          *   (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")

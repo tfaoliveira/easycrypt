@@ -615,6 +615,7 @@ module Psubst = struct
        is_ty_subst_id s.ps_sty
     && Mid.is_empty   s.ps_patloc
 
+
   let p_subst_init ?sty () =
     { p_subst_id with ps_sty = odfl ty_subst_id sty; }
 
@@ -624,7 +625,7 @@ module Psubst = struct
 
   let p_bind_mem (s : p_subst) (m1 : memory) (m2 : memory) =
     let merge o = assert (o = None); Some (pat_memory m2) in
-    { s with ps_patloc = Mid.change merge m1 s.ps_patloc }
+    { s with ps_patloc = Mid.change merge m1 s.ps_patloc; }
 
   let p_bind_mod (s : p_subst) (x : ident) (m : mpath) =
     let merge o = assert (o = None); Some (pat_mpath m) in
@@ -654,7 +655,7 @@ module Psubst = struct
     { s with ps_patloc = Mid.remove n s.ps_patloc; }
 
   let p_rem_mem (s : p_subst) (m : memory) =
-    { s with ps_patloc = Mid.remove m s.ps_patloc }
+    { s with ps_patloc = Mid.remove m s.ps_patloc; }
 
   let p_rem_mod (s : p_subst) (m : ident) =
     let ps_patloc = Mid.remove m s.ps_patloc in
@@ -665,7 +666,7 @@ module Psubst = struct
     let ps_patloc =
       Mid.mapi (fun id a -> odfl a (omap pat_mpath (Mid.find_opt id smp)))
         ps_patloc in
-    { s with ps_patloc = ps_patloc; ps_sty = sty; }
+    { s with ps_patloc; ps_sty = sty; }
 
   (* ------------------------------------------------------------------------ *)
   let add_local (s : p_subst) (n,t as nt : ident * ty) =
@@ -772,8 +773,15 @@ module Psubst = struct
 
   let add_pbindings = List.map_fold add_pbinding
 
+
+  let change_id m n = match Mid.find_opt n m with
+    | Some { p_node = Pat_Meta_Name (_,n,_) }         -> n
+    | Some { p_node = Pat_Axiom (Axiom_Local (n,_)) } -> n
+    | _ -> n
+
   (* ------------------------------------------------------------------------ *)
-  let rec p_subst (s : p_subst) (p : pattern) =
+  let rec p_subst ?(keep_ho:bool=true) (s : p_subst) (p : pattern) =
+    let p_subst = p_subst ~keep_ho:false in
     let p = mk_pattern p.p_node (ogty_subst s p.p_ogty) in
     let p = match p.p_node with
       | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) p.p_ogty
@@ -781,6 +789,8 @@ module Psubst = struct
       | Pat_Red_Strat (p,f) ->
          let p = p_subst s p in mk_pattern (Pat_Red_Strat (p,f)) p.p_ogty
       | Pat_Meta_Name (op,name,ob) -> begin
+          let ob =
+            omap (List.map (fst_map (change_id s.ps_patloc))) ob in
           match Mid.find_opt name s.ps_patloc with
           | Some p -> p
           | None ->
@@ -815,8 +825,10 @@ module Psubst = struct
           | Sym_Form_If, [cond;p1;p2] ->
              let cond, p1, p2 = p_subst s cond, p_subst s p1, p_subst s p2 in
              p_if cond p1 p2
-          | Sym_Form_App (ty,ho), op::args ->
+          | Sym_Form_App (ty,ho), op::args when keep_ho ->
              p_app ~ho (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
+          | Sym_Form_App (ty,_), op::args when not keep_ho ->
+             p_app (p_subst s op) (List.map (p_subst s) args) (omap (ty_subst s.ps_sty) ty)
           | Sym_Form_Tuple, t ->
              p_tuple (List.map (p_subst s) t)
           | Sym_Form_Proj (i,ty), [p] ->
@@ -1027,13 +1039,13 @@ module Psubst = struct
       | Pat_Axiom _ -> None
       | Pat_Fun_Symbol (s,lp) ->
       match s,lp with
-      | Sym_Form_App (ty,ho),
+      | Sym_Form_App (ty,_ho),
         ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p) subst bs1 pargs1 in
-         Some (p_app ~ho (p_quant Llambda bs2 (p_subst subst p)) pargs2 ty)
+         Some (p_app (p_quant Llambda bs2 (p_subst ~keep_ho:false subst p)) pargs2 ty)
       | _ -> None
 
 end
@@ -1364,9 +1376,7 @@ let p_int_add_simpl_opt =
            (fun () -> i2 |> obind (try_addc^~ p1));
         ] in
 
-        ofdfl
-          (fun () -> None)
-          (List.Exceptionless.find_map (fun f -> Some (f ())) simpls)
+        List.Exceptionless.find_map (fun f -> f ()) simpls
 
 let p_int_add_simpl p1 p2 = odfl (p_int_add p1 p2) (p_int_add_simpl_opt p1 p2)
 
@@ -1508,9 +1518,7 @@ let p_real_add_simpl_opt (p1 : pattern) (p2 : pattern) =
          (fun () -> r2 |> obind (try_addc^~ p1));
        ] in
 
-     ofdfl
-       (fun () -> None)
-       (List.Exceptionless.find_map (fun f -> Some (f ())) simpls)
+     List.Exceptionless.find_map (fun f -> f ()) simpls
 
 let p_real_opp_simpl_opt (p : pattern) =
   match p_destr_app p with
@@ -1591,78 +1599,6 @@ and p_real_inv_simpl_opt p =
      with DestrError _ -> None
 
 (* -------------------------------------------------------------------------- *)
-let rec reduce_pat p = match p.p_node with
-  | Pat_Red_Strat _ | Pat_Sub _ | Pat_Or _ -> p
-  | Pat_Meta_Name (None, id, None) -> begin
-      match p.p_ogty with
-      | OGTty (Some ty) -> pat_form (f_local id ty)
-      | _ -> p
-    end
-  | Pat_Meta_Name _ -> p
-  | Pat_Axiom _ -> p
-  | Pat_Fun_Symbol (Sym_Form_If, [p1;p2;p3]) ->
-     p_if (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-  | Pat_Fun_Symbol (Sym_Form_App (ty,ho), pop::pargs) ->
-     p_app ~ho (reduce_pat pop) (List.map reduce_pat pargs) ty
-  | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
-     p_tuple (List.map reduce_pat t)
-  | Pat_Fun_Symbol (Sym_Form_Proj (i,ty), [p]) ->
-     p_proj (reduce_pat p) i ty
-  | Pat_Fun_Symbol (Sym_Form_Match ty, pop::l) ->
-     p_match (reduce_pat pop) ty (List.map reduce_pat l)
-  | Pat_Fun_Symbol (Sym_Form_Let lp, [p1;p2]) ->
-     p_let lp (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Form_Pvar ty, [p1;p2]) ->
-     p_pvar (reduce_pat p1) ty (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Form_Prog_var k, [p]) ->
-     p_prog_var (reduce_pat p) k
-  | Pat_Fun_Symbol (Sym_Form_Glob, [p1;p2]) ->
-     p_glob (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Form_Hoare_F, [p1;p2;p3]) ->
-     p_hoareF (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-  | Pat_Fun_Symbol (Sym_Form_Hoare_S, [p1;p2;p3;p4]) ->
-     p_hoareS (reduce_pat p1) (reduce_pat p2) (reduce_pat p3) (reduce_pat p4)
-  | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, [p1;p2;p3;p4;p5]) ->
-     p_bdHoareF (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-       (reduce_pat p4) (reduce_pat p5)
-  | Pat_Fun_Symbol (Sym_Form_bd_Hoare_S, [p1;p2;p3;p4;p5;p6]) ->
-     p_bdHoareS (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-       (reduce_pat p4) (reduce_pat p5) (reduce_pat p6)
-  | Pat_Fun_Symbol (Sym_Form_Equiv_F, [p1;p2;p3;p4]) ->
-     p_equivF (reduce_pat p1) (reduce_pat p2) (reduce_pat p3) (reduce_pat p4)
-  | Pat_Fun_Symbol (Sym_Form_Equiv_S, [p1;p2;p3;p4;p5;p6]) ->
-     p_equivS (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-       (reduce_pat p4) (reduce_pat p5) (reduce_pat p6)
-  | Pat_Fun_Symbol (Sym_Form_Eager_F, [p1;p2;p3;p4;p5;p6]) ->
-     p_eagerF (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-       (reduce_pat p4) (reduce_pat p5) (reduce_pat p6)
-  | Pat_Fun_Symbol (Sym_Form_Pr, [p1;p2;p3;p4]) ->
-     p_pr (reduce_pat p1) (reduce_pat p2) (reduce_pat p3) (reduce_pat p4)
-  | Pat_Fun_Symbol (Sym_Stmt_Seq, l) ->
-     p_stmt (List.map reduce_pat l)
-  | Pat_Fun_Symbol (Sym_Instr_Assign, [p1;p2]) ->
-     p_assign (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Instr_Sample, [p1;p2]) ->
-     p_sample (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Instr_Call, p1::pargs) ->
-     p_call None (reduce_pat p1) (List.map reduce_pat pargs)
-  | Pat_Fun_Symbol (Sym_Instr_Call_Lv, p0::p1::pargs) ->
-     p_call (Some (reduce_pat p0)) (reduce_pat p1) (List.map reduce_pat pargs)
-  | Pat_Fun_Symbol (Sym_Instr_If, [p1;p2;p3]) ->
-     p_instr_if (reduce_pat p1) (reduce_pat p2) (reduce_pat p3)
-  | Pat_Fun_Symbol (Sym_Instr_While, [p1;p2]) ->
-     p_while (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Instr_Assert, [p1]) ->
-     p_assert (reduce_pat p1)
-  | Pat_Fun_Symbol (Sym_Xpath, [p1;p2]) ->
-     p_xpath (reduce_pat p1) (reduce_pat p2)
-  | Pat_Fun_Symbol (Sym_Mpath, p1::pall) ->
-     p_mpath (reduce_pat p1) (List.map reduce_pat pall)
-  | Pat_Fun_Symbol (Sym_Quant (q,b), [p]) ->
-     p_quant q b (reduce_pat p)
-  | _ -> assert false
-
-(* -------------------------------------------------------------------------- *)
 let p_if_simpl_opt (p1 : pattern) (p2 : pattern) (p3 : pattern) =
   if p_equal p2 p3 then Some p2
   else match p_bool_val p1, p_bool_val p2, p_bool_val p3 with
@@ -1681,7 +1617,7 @@ let p_proj_simpl (p1 : pattern) (i : int) (ty : ty) =
   | _ -> p_proj p1 i ty
 
 let p_app_simpl_opt ?ho op pargs oty =
-  omap reduce_pat (p_betared_opt (reduce_pat (p_app ?ho op pargs oty)))
+  p_betared_opt (p_app ?ho op pargs oty)
 
 let p_app_simpl ?ho op pargs oty =
   odfl (p_app ?ho op pargs oty) (p_app_simpl_opt ?ho op pargs oty)
@@ -1786,6 +1722,14 @@ end
 module PReduction = struct
   open EcReduction
   open Psubst
+
+  let update_higher_order p =
+    let f p = match p.p_node with
+      | Pat_Fun_Symbol
+        (Sym_Form_App (ty,_), ({ p_node = Pat_Meta_Name _ } as p)::args) ->
+         p_app ~ho:MaybeHO p args ty
+      | _ -> p in
+    p_map f p
 
   let rec h_red_args
         (p_f : 'a -> pattern)
@@ -2092,11 +2036,11 @@ module PReduction = struct
        in p'
 
     (* δ-reduction *)
-    | Sym_Form_App (ty,ho),
+    | Sym_Form_App (ty,_ho),
       ({ p_node = Pat_Axiom (Axiom_Op (op,lty,_)) } as pop) :: args
          when is_delta_p ri pop ->
        let op = h_red_op_opt hyps ri s op lty in
-       omap (fun op -> p_app_simpl ~ho op args ty) op
+       omap (fun op -> update_higher_order (p_app_simpl op args ty)) op
 
     (* η-reduction *)
     | Sym_Quant (Llambda, (x, OGTty _)::binds),
