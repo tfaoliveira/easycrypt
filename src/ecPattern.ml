@@ -1763,13 +1763,13 @@ module PReduction = struct
     | _ -> false
 
   let reduce_local_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
-        (s : Psubst.p_subst) (id : Name.t) (ob : pbindings option) (ogty : ogty): pattern option =
+        (s : Psubst.p_subst) (p : pattern) (id : Name.t)
+        (ob : pbindings option) : pattern option =
     if ri.delta_h id
     then
       if is_none ob && EcEnv.LDecl.can_unfold id hyps then
          Some (pat_form (EcEnv.LDecl.unfold id hyps))
       else
-        let p = meta_var id ob ogty in
         let p' = Psubst.p_subst s p in
         if p_equal p p' then None else Some p'
     else None
@@ -1797,7 +1797,7 @@ module PReduction = struct
         (s : Psubst.p_subst) (p : pattern) =
     try
       match p.p_node with
-      | Pat_Meta_Name (_,n,ob) -> reduce_local_opt hyps ri s n ob p.p_ogty
+      | Pat_Meta_Name (_,n,ob) -> reduce_local_opt hyps ri s p n ob
       | Pat_Sub p -> omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
                        (h_red_pattern_opt hyps ri s p)
       | Pat_Or _ -> None
@@ -1812,23 +1812,23 @@ module PReduction = struct
 
       (* ζ-reduction *)
       | Sym_Form_App (ty,ho),
-        { p_node = (Pat_Meta_Name (None, id, ob)) ; p_ogty = ogty} :: pargs ->
+        ({ p_node = (Pat_Meta_Name (None, id, ob)) ; p_ogty = ogty} as p) :: pargs ->
          if ri.beta
-         then match reduce_local_opt hyps ri s id ob ogty with
+         then match reduce_local_opt hyps ri s p id ob with
               | None -> None
               | Some op -> Some (p_app_simpl ~ho op pargs ty)
          else omap (fun x -> p_app ~ho x pargs ty)
-                (reduce_local_opt hyps ri s id ob ogty)
+                (reduce_local_opt hyps ri s p id ob)
 
       (* ζ-reduction *)
       | Sym_Form_App (oty,ho),
-        { p_node = Pat_Axiom (Axiom_Local (id,ty))} :: pargs ->
+        ({ p_node = Pat_Axiom (Axiom_Local (id,ty))} as p) :: pargs ->
          if ri.beta
-         then match reduce_local_opt hyps ri s id None (OGTty (Some ty)) with
+         then match reduce_local_opt hyps ri s p id None with
               | None -> None
               | Some op -> Some (p_app_simpl ~ho op pargs oty)
          else omap (fun x -> p_app ~ho x pargs oty)
-                (reduce_local_opt hyps ri s id None (OGTty (Some ty)))
+                (reduce_local_opt hyps ri s p id None)
 
       (* ζ-reduction *)
       | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
@@ -2106,7 +2106,7 @@ module PReduction = struct
       | Axiom_Stmt stmt     -> h_red_stmt_opt hyps ri s stmt
       | Axiom_Lvalue lv     -> h_red_lvalue_opt hyps ri s lv
       | Axiom_Xpath x       -> h_red_xpath_opt hyps ri s x
-      | Axiom_Local (id,ty) -> h_red_local_opt hyps ri s id ty
+      | Axiom_Local (id,ty) -> reduce_local_opt hyps ri s (pat_axiom a) id None
       | Axiom_Int _         -> None
     with
     | EcEnv.NotReducible -> None
@@ -2172,13 +2172,6 @@ module PReduction = struct
          | Some p -> Some (p_xpath p (pat_op x.x_sub [] None))
          | None -> None
     else None
-
-  and h_red_local_opt hyps ri s id ty =
-    match reduce_local_opt hyps ri s id None (OGTty (Some ty)) with
-    | Some { p_ogty = ogty } as op ->
-       if ogty_equal (OGTty (Some ty)) ogty then op else None
-    | _ -> None
-
 
   let h_red_pattern_opt h r s p = match h_red_pattern_opt h r s p with
     | None -> None

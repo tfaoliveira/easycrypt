@@ -1378,61 +1378,67 @@ let rec process (e : engine) : nengine =
     (* FIXME *)
     | Pat_Fun_Symbol (Sym_Form_App (_, HO),
                       { p_node = Pat_Meta_Name(None, name, ob)}
-                      ::pargs), _ when pattern_is_higher_order_decidable pargs ->
+                      ::pargs), _ ->
        begin
          try
            Debug.debug_which_rule e.e_env "form : application : with higher order";
            let e = try_reduce e in
            (* higher order *)
            let env = saturate e.e_env in
-           (* let s = psubst_of_menv env.env_match in *)
-           (* let p_subst s p =
-            *   let p2 = Psubst.p_subst s p in
-            *   Debug.debug_subst env p p2;
-            *   p2 in *)
-           (* let pargs = List.map (p_subst s) pargs in *)
-           (* let pargs, env =
-            *   let meta_pargs = List.filter pattern_contain_meta_var pargs in
-            *   if meta_pargs <> [] then
-            *     let find_sub env p =
-            *       try let ne = process { e_env = env_copy env;
-            *                              e_pattern1 = mk_pattern (Pat_Sub p) OGTany;
-            *                              e_pattern2 = e.e_pattern2;
-            *                              e_continuation = ZTop; } in
-            *           ne.ne_env
-            *       with NoMatches -> env
-            *     in
-            *     let env = List.fold_left find_sub env meta_pargs in
-            *     let s = psubst_of_menv env.env_match in
-            *     List.map (Psubst.p_subst s) pargs, env
-            *   else pargs, env in *)
-           let add_ident i x =
-             EcIdent.create (String.concat "" ["s";string_of_int i]), x in
-           let args = List.mapi add_ident pargs in
-           (* let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in *)
-           let env_meta_restr_binds =
-             odfl env.env_meta_restr_binds
-               (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
-           let e = { e with e_env = { env with env_meta_restr_binds } } in
-           let abstract (e, p) arg =
-             Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
-             let env, p = abstract_opt e p ob arg in
-             { e with e_env = env}, p
-           in
-           let e', pat =
-             (* FIXME : add strategies to adapt the order of the arguments *)
-             List.fold_left abstract (e, e.e_pattern2) args in
-           EcUnify.UniEnv.restore ~src:e'.e_env.env_match.me_unienv
-             ~dst:e.e_env.env_match.me_unienv;
-           let f (name,p) = (name,p.p_ogty) in
-           let args = List.map f args in
-           let pat = p_quant Llambda args pat in
-           let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
-           let pat = p_subst s pat in
-           let m,e =
-             try let e = add_match e name pat ob in Match, e
-             with CannotUnify -> NoMatch, e
-           in next m e
+           let s = psubst_of_menv env.env_match in
+           let p_subst s p =
+             let p2 = Psubst.p_subst s p in
+             Debug.debug_subst env p p2;
+             p2 in
+           let pargs = List.map (p_subst s) pargs in
+           (* if not(pattern_is_higher_order_decidable pargs)
+            * then raise NoMatches
+            * else *)
+
+           let pargs, env =
+             (* let meta_pargs = List.filter pattern_contain_meta_var pargs in *)
+             let find_sub env p =
+               (* try  *)
+               let ne = process { e_env = env_copy env;
+                                  e_pattern1 = mk_pattern (Pat_Sub p) OGTany;
+                                  e_pattern2 = e.e_pattern2;
+                                  e_continuation = ZTop; } in
+               ne.ne_env
+                 (* with NoMatches -> env *)
+             in
+             let env = List.fold_left find_sub env pargs in
+             let s = psubst_of_menv env.env_match in
+             List.map (Psubst.p_subst s) pargs, env in
+           if not(pattern_is_higher_order_decidable pargs)
+           then raise NoMatches
+           else
+             let add_ident i x =
+               EcIdent.create (String.concat "" ["s";string_of_int i]), x in
+             let args = List.mapi add_ident pargs in
+             (* let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in *)
+             let env_meta_restr_binds =
+               odfl env.env_meta_restr_binds
+                 (omap (fun b -> Mid.add name b env.env_meta_restr_binds) ob) in
+             let e = { e with e_env = { env with env_meta_restr_binds } } in
+             let abstract (e, p) arg =
+               Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
+               let env, p = abstract_opt e p ob arg in
+               { e with e_env = env}, p
+             in
+             let e', pat =
+               (* FIXME : add strategies to adapt the order of the arguments *)
+               List.fold_left abstract (e, e.e_pattern2) args in
+             EcUnify.UniEnv.restore ~src:e'.e_env.env_match.me_unienv
+               ~dst:e.e_env.env_match.me_unienv;
+             let f (name,p) = (name,p.p_ogty) in
+             let args = List.map f args in
+             let pat = p_quant Llambda args pat in
+             let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
+             let pat = p_subst s pat in
+             let m,e =
+               try let e = add_match e name pat ob in Match, e
+               with CannotUnify -> NoMatch, e
+             in next m e
          with
          | NoMatches -> next NoMatch e
        end
