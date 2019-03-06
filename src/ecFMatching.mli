@@ -29,6 +29,7 @@ type verbose = {
     verbose_translate_error : bool;
     verbose_subst           : bool;
     verbose_unienv          : bool;
+    verbose_eta             : bool;
   }
 
 type environment = {

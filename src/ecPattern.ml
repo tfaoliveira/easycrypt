@@ -124,6 +124,15 @@ let olist_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   in aux [] l
 
 
+let olist_some (def : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list option =
+  let rec aux is_some accb = function
+    | []     -> if is_some then Some (List.rev accb) else None
+    | a :: r -> match f a with
+                | None   -> aux is_some ((def a)::accb) r
+                | Some b -> aux true (b::accb) r
+  in aux false [] l
+
+
 (* -------------------------------------------------------------------------- *)
 
 type map = pattern MName.t
@@ -1045,8 +1054,13 @@ module Psubst = struct
          let subst = p_subst_id in
          let subst =
            List.fold_left2 (fun s (id,_) p -> p_bind_local s id p) subst bs1 pargs1 in
-         Some (p_app (p_quant Llambda bs2 (p_subst ~keep_ho:false subst p)) pargs2 ty)
-      | _ -> None
+         let pop = p_subst ~keep_ho:false subst p in
+         let f pop = odfl pop (p_betared_opt pop) in
+         let pop = f pop in
+         let pargs2 = List.map f pargs2 in
+         Some (p_app (p_quant Llambda bs2 pop) pargs2 ty)
+      | s, lp ->
+         omap (pat_fun_symbol s) (olist_some (fun i -> i) p_betared_opt lp)
 
 end
 
@@ -1191,7 +1205,7 @@ let p_real_div (p1 : pattern) (p2 : pattern) =
   p_real_mul p1 (p_real_inv p2)
 
 (* -------------------------------------------------------------------------- *)
-let p_is_not = function
+let p_is_not p = match p with
   | { p_node = Pat_Axiom(Axiom_Op (op,[],ot)) } ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_not
      && odfl true (omap (ty_equal (toarrow [tbool] tbool)) ot)
@@ -1203,7 +1217,8 @@ let p_destr_not p = match p_destr_app p with
 
 (* -------------------------------------------------------------------------- *)
 let p_not_simpl_opt (p : pattern) =
-  if p_is_not p then Some (p_destr_not p)
+  let op, _ = p_destr_app p in
+  if p_is_not op then Some (p_destr_not p)
   else if p_is_true p then Some p_false
   else if p_is_false p then Some p_true
   else None
@@ -2043,11 +2058,12 @@ module PReduction = struct
        omap (fun op -> update_higher_order (p_app_simpl op args ty)) op
 
     (* η-reduction *)
-    | Sym_Quant (Llambda, (x, OGTty _)::binds),
+    | Sym_Quant (Llambda, (x, OGTty (Some t1))::binds),
       [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,ho), pn::pargs)}]
          when p_can_eta hyps x (pn, pargs) ->
        Some (p_quant Llambda binds
-               (p_app ~ho pn (List.take (List.length pargs - 1) pargs) ty))
+               (p_app ~ho pn (List.take (List.length pargs - 1) pargs)
+                  (omap (tfun t1) ty)))
 
     (* contextual rule - let *)
     | Sym_Form_Let lp, [p1;p2] ->

@@ -23,6 +23,7 @@ type verbose = {
     verbose_translate_error : bool;
     verbose_subst           : bool;
     verbose_unienv          : bool;
+    verbose_eta             : bool;
   }
 
 let no_verbose : verbose = {
@@ -39,6 +40,7 @@ let no_verbose : verbose = {
     verbose_translate_error = false;
     verbose_subst           = false;
     verbose_unienv          = false;
+    verbose_eta             = false;
   }
 
 let full_verbose : verbose = {
@@ -55,22 +57,24 @@ let full_verbose : verbose = {
     verbose_translate_error = true;
     verbose_subst           = true;
     verbose_unienv          = true;
+    verbose_eta             = true;
   }
 
 let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = true;
-    verbose_type            = false;
+    verbose_type            = true;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
     verbose_unienv          = false;
+    verbose_eta             = true;
   }
 
 let env_verbose = no_verbose
@@ -204,7 +208,7 @@ let zor e l =
 module Debug : sig
   val debug_h_red_strat              : environment -> pattern -> pattern -> int -> unit
   val debug_type                     : environment -> ty -> ty -> unit
-  val debug_ogty                     : environment -> pattern -> pattern -> unit
+  val debug_ogty                     : environment -> pattern -> pattern -> bool -> unit
   val debug_bind_restr               : environment -> ident -> unit
   val debug_add_match                : environment -> bool -> ident -> pattern -> unit
   val debug_higher_order_abstract_eq : environment -> bool -> pattern -> pattern -> unit
@@ -228,7 +232,17 @@ module Debug : sig
   val debug_eta_expansion            : environment -> meta_name -> ogty -> unit
   val debug_unienv                   : environment -> unit
   val debug_subst                    : environment -> pattern -> pattern -> unit
+  val debug_no_eta                   : environment -> pbinding -> pattern -> bool -> unit
 end = struct
+
+  let debug_no_eta menv (id,ogty) p b =
+    if menv.env_verbose.verbose_eta then
+      let env = LDecl.toenv menv.env_hyps in
+      (* let ppe = EcPrinting.PPEnv.ofenv env in *)
+
+      EcEnv.notify env `Warning
+        "--- eta could not be applied because of type restrictions"
+
 
   let debug_h_red_strat menv p1 p2 i =
     if menv.env_verbose.verbose_reduce then
@@ -361,7 +375,7 @@ end = struct
         (EcPrinting.pp_type ppe) ty1
         (EcPrinting.pp_type ppe) ty2
 
-  let debug_ogty menv p1 p2 =
+  let debug_ogty menv p1 p2 b =
     if menv.env_verbose.verbose_type then
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
@@ -371,8 +385,9 @@ end = struct
       let p1 = Psubst.p_subst s p1 in
 
       EcEnv.notify env `Warning
-        "-ot ogty : %a <?- %a"
+        "--- ogty: %a %s %a"
         (EcPrinting.pp_ogty ppe) p1.p_ogty
+        (if b then "=" else "!=")
         (EcPrinting.pp_ogty ppe) p2.p_ogty
 
   let debug_bind_restr menv x =
@@ -458,12 +473,12 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
-        "(%i) try match : %a : %a ?= %a : %a"
-        (match c with
-        | Zand (_,l,_) -> List.length l
-        | _ -> 0)
+        "(%i) try match : %a : %a"
+        (compute_zands 0 c)
         (EcPrinting.pp_pattern ppe) p
-        (EcPrinting.pp_ogty ppe) p.p_ogty
+        (EcPrinting.pp_ogty ppe) p.p_ogty;
+
+      EcEnv.notify env `Warning "with %a : %a"
         (EcPrinting.pp_pattern ppe) a
         (EcPrinting.pp_ogty ppe) a.p_ogty
 
@@ -591,8 +606,10 @@ end = struct
       EcEnv.notify env `Warning
         "========================= Begin new match ===========================";
 
-      EcEnv.notify env `Warning "=== %a ?= %a ==="
-        (EcPrinting.pp_pattern ppe) p
+      EcEnv.notify env `Warning "=== %a"
+        (EcPrinting.pp_pattern ppe) p;
+
+      EcEnv.notify env `Warning "=== %a ==="
         (EcPrinting.pp_pattern ppe) a
 
 
@@ -1058,6 +1075,7 @@ let h_red_strat env p1 p2 =
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
   let m  = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
+  let m  = Mid.set_diff m (env.env_match.me_meta_vars) in
 
   let check1 (x : ident) =
     let aout =
@@ -1184,10 +1202,11 @@ let parrow args t = parrow (List.rev args) t
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
+  let eq = EQ.ogty e.e_env e.e_pattern1.p_ogty e.e_pattern2.p_ogty in
   Debug.debug_try_match e.e_env e.e_pattern1 e.e_pattern2 e.e_continuation;
-  Debug.debug_ogty e.e_env e.e_pattern1 e.e_pattern2;
+  Debug.debug_ogty e.e_env e.e_pattern1 e.e_pattern2 eq;
   Debug.debug_unienv e.e_env;
-  if   not (EQ.ogty e.e_env e.e_pattern1.p_ogty e.e_pattern2.p_ogty)
+  if   not eq
   then next NoMatch e
   else
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
@@ -1452,6 +1471,26 @@ let rec process (e : engine) : nengine =
        let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
        process { e with e_pattern1; e_pattern2 }
 
+    (* eta-expansion in the case where the types of e_pattern1 is some tarrow *)
+    | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b2)::bs), [p2])
+         when check_arrow e [b2] e.e_pattern1.p_ogty ->
+       Debug.debug_which_rule e.e_env "eta-expansion 1";
+       let x = pat_local (EcIdent.create (EcIdent.tostring id)) ty in
+       let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p2.p_ogty) in
+       let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
+       let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
+       process { e with e_pattern1; e_pattern2 }
+
+    (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
+    | Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some _) as b1)::_), [_]), _ ->
+       Debug.debug_no_eta e.e_env b1 e.e_pattern2 (check_arrow e [b1] e.e_pattern2.p_ogty);
+       next NoMatch e
+
+    (* eta-expansion in the case where the types of e_pattern1 is some tarrow *)
+    | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some _) as b1)::_), [_]) ->
+       Debug.debug_no_eta e.e_env b1 e.e_pattern2 (check_arrow e [b1] e.e_pattern2.p_ogty);
+       next NoMatch e
+
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
     | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b2)::bs), [p2])
          when check_arrow e [b2] e.e_pattern1.p_ogty ->
@@ -1607,7 +1646,8 @@ and next_n (m : ismatch) (e : nengine) : nengine =
 
   | Match, ZTop   ->
      Debug.debug_found_match e.ne_env;
-     e
+     let ne_env = saturate e.ne_env in
+     { e with ne_env }
 
   | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : no match in named";
