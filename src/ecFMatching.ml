@@ -62,19 +62,19 @@ let full_verbose : verbose = {
 
 let debug_verbose : verbose = {
     verbose_match           = true;
-    verbose_rule            = true;
-    verbose_type            = true;
+    verbose_rule            = false;
+    verbose_type            = false;
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
     verbose_unienv          = false;
-    verbose_eta             = true;
+    verbose_eta             = false;
   }
 
 let env_verbose = no_verbose
@@ -473,12 +473,12 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning
-        "(%i) try match : %a : %a"
+        "---- (%i) try match : %a : %a"
         (compute_zands 0 c)
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_ogty ppe) p.p_ogty;
 
-      EcEnv.notify env `Warning "with %a : %a"
+      EcEnv.notify env `Warning "---- with %a : %a"
         (EcPrinting.pp_pattern ppe) a
         (EcPrinting.pp_ogty ppe) a.p_ogty
 
@@ -1058,12 +1058,12 @@ let h_red_strat env p1 p2 =
   let r   = env.env_red_info_match in
   (* let p1  = Psubst.p_subst s p1 in
    * let p2  = Psubst.p_subst s p2 in *)
-  match PReduction.h_red_pattern_opt h r s p1 with
+  match EcPReduction.h_red_pattern_opt h r s p1 with
   | Some p1 ->
      Debug.debug_h_red_strat env p1 p2 1;
      Some (p1, p2)
   | None ->
-     match PReduction.h_red_pattern_opt h r s p2 with
+     match EcPReduction.h_red_pattern_opt h r s p2 with
      | Some p2 ->
         Debug.debug_h_red_strat env p1 p2 2;
         Some (p1, p2)
@@ -1105,7 +1105,7 @@ let n_engine (e_pattern1) (e_pattern2 : pattern) (n : nengine) =
   }
 
 let sub_engine1 e p f =
-  e_copy { e with e_pattern1 = f; e_pattern2 = mk_pattern (Pat_Sub p) OGTany; }
+  e_copy { e with e_pattern2 = f; e_pattern1 = mk_pattern (Pat_Sub p) OGTany; }
 
 let omap_list (default : 'a -> 'b) (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   let rec aux acc there_is_Some = function
@@ -1844,6 +1844,7 @@ let search_eng e =
     let e' = process (e_copy e) in
     EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
     Debug.debug_unienv e'.ne_env;
+    Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
     Some e'
   with
   | NoMatches -> None

@@ -164,6 +164,9 @@ val p_tuple    : pattern list -> pattern
 val p_app      : ?ho:is_higher_order ->
                  pattern -> pattern list -> ty option -> pattern
 val p_quant    : quantif -> pbindings -> pattern -> pattern
+val p_lambda   : pbindings -> pattern -> pattern
+val p_exists   : pbindings -> pattern -> pattern
+val p_forall   : pbindings -> pattern -> pattern
 val p_pvar     : pattern -> ty -> pattern -> pattern
 val p_glob     : pattern -> pattern -> pattern
 val p_match    : pattern -> ty -> pattern list -> pattern
@@ -189,18 +192,49 @@ val p_stmt     : pattern list -> pattern
 (* -------------------------------------------------------------------- *)
 val p_var_form : EcIdent.t -> ty -> pattern
 
+val op_equal   : pattern -> form -> bool
+
 (* -------------------------------------------------------------------------- *)
 val p_destr_app : pattern -> pattern * pattern list
 
 (* -------------------------------------------------------------------------- *)
 val p_eq    : pattern -> pattern -> pattern
 val p_and   : pattern -> pattern -> pattern
+val p_anda  : pattern -> pattern -> pattern
 val p_ands  : pattern list -> pattern
+val p_not   : pattern -> pattern
+val p_imp   : pattern -> pattern -> pattern
+val p_or    : pattern -> pattern -> pattern
+val p_ora   : pattern -> pattern -> pattern
+val p_iff   : pattern -> pattern -> pattern
+
+val p_i0 : pattern
+val p_i1 : pattern
+val p_r0 : pattern
+val p_r1 : pattern
+
+val p_destr_int : pattern -> EcBigInt.zint
+val p_int       : EcBigInt.zint -> pattern
+val p_int_le    : pattern -> pattern -> pattern
+val p_int_lt    : pattern -> pattern -> pattern
+val p_int_opp   : pattern -> pattern
+val p_int_add   : pattern -> pattern -> pattern
+val p_int_mul   : pattern -> pattern -> pattern
+
+val p_destr_rint : pattern -> EcBigInt.zint
+val p_rint       : EcBigInt.zint -> pattern
+val p_real_le    : pattern -> pattern -> pattern
+val p_real_lt    : pattern -> pattern -> pattern
+val p_real_opp   : pattern -> pattern
+val p_real_add   : pattern -> pattern -> pattern
+val p_real_mul   : pattern -> pattern -> pattern
+val p_real_div   : pattern -> pattern -> pattern
+val p_real_inv   : pattern -> pattern
 
 
 (* -------------------------------------------------------------------------- *)
 val p_destr_app     : pattern -> pattern * pattern list
-val p_real_split    : pattern -> pattern * pattern
+(* val p_real_split    : pattern -> pattern * pattern *)
 
 
 val p_app_simpl : ?ho:is_higher_order ->
@@ -264,19 +298,19 @@ val default_name       : string
 
 (* -------------------------------------------------------------------------- *)
 
-module PReduction : sig
-
-  val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                          Psubst.p_subst -> pattern -> Name.t ->
-                          pbindings option -> pattern option
-
-  val p_can_eta         : EcEnv.LDecl.hyps -> EcIdent.Mid.key ->
-                          pattern * pattern list -> bool
-  val can_eta           : EcIdent.Mid.key -> EcFol.form * EcFol.form list ->
-                          bool
-
-  val h_red_pattern_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                          Psubst.p_subst -> pattern -> pattern option
-  val h_red_axiom_opt   : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                          Psubst.p_subst -> axiom -> pattern option
-end
+(* module PReduction : sig
+ *
+ *   val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+ *                           Psubst.p_subst -> pattern -> Name.t ->
+ *                           pbindings option -> pattern option
+ *
+ *   val p_can_eta         : EcEnv.LDecl.hyps -> EcIdent.Mid.key ->
+ *                           pattern * pattern list -> bool
+ *   val can_eta           : EcIdent.Mid.key -> EcFol.form * EcFol.form list ->
+ *                           bool
+ *
+ *   val h_red_pattern_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+ *                           Psubst.p_subst -> pattern -> pattern option
+ *   val h_red_axiom_opt   : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
+ *                           Psubst.p_subst -> axiom -> pattern option
+ * end *)
