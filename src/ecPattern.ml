@@ -157,7 +157,7 @@ let gty_of_ogty (ogty : ogty) = match ogty with
 
 (* -------------------------------------------------------------------------- *)
 
-let rec p_equal : pattern -> pattern -> bool = (=)
+let rec p_equal : pattern -> pattern -> bool = (==)
 
 let ogty_equal o1 o2 = match o1, o2 with
   | OGTany, _ | _, OGTany -> true
