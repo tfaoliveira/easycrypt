@@ -28,19 +28,19 @@ type pbinding  = ident * ogty
 type pbindings = pbinding list
 
 type axiom =
-  | Axiom_Int       of EcBigInt.zint
-  | Axiom_Local     of ident * ty
-  | Axiom_Op        of path * ty list * ty option
+  | Axiom_Int         of EcBigInt.zint
+  | Axiom_Local       of ident * ty
+  | Axiom_Op          of bool * path * ty list * ty option
 
-  | Axiom_Memory    of memory
-  | Axiom_MemEnv    of memenv
-  | Axiom_Prog_Var  of prog_var
-  | Axiom_Mpath_top of mpath_top
-  | Axiom_Mpath     of mpath
-  | Axiom_Stmt      of stmt
-  | Axiom_Lvalue    of lvalue
-  | Axiom_Xpath     of xpath
-  | Axiom_Hoarecmp  of hoarecmp
+  | Axiom_Memory      of memory
+  | Axiom_MemEnv      of memenv
+  | Axiom_Prog_Var    of prog_var
+  | Axiom_Mpath_top   of mpath_top
+  | Axiom_Mpath       of mpath
+  | Axiom_Stmt        of stmt
+  | Axiom_Lvalue      of lvalue
+  | Axiom_Xpath       of xpath
+  | Axiom_Hoarecmp    of hoarecmp
 
 type is_higher_order =
   | MaybeHO
@@ -129,20 +129,20 @@ val meta_var       : meta_name -> pbindings option -> ogty -> pattern
 
 val axiom_mpath   : mpath -> axiom
 
-val pat_form      : form            -> pattern
-val pat_int       : EcBigInt.zint   -> pattern
-val pat_mpath     : mpath           -> pattern
-val pat_mpath_top : mpath_top       -> pattern
-val pat_xpath     : xpath           -> pattern
-val pat_lvalue    : lvalue          -> pattern
-val pat_instr     : instr           -> pattern
-val pat_stmt      : stmt            -> pattern
-val pat_local     : ident -> ty     -> pattern
-val pat_pv        : prog_var        -> pattern
-val pat_memory    : EcMemory.memory -> pattern
-val pat_memenv    : EcMemory.memenv -> pattern
-val pat_cmp       : hoarecmp        -> pattern
-val pat_op        : path -> ty list -> ty option -> pattern
+val pat_form        : form            -> pattern
+val pat_int         : EcBigInt.zint   -> pattern
+val pat_mpath       : mpath           -> pattern
+val pat_mpath_top   : mpath_top       -> pattern
+val pat_xpath       : xpath           -> pattern
+val pat_lvalue      : lvalue          -> pattern
+val pat_instr       : instr           -> pattern
+val pat_stmt        : stmt            -> pattern
+val pat_local       : ident -> ty     -> pattern
+val pat_pv          : prog_var        -> pattern
+val pat_memory      : EcMemory.memory -> pattern
+val pat_memenv      : EcMemory.memenv -> pattern
+val pat_cmp         : hoarecmp        -> pattern
+val pat_op          : ?delta:bool -> path -> ty list -> ty option -> pattern
 
 (* -------------------------------------------------------------------------- *)
 
@@ -297,20 +297,3 @@ val default_end_name   : string
 val default_name       : string
 
 (* -------------------------------------------------------------------------- *)
-
-(* module PReduction : sig
- *
- *   val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
- *                           Psubst.p_subst -> pattern -> Name.t ->
- *                           pbindings option -> pattern option
- *
- *   val p_can_eta         : EcEnv.LDecl.hyps -> EcIdent.Mid.key ->
- *                           pattern * pattern list -> bool
- *   val can_eta           : EcIdent.Mid.key -> EcFol.form * EcFol.form list ->
- *                           bool
- *
- *   val h_red_pattern_opt : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
- *                           Psubst.p_subst -> pattern -> pattern option
- *   val h_red_axiom_opt   : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
- *                           Psubst.p_subst -> axiom -> pattern option
- * end *)

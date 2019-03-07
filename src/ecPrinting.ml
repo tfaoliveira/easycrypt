@@ -2985,9 +2985,9 @@ let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_MemEnv _ -> assert false
   | Axiom_Prog_Var pv ->
      pp_pv ppe fmt pv
-  | Axiom_Op (p,lty,Some ty) ->
+  | Axiom_Op (_, p,lty,Some ty) ->
      pp_form ppe fmt (f_op p lty ty)
-  | Axiom_Op (p,_,None) ->
+  | Axiom_Op (_, p,_,None) ->
      pp_path fmt p
      (* Format.fprintf fmt "Op(%a)" pp_path path *)
   | Axiom_Mpath_top m ->

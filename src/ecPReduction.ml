@@ -11,14 +11,14 @@ open Psubst
 
 
 let rec p_is_true p = match p_destr_app p with
-  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
+  | { p_node = Pat_Axiom(Axiom_Op (_,op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_true
      && odfl true (omap (ty_equal tbool) ty)
   (* | pop, [t] -> op_equal pop fop_not && p_is_false t *)
   | _ -> false
 
 and p_is_false p = match p_destr_app p with
-  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
+  | { p_node = Pat_Axiom(Axiom_Op (_,op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_false
      && odfl true (omap (ty_equal tbool) ty)
   (* | pop, [t] -> op_equal pop fop_not && p_is_true t *)
@@ -31,7 +31,7 @@ let p_bool_val p =
 
 (* -------------------------------------------------------------------------- *)
 let p_is_not p = match p with
-  | { p_node = Pat_Axiom(Axiom_Op (op,[],ot)) } ->
+  | { p_node = Pat_Axiom(Axiom_Op (_,op,[],ot)) } ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_not
      && odfl true (omap (ty_equal (toarrow [tbool] tbool)) ot)
   | _ -> false
@@ -125,8 +125,8 @@ let rec p_eq_simpl_opt (p1 : pattern) (p2 : pattern) =
   else match p1.p_node, p2.p_node with
   | Pat_Axiom (Axiom_Int _), Pat_Axiom (Axiom_Int _) -> Some p_false
 
-  | Pat_Axiom (Axiom_Op (op1, [], _) ),
-    Pat_Axiom (Axiom_Op (op2, [], _) )
+  | Pat_Axiom (Axiom_Op (_, op1, [], _) ),
+    Pat_Axiom (Axiom_Op (_, op2, [], _) )
        when
          (EcPath.p_equal op1 EcCoreLib.CI_Bool.p_true  &&
           EcPath.p_equal op2 EcCoreLib.CI_Bool.p_false  )
@@ -509,7 +509,7 @@ let rec h_red_args
 
 let rec p_is_record (hyps : EcEnv.LDecl.hyps) (p : pattern) =
   match p_destr_app p with
-  | { p_node = Pat_Axiom (Axiom_Op (p,_,_)) }, _ ->
+  | { p_node = Pat_Axiom (Axiom_Op (_, p,_,_)) }, _ ->
      EcEnv.Op.is_record_ctor (EcEnv.LDecl.toenv hyps) p
   | _ -> false
 
@@ -526,7 +526,7 @@ let reduce_local_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
   else None
 
 let is_delta_p ri pop = match pop.p_node with
-  | Pat_Axiom (Axiom_Op (op, _, _)) -> ri.delta_p op
+  | Pat_Axiom (Axiom_Op (delta, op, _, _)) -> delta && ri.delta_p op
   | _ -> false
 
 let can_eta x (f, args) =
@@ -607,7 +607,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* ι-reduction (records projection) *)
        | Sym_Form_App (oty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (op, _, _)) } as p1) :: pargs
+         ({ p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) } as p1) :: pargs
             when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
            let op =
              match pargs with
@@ -616,7 +616,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                  | { p_node =
                        Pat_Fun_Symbol
                          (Sym_Form_App _,
-                          { p_node = Pat_Axiom (Axiom_Op (mkp,_,_))} :: pargs)} ->
+                          { p_node = Pat_Axiom (Axiom_Op (_, mkp,_,_))} :: pargs)} ->
                     if not (EcEnv.Op.is_record_ctor (EcEnv.LDecl.toenv hyps) mkp)
                     then None
                     else
@@ -655,7 +655,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* ι-reduction (match-fix) *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (op, lty, _)) } as p1) :: args
+         ({ p_node = Pat_Axiom (Axiom_Op (_, op, lty, _)) } as p1) :: args
             when ri.iota
                  && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
            try
@@ -669,7 +669,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                  let v = pargs.(v) in
                  let v = odfl v (h_red_pattern_opt hyps ri s v) in
                  match p_destr_app v with
-                 | { p_node = Pat_Axiom (Axiom_Op (op, _, _)) }, cargs
+                 | { p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) }, cargs
                       when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op -> begin
                      let idx = EcEnv.Op.by_path op (EcEnv.LDecl.toenv hyps) in
                      let idx = snd (EcDecl.operator_as_ctor idx) in
@@ -742,7 +742,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* logical reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (op, tys, _))} as fo) :: args
+         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
           let pcompat =
@@ -773,8 +773,8 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             | Some (`Real_inv ), [f]     -> p_real_inv_simpl_opt f
             | Some (`Eq       ), [f1;f2] -> begin
                 match (p_destr_app f1), (p_destr_app f2) with
-                | ({ p_node = Pat_Axiom (Axiom_Op (op1, _, _))}, args1),
-                  ({ p_node = Pat_Axiom (Axiom_Op (op2, _, _))}, args2)
+                | ({ p_node = Pat_Axiom (Axiom_Op (_, op1, _, _))}, args1),
+                  ({ p_node = Pat_Axiom (Axiom_Op (_, op2, _, _))}, args2)
                      when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op1
                           && EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op2 ->
 
@@ -809,8 +809,8 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (op,lty,_)) } as pop) :: args
-            when is_delta_p ri pop ->
+         ({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) } as pop) :: args
+            when delta && is_delta_p ri pop ->
           let op = h_red_op_opt hyps ri s op lty in
           omap (fun op -> update_higher_order (p_app_simpl op args ty)) op
 
@@ -857,7 +857,7 @@ and h_red_axiom_opt hyps ri s (a : axiom) =
       | Axiom_Memory m      -> h_red_mem_opt hyps ri s m
       | Axiom_MemEnv m      -> h_red_memenv_opt hyps ri s m
       | Axiom_Prog_Var pv   -> h_red_prog_var_opt hyps ri s pv
-      | Axiom_Op (op,lty,_) -> h_red_op_opt hyps ri s op lty
+      | Axiom_Op (b,op,l,_) -> if b then h_red_op_opt hyps ri s op l else None
       | Axiom_Mpath_top m   -> h_red_mpath_top_opt hyps ri s m
       | Axiom_Mpath m       -> h_red_mpath_opt hyps ri s m
       | Axiom_Stmt stmt     -> h_red_stmt_opt hyps ri s stmt

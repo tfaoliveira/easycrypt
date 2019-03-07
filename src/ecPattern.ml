@@ -35,19 +35,19 @@ type reduction_strategy =
   EcReduction.reduction_info * EcReduction.reduction_info
 
 type axiom =
-  | Axiom_Int       of EcBigInt.zint
-  | Axiom_Local     of ident * ty
-  | Axiom_Op        of path * ty list * ty option
+  | Axiom_Int         of EcBigInt.zint
+  | Axiom_Local       of ident * ty
+  | Axiom_Op          of bool * path * ty list * ty option
 
-  | Axiom_Memory    of memory
-  | Axiom_MemEnv    of memenv
-  | Axiom_Prog_Var  of prog_var
-  | Axiom_Mpath_top of mpath_top
-  | Axiom_Mpath     of mpath
-  | Axiom_Stmt      of stmt
-  | Axiom_Lvalue    of lvalue
-  | Axiom_Xpath     of xpath
-  | Axiom_Hoarecmp  of hoarecmp
+  | Axiom_Memory      of memory
+  | Axiom_MemEnv      of memenv
+  | Axiom_Prog_Var    of prog_var
+  | Axiom_Mpath_top   of mpath_top
+  | Axiom_Mpath       of mpath
+  | Axiom_Stmt        of stmt
+  | Axiom_Lvalue      of lvalue
+  | Axiom_Xpath       of xpath
+  | Axiom_Hoarecmp    of hoarecmp
 
 type is_higher_order =
   | MaybeHO
@@ -172,15 +172,15 @@ let ogty_equal o1 o2 = match o1, o2 with
 
 let op_equal (p1 : pattern) (op : form) =
   match p1, op with
-  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1, Some ty1)) },
+  | { p_node = Pat_Axiom (Axiom_Op (_, op1, lty1, Some ty1)) },
     { f_node = Fop (op2, lty2); f_ty = ty2 } ->
      ty_equal ty1 ty2 && EcPath.p_equal op1 op2
                       && List.for_all2 ty_equal lty1 lty2
-  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1, None)); p_ogty = OGTty (Some ty1) },
+  | { p_node = Pat_Axiom (Axiom_Op (_, op1, lty1, None)); p_ogty = OGTty (Some ty1) },
     { f_node = Fop (op2, lty2); f_ty = ty2 } ->
      ty_equal ty1 ty2 && EcPath.p_equal op1 op2
                       && List.for_all2 ty_equal lty1 lty2
-  | { p_node = Pat_Axiom (Axiom_Op (op1, lty1, _)); p_ogty = OGTty None },
+  | { p_node = Pat_Axiom (Axiom_Op (_, op1, lty1, _)); p_ogty = OGTty None },
     { f_node = Fop (op2, lty2) } ->
      EcPath.p_equal op1 op2 && List.for_all2 ty_equal lty1 lty2
   | _ -> false
@@ -190,10 +190,8 @@ let axiom_equal (a1 : axiom) (a2 : axiom) =
   | Axiom_Int z1, Axiom_Int z2 -> EcBigInt.equal z1 z2
   | Axiom_Local (id1,ty1), Axiom_Local (id2,ty2) ->
      id_equal id1 id2 && ty_equal ty1 ty2
-  | Axiom_Op (op1,lty1,Some t1), Axiom_Op (op2,lty2,Some t2) ->
+  | Axiom_Op (_,op1,lty1,Some t1), Axiom_Op (_,op2,lty2,Some t2) ->
      EcPath.p_equal op1 op2 && List.for_all2 ty_equal (t1::lty1) (t2::lty2)
-  | Axiom_Op (op1,lty1,_), Axiom_Op (op2,lty2,_) ->
-     EcPath.p_equal op1 op2 && List.for_all2 ty_equal lty1 lty2
   | Axiom_Memory m1, Axiom_Memory m2 -> EcMemory.mem_equal m1 m2
   | Axiom_MemEnv m1, Axiom_MemEnv m2 -> EcMemory.me_equal m1 m2
   | Axiom_Prog_Var pv1, Axiom_Prog_Var pv2 -> pv_equal pv1 pv2
@@ -234,7 +232,7 @@ let pat_memenv m    = mk_pattern (Pat_Axiom (Axiom_MemEnv m))      (OGTmem (Some
 let pat_mpath m     = mk_pattern (Pat_Axiom (Axiom_Mpath m))       (OGTmodty None)
 let pat_mpath_top m = mk_pattern (Pat_Axiom (Axiom_Mpath_top m))   (OGTmodty None)
 let pat_xpath x     = mk_pattern (Pat_Axiom (Axiom_Xpath x))       OGTxpath
-let pat_op op lty o = mk_pattern (Pat_Axiom (Axiom_Op (op,lty,o))) (OGTty o)
+let pat_op ?(delta:bool=true) op lty o = mk_pattern (Pat_Axiom (Axiom_Op (delta,op,lty,o))) (OGTty o)
 let pat_lvalue lv   = mk_pattern (Pat_Axiom (Axiom_Lvalue lv))     OGTlv
 let pat_stmt s      = mk_pattern (Pat_Axiom (Axiom_Stmt s))        OGTstmt
 let pat_local id ty = mk_pattern (Pat_Axiom (Axiom_Local (id,ty))) (OGTty (Some ty))
@@ -251,18 +249,18 @@ let meta_var name ob ogty =
 
 
 let pat_axiom x = match x with
-  | Axiom_Int       z      -> pat_int z
-  | Axiom_Memory    m      -> pat_memory m
-  | Axiom_MemEnv    m      -> pat_memenv m
-  | Axiom_Prog_Var  pv     -> pat_pv pv
-  | Axiom_Op      (op,l,o) -> pat_op op l o
-  | Axiom_Mpath_top mt     -> pat_mpath_top mt
-  | Axiom_Mpath     m      -> pat_mpath m
-  | Axiom_Stmt      s      -> pat_stmt s
-  | Axiom_Lvalue    lv     -> pat_lvalue lv
-  | Axiom_Xpath     xp     -> pat_xpath xp
-  | Axiom_Hoarecmp  cmp    -> pat_cmp cmp
-  | Axiom_Local     (x,t)  -> pat_local x t
+  | Axiom_Int          z       -> pat_int z
+  | Axiom_Memory       m       -> pat_memory m
+  | Axiom_MemEnv       m       -> pat_memenv m
+  | Axiom_Prog_Var     pv      -> pat_pv pv
+  | Axiom_Op        (b,op,l,o) -> pat_op ~delta:b op l o
+  | Axiom_Mpath_top    mt      -> pat_mpath_top mt
+  | Axiom_Mpath        m       -> pat_mpath m
+  | Axiom_Stmt         s       -> pat_stmt s
+  | Axiom_Lvalue       lv      -> pat_lvalue lv
+  | Axiom_Xpath        xp      -> pat_xpath xp
+  | Axiom_Hoarecmp     cmp     -> pat_cmp cmp
+  | Axiom_Local        (x,t)   -> pat_local x t
 
 let get_tys (b : bindings) =
   let rec aux acc = function
@@ -818,14 +816,14 @@ module Psubst = struct
           | Axiom_Memory m -> mem_subst s m
           | Axiom_MemEnv m -> memenv_subst s m
           | Axiom_Prog_Var pv -> pv_subst s pv
-          | Axiom_Op (op,lty,ot) ->
+          | Axiom_Op (delta,op,lty,ot) ->
              let ot = omap (ty_subst s.ps_sty) ot in
              let lty = List.Smart.map (ty_subst s.ps_sty) lty in
              let oty = match ot, p.p_ogty with
                | Some _, _ -> ot
                | None, OGTty (Some ty) -> Some (ty_subst s.ps_sty ty)
                | _ -> None in
-             pat_op op lty oty
+             pat_op ~delta op lty oty
           | Axiom_Stmt st -> stmt_subst s st
           | Axiom_Lvalue lv -> lv_subst s lv
           | Axiom_Hoarecmp _ -> p
