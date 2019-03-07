@@ -829,7 +829,11 @@ module Psubst = struct
           | Axiom_Stmt st -> stmt_subst s st
           | Axiom_Lvalue lv -> lv_subst s lv
           | Axiom_Hoarecmp _ -> p
-          | Axiom_Local (id,_) -> odfl p (Mid.find_opt id s.ps_patloc)
+          | Axiom_Local (id,ty) -> begin
+             match Mid.find_opt id s.ps_patloc with
+             | Some p -> p
+             | None -> pat_local id (ty_subst s.ps_sty ty)
+            end
         end
       | Pat_Fun_Symbol (sym,lp) -> begin
           match sym,lp with
