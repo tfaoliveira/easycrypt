@@ -73,7 +73,7 @@ let debug_verbose : verbose = {
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
-    verbose_unienv          = true;
+    verbose_unienv          = false;
     verbose_eta             = false;
   }
 
@@ -1643,6 +1643,24 @@ let rec process (e : engine) : nengine =
                  e_pattern1 = pat_op x.x_sub [] None;
                  e_continuation = Zand ([],zand,e.e_continuation); }
        end
+
+    | Pat_Fun_Symbol
+        (Sym_Form_App _,
+         { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_), _ -> begin
+       match p_betared_opt e.e_pattern1 with
+       | Some e_pattern1 ->
+          process { e with e_pattern1 }
+       | None -> next NoMatch e
+      end
+
+    | _, Pat_Fun_Symbol
+           (Sym_Form_App _,
+            { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_) -> begin
+       match p_betared_opt e.e_pattern2 with
+       | Some e_pattern2 ->
+          process { e with e_pattern2 }
+       | None -> next NoMatch e
+      end
 
     | _ ->
        begin Debug.debug_which_rule e.e_env "default";

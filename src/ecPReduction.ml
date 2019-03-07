@@ -14,14 +14,14 @@ let rec p_is_true p = match p_destr_app p with
   | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_true
      && odfl true (omap (ty_equal tbool) ty)
-  | pop, [t] -> op_equal pop fop_not && p_is_false t
+  (* | pop, [t] -> op_equal pop fop_not && p_is_false t *)
   | _ -> false
 
 and p_is_false p = match p_destr_app p with
   | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_false
      && odfl true (omap (ty_equal tbool) ty)
-  | pop, [t] -> op_equal pop fop_not && p_is_true t
+  (* | pop, [t] -> op_equal pop fop_not && p_is_true t *)
   | _ -> false
 
 let p_bool_val p =
@@ -562,23 +562,21 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* ζ-reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = (Pat_Meta_Name (None, id, ob)) ; p_ogty = _ogty} as p) :: pargs ->
-          if ri.beta
-          then match reduce_local_opt hyps ri s p id ob with
-               | None -> None
-               | Some op -> Some (p_app_simpl ~ho op pargs ty)
-          else omap (fun x -> p_app ~ho x pargs ty)
-                 (reduce_local_opt hyps ri s p id ob)
+         ({ p_node = (Pat_Meta_Name (None, id, ob))} as p) :: pargs
+            when ri.zeta -> begin
+           match reduce_local_opt hyps ri s p id ob with
+           | None -> None
+           | Some op -> Some (p_app_simpl ~ho op pargs ty)
+         end
 
        (* ζ-reduction *)
        | Sym_Form_App (oty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Local (id,_ty))} as p) :: pargs ->
-          if ri.beta
-          then match reduce_local_opt hyps ri s p id None with
-               | None -> None
-               | Some op -> Some (p_app_simpl ~ho op pargs oty)
-          else omap (fun x -> p_app ~ho x pargs oty)
-                 (reduce_local_opt hyps ri s p id None)
+         ({ p_node = Pat_Axiom (Axiom_Local (id,_))} as p) :: pargs
+            when ri.zeta -> begin
+           match reduce_local_opt hyps ri s p id None with
+           | None -> None
+           | Some op -> Some (p_app_simpl ~ho op pargs oty)
+         end
 
        (* ζ-reduction *)
        | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
@@ -607,8 +605,8 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
           Some (Psubst.p_subst subst p2)
 
        (* ι-reduction (records projection) *)
-       | Sym_Form_App (_,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (op, _, Some fty)) } as p1) :: pargs
+       | Sym_Form_App (oty,ho),
+         ({ p_node = Pat_Axiom (Axiom_Op (op, _, _)) } as p1) :: pargs
             when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
            let op =
              match pargs with
@@ -635,7 +633,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
              | _ -> None
            in match op with
               | None ->
-                 omap (fun x -> p_app ~ho x pargs (Some fty))
+                 omap (fun x -> p_app ~ho x pargs oty)
                    (h_red_pattern_opt hyps ri s p1)
               | _ -> op
          end
@@ -743,7 +741,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* logical reduction *)
        | Sym_Form_App (ty,ho),
-         { p_node = Pat_Axiom (Axiom_Op (op, tys, _))} :: args
+         ({ p_node = Pat_Axiom (Axiom_Op (op, tys, _))} as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
           let pcompat =
@@ -798,7 +796,15 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
               end
 
             | _ -> Some p
-          in p'
+          in
+          begin
+            match p' with
+            | Some p -> Some p
+            | _ -> omap
+                     (fun x -> p_app fo x ty)
+                     (h_red_args (fun x -> x) h_red_pattern_opt
+                        hyps ri s args)
+          end
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),

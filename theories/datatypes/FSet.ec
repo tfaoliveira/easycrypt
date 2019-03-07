@@ -208,7 +208,7 @@ proof. by apply/fsetP=> x; rewrite in_filter in_fset0. qed.
 lemma filter1 (p : 'a -> bool) (a : 'a):
   filter p (fset1 a) = if (p a) then fset1 a else fset0.
 proof.
-apply/fsetP=> x; rewrite in_filter fun_if2 in_fset1 in_fset0.
+apply/fsetP=> x; rewrite in_filter fun_if2 /= in_fset1 in_fset0.
 by case (x = a).
 qed.
 
@@ -233,7 +233,7 @@ proof. by apply/fsetP=> x; rewrite in_fset0 in_filter. qed.
 lemma filter_pred1 (a : 'a) (A : 'a fset):
   filter (pred1 a) A = if mem A a then fset1 a else fset0.
 proof.
-by apply/fsetP=> x; rewrite in_filter fun_if2 !inE; case (x = a)=> ->.
+by apply/fsetP=> x; rewrite in_filter fun_if2 /= !inE; case (x = a)=> ->.
 qed.
 
 lemma filter_mem (A B : 'a fset): filter (mem A) B = A `&` B.
@@ -326,7 +326,7 @@ proof. by rewrite fsetIC fset0I. qed.
 lemma fset1I (x : 'a) (D : 'a fset):
   fset1 x `&` D = if mem D x then fset1 x else fset0.
 proof.
-by apply/fsetP=> y; rewrite fun_if2 !inE; case: (mem D x); case: (y = x).
+by apply/fsetP=> y; rewrite fun_if2 /= !inE; case: (mem D x); case: (y = x).
 qed.
 
 lemma fsetI1 (x : 'a) (D : 'a fset):
@@ -389,7 +389,7 @@ proof. by apply/fsetP=> x; rewrite !inE. qed.
 lemma fset1D (x : 'a) (D : 'a fset):
   fset1 x `\` D = if mem D x then fset0 else fset1 x.
 proof.
-by apply/fsetP=> y; rewrite fun_if2 !inE; case: (mem D x); case: (y = x).
+by apply/fsetP=> y; rewrite fun_if2 /= !inE; case: (mem D x); case: (y = x).
 qed.
 
 lemma fsetDv (A : 'a fset) : A `\` A = fset0.
