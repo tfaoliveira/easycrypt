@@ -10,16 +10,18 @@ open Psubst
 
 
 
-let p_is_true = function
-  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) } ->
+let rec p_is_true p = match p_destr_app p with
+  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_true
      && odfl true (omap (ty_equal tbool) ty)
+  | pop, [t] -> op_equal pop fop_not && p_is_false t
   | _ -> false
 
-let p_is_false = function
-  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) } ->
+and p_is_false p = match p_destr_app p with
+  | { p_node = Pat_Axiom(Axiom_Op (op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_false
      && odfl true (omap (ty_equal tbool) ty)
+  | pop, [t] -> op_equal pop fop_not && p_is_true t
   | _ -> false
 
 let p_bool_val p =

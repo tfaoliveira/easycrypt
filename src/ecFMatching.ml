@@ -1398,13 +1398,13 @@ let rec process (e : engine) : nengine =
            let pargs, env =
              (* let meta_pargs = List.filter pattern_contain_meta_var pargs in *)
              let find_sub env p =
-               (* try  *)
-               let ne = process { e_env = env_copy env;
-                                  e_pattern1 = mk_pattern (Pat_Sub p) OGTany;
-                                  e_pattern2 = e.e_pattern2;
-                                  e_continuation = ZTop; } in
-               ne.ne_env
-                 (* with NoMatches -> env *)
+               try
+                 let ne = process { e_env = env_copy env;
+                                    e_pattern1 = mk_pattern (Pat_Sub p) OGTany;
+                                    e_pattern2 = e.e_pattern2;
+                                    e_continuation = ZTop; } in
+                 ne.ne_env
+               with NoMatches -> env
              in
              let env = List.fold_left find_sub env pargs in
              let s = psubst_of_menv env.env_match in
