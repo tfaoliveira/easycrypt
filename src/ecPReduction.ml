@@ -459,8 +459,9 @@ let p_real_mul_simpl_opt e p1 p2 =
 
 (* -------------------------------------------------------------------------- *)
 let p_if_simpl_opt (p1 : pattern) (p2 : pattern) (p3 : pattern) =
-  if p_equal p2 p3 then Some p2
-  else match p_bool_val p1, p_bool_val p2, p_bool_val p3 with
+  (* if p_equal p2 p3 then Some p2
+   * else  *)
+    match p_bool_val p1, p_bool_val p2, p_bool_val p3 with
   | Some true, _, _  -> Some p2
   | Some false, _, _ -> Some p3
   | _, Some true, _  -> Some (p_imp_simpl (p_not_simpl p1) p3)

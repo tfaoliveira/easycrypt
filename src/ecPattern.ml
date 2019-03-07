@@ -803,7 +803,7 @@ module Psubst = struct
           let ob =
             omap (List.map (fst_map (change_id s.ps_patloc))) ob in
           match Mid.find_opt name s.ps_patloc with
-          | Some p -> p
+          | Some p -> pat_meta p name ob
           | None ->
           match op with
           | None -> meta_var name ob p.p_ogty

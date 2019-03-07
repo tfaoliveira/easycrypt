@@ -1169,13 +1169,22 @@ let all_map2 (f : 'a -> 'b -> 'c -> bool * 'a) (a : 'a) (lb : 'b list)
 
 let change_ogty ogty p = mk_pattern p.p_node ogty
 
+let rec add_reduce (c : pat_continuation) (e : engine) (ne : nengine) =
+  match c with
+  | Zor (c1, l, n) ->
+     let n = { n with ne_env = ne.ne_env;
+                      ne_continuation = add_reduce n.ne_continuation e ne } in
+     Zor (c1, l, n)
+  | _ -> ZReduce (c, e, ne)
+
+
 let try_reduce (e : engine) : engine =
   Debug.debug_try_reduce e.e_env e.e_pattern1 e.e_pattern2;
   let e_env = saturate e.e_env in
   let ne = let e = e_copy e in
-           { ne_continuation = e.e_continuation; ne_env = e.e_env } in
-  let e_continuation = ZReduce (e.e_continuation, e_copy e, ne) in
-  { e with e_env; e_continuation }
+           { ne_continuation = e.e_continuation; ne_env = e_env } in
+  let e_continuation = add_reduce e.e_continuation (e_copy e) ne in
+  { e with e_env; e_continuation; }
 
 
 let rec check_arrow e b t = match b, t.ty_node with
