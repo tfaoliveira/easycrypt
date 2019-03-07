@@ -73,7 +73,7 @@ let debug_verbose : verbose = {
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
-    verbose_unienv          = false;
+    verbose_unienv          = true;
     verbose_eta             = false;
   }
 
@@ -1987,7 +1987,7 @@ let menv_is_full (e : match_env) h =
     | Some p -> let fv = FV.pattern0 h p in
                 Mid.for_all (fun n _ -> not (Mid.mem n meta_vars)) fv in
 
-  Mid.for_all f meta_vars
+  Mid.for_all f meta_vars && EcUnify.UniEnv.closed e.me_unienv
 
 (* -------------------------------------------------------------------- *)
 let fsubst_of_menv (me : match_env) (env : env) =
