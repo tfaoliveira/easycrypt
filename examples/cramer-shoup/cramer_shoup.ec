@@ -435,7 +435,7 @@ section Security_Aux.
       (x1, G1.x , fun z => z + G1.w{2} * G1.x2{2})
       (x2, G1.x2)
       (k , G1.k ).
-    wp; rnd (fun z => z / x{1}) (fun z => z * x{1}).
+    wp; rnd auto (fun z => z / x{1}).  (fun z => z * x{1}).
     rndmatch
       (y , G1.u )
       (x , G1.w ).
