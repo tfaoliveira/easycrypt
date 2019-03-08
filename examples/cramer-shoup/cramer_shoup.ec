@@ -569,8 +569,7 @@ section Security_Aux.
                G1.y1, G1.y2, G1.z, G1.w, G1.k}).
     + by sim => />.
     swap{1} [23..24] 3;wp => /=.
-    rnd  (fun z2 => G1.u*G1.z - G1.u*G1.w*z2 + G1.w*G1.u'* z2 + log (b ? m1 : m0)){1}
-         (fun r' => (r' - G1.u*G1.z - log (b ? m1 : m0)) / (G1.w * (G1.u' - G1.u))){1}.
+    rnd auto (fun z2 => G1.u*G1.z - G1.u*G1.w*z2 + G1.w*G1.u'* z2 + log (b ? m1 : m0)){1}.
     rnd.
     call (_: ={G1.bad, G1.cstar, G1.log, G1.x, G1.x1, G1.x2, G1.y,
                G1.y1, G1.y2, G1.z, G1.w, G1.k}).
