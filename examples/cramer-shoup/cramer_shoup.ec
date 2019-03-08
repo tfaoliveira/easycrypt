@@ -434,9 +434,8 @@ section Security_Aux.
       (y2, G1.y2)
       (x1, G1.x , fun z => z + G1.w{2} * G1.x2{2})
       (x2, G1.x2)
-      (k , G1.k ).
-    wp; rnd auto (fun z => z / x{1}).  (fun z => z * x{1}).
-    rndmatch
+      (k , G1.k )
+      (z , x    , fun z => z / x{1})
       (y , G1.u )
       (x , G1.w ).
     auto => &m1 &m2 /= -> xL H;rewrite H /=;move: H => /supp_dexcepted. 
