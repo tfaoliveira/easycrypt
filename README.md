@@ -53,6 +53,8 @@ EasyCrypt uses the following third-party tools/libraries:
 
  * OCaml ini-files <http://archive.ubuntu.com/ubuntu/pool/universe/o/ocaml-inifiles/>
 
+ * The SolveEq library.
+
 On POSIX/Win32 systems (GNU/Linux, *BSD, OS-X), we recommend that users
 install EasyCrypt and all its dependencies via `opam`.
 
