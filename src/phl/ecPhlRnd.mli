@@ -29,3 +29,4 @@ val t_equiv_rnd   : oside -> (mkbij_t option) pair -> backward
 
 (* -------------------------------------------------------------------- *)
 val process_rnd : oside -> rnd_infos_t -> backward
+val process_rnd_match : (pqsymbol * pqsymbol * pformula option) list -> backward

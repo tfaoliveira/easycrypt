@@ -142,6 +142,7 @@
     "swap"        , SWAP       ;        (* KW: tactic *)
     "cfold"       , CFOLD      ;        (* KW: tactic *)
     "rnd"         , RND        ;        (* KW: tactic *)
+    "rndmatch"    , RNDMATCH   ;        (* KW: tactic *)
     "pr_bounded"  , PRBOUNDED  ;        (* KW: tactic *)
     "bypr"        , BYPR       ;        (* KW: tactic *)
     "byphoare"    , BYPHOARE   ;        (* KW: tactic *)
@@ -205,7 +206,6 @@
 
     "time"        , TIME       ;        (* KW: internal *)
     "undo"        , UNDO       ;        (* KW: internal *)
-    "debug"       , DEBUG      ;        (* KW: internal *)
     "pragma"      , PRAGMA     ;        (* KW: internal *)
 
     "Top"         , TOP        ;        (* KW: global *)

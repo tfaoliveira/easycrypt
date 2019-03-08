@@ -401,7 +401,6 @@
 %token CONSEQ
 %token CONST
 %token CUT
-%token DEBUG
 %token DECLARE
 %token DELTA
 %token DLBRACKET
@@ -517,6 +516,7 @@
 %token REWRITE
 %token RIGHT
 %token RND
+%token RNDMATCH
 %token RPAREN
 %token RPBRACE
 %token RRARROW
@@ -2697,6 +2697,9 @@ phltactic:
 | RND s=side? info=rnd_info
     { Prnd (s, info) }
 
+| RNDMATCH info=rndmatch*
+    { Prndmatch info }
+
 | INLINE s=side? o=occurences? f=plist1(loc(fident), empty)
     { Pinline (`ByName (s, (f, o))) }
 
@@ -2840,6 +2843,13 @@ phltactic:
 
 | LOSSLESS
     { Plossless }
+
+rndmatch:
+| LPAREN x1=qoident COMMA x2=qoident RPAREN
+    { (x1, x2, None) }
+
+| LPAREN x1=qoident COMMA x2=qoident COMMA f=form RPAREN
+    { (x1, x2, Some f) }
 
 bdhoare_split:
 | b1=sform b2=sform b3=sform?
@@ -3011,10 +3021,6 @@ tactic_core_r:
 
 | x=phltactic
    { PPhl x }
-
-(* DEBUG *)
-| DEBUG
-    { Pdebug }
 
 %inline tactic_core:
 | x=loc(tactic_core_r) { x }

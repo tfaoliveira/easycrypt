@@ -427,13 +427,18 @@ section Security_Aux.
       + by move=> _ _; apply (CCA_dec_ll A).
       + by move=> _;apply G1_dec_bad.
     swap{1} 16 -9;wp.
-    swap -1;rnd (fun z => z + G1.w{2} * G1.z2{2}) (fun z => z - G1.w{2} * G1.z2{2}).
-    rnd;wp.
-    swap -1;rnd (fun z => z + G1.w{2} * G1.y2{2}) (fun z => z - G1.w{2} * G1.y2{2}).
-    rnd;wp.
-    swap -1;rnd (fun z => z + G1.w{2} * G1.x2{2}) (fun z => z - G1.w{2} * G1.x2{2}).
-    rnd;wp;rnd;wp.
-    rnd (fun z => z / x{1}) (fun z => z * x{1}) => /=.
+    rndmatch
+      (z1, G1.z , fun z => z + G1.w{2} * G1.z2{2})
+      (z2, G1.z2)
+      (y1, G1.y , fun z => z + G1.w{2} * G1.y2{2})
+      (y2, G1.y2)
+      (x1, G1.x , fun z => z + G1.w{2} * G1.x2{2})
+      (x2, G1.x2)
+      (k , G1.k ).
+    wp; rnd (fun z => z / x{1}) (fun z => z * x{1}).
+    rndmatch
+      (y , G1.u )
+      (x , G1.w ).
     auto => &m1 &m2 /= -> xL H;rewrite H /=;move: H => /supp_dexcepted. 
     rewrite /pred1 -ofint0 => -[] InxL HxL yL -> /=.
     split => [ ? _ | eqxL]; 1:by field. 
@@ -459,7 +464,9 @@ section Security_Aux.
     have H2 : forall x1L x2L, x1L + xL * x2L = x1L + xL * x2L - xL * x2L + xL * x2L.
     +  by move=> ??;ring.
     rewrite -!H2 /=;split=> [ | _].
-    + by split=> [ | _] ;ring.
+    + by ring.
+    split => [|_].
+    + by split=> [|_]; ring.
     move=> ??????? Hbad ? -> /=.
     have <- /= : g ^ zL = g ^ xL ^ (zL / xL).
     + by rewrite log_bij !(log_g, log_pow, log_mul);field.

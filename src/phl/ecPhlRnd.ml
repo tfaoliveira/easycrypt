@@ -20,6 +20,7 @@ open EcLowGoal
 open EcLowPhlGoal
 
 module TTC = EcProofTyping
+module L   = EcLocation
 
 (* -------------------------------------------------------------------- *)
 type bhl_infos_t = (form, ty -> form option, ty -> form) rnd_tac_info
@@ -390,15 +391,16 @@ let t_bdhoare_rnd = FApi.t_low1 "bdhoare-rnd" t_bdhoare_rnd_r
 let t_equiv_rnd   = FApi.t_low2 "equiv-rnd"   t_equiv_rnd_r
 
 (* -------------------------------------------------------------------- *)
-let process_inv pe hyps _es f ty1 ty2 =
+let process_inv_group pe hyps _es f ty1 ty2 =
   let env = EcEnv.LDecl.toenv hyps in
   let f = f ty1 ty2 in
 
   if not (EcReduction.EqTest.for_type env ty1 ty2) then
-    tc_error pe "BIM";
+    tc_error pe "Left/right types must be equal";
 
   let x, _, f =
-    try destr_lambda1 f with DestrError _ -> tc_error pe "BOUM" in
+    try destr_lambda1 f with DestrError _ ->
+      tc_error pe "rnd map should be a lambda" in
 
   let tp = (EcEnv.LDecl.tohyps hyps).EcBaseLogic.h_tvar in
   let cr =
@@ -431,18 +433,19 @@ let process_inv pe hyps _es f ty1 ty2 =
         T.Opp (translate f)
     | EcRing.PEsub (f1, f2) ->
         T.Add (translate f1, T.Opp (translate f2))
-    | _ -> assert false
+    | EcRing.PEmul _ | EcRing.PEc _ | EcRing.PEpow _ ->
+        tc_error pe "failed to compute inverse"
 
   and itranslate f =
     match f with
     | T.Var x ->
         EcRing.PEX (T.Var.to_int x)
+    | T.Zero ->
+        EcRing.PEc (EcBigInt.zero)
     | T.Add (f1, f2) ->
         EcRing.PEadd (itranslate f1, itranslate f2)
     | T.Opp f ->
         EcRing.PEopp (itranslate f)
-    | T.Zero ->
-        EcRing.PEc (EcBigInt.zero)
   in
 
   let f = translate f in
@@ -453,6 +456,98 @@ let process_inv pe hyps _es f ty1 ty2 =
   let f = EcAlgebra.ofring acr st (itranslate f) in
 
   f_lambda [(x, GTty ty2)] f
+
+(* -------------------------------------------------------------------- *)
+let process_inv_ring pe hyps _es f ty1 ty2 =
+  let env = EcEnv.LDecl.toenv hyps in
+  let f = f ty1 ty2 in
+
+  if not (EcReduction.EqTest.for_type env ty1 ty2) then
+    tc_error pe "Left/right types must be equal";
+
+  let x, _, f =
+    try destr_lambda1 f with DestrError _ ->
+      tc_error pe "rnd map should be a lambda" in
+
+  let tp = (EcEnv.LDecl.tohyps hyps).EcBaseLogic.h_tvar in
+  let cr =
+    match EcTyping.get_field (tp, ty2) env with
+    | None    -> tc_error pe "Cannot find a field structure"
+    | Some cr -> cr in
+
+  let acr = EcDecl.{ cr with f_ring =
+              { cr.f_ring with r_embed = `Default } } in
+  let cr  = EcAlgebra.cfield_of_field acr in
+
+  let st = EcAlgebra.RState.empty in
+
+  let xid, st =
+    match EcAlgebra.tofield hyps cr st (f_local x ty1) with
+    | EcField.FEX xid, st -> xid, st
+    | _, _ -> assert false in
+
+  let f, st = EcAlgebra.tofield hyps cr st f in
+
+  let module T = Solveq.Types in
+  let module I = Solveq.Inverter in
+
+  let rec translate f =
+    match f with
+    | EcField.FEX x ->
+        T.VarR (T.Var.of_id x)
+    | EcField.FEadd (f1, f2) ->
+        T.AddR (translate f1, translate f2)
+    | EcField.FEopp f ->
+        T.OppR (translate f)
+    | EcField.FEsub (f1, f2) ->
+        T.AddR (translate f1, T.OppR (translate f2))
+    | EcField.FEmul (f1, f2) ->
+        T.MultR (translate f1, translate f2)
+    | EcField.FEinv f ->
+        T.InvR (translate f)
+    | EcField.FEdiv (f1, f2) ->
+        T.MultR (translate f1, T.InvR (translate f2))
+    | EcField.FEpow _ | EcField.FEc _ ->
+        tc_error pe "failed to compute inverse"
+
+  and itranslate f =
+    match f with
+    | T.VarR x ->
+        EcField.FEX (T.Var.to_int x)
+    | T.ZeroR ->
+        EcField.FEc (EcBigInt.zero)
+    | T.UnitR ->
+        EcField.FEc (EcBigInt.one)
+    | T.AddR (f1, f2) ->
+        EcField.FEadd (itranslate f1, itranslate f2)
+    | T.OppR f ->
+        EcField.FEopp (itranslate f)
+    | T.MultR (f1, f2) ->
+        EcField.FEmul (itranslate f1, itranslate f2)
+    | T.InvR f ->
+        EcField.FEinv (itranslate f)
+  in
+
+  let f = translate f in
+
+  let f =
+    match I.compute_inv_ring (T.Var.of_id xid) f with
+    | None   -> tc_error pe "failed to compute inverse"
+    | Some f -> f in
+  let f = EcAlgebra.offield acr st (itranslate f) in
+
+  f_lambda [(x, GTty ty2)] f
+
+(* -------------------------------------------------------------------- *)
+let process_inv pe hyps es f ty1 ty2 =
+  let env = EcEnv.LDecl.toenv hyps in
+
+  let tp = (EcEnv.LDecl.tohyps hyps).EcBaseLogic.h_tvar in
+
+  if is_some (EcTyping.get_field (tp, ty2) env) then
+    process_inv_ring pe hyps es f ty1 ty2
+  else
+    process_inv_group pe hyps es f ty1 ty2
 
 (* -------------------------------------------------------------------- *)
 let process_rnd side tac_info tc =
@@ -515,3 +610,70 @@ let process_rnd side tac_info tc =
       t_equiv_rnd side bij_info tc
 
   | _ -> tc_error !!tc "invalid arguments"
+
+(* -------------------------------------------------------------------- *)
+let process_rnd_match infos tc =
+  let infos =
+    let es   = tc1_as_equivS tc in
+    let hyps = FApi.tc1_hyps tc in
+    let hyps = EcEnv.LDecl.push_all [es.es_ml; es.es_mr] hyps in
+
+    let forpv me x =
+      let env = EcEnv.Memory.set_active me (EcEnv.LDecl.toenv hyps) in
+      EcTyping.trans_pv env x in
+
+    let for1 (x1, x2, f) =
+      let x1 = forpv (EcMemory.memory es.es_ml) x1 in
+      let x2 = forpv (EcMemory.memory es.es_mr) x2 in
+      (x1, x2, f) in
+
+    List.map for1 infos in
+
+  let split_at_var tc pv =
+    let rec doit acc = function
+    | { i_node = Srnd (LvVar (pv', _), d) } :: s when pv_equal pv pv' ->
+        (s, (pv', d), acc)
+    | i :: s ->
+        doit (i :: acc) s
+    | _ ->
+        let ppe = EcPrinting.PPEnv.ofenv (FApi.tc1_env tc) in
+        tc_error !!tc
+             "cannot find an rnd assignment for %a"
+             (EcPrinting.pp_pv ppe) pv in
+
+    fun s -> doit [] s in
+
+  let do1 ((xl, _tyl), (xr, _tyr), f) tc =
+    let tc = FApi.as_tcenv1 (EcPhlWp.t_wp None tc) in
+    let es = tc1_as_equivS tc in
+
+    let sl = List.rev es.es_sl.s_node in
+    let sr = List.rev es.es_sr.s_node in
+
+    let sl1, _dl, sl2 = split_at_var tc xl sl in
+    let sr1, _dr, sr2 = split_at_var tc xr sr in
+
+    let tc =
+      let l1, l2 = List.length sl1, List.length sl2 in
+      if 0 < l2 then
+        EcPhlSwap.t_equiv_swap `Left (l1 + 1) (l1 + 2) (l1 + l2 + 1) tc
+      else FApi.tcenv_of_tcenv1 tc in
+    let tc = FApi.as_tcenv1 tc in
+
+    let tc =
+      let l1, l2 = List.length sr1, List.length sr2 in
+        if 0 < l2 then
+          EcPhlSwap.t_equiv_swap `Right (l1 + 1) (l1 + 2) (l1 + l2 + 1) tc
+        else FApi.tcenv_of_tcenv1 tc in
+    let tc = FApi.as_tcenv1 tc in
+
+    let tc =
+      match f with
+      | None   -> process_rnd None PNoRndParams tc
+      | Some f -> process_rnd None (PSingleRndParam (true, f)) tc in
+
+    tc in
+
+  List.fold_left
+    (fun tc info -> FApi.t_last (do1 info) tc)
+    (FApi.tcenv_of_tcenv1 tc) infos

@@ -120,6 +120,8 @@ module CI_Distr : sig
   val p_dbool      : path
   val p_dbitstring : path
   val p_dinter     : path
+  val p_dunit      : path
+  val p_dprod      : path
 
   val p_support : path
   val p_mu      : path

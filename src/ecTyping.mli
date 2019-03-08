@@ -159,6 +159,7 @@ val transstmt : ?map:ismap -> env -> EcUnify.unienv -> pstmt -> stmt
 type ptnmap = ty EcIdent.Mid.t ref
 
 val transmem       : env -> EcSymbols.symbol located -> EcIdent.t
+val trans_pv       : env -> pqsymbol -> prog_var * ty
 val trans_form_opt : env -> EcUnify.unienv -> pformula -> ty option -> EcFol.form
 val trans_form     : env -> EcUnify.unienv -> pformula -> ty -> EcFol.form
 val trans_prop     : env -> EcUnify.unienv -> pformula -> EcFol.form

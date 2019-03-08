@@ -580,6 +580,7 @@ type phltactic =
   | Pinline        of inline_info
   | Pkill          of (oside * codepos * int option)
   | Prnd           of oside * (pformula, pformula option, pformula) rnd_tac_info
+  | Prndmatch      of (pqsymbol * pqsymbol * pformula option) list
   | Palias         of (oside * codepos * osymbol_r)
   | Pset           of (oside * codepos * bool * psymbol * pexpr)
   | Pconseq        of (pcqoptions * (conseq_ppterm option tuple3))
@@ -818,7 +819,6 @@ and ptactic_core_r =
   | Psubgoal    of ptactic_chain
   | Pnstrict    of ptactic_core
   | Padmit
-  | Pdebug
 
 (* -------------------------------------------------------------------- *)
 and ptactic_core = ptactic_core_r located

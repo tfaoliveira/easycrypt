@@ -680,6 +680,12 @@ let e_app x args ty =
     | _ -> mk_expr (Eapp (x, args)) ty
 
 (* -------------------------------------------------------------------- *)
+let e_dunit x =
+  let op = e_op EcCoreLib.CI_Distr.p_dunit in
+  let op = op [x.e_ty] (tfun x.e_ty (tdistr x.e_ty)) in
+  e_app op [x] (tdistr x.e_ty)
+
+(* -------------------------------------------------------------------- *)
 module ExprSmart = struct
   let l_symbol (lp, x) x' =
     if x == x' then lp else LSymbol x'
