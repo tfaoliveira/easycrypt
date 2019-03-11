@@ -99,7 +99,7 @@ module RegexpBaseInstr = struct
                         EcReduction.full_red EcReduction.full_red in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
-                | Some e -> e.ne_env.env_match.me_matches in
+                | Some e -> (get_n_matches e).me_matches in
               map
 
            | LvTuple tuple ->
@@ -111,7 +111,7 @@ module RegexpBaseInstr = struct
                         EcReduction.full_red EcReduction.full_red in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
-                | Some e -> e.ne_env.env_match.me_matches in
+                | Some e -> (get_n_matches e).me_matches in
               map
 
            | LvMap ((op,tys),_pv,_e,ty) ->
@@ -126,7 +126,7 @@ module RegexpBaseInstr = struct
                      EcReduction.full_red in
            let map = match EcFMatching.search_eng e with
              | None -> raise NoMatch
-             | Some e -> e.ne_env.env_match.me_matches in
+             | Some e -> (get_n_matches e).me_matches in
            { eng with e_map = map }, []
 
        | Scall (Some x,f,args), RCall (p1,p2,pargs)  ->
@@ -147,7 +147,7 @@ module RegexpBaseInstr = struct
                     EcReduction.full_red EcReduction.full_red in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
-            | Some e -> e.ne_env.env_match.me_matches in
+            | Some e -> (get_n_matches e).me_matches in
           let args = List.map (form_of_expr mhr) args in
           let f = pat_form (f_pr mleft f (f_tuple args) f_true) in
           let p = pat_fun_symbol Sym_Form_Pr
@@ -159,7 +159,7 @@ module RegexpBaseInstr = struct
                     EcReduction.full_red EcReduction.full_red in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
-            | Some e -> e.ne_env.env_match.me_matches in
+            | Some e -> (get_n_matches e).me_matches in
           { eng with e_map = map }, []
 
        | Sif (cond, st, sf), RIf (pcond, stn, sfn) -> begin
@@ -170,7 +170,7 @@ module RegexpBaseInstr = struct
                       EcReduction.full_red EcReduction.full_red in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
-             | Some e' -> e'.ne_env.env_match.me_matches in
+             | Some e' -> (get_n_matches e').me_matches in
 
            let e_t = mkengine st.s_node eng.e_hyps in
            let e_t = { e_t with e_map = map } in
@@ -197,7 +197,7 @@ module RegexpBaseInstr = struct
                       EcReduction.full_red EcReduction.full_red in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
-             | Some e' -> e'.ne_env.env_match.me_matches in
+             | Some e' -> (get_n_matches e').me_matches in
            let es = mkengine s.s_node eng.e_hyps in
            let es = { es with e_map = map } in
            let es =

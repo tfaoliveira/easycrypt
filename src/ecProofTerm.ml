@@ -273,7 +273,7 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
 
     match EcFMatching.search_eng eng with
     | None     -> raise EcMatching.MatchFailure
-    | Some eng -> pt.pte_mc := eng.ne_env.env_match
+    | Some eng -> pt.pte_mc := EcFMatching.get_n_matches eng
   with EcMatching.MatchFailure  as exn ->
     (* FIXME: should we check for empty inters. with ecmap? *)
     if not (EcReduction.is_conv pt.pte_hy ptn subject) then

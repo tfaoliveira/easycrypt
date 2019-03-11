@@ -1918,12 +1918,10 @@ and h_red_strat env p1 p2 =
   let h   = env.env_hyps in
   let r   = env.env_red_info_match in
   let eq h r p1 p2 =
-    try
       let eng = mk_engine ~mtch:env.env_match p1 p2 h r
                   env.env_red_info_same_meta in
-      let _ = process eng in
-      true
-    with NoMatches -> false in
+      let env = eng.e_env in
+      EQ.pattern env r p1 p2 in
   (* let p1  = Psubst.p_subst s p1 in
    * let p2  = Psubst.p_subst s p2 in *)
   match EcPReduction.h_red_pattern_opt eq h r s p1 with

@@ -31,20 +31,11 @@ val full_verbose  : verbose
 val debug_verbose : verbose
 
 type pat_continuation
+type engine
+type nengine
 
-and engine = {
-    e_pattern1     : pattern;
-    e_pattern2     : pattern;
-    e_continuation : pat_continuation;
-    e_env          : environment;
-    e_reductions   : engine list;
-  }
-
-and nengine = {
-    ne_continuation : pat_continuation;
-    ne_env          : environment;
-    ne_reductions   : engine list;
-  }
+val get_matches     : engine -> match_env
+val get_n_matches   : nengine -> match_env
 
 val menv_copy       : match_env -> match_env
 
