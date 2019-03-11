@@ -14,6 +14,7 @@ let rec p_is_true p = match p_destr_app p with
   | { p_node = Pat_Axiom(Axiom_Op (_,op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_true
      && odfl true (omap (ty_equal tbool) ty)
+  | { p_node = Pat_Meta_Name (Some p, _, _) }, [] -> p_is_true p
   (* | pop, [t] -> op_equal pop fop_not && p_is_false t *)
   | _ -> false
 
@@ -21,6 +22,7 @@ and p_is_false p = match p_destr_app p with
   | { p_node = Pat_Axiom(Axiom_Op (_,op,[],ty)) }, [] ->
      EcPath.p_equal op EcCoreLib.CI_Bool.p_false
      && odfl true (omap (ty_equal tbool) ty)
+  | { p_node = Pat_Meta_Name (Some p, _, _) }, [] -> p_is_false p
   (* | pop, [t] -> op_equal pop fop_not && p_is_true t *)
   | _ -> false
 

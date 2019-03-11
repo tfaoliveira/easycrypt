@@ -24,6 +24,8 @@ type verbose = {
     verbose_subst           : bool;
     verbose_unienv          : bool;
     verbose_eta             : bool;
+    verbose_show_match      : bool;
+    verbose_add_reduce      : bool;
   }
 
 let no_verbose : verbose = {
@@ -41,6 +43,8 @@ let no_verbose : verbose = {
     verbose_subst           = false;
     verbose_unienv          = false;
     verbose_eta             = false;
+    verbose_show_match      = false;
+    verbose_add_reduce      = false;
   }
 
 let full_verbose : verbose = {
@@ -58,6 +62,8 @@ let full_verbose : verbose = {
     verbose_subst           = true;
     verbose_unienv          = true;
     verbose_eta             = true;
+    verbose_show_match      = true;
+    verbose_add_reduce      = true;
   }
 
 let debug_verbose : verbose = {
@@ -67,7 +73,7 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -75,6 +81,8 @@ let debug_verbose : verbose = {
     verbose_subst           = false;
     verbose_unienv          = false;
     verbose_eta             = false;
+    verbose_show_match      = false;
+    verbose_add_reduce      = true;
   }
 
 let env_verbose = no_verbose
@@ -107,9 +115,9 @@ type pat_continuation =
 
   (* Zor (cont, e_list, ne) :
        - cont   : the continuation if the matching is correct
-       - e_list : if not, the sorted list of next engines to try matching with
+       - e_list : if not, the reverted sorted list of next engines to try matching with
        - ne     : if no match at all, then take the nengine to go up *)
-  | Zor        of pat_continuation * engine list * nengine
+  | Zor        of pat_continuation * (engine * bool) list * nengine
 
   (* Zand (before, after, cont) :
        - before : list of couples (pattern, pattern) that has already been checked
@@ -118,8 +126,6 @@ type pat_continuation =
   | Zand       of (pattern * pattern) list
                   * (pattern * pattern) list
                   * pat_continuation
-
-  | ZReduce    of pat_continuation * engine * nengine
 
 
 and engine = {
@@ -197,11 +203,11 @@ let e_copy e = { e with e_env = env_copy e.e_env }
 let zor e l =
   match e.e_continuation with
   | Zor (c, l1, ne) ->
-     { e with e_continuation = Zor (c, l1 @ (List.map e_copy l), ne) }
+     { e with e_continuation = Zor (c, l1 @ (List.map (fun e -> e_copy e, false) l), ne) }
   | c ->
      let ne = e_copy e in
      let ne = { ne_env = ne.e_env ; ne_continuation = ne.e_continuation; } in
-     { e with e_continuation = Zor (c, List.map e_copy l, ne) }
+     { e with e_continuation = Zor (c, List.map (fun e -> e_copy e, false) l, ne) }
 
 
 (* -------------------------------------------------------------------- *)
@@ -233,7 +239,16 @@ module Debug : sig
   val debug_unienv                   : environment -> unit
   val debug_subst                    : environment -> pattern -> pattern -> unit
   val debug_no_eta                   : environment -> pbinding -> pattern -> bool -> unit
+  val debug_show_matches             : environment -> unit
+  val debug_add_reduce               : environment -> int -> unit
 end = struct
+
+  let debug_add_reduce menv i =
+    if menv.env_verbose.verbose_add_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      (* let ppe = EcPrinting.PPEnv.ofenv env in *)
+
+      EcEnv.notify env `Warning "--- add_reduce : %i" i
 
   let debug_no_eta menv (_id,_ogty) _p _b =
     if menv.env_verbose.verbose_eta then
@@ -464,7 +479,6 @@ end = struct
     | ZTop -> c
     | Zor (ct,_,_) -> compute_zands c ct
     | Zand (_,l,ct) -> compute_zands (c + List.length l) ct
-    | ZReduce (ct,_,_) -> compute_zands c ct
     | Znamed (_,_,_,ct) -> compute_zands c ct
 
   let debug_try_match menv p a c =
@@ -568,6 +582,22 @@ end = struct
           (EcPrinting.pp_ogty ppe) p.p_ogty in
 
       EcEnv.notify env `Warning "Matching successful: %a"
+        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
+        (Mid.bindings menv.env_match.me_matches);
+      debug_unienv menv
+
+  let debug_show_matches menv =
+    if menv.env_verbose.verbose_show_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let pp_names ppe fmt (name,p) =
+        Format.fprintf fmt "%a <- (%a : %a)"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_ogty ppe) p.p_ogty in
+
+      EcEnv.notify env `Warning "Current matching: %a"
         (EcPrinting.pp_list "@ and@ " (pp_names ppe))
         (Mid.bindings menv.env_match.me_matches);
       debug_unienv menv
@@ -1176,20 +1206,23 @@ let change_ogty ogty p = mk_pattern p.p_node ogty
 let rec add_reduce (c : pat_continuation) (e : engine) (ne : nengine) =
   match c with
   | Zor (c1, l, n) ->
-     let n = { n with ne_env = ne.ne_env;
-                      ne_continuation = add_reduce n.ne_continuation e ne } in
-     Zor (c1, l, n)
-  | ZReduce (c1, e1, n1) ->
-     ZReduce (c1, e1, { n1 with ne_continuation = add_reduce n1.ne_continuation e ne })
-  | _ -> ZReduce (c, e, ne)
+     Debug.debug_add_reduce e.e_env 1;
+     Zor (c1, l @ [ e_copy e, true], n)
+  | _ ->
+     Debug.debug_add_reduce e.e_env 3;
+     Zor (c, [ e_copy e, true], ne)
 
 
 let try_reduce (e : engine) : engine =
   Debug.debug_try_reduce e.e_env e.e_pattern1 e.e_pattern2;
+  Debug.debug_show_matches e.e_env;
   let e_env = saturate e.e_env in
+  Debug.debug_show_matches e.e_env;
   let ne = let e = e_copy e in
            { ne_continuation = e.e_continuation; ne_env = e_env } in
+  Debug.debug_show_matches e.e_env;
   let e_continuation = add_reduce e.e_continuation (e_copy e) ne in
+  Debug.debug_show_matches e.e_env;
   { e with e_env; e_continuation; }
 
 
@@ -1291,12 +1324,6 @@ let rec process (e : engine) : nengine =
            e_pattern2 = p; e_env;
            e_continuation = Znamed(e.e_pattern1, name, ob, e.e_continuation);
          }
-
-    | _, Pat_Sub ({ p_node = Pat_Fun_Symbol (Sym_Form_Proj (i,{ ty_node = Ttuple lt}), [_])})
-         when 0 <= i && i < List.length lt ->
-       let e_pattern1 =
-         p_tuple (List.mapi (fun i t -> p_proj e.e_pattern1 i t) lt) in
-       process { e with e_pattern1 }
 
     | Pat_Sub p, _ ->
        let le = sub_engines1 e p in
@@ -1671,23 +1698,10 @@ let rec process (e : engine) : nengine =
                  e_continuation = Zand ([],zand,e.e_continuation); }
        end
 
-    | Pat_Fun_Symbol (Sym_Form_Proj (i,{ ty_node = Ttuple lt }), [_]),
-      Pat_Axiom (Axiom_Local (_, ty))
-         when 0 <= i && i < List.length lt && EQ.ty e.e_env (List.nth lt i) ty ->
-       let e_pattern2 =
-         p_tuple (List.mapi (fun i t -> p_proj e.e_pattern2 i t) lt) in
-       process { e with e_pattern2 }
-
-    | Pat_Axiom (Axiom_Local (_, ty)),
-      Pat_Fun_Symbol (Sym_Form_Proj (i,{ ty_node = Ttuple lt }), [_])
-         when 0 <= i && i < List.length lt && EQ.ty e.e_env (List.nth lt i) ty ->
-       let e_pattern1 =
-         p_tuple (List.mapi (fun i t -> p_proj e.e_pattern1 i t) lt) in
-       process { e with e_pattern1 }
-
     | Pat_Fun_Symbol
         (Sym_Form_App _,
-         { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_), _ -> begin
+         { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_), _
+         when e.e_env.env_red_info_match.EcReduction.beta -> begin
        match p_betared_opt e.e_pattern1 with
        | Some e_pattern1 ->
           process { e with e_pattern1 }
@@ -1696,18 +1710,19 @@ let rec process (e : engine) : nengine =
 
     | _, Pat_Fun_Symbol
            (Sym_Form_App _,
-            { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_) -> begin
+            { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_)
+         when e.e_env.env_red_info_match.EcReduction.beta -> begin
        match p_betared_opt e.e_pattern2 with
        | Some e_pattern2 ->
           process { e with e_pattern2 }
        | None -> next NoMatch e
       end
 
-    | _ ->
-       begin Debug.debug_which_rule e.e_env "default";
-             let e = try_reduce e in
-             next NoMatch e
-       end
+    | _ -> begin
+        Debug.debug_which_rule e.e_env "default";
+        let e = try_reduce e in
+        next NoMatch e
+      end
 
 and next (m : ismatch) (e : engine) : nengine =
   Debug.debug_result_match e.e_env m;
@@ -1719,14 +1734,51 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      Debug.debug_no_match_found e.ne_env;
      raise NoMatches
 
+  | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
+     Debug.debug_which_rule e.ne_env "next : no match in named";
+     next_n NoMatch { e with ne_continuation; }
+
+  | NoMatch, Zand (_,_,ne_continuation) ->
+     Debug.debug_which_rule e.ne_env "next : no match in zand";
+     next_n NoMatch { e with ne_continuation; }
+
+  | NoMatch, Zor (_, [], ne) ->
+     Debug.debug_which_rule e.ne_env "next : no match in zor, no more matches";
+     next_n NoMatch ne
+
+  | NoMatch, Zor (_, (e',is_to_reduce)::engines, ne) ->
+     if is_to_reduce then begin
+         Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
+         match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
+         | None ->
+            Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern2 false;
+            EcUnify.UniEnv.restore
+              ~src:ne.ne_env.env_match.me_unienv
+              ~dst: e.ne_env.env_match.me_unienv;
+            next_n NoMatch { e with
+                ne_continuation = Zor (e'.e_continuation, engines, ne) }
+         | Some (e_pattern1, e_pattern2) ->
+            Debug.debug_reduce e'.e_env e_pattern1 e_pattern2 true;
+            EcUnify.UniEnv.restore
+              ~src:e'.e_env.env_match.me_unienv
+              ~dst:e.ne_env.env_match.me_unienv;
+            let e = { e' with e_pattern1; e_pattern2 } in
+            let e = { e  with e_continuation = Zor (e.e_continuation, engines, ne) } in
+            let e = try_reduce e in
+            process e
+       end
+     else begin
+         Debug.debug_another_or e.ne_env;
+         EcUnify.UniEnv.restore
+           ~src:ne.ne_env.env_match.me_unienv
+           ~dst: e.ne_env.env_match.me_unienv;
+         process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
+       end
+
   | Match, ZTop   ->
      Debug.debug_found_match e.ne_env;
      let ne_env = saturate e.ne_env in
      { e with ne_env }
-
-  | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
-     Debug.debug_which_rule e.ne_env "next : no match in named";
-     next_n NoMatch { e with ne_continuation; }
 
   | Match, Znamed (f, name, ob, ne_continuation) ->
      let m,e =
@@ -1739,20 +1791,16 @@ and next_n (m : ismatch) (e : nengine) : nengine =
           NoMatch, { e with ne_continuation; } in
      next_n m e
 
-  | NoMatch, Zand (_,_,ne_continuation) ->
-     Debug.debug_which_rule e.ne_env "next : no match in zand";
-     next_n NoMatch { e with ne_continuation; }
-
   | Match, Zand (_before,[],ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : all match in zand";
      next_n Match { e with ne_continuation }
 
   | Match, Zand (before,(f,p)::after,z) ->
      Debug.debug_which_rule e.ne_env "next : next match in zand";
-     (* let ne_env = saturate e.ne_env in
-      * let e      = { e with ne_env } in
-      * let s      = psubst_of_menv e.ne_env.env_match in
-      * let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in *)
+     let ne_env = saturate e.ne_env in
+     let e      = { e with ne_env } in
+     let s      = psubst_of_menv e.ne_env.env_match in
+     let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
@@ -1761,49 +1809,6 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      Debug.debug_ignore_ors e.ne_env;
      next_n Match { e with ne_continuation }
 
-  | NoMatch, Zor (_, [], ne) ->
-     Debug.debug_which_rule e.ne_env "next : no match in zor, no more matches";
-     next_n NoMatch ne
-
-  | NoMatch, Zor (_, e'::engines, ne) ->
-     Debug.debug_another_or e.ne_env;
-     EcUnify.UniEnv.restore
-       ~src:ne.ne_env.env_match.me_unienv
-       ~dst: e.ne_env.env_match.me_unienv;
-     process { e' with e_continuation = Zor (e'.e_continuation, engines, ne); }
-
-  | Match, ZReduce (ne_continuation, e', _) ->
-     Debug.debug_reduce e.ne_env e'.e_pattern1 e'.e_pattern2 false;
-     next_n Match { e with ne_continuation }
-
-  | NoMatch, ZReduce (_, e', ne) ->
-     Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
-     match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
-     | None ->
-        Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern2 false;
-        EcUnify.UniEnv.restore
-          ~src:ne.ne_env.env_match.me_unienv
-          ~dst: e.ne_env.env_match.me_unienv;
-        next_n NoMatch ne
-
-     | Some (e_pattern1, e_pattern2) ->
-        (* if EQ.pattern e'.e_env EcReduction.no_red e_pattern e'.e_pattern
-         *    && EQ.axiom e'.e_env EcReduction.no_red e_head e'.e_head then begin
-         *     Debug.debug_reduce_incorrect e'.e_env e_pattern e_head;
-         *     EcUnify.UniEnv.restore
-         *       ~src:ne.ne_env.env_match.me_unienv
-         *       ~dst: e.ne_env.env_match.me_unienv;
-         *     next_n NoMatch ne
-         *   end
-         * else begin *)
-            Debug.debug_reduce e'.e_env e_pattern1 e_pattern2 true;
-            EcUnify.UniEnv.restore
-              ~src:e'.e_env.env_match.me_unienv
-              ~dst:e.ne_env.env_match.me_unienv;
-            let e = { e' with e_pattern1; e_pattern2 } in
-            let e = try_reduce e in
-            process e
-          (* end *)
 
 and sub_engines2 e p =
   let f e = { e with e_pattern1 = e.e_pattern2; e_pattern2 = e.e_pattern1; } in
@@ -1812,17 +1817,19 @@ and sub_engines2 e p =
   List.map f l
 
 and sub_engines1 (e : engine) (p : pattern) : engine list =
-  match e.e_pattern2.p_node with
-  | Pat_Meta_Name (_, _, _)  -> []
-  | Pat_Sub _                -> []
-  | Pat_Or _                 -> []
-  | Pat_Red_Strat (_,_)      -> []
-  | Pat_Axiom (Axiom_Stmt s) ->
+  match e.e_pattern2.p_node, p.p_node with
+  | Pat_Meta_Name (_, _, _) , _ -> []
+  | Pat_Sub _               , _ -> []
+  | Pat_Or _                , _ -> []
+  | Pat_Red_Strat (_,_)     , _ -> []
+  | Pat_Axiom (Axiom_Stmt s), _ ->
      List.map (fun x -> sub_engine1 e p (pat_instr x)) s.s_node
-  | Pat_Axiom (Axiom_Local (_, { ty_node = Ttuple lt })) ->
+  | Pat_Axiom (Axiom_Local (id1, { ty_node = Ttuple lt })),
+    Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id2, _))}])
+       when EQ.name id1 id2 ->
      List.mapi (fun i t -> sub_engine1 e p (p_proj e.e_pattern2 i t)) lt
-  | Pat_Axiom _              -> []
-  | Pat_Fun_Symbol (_, lp)   -> List.map (sub_engine1 e p) lp
+  | Pat_Axiom _             , _ -> []
+  | Pat_Fun_Symbol (_, lp)  , _ -> List.map (sub_engine1 e p) lp
 
 (* add_match can raise the exception : CannotUnify *)
 and nadd_match (e : nengine) (name : meta_name) (p : pattern)

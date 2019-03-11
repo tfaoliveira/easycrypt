@@ -15,22 +15,7 @@ type match_env = {
     me_matches   : pattern Mid.t;
   }
 
-type verbose = {
-    verbose_match           : bool;
-    verbose_rule            : bool;
-    verbose_type            : bool;
-    verbose_bind_restr      : bool;
-    verbose_add_meta        : bool;
-    verbose_abstract        : bool;
-    verbose_reduce          : bool;
-    verbose_show_ignored_or : bool;
-    verbose_show_or         : bool;
-    verbose_begin_match     : bool;
-    verbose_translate_error : bool;
-    verbose_subst           : bool;
-    verbose_unienv          : bool;
-    verbose_eta             : bool;
-  }
+type verbose
 
 type environment = {
     env_hyps               : EcEnv.LDecl.hyps;
@@ -45,26 +30,7 @@ val no_verbose    : verbose
 val full_verbose  : verbose
 val debug_verbose : verbose
 
-type pat_continuation =
-  | ZTop
-  | Znamed     of pattern * meta_name * pbindings option * pat_continuation
-
-  (* Zor (cont, e_list, ne) :
-       - cont   : the continuation if the matching is correct
-       - e_list : if not, the sorted list of next engines to try matching with
-       - ne     : if no match at all, then take the nengine to go up *)
-  | Zor        of pat_continuation * engine list * nengine
-
-  (* Zand (before, after, cont) :
-       - before : list of couples (form, pattern) that has already been checked
-       - after  : list of couples (form, pattern) to check in the following
-       - cont   : continuation if all the matches succeed *)
-  | Zand       of (pattern * pattern) list
-                  * (pattern * pattern) list
-                  * pat_continuation
-
-  | ZReduce    of pat_continuation * engine * nengine
-
+type pat_continuation
 
 and engine = {
     e_pattern1     : pattern;
