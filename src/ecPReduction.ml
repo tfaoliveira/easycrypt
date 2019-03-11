@@ -387,10 +387,10 @@ let p_real_is_one p =
 
 
 let rec p_real_mul_simpl e p1 p2 : pattern =
-  let ppe = EcPrinting.PPEnv.ofenv e in
-  EcEnv.notify e `Warning "simplify mul : p_real_mul_simpl (%a) (%a)"
-    (EcPrinting.pp_pattern ppe) p1
-    (EcPrinting.pp_pattern ppe) p2;
+  (* let ppe = EcPrinting.PPEnv.ofenv e in
+   * EcEnv.notify e `Warning "simplify mul : p_real_mul_simpl (%a) (%a)"
+   *   (EcPrinting.pp_pattern ppe) p1
+   *   (EcPrinting.pp_pattern ppe) p2; *)
   let (n1, d1) = p_real_split p1 in
   let (n2, d2) = p_real_split p2 in
 
@@ -399,10 +399,10 @@ let rec p_real_mul_simpl e p1 p2 : pattern =
     (p_real_mul_simpl_r e d1 d2)
 
 and p_real_div_simpl e p1 p2 =
-  let ppe = EcPrinting.PPEnv.ofenv e in
-  EcEnv.notify e `Warning "simplify mul : p_real_div_simpl (%a) (%a)"
-    (EcPrinting.pp_pattern ppe) p1
-    (EcPrinting.pp_pattern ppe) p2;
+  (* let ppe = EcPrinting.PPEnv.ofenv e in
+   * EcEnv.notify e `Warning "simplify mul : p_real_div_simpl (%a) (%a)"
+   *   (EcPrinting.pp_pattern ppe) p1
+   *   (EcPrinting.pp_pattern ppe) p2; *)
   let (n1, d1) = p_real_split p1 in
   let (n2, d2) = p_real_split p2 in
 
@@ -410,11 +410,11 @@ and p_real_div_simpl e p1 p2 =
     (p_real_mul_simpl_r e n1 d2)
     (p_real_mul_simpl_r e d1 n2)
 
-and p_real_mul_simpl_r e p1 p2 =
-  let ppe = EcPrinting.PPEnv.ofenv e in
-  EcEnv.notify e `Warning "simplify mul : p_real_mul_simpl_r (%a) (%a)"
-    (EcPrinting.pp_pattern ppe) p1
-    (EcPrinting.pp_pattern ppe) p2;
+and p_real_mul_simpl_r _e p1 p2 =
+  (* let ppe = EcPrinting.PPEnv.ofenv e in
+   * EcEnv.notify e `Warning "simplify mul : p_real_mul_simpl_r (%a) (%a)"
+   *   (EcPrinting.pp_pattern ppe) p1
+   *   (EcPrinting.pp_pattern ppe) p2; *)
   if p_real_is_zero p1 || p_real_is_zero p2 then p_r0 else
 
   if p_real_is_one p1 then p2 else
@@ -425,10 +425,10 @@ and p_real_mul_simpl_r e p1 p2 =
   with DestrError _ -> p_real_mul p1 p2
 
 and p_real_div_simpl_r e p1 p2 =
-  let ppe = EcPrinting.PPEnv.ofenv e in
-  EcEnv.notify e `Warning "simplify mul : p_real_div_simpl_r (%a) (%a)"
-    (EcPrinting.pp_pattern ppe) p1
-    (EcPrinting.pp_pattern ppe) p2;
+  (* let ppe = EcPrinting.PPEnv.ofenv e in
+   * EcEnv.notify e `Warning "simplify mul : p_real_div_simpl_r (%a) (%a)"
+   *   (EcPrinting.pp_pattern ppe) p1
+   *   (EcPrinting.pp_pattern ppe) p2; *)
   let (p1, p2) =
     try
       let n1 = p_destr_rint p1 in
@@ -546,16 +546,16 @@ let p_can_eta h x (f, args) =
      id_equal x y && List.for_all check (f :: args)
   | _ -> false
 
-let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
+let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
           (s : Psubst.p_subst) (p : pattern) =
   try
     match p.p_node with
     | Pat_Meta_Name (_,n,ob) -> reduce_local_opt hyps ri s p n ob
     | Pat_Sub p -> omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
-                     (h_red_pattern_opt hyps ri s p)
+                     (h_red_pattern_opt eq hyps ri s p)
     | Pat_Or _ -> None
     | Pat_Red_Strat _ -> None
-    | Pat_Axiom a -> h_red_axiom_opt hyps ri s a
+    | Pat_Axiom a -> h_red_axiom_opt eq hyps ri s a
     | Pat_Fun_Symbol (symbol,lp) ->
        match symbol, lp with
        (* β-reduction *)
@@ -614,7 +614,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
            let op =
              match pargs with
              | [mk] -> begin
-                 match odfl mk (h_red_pattern_opt hyps ri s mk) with
+                 match odfl mk (h_red_pattern_opt eq hyps ri s mk) with
                  | { p_node =
                        Pat_Fun_Symbol
                          (Sym_Form_App _,
@@ -629,7 +629,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                       begin
                         match v with
                         | None -> None
-                        | Some v -> h_red_pattern_opt hyps ri s v
+                        | Some v -> h_red_pattern_opt eq hyps ri s v
                       end
                  | _ -> None
                end
@@ -637,7 +637,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
            in match op with
               | None ->
                  omap (fun x -> p_app ~ho x pargs oty)
-                   (h_red_pattern_opt hyps ri s p1)
+                   (h_red_pattern_opt eq hyps ri s p1)
               | _ -> op
          end
 
@@ -645,13 +645,14 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
        | Sym_Form_Proj (i,ty), [p1] when ri.iota ->
           let p' = p_proj_simpl p1 i ty in
           if p = p'
-          then omap (fun x -> p_proj x i ty) (h_red_pattern_opt hyps ri s p1)
+          then omap (fun x -> p_proj x i ty) (h_red_pattern_opt eq hyps ri s p1)
           else Some p'
 
        (* ι-reduction (if-then-else) *)
        | Sym_Form_If, [p1;p2;p3] when ri.iota -> begin
            match p_if_simpl_opt p1 p2 p3 with
-           | None -> omap (fun x -> p_if x p2 p3) (h_red_pattern_opt hyps ri s p1)
+           | None ->
+              omap (fun x -> p_if x p2 p3) (h_red_pattern_opt eq hyps ri s p1)
            | Some _ as p -> p
          end
 
@@ -669,7 +670,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                let pargs = Array.of_list args in
                let myfun (opb, acc) v =
                  let v = pargs.(v) in
-                 let v = odfl v (h_red_pattern_opt hyps ri s v) in
+                 let v = odfl v (h_red_pattern_opt eq hyps ri s v) in
                  match p_destr_app v with
                  | { p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) }, cargs
                       when EcEnv.Op.is_dtype_ctor (EcEnv.LDecl.toenv hyps) op -> begin
@@ -711,7 +712,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
            with
            | EcEnv.NotReducible ->
               omap (fun x -> p_app ~ho x args ty)
-                (h_red_pattern_opt hyps ri s p1)
+                (h_red_pattern_opt eq hyps ri s p1)
          end
 
        (* μ-reduction *)
@@ -723,9 +724,10 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                if f_equal f f' then None
                else Some (pat_form f')
             | _ ->
-               match h_red_pattern_opt hyps ri s mp with
+               match h_red_pattern_opt eq hyps ri s mp with
                | Some mp' when not (p_equal mp mp') -> Some (p_glob mp' mem)
-               | _ -> omap (fun x -> p_glob mp x) (h_red_pattern_opt hyps ri s mem) in
+               | _ ->
+                  omap (fun x -> p_glob mp x) (h_red_pattern_opt eq hyps ri s mem) in
           p'
 
        (* μ-reduction *)
@@ -734,12 +736,12 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             | Pat_Axiom (Axiom_Prog_Var pv) ->
                let pv' = EcEnv.NormMp.norm_pvar (EcEnv.LDecl.toenv hyps) pv in
                if pv_equal pv pv' then
-                 omap (p_pvar ppv ty) (h_red_pattern_opt hyps ri s m)
+                 omap (p_pvar ppv ty) (h_red_pattern_opt eq hyps ri s m)
                else Some (p_pvar (pat_pv pv') ty m)
             | _ ->
-               match h_red_pattern_opt hyps ri s ppv with
+               match h_red_pattern_opt eq hyps ri s ppv with
                | Some pv -> Some (p_pvar pv ty m)
-               | None -> omap (p_pvar ppv ty) (h_red_pattern_opt hyps ri s m) in
+               | None -> omap (p_pvar ppv ty) (h_red_pattern_opt eq hyps ri s m) in
           pv
 
        (* logical reduction *)
@@ -788,7 +790,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                    then Some p_false
                    else Some (p_ands (List.map2 p_eq args1 args2))
 
-                | _ -> if p_equal f1 f2 then Some p_true
+                | _ -> if p_equal f1 f2 || eq hyps ri f1 f2 then Some p_true
                        else Some (p_eq_simpl f1 f2)
               end
 
@@ -805,7 +807,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             | Some p -> Some p
             | _ -> omap
                      (fun x -> p_app fo x ty)
-                     (h_red_args (fun x -> x) h_red_pattern_opt
+                     (h_red_args (fun x -> x) (h_red_pattern_opt eq)
                         hyps ri s args)
           end
 
@@ -826,11 +828,11 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* contextual rule - let *)
        | Sym_Form_Let lp, [p1;p2] ->
-          omap (fun p1 -> p_let lp p1 p2) (h_red_pattern_opt hyps ri s p1)
+          omap (fun p1 -> p_let lp p1 p2) (h_red_pattern_opt eq hyps ri s p1)
 
        (* Contextual rule - application args. *)
        | Sym_Form_App (ty,ho), p1::args ->
-          omap (fun p1 -> p_app ~ho p1 args ty) (h_red_pattern_opt hyps ri s p1)
+          omap (fun p1 -> p_app ~ho p1 args ty) (h_red_pattern_opt eq hyps ri s p1)
 
        (* (\* Contextual rule - bindings *\)
         * | Sym_Form_Quant (Lforall as t, b), [p1]
@@ -853,7 +855,7 @@ let rec h_red_pattern_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
   with
   | EcEnv.NotReducible -> None
 
-and h_red_axiom_opt hyps ri s (a : axiom) =
+and h_red_axiom_opt eq hyps ri s (a : axiom) =
   try match a with
       | Axiom_Hoarecmp _    -> None
       | Axiom_Memory m      -> h_red_mem_opt hyps ri s m
@@ -862,7 +864,7 @@ and h_red_axiom_opt hyps ri s (a : axiom) =
       | Axiom_Op (b,op,l,_) -> if b then h_red_op_opt hyps ri s op l else None
       | Axiom_Mpath_top m   -> h_red_mpath_top_opt hyps ri s m
       | Axiom_Mpath m       -> h_red_mpath_opt hyps ri s m
-      | Axiom_Stmt stmt     -> h_red_stmt_opt hyps ri s stmt
+      | Axiom_Stmt stmt     -> h_red_stmt_opt eq hyps ri s stmt
       | Axiom_Lvalue lv     -> h_red_lvalue_opt hyps ri s lv
       | Axiom_Xpath x       -> h_red_xpath_opt hyps ri s x
       | Axiom_Local (id,_t) -> reduce_local_opt hyps ri s (pat_axiom a) id None
@@ -911,9 +913,9 @@ and h_red_mpath_opt hyps ri s m =
             (h_red_args pat_mpath h_red_mpath_opt hyps ri s m.m_args)
   else None
 
-and h_red_stmt_opt hyps ri s stmt =
+and h_red_stmt_opt eq hyps ri s stmt =
   omap (fun l -> pat_fun_symbol Sym_Stmt_Seq l)
-    (h_red_args (fun x -> x) h_red_pattern_opt hyps ri s
+    (h_red_args (fun x -> x) (h_red_pattern_opt eq) hyps ri s
        (List.map pat_instr stmt.s_node))
 
 and h_red_lvalue_opt hyps ri s = function
@@ -932,12 +934,12 @@ and h_red_xpath_opt hyps ri s x =
        | None -> None
   else None
 
-let h_red_pattern_opt h r s p = match h_red_pattern_opt h r s p with
+let h_red_pattern_opt eq h r s p = match h_red_pattern_opt eq h r s p with
   | None -> None
   | Some p' ->
      if p = p' then None else Some p'
 
-let h_red_axiom_opt h r s a = match h_red_axiom_opt h r s a with
+let h_red_axiom_opt eq h r s a = match h_red_axiom_opt eq h r s a with
   | None -> None
   | Some p' ->
      if pat_axiom a = p' then None else Some p'

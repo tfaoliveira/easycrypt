@@ -37,11 +37,13 @@ and engine = {
     e_pattern2     : pattern;
     e_continuation : pat_continuation;
     e_env          : environment;
+    e_reductions   : engine list;
   }
 
 and nengine = {
     ne_continuation : pat_continuation;
     ne_env          : environment;
+    ne_reductions   : engine list;
   }
 
 val menv_copy       : match_env -> match_env
