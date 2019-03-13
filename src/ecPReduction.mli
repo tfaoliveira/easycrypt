@@ -15,8 +15,3 @@ val h_red_pattern_opt : (EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
                          EcPattern.pattern -> EcPattern.pattern -> bool) ->
                         EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
                         Psubst.p_subst -> pattern -> pattern option
-
-val h_red_axiom_opt   : (EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                         EcPattern.pattern -> EcPattern.pattern -> bool) ->
-                        EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                        Psubst.p_subst -> axiom -> pattern option

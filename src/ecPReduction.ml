@@ -936,10 +936,8 @@ and h_red_xpath_opt hyps ri s x =
 
 let h_red_pattern_opt eq h r s p = match h_red_pattern_opt eq h r s p with
   | None -> None
-  | Some p' ->
-     if p = p' then None else Some p'
+  | Some p' -> if p = p' then None else Some p'
 
 let h_red_axiom_opt eq h r s a = match h_red_axiom_opt eq h r s a with
   | None -> None
-  | Some p' ->
-     if pat_axiom a = p' then None else Some p'
+  | Some p' -> if pat_axiom a = p' then None else Some p'

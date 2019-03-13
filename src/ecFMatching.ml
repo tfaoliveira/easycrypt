@@ -81,7 +81,7 @@ let debug_verbose : verbose = {
     verbose_subst           = false;
     verbose_unienv          = false;
     verbose_eta             = false;
-    verbose_show_match      = false;
+    verbose_show_match      = true;
     verbose_add_reduce      = true;
   }
 
@@ -1509,7 +1509,7 @@ let rec process (e : engine) : nengine =
          else
            let f s (id1,_) (id2,gty1) = Psubst.p_bind_ogty s id1 id2 gty1 in
            let e_env      = saturate e.e_env in
-           let subst      = psubst_of_menv e.e_env.env_match in
+           let subst      = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty }in
            let s          = List.fold_left2 f subst b11 b21 in
            let p1         = p_quant q1 b12 p1 in
            let e_pattern1 = Psubst.p_subst s p1 in
@@ -1755,7 +1755,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
              *   ~src:e'.e_env.env_match.me_unienv
              *   ~dst:e.ne_env.env_match.me_unienv; *)
             let e = { e' with e_pattern1; e_pattern2 } in
-            let e = { e with e_reductions = (e_copy e)::e_reductions } in
+            let e = { e with e_reductions = e_reductions } in
             process e
     end
 
@@ -1802,8 +1802,8 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      Debug.debug_which_rule e.ne_env "next : next match in zand";
      let ne_env = saturate e.ne_env in
      let e      = { e with ne_env } in
-     let s      = psubst_of_menv e.ne_env.env_match in
-     let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in
+     (* let s      = psubst_of_menv e.ne_env.env_match in
+      * let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in *)
      process (n_engine f p
                 { e with ne_continuation = Zand ((f,p)::before,after,z)})
 
@@ -1952,6 +1952,20 @@ and search_eng e =
     Some e'
   with
   | NoMatches -> None
+
+let no_delta p = match p.p_node with
+  | Pat_Fun_Symbol (Sym_Form_App (t1,ho),
+                    { p_node = Pat_Axiom (Axiom_Op (_,p,lt,t))} :: lp) ->
+     p_app ~ho (pat_op ~delta:false p lt t) lp t1
+  | _ -> p
+
+let search_eng_head_no_delta e =
+  search_eng { e with e_pattern1 = no_delta e.e_pattern1 }
+
+let search_eng e = search_eng_head_no_delta e
+  (* match search_eng_head_no_delta e with
+   * | Some ne -> Some ne
+   * | None    -> search_eng e *)
 
 let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
