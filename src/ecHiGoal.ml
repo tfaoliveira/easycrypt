@@ -1429,7 +1429,7 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
             (ptenv !!tc hyps menv, p)
           in
 
-          (try  PT.pf_find_occurence ptenv ~ptn:p concl
+          (try  PT.pf_find_occurence ptenv ~keyed:`Lazy ~ptn:p concl
            with PT.FindOccFailure _ -> tc_error !!tc "cannot find an occurence");
 
           let p    = PT.concretize_form ptenv p in
