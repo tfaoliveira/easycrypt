@@ -772,34 +772,70 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
          ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
-          if verbose then print hyps "logical";
           let pcompat =
             match oget ri.logic with `Full -> true | `ProductCompat -> false
           in
 
           let p' =
             match op_kind op, args with
-            | Some (`Not), [f1]    when pcompat -> p_not_simpl_opt f1
-            | Some (`Imp), [f1;f2] when pcompat -> p_imp_simpl_opt f1 f2
-            | Some (`Iff), [f1;f2] when pcompat -> p_iff_simpl_opt f1 f2
+            | Some (`Not), [f1]    when pcompat ->
+               if verbose then print hyps "!";
+               p_not_simpl_opt f1
+            | Some (`Imp), [f1;f2] when pcompat ->
+               if verbose then print hyps "=>";
+               p_imp_simpl_opt f1 f2
+            | Some (`Iff), [f1;f2] when pcompat ->
+               if verbose then print hyps "<=>";
+               p_iff_simpl_opt f1 f2
 
 
-            | Some (`And `Asym), [f1;f2] ->     p_anda_simpl_opt f1 f2
-            | Some (`Or  `Asym), [f1;f2] ->      p_ora_simpl_opt f1 f2
-            | Some (`And `Sym ), [f1;f2] ->      p_and_simpl_opt f1 f2
-            | Some (`Or  `Sym ), [f1;f2] ->       p_or_simpl_opt f1 f2
-            | Some (`Int_le   ), [f1;f2] ->   p_int_le_simpl_opt f1 f2
-            | Some (`Int_lt   ), [f1;f2] ->   p_int_lt_simpl_opt f1 f2
-            | Some (`Real_le  ), [f1;f2] ->  p_real_le_simpl_opt f1 f2
-            | Some (`Real_lt  ), [f1;f2] ->  p_real_lt_simpl_opt f1 f2
-            | Some (`Int_add  ), [f1;f2] ->  p_int_add_simpl_opt f1 f2
-            | Some (`Int_opp  ), [f]     ->  p_int_opp_simpl_opt f
-            | Some (`Int_mul  ), [f1;f2] ->  p_int_mul_simpl_opt f1 f2
-            | Some (`Real_add ), [f1;f2] -> p_real_add_simpl_opt f1 f2
-            | Some (`Real_opp ), [f]     -> p_real_opp_simpl_opt f
-            | Some (`Real_mul ), [f1;f2] -> p_real_mul_simpl_opt (EcEnv.LDecl.toenv hyps) f1 f2
-            | Some (`Real_inv ), [f]     -> p_real_inv_simpl_opt f
+            | Some (`And `Asym), [f1;f2] ->
+               if verbose then print hyps "&&";
+               p_anda_simpl_opt f1 f2
+            | Some (`Or  `Asym), [f1;f2] ->
+               if verbose then print hyps "||";
+               p_ora_simpl_opt f1 f2
+            | Some (`And `Sym ), [f1;f2] ->
+               if verbose then print hyps "/\\";
+               p_and_simpl_opt f1 f2
+            | Some (`Or  `Sym ), [f1;f2] ->
+               if verbose then print hyps "\\/";
+               p_or_simpl_opt f1 f2
+            | Some (`Int_le   ), [f1;f2] ->
+               if verbose then print hyps "Int.(<=)";
+               p_int_le_simpl_opt f1 f2
+            | Some (`Int_lt   ), [f1;f2] ->
+               if verbose then print hyps "Int.(<)";
+               p_int_lt_simpl_opt f1 f2
+            | Some (`Real_le  ), [f1;f2] ->
+               if verbose then print hyps "Real.(<=)";
+               p_real_le_simpl_opt f1 f2
+            | Some (`Real_lt  ), [f1;f2] ->
+               if verbose then print hyps "Real.(<)";
+               p_real_lt_simpl_opt f1 f2
+            | Some (`Int_add  ), [f1;f2] ->
+               if verbose then print hyps "Int.(+)";
+               p_int_add_simpl_opt f1 f2
+            | Some (`Int_opp  ), [f]     ->
+               if verbose then print hyps "Int.[-]";
+               p_int_opp_simpl_opt f
+            | Some (`Int_mul  ), [f1;f2] ->
+               if verbose then print hyps "Int.( * )";
+               p_int_mul_simpl_opt f1 f2
+            | Some (`Real_add ), [f1;f2] ->
+               if verbose then print hyps "Real.(+)";
+               p_real_add_simpl_opt f1 f2
+            | Some (`Real_opp ), [f]     ->
+               if verbose then print hyps "Real.[-]";
+               p_real_opp_simpl_opt f
+            | Some (`Real_mul ), [f1;f2] ->
+               if verbose then print hyps "Real.( * )";
+               p_real_mul_simpl_opt (EcEnv.LDecl.toenv hyps) f1 f2
+            | Some (`Real_inv ), [f]     ->
+               if verbose then print hyps "inv";
+               p_real_inv_simpl_opt f
             | Some (`Eq       ), [f1;f2] -> begin
+                if verbose then print hyps "(=)";
                 match (p_destr_app f1), (p_destr_app f2) with
                 | ({ p_node = Pat_Axiom (Axiom_Op (_, op1, _, _))}, args1),
                   ({ p_node = Pat_Axiom (Axiom_Op (_, op2, _, _))}, args2)
@@ -829,17 +865,23 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
           begin
             match p' with
             | Some p -> Some p
-            | _ -> omap
-                     (fun x -> p_app fo x ty)
-                     (h_red_args (fun x -> x) (h_red_pattern_opt eq)
-                        hyps ri s args)
+            | _ ->
+               if verbose then print hyps "logical other";
+               omap
+                 (fun x -> p_app fo x ty)
+                 (h_red_args (fun x -> x) (h_red_pattern_opt eq)
+                    hyps ri s args)
           end
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),
          ({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) } as pop) :: args
             when delta && is_delta_p ri pop ->
-          if verbose then print hyps "delta";
+          if verbose then
+            (print hyps "delta";
+             let env = EcEnv.LDecl.toenv hyps in
+             EcEnv.notify env `Warning "%a"
+               EcPrinting.pp_path op);
           let op = h_red_op_opt hyps ri s op lty in
           omap (fun op -> update_higher_order (p_app_simpl op args ty)) op
 
@@ -982,10 +1024,12 @@ and h_red_xpath_opt hyps ri s x =
        | None -> None
   else None
 
-let h_red_pattern_opt eq h r s p = match h_red_pattern_opt eq h r s p with
+let h_red_pattern_opt ?(verbose:bool=false) eq h r s p =
+  match h_red_pattern_opt ~verbose eq h r s p with
   | None -> None
   | Some p' -> if p = p' then None else Some p'
 
-let h_red_axiom_opt eq h r s a = match h_red_axiom_opt eq h r s a with
+let h_red_axiom_opt ?(verbose:bool=false) eq h r s a =
+  match h_red_axiom_opt ~verbose eq h r s a with
   | None -> None
   | Some p' -> if pat_axiom a = p' then None else Some p'

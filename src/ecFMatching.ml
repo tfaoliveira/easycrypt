@@ -228,7 +228,7 @@ module Debug : sig
   val debug_which_rule               : environment -> string -> unit
   val debug_result_match             : environment -> ismatch -> unit
   val debug_try_reduce               : environment -> pattern -> pattern -> unit
-  val debug_reduce                   : environment -> pattern -> pattern -> bool -> unit
+  val debug_reduce                   : environment -> pattern -> pattern -> pattern -> pattern -> bool -> unit
   val debug_reduce_incorrect         : environment -> pattern -> pattern -> unit
   val debug_found_match              : environment -> unit
   val debug_no_match_found           : environment -> unit
@@ -523,7 +523,7 @@ end = struct
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pattern ppe) a
 
-  let debug_reduce menv p a b =
+  let debug_reduce menv p1 p2 a1 a2 b =
     if menv.env_verbose.verbose_reduce then
       let env = LDecl.toenv menv.env_hyps in
       let ppe = EcPrinting.PPEnv.ofenv env in
@@ -533,14 +533,18 @@ end = struct
             (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
             (if menv.env_red_info_match.EcReduction.delta_p (EcPath.psymbol "toto")
              then "with" else "without");
-          EcEnv.notify env `Warning "*** %a"
-            (EcPrinting.pp_pattern ppe) p
+          EcEnv.notify env `Warning "***1: before %a"
+            (EcPrinting.pp_pattern ppe) p1;
+          EcEnv.notify env `Warning "***1: after  %a"
+            (EcPrinting.pp_pattern ppe) p2;
+          EcEnv.notify env `Warning "***2: before %a"
+            (EcPrinting.pp_pattern ppe) a1
         end
       else
         EcEnv.notify env `Warning "Ignore reduction: %a"
-          (EcPrinting.pp_pattern ppe) p;
-      EcEnv.notify env `Warning "*** %a"
-        (EcPrinting.pp_pattern ppe) a
+          (EcPrinting.pp_pattern ppe) p1;
+      EcEnv.notify env `Warning "***2: after  %a"
+        (EcPrinting.pp_pattern ppe) a2
 
   let debug_reduce_incorrect menv p a =
     if menv.env_verbose.verbose_reduce then
@@ -1744,18 +1748,19 @@ and next_n (m : ismatch) (e : nengine) : nengine =
          Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
          match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
          | None ->
-            Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern2 false;
+            Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern1
+              e'.e_pattern2 e'.e_pattern2 false;
             (* EcUnify.UniEnv.restore
              *   ~src:ne.ne_env.env_match.me_unienv
              *   ~dst: e.ne_env.env_match.me_unienv; *)
             next_n NoMatch { e with ne_reductions = e_reductions }
          | Some (e_pattern1, e_pattern2) ->
-            Debug.debug_reduce e'.e_env e_pattern1 e_pattern2 true;
+            Debug.debug_reduce e'.e_env e'.e_pattern1 e_pattern1
+              e'.e_pattern2 e_pattern2 true;
             (* EcUnify.UniEnv.restore
              *   ~src:e'.e_env.env_match.me_unienv
              *   ~dst:e.ne_env.env_match.me_unienv; *)
-            let e = { e' with e_pattern1; e_pattern2 } in
-            let e = { e with e_reductions = e_reductions } in
+            let e = { e' with e_pattern1; e_pattern2; e_reductions } in
             process e
     end
 
@@ -1927,12 +1932,14 @@ and h_red_strat env p1 p2 =
       EQ.pattern env r p1 p2 in
   (* let p1  = Psubst.p_subst s p1 in
    * let p2  = Psubst.p_subst s p2 in *)
-  match EcPReduction.h_red_pattern_opt eq h r s p1 with
+  match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+          eq h r s p1 with
   | Some p1 ->
      Debug.debug_h_red_strat env p1 p2 1;
      Some (p1, p2)
   | None ->
-     match EcPReduction.h_red_pattern_opt eq h r s p2 with
+     match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+             eq h r s p2 with
      | Some p2 ->
         Debug.debug_h_red_strat env p1 p2 2;
         Some (p1, p2)
