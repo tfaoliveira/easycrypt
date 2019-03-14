@@ -769,7 +769,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
 
        (* logical reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as _fo) :: args
+         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
           let pcompat =
@@ -865,12 +865,12 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
           begin
             match p' with
             | Some p -> Some p
-            | _ -> None
-               (* if verbose then print hyps "logical other";
-                * omap
-                *   (fun x -> p_app fo x ty)
-                *   (h_red_args (fun x -> x) (h_red_pattern_opt eq)
-                *      hyps ri s args) *)
+            | _ ->
+               if verbose then print hyps "logical other";
+               omap
+                 (fun x -> p_app fo x ty)
+                 (h_red_args (fun x -> x) (h_red_pattern_opt eq)
+                    hyps ri s args)
           end
 
        (* δ-reduction *)
@@ -1024,12 +1024,36 @@ and h_red_xpath_opt hyps ri s x =
        | None -> None
   else None
 
+let rec test_eq f p1 p2 =
+  match p_destr_app p1, p_destr_app p2 with
+  | (pop1, [p11;p13]), (pop2, [p21;p23])
+       when op_equal pop1 f && op_equal pop2 f -> begin
+      match p_destr_app p11, p_destr_app p23 with
+      | (pop1, [p11;p12]), (pop2, [p21;p22])
+           when op_equal pop1 f && op_equal pop2 f ->
+         pat_eq p11 p21 && pat_eq p12 p22 && pat_eq p13 p23
+      | _ ->
+      match p_destr_app p13, p_destr_app p21 with
+      | (pop1, [p12;p13]), (pop2, [p21;p22])
+           when op_equal pop1 f && op_equal pop2 f ->
+         pat_eq p11 p21 && pat_eq p12 p22 && pat_eq p13 p23
+      | _ -> false
+    end
+
+  | _ -> false
+
+and pat_eq p1 p2 = p1 = p2
+  || test_eq fop_int_add p1 p2
+  || test_eq fop_int_mul p1 p2
+  || test_eq fop_real_add p1 p2
+  || test_eq fop_real_mul p1 p2
+
 let h_red_pattern_opt ?(verbose:bool=false) eq h r s p =
   match h_red_pattern_opt ~verbose eq h r s p with
   | None -> None
-  | Some p' -> if p = p' then None else Some p'
+  | Some p' -> if pat_eq p p' then None else Some p'
 
 let h_red_axiom_opt ?(verbose:bool=false) eq h r s a =
   match h_red_axiom_opt ~verbose eq h r s a with
   | None -> None
-  | Some p' -> if pat_axiom a = p' then None else Some p'
+  | Some p' -> if pat_eq (pat_axiom a) p' then None else Some p'

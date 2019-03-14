@@ -452,6 +452,45 @@ end = struct
           (EcPrinting.pp_pattern ppe) p1
           (EcPrinting.pp_pattern ppe) p2
 
+  let debug_unienv menv =
+    if menv.env_verbose.verbose_unienv then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let vars = EcUnify.UniEnv.uvars menv.env_match.me_unienv in
+      let vars = EcUid.Suid.elements vars in
+      let s = EcUnify.UniEnv.assubst menv.env_match.me_unienv in
+
+      let pp_names ppe fmt name =
+        match s name with
+        | Some t ->
+           Format.fprintf fmt "%a <- %a"
+             (EcPrinting.pp_tyunivar ppe) name
+             (EcPrinting.pp_type ppe) t
+        | None ->
+           Format.fprintf fmt "%a : not unified"
+             (EcPrinting.pp_tyunivar ppe) name
+      in
+
+      EcEnv.notify env `Warning "Unienv: %a"
+        (EcPrinting.pp_list "@ and@ " (pp_names ppe)) vars
+
+  let debug_show_matches menv =
+    if menv.env_verbose.verbose_show_match then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      let pp_names ppe fmt (name,p) =
+        Format.fprintf fmt "%a <- (%a : %a)"
+          (EcPrinting.pp_local ppe) name
+          (EcPrinting.pp_pattern ppe) p
+          (EcPrinting.pp_ogty ppe) p.p_ogty in
+
+      EcEnv.notify env `Warning "Current matching: %a"
+        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
+        (Mid.bindings menv.env_match.me_matches);
+      debug_unienv menv
+
   let debug_higher_order_to_abstract menv p1 p2 =
     if menv.env_verbose.verbose_abstract then
       let env = LDecl.toenv menv.env_hyps in
@@ -546,7 +585,8 @@ end = struct
         EcEnv.notify env `Warning "Ignore reduction: %a"
           (EcPrinting.pp_pattern ppe) p1;
       EcEnv.notify env `Warning "***2: after  %a"
-        (EcPrinting.pp_pattern ppe) a2
+        (EcPrinting.pp_pattern ppe) a2;
+      debug_show_matches menv
 
   let debug_reduce_incorrect menv p a =
     if menv.env_verbose.verbose_reduce then
@@ -556,29 +596,6 @@ end = struct
       EcEnv.notify env `Warning "Incorrect reduction for (%a,%a)"
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pattern ppe) a
-
-  let debug_unienv menv =
-    if menv.env_verbose.verbose_unienv then
-      let env = LDecl.toenv menv.env_hyps in
-      let ppe = EcPrinting.PPEnv.ofenv env in
-
-      let vars = EcUnify.UniEnv.uvars menv.env_match.me_unienv in
-      let vars = EcUid.Suid.elements vars in
-      let s = EcUnify.UniEnv.assubst menv.env_match.me_unienv in
-
-      let pp_names ppe fmt name =
-        match s name with
-        | Some t ->
-           Format.fprintf fmt "%a <- %a"
-             (EcPrinting.pp_tyunivar ppe) name
-             (EcPrinting.pp_type ppe) t
-        | None ->
-           Format.fprintf fmt "%a : not unified"
-             (EcPrinting.pp_tyunivar ppe) name
-      in
-
-      EcEnv.notify env `Warning "Unienv: %a"
-        (EcPrinting.pp_list "@ and@ " (pp_names ppe)) vars
 
   let debug_found_match menv =
     if menv.env_verbose.verbose_match then
@@ -592,22 +609,6 @@ end = struct
           (EcPrinting.pp_ogty ppe) p.p_ogty in
 
       EcEnv.notify env `Warning "Matching successful: %a"
-        (EcPrinting.pp_list "@ and@ " (pp_names ppe))
-        (Mid.bindings menv.env_match.me_matches);
-      debug_unienv menv
-
-  let debug_show_matches menv =
-    if menv.env_verbose.verbose_show_match then
-      let env = LDecl.toenv menv.env_hyps in
-      let ppe = EcPrinting.PPEnv.ofenv env in
-
-      let pp_names ppe fmt (name,p) =
-        Format.fprintf fmt "%a <- (%a : %a)"
-          (EcPrinting.pp_local ppe) name
-          (EcPrinting.pp_pattern ppe) p
-          (EcPrinting.pp_ogty ppe) p.p_ogty in
-
-      EcEnv.notify env `Warning "Current matching: %a"
         (EcPrinting.pp_list "@ and@ " (pp_names ppe))
         (Mid.bindings menv.env_match.me_matches);
       debug_unienv menv
