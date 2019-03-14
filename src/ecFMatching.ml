@@ -122,9 +122,11 @@ type pat_continuation =
   (* Zand (before, after, cont) :
        - before : list of couples (pattern, pattern) that has already been checked
        - after  : list of couples (pattern, pattern) to check in the following
+       - reductions : list of possible reduction before asking zand
        - cont   : continuation if all the matches succeed *)
   | Zand       of (pattern * pattern) list
                   * (pattern * pattern) list
+                  * engine list
                   * pat_continuation
 
 
@@ -482,7 +484,7 @@ end = struct
   let rec compute_zands c = function
     | ZTop -> c
     | Zor (ct,_,_) -> compute_zands c ct
-    | Zand (_,l,ct) -> compute_zands (c + List.length l) ct
+    | Zand (_,l,_,ct) -> compute_zands (c + List.length l) ct
     | Znamed (_,_,_,ct) -> compute_zands c ct
 
   let debug_try_match menv p a c =
@@ -1196,9 +1198,8 @@ let change_ogty ogty p = mk_pattern p.p_node ogty
 
 let try_reduce (e : engine) : engine =
   Debug.debug_try_reduce e.e_env e.e_pattern1 e.e_pattern2;
-  let e_env = saturate e.e_env in
   let copy = e_copy e in
-  { e with e_env; e_reductions = e.e_reductions @ [ copy ]; }
+  { e with e_reductions = copy :: e.e_reductions; }
 
 
 let rec check_arrow e b t = match b, t.ty_node with
@@ -1428,7 +1429,8 @@ let rec process (e : engine) : nengine =
        let op1 = p_app op1 args11 (parrow args12 ot1) in
        let op2 = p_app op2 args21 (parrow args22 ot2) in
        let e_pattern1, e_pattern2, zand = op1, op2, zand in
-       let e_continuation = Zand ([e_pattern1,e_pattern2],zand,e.e_continuation) in
+       let e_continuation =
+         Zand ([e_pattern1,e_pattern2],zand,e.e_reductions,e.e_continuation) in
        process { e with e_pattern1; e_pattern2; e_continuation; }
 
     (* FIXME *)
@@ -1530,7 +1532,7 @@ let rec process (e : engine) : nengine =
              let zand = List.combine args12 args22 in
              let e_continuation = match zand with
                | [] -> e.e_continuation
-               | _  -> Zand ([],zand,e.e_continuation) in
+               | _  -> Zand ([],zand,e.e_reductions,e.e_continuation) in
              let e_pattern1 = p_mpath p1 args11 in
              let e_pattern2 = p_mpath p2 args21 in
              process { e with e_pattern1; e_pattern2; e_continuation; }
@@ -1540,7 +1542,7 @@ let rec process (e : engine) : nengine =
        if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
        then begin
            Debug.debug_which_rule e.e_env "same fun symbol";
-           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
+           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_reductions, e.e_continuation) in
            next Match { e with e_continuation }
          end
        else let e = try_reduce e in next NoMatch e
@@ -1589,7 +1591,7 @@ let rec process (e : engine) : nengine =
              let zand = List.map2 (fun x y -> (pat_mpath x),y) margs2 pargs2 in
              let e_continuation = match zand with
                | [] -> e.e_continuation
-               | _  -> Zand ([],zand,e.e_continuation) in
+               | _  -> Zand ([],zand,e.e_reductions,e.e_continuation) in
              let m = match margs1 with
                | [] -> pat_mpath_top m.m_top
                | _  -> if margs2 = [] then pat_mpath m
@@ -1609,7 +1611,7 @@ let rec process (e : engine) : nengine =
              let zand = List.map2 (fun x y -> (pat_mpath x),y) margs2 pargs2 in
              let e_continuation = match zand with
                | [] -> e.e_continuation
-               | _  -> Zand ([],zand,e.e_continuation) in
+               | _  -> Zand ([],zand,e.e_reductions,e.e_continuation) in
              let m = match margs1 with
                | [] -> pat_mpath_top m.m_top
                | _  -> if margs2 = [] then pat_mpath m
@@ -1657,7 +1659,7 @@ let rec process (e : engine) : nengine =
              process { e with
                  e_pattern1 = pi;
                  e_pattern2 = pat_instr fi;
-                 e_continuation = Zand ([],zand,e.e_continuation);
+                 e_continuation = Zand ([],zand,e.e_reductions,e.e_continuation);
                }
        end
 
@@ -1670,7 +1672,7 @@ let rec process (e : engine) : nengine =
              process { e with
                  e_pattern2 = pi;
                  e_pattern1 = pat_instr fi;
-                 e_continuation = Zand ([],zand,e.e_continuation);
+                 e_continuation = Zand ([],zand,e.e_reductions,e.e_continuation);
                }
        end
 
@@ -1695,7 +1697,7 @@ let rec process (e : engine) : nengine =
              process { e with
                  e_pattern1 = pf;
                  e_pattern2 = pat_op x.x_sub [] None;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
+                 e_continuation = Zand ([],zand,e.e_reductions,e.e_continuation); }
        end
 
     | Pat_Axiom (Axiom_Xpath x),
@@ -1705,7 +1707,7 @@ let rec process (e : engine) : nengine =
              process { e with
                  e_pattern2 = pf;
                  e_pattern1 = pat_op x.x_sub [] None;
-                 e_continuation = Zand ([],zand,e.e_continuation); }
+                 e_continuation = Zand ([],zand,e.e_reductions,e.e_continuation); }
        end
 
     | Pat_Fun_Symbol
@@ -1768,9 +1770,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      Debug.debug_which_rule e.ne_env "next : no match in named";
      next_n NoMatch { e with ne_continuation; }
 
-  | NoMatch, Zand (_,_,ne_continuation) ->
+  | NoMatch, Zand (_,_,ne_reductions,ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : no match in zand";
-     next_n NoMatch { e with ne_continuation; }
+     next_n NoMatch { e with ne_continuation; ne_reductions; }
 
   | NoMatch, Zor (_, [], ne) ->
      Debug.debug_which_rule e.ne_env "next : no match in zor, no more matches";
@@ -1799,18 +1801,19 @@ and next_n (m : ismatch) (e : nengine) : nengine =
           NoMatch, { e with ne_continuation; } in
      next_n m e
 
-  | Match, Zand (_before,[],ne_continuation) ->
+  | Match, Zand (_before,[],ne_reductions,ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : all match in zand";
-     next_n Match { e with ne_continuation }
+     next_n Match { e with ne_continuation; ne_reductions }
 
-  | Match, Zand (before,(f,p)::after,z) ->
+  | Match, Zand (before,(f,p)::after,ne_reductions,z) ->
      Debug.debug_which_rule e.ne_env "next : next match in zand";
      let ne_env = saturate e.ne_env in
      let e      = { e with ne_env } in
      (* let s      = psubst_of_menv e.ne_env.env_match in
       * let f, p   = Psubst.p_subst s f, Psubst.p_subst s p in *)
      process (n_engine f p
-                { e with ne_continuation = Zand ((f,p)::before,after,z)})
+                { e with ne_continuation = Zand ((f,p)::before,after,ne_reductions,z);
+                         ne_reductions;})
 
   | Match, Zor (ne_continuation, _, _) ->
      Debug.debug_which_rule e.ne_env "next : match in zor";

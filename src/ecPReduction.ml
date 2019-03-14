@@ -769,7 +769,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
 
        (* logical reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
+         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as _fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
           let pcompat =
@@ -865,12 +865,12 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
           begin
             match p' with
             | Some p -> Some p
-            | _ ->
-               if verbose then print hyps "logical other";
-               omap
-                 (fun x -> p_app fo x ty)
-                 (h_red_args (fun x -> x) (h_red_pattern_opt eq)
-                    hyps ri s args)
+            | _ -> None
+               (* if verbose then print hyps "logical other";
+                * omap
+                *   (fun x -> p_app fo x ty)
+                *   (h_red_args (fun x -> x) (h_red_pattern_opt eq)
+                *      hyps ri s args) *)
           end
 
        (* δ-reduction *)
