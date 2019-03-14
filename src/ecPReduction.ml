@@ -546,22 +546,32 @@ let p_can_eta h x (f, args) =
      id_equal x y && List.for_all check (f :: args)
   | _ -> false
 
-let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
+let print h s =
+  let env = EcEnv.LDecl.toenv h in
+  EcEnv.notify env `Warning "rrrrr Reduction : %s" s
+
+let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
           (s : Psubst.p_subst) (p : pattern) =
+  let h_red_pattern_opt = h_red_pattern_opt ~verbose in
   try
     match p.p_node with
-    | Pat_Meta_Name (_,n,ob) -> reduce_local_opt hyps ri s p n ob
-    | Pat_Sub p -> omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
-                     (h_red_pattern_opt eq hyps ri s p)
+    | Pat_Meta_Name (_,n,ob) ->
+       let o = reduce_local_opt hyps ri s p n ob in
+       if verbose && is_some o then print hyps "meta name"; o
+    | Pat_Sub p ->
+       omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
+         (h_red_pattern_opt eq hyps ri s p)
     | Pat_Or _ -> None
     | Pat_Red_Strat _ -> None
-    | Pat_Axiom a -> h_red_axiom_opt eq hyps ri s a
+    | Pat_Axiom a -> h_red_axiom_opt ~verbose eq hyps ri s a
     | Pat_Fun_Symbol (symbol,lp) ->
        match symbol, lp with
        (* β-reduction *)
        | Sym_Form_App _,
          { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_
-            when ri.beta -> p_betared_opt p
+            when ri.beta ->
+          let o = p_betared_opt p in
+          if verbose && is_some o then print hyps "beta"; o
 
        (* ζ-reduction *)
        | Sym_Form_App (ty,ho),
@@ -569,7 +579,9 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             when ri.zeta -> begin
            match reduce_local_opt hyps ri s p id ob with
            | None -> None
-           | Some op -> Some (p_app_simpl ~ho op pargs ty)
+           | Some op ->
+              let o = Some (p_app_simpl ~ho op pargs ty) in
+              if verbose && is_some o then print hyps "zeta 2"; o
          end
 
        (* ζ-reduction *)
@@ -578,12 +590,15 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             when ri.zeta -> begin
            match reduce_local_opt hyps ri s p id None with
            | None -> None
-           | Some op -> Some (p_app_simpl ~ho op pargs oty)
+           | Some op ->
+              let o = Some (p_app_simpl ~ho op pargs oty) in
+              if verbose && is_some o then print hyps "zeta 2"; o
          end
 
        (* ζ-reduction *)
        | Sym_Form_Let (LSymbol(x,_)), [p1;p2] when ri.zeta ->
           let s = Psubst.p_bind_local Psubst.p_subst_id x p1 in
+          if verbose then print hyps "zeta 3";
           Some (Psubst.p_subst s p2)
 
        (* ι-reduction (let-tuple) *)
@@ -592,6 +607,7 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
             when ri.zeta ->
           let s = List.fold_left2 (fun s (x,_) p -> Psubst.p_bind_local s x p)
                     Psubst.p_subst_id ids lp in
+          if verbose then print hyps "iota 1";
           Some (Psubst.p_subst s p2)
 
        (* ι-reduction (let-records) *)
@@ -605,6 +621,7 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                 | Some x -> Psubst.p_bind_local subst x e)
               Psubst.p_subst_id ids args
           in
+          if verbose then print hyps "iota 2";
           Some (Psubst.p_subst subst p2)
 
        (* ι-reduction (records projection) *)
@@ -636,24 +653,27 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
              | _ -> None
            in match op with
               | None ->
-                 omap (fun x -> p_app ~ho x pargs oty)
-                   (h_red_pattern_opt eq hyps ri s p1)
-              | _ -> op
+                 let o = omap (fun x -> p_app ~ho x pargs oty)
+                           (h_red_pattern_opt eq hyps ri s p1) in
+                 if verbose && is_some o then print hyps "iota 3"; o
+              | _ -> if verbose then print hyps "iota 3"; op
          end
 
        (* ι-reduction (tuples projection) *)
        | Sym_Form_Proj (i,ty), [p1] when ri.iota ->
           let p' = p_proj_simpl p1 i ty in
           if p = p'
-          then omap (fun x -> p_proj x i ty) (h_red_pattern_opt eq hyps ri s p1)
-          else Some p'
+          then (let o = omap (fun x -> p_proj x i ty) (h_red_pattern_opt eq hyps ri s p1) in
+               if verbose && is_some o then print hyps "iota 4 1"; o)
+          else (if verbose then print hyps "iota 4 2"; Some p')
 
        (* ι-reduction (if-then-else) *)
        | Sym_Form_If, [p1;p2;p3] when ri.iota -> begin
            match p_if_simpl_opt p1 p2 p3 with
            | None ->
-              omap (fun x -> p_if x p2 p3) (h_red_pattern_opt eq hyps ri s p1)
-           | Some _ as p -> p
+              let o = omap (fun x -> p_if x p2 p3) (h_red_pattern_opt eq hyps ri s p1) in
+              if verbose && is_some o then print hyps "iota 5 1"; o
+           | Some _ as p -> if verbose then print hyps "iota 5 2"; p
          end
 
        (* ι-reduction (match-fix) *)
@@ -707,16 +727,18 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
                let body =
                  EcFol.Fsubst.subst_tvar
                    (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) lty) body in
+               if verbose then print hyps "iota 6 1";
                Some (Psubst.p_subst s (pat_form body))
-
            with
            | EcEnv.NotReducible ->
-              omap (fun x -> p_app ~ho x args ty)
-                (h_red_pattern_opt eq hyps ri s p1)
+              let o = omap (fun x -> p_app ~ho x args ty)
+                (h_red_pattern_opt eq hyps ri s p1) in
+              if verbose && is_some o then print hyps "iota 6 2"; o
          end
 
        (* μ-reduction *)
        | Sym_Form_Glob, [mp;mem] when ri.modpath ->
+          if verbose then print hyps "mu 1";
           let p' = match mp.p_node, mem.p_node with
             | Pat_Axiom (Axiom_Mpath mp), Pat_Axiom (Axiom_Memory m) ->
                let f  = f_glob mp m in
@@ -732,6 +754,7 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
        (* μ-reduction *)
        | Sym_Form_Pvar ty, [ppv;m] ->
+          if verbose then print hyps "mu 2";
           let pv = match ppv.p_node with
             | Pat_Axiom (Axiom_Prog_Var pv) ->
                let pv' = EcEnv.NormMp.norm_pvar (EcEnv.LDecl.toenv hyps) pv in
@@ -749,6 +772,7 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
          ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
+          if verbose then print hyps "logical";
           let pcompat =
             match oget ri.logic with `Full -> true | `ProductCompat -> false
           in
@@ -815,6 +839,7 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
        | Sym_Form_App (ty,_ho),
          ({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) } as pop) :: args
             when delta && is_delta_p ri pop ->
+          if verbose then print hyps "delta";
           let op = h_red_op_opt hyps ri s op lty in
           omap (fun op -> update_higher_order (p_app_simpl op args ty)) op
 
@@ -822,16 +847,19 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
        | Sym_Quant (Llambda, (x, OGTty (Some t1))::binds),
          [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,ho), pn::pargs)}]
             when p_can_eta hyps x (pn, pargs) ->
+          if verbose then print hyps "eta";
           Some (p_quant Llambda binds
                   (p_app ~ho pn (List.take (List.length pargs - 1) pargs)
                      (omap (tfun t1) ty)))
 
        (* contextual rule - let *)
        | Sym_Form_Let lp, [p1;p2] ->
+          if verbose then print hyps "context let";
           omap (fun p1 -> p_let lp p1 p2) (h_red_pattern_opt eq hyps ri s p1)
 
        (* Contextual rule - application args. *)
        | Sym_Form_App (ty,ho), p1::args ->
+          if verbose then print hyps "context app";
           omap (fun p1 -> p_app ~ho p1 args ty) (h_red_pattern_opt eq hyps ri s p1)
 
        (* (\* Contextual rule - bindings *\)
@@ -855,19 +883,39 @@ let rec h_red_pattern_opt eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
   with
   | EcEnv.NotReducible -> None
 
-and h_red_axiom_opt eq hyps ri s (a : axiom) =
+and h_red_axiom_opt ?(verbose:bool=false) eq hyps ri s (a : axiom) =
   try match a with
       | Axiom_Hoarecmp _    -> None
-      | Axiom_Memory m      -> h_red_mem_opt hyps ri s m
-      | Axiom_MemEnv m      -> h_red_memenv_opt hyps ri s m
-      | Axiom_Prog_Var pv   -> h_red_prog_var_opt hyps ri s pv
-      | Axiom_Op (b,op,l,_) -> if b then h_red_op_opt hyps ri s op l else None
-      | Axiom_Mpath_top m   -> h_red_mpath_top_opt hyps ri s m
-      | Axiom_Mpath m       -> h_red_mpath_opt hyps ri s m
-      | Axiom_Stmt stmt     -> h_red_stmt_opt eq hyps ri s stmt
-      | Axiom_Lvalue lv     -> h_red_lvalue_opt hyps ri s lv
-      | Axiom_Xpath x       -> h_red_xpath_opt hyps ri s x
-      | Axiom_Local (id,_t) -> reduce_local_opt hyps ri s (pat_axiom a) id None
+      | Axiom_Memory m      ->
+         let o = h_red_mem_opt hyps ri s m in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_MemEnv m      ->
+         let o = h_red_memenv_opt hyps ri s m in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Prog_Var pv   ->
+         let o = h_red_prog_var_opt hyps ri s pv in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Op (b,op,l,_) ->
+         let o = if b then h_red_op_opt hyps ri s op l else None in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Mpath_top m   ->
+         let o = h_red_mpath_top_opt hyps ri s m in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Mpath m       ->
+         let o = h_red_mpath_opt hyps ri s m in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Stmt stmt     ->
+         let o = h_red_stmt_opt eq hyps ri s stmt in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Lvalue lv     ->
+         let o = h_red_lvalue_opt hyps ri s lv in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Xpath x       ->
+         let o = h_red_xpath_opt hyps ri s x in
+         if verbose && is_some o then print hyps "ax : mem"; o
+      | Axiom_Local (id,_t) ->
+         let o = reduce_local_opt hyps ri s (pat_axiom a) id None in
+         if verbose && is_some o then print hyps "ax : mem"; o
       | Axiom_Int _         -> None
   with
   | EcEnv.NotReducible -> None

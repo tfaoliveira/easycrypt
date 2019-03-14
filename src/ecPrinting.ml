@@ -3003,7 +3003,7 @@ let rec pp_pat_axiom ppe fmt a = match a with
   | Axiom_Hoarecmp h ->
      Format.fprintf fmt "%s" (string_of_hrcmp h)
   | Axiom_Local (id,_) ->
-     Format.fprintf fmt "Local(%a)"
+     Format.fprintf fmt "%a"
        (pp_mem ppe) id
 
 and pp_pattern ppe fmt p = match p.p_node with
@@ -3022,16 +3022,15 @@ and pp_pattern ppe fmt p = match p.p_node with
   | Pat_Fun_Symbol (symbol,args) ->
      match symbol,args with
      | Sym_Form_If, [p1;p2;p3] ->
-        Format.fprintf fmt "Pat([if %a@ then@ %a@ else@ %a] : %a) "
+        Format.fprintf fmt "[if %a@ then@ %a@ else@ %a]"
           (pp_pattern ppe) p1
           (pp_pattern ppe) p2
           (pp_pattern ppe) p3
-          (pp_ogty ppe) p.p_ogty
      | Sym_Form_If, _ -> assert false
 
      | Sym_Form_App (Some _ty,i),op::args ->
         Format.fprintf fmt "%s(@[%a@])"
-          (match i with MaybeHO -> "" | NoHO -> "_NoHO" | HO -> "_HO")
+          (match i with MaybeHO -> "?" | NoHO -> "" | HO -> "!")
           (pp_list "@ " (pp_pattern ppe)) (op::args)
         (* Format.fprintf fmt "PApp%s(@[%a@])" *)
           (* (pp_list "@ " (pp_pattern ppe)) (op::args) *)

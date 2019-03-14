@@ -1829,8 +1829,11 @@ and sub_engines1 (e : engine) (p : pattern) : engine list =
      List.map (fun x -> sub_engine1 e p (pat_instr x)) s.s_node
   | Pat_Axiom (Axiom_Local (id1, { ty_node = Ttuple lt })),
     Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id2, _))}])
-       when EQ.name id1 id2 ->
+       when EQ.name id1 id2     ->
      List.mapi (fun i t -> sub_engine1 e p (p_proj e.e_pattern2 i t)) lt
+  | Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id1, _))}]),
+    Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id2, _))}])
+       when EQ.name id1 id2     -> []
   | Pat_Axiom _             , _ -> []
   | Pat_Fun_Symbol (_, lp)  , _ -> List.map (sub_engine1 e p) lp
 
@@ -1962,10 +1965,10 @@ let no_delta p = match p.p_node with
 let search_eng_head_no_delta e =
   search_eng { e with e_pattern1 = no_delta e.e_pattern1 }
 
-let search_eng e = search_eng_head_no_delta e
-  (* match search_eng_head_no_delta e with
-   * | Some ne -> Some ne
-   * | None    -> search_eng e *)
+(* let search_eng e = search_eng_head_no_delta e
+ *   (\* match search_eng_head_no_delta e with
+ *    * | Some ne -> Some ne
+ *    * | None    -> search_eng e *\) *)
 
 let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
