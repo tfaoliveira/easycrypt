@@ -3,8 +3,7 @@ open EcPattern
 
 
 val reduce_local_opt  : EcEnv.LDecl.hyps -> EcReduction.reduction_info ->
-                        Psubst.p_subst -> pattern -> Name.t ->
-                        pbindings option -> pattern option
+                        Name.t -> pattern option
 
 val p_can_eta         : EcEnv.LDecl.hyps -> EcIdent.Mid.key ->
                         pattern * pattern list -> bool

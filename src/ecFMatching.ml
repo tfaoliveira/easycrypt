@@ -1753,7 +1753,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
       | [] -> Debug.debug_no_match_found e.ne_env;
               raise NoMatches
       | e' :: e_reductions ->
+         Debug.debug_show_matches e.ne_env;
          Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
+         Debug.debug_show_matches e'.e_env;
          match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
          | None ->
             Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern1
@@ -1934,27 +1936,31 @@ and h_red_strat env p1 p2 =
   let s   = psubst_of_menv env.env_match in
   let h   = env.env_hyps in
   let r   = env.env_red_info_match in
-  let eq h r p1 p2 =
+  (* let p1', p2' = Psubst.p_subst s p1, Psubst.p_subst s p2 in
+   * if p1 = p1' && p2 = p2' then *)
+    let eq h r p1 p2 =
       let eng = mk_engine ~mtch:env.env_match p1 p2 h r
                   env.env_red_info_same_meta in
       let env = eng.e_env in
       EQ.pattern env r p1 p2 in
-  (* let p1  = Psubst.p_subst s p1 in
-   * let p2  = Psubst.p_subst s p2 in *)
-  match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
-          eq h r s p1 with
-  | Some p1 ->
-     Debug.debug_h_red_strat env p1 p2 1;
-     Some (p1, p2)
-  | None ->
-     match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
-             eq h r s p2 with
-     | Some p2 ->
-        Debug.debug_h_red_strat env p1 p2 2;
-        Some (p1, p2)
-     | None ->
-        Debug.debug_h_red_strat env p1 p2 3;
-        None
+    (* let p1  = Psubst.p_subst s p1 in
+     * let p2  = Psubst.p_subst s p2 in *)
+    match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+            eq h r s p1 with
+    | Some p1 ->
+       Debug.debug_h_red_strat env p1 p2 1;
+       Some (p1, p2)
+    | None ->
+       match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+               eq h r s p2 with
+       | Some p2 ->
+          Debug.debug_h_red_strat env p1 p2 2;
+          Some (p1, p2)
+       | None ->
+          Debug.debug_h_red_strat env p1 p2 3;
+          None
+  (* else
+   *   Some (p1',p2') *)
 
 and search_eng e =
   let s = psubst_of_menv e.e_env.env_match in

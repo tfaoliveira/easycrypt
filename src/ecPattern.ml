@@ -804,7 +804,9 @@ module Psubst = struct
            * | Some p -> pat_meta p name ob
            * | None -> *)
           match op with
-          | Some p -> let p = p_subst s p in pat_meta p name ob
+          | Some p -> let p = p_subst s p in
+                      (* pat_meta p name ob *)
+                      p
           | None ->
              meta_var name ob p.p_ogty
         end

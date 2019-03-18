@@ -516,15 +516,9 @@ let rec p_is_record (hyps : EcEnv.LDecl.hyps) (p : pattern) =
   | _ -> false
 
 let reduce_local_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
-      (s : Psubst.p_subst) (p : pattern) (id : Name.t)
-      (ob : pbindings option) : pattern option =
-  if ri.delta_h id
-  then
-    if is_none ob && EcEnv.LDecl.can_unfold id hyps then
+      (id : Name.t) : pattern option =
+  if ri.delta_h id && EcEnv.LDecl.can_unfold id hyps then
       Some (pat_form (EcEnv.LDecl.unfold id hyps))
-    else
-      let p' = Psubst.p_subst s p in
-      if p_equal p p' then None else Some p'
   else None
 
 let is_delta_p ri pop = match pop.p_node with
@@ -550,14 +544,16 @@ let print h s =
   let env = EcEnv.LDecl.toenv h in
   EcEnv.notify env `Warning "rrrrr Reduction : %s" s
 
-let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
+let rec h_red_pattern_opt ?(verbose:bool=false) eq
+          (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
           (s : Psubst.p_subst) (p : pattern) =
   let h_red_pattern_opt = h_red_pattern_opt ~verbose in
   try
     match p.p_node with
-    | Pat_Meta_Name (_,n,ob) ->
-       let o = reduce_local_opt hyps ri s p n ob in
+    | Pat_Meta_Name (None,n,_) ->
+       let o = Mid.find_opt n s.ps_patloc in
        if verbose && is_some o then print hyps "meta name"; o
+    | Pat_Meta_Name (Some p,_,_) -> h_red_pattern_opt eq hyps ri s p
     | Pat_Sub p ->
        omap (fun x -> mk_pattern (Pat_Sub x) OGTany)
          (h_red_pattern_opt eq hyps ri s p)
@@ -575,20 +571,19 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
 
        (* ζ-reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = (Pat_Meta_Name (None, id, ob))} as p) :: pargs
-            when ri.zeta -> begin
-           match reduce_local_opt hyps ri s p id ob with
-           | None -> None
-           | Some op ->
-              let o = Some (p_app_simpl ~ho op pargs ty) in
-              if verbose && is_some o then print hyps "zeta 2"; o
+         { p_node = (Pat_Meta_Name (None, id, _))} :: pargs
+            (* when ri.zeta *)
+         -> begin
+           let o = omap (fun op -> p_app_simpl ~ho op pargs ty)
+                     (Mid.find_opt id s.ps_patloc) in
+           if verbose && is_some o then print hyps "zeta 1"; o
          end
 
        (* ζ-reduction *)
        | Sym_Form_App (oty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Local (id,_))} as p) :: pargs
+         { p_node = Pat_Axiom (Axiom_Local (id,_))} :: pargs
             when ri.zeta -> begin
-           match reduce_local_opt hyps ri s p id None with
+           match reduce_local_opt hyps ri id with
            | None -> None
            | Some op ->
               let o = Some (p_app_simpl ~ho op pargs oty) in
@@ -671,7 +666,8 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
        | Sym_Form_If, [p1;p2;p3] when ri.iota -> begin
            match p_if_simpl_opt p1 p2 p3 with
            | None ->
-              let o = omap (fun x -> p_if x p2 p3) (h_red_pattern_opt eq hyps ri s p1) in
+              let o = omap (fun x -> p_if x p2 p3)
+                        (h_red_pattern_opt eq hyps ri s p1) in
               if verbose && is_some o then print hyps "iota 5 1"; o
            | Some _ as p -> if verbose then print hyps "iota 5 2"; p
          end
@@ -956,7 +952,7 @@ and h_red_axiom_opt ?(verbose:bool=false) eq hyps ri s (a : axiom) =
          let o = h_red_xpath_opt hyps ri s x in
          if verbose && is_some o then print hyps "ax : mem"; o
       | Axiom_Local (id,_t) ->
-         let o = reduce_local_opt hyps ri s (pat_axiom a) id None in
+         let o = reduce_local_opt hyps ri id in
          if verbose && is_some o then print hyps "ax : mem"; o
       | Axiom_Int _         -> None
   with
