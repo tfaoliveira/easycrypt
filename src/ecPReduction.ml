@@ -565,6 +565,11 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
        (* β-reduction *)
        | Sym_Form_App _,
          { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_
+         | Sym_Form_App _,
+           { p_node =
+               Pat_Meta_Name
+                 (Some
+                    { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])},_,_)}::_
             when ri.beta ->
           let o = p_betared_opt p in
           if verbose && is_some o then print hyps "beta"; o
@@ -598,7 +603,13 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* ι-reduction (let-tuple) *)
        | Sym_Form_Let (LTuple ids),
-         [{ p_node = Pat_Fun_Symbol (Sym_Form_Tuple, lp)};p2]
+         [({ p_node = Pat_Fun_Symbol (Sym_Form_Tuple, lp)}
+           | { p_node =
+                 Pat_Meta_Name
+                   (Some
+                      { p_node =
+                          Pat_Fun_Symbol (Sym_Form_Tuple, lp)},_,_)})
+         ;p2]
             when ri.zeta ->
           let s = List.fold_left2 (fun s (x,_) p -> Psubst.p_bind_local s x p)
                     Psubst.p_subst_id ids lp in
@@ -621,7 +632,10 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* ι-reduction (records projection) *)
        | Sym_Form_App (oty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) } as p1) :: pargs
+         (({ p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) }
+           | { p_node =
+                 Pat_Meta_Name (Some { p_node = Pat_Axiom (Axiom_Op (_, op, _, _)) },_,_)})
+          as p1) :: pargs
             when ri.iota && EcEnv.Op.is_projection (EcEnv.LDecl.toenv hyps) op -> begin
            let op =
              match pargs with
@@ -674,7 +688,12 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* ι-reduction (match-fix) *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (_, op, lty, _)) } as p1) :: args
+         (({ p_node = Pat_Axiom (Axiom_Op (_, op, lty, _)) }
+           | { p_node =
+                 Pat_Meta_Name
+                   (Some
+                      { p_node = Pat_Axiom (Axiom_Op (_, op, lty, _)) },_,_)})
+          as p1) :: args
             when ri.iota
                  && EcEnv.Op.is_fix_def (EcEnv.LDecl.toenv hyps) op -> begin
            try
@@ -765,7 +784,12 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* logical reduction *)
        | Sym_Form_App (ty,ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))} as fo) :: args
+         (({ p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))}
+           | { p_node =
+                 Pat_Meta_Name
+                   (Some
+                      { p_node = Pat_Axiom (Axiom_Op (_, op, tys, _))},_,_)})
+          as fo) :: args
             when is_some ri.logic && is_logical_op op
          ->
           let pcompat =
@@ -871,7 +895,12 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),
-         ({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) } as pop) :: args
+         (({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) }
+           | { p_node =
+                 Pat_Meta_Name
+                   (Some
+                      { p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) },_,_)})
+          as pop) :: args
             when delta && is_delta_p ri pop ->
           if verbose then
             (print hyps "delta";
