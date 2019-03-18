@@ -1051,7 +1051,18 @@ and pat_eq p1 p2 = p1 = p2
 let h_red_pattern_opt ?(verbose:bool=false) eq h r s p =
   match h_red_pattern_opt ~verbose eq h r s p with
   | None -> None
-  | Some p' -> if pat_eq p p' then None else Some p'
+  | Some p' ->
+     if pat_eq p p'
+     then begin
+         (if verbose then
+            let env = EcEnv.LDecl.toenv h in
+            let ppe = EcPrinting.PPEnv.ofenv env in
+            EcEnv.notify env `Warning
+              "reduction was equal to previous patterns : %a"
+              (EcPrinting.pp_pattern ppe) p');
+           None
+       end
+     else Some p'
 
 let h_red_axiom_opt ?(verbose:bool=false) eq h r s a =
   match h_red_axiom_opt ~verbose eq h r s a with

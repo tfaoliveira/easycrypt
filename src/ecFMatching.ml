@@ -581,9 +581,14 @@ end = struct
           EcEnv.notify env `Warning "***2: before %a"
             (EcPrinting.pp_pattern ppe) a1
         end
-      else
-        EcEnv.notify env `Warning "Ignore reduction: %a"
-          (EcPrinting.pp_pattern ppe) p1;
+      else begin
+          EcEnv.notify env `Warning "Ignore reduction (%s beta, %s delta):"
+            (if menv.env_red_info_match.EcReduction.beta then "with" else "without")
+            (if menv.env_red_info_match.EcReduction.delta_p (EcPath.psymbol "toto")
+             then "with" else "without");
+          EcEnv.notify env `Warning "***1: before %a"
+            (EcPrinting.pp_pattern ppe) p1
+        end;
       EcEnv.notify env `Warning "***2: after  %a"
         (EcPrinting.pp_pattern ppe) a2;
       debug_show_matches menv
@@ -1771,9 +1776,9 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      Debug.debug_which_rule e.ne_env "next : no match in named";
      next_n NoMatch { e with ne_continuation; }
 
-  | NoMatch, Zand (_,_,ne_reductions,ne_continuation) ->
+  | NoMatch, Zand (_,_,_,ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : no match in zand";
-     next_n NoMatch { e with ne_continuation; ne_reductions; }
+     next_n NoMatch { e with ne_continuation; }
 
   | NoMatch, Zor (_, [], ne) ->
      Debug.debug_which_rule e.ne_env "next : no match in zor, no more matches";
