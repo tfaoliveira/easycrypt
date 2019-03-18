@@ -26,6 +26,7 @@ type verbose = {
     verbose_eta             : bool;
     verbose_show_match      : bool;
     verbose_add_reduce      : bool;
+    verbose_saturate        : bool;
   }
 
 let no_verbose : verbose = {
@@ -45,6 +46,7 @@ let no_verbose : verbose = {
     verbose_eta             = false;
     verbose_show_match      = false;
     verbose_add_reduce      = false;
+    verbose_saturate        = false;
   }
 
 let full_verbose : verbose = {
@@ -64,6 +66,7 @@ let full_verbose : verbose = {
     verbose_eta             = true;
     verbose_show_match      = true;
     verbose_add_reduce      = true;
+    verbose_saturate        = true;
   }
 
 let debug_verbose : verbose = {
@@ -83,6 +86,7 @@ let debug_verbose : verbose = {
     verbose_eta             = false;
     verbose_show_match      = true;
     verbose_add_reduce      = true;
+    verbose_saturate        = true;
   }
 
 let env_verbose = no_verbose
@@ -181,21 +185,20 @@ let saturate (me : match_env) =
   let subst = { ps_patloc = mtch; ps_sty = sty } in
   let seen  = ref Sid.empty in
 
-  let rec for_ident x binding subst =
-    if Sid.mem x !seen then subst else begin
-        seen := Sid.add x !seen;
+  let rec for_ident id value subst =
+    if Sid.mem id !seen then subst else begin
+        seen := Sid.add id !seen;
         let subst =
           Mid.fold2_inter (fun x bdx _ -> for_ident x bdx)
-            subst.ps_patloc (pat_fv binding) subst in
-        { subst with ps_patloc = Mid.add x (Psubst.p_subst subst binding) subst.ps_patloc }
+            subst.ps_patloc (pat_fv value) subst in
+        { subst with
+          ps_patloc =
+            Mid.add id (Psubst.p_subst ~meta:false subst value) subst.ps_patloc }
       end
   in
   let subst = Mid.fold_left (fun acc x bd -> for_ident x bd acc)
                 subst subst.ps_patloc in
   { me with me_matches = subst.ps_patloc }
-
-
-let saturate env = { env with env_match = saturate env.env_match }
 
 let psubst_of_menv env =
   let sty   = { EcTypes.ty_subst_id with
@@ -247,7 +250,15 @@ module Debug : sig
   val debug_no_eta                   : environment -> pbinding -> pattern -> bool -> unit
   val debug_show_matches             : environment -> unit
   val debug_add_reduce               : environment -> int -> unit
+  val debug_saturate                 : environment -> bool -> unit
 end = struct
+
+  let debug_saturate menv is_before =
+    if menv.env_verbose.verbose_saturate then
+      let env = LDecl.toenv menv.env_hyps in
+
+      if is_before then EcEnv.notify env `Warning "----- try saturate"
+      else  EcEnv.notify env `Warning "----- finish saturate"
 
   let debug_add_reduce menv i =
     if menv.env_verbose.verbose_add_reduce then
@@ -662,9 +673,16 @@ end = struct
       EcEnv.notify env `Warning "=== %a ==="
         (EcPrinting.pp_pattern ppe) a
 
-
-
 end
+
+
+let saturate env =
+  (* Debug.debug_saturate env true;
+   * Debug.debug_show_matches env; *)
+  let env = { env with env_match = saturate env.env_match } in
+  (* Debug.debug_show_matches env;
+   * Debug.debug_saturate env false; *)
+  env
 
 (* -------------------------------------------------------------------------- *)
 
@@ -698,6 +716,7 @@ module Translate = struct
 
   let rec form_of_pattern env (p : pattern) =
     match p.p_node with
+    | Pat_Meta_Name (Some p,_,_) -> form_of_pattern env p
     | Pat_Meta_Name (_,_,_)   -> raise (Invalid_Type "formula")
     | Pat_Sub _               -> raise (Invalid_Type "sub in form")
     | Pat_Or [p]              -> form_of_pattern env p
@@ -852,11 +871,11 @@ module Translate = struct
 
 end
 
-let simplify env p =
-  try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
-  with Translate.Invalid_Type s ->
-    Debug.debug_translate_error env s;
-    p
+(* let simplify env p =
+ *   try pat_form (Translate.form_of_pattern (LDecl.toenv env.env_hyps) p)
+ *   with Translate.Invalid_Type s ->
+ *     Debug.debug_translate_error env s;
+ *     p *)
 
 
 module EQ : sig
@@ -1010,8 +1029,8 @@ end = struct
     let try_translate_eq eq trans p1 p2 =
       try eq (trans p1) (trans p2)
       with Translate.Invalid_Type _ -> false in
-    if      (try_translate_eq (form env ri)
-               (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
+    if   (try_translate_eq (form env ri)
+            (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
     then true
     else if (try_translate_eq (memory env) Translate.memory_of_pattern p1 p2)
     then true
@@ -1862,7 +1881,10 @@ and nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let p' = Psubst.p_subst subst p in
   Debug.debug_subst env p p';
   let p = p' in
-  if odfl true (omap (fun r -> restr_bds_check env p r) orb)
+  let p_fv = FV.pattern0 e.ne_env.env_hyps p in
+  if Mid.mem name p_fv then
+    raise CannotUnify
+  else if odfl true (omap (fun r -> restr_bds_check env p r) orb)
   then
     let me_matches =
       match Mid.find_opt name e.ne_env.env_match.me_matches with
@@ -1882,8 +1904,8 @@ and nadd_match (e : nengine) (name : meta_name) (p : pattern)
            ne_unification.ne_env.env_match.me_matches
          with
          | NoMatches ->
-             Debug.debug_add_match e.ne_env false name p;
-             raise CannotUnify
+            Debug.debug_add_match e.ne_env false name p;
+            raise CannotUnify
     in
     { e with ne_env = { env with env_match = { env.env_match with me_matches; }; }; }
   else raise CannotUnify
@@ -1971,6 +1993,8 @@ and search_eng e =
   try
     let unienv = e.e_env.env_match.me_unienv in
     let e' = process (e_copy e) in
+    let ne_env = saturate e'.ne_env in
+    let e' = { e' with ne_env } in
     EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
     Debug.debug_unienv e'.ne_env;
     Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };

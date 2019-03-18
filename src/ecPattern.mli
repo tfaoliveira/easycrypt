@@ -285,7 +285,7 @@ module Psubst : sig
   val add_pbinding  : p_subst -> pbinding -> p_subst * pbinding
   val add_pbindings : p_subst -> pbindings -> p_subst * pbindings
 
-  val p_subst       : ?keep_ho:bool -> p_subst -> pattern -> pattern
+  val p_subst       : ?keep_ho:bool -> ?meta:bool -> p_subst -> pattern -> pattern
 end
 
 (* -------------------------------------------------------------------- *)

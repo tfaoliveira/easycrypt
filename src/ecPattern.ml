@@ -789,8 +789,8 @@ module Psubst = struct
     | _ -> n
 
   (* ------------------------------------------------------------------------ *)
-  let rec p_subst ?(keep_ho:bool=true) (s : p_subst) (p : pattern) =
-    let p_subst = p_subst ~keep_ho:false in
+  let rec p_subst ?(keep_ho:bool=true) ?(meta:bool=true) (s : p_subst) (p : pattern) =
+    let p_subst = p_subst ~keep_ho:false ~meta in
     let p = mk_pattern p.p_node (ogty_subst s p.p_ogty) in
     let p = match p.p_node with
       | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) p.p_ogty
@@ -805,10 +805,13 @@ module Psubst = struct
            * | None -> *)
           match op with
           | Some p -> let p = p_subst s p in
-                      pat_meta p name ob
-                      (* p *)
+                      if meta then pat_meta p name ob
+                      else p
           | None ->
-             meta_var name ob p.p_ogty
+             if Mid.mem name s.ps_patloc then
+               if meta then pat_meta (Mid.find name s.ps_patloc) name ob
+               else Mid.find name s.ps_patloc
+             else meta_var name ob p.p_ogty
         end
       | Pat_Axiom a -> begin
           match a with
@@ -1056,7 +1059,11 @@ module Psubst = struct
       | Pat_Fun_Symbol (s,lp) ->
       match s,lp with
       | Sym_Form_App (ty,_ho),
-        ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])})::pargs ->
+        ({ p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])}
+         | { p_node =
+               Pat_Meta_Name
+                 (Some { p_node = Pat_Fun_Symbol(Sym_Quant(Llambda, bds),[p])},_,_)})
+        ::pargs ->
          let (bs1,bs2),(pargs1,pargs2) = List.prefix2 bds pargs in
          let subst = p_subst_id in
          let subst =
