@@ -851,7 +851,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq (hyps : EcEnv.LDecl.hyps) (ri
                    else Some (p_ands (List.map2 p_eq args1 args2))
 
                 | _ -> if p_equal f1 f2 || eq hyps ri f1 f2 then Some p_true
-                       else Some (p_eq_simpl f1 f2)
+                       else p_eq_simpl_opt f1 f2
               end
 
             | _ when ri.delta_p op -> begin
