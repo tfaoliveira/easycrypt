@@ -2003,16 +2003,16 @@ and search_eng e =
   Debug.debug_show_matches e.e_env;
   try
     let unienv = e.e_env.env_match.me_unienv in
-    try
-      let e' = process (e_copy { e with e_env = { e.e_env with env_red_info_match = EcReduction.no_red } }) in
-      EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
-      Debug.debug_unienv e'.ne_env;
-      Debug.debug_show_matches e'.ne_env;
-      Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
-      Some e'
-    with
-    | NoMatches ->
-       Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2;
+    (* try
+     *   let e' = process (e_copy { e with e_env = { e.e_env with env_red_info_match = EcReduction.no_red } }) in
+     *   EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
+     *   Debug.debug_unienv e'.ne_env;
+     *   Debug.debug_show_matches e'.ne_env;
+     *   Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
+     *   Some e'
+     * with
+     * | NoMatches ->
+     *    Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2; *)
        let e' = process (e_copy e) in
        EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
        (* let ne_env = saturate e'.ne_env in
