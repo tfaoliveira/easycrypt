@@ -1138,7 +1138,7 @@ let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
                    (mpath (`Local x) [])
                    (LDecl.toenv env.env_hyps)) in
 
-      (* EcIdent.id_equal x mhr ||  *)
+      EcIdent.id_equal x mhr ||
         LDecl.has_id x env.env_hyps || lookup () in
 
     if not aout then
@@ -1967,32 +1967,26 @@ and h_red_strat env p1 p2 =
   let s   = psubst_of_menv env.env_match in
   let h   = env.env_hyps in
   let r   = env.env_red_info_match in
-  (* let p1', p2' = Psubst.p_subst s p1, Psubst.p_subst s p2 in
-   * if p1 = p1' && p2 = p2' then *)
-    let eq h r p1 p2 =
-      let eng = mk_engine ~mtch:env.env_match p1 p2 h r
-                  env.env_red_info_same_meta in
-      let env = eng.e_env in
-      EQ.pattern env r p1 p2 in
-    (* let p1  = Psubst.p_subst s p1 in
-     * let p2  = Psubst.p_subst s p2 in *)
-    match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
-            eq h r s p1 with
-    | Some p1 ->
-       Debug.debug_h_red_strat env p1 p2 1;
-       Some (p1, p2)
-    | None ->
-       Debug.debug_h_red_strat_next env;
-       match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
-               eq h r s p2 with
-       | Some p2 ->
-          Debug.debug_h_red_strat env p1 p2 2;
-          Some (p1, p2)
-       | None ->
-          Debug.debug_h_red_strat env p1 p2 3;
-          None
-  (* else
-   *   Some (p1',p2') *)
+  let eq h r p1 p2 =
+    let eng = mk_engine ~mtch:env.env_match p1 p2 h r
+                env.env_red_info_same_meta in
+    let env = eng.e_env in
+    EQ.pattern env r p1 p2 in
+  match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+          eq h r s p1 with
+  | Some p1 ->
+     Debug.debug_h_red_strat env p1 p2 1;
+     Some (p1, p2)
+  | None ->
+     Debug.debug_h_red_strat_next env;
+     match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
+             eq h r s p2 with
+     | Some p2 ->
+        Debug.debug_h_red_strat env p1 p2 2;
+        Some (p1, p2)
+     | None ->
+        Debug.debug_h_red_strat env p1 p2 3;
+        None
 
 and search_eng e =
   let s = psubst_of_menv e.e_env.env_match in
@@ -2003,20 +1997,8 @@ and search_eng e =
   Debug.debug_show_matches e.e_env;
   try
     let unienv = e.e_env.env_match.me_unienv in
-    (* try
-     *   let e' = process (e_copy { e with e_env = { e.e_env with env_red_info_match = EcReduction.no_red } }) in
-     *   EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
-     *   Debug.debug_unienv e'.ne_env;
-     *   Debug.debug_show_matches e'.ne_env;
-     *   Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
-     *   Some e'
-     * with
-     * | NoMatches ->
-     *    Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2; *)
        let e' = process (e_copy e) in
        EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
-       (* let ne_env = saturate e'.ne_env in
-        * let e' = { e' with ne_env } in *)
        Debug.debug_unienv e'.ne_env;
        Debug.debug_show_matches e'.ne_env;
        Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
@@ -2034,11 +2016,6 @@ let no_delta p = match p.p_node with
 
 let search_eng_head_no_delta e =
   search_eng { e with e_pattern1 = no_delta e.e_pattern1 }
-
-(* let search_eng e = search_eng_head_no_delta e
- *   (\* match search_eng_head_no_delta e with
- *    * | Some ne -> Some ne
- *    * | None    -> search_eng e *\) *)
 
 let get_matches (e : engine) : match_env = (saturate e.e_env).env_match
 let get_n_matches (e : nengine) : match_env = (saturate e.ne_env).env_match
@@ -2111,6 +2088,20 @@ let get_meta_bindings (p : pattern) : pbindings Mid.t =
     | Pat_Axiom _ -> meta_bds
     | Pat_Fun_Symbol (Sym_Quant (_,b),[p]) ->
        aux (current_bds @ b) meta_bds p
+    | Pat_Fun_Symbol (Sym_Form_Pr, [p1;p2;p3;p4]) ->
+       let m = aux ((mhr,OGTmem None)::current_bds) meta_bds p4 in
+       List.fold_left (aux current_bds) m [p1;p2;p3]
+    | Pat_Fun_Symbol (Sym_Form_Hoare_F, [p1;p2;p3]) ->
+       let m = List.fold_left (aux ((mhr,OGTmem None)::current_bds)) meta_bds [p1;p3] in
+       aux current_bds m p2
+    | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, [p1;p2;p3;p4;p5]) ->
+       let m = List.fold_left (aux ((mhr,OGTmem None)::current_bds)) meta_bds [p1;p3;p5] in
+       List.fold_left (aux current_bds) m [p2;p4]
+    | Pat_Fun_Symbol (Sym_Form_Equiv_F, [p1;p2;p3;p4]) ->
+       let m = List.fold_left
+                 (aux ((mleft,OGTmem None)::(mright,OGTmem None)::current_bds))
+                 meta_bds [p1;p4] in
+       List.fold_left (aux current_bds) m [p2;p3]
     | Pat_Fun_Symbol (_,lp) -> List.fold_left (aux current_bds) meta_bds lp
   in aux [] Mid.empty p
 
