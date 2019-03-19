@@ -132,7 +132,7 @@ type pat_continuation =
                   * (pattern * pattern) list
                   * pat_continuation
 
-  | Zreduce    of pat_continuation * engine
+  | Zreduce    of pat_continuation * engine * nengine
 
 
 and engine = {
@@ -220,6 +220,7 @@ let zor e l =
 (* -------------------------------------------------------------------- *)
 module Debug : sig
   val debug_h_red_strat              : environment -> pattern -> pattern -> int -> unit
+  val debug_h_red_strat_next         : environment -> unit
   val debug_type                     : environment -> ty -> ty -> unit
   val debug_ogty                     : environment -> pattern -> pattern -> bool -> unit
   val debug_bind_restr               : environment -> ident -> unit
@@ -273,6 +274,11 @@ end = struct
       EcEnv.notify env `Warning
         "--- eta could not be applied because of type restrictions"
 
+
+  let debug_h_red_strat_next menv =
+    if menv.env_verbose.verbose_reduce then
+      let env = LDecl.toenv menv.env_hyps in
+      EcEnv.notify env `Warning "----- next red"
 
   let debug_h_red_strat menv p1 p2 i =
     if menv.env_verbose.verbose_reduce then
@@ -534,7 +540,7 @@ end = struct
     | Zor (ct,_,_) -> compute_zands c ct
     | Zand (_,l,ct) -> compute_zands (c + List.length l) ct
     | Znamed (_,_,_,ct) -> compute_zands c ct
-    | Zreduce (ct,_) -> compute_zands c ct
+    | Zreduce (ct,_,_) -> compute_zands c ct
 
   let debug_try_match menv p a c =
     if menv.env_verbose.verbose_match then
@@ -1222,7 +1228,8 @@ let change_ogty ogty p = mk_pattern p.p_node ogty
 let try_reduce (e : engine) : engine =
   Debug.debug_try_reduce e.e_env e.e_pattern1 e.e_pattern2;
   let copy = e_copy e in
-  let e_continuation = Zreduce (e.e_continuation,copy) in
+  let ne = e_next (e_copy e) in
+  let e_continuation = Zreduce (e.e_continuation,copy,ne) in
   { e with e_continuation }
 
 
@@ -1778,14 +1785,14 @@ and next_n (m : ismatch) (e : nengine) : nengine =
   match m,e.ne_continuation with
   | NoMatch, ZTop -> raise NoMatches
 
-  | NoMatch, Zreduce (_, e') -> begin
+  | NoMatch, Zreduce (_, e',ne) -> begin
       Debug.debug_show_matches e.ne_env;
       Debug.debug_which_rule e.ne_env "next : no match, then try to reduce";
       Debug.debug_show_matches e'.e_env;
       match h_red_strat e'.e_env e'.e_pattern1 e'.e_pattern2 with
       | None -> Debug.debug_reduce e'.e_env e'.e_pattern1 e'.e_pattern1
                   e'.e_pattern2 e'.e_pattern2 false;
-                next_n NoMatch e
+                next_n NoMatch ne
       | Some (e_pattern1, e_pattern2) ->
          Debug.debug_reduce e'.e_env e'.e_pattern1 e_pattern1
            e'.e_pattern2 e_pattern2 true;
@@ -1817,7 +1824,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
      let ne_env = saturate e.ne_env in
      { e with ne_env }
 
-  | Match, Zreduce (ne_continuation, _) ->
+  | Match, Zreduce (ne_continuation, _, _) ->
      Debug.debug_which_rule e.ne_env "next : skip reduce";
      next_n Match { e with ne_continuation }
 
@@ -1975,6 +1982,7 @@ and h_red_strat env p1 p2 =
        Debug.debug_h_red_strat env p1 p2 1;
        Some (p1, p2)
     | None ->
+       Debug.debug_h_red_strat_next env;
        match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce
                eq h r s p2 with
        | Some p2 ->
