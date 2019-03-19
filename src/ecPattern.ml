@@ -800,18 +800,14 @@ module Psubst = struct
       | Pat_Meta_Name (op,name,ob) -> begin
           let ob =
             omap (List.map (fst_map (change_id s.ps_patloc))) ob in
-          (* match Mid.find_opt name s.ps_patloc with
-           * | Some p -> pat_meta p name ob
-           * | None -> *)
-          match op with
-          | Some p -> let p = p_subst s p in
-                      if meta then pat_meta p name ob
-                      else p
+          match Mid.find_opt name s.ps_patloc with
+          | Some p -> let p = p_subst { s with ps_patloc = Mid.empty } p in
+                      if meta then pat_meta p name ob else p
           | None ->
-             if Mid.mem name s.ps_patloc then
-               if meta then pat_meta (Mid.find name s.ps_patloc) name ob
-               else Mid.find name s.ps_patloc
-             else meta_var name ob p.p_ogty
+          match op with
+          | Some p -> let p = p_subst { s with ps_patloc = Mid.empty } p in
+                      if meta then pat_meta p name ob else p
+          | None -> p
         end
       | Pat_Axiom a -> begin
           match a with
@@ -835,7 +831,7 @@ module Psubst = struct
           | Axiom_Hoarecmp _ -> p
           | Axiom_Local (id,ty) -> begin
              match Mid.find_opt id s.ps_patloc with
-             | Some p -> p
+             | Some p -> p_subst { s with ps_patloc = Mid.empty } p
              | None -> pat_local id (ty_subst s.ps_sty ty)
             end
         end

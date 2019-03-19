@@ -76,16 +76,16 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
+    verbose_reduce          = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
-    verbose_unienv          = false;
+    verbose_unienv          = true;
     verbose_eta             = false;
     verbose_show_match      = true;
-    verbose_add_reduce      = true;
+    verbose_add_reduce      = false;
     verbose_saturate        = true;
   }
 
@@ -1311,8 +1311,21 @@ let rec process (e : engine) : nengine =
   else
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
     | Pat_Meta_Name (None, n1, _), Pat_Meta_Name (None, n2, _) when EQ.name n1 n2 ->
-       Debug.debug_which_rule e.e_env "same meta variable";
+       Debug.debug_which_rule e.e_env "same meta variable 1";
        next Match e
+
+    | Pat_Meta_Name (Some p1, n1, ob), Pat_Meta_Name (None, n2, _) when EQ.name n1 n2 ->
+       Debug.debug_which_rule e.e_env "same meta variable 2";
+       next Match { e with e_continuation = Znamed (p1, n1, ob, e.e_continuation) }
+
+    | Pat_Meta_Name (None, n2, _), Pat_Meta_Name (Some p1, n1, ob) when EQ.name n1 n2 ->
+       Debug.debug_which_rule e.e_env "same meta variable 3";
+       next Match { e with e_continuation = Znamed (p1, n1, ob, e.e_continuation) }
+
+    | Pat_Meta_Name (Some p1, n1, _), Pat_Meta_Name (Some p2, n2, ob) when EQ.name n1 n2 ->
+       Debug.debug_which_rule e.e_env "same meta variable 4";
+       process { e with e_pattern1 = p1; e_pattern2 = p2;
+                        e_continuation = Znamed (p2, n1, ob, e.e_continuation) }
 
    | Pat_Meta_Name (None, name, ob), _ ->
        let env_meta_restr_binds =
@@ -1493,12 +1506,14 @@ let rec process (e : engine) : nengine =
              in
              let env = List.fold_left find_sub env pargs in
              let s = psubst_of_menv env.env_match in
-             List.map (Psubst.p_subst s) pargs, env in
+             let env_match = { e.e_env.env_match with
+                               me_matches = e.e_env.env_match.me_matches } in
+             List.map (Psubst.p_subst s) pargs, { env with env_match } in
            if not(pattern_is_higher_order_decidable pargs)
            then raise NoMatches
            else
              let add_ident i x =
-               EcIdent.create (String.concat "" ["s";string_of_int i]), x in
+               EcIdent.create (String.concat "" ["t";string_of_int i]), x in
              let args = List.mapi add_ident pargs in
              (* let args = List.map (fun (i,p) -> i, pat_meta p i ob) args in *)
              let env_meta_restr_binds =
@@ -1508,7 +1523,7 @@ let rec process (e : engine) : nengine =
              let abstract (e, p) arg =
                Debug.debug_higher_order_to_abstract e.e_env (snd arg) p;
                let env, p = abstract_opt e p ob arg in
-               { e with e_env = env}, p
+               { e with e_env = env }, p
              in
              let e', pat =
                (* FIXME : add strategies to adapt the order of the arguments *)
@@ -1521,8 +1536,15 @@ let rec process (e : engine) : nengine =
              let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
              let pat = p_subst s pat in
              let m,e =
-               try let e = add_match e name pat ob in Match, e
-               with CannotUnify -> NoMatch, e
+               try let e = add_match e name pat ob in
+                   let me_matches =
+                     List.fold_left (fun m (id,_) -> Mid.remove id m)
+                       e.e_env.env_match.me_matches args in
+                   let env_match = { e.e_env.env_match with me_matches } in
+                   let e_env = { e.e_env with env_match } in
+                   let e = { e with e_env } in
+                   Match, e
+               with CannotUnify -> raise NoMatches
              in next m e
          with
          | NoMatches -> next NoMatch e
@@ -1542,8 +1564,8 @@ let rec process (e : engine) : nengine =
            let e_env      = saturate e.e_env in
            let subst      = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty }in
            let s          = List.fold_left2 f subst b11 b21 in
-           let p1         = p_quant q1 b12 p1 in
            let e_pattern1 = Psubst.p_subst s p1 in
+           let e_pattern1 = p_quant q1 b12 e_pattern1 in
            Debug.debug_subst e_env p1 e_pattern1;
            let e_pattern2 = p_quant q2 b22 (Psubst.p_subst subst p2) in
            process { e with e_pattern1; e_pattern2; e_env; }
@@ -1562,15 +1584,6 @@ let rec process (e : engine) : nengine =
              let e_pattern2 = p_mpath p2 args21 in
              process { e with e_pattern1; e_pattern2; e_continuation; }
        end
-
-    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
-       if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
-       then begin
-           Debug.debug_which_rule e.e_env "same fun symbol";
-           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_reductions, e.e_continuation) in
-           next Match { e with e_continuation }
-         end
-       else let e = try_reduce e in next NoMatch e
 
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
     | Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b1)::bs), [p1]), _
@@ -1598,15 +1611,14 @@ let rec process (e : engine) : nengine =
         with NoMatches -> next NoMatch e
       end
 
-    (* (\* eta-expansion in the case where the types of e_pattern2 is some tarrow *\)
-     * | Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some _) as b1)::_), [_]), _ ->
-     *    Debug.debug_no_eta e.e_env b1 e.e_pattern2 (check_arrow e [b1] e.e_pattern2.p_ogty);
-     *    next NoMatch e
-     *
-     * (\* eta-expansion in the case where the types of e_pattern1 is some tarrow *\)
-     * | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (_, OGTty (Some _) as b1)::_), [_]) ->
-     *    Debug.debug_no_eta e.e_env b1 e.e_pattern2 (check_arrow e [b1] e.e_pattern2.p_ogty);
-     *    next NoMatch e *)
+    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
+       if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
+       then begin
+           Debug.debug_which_rule e.e_env "same fun symbol";
+           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_reductions, e.e_continuation) in
+           next Match { e with e_continuation }
+         end
+       else let e = try_reduce e in next NoMatch e
 
     (* Pattern / Axiom *)
     | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
@@ -1990,17 +2002,20 @@ and search_eng e =
   let e_pattern2 = Psubst.p_subst s e.e_pattern2 in
   let e = { e with e_pattern1; e_pattern2; } in
   Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2;
+  Debug.debug_show_matches e.e_env;
   try
     let unienv = e.e_env.env_match.me_unienv in
     let e' = process (e_copy e) in
-    let ne_env = saturate e'.ne_env in
-    let e' = { e' with ne_env } in
     EcUnify.UniEnv.restore ~src:e'.ne_env.env_match.me_unienv ~dst:unienv;
+    (* let ne_env = saturate e'.ne_env in
+     * let e' = { e' with ne_env } in *)
     Debug.debug_unienv e'.ne_env;
+    Debug.debug_show_matches e'.ne_env;
     Debug.debug_unienv {e'.ne_env with env_match = { e'.ne_env.env_match with me_unienv = unienv } };
     Some e'
   with
-  | NoMatches -> None
+  | NoMatches ->
+    None
 
 let no_delta p = match p.p_node with
   | Pat_Fun_Symbol (Sym_Form_App (t1,ho),
