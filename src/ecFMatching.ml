@@ -76,13 +76,13 @@ let debug_verbose : verbose = {
     verbose_bind_restr      = false;
     verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = false;
+    verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
     verbose_subst           = false;
-    verbose_unienv          = true;
+    verbose_unienv          = false;
     verbose_eta             = false;
     verbose_show_match      = true;
     verbose_add_reduce      = false;
@@ -1133,7 +1133,7 @@ let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
                    (mpath (`Local x) [])
                    (LDecl.toenv env.env_hyps)) in
 
-      LDecl.has_id x env.env_hyps || lookup () in
+      EcIdent.id_equal x mhr || LDecl.has_id x env.env_hyps || lookup () in
 
     if not aout then
       Debug.debug_bind_restr env x;

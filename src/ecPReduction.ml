@@ -523,6 +523,10 @@ let reduce_local_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
 
 let is_delta_p ri pop = match pop.p_node with
   | Pat_Axiom (Axiom_Op (delta, op, _, _)) -> delta && ri.delta_p op
+  | Pat_Meta_Name
+      (Some
+         { p_node =
+             Pat_Axiom (Axiom_Op (delta, op, _, _))},_,_) -> delta && ri.delta_p op
   | _ -> false
 
 let can_eta x (f, args) =
@@ -895,13 +899,13 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),
-         (({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) }
+         (({ p_node = Pat_Axiom (Axiom_Op (_, op,lty,_)) }
            | { p_node =
                  Pat_Meta_Name
                    (Some
-                      { p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) },_,_)})
+                      { p_node = Pat_Axiom (Axiom_Op (_, op,lty,_)) },_,_)})
           as pop) :: args
-            when delta && is_delta_p ri pop ->
+            when is_delta_p ri pop ->
           if verbose then
             (print hyps "delta";
              let env = EcEnv.LDecl.toenv hyps in
