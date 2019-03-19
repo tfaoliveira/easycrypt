@@ -1585,6 +1585,15 @@ let rec process (e : engine) : nengine =
              process { e with e_pattern1; e_pattern2; e_continuation; }
        end
 
+    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
+       if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
+       then begin
+           Debug.debug_which_rule e.e_env "same fun symbol";
+           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_reductions, e.e_continuation) in
+           next Match { e with e_continuation }
+         end
+       else let e = try_reduce e in next NoMatch e
+
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
     | Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b1)::bs), [p1]), _
          when check_arrow e [b1] e.e_pattern2.p_ogty -> begin
@@ -1610,15 +1619,6 @@ let rec process (e : engine) : nengine =
           process { e with e_pattern1; e_pattern2 }
         with NoMatches -> next NoMatch e
       end
-
-    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
-       if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
-       then begin
-           Debug.debug_which_rule e.e_env "same fun symbol";
-           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_reductions, e.e_continuation) in
-           next Match { e with e_continuation }
-         end
-       else let e = try_reduce e in next NoMatch e
 
     (* Pattern / Axiom *)
     | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
