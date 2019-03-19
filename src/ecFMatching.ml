@@ -2088,6 +2088,13 @@ let get_meta_bindings (p : pattern) : pbindings Mid.t =
     | Pat_Axiom _ -> meta_bds
     | Pat_Fun_Symbol (Sym_Quant (_,b),[p]) ->
        aux (current_bds @ b) meta_bds p
+    | Pat_Fun_Symbol (Sym_Form_Let lp, [p1;p2]) ->
+       let m = aux current_bds meta_bds p1 in
+       let current_bds = match lp with
+         | LSymbol (id,ty) -> (id, OGTty (Some ty)) :: current_bds
+         | LTuple l -> (List.map (snd_map (fun t -> OGTty (Some t))) l) @ current_bds
+         | _ -> current_bds in
+       aux current_bds m p2
     | Pat_Fun_Symbol (Sym_Form_Pr, [p1;p2;p3;p4]) ->
        let m = aux ((mhr,OGTmem None)::current_bds) meta_bds p4 in
        List.fold_left (aux current_bds) m [p1;p2;p3]

@@ -521,14 +521,6 @@ let reduce_local_opt (hyps : EcEnv.LDecl.hyps) (ri : reduction_info)
       Some (pat_form (EcEnv.LDecl.unfold id hyps))
   else None
 
-let is_delta_p ri pop = match pop.p_node with
-  | Pat_Axiom (Axiom_Op (delta, op, _, _)) -> delta && ri.delta_p op
-  | Pat_Meta_Name
-      (Some
-         { p_node =
-             Pat_Axiom (Axiom_Op (delta, op, _, _))},_,_) -> delta && ri.delta_p op
-  | _ -> false
-
 let can_eta x (f, args) =
   match List.rev args with
   | { f_node = Flocal y } :: args ->
@@ -899,13 +891,13 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* δ-reduction *)
        | Sym_Form_App (ty,_ho),
-         (({ p_node = Pat_Axiom (Axiom_Op (_, op,lty,_)) }
-           | { p_node =
-                 Pat_Meta_Name
-                   (Some
-                      { p_node = Pat_Axiom (Axiom_Op (_, op,lty,_)) },_,_)})
-          as pop) :: args
-            when is_delta_p ri pop ->
+         ({ p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) }
+          | { p_node =
+                Pat_Meta_Name
+                  (Some
+                     { p_node = Pat_Axiom (Axiom_Op (delta, op,lty,_)) },_,_)})
+         :: args
+            when delta && ri.delta_p op ->
           if verbose then
             (print hyps "delta";
              let env = EcEnv.LDecl.toenv hyps in
@@ -930,7 +922,21 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
 
        (* Contextual rule - application args. *)
        | Sym_Form_App (ty,ho), p1::args ->
-          if verbose then print hyps "context app";
+          if verbose then
+            (print hyps "context app";
+             let env = EcEnv.LDecl.toenv hyps in
+             let ppe = EcPrinting.PPEnv.ofenv env in
+             EcEnv.notify env `Warning "------------ %a : (%s, %s, %s) delta"
+               (EcPrinting.pp_pattern ppe) p1
+               (match p1.p_node with
+                | Pat_Axiom (Axiom_Op (b,_,_,_)) -> if b then "true" else "false"
+                | _ -> "false")
+               (match p1.p_node with
+                | Pat_Axiom (Axiom_Op (_,p,_,_)) ->
+                   if ri.delta_p p then "true" else "false"
+                | _ -> "false")
+               (if ri.delta_p (EcPath.psymbol "test") then "true" else "false"));
+
           omap (fun p1 -> p_app ~ho p1 args ty) (h_red_pattern_opt eq hyps ri s p1)
 
        (* (\* Contextual rule - bindings *\)
