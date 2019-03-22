@@ -243,14 +243,12 @@ val p_app_simpl : ?ho:is_higher_order ->
 module FV : sig
   type fv = int Mid.t
 
-  val add_fv   : fv -> ident -> fv
-  val union    : fv -> fv -> fv
-  val lvalue   : EcEnv.LDecl.hyps -> fv -> lvalue -> fv
-  val axiom    : EcEnv.LDecl.hyps -> fv -> axiom -> fv
-  val pattern  : EcEnv.LDecl.hyps -> fv -> pattern -> fv
-  val lvalue0  : EcEnv.LDecl.hyps -> lvalue -> fv
-  val axiom0   : EcEnv.LDecl.hyps -> axiom -> fv
-  val pattern0 : EcEnv.LDecl.hyps -> pattern -> fv
+  val lvalue   : fv -> lvalue -> fv
+  val axiom    : fv -> axiom -> fv
+  val pattern  : fv -> pattern -> fv
+  val lvalue0  : lvalue -> fv
+  val axiom0   : axiom -> fv
+  val pattern0 : pattern -> fv
 end
 (* -------------------------------------------------------------------------- *)
 module Psubst : sig

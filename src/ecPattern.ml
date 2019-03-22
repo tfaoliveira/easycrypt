@@ -1217,71 +1217,103 @@ let get_ty2 (p1 : pattern) (p2 : pattern) =
 module FV = struct
   type fv = int Mid.t
 
-  let add_fv (m: fv) (x : ident) =
-    Mid.change (fun i -> Some (odfl 0 i + 1)) x m
+  let add_fv (m: fv) (x : ident) = fv_add x m
 
-  let union (m1 : fv) (m2 : fv) =
-    Mid.union (fun _ i1 i2 -> Some (i1 + i2)) m1 m2
+  let union m ex l = List.fold_left (fun s a -> fv_union s (ex a)) m l
 
-  let rec lvalue h (map : fv) =
-    function
-    | LvVar (pv,_) ->
-        pattern h map (pat_pv pv)
-    | LvTuple t ->
-        List.fold_left (pattern h) map (List.map (fun (x,_) -> pat_pv x) t)
-    | LvMap ((_,_),pv,e,_) ->
-        pattern h (union map e.e_fv) (pat_pv pv)
+  let fv_mlr = Sid.add mleft (Sid.singleton mright)
 
-  and axiom h =
+  let lv_fv = function
+    | LvVar (pv, _) ->
+       EcTypes.pv_fv pv
+
+    | LvTuple pvs ->
+       let add s (pv, _) = EcIdent.fv_union s (EcTypes.pv_fv pv) in
+       List.fold_left add Mid.empty pvs
+
+    | LvMap (_, pv, e, _) ->
+       EcIdent.fv_union (EcTypes.pv_fv pv) (EcTypes.e_fv e)
+
+  let lvalue (map : fv) lv = fv_union map (lv_fv lv)
+
+  let rec axiom =
     let rec aux (map : fv) (a : axiom) =
       match a with
-      | Axiom_Int _ -> map
-      | Axiom_Memory m -> add_fv map m
-      | Axiom_Stmt s -> union map s.s_fv
-      | Axiom_MemEnv (m, _) -> add_fv map m
-      | Axiom_Prog_Var pv -> pattern h map (pat_xpath pv.pv_name)
-      | Axiom_Xpath xp -> pattern h map (pat_mpath xp.x_top)
-      | Axiom_Mpath mp ->
-          (* let env0 = EcEnv.LDecl.toenv h in *)
-          (* if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else *)
-          List.fold_left (pattern h)
-            (pattern h map (pat_mpath_top mp.m_top))
-            (List.map pat_mpath mp.m_args)
-
+      | Axiom_Int _        -> map
+      | Axiom_Op (_,_,l,_) -> union map (fun a -> a.ty_fv) l
+      | Axiom_Memory m     -> add_fv map m
+      | Axiom_Stmt s       -> fv_union map s.s_fv
+      | Axiom_MemEnv (m,_) -> add_fv map m
+      | Axiom_Prog_Var pv  -> pv_fv pv
+      | Axiom_Xpath xp     -> x_fv map xp
+      | Axiom_Mpath mp     -> m_fv map mp
       | Axiom_Mpath_top (`Local id) -> add_fv map id
-      | Axiom_Mpath_top _ -> map
+      | Axiom_Mpath_top _  -> map
       | Axiom_Local (id,_) -> add_fv map id
-      | Axiom_Op _ -> map
-      | Axiom_Hoarecmp _ -> map
-      | Axiom_Lvalue lv -> lvalue h map lv
+      | Axiom_Hoarecmp _   -> map
+      | Axiom_Lvalue lv    -> lvalue map lv
 
     in fun m a -> aux m a
 
-  and pattern h =
+  and pattern =
     let rec aux (map : int Mid.t) p = match p.p_node with
       | Pat_Meta_Name (None, n, _) -> add_fv map n
       | Pat_Meta_Name (Some p, n, _) -> aux (add_fv map n) p
       | Pat_Sub p -> aux map p
       | Pat_Or lp -> List.fold_left aux map lp
       | Pat_Red_Strat (p,_) -> aux map p
+       (* FIXME *)
       | Pat_Fun_Symbol (Sym_Quant (_,b),lp) ->
          let map' = List.fold_left aux Mid.empty lp in
-         let map' =
-           Mid.filter
-             (fun x _ -> not (List.exists (fun (y,_) -> id_equal x y) b))
-             map' in
-         union map map'
-      | Pat_Fun_Symbol (Sym_Form_Pr, lp) ->
-         let map = List.fold_left aux map lp in
-         Mid.remove mhr map
-      (* | Pat_Fun_Symbol *)
+         let map' = List.fold_left (fun m (x,_) -> Mid.remove x m) map' b in
+         fv_union map map'
+       (* FIXME *)
+      | Pat_Fun_Symbol (Sym_Form_Match ty, lp) ->
+         List.fold_left aux (fv_union map ty.ty_fv) lp
+      | Pat_Fun_Symbol (Sym_Form_Let lp, [p1;p2]) ->
+         aux (fv_diff (aux map p2) (lp_fv lp)) p1
+      | Pat_Fun_Symbol (Sym_Form_Hoare_F, [pr;f;po]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po] in
+         aux (fv_union map (Mid.remove mhr fv)) f
+      | Pat_Fun_Symbol (Sym_Form_Hoare_S, [m;pr;s;po]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po] in
+         let fv = Mid.set_diff fv (aux Mid.empty m) in
+         aux (fv_union fv map) s
+      | Pat_Fun_Symbol (Sym_Form_bd_Hoare_F, [pr;f;po;cmp;bd]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po;bd;cmp] in
+         aux (fv_union map (Mid.remove mhr fv)) f
+      | Pat_Fun_Symbol (Sym_Form_bd_Hoare_S, [m;pr;s;po;cmp;bd]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po;bd;cmp] in
+         let fv = fv_diff fv (aux Mid.empty m) in
+         aux (fv_union map fv) s
+      | Pat_Fun_Symbol (Sym_Form_Equiv_F, [pr;fl;fr;po]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po] in
+         List.fold_left aux (fv_union map (fv_diff fv fv_mlr)) [fl;fr]
+      | Pat_Fun_Symbol (Sym_Form_Equiv_S, [ml;mr;pr;sl;sr;po]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po] in
+         let mapl, mapr = aux Mid.empty ml, aux Mid.empty mr in
+         let fv = fv_diff (fv_diff fv mapl) mapr in
+         List.fold_left aux (fv_union map fv) [sl;sr]
+      | Pat_Fun_Symbol (Sym_Form_Eager_F, [pr;sl;fl;fr;sr;po]) ->
+         let fv = List.fold_left aux Mid.empty [pr;po] in
+         let fv = fv_diff fv fv_mlr in
+         List.fold_left aux (fv_union map fv) [sl;sr;fl;fr]
+      | Pat_Fun_Symbol (Sym_Form_Pr, [m;f;args;event]) ->
+         let fve = Mid.remove mhr (aux Mid.empty event) in
+         List.fold_left aux (fv_union map fve) [f;args;m]
+       (* FIXME *)
       | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
-      | Pat_Axiom a -> axiom h map a
+      | Pat_Axiom a -> axiom map a
 
-    in fun m p -> aux m p
+    in fun m p ->
+       let map = aux m p in
+       match p.p_ogty with
+       | OGTty (Some ty) -> fv_union map ty.ty_fv
+       (* FIXME *)
+       | _ -> map
 
   (* ------------------------------------------------------------------ *)
-  let lvalue0  h = lvalue  h Mid.empty
-  let axiom0   h = axiom   h Mid.empty
-  let pattern0 h = pattern h Mid.empty
+  let lvalue0  = lvalue  Mid.empty
+  let axiom0   = axiom   Mid.empty
+  let pattern0 = pattern Mid.empty
 end

@@ -532,7 +532,7 @@ let p_can_eta h x (f, args) =
   match List.rev args with
   | { p_node = (Pat_Axiom (Axiom_Local (y,_))
                 | Pat_Meta_Name (None, y, _))} :: args ->
-     let check v = not (Mid.mem x (FV.pattern0 h v)) in
+     let check v = not (Mid.mem x (FV.pattern0 v)) in
      id_equal x y && List.for_all check (f :: args)
   | _ -> false
 

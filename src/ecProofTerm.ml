@@ -111,7 +111,7 @@ let rec get_head_symbol (pt : pt_env) (f : form) =
 
 (* -------------------------------------------------------------------- *)
 let can_concretize (pt : pt_env) =
-  EcFMatching.menv_is_full !(pt.pte_mc) pt.pte_hy
+  EcFMatching.menv_is_full !(pt.pte_mc)
 
 (* -------------------------------------------------------------------- *)
 let concretize_env pe =

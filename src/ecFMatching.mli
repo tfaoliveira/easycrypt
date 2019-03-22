@@ -67,7 +67,7 @@ val pattern_of_memory : match_env -> EcMemory.memory -> pattern
 
 val rewrite_term    : engine -> EcFol.form -> pattern
 
-val menv_is_full    : match_env -> LDecl.hyps -> bool
+val menv_is_full    : match_env -> bool
 
 (* -------------------------------------------------------------------------- *)
 module Translate : sig

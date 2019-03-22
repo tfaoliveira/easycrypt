@@ -1128,7 +1128,7 @@ let get_ty = function
 (* --------------------------------------------------------------------- *)
 let restr_bds_check (env : environment) (p : pattern) (restr : pbindings) =
   let mr = Sid.of_list (List.map fst restr) in
-  let m  = Mid.set_diff (FV.pattern0 env.env_hyps p) mr in
+  let m  = Mid.set_diff (FV.pattern0 p) mr in
   let m  = Mid.set_diff m (env.env_match.me_meta_vars) in
 
   let check1 (x : ident) =
@@ -1891,7 +1891,7 @@ and nadd_match (e : nengine) (name : meta_name) (p : pattern)
   let p' = Psubst.p_subst subst p in
   Debug.debug_subst env p p';
   let p = p' in
-  let p_fv = FV.pattern0 e.ne_env.env_hyps p in
+  let p_fv = FV.pattern0 p in
   Debug.debug_subst env p p';
   if Mid.mem name p_fv then
     raise CannotUnify
@@ -2142,13 +2142,13 @@ let pattern_of_memory me m =
   abstract_pattern me.me_meta_vars (pat_memory m)
 
 (* -------------------------------------------------------------------- *)
-let menv_is_full (e : match_env) h =
+let menv_is_full (e : match_env) =
   let matches   = e.me_matches in
   let meta_vars = e.me_meta_vars in
 
   let f n _ = match Mid.find_opt n matches with
     | None   -> false
-    | Some p -> let fv = FV.pattern0 h p in
+    | Some p -> let fv = FV.pattern0 p in
                 Mid.for_all (fun n _ -> not (Mid.mem n meta_vars)) fv in
 
   Mid.for_all f meta_vars && EcUnify.UniEnv.closed e.me_unienv
