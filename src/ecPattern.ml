@@ -1242,8 +1242,8 @@ module FV = struct
       | Axiom_Prog_Var pv -> pattern h map (pat_xpath pv.pv_name)
       | Axiom_Xpath xp -> pattern h map (pat_mpath xp.x_top)
       | Axiom_Mpath mp ->
-          let env0 = EcEnv.LDecl.toenv h in
-          if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else
+          (* let env0 = EcEnv.LDecl.toenv h in *)
+          (* if is_none (EcEnv.Mod.by_mpath_opt mp env0) then map else *)
           List.fold_left (pattern h)
             (pattern h map (pat_mpath_top mp.m_top))
             (List.map pat_mpath mp.m_args)
@@ -1274,6 +1274,7 @@ module FV = struct
       | Pat_Fun_Symbol (Sym_Form_Pr, lp) ->
          let map = List.fold_left aux map lp in
          Mid.remove mhr map
+      (* | Pat_Fun_Symbol *)
       | Pat_Fun_Symbol (_,lp) -> List.fold_left aux map lp
       | Pat_Axiom a -> axiom h map a
 

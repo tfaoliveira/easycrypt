@@ -74,14 +74,14 @@ let debug_verbose : verbose = {
     verbose_rule            = true;
     verbose_type            = false;
     verbose_bind_restr      = true;
-    verbose_add_meta        = false;
+    verbose_add_meta        = true;
     verbose_abstract        = false;
     verbose_reduce          = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
-    verbose_subst           = false;
+    verbose_subst           = true;
     verbose_unienv          = false;
     verbose_eta             = false;
     verbose_show_match      = true;
@@ -1892,6 +1892,7 @@ and nadd_match (e : nengine) (name : meta_name) (p : pattern)
   Debug.debug_subst env p p';
   let p = p' in
   let p_fv = FV.pattern0 e.ne_env.env_hyps p in
+  Debug.debug_subst env p p';
   if Mid.mem name p_fv then
     raise CannotUnify
   else if odfl true (omap (fun r -> restr_bds_check env p r) orb)
@@ -1995,6 +1996,8 @@ and search_eng e =
   let e = { e with e_pattern1; e_pattern2; } in
   Debug.debug_begin_match e.e_env e.e_pattern1 e.e_pattern2;
   Debug.debug_show_matches e.e_env;
+  Debug.debug_reduce e.e_env e.e_pattern1 e.e_pattern1 e.e_pattern2
+    e.e_pattern2 false;
   try
     let unienv = e.e_env.env_match.me_unienv in
        let e' = process (e_copy e) in
