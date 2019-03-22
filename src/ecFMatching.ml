@@ -110,6 +110,7 @@ type environment = {
     env_red_info_same_meta : EcReduction.reduction_info;
     env_meta_restr_binds   : pbindings Mid.t;
     env_verbose            : verbose;
+    env_has_reduced_eta    : bool;
   }
 
 type pat_continuation =
@@ -1297,6 +1298,7 @@ let mk_engine ?mtch f pattern hyps rim ris =
       env_meta_restr_binds   = Mid.empty;
       env_match              = env_match;
       env_verbose            = verbose;
+      env_has_reduced_eta    = false;
     } in
 
   { e_pattern1     = pattern;
@@ -1304,6 +1306,9 @@ let mk_engine ?mtch f pattern hyps rim ris =
     e_continuation = ZTop;
     e_env          = e_env;
   }
+
+let ressert_eta e   = { e with  e_env = { e.e_env  with env_has_reduced_eta = false } }
+let n_ressert_eta e = { e with ne_env = { e.ne_env with env_has_reduced_eta = false } }
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
@@ -1378,12 +1383,14 @@ let rec process (e : engine) : nengine =
          }
 
     | Pat_Sub p, _ ->
+       let e = ressert_eta e in
        let le = sub_engines1 e p in
        Debug.debug_which_rule e.e_env "sub 1";
        let e    = { e with e_pattern1 = p } in
        process (zor e le)
 
     | _, Pat_Sub p ->
+       let e = ressert_eta e in
        let le = sub_engines2 e p in
        Debug.debug_which_rule e.e_env "sub 2";
        let e    = { e with e_pattern2 = p } in
@@ -1394,6 +1401,7 @@ let rec process (e : engine) : nengine =
     | _, Pat_Or [] -> next NoMatch e
 
     | Pat_Or (p::pl), _ ->
+       let e = ressert_eta e in
        Debug.debug_which_rule e.e_env "or 1";
        let update_pattern p = { e with e_pattern1 = p; } in
        let l = List.map update_pattern pl in
@@ -1401,6 +1409,7 @@ let rec process (e : engine) : nengine =
        process (zor e l)
 
     | _, Pat_Or (p::pl) ->
+       let e = ressert_eta e in
        Debug.debug_which_rule e.e_env "or 2";
        let update_pattern p = { e with e_pattern2 = p; } in
        let l = List.map update_pattern pl in
@@ -1471,6 +1480,7 @@ let rec process (e : engine) : nengine =
        let zand = List.combine args12 args22 in
        let op1 = p_app op1 args11 (parrow args12 ot1) in
        let op2 = p_app op2 args21 (parrow args22 ot2) in
+       let e = ressert_eta e in
        let e_pattern1, e_pattern2, zand = op1, op2, zand in
        let e_continuation =
          Zand ([e_pattern1,e_pattern2],zand,e.e_continuation) in
@@ -1500,6 +1510,7 @@ let rec process (e : engine) : nengine =
              (* let meta_pargs = List.filter pattern_contain_meta_var pargs in *)
              let find_sub env p =
                try
+                 let e = ressert_eta e in
                  let ne = process
                             { e_env          = env_copy env;
                               e_pattern1     = mk_pattern (Pat_Sub p) OGTany;
@@ -1540,7 +1551,9 @@ let rec process (e : engine) : nengine =
              let s = psubst_of_menv { e.e_env.env_match with me_matches = Mid.empty } in
              let pat = p_subst s pat in
              let m,e =
-               try let e = add_match e name pat ob in
+               try
+                 let e = ressert_eta e in
+                 let e = add_match e name pat ob in
                    let me_matches =
                      List.fold_left (fun m (id,_) -> Mid.remove id m)
                        e.e_env.env_match.me_matches args in
@@ -1572,6 +1585,7 @@ let rec process (e : engine) : nengine =
            let e_pattern1 = p_quant q1 b12 e_pattern1 in
            Debug.debug_subst e_env p1 e_pattern1;
            let e_pattern2 = p_quant q2 b22 (Psubst.p_subst subst p2) in
+           let e = ressert_eta e in
            process { e with e_pattern1; e_pattern2; e_env; }
        end
 
@@ -1586,43 +1600,52 @@ let rec process (e : engine) : nengine =
                | _  -> Zand ([],zand,e.e_continuation) in
              let e_pattern1 = p_mpath p1 args11 in
              let e_pattern2 = p_mpath p2 args21 in
+             let e = ressert_eta e in
              process { e with e_pattern1; e_pattern2; e_continuation; }
        end
 
-    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2) ->
-       if EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2
-       then begin
-           Debug.debug_which_rule e.e_env "same fun symbol";
-           let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
-           next Match { e with e_continuation }
-         end
-       else let e = try_reduce e in next NoMatch e
+    | Pat_Fun_Symbol (s1, lp1), Pat_Fun_Symbol (s2, lp2)
+         when EQ.symbol e.e_env s1 s2 && 0 = List.compare_lengths lp1 lp2 ->
+       Debug.debug_which_rule e.e_env "same fun symbol";
+       let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
+       next Match { e with e_continuation }
 
     (* eta-expansion in the case where the types of e_pattern2 is some tarrow *)
     | Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b1)::bs), [p1]), _
-         when check_arrow e [b1] e.e_pattern2.p_ogty -> begin
+         when not e.e_env.env_has_reduced_eta
+              && check_arrow e [b1] e.e_pattern2.p_ogty -> begin
         try
           Debug.debug_which_rule e.e_env "eta-expansion 1";
           let x = pat_local (EcIdent.create (EcIdent.tostring id)) ty in
           let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p1.p_ogty) in
           let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
           let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
-          process { e with e_pattern1; e_pattern2 }
+          let e_or = e_copy { e with e_pattern1; e_pattern2 } in
+          let e_env = { e.e_env with env_has_reduced_eta = true } in
+          let e = { e with e_env; } in
+          process (zor e [e_or])
         with NoMatches -> next NoMatch e
       end
 
     (* eta-expansion in the case where the types of e_pattern1 is some tarrow *)
     | _, Pat_Fun_Symbol (Sym_Quant (Llambda, (id, OGTty (Some ty) as b2)::bs), [p2])
-         when check_arrow e [b2] e.e_pattern1.p_ogty -> begin
+         when not e.e_env.env_has_reduced_eta
+              && check_arrow e [b2] e.e_pattern1.p_ogty -> begin
         try
           Debug.debug_which_rule e.e_env "eta-expansion 1";
           let x = pat_local (EcIdent.create (EcIdent.tostring id)) ty in
           let codom = toarrow (List.map (get_ty |- snd) bs) (get_ty p2.p_ogty) in
           let e_pattern1 = p_app_simpl e.e_pattern1 [x] (Some codom) in
           let e_pattern2 = p_app_simpl e.e_pattern2 [x] (Some codom) in
-          process { e with e_pattern1; e_pattern2 }
+          let e_or = e_copy { e with e_pattern1; e_pattern2 } in
+          let e_env = { e.e_env with env_has_reduced_eta = true } in
+          let e = { e with e_env; } in
+          process (zor e [e_or])
         with NoMatches -> next NoMatch e
       end
+
+    | Pat_Fun_Symbol _, Pat_Fun_Symbol _ ->
+       let e = try_reduce e in next NoMatch e
 
     (* Pattern / Axiom *)
     | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
@@ -1845,6 +1868,7 @@ and next_n (m : ismatch) (e : nengine) : nengine =
 
   | Match, Zand (before,(f,p)::after,z) ->
      Debug.debug_which_rule e.ne_env "next : next match in zand";
+     let e      = n_ressert_eta e in
      let ne_env = saturate e.ne_env in
      let e      = { e with ne_env } in
      (* let s      = psubst_of_menv e.ne_env.env_match in

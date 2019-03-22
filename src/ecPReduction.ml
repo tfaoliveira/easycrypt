@@ -528,7 +528,7 @@ let can_eta x (f, args) =
      id_equal x y && List.for_all check (f :: args)
   | _ -> false
 
-let p_can_eta h x (f, args) =
+let p_can_eta x (f, args) =
   match List.rev args with
   | { p_node = (Pat_Axiom (Axiom_Local (y,_))
                 | Pat_Meta_Name (None, y, _))} :: args ->
@@ -909,7 +909,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
        (* η-reduction *)
        | Sym_Quant (Llambda, (x, OGTty (Some t1))::binds),
          [{ p_node = Pat_Fun_Symbol (Sym_Form_App (ty,ho), pn::pargs)}]
-            when p_can_eta hyps x (pn, pargs) ->
+            when p_can_eta x (pn, pargs) ->
           if verbose then print hyps "eta";
           Some (p_quant Llambda binds
                   (p_app ~ho pn (List.take (List.length pargs - 1) pargs)

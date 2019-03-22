@@ -54,7 +54,7 @@ lemma nosmt f2trans (f g h : 'a -> 'b -> 'c): f === g => g === h => f === h by [
 
 lemma rel_ext (f g : 'a -> 'b -> 'c) : f = g <=> f === g.
 proof.
-by split=> //= fg; apply/fun_ext=> x; apply/fun_ext=> y; rewrite fg.
+by split=> //= fg; apply/fun_ext=> x; rewrite fun_ext=> y; rewrite fg.
 qed.
 
 (* -------------------------------------------------------------------- *)

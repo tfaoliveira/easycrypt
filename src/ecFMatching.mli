@@ -17,14 +17,7 @@ type match_env = {
 
 type verbose
 
-type environment = {
-    env_hyps               : EcEnv.LDecl.hyps;
-    env_match              : match_env;
-    env_red_info_match     : EcReduction.reduction_info;
-    env_red_info_same_meta : EcReduction.reduction_info;
-    env_meta_restr_binds   : pbindings Mid.t;
-    env_verbose            : verbose;
-  }
+type environment
 
 val no_verbose    : verbose
 val full_verbose  : verbose
