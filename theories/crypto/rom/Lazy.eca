@@ -44,7 +44,7 @@ by sim.
 hoare dom_RO_o d x': RO.o:
   x = x' /\ (forall x, x \in RO.m = d x) ==> dom RO.m = predU d (pred1 x').
 proof.
-proc; auto=> /> &m eq_m_d y _; rewrite -!fun_ext; split.
+proc; auto=> /> &m eq_m_d y _; rewrite !fun_ext; split.
 + by move=> _ x0; rewrite mem_set /predU /pred1 eq_m_d.
 by move=> + x0; rewrite /predU /pred1 !eq_m_d; case: (x0 = x{m})=> //= ->> ->.
 qed.
