@@ -291,7 +291,8 @@ qed.
 lemma mu_mem_uniq ['a] (d : 'a distr) (s : 'a list) : 
   uniq s => mu d (mem s) = BRA.big predT (mu1 d) s.
 proof.
-elim: s => [_|x s ih [xs uq_s]]; first by rewrite big_nil mu0.
+(* FIXME: CECILE: argument `d` to `mu0` should not be required *)
+elim: s => [_|x s ih [xs uq_s]]; first by rewrite big_nil (@mu0 d).
 rewrite big_cons {1}/predT /= -ih // -mu_disjointL => [y ->//|].
 by apply/mu_eq=> y.
 qed.
