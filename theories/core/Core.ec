@@ -210,7 +210,7 @@ by [].
 
 lemma nosmt subpred_asym (X Y:'a -> bool):
   X <= Y => Y <= X => X = Y
-by (rewrite -fun_ext; smt).
+by (rewrite fun_ext; smt).
 
 lemma nosmt subpred_trans (X Y Z:'a -> bool):
   X <= Y => Y <= Z => X <= Z
@@ -218,7 +218,7 @@ by [].
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt pred1E (c : 'a) : pred1 c = ((=) c).
-proof. by apply fun_ext=> x; rewrite (eq_sym c). qed.
+proof. by rewrite fun_ext => x; rewrite (eq_sym c). qed.
 
 lemma nosmt predU1l (x y : 'a) b : x = y => (x = y) \/ b by [].
 lemma nosmt predU1r (x y : 'a) b : b => (x = y) \/ b by [].
@@ -228,7 +228,7 @@ lemma nosmt predT_comp ['a 'b] (p : 'a -> 'b) : predT \o p = predT.
 proof. by []. qed.
 
 lemma nosmt predIC (p1 p2 : 'a -> bool) : predI p1 p2 = predI p2 p1.
-proof. by apply fun_ext=> x; rewrite /predI andbC. qed.
+proof. by apply/fun_ext=> x; rewrite /predI andbC. qed.
 
 lemma nosmt predCI (p : 'a -> bool) : predI (predC p) p = pred0.
 proof. by apply/fun_ext=> x /=; case: (p x); delta=> ->. qed. (* delta *)

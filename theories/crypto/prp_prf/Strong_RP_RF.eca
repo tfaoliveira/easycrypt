@@ -132,7 +132,7 @@ proof.
 rewrite (mu_split _ predT P) /predI /predT /predC /=.
 rewrite (exists_eq (fun a => support d a /\ !P a) (fun a => !P a /\ a \in d)) /=.
 + by move=> a /=; rewrite andbC.
-by rewrite -(witness_support (predC P)) -/(predC _) /#.
+by rewrite -(witness_support (predC P) d) -/(predC _) /#.
 qed.
 
 lemma excepted_lossless (m:(D,D) fmap):

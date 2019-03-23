@@ -233,7 +233,7 @@ rewrite ltr_pmul2r ?lt_iq //= take_cat; pose s := drop _ _.
 suff /ler_eqVlt[->|->//]: r <= size s; 1: rewrite ltrr /=.
   by rewrite take0 take_size cats0.
 rewrite size_drop ?mulr_ge0 // 1:ltrW // szxs -mulrBl.
-rewrite max_ler ?mulr_ge0 1,2:ltrW ?subr_gt0 ?ler_pmull //.
-by rewrite ler_subr_addl -ltzE.
+rewrite max_ler ?mulr_ge0 1,2:ltrW ?subr_gt0 //.
+by rewrite 2?ler_pmull // ler_subr_addl -ltzE.
 qed.
 end BitChunking.
