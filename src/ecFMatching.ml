@@ -17,6 +17,7 @@ type verbose = {
     verbose_add_meta        : bool;
     verbose_abstract        : bool;
     verbose_reduce          : bool;
+    verbose_conv            : bool;
     verbose_show_ignored_or : bool;
     verbose_show_or         : bool;
     verbose_begin_match     : bool;
@@ -37,6 +38,7 @@ let no_verbose : verbose = {
     verbose_add_meta        = false;
     verbose_abstract        = false;
     verbose_reduce          = false;
+    verbose_conv            = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = false;
@@ -57,6 +59,7 @@ let full_verbose : verbose = {
     verbose_add_meta        = true;
     verbose_abstract        = true;
     verbose_reduce          = true;
+    verbose_conv            = true;
     verbose_show_ignored_or = true;
     verbose_show_or         = true;
     verbose_begin_match     = true;
@@ -77,6 +80,7 @@ let debug_verbose : verbose = {
     verbose_add_meta        = true;
     verbose_abstract        = false;
     verbose_reduce          = true;
+    verbose_conv            = true;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
@@ -108,6 +112,7 @@ type environment = {
     env_match              : match_env;
     env_red_info_match     : EcReduction.reduction_info;
     env_red_info_same_meta : EcReduction.reduction_info;
+    env_red_info_conv      : EcReduction.reduction_info;
     env_meta_restr_binds   : pbindings Mid.t;
     env_verbose            : verbose;
   }
@@ -133,7 +138,7 @@ type pat_continuation =
                   * pat_continuation
 
   | Zreduce    of pat_continuation * engine * nengine
-
+  | Zconv      of pat_continuation * engine * nengine
 
 and engine = {
     e_pattern1     : pattern;
@@ -232,6 +237,7 @@ module Debug : sig
   val debug_which_rule               : environment -> string -> unit
   val debug_result_match             : environment -> ismatch -> unit
   val debug_try_reduce               : environment -> pattern -> pattern -> unit
+  val debug_try_conv                 : environment -> pattern -> pattern -> unit
   val debug_reduce                   : environment -> pattern -> pattern -> pattern -> pattern -> bool -> unit
   val debug_reduce_incorrect         : environment -> pattern -> pattern -> unit
   val debug_found_match              : environment -> unit
@@ -541,6 +547,7 @@ end = struct
     | Zand (_,l,ct) -> compute_zands (c + List.length l) ct
     | Znamed (_,_,_,ct) -> compute_zands c ct
     | Zreduce (ct,_,_) -> compute_zands c ct
+    | Zconv (ct,_,_) -> compute_zands c ct
 
   let debug_try_match menv p a c =
     if menv.env_verbose.verbose_match then
@@ -577,6 +584,15 @@ end = struct
       let ppe = EcPrinting.PPEnv.ofenv env in
 
       EcEnv.notify env `Warning "Later : try reduce (%a,%a)"
+        (EcPrinting.pp_pattern ppe) p
+        (EcPrinting.pp_pattern ppe) a
+
+  let debug_try_conv menv p a =
+    if menv.env_verbose.verbose_conv then
+      let env = LDecl.toenv menv.env_hyps in
+      let ppe = EcPrinting.PPEnv.ofenv env in
+
+      EcEnv.notify env `Warning "Later : try conv (%a,%a)"
         (EcPrinting.pp_pattern ppe) p
         (EcPrinting.pp_pattern ppe) a
 
@@ -1032,17 +1048,16 @@ end = struct
 
   and pattern (env : environment) ri (p1 : pattern) (p2 : pattern) : bool =
     let try_translate_eq eq trans p1 p2 =
-      try eq (trans p1) (trans p2)
+      try  eq (trans p1) (trans p2)
       with Translate.Invalid_Type _ -> false in
-    if   (try_translate_eq (form env ri)
-            (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
-    then true
-    else if (try_translate_eq (memory env) Translate.memory_of_pattern p1 p2)
-    then true
-    else if (try_translate_eq (mpath env)
-               (Translate.mpath_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
-    then true
-    else
+
+       (try_translate_eq (form env ri)
+          (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
+    || (try_translate_eq (memory env)
+          Translate.memory_of_pattern p1 p2)
+    || (try_translate_eq (mpath env)
+          (Translate.mpath_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
+    ||
       match p1.p_node, p2.p_node with
       | Pat_Red_Strat (p1,red1), Pat_Red_Strat (p2,red2) ->
          if red1 == red2 then pattern env ri p1 p2 else false
@@ -1232,6 +1247,12 @@ let try_reduce (e : engine) : engine =
   let e_continuation = Zreduce (e.e_continuation,copy,ne) in
   { e with e_continuation }
 
+let try_conv (e : engine) : engine =
+  Debug.debug_try_conv e.e_env e.e_pattern1 e.e_pattern2;
+  let copy = e_copy e in
+  let ne = e_next (e_copy e) in
+  let e_continuation = Zconv (e.e_continuation,copy,ne) in
+  { e with e_continuation }
 
 let rec check_arrow e b t = match b, t.ty_node with
   | [], _ -> true
@@ -1284,7 +1305,7 @@ let empty_matches_env () =
     me_meta_vars = Mid.empty;
     me_unienv    = EcUnify.UniEnv.create None; }
 
-let mk_engine ?mtch f pattern hyps rim ris =
+let mk_engine ?mtch f pattern hyps rim ris ric =
   let gstate  = EcEnv.gstate (EcEnv.LDecl.toenv hyps) in
   let verbose = EcGState.getflag "debug" gstate in
 
@@ -1294,6 +1315,7 @@ let mk_engine ?mtch f pattern hyps rim ris =
       env_hyps               = hyps;
       env_red_info_match     = rim;
       env_red_info_same_meta = ris;
+      env_red_info_conv      = ric;
       env_meta_restr_binds   = Mid.empty;
       env_match              = env_match;
       env_verbose            = verbose;
@@ -1314,6 +1336,8 @@ let rec process (e : engine) : nengine =
   if   not eq
   then next NoMatch e
   else
+    let e = try_conv e in
+
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
     | Pat_Meta_Name (None, n1, _), Pat_Meta_Name (None, n2, _) when EQ.name n1 n2 ->
        Debug.debug_which_rule e.e_env "same meta variable 1";
@@ -1775,6 +1799,26 @@ and next_n (m : ismatch) (e : nengine) : nengine =
          process e
     end
 
+  | NoMatch, Zconv (_, e',ne) -> begin
+      Debug.debug_show_matches e.ne_env;
+      Debug.debug_which_rule e.ne_env "next : no match, then try to convert";
+      Debug.debug_show_matches e'.e_env;
+
+      let env = saturate e'.e_env in
+      let s   = psubst_of_menv env.env_match in
+      let r   = env.env_red_info_conv in
+      let p1  = Psubst.p_subst s e'.e_pattern1 in
+      let p2  = Psubst.p_subst s e'.e_pattern2 in
+      try
+        let f1  = Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps) p1 in
+        let f2  = Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps) p2 in
+        if EcReduction.is_conv_param r env.env_hyps f1 f2 then
+          next Match e'
+        else next_n NoMatch ne
+      with Translate.Invalid_Type _ ->
+        next_n NoMatch ne
+    end
+
   | NoMatch, Znamed (_f, _name, _ob, ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : no match in named";
      next_n NoMatch { e with ne_continuation; }
@@ -1801,6 +1845,10 @@ and next_n (m : ismatch) (e : nengine) : nengine =
 
   | Match, Zreduce (ne_continuation, _, _) ->
      Debug.debug_which_rule e.ne_env "next : skip reduce";
+     next_n Match { e with ne_continuation }
+
+  | Match, Zconv (ne_continuation, _, _) ->
+     Debug.debug_which_rule e.ne_env "next : skip conv";
      next_n Match { e with ne_continuation }
 
   | Match, Znamed (f, name, ob, ne_continuation) ->
@@ -1945,7 +1993,7 @@ and h_red_strat env p1 p2 =
   let r   = env.env_red_info_match in
   let eq h r p1 p2 =
     let eng = mk_engine ~mtch:env.env_match p1 p2 h r
-                env.env_red_info_same_meta in
+                env.env_red_info_same_meta env.env_red_info_conv in
     let env = eng.e_env in
     EQ.pattern env r p1 p2 in
   match EcPReduction.h_red_pattern_opt ~verbose:env.env_verbose.verbose_reduce

@@ -51,9 +51,11 @@ val search_eng      : engine -> nengine option
 
 val search_eng_head_no_delta : engine -> nengine option
 
-val mk_engine       : ?mtch:match_env -> pattern -> pattern ->
-                      LDecl.hyps -> EcReduction.reduction_info ->
-                      EcReduction.reduction_info -> engine
+val mk_engine       : ?mtch:match_env -> pattern -> pattern -> LDecl.hyps ->
+                      EcReduction.reduction_info ->
+                      EcReduction.reduction_info ->
+                      EcReduction.reduction_info ->
+                      engine
 
 val pattern_of_form : match_env -> form -> pattern
 val pattern_of_memory : match_env -> EcMemory.memory -> pattern

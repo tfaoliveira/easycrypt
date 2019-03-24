@@ -136,9 +136,7 @@ split=> // s' uq_s'; rewrite (@bigID _ _ (mem s)) addrC big1 /=.
 rewrite -big_filter; apply/(ler_trans _ _ le1_m).
 rewrite filter_predI filter_predT; pose t := filter _ _.
 suff /eq_big_perm ->: perm_eq t (filter (mem s') s).
-  rewrite big_filter (@bigID predT _ (mem s')).
-  (* FIXME: CECILE: /predT & /predI should not be required *)
-  rewrite /predI /predT /= ler_addl.
+  rewrite big_filter (@bigID predT _ (mem s')) /= ler_addl.
   by rewrite sumr_ge0 => x _; apply/ge0_m.
 apply/uniq_perm_eq; rewrite ?filter_uniq // => x.
 by rewrite !mem_filter andbC.
@@ -291,8 +289,7 @@ qed.
 lemma mu_mem_uniq ['a] (d : 'a distr) (s : 'a list) : 
   uniq s => mu d (mem s) = BRA.big predT (mu1 d) s.
 proof.
-(* FIXME: CECILE: argument `d` to `mu0` should not be required *)
-elim: s => [_|x s ih [xs uq_s]]; first by rewrite big_nil (@mu0 d).
+elim: s => [_|x s ih [xs uq_s]]; first by rewrite big_nil mu0.
 rewrite big_cons {1}/predT /= -ih // -mu_disjointL => [y ->//|].
 by apply/mu_eq=> y.
 qed.

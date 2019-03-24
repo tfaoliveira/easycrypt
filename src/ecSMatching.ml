@@ -96,7 +96,7 @@ module RegexpBaseInstr = struct
               let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
               let e = EcFMatching.mk_engine ~mtch fx1 x2 eng.e_hyps
-                        EcReduction.full_red EcReduction.full_red in
+                        EcReduction.full_red EcReduction.full_red EcReduction.full_red in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
                 | Some e -> (get_n_matches e).me_matches in
@@ -108,7 +108,7 @@ module RegexpBaseInstr = struct
               let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
               let e = EcFMatching.mk_engine ~mtch fx1 x2 eng.e_hyps
-                        EcReduction.full_red EcReduction.full_red in
+                        EcReduction.full_red EcReduction.full_red EcReduction.full_red in
               let map = match EcFMatching.search_eng e with
                 | None -> raise NoMatch
                 | Some e -> (get_n_matches e).me_matches in
@@ -123,7 +123,7 @@ module RegexpBaseInstr = struct
            let unienv = EcUnify.UniEnv.create None in
               let mtch = EcFMatching.init_match_env ~mtch:map ~unienv () in
            let e = EcFMatching.mk_engine ~mtch f1 p2 eng.e_hyps EcReduction.full_red
-                     EcReduction.full_red in
+                     EcReduction.full_red EcReduction.full_red in
            let map = match EcFMatching.search_eng e with
              | None -> raise NoMatch
              | Some e -> (get_n_matches e).me_matches in
@@ -144,7 +144,8 @@ module RegexpBaseInstr = struct
           let unienv = EcUnify.UniEnv.create None in
           let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
           let e = EcFMatching.mk_engine ~mtch fx1 p1 eng.e_hyps
-                    EcReduction.full_red EcReduction.full_red in
+                    EcReduction.full_red EcReduction.full_red
+                    EcReduction.full_red in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
             | Some e -> (get_n_matches e).me_matches in
@@ -156,7 +157,7 @@ module RegexpBaseInstr = struct
           let unienv = EcUnify.UniEnv.create None in
           let mtch = EcFMatching.init_match_env ~mtch:map ~unienv () in
           let e = EcFMatching.mk_engine ~mtch f p eng.e_hyps
-                    EcReduction.full_red EcReduction.full_red in
+                    EcReduction.full_red EcReduction.full_red EcReduction.full_red in
           let map = match EcFMatching.search_eng e with
             | None -> raise NoMatch
             | Some e -> (get_n_matches e).me_matches in
@@ -167,7 +168,7 @@ module RegexpBaseInstr = struct
            let unienv = EcUnify.UniEnv.create None in
            let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
            let e' = EcFMatching.mk_engine ~mtch fcond pcond eng.e_hyps
-                      EcReduction.full_red EcReduction.full_red in
+                      EcReduction.full_red EcReduction.full_red EcReduction.full_red in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
              | Some e' -> (get_n_matches e').me_matches in
@@ -194,7 +195,7 @@ module RegexpBaseInstr = struct
            let unienv = EcUnify.UniEnv.create None in
            let mtch = EcFMatching.init_match_env ~mtch:eng.e_map ~unienv () in
            let e' = EcFMatching.mk_engine ~mtch fcond pcond eng.e_hyps
-                      EcReduction.full_red EcReduction.full_red in
+                      EcReduction.full_red EcReduction.full_red EcReduction.full_red in
            let map = match EcFMatching.search_eng e' with
              | None -> raise NoMatch
              | Some e' -> (get_n_matches e').me_matches in

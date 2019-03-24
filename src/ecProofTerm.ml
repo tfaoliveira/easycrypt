@@ -263,13 +263,18 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
       else EcReduction.no_red
   in
 
+  let ric =
+    if   mode.fm_conv
+    then EcReduction.full_red
+    else EcReduction.no_red in
+
   try
     let ptn     = EcFMatching.pattern_of_form !(pt.pte_mc) ptn in
     let subject = EcFMatching.pattern_of_form !(pt.pte_mc) subject in
     let eng     =
       EcFMatching.mk_engine
         ~mtch:!(pt.pte_mc) subject ptn pt.pte_hy
-        ri EcReduction.full_red in
+        ri EcReduction.full_red ric in
 
     match EcFMatching.search_eng eng with
     | None     -> raise EcMatching.MatchFailure
