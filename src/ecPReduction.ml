@@ -981,9 +981,6 @@ and h_red_axiom_opt ?(verbose:bool=false) eq hyps ri s (a : axiom) =
       | Axiom_Mpath m       ->
          let o = h_red_mpath_opt hyps ri s m in
          if verbose && is_some o then print hyps "ax : mem"; o
-      | Axiom_Stmt stmt     ->
-         let o = h_red_stmt_opt eq hyps ri s stmt in
-         if verbose && is_some o then print hyps "ax : mem"; o
       | Axiom_Lvalue lv     ->
          let o = h_red_lvalue_opt hyps ri s lv in
          if verbose && is_some o then print hyps "ax : mem"; o
@@ -1038,8 +1035,8 @@ and h_red_mpath_opt hyps ri s m =
             (h_red_args pat_mpath h_red_mpath_opt hyps ri s m.m_args)
   else None
 
-and h_red_stmt_opt eq hyps ri s stmt =
-  omap (fun l -> pat_fun_symbol Sym_Stmt_Seq l)
+and h_red_stmt_opt ?(start:bool=false) ?(finish:bool=false) eq hyps ri s stmt =
+  omap (fun l -> p_stmt ~start ~finish l)
     (h_red_args (fun x -> x) (h_red_pattern_opt eq) hyps ri s
        (List.map pat_instr stmt.s_node))
 

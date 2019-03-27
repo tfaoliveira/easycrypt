@@ -1,3 +1,4 @@
+open EcUtils
 open EcFol
 open EcTypes
 open EcPath
@@ -37,7 +38,6 @@ type axiom =
   | Axiom_Prog_Var    of prog_var
   | Axiom_Mpath_top   of mpath_top
   | Axiom_Mpath       of mpath
-  | Axiom_Stmt        of stmt
   | Axiom_Lvalue      of lvalue
   | Axiom_Xpath       of xpath
   | Axiom_Hoarecmp    of hoarecmp
@@ -66,27 +66,35 @@ type fun_symbol =
   | Sym_Form_Equiv_S
   | Sym_Form_Eager_F
   | Sym_Form_Pr
+
+  (* generalized *)
+  | Sym_Quant             of quantif * pbindings
+
   (* form type stmt*)
-  | Sym_Stmt_Seq
+  | Sym_Stmt_Seq          of bool pair
+  | Sym_Stmt_Repeat       of int option pair * [ `Greedy | `Lazy ]
+  | Sym_Stmt_Offset       of int option pair
+  | Sym_Stmt_Range        of bool pair
+
   (* from type instr *)
   | Sym_Instr_Assign
   | Sym_Instr_Sample
   | Sym_Instr_Call
-  | Sym_Instr_Call_Lv
   | Sym_Instr_If
   | Sym_Instr_While
   | Sym_Instr_Assert
+
   (* from type xpath *)
   | Sym_Xpath
+
   (* from type mpath *)
   | Sym_Mpath
-  (* generalized *)
-  | Sym_Quant             of quantif * pbindings
 
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
 type p_node =
+  | Pat_Anything
   | Pat_Meta_Name  of pattern option * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
@@ -126,8 +134,9 @@ val pat_axiom      : axiom -> pattern
 val pat_fun_symbol : fun_symbol -> pattern list -> pattern
 val pat_meta       : pattern -> meta_name -> pbindings option -> pattern
 val meta_var       : meta_name -> pbindings option -> ogty -> pattern
+val pat_or         : pattern list -> pattern
+val axiom_mpath    : mpath -> axiom
 
-val axiom_mpath   : mpath -> axiom
 
 val pat_form        : form            -> pattern
 val pat_int         : EcBigInt.zint   -> pattern
@@ -182,13 +191,14 @@ val p_pr       : pattern -> pattern -> pattern -> pattern -> pattern
 
 val p_assign   : pattern -> pattern -> pattern
 val p_sample   : pattern -> pattern -> pattern
-val p_call     : pattern option -> pattern -> pattern list -> pattern
+val p_call     : pattern option -> pattern -> pattern -> pattern
 val p_instr_if : pattern -> pattern -> pattern -> pattern
 val p_while    : pattern -> pattern -> pattern
 val p_assert   : pattern -> pattern
 
-val p_stmt     : pattern list -> pattern
-
+val p_stmt     : ?start:bool -> ?finish:bool -> pattern list -> pattern
+val p_repeat   : int option pair -> [ `Greedy | `Lazy ] -> pattern -> pattern
+val p_offset   : int option pair -> pattern -> pattern
 (* -------------------------------------------------------------------- *)
 val p_var_form : EcIdent.t -> ty -> pattern
 
@@ -290,8 +300,8 @@ end
 val p_betared_opt : pattern -> pattern option
 
 (* -------------------------------------------------------------------- *)
-val default_start_name : string
-val default_end_name   : string
-val default_name       : string
+val default_start_name : ident
+val default_end_name   : ident
+val default_name       : ident
 
 (* -------------------------------------------------------------------------- *)

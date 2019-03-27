@@ -2996,8 +2996,6 @@ let rec pp_pat_axiom ppe fmt a = match a with
      pp_topmod ppe fmt m
   | Axiom_Xpath x ->
      pp_funname ppe fmt x
-  | Axiom_Stmt s ->
-     pp_stmt ppe fmt s
   | Axiom_Lvalue lv ->
      pp_lvalue ppe fmt lv
   | Axiom_Hoarecmp h ->
@@ -3007,6 +3005,7 @@ let rec pp_pat_axiom ppe fmt a = match a with
        (pp_mem ppe) id
 
 and pp_pattern ppe fmt p = match p.p_node with
+  | Pat_Anything -> Format.fprintf fmt "_"
   | Pat_Meta_Name (None, name, _) ->
      Format.fprintf fmt "#%a"
        (pp_mem ppe) name
@@ -3185,8 +3184,20 @@ and pp_pattern ppe fmt p = match p.p_node with
         (pp_pattern ppe) mem
         (pp_pattern ppe) event
      | Sym_Form_Pr, _ -> assert false
-     | Sym_Stmt_Seq, lp ->
+     | Sym_Stmt_Seq _, lp ->
         pp_list "@," (pp_pattern ppe) fmt lp
+
+     | Sym_Stmt_Repeat _, [p] ->
+        Format.fprintf fmt "Repeat(@[%a@])"
+          (pp_pattern ppe) p
+     | Sym_Stmt_Repeat _, _ -> assert false
+     | Sym_Stmt_Offset _, [p] ->
+        Format.fprintf fmt "Offset(@[%a@])"
+          (pp_pattern ppe) p
+     | Sym_Stmt_Offset _, _ -> assert false
+     | Sym_Stmt_Range _, lp ->
+        Format.fprintf fmt "Range(@[%a@])"
+          (pp_list "@," (pp_pattern ppe)) lp
 
      | Sym_Instr_Assign, [lv;e] ->
         Format.fprintf fmt "@[<hov 2>%a <-@ @[%a@]@];"
@@ -3198,24 +3209,17 @@ and pp_pattern ppe fmt p = match p.p_node with
           (pp_pattern ppe) lv (pp_pattern ppe) e
      | Sym_Instr_Sample, _ -> assert false
 
-     | Sym_Instr_Call, xp::args ->
+     | Sym_Instr_Call, [xp;args] ->
         Format.fprintf fmt "%a(@[%a@]);"
           (pp_pattern ppe) xp
-          (pp_list ",@ " (pp_pattern ppe)) args
+          (pp_pattern ppe) args
      | Sym_Instr_Call, _ -> assert false
-
-     | Sym_Instr_Call_Lv, lv::xp::args ->
-        Format.fprintf fmt "@[<hov 2>%a <@@@ %a(@[%a@])@];"
-          (pp_pattern ppe) lv
-          (pp_pattern ppe) xp
-          (pp_list ",@ " (pp_pattern ppe)) args
-     | Sym_Instr_Call_Lv, _ -> assert false
 
      | Sym_Instr_If, [e;s1;s2] ->
         let pp_else ppe fmt s =
           match s.p_node with
-          | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  -> ()
-          | Pat_Fun_Symbol(Sym_Stmt_Seq,[_]) ->
+          | Pat_Fun_Symbol(Sym_Stmt_Seq _,[])  -> ()
+          | Pat_Fun_Symbol(Sym_Stmt_Seq _,[_]) ->
              Format.fprintf fmt "@,else %a" (pp_pat_block ppe) s
           | _   -> Format.fprintf fmt "@ else %a" (pp_pat_block ppe) s
         in
@@ -3273,11 +3277,11 @@ and pp_pattern ppe fmt p = match p.p_node with
 
 and pp_pat_block ppe fmt p =
   match p.p_node with
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq _,[])  ->
      Format.fprintf fmt "{}"
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,[i]) ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq _,[i]) ->
      Format.fprintf fmt "@;<1 2>%a" (pp_pattern ppe) i
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,l)   ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq b,l)   ->
      Format.fprintf fmt "{@,  @[<v>%a@]@,}"
-       (pp_pattern ppe) (pat_fun_symbol Sym_Stmt_Seq l)
+       (pp_pattern ppe) (pat_fun_symbol (Sym_Stmt_Seq b) l)
   | _ -> assert false

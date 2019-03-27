@@ -96,10 +96,21 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
   let ct = match oget s with `Left -> es.es_sl | `Right -> es.es_sr in
   let mt = snd (match oget s with `Left -> es.es_ml | `Right -> es.es_mr) in
   (* Translation of the stmt *)
-  let regexpstmt = trans_block p in
-  let map = match EcSMatching.RegexpStmt.search regexpstmt ct.s_node hyps with
+  let p' = trans_block p in
+  let r  = EcReduction.full_red in
+  let r' = EcReduction.no_red in
+  let e  = EcFMatching.mk_engine p' (EcPattern.pat_stmt ct) hyps r r r' in
+  let map = match EcFMatching.search_eng e with
     | None -> Mstr.empty
-    | Some (_,m) -> m in
+    | Some m ->
+       let m = (EcFMatching.get_n_matches m).EcFMatching.me_matches in
+       let m = EcIdent.Mid.fold_left (fun m id pat -> Mstr.add (EcIdent.name id) pat m) Mstr.empty m in
+       let m = Mstr.map_filter
+                 (fun pat ->
+                   try Some ((EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node)
+                   with EcFMatching.Translate.Invalid_Type _ -> None) m in
+       m
+  in
   let p1, q1 =
     let hyps = LDecl.push_all [es.es_ml; (mright, mt)] hyps in
     TTC.pf_process_form !!tc hyps tbool p1,

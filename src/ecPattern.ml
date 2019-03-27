@@ -44,7 +44,6 @@ type axiom =
   | Axiom_Prog_Var    of prog_var
   | Axiom_Mpath_top   of mpath_top
   | Axiom_Mpath       of mpath
-  | Axiom_Stmt        of stmt
   | Axiom_Lvalue      of lvalue
   | Axiom_Xpath       of xpath
   | Axiom_Hoarecmp    of hoarecmp
@@ -73,27 +72,35 @@ type fun_symbol =
   | Sym_Form_Equiv_S
   | Sym_Form_Eager_F
   | Sym_Form_Pr
+
+  (* generalized *)
+  | Sym_Quant             of quantif * pbindings
+
   (* form type stmt*)
-  | Sym_Stmt_Seq
+  | Sym_Stmt_Seq          of bool pair
+  | Sym_Stmt_Repeat       of int option pair * [ `Greedy | `Lazy ]
+  | Sym_Stmt_Offset       of int option pair
+  | Sym_Stmt_Range        of bool pair
+
   (* from type instr *)
   | Sym_Instr_Assign
   | Sym_Instr_Sample
   | Sym_Instr_Call
-  | Sym_Instr_Call_Lv
   | Sym_Instr_If
   | Sym_Instr_While
   | Sym_Instr_Assert
+
   (* from type xpath *)
   | Sym_Xpath
+
   (* from type mpath *)
   | Sym_Mpath
-  (* generalized *)
-  | Sym_Quant             of quantif * pbindings
 
 
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
 type p_node =
+  | Pat_Anything
   | Pat_Meta_Name  of pattern option * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
@@ -109,9 +116,9 @@ and pattern = {
 
 
 (* This is for EcTransMatching ---------------------------------------- *)
-let default_start_name = "$start"
-let default_end_name = "$end"
-let default_name = "$default"
+let default_start_name = EcIdent.create "$start"
+let default_end_name   = EcIdent.create "$end"
+let default_name       = EcIdent.create "$default"
 
 
 (* -------------------------------------------------------------------------- *)
@@ -198,7 +205,6 @@ let axiom_equal (a1 : axiom) (a2 : axiom) =
   | Axiom_Mpath_top mt1, Axiom_Mpath_top mt2 ->
      EcPath.mt_equal mt1 mt2
   | Axiom_Mpath m1, Axiom_Mpath m2 -> EcPath.m_equal m1 m2
-  | Axiom_Stmt s1, Axiom_Stmt s2 -> s_equal s1 s2
   | Axiom_Lvalue lv1, Axiom_Lvalue lv2 -> lv_equal lv1 lv2
   | Axiom_Xpath xp1, Axiom_Xpath xp2 -> x_equal xp1 xp2
   | Axiom_Hoarecmp cmp1, Axiom_Hoarecmp cmp2 -> cmp1 = cmp2
@@ -234,7 +240,6 @@ let pat_mpath_top m = mk_pattern (Pat_Axiom (Axiom_Mpath_top m))   (OGTmodty Non
 let pat_xpath x     = mk_pattern (Pat_Axiom (Axiom_Xpath x))       OGTxpath
 let pat_op ?(delta:bool=true) op lty o = mk_pattern (Pat_Axiom (Axiom_Op (delta,op,lty,o))) (OGTty o)
 let pat_lvalue lv   = mk_pattern (Pat_Axiom (Axiom_Lvalue lv))     OGTlv
-let pat_stmt s      = mk_pattern (Pat_Axiom (Axiom_Stmt s))        OGTstmt
 let pat_local id ty = mk_pattern (Pat_Axiom (Axiom_Local (id,ty))) (OGTty (Some ty))
 let pat_cmp cmp     = mk_pattern (Pat_Axiom (Axiom_Hoarecmp cmp))  OGThcmp
 let pat_pv pv       = mk_pattern (Pat_Axiom (Axiom_Prog_Var pv))   OGTpv
@@ -256,7 +261,6 @@ let pat_axiom x = match x with
   | Axiom_Op        (b,op,l,o) -> pat_op ~delta:b op l o
   | Axiom_Mpath_top    mt      -> pat_mpath_top mt
   | Axiom_Mpath        m       -> pat_mpath m
-  | Axiom_Stmt         s       -> pat_stmt s
   | Axiom_Lvalue       lv      -> pat_lvalue lv
   | Axiom_Xpath        xp      -> pat_xpath xp
   | Axiom_Hoarecmp     cmp     -> pat_cmp cmp
@@ -311,12 +315,13 @@ let pat_fun_symbol s lp = match s, lp with
     | Sym_Form_Eager_F, _    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
   | Sym_Form_Pr, _           -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some treal))
   (* form type stmt*)
-  | Sym_Stmt_Seq, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
+  | Sym_Stmt_Seq _, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
+  | Sym_Stmt_Range _, _        -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
+  | Sym_Stmt_Offset _, _       -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
   (* from type instr *)
   | (Sym_Instr_Assign
     | Sym_Instr_Sample
     | Sym_Instr_Call
-    | Sym_Instr_Call_Lv
     | Sym_Instr_If
     | Sym_Instr_While
     | Sym_Instr_Assert), _  -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTinstr
@@ -349,6 +354,7 @@ let pat_fv_union m1 m2 =
 
 let pat_fv p =
   let rec aux (map : int Mid.t) p = match p.p_node with
+    | Pat_Anything -> map
     | Pat_Meta_Name (p,n,_) ->
        let map = pat_add_fv map n in
        odfl map (omap (aux map) p)
@@ -363,7 +369,6 @@ let pat_fv p =
        match a with
        | Axiom_Int _ -> map
        | Axiom_Memory m -> pat_add_fv map m
-       | Axiom_Stmt s -> pat_fv_union map s.s_fv
        | Axiom_MemEnv (m,_) -> pat_add_fv map m
        | Axiom_Prog_Var pv -> aux map (pat_xpath pv.pv_name)
        | Axiom_Xpath xp -> aux map (pat_mpath xp.x_top)
@@ -451,8 +456,21 @@ let p_exists b p = p_quant Lexists b p
 
 let p_lambda b p = p_quant Llambda b p
 
-let p_stmt (lp : pattern list) =
-  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Seq,lp)) OGTstmt
+let p_stmt ?(start:bool=false) ?(finish:bool=false) (lp : pattern list) =
+  let get_seq p = match p.p_node with
+    | Pat_Fun_Symbol (Sym_Stmt_Seq _, lp) -> lp
+    | _ -> [p] in
+  let lp = List.flatten (List.map get_seq lp) in
+  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Seq (start,finish),lp)) OGTstmt
+
+let p_repeat (a : int option pair) g p =
+  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Repeat (a,g), [p])) OGTstmt
+
+let p_offset (a : int option pair) p =
+  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Offset a, [p])) OGTstmt
+
+let p_range (a : bool pair) lp =
+  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Range a, lp)) OGTstmt
 
 let p_var_form x ty = let t = OGTty (Some ty) in meta_var x None t
 
@@ -462,10 +480,10 @@ let p_assign (plv : pattern) (pe : pattern) =
 let p_sample (plv : pattern) (pe : pattern) =
   pat_fun_symbol Sym_Instr_Sample [plv;pe]
 
-let p_call (olv : pattern option) (f : pattern) (args : pattern list) =
+let p_call (olv : pattern option) (f : pattern) (args : pattern) =
   match olv, f.p_node with
-  | None   ,_ -> pat_fun_symbol Sym_Instr_Call        (f::args)
-  | Some lv,_ -> pat_fun_symbol Sym_Instr_Call_Lv (lv::f::args)
+  | None   ,_ -> pat_fun_symbol Sym_Instr_Call    [f;args]
+  | Some lv,_ -> pat_fun_symbol Sym_Instr_Call [lv;f;args]
 
 let p_instr_if (pcond : pattern) (ps1 : pattern) (ps2 : pattern) =
   pat_fun_symbol Sym_Instr_If [pcond;ps1;ps2]
@@ -542,16 +560,20 @@ let rec pat_form f = match f.f_node with
      p_pr (pat_memory h.pr_mem) (pat_xpath h.pr_fun) (pat_form h.pr_args)
        (pat_form h.pr_event)
 
-let pat_instr i = match i.i_node with
+and pat_stmt s = p_stmt (List.map pat_instr s.s_node)
+
+and pat_instr i = match i.i_node with
   | Sasgn (lv, e) -> p_assign (pat_lvalue lv) (pat_form (form_of_expr e))
   | Srnd  (lv, e) -> p_sample (pat_lvalue lv) (pat_form (form_of_expr e))
   | Scall (olv, f, args) -> p_call (omap pat_lvalue olv) (pat_xpath f)
-                              (List.map (fun e -> pat_form (form_of_expr e)) args)
+                              (p_tuple (List.map (fun e -> pat_form (form_of_expr e)) args))
   | Sif (e, s1, s2) -> p_instr_if (pat_form (form_of_expr e))
                          (pat_stmt s1) (pat_stmt s2)
   | Swhile (e, s) -> p_while (pat_form (form_of_expr e)) (pat_stmt s)
   | Sassert e -> p_assert (pat_form (form_of_expr e))
   | Sabstract id -> meta_var id None OGTinstr
+
+let pat_or l = mk_pattern (Pat_Or l) OGTany
 
 (* -------------------------------------------------------------------------- *)
 let lv_ty (f_ty : ty -> ty) = function
@@ -563,6 +585,7 @@ let lv_ty (f_ty : ty -> ty) = function
 
 let p_fold_map (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern) : 'a * pattern =
   match p.p_node with
+  | Pat_Anything -> a, p
   | Pat_Meta_Name (None,_,_) -> a, p
   | Pat_Meta_Name (Some p,n,ob) ->
      let a, p = f a p in a, pat_meta p n ob
@@ -577,9 +600,6 @@ let p_fold_map (f : 'a -> pattern -> 'a * pattern) (a : 'a) (p : pattern) : 'a *
   | Pat_Axiom axiom ->
      match axiom with
      | Axiom_Int _ -> a, p
-     | Axiom_Stmt s ->
-        let a, s = List.fold_left_map f a (List.map pat_instr s.s_node) in
-        a, p_stmt s
      | Axiom_Lvalue lv -> begin
          match lv with
          | LvVar (pv,ty) ->
@@ -793,6 +813,7 @@ module Psubst = struct
     let p_subst = p_subst ~keep_ho:false ~meta in
     let p = mk_pattern p.p_node (ogty_subst s p.p_ogty) in
     let p = match p.p_node with
+      | Pat_Anything -> p
       | Pat_Sub p -> mk_pattern (Pat_Sub (p_subst s p)) p.p_ogty
       | Pat_Or lp -> mk_pattern (Pat_Or (List.map (p_subst s) lp)) p.p_ogty
       | Pat_Red_Strat (p,f) ->
@@ -826,7 +847,6 @@ module Psubst = struct
                | None, OGTty (Some ty) -> Some (ty_subst s.ps_sty ty)
                | _ -> None in
              pat_op ~delta op lty oty
-          | Axiom_Stmt st -> stmt_subst s st
           | Axiom_Lvalue lv -> lv_subst s lv
           | Axiom_Hoarecmp _ -> p
           | Axiom_Local (id,ty) -> begin
@@ -886,15 +906,21 @@ module Psubst = struct
           | Sym_Form_Pr, [pm;pf;pargs;pevent] ->
              p_pr (p_subst s pm) (p_subst s pf)
                (p_subst s pargs) (p_subst s pevent)
-          | Sym_Stmt_Seq, lp -> p_stmt (List.map (p_subst s) lp)
+          | Sym_Stmt_Seq (start, finish), lp ->
+             p_stmt ~start ~finish (List.map (p_subst s) lp)
+          | Sym_Stmt_Repeat (a,g), [p] -> p_repeat a g (p_subst s p)
+          | Sym_Stmt_Repeat _, _ -> assert false
+          | Sym_Stmt_Range b, lp -> p_range b (List.map (p_subst s) lp)
+          | Sym_Stmt_Offset a, [p] -> p_offset a p
+          | Sym_Stmt_Offset _, _ -> assert false
           | Sym_Instr_Assign, [lv;e] ->
              p_assign (p_subst s lv) (p_subst s e)
           | Sym_Instr_Sample, [lv;e] ->
              p_sample (p_subst s lv) (p_subst s e)
-          | Sym_Instr_Call, p::args ->
-             p_call None (p_subst s p) (List.map (p_subst s) args)
-          | Sym_Instr_Call_Lv, lv::p::args ->
-             p_call (Some (p_subst s lv)) (p_subst s p) (List.map (p_subst s) args)
+          | Sym_Instr_Call, [p;args] ->
+             p_call None (p_subst s p) (p_subst s args)
+          | Sym_Instr_Call, [lv;p;args] ->
+             p_call (Some (p_subst s lv)) (p_subst s p) (p_subst s args)
           | Sym_Instr_If, [cond;s1;s2] ->
              p_instr_if (p_subst s cond) (p_subst s s1) (p_subst s s2)
           | Sym_Instr_While, [cond;body] ->
@@ -928,7 +954,6 @@ module Psubst = struct
           | Sym_Instr_Assign, _    -> assert false
           | Sym_Instr_Sample, _    -> assert false
           | Sym_Instr_Call, _      -> assert false
-          | Sym_Instr_Call_Lv, _   -> assert false
           | Sym_Instr_If, _        -> assert false
           | Sym_Instr_While, _     -> assert false
           | Sym_Instr_Assert, _    -> assert false
@@ -1006,7 +1031,7 @@ module Psubst = struct
       | Srnd (lv, e) ->
          p_sample (lv_subst lv) (e_s e)
       | Scall (olv, xp, le) ->
-         p_call (omap (lv_subst) olv) (xp_subst s xp) (List.map e_s le)
+         p_call (omap (lv_subst) olv) (xp_subst s xp) (p_tuple (List.map e_s le))
       | Sif (e, s1, s2) ->
          p_instr_if (e_s e) (stmt_subst s s1) (stmt_subst s s2)
       | Swhile (e, st) ->
@@ -1018,13 +1043,7 @@ module Psubst = struct
 
 
     and stmt_subst s stmt =
-      (* ISmart.s_stmt s (List.Smart.map i_subst s.s_node) *)
       p_stmt (List.map (i_subst s) stmt.s_node)
-
-      (* (\* FIXME *\)
-       * let es  = e_subst_init s.ps_freshen s.ps_sty.ts_p
-       *             (ty_subst s.ps_sty) s.ps_opdef s.ps_mp s.ps_exloc in
-       * pat_stmt (EcModules.s_subst es stmt) *)
 
     and lv_subst (s : p_subst) (lv : lvalue) = match lv with
       | LvVar (pv,ty) ->
@@ -1042,6 +1061,7 @@ module Psubst = struct
 
     and p_betared_opt p =
       match p.p_node with
+      | Pat_Anything -> None
       | Pat_Meta_Name (None,_,_) -> None
       | Pat_Meta_Name (Some p,n,ob) ->
          omap (fun p -> pat_meta p n ob) (p_betared_opt p)
@@ -1242,7 +1262,6 @@ module FV = struct
       | Axiom_Int _        -> map
       | Axiom_Op (_,_,l,_) -> union map (fun a -> a.ty_fv) l
       | Axiom_Memory m     -> add_fv map m
-      | Axiom_Stmt s       -> fv_union map s.s_fv
       | Axiom_MemEnv (m,_) -> add_fv map m
       | Axiom_Prog_Var pv  -> pv_fv pv
       | Axiom_Xpath xp     -> x_fv map xp
@@ -1257,6 +1276,7 @@ module FV = struct
 
   and pattern =
     let rec aux (map : int Mid.t) p = match p.p_node with
+      | Pat_Anything -> map
       | Pat_Meta_Name (None, n, _) -> add_fv map n
       | Pat_Meta_Name (Some p, n, _) -> aux (add_fv map n) p
       | Pat_Sub p -> aux map p
