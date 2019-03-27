@@ -71,7 +71,7 @@ type fun_symbol =
   | Sym_Quant             of quantif * pbindings
 
   (* form type stmt*)
-  | Sym_Stmt_Seq          of bool pair
+  | Sym_Stmt_Seq
   | Sym_Stmt_Repeat       of int option pair * [ `Greedy | `Lazy ]
   | Sym_Stmt_Offset       of int option pair
   | Sym_Stmt_Range        of bool pair
@@ -196,7 +196,7 @@ val p_instr_if : pattern -> pattern -> pattern -> pattern
 val p_while    : pattern -> pattern -> pattern
 val p_assert   : pattern -> pattern
 
-val p_stmt     : ?start:bool -> ?finish:bool -> pattern list -> pattern
+val p_stmt     : pattern list -> pattern
 val p_repeat   : int option pair -> [ `Greedy | `Lazy ] -> pattern -> pattern
 val p_offset   : int option pair -> pattern -> pattern
 (* -------------------------------------------------------------------- *)

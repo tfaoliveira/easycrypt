@@ -546,6 +546,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
   let h_red_pattern_opt = h_red_pattern_opt ~verbose in
   try
     match p.p_node with
+    | Pat_Anything -> None
     | Pat_Meta_Name (None,n,_) ->
        let o = Mid.find_opt n s.ps_patloc in
        if verbose && is_some o then print hyps "meta name"; o
@@ -555,7 +556,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
          (h_red_pattern_opt eq hyps ri s p)
     | Pat_Or _ -> None
     | Pat_Red_Strat _ -> None
-    | Pat_Axiom a -> h_red_axiom_opt ~verbose eq hyps ri s a
+    | Pat_Axiom a -> h_red_axiom_opt ~verbose hyps ri s a
     | Pat_Fun_Symbol (symbol,lp) ->
        match symbol, lp with
        (* β-reduction *)
@@ -960,7 +961,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
   with
   | EcEnv.NotReducible -> None
 
-and h_red_axiom_opt ?(verbose:bool=false) eq hyps ri s (a : axiom) =
+and h_red_axiom_opt ?(verbose:bool=false) hyps ri s (a : axiom) =
   try match a with
       | Axiom_Hoarecmp _    -> None
       | Axiom_Memory m      ->
@@ -1035,8 +1036,8 @@ and h_red_mpath_opt hyps ri s m =
             (h_red_args pat_mpath h_red_mpath_opt hyps ri s m.m_args)
   else None
 
-and h_red_stmt_opt ?(start:bool=false) ?(finish:bool=false) eq hyps ri s stmt =
-  omap (fun l -> p_stmt ~start ~finish l)
+and h_red_stmt_opt eq hyps ri s stmt =
+  omap (fun l -> p_stmt l)
     (h_red_args (fun x -> x) (h_red_pattern_opt eq) hyps ri s
        (List.map pat_instr stmt.s_node))
 
@@ -1096,7 +1097,7 @@ let h_red_pattern_opt ?(verbose:bool=false) eq h r s p =
        end
      else Some p'
 
-let h_red_axiom_opt ?(verbose:bool=false) eq h r s a =
-  match h_red_axiom_opt ~verbose eq h r s a with
+let h_red_axiom_opt ?(verbose:bool=false) h r s a =
+  match h_red_axiom_opt ~verbose h r s a with
   | None -> None
   | Some p' -> if pat_eq (pat_axiom a) p' then None else Some p'

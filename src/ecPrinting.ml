@@ -3184,7 +3184,7 @@ and pp_pattern ppe fmt p = match p.p_node with
         (pp_pattern ppe) mem
         (pp_pattern ppe) event
      | Sym_Form_Pr, _ -> assert false
-     | Sym_Stmt_Seq _, lp ->
+     | Sym_Stmt_Seq, lp ->
         pp_list "@," (pp_pattern ppe) fmt lp
 
      | Sym_Stmt_Repeat _, [p] ->
@@ -3218,8 +3218,8 @@ and pp_pattern ppe fmt p = match p.p_node with
      | Sym_Instr_If, [e;s1;s2] ->
         let pp_else ppe fmt s =
           match s.p_node with
-          | Pat_Fun_Symbol(Sym_Stmt_Seq _,[])  -> ()
-          | Pat_Fun_Symbol(Sym_Stmt_Seq _,[_]) ->
+          | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  -> ()
+          | Pat_Fun_Symbol(Sym_Stmt_Seq,[_]) ->
              Format.fprintf fmt "@,else %a" (pp_pat_block ppe) s
           | _   -> Format.fprintf fmt "@ else %a" (pp_pat_block ppe) s
         in
@@ -3277,11 +3277,18 @@ and pp_pattern ppe fmt p = match p.p_node with
 
 and pp_pat_block ppe fmt p =
   match p.p_node with
-  | Pat_Fun_Symbol(Sym_Stmt_Seq _,[])  ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  ->
      Format.fprintf fmt "{}"
-  | Pat_Fun_Symbol(Sym_Stmt_Seq _,[i]) ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,[i]) ->
      Format.fprintf fmt "@;<1 2>%a" (pp_pattern ppe) i
-  | Pat_Fun_Symbol(Sym_Stmt_Seq b,l)   ->
+  | Pat_Fun_Symbol(Sym_Stmt_Seq,l)   ->
      Format.fprintf fmt "{@,  @[<v>%a@]@,}"
-       (pp_pattern ppe) (pat_fun_symbol (Sym_Stmt_Seq b) l)
-  | _ -> assert false
+       (pp_pattern ppe) (p_stmt l)
+  | Pat_Fun_Symbol(Sym_Stmt_Repeat ((a,b),g),[p]) ->
+     Format.fprintf fmt "Repeat[%i,%i]%s(%a)"
+       (odfl 0 a) (odfl 100000000 b)
+       (match g with `Greedy -> "" | `Lazy -> "*")
+       (pp_pattern ppe) p
+  | Pat_Anything -> Format.fprintf fmt "_"
+  | _ -> pp_pattern ppe fmt p
+     (* assert false *)

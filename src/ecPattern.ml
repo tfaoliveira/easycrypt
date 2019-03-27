@@ -77,7 +77,7 @@ type fun_symbol =
   | Sym_Quant             of quantif * pbindings
 
   (* form type stmt*)
-  | Sym_Stmt_Seq          of bool pair
+  | Sym_Stmt_Seq
   | Sym_Stmt_Repeat       of int option pair * [ `Greedy | `Lazy ]
   | Sym_Stmt_Offset       of int option pair
   | Sym_Stmt_Range        of bool pair
@@ -315,7 +315,7 @@ let pat_fun_symbol s lp = match s, lp with
     | Sym_Form_Eager_F, _    -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some tbool))
   | Sym_Form_Pr, _           -> mk_pattern (Pat_Fun_Symbol(s,lp)) (OGTty (Some treal))
   (* form type stmt*)
-  | Sym_Stmt_Seq _, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
+  | Sym_Stmt_Seq, _          -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
   | Sym_Stmt_Range _, _        -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
   | Sym_Stmt_Offset _, _       -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
   (* from type instr *)
@@ -456,12 +456,12 @@ let p_exists b p = p_quant Lexists b p
 
 let p_lambda b p = p_quant Llambda b p
 
-let p_stmt ?(start:bool=false) ?(finish:bool=false) (lp : pattern list) =
+let p_stmt (lp : pattern list) =
   let get_seq p = match p.p_node with
-    | Pat_Fun_Symbol (Sym_Stmt_Seq _, lp) -> lp
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, lp) -> lp
     | _ -> [p] in
   let lp = List.flatten (List.map get_seq lp) in
-  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Seq (start,finish),lp)) OGTstmt
+  mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Seq,lp)) OGTstmt
 
 let p_repeat (a : int option pair) g p =
   mk_pattern (Pat_Fun_Symbol(Sym_Stmt_Repeat (a,g), [p])) OGTstmt
@@ -906,8 +906,7 @@ module Psubst = struct
           | Sym_Form_Pr, [pm;pf;pargs;pevent] ->
              p_pr (p_subst s pm) (p_subst s pf)
                (p_subst s pargs) (p_subst s pevent)
-          | Sym_Stmt_Seq (start, finish), lp ->
-             p_stmt ~start ~finish (List.map (p_subst s) lp)
+          | Sym_Stmt_Seq, lp -> p_stmt (List.map (p_subst s) lp)
           | Sym_Stmt_Repeat (a,g), [p] -> p_repeat a g (p_subst s p)
           | Sym_Stmt_Repeat _, _ -> assert false
           | Sym_Stmt_Range b, lp -> p_range b (List.map (p_subst s) lp)

@@ -34,19 +34,29 @@ let add_default_names (at_begin, at_end) pattern =
   let pattern_sequence = [ set_default_name pattern ] in
   let pattern_sequence =
     if   at_begin
-    then (pat_meta (p_stmt ~start:true ~finish:true []) default_start_name None)
+    then (pat_meta (p_stmt []) default_start_name None)
          :: pattern_sequence
     else default_start_without_anchor :: pattern_sequence in
   let pattern_sequence =
     if   at_end
-    then pattern_sequence @ [pat_meta (p_stmt ~start:true ~finish:true [])
+    then pattern_sequence @ [pat_meta (p_stmt [])
                                default_end_name None]
     else pattern_sequence @ [default_end_without_anchor] in
   pattern_sequence
 
 (*-------------------------------------------------------------------- *)
 let add_anchors (at_begin, at_end) pattern_sequence =
-  p_stmt ~start:(at_begin = With_anchor) ~finish:(at_end = With_anchor) pattern_sequence
+  let pattern_sequence =
+    if   at_begin = With_anchor
+    then pattern_sequence
+    else (p_repeat (None, None) `Lazy (mk_pattern Pat_Anything OGTinstr)) :: pattern_sequence
+  in
+  let pattern_sequence =
+    if   at_end = With_anchor
+    then pattern_sequence
+    else pattern_sequence @ [p_repeat (None, None) `Greedy (mk_pattern Pat_Anything OGTinstr)]
+  in
+  p_stmt pattern_sequence
 
 let pat_anything ogty =
   (* meta_var (EcIdent.create "") None OGTany *)
@@ -56,7 +66,7 @@ let pat_anything ogty =
 let rec trans_block (anchors, pattern_parsed) =
   let pattern = trans_stmt pattern_parsed in
   match pattern.p_node with
-  | Pat_Fun_Symbol (Sym_Stmt_Seq _, ps) -> add_anchors anchors ps
+  | Pat_Fun_Symbol (Sym_Stmt_Seq, ps) -> add_anchors anchors ps
   | _                                   -> add_anchors anchors [ pattern ]
 
 (*-------------------------------------------------------------------- *)
@@ -122,4 +132,4 @@ and trans_repeat ((is_greedy, repeat_kind), r) =
 (*-------------------------------------------------------------------- *)
 let trans_block ((a,b), pattern_parsed) =
   let pattern = trans_stmt pattern_parsed in
-  add_anchors (a,b) (add_default_names (a=With_anchor,b=With_anchor) pattern)
+  p_stmt (add_default_names (a=With_anchor,b=With_anchor) pattern)

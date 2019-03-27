@@ -105,10 +105,10 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
     | Some m ->
        let m = (EcFMatching.get_n_matches m).EcFMatching.me_matches in
        let m = EcIdent.Mid.fold_left (fun m id pat -> Mstr.add (EcIdent.name id) pat m) Mstr.empty m in
-       let m = Mstr.map_filter
+       let m = Mstr.map
                  (fun pat ->
-                   try Some ((EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node)
-                   with EcFMatching.Translate.Invalid_Type _ -> None) m in
+                   try (EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node
+                   with EcFMatching.Translate.Invalid_Type _ -> []) m in
        m
   in
   let p1, q1 =

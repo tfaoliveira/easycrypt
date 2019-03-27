@@ -834,7 +834,7 @@ module Translate = struct
     | _ -> raise (Invalid_Type "memenv")
 
   and stmt_of_pattern env p = match p.p_node with
-    | Pat_Fun_Symbol (Sym_Stmt_Seq _, l) ->
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, l) ->
        stmt (List.flatten (List.map (instr_of_pattern env) l))
     | _ -> raise (Invalid_Type "stmt")
 
@@ -854,7 +854,7 @@ module Translate = struct
        [i_while (expr_of_pattern env cond, stmt_of_pattern env s)]
     | Pat_Fun_Symbol (Sym_Instr_Assert, [e]) ->
        [i_assert (expr_of_pattern env e)]
-    | Pat_Fun_Symbol (Sym_Stmt_Seq _, lp) ->
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, lp) ->
        List.flatten (List.map (instr_of_pattern env) lp)
     | _ -> raise (Invalid_Type "instr")
 
@@ -1745,64 +1745,42 @@ let rec process (e : engine) : nengine =
        | None -> next NoMatch e
       end
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq (_,finish), []),
-      Pat_Fun_Symbol (Sym_Stmt_Seq (_,_), l) ->
-       if l = [] || not finish
-       then next Match e
-       else next NoMatch e
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, []),
+      Pat_Fun_Symbol (Sym_Stmt_Seq, []) ->
+       next Match e
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq (_,_), _),
-      Pat_Fun_Symbol (Sym_Stmt_Seq (_,finish), []) ->
-       if   finish (* here : first sequence of pattern cannot be equal to [] *)
-       then next NoMatch e
-       else next Match e
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, _),
+      Pat_Fun_Symbol (Sym_Stmt_Seq, [])
+      | Pat_Fun_Symbol (Sym_Stmt_Seq, []),
+        Pat_Fun_Symbol (Sym_Stmt_Seq, _) ->
+       next NoMatch e
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq (b1, e1), ({ p_ogty = OGTinstr } as p1) :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq (b2, e2), ({ p_ogty = OGTinstr } as p2) :: rest2) ->
-       let finish = e1 || e2 in
-       let e_ors =
-         if b1 then []
-         else [{ e with e_pattern2 = p_stmt ~start:true ~finish rest2; }]
-       in
-       let e = zor e e_ors in
-       let e_ors =
-         if b2 then []
-         else [{ e with e_pattern1 = p_stmt ~start:b1 ~finish rest1; }]
-       in
-       let e = zor e e_ors in
-       let zand = [p_stmt ~start:true ~finish rest1,
-                   p_stmt ~start:true ~finish rest2] in
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p1) :: rest1),
+      Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p2) :: rest2) ->
+       let zand = [p_stmt rest1, p_stmt  rest2] in
        let e =
          let e_continuation = Zand ([p1,p2], zand, e.e_continuation) in
          { e with e_pattern1 = p1; e_pattern2 = p2; e_continuation } in
        process e
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq (b1, e1), ({ p_ogty = OGTinstr } as p1) :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq (b2, e2),                           p2  :: rest2) ->
-       let start, finish = b1 || b2, e1 || e2 in
+    | Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p1) :: rest1),
+      Pat_Fun_Symbol (Sym_Stmt_Seq,                           p2  :: rest2) ->
        let l =
          List.mapi (fun i _ ->
              let l1, l2 = List.split_at i rest1 in p1::l1, l2) rest1 in
        let e_ors =
          List.map (fun (l1,l2) ->
-             { e with e_pattern1 =
-                        p_stmt ~start ~finish:(if l2 = [] then finish else true) l1;
-                      e_pattern2 = p2;
-                      e_continuation =
-                        Zand ([], [p_stmt ~start:true ~finish l2,
-                                   p_stmt ~start:true ~finish rest2],
-                              e.e_continuation); }) l in
+             { e with e_pattern1 = p_stmt l1; e_pattern2 = p2;
+                      e_continuation = Zand ([], [p_stmt l2, p_stmt rest2],
+                                             e.e_continuation); }) l in
        let e = {
-           e with e_pattern1 =
-                    p_stmt ~start ~finish:(if rest1 = [] then finish else true) [];
-                  e_pattern2 = p2;
-                  e_continuation =
-                    Zand ([], [e.e_pattern1, p_stmt ~start:true ~finish rest2],
-                          e.e_continuation ) } in
+           e with e_pattern1 = p_stmt []; e_pattern2 = p2;
+                  e_continuation = Zand ([], [e.e_pattern1, p_stmt rest2],
+                                         e.e_continuation ) } in
        process (zor e e_ors)
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq _,                           p1  :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq _, ({ p_ogty = OGTinstr } as p2) :: rest2) ->
+    | Pat_Fun_Symbol (Sym_Stmt_Seq,                           p1  :: rest1),
+      Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p2) :: rest2) ->
        let l =
          List.mapi (fun i _ ->
              let l1, l2 = List.split_at i rest1 in p2::l1, l2) rest2 in
