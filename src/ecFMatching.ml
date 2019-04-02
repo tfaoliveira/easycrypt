@@ -8,6 +8,8 @@ open EcEnv
 open EcModules
 open EcPattern
 open Psubst
+open EcGenRegexp
+
 
 type verbose = {
     verbose_match           : bool;
@@ -76,21 +78,21 @@ let debug_verbose : verbose = {
     verbose_match           = true;
     verbose_rule            = true;
     verbose_type            = false;
-    verbose_bind_restr      = true;
-    verbose_add_meta        = true;
+    verbose_bind_restr      = false;
+    verbose_add_meta        = false;
     verbose_abstract        = false;
-    verbose_reduce          = true;
-    verbose_conv            = true;
+    verbose_reduce          = false;
+    verbose_conv            = false;
     verbose_show_ignored_or = false;
     verbose_show_or         = false;
     verbose_begin_match     = true;
     verbose_translate_error = false;
-    verbose_subst           = true;
+    verbose_subst           = false;
     verbose_unienv          = false;
     verbose_eta             = false;
-    verbose_show_match      = true;
+    verbose_show_match      = false;
     verbose_add_reduce      = false;
-    verbose_saturate        = true;
+    verbose_saturate        = false;
   }
 
 let env_verbose = no_verbose
@@ -107,6 +109,8 @@ type match_env = {
     me_matches   : pattern Mid.t;
   }
 
+type stmt_engine = pattern list Mid.t
+
 type environment = {
     env_hyps               : EcEnv.LDecl.hyps;
     env_match              : match_env;
@@ -114,6 +118,7 @@ type environment = {
     env_red_info_same_meta : EcReduction.reduction_info;
     env_red_info_conv      : EcReduction.reduction_info;
     env_meta_restr_binds   : pbindings Mid.t;
+    env_stmt               : stmt_engine;
     env_verbose            : verbose;
   }
 
@@ -739,7 +744,6 @@ module Translate = struct
 
   let rec form_of_pattern env (p : pattern) =
     match p.p_node with
-    | Pat_Anything            -> raise (Invalid_Type "formula : anything")
     | Pat_Meta_Name (Some p,_,_) -> form_of_pattern env p
     | Pat_Meta_Name (_,_,_)   -> raise (Invalid_Type "formula")
     | Pat_Sub _               -> raise (Invalid_Type "sub in form")
@@ -750,6 +754,7 @@ module Translate = struct
     | Pat_Axiom (Axiom_Local (id,ty)) -> f_local id ty
     | Pat_Axiom (Axiom_Op (_, op,lty, Some ty)) -> f_op op lty ty
     | Pat_Axiom _             -> raise (Invalid_Type "formula : other axiom")
+    | Pat_Stmt _              -> raise (Invalid_Type "formula : stmt")
     | Pat_Fun_Symbol (s, lp)  ->
        match s, lp with
        | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
@@ -834,9 +839,18 @@ module Translate = struct
     | _ -> raise (Invalid_Type "memenv")
 
   and stmt_of_pattern env p = match p.p_node with
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, l) ->
-       stmt (List.flatten (List.map (instr_of_pattern env) l))
+    | Pat_Stmt g -> stmt (list_of_gen_pattern env g)
     | _ -> raise (Invalid_Type "stmt")
+
+  and list_of_gen_pattern env g = match g with
+    | Anchor _     -> []
+    | Any          -> raise (Invalid_Type "gen_stmt : any")
+    | Base p       -> instr_of_pattern env p
+    | Choice [g]   -> list_of_gen_pattern env g
+    | Choice _     -> raise (Invalid_Type "gen_stmt : choice")
+    | Named (g, _) -> list_of_gen_pattern env g
+    | Repeat _     -> raise (Invalid_Type "gen_stmt : repeat")
+    | Seq l        -> List.flatten (List.map (list_of_gen_pattern env) l)
 
   and instr_of_pattern env p = match p.p_node with
     | Pat_Fun_Symbol (Sym_Instr_Assign, [lv;e]) ->
@@ -854,8 +868,7 @@ module Translate = struct
        [i_while (expr_of_pattern env cond, stmt_of_pattern env s)]
     | Pat_Fun_Symbol (Sym_Instr_Assert, [e]) ->
        [i_assert (expr_of_pattern env e)]
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, lp) ->
-       List.flatten (List.map (instr_of_pattern env) lp)
+    | Pat_Stmt g -> list_of_gen_pattern env g
     | _ -> raise (Invalid_Type "instr")
 
   and lvalue_of_pattern env p =
@@ -1213,7 +1226,6 @@ let rewrite_term e f =
   p2
 
 let rec pattern_contain_meta_var p = match p.p_node with
-  | Pat_Anything -> false
   | Pat_Axiom _ -> false
   | Pat_Sub p -> pattern_contain_meta_var p
   | Pat_Or lp -> List.exists pattern_contain_meta_var lp
@@ -1315,6 +1327,7 @@ let mk_engine ?mtch f pattern hyps rim ris ric =
       env_meta_restr_binds   = Mid.empty;
       env_match              = env_match;
       env_verbose            = verbose;
+      env_stmt               = Mid.empty;
     } in
 
   { e_pattern1     = pattern;
@@ -1322,6 +1335,14 @@ let mk_engine ?mtch f pattern hyps rim ris ric =
     e_continuation = ZTop;
     e_env          = e_env;
   }
+
+let init_env_stmt env name =
+  { env with env_stmt = Mid.add name [] env.env_stmt }
+
+let add_env_stmt (e : nengine) _p1 p2 =
+  (* FIXME : this is an arbitrary choice *)
+  let env_stmt = Mid.map (fun stmt -> p2 :: stmt) e.ne_env.env_stmt in
+  { e with ne_env = { e.ne_env with env_stmt }}
 
 (* ---------------------------------------------------------------------- *)
 let rec process (e : engine) : nengine =
@@ -1335,10 +1356,6 @@ let rec process (e : engine) : nengine =
     let e = try_conv e in
 
     match e.e_pattern1.p_node, e.e_pattern2.p_node with
-    | Pat_Anything, _ | _, Pat_Anything ->
-       Debug.debug_which_rule e.e_env "pat_anything";
-       next Match e
-
     | Pat_Meta_Name (None, n1, _), Pat_Meta_Name (None, n2, _) when EQ.name n1 n2 ->
        Debug.debug_which_rule e.e_env "same meta variable 1";
        next Match e
@@ -1620,22 +1637,6 @@ let rec process (e : engine) : nengine =
        let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
        next Match { e with e_continuation }
 
-    | Pat_Fun_Symbol (Sym_Instr_Call, [{ p_node = Pat_Anything }; p1; p2]),
-      Pat_Fun_Symbol (Sym_Instr_Call,                            [p3; p4]) ->
-       let e = { e with
-                 e_pattern1 = p1; e_pattern2 = p3;
-                 e_continuation =
-                   Zand ([p1,p3],[p2,p4], e.e_continuation) } in
-       process e
-
-    | Pat_Fun_Symbol (Sym_Instr_Call,                            [p1; p2]),
-      Pat_Fun_Symbol (Sym_Instr_Call, [{ p_node = Pat_Anything }; p3; p4]) ->
-       let e = { e with
-                 e_pattern1 = p1; e_pattern2 = p3;
-                 e_continuation =
-                   Zand ([p1,p3],[p2,p4], e.e_continuation) } in
-       process e
-
     (* Pattern / Axiom *)
     | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
        begin Debug.debug_which_rule e.e_env "mpath : pat ax";
@@ -1745,108 +1746,6 @@ let rec process (e : engine) : nengine =
        | None -> next NoMatch e
       end
 
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, []),
-      Pat_Fun_Symbol (Sym_Stmt_Seq, []) ->
-       next Match e
-
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, _),
-      Pat_Fun_Symbol (Sym_Stmt_Seq, [])
-      | Pat_Fun_Symbol (Sym_Stmt_Seq, []),
-        Pat_Fun_Symbol (Sym_Stmt_Seq, _) ->
-       next NoMatch e
-
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p1) :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p2) :: rest2) ->
-       let zand = [p_stmt rest1, p_stmt  rest2] in
-       let e =
-         let e_continuation = Zand ([p1,p2], zand, e.e_continuation) in
-         { e with e_pattern1 = p1; e_pattern2 = p2; e_continuation } in
-       process e
-
-    | Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p1) :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq,                           p2  :: rest2) ->
-       let l =
-         List.mapi (fun i _ ->
-             let l1, l2 = List.split_at i rest1 in p1::l1, l2) rest1 in
-       let e_ors =
-         List.map (fun (l1,l2) ->
-             { e with e_pattern1 = p_stmt l1; e_pattern2 = p2;
-                      e_continuation = Zand ([], [p_stmt l2, p_stmt rest2],
-                                             e.e_continuation); }) l in
-       let e = {
-           e with e_pattern1 = p_stmt []; e_pattern2 = p2;
-                  e_continuation = Zand ([], [e.e_pattern1, p_stmt rest2],
-                                         e.e_continuation ) } in
-       process (zor e e_ors)
-
-    | Pat_Fun_Symbol (Sym_Stmt_Seq,                           p1  :: rest1),
-      Pat_Fun_Symbol (Sym_Stmt_Seq, ({ p_ogty = OGTinstr } as p2) :: rest2) ->
-       let l =
-         List.mapi (fun i _ ->
-             let l1, l2 = List.split_at i rest1 in p2::l1, l2) rest2 in
-       let e_ors =
-         List.map (fun (l1,l2) ->
-             { e with e_pattern2 = p_stmt l1; e_pattern1 = p1;
-                      e_continuation =
-                        Zand ([], [p_stmt rest1, p_stmt l2], e.e_continuation); }) l in
-       let e = {
-           e with e_pattern2 = p_stmt []; e_pattern1 = p1;
-                  e_continuation =
-                    Zand ([], [p_stmt rest1, e.e_pattern2], e.e_continuation ) } in
-       process (zor e e_ors)
-
-    | Pat_Fun_Symbol (Sym_Stmt_Repeat ((_, Some i2), _), _), _
-         when i2 <= 0 ->
-       process { e with e_pattern1 = p_stmt [] }
-
-    | _, Pat_Fun_Symbol (Sym_Stmt_Repeat ((_, Some i2), _), _)
-         when i2 <= 0 ->
-       process { e with e_pattern2 = p_stmt [] }
-
-    | Pat_Fun_Symbol (Sym_Stmt_Repeat ((Some i1, oi2), g), [p]), _
-         when 0 < i1 ->
-       process { e with
-           e_pattern1 =
-             p_stmt [p; p_repeat (Some (i1-1), omap (fun i -> i-1) oi2) g p] }
-
-    | _, Pat_Fun_Symbol (Sym_Stmt_Repeat ((Some i1, oi2), g), [p])
-         when 0 < i1 ->
-       process { e with
-           e_pattern2 =
-             p_stmt [p; p_repeat (Some (i1-1), omap (fun i -> i-1) oi2) g p] }
-
-    | Pat_Fun_Symbol (Sym_Stmt_Repeat (((Some 0 | None), oi2), `Greedy), [p]), _ ->
-       let e_or = { e with e_pattern1 = p_stmt [] } in
-       let e = {
-           e with
-           e_pattern1 =
-             p_stmt [p; p_repeat (None, omap (fun i -> i-1) oi2) `Greedy p] } in
-       process (zor e [e_or])
-
-    | _, Pat_Fun_Symbol (Sym_Stmt_Repeat (((Some 0 | None), oi2), `Greedy), [p]) ->
-       let e_or = { e with e_pattern2 = p_stmt [] } in
-       let e = {
-           e with
-           e_pattern2 =
-             p_stmt [p; p_repeat (None, omap (fun i -> i-1) oi2) `Lazy p] } in
-       process (zor e [e_or])
-
-    | Pat_Fun_Symbol (Sym_Stmt_Repeat (((Some 0 | None), oi2), `Lazy), [p]), _ ->
-       let e = { e with e_pattern1 = p_stmt [] } in
-       let e_or = {
-           e with
-           e_pattern1 =
-             p_stmt [p; p_repeat (None, omap (fun i -> i-1) oi2) `Lazy p] } in
-       process (zor e [e_or])
-
-    | _, Pat_Fun_Symbol (Sym_Stmt_Repeat (((Some 0 | None), oi2), `Lazy), [p]) ->
-       let e = { e with e_pattern2 = p_stmt [] } in
-       let e_or = {
-           e with
-           e_pattern2 =
-             p_stmt [p; p_repeat (None, omap (fun i -> i-1) oi2) `Lazy p] } in
-       process (zor e [e_or])
-
     | _ -> begin
         Debug.debug_which_rule e.e_env "default";
         let e = try_reduce e in
@@ -1939,9 +1838,12 @@ and next_n (m : ismatch) (e : nengine) : nengine =
           NoMatch, { e with ne_continuation; } in
      next_n m e
 
-  | Match, Zand (_before,[],ne_continuation) ->
+  | Match, Zand ((p1,p2)::_before,[],ne_continuation) ->
      Debug.debug_which_rule e.ne_env "next : all match in zand";
+     let e = add_env_stmt e p1 p2 in
      next_n Match { e with ne_continuation; }
+
+  | Match, Zand ([],[],_) -> assert false
 
   | Match, Zand (before,(f,p)::after,z) ->
      Debug.debug_which_rule e.ne_env "next : next match in zand";
@@ -1966,7 +1868,6 @@ and sub_engines2 e p =
 
 and sub_engines1 (e : engine) (p : pattern) : engine list =
   match e.e_pattern2.p_node, p.p_node with
-  | Pat_Anything            , _ -> []
   | Pat_Meta_Name (_, _, _) , _ -> []
   | Pat_Sub _               , _ -> []
   | Pat_Or _                , _ -> []
@@ -2203,7 +2104,6 @@ let add_meta_bindings (name : meta_name) (b : pbindings)
 
 let get_meta_bindings (p : pattern) : pbindings Mid.t =
   let rec aux current_bds meta_bds p = match p.p_node with
-    | Pat_Anything -> meta_bds
     | Pat_Meta_Name (None, n, _) -> add_meta_bindings n current_bds meta_bds
     | Pat_Meta_Name (Some p, n, _) ->
        aux current_bds (add_meta_bindings n current_bds meta_bds) p
@@ -2240,7 +2140,6 @@ let get_meta_bindings (p : pattern) : pbindings Mid.t =
 let rec write_meta_bindings (m : pbindings Mid.t) (p : pattern) =
   let aux = write_meta_bindings m in
   match p.p_node with
-  | Pat_Anything               -> p
   | Pat_Meta_Name (None, n, _) -> meta_var n (Mid.find_opt n m) p.p_ogty
   | Pat_Meta_Name (Some p,n,_) -> pat_meta (aux p) n (Mid.find_opt n m)
   | Pat_Sub p                  -> mk_pattern (Pat_Sub (aux p)) OGTany

@@ -14,6 +14,7 @@ open EcTypes
 open EcModules
 open EcDecl
 open EcFol
+open EcGenRegexp
 
 module P  = EcPath
 module EP = EcParser
@@ -3005,7 +3006,6 @@ let rec pp_pat_axiom ppe fmt a = match a with
        (pp_mem ppe) id
 
 and pp_pattern ppe fmt p = match p.p_node with
-  | Pat_Anything -> Format.fprintf fmt "_"
   | Pat_Meta_Name (None, name, _) ->
      Format.fprintf fmt "#%a"
        (pp_mem ppe) name
@@ -3018,6 +3018,7 @@ and pp_pattern ppe fmt p = match p.p_node with
   | Pat_Or _ -> assert false
   | Pat_Red_Strat _ -> assert false
   | Pat_Axiom a -> pp_pat_axiom ppe fmt a
+  | Pat_Stmt g -> pp_gen_pattern ppe fmt g
   | Pat_Fun_Symbol (symbol,args) ->
      match symbol,args with
      | Sym_Form_If, [p1;p2;p3] ->
@@ -3184,20 +3185,6 @@ and pp_pattern ppe fmt p = match p.p_node with
         (pp_pattern ppe) mem
         (pp_pattern ppe) event
      | Sym_Form_Pr, _ -> assert false
-     | Sym_Stmt_Seq, lp ->
-        pp_list "@," (pp_pattern ppe) fmt lp
-
-     | Sym_Stmt_Repeat _, [p] ->
-        Format.fprintf fmt "Repeat(@[%a@])"
-          (pp_pattern ppe) p
-     | Sym_Stmt_Repeat _, _ -> assert false
-     | Sym_Stmt_Offset _, [p] ->
-        Format.fprintf fmt "Offset(@[%a@])"
-          (pp_pattern ppe) p
-     | Sym_Stmt_Offset _, _ -> assert false
-     | Sym_Stmt_Range _, lp ->
-        Format.fprintf fmt "Range(@[%a@])"
-          (pp_list "@," (pp_pattern ppe)) lp
 
      | Sym_Instr_Assign, [lv;e] ->
         Format.fprintf fmt "@[<hov 2>%a <-@ @[%a@]@];"
@@ -3218,8 +3205,8 @@ and pp_pattern ppe fmt p = match p.p_node with
      | Sym_Instr_If, [e;s1;s2] ->
         let pp_else ppe fmt s =
           match s.p_node with
-          | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  -> ()
-          | Pat_Fun_Symbol(Sym_Stmt_Seq,[_]) ->
+          | Pat_Stmt (Seq [])  -> ()
+          | Pat_Stmt (Seq [_]) ->
              Format.fprintf fmt "@,else %a" (pp_pat_block ppe) s
           | _   -> Format.fprintf fmt "@ else %a" (pp_pat_block ppe) s
         in
@@ -3277,18 +3264,27 @@ and pp_pattern ppe fmt p = match p.p_node with
 
 and pp_pat_block ppe fmt p =
   match p.p_node with
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,[])  ->
-     Format.fprintf fmt "{}"
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,[i]) ->
-     Format.fprintf fmt "@;<1 2>%a" (pp_pattern ppe) i
-  | Pat_Fun_Symbol(Sym_Stmt_Seq,l)   ->
+  | Pat_Stmt (Seq [i]) -> Format.fprintf fmt "@;<1 2>%a" (pp_gen_pattern ppe) i
+  | Pat_Stmt g   ->
      Format.fprintf fmt "{@,  @[<v>%a@]@,}"
-       (pp_pattern ppe) (p_stmt l)
-  | Pat_Fun_Symbol(Sym_Stmt_Repeat ((a,b),g),[p]) ->
-     Format.fprintf fmt "Repeat[%i,%i]%s(%a)"
-       (odfl 0 a) (odfl 100000000 b)
-       (match g with `Greedy -> "" | `Lazy -> "*")
-       (pp_pattern ppe) p
-  | Pat_Anything -> Format.fprintf fmt "_"
-  | _ -> pp_pattern ppe fmt p
-     (* assert false *)
+       (pp_gen_pattern ppe) g
+  | _ -> assert false
+
+and pp_gen_pattern ppe fmt g = match g with
+  | Anchor _ -> Format.fprintf fmt "|"
+  | Any      -> Format.fprintf fmt "_"
+  | Base p   -> pp_pattern ppe fmt p
+  | Choice l ->
+     Format.fprintf fmt "(@[%a@])"
+       (pp_list " | " (pp_gen_pattern ppe)) l
+  | Named (g, n) ->
+     Format.fprintf fmt "(@[%a@] as %a)"
+       (pp_gen_pattern ppe) g (pp_mem ppe) n
+  | Repeat (g, (o1,o2), greed) ->
+     Format.fprintf fmt "Rep[%s,%s]%s(@[%a@])"
+       (match o1 with None -> "_" | Some i -> string_of_int i)
+       (match o2 with None -> "_" | Some i -> string_of_int i)
+       (match greed with `Greedy -> "!" | `Lazy -> "*")
+       (pp_gen_pattern ppe) g
+  | Seq l ->
+     (pp_list "; " (pp_gen_pattern ppe)) fmt l

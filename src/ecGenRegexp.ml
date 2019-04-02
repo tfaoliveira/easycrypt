@@ -8,20 +8,24 @@
 
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcMaps
 open EcEnv
+open EcIdent
 
 (* -------------------------------------------------------------------- *)
 type anchor =
   | Start
   | End
 
+type name = ident
+
+module M = Mid
+
 type 'base gen_regexp =
   | Anchor    of anchor
   | Any
   | Base      of 'base
   | Choice    of 'base gen_regexp list
-  | Named     of 'base gen_regexp * string
+  | Named     of 'base gen_regexp * name
   | Repeat    of 'base gen_regexp * int option pair * [ `Greedy | `Lazy ]
   | Seq       of 'base gen_regexp list
 
@@ -54,7 +58,7 @@ end
 module Regexp(B : IRegexpBase) : sig
   type regexp  = B.regexp
   type subject = B.subject
-  type matches = subject Mstr.t
+  type matches = subject M.t
 
   val search : regexp -> subject -> LDecl.hyps -> (B.engine * matches) option
 end = struct
@@ -62,13 +66,13 @@ end = struct
 
   (* ------------------------------------------------------------------ *)
   type subject = B.subject
-  type matches = subject Mstr.t
+  type matches = subject M.t
   type engine  = { e_sub : B.engine; e_grp : matches; }
   type pos     = B.pos
 
   (* ------------------------------------------------------------------ *)
   let mkengine (s : subject) (h : LDecl.hyps) =
-    { e_sub = B.mkengine s h; e_grp = Mstr.empty; }
+    { e_sub = B.mkengine s h; e_grp = M.empty; }
 
   (* ------------------------------------------------------------------ *)
   let eat (e : engine) =
@@ -95,8 +99,8 @@ end = struct
     (e, no_continuation)
 
   (* -------------------------------------------------------------------- *)
-  let add_match (e : engine) (name : string) (range : pos * pos) =
-    { e with e_grp = Mstr.add name (B.extract e.e_sub range) e.e_grp }
+  let add_match (e : engine) (name : name) (range : pos * pos) =
+    { e with e_grp = M.add name (B.extract e.e_sub range) e.e_grp }
 
   (* ------------------------------------------------------------------ *)
   let rec search (e : engine) (r : regexp) : matchr =

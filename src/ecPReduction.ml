@@ -546,7 +546,6 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
   let h_red_pattern_opt = h_red_pattern_opt ~verbose in
   try
     match p.p_node with
-    | Pat_Anything -> None
     | Pat_Meta_Name (None,n,_) ->
        let o = Mid.find_opt n s.ps_patloc in
        if verbose && is_some o then print hyps "meta name"; o
@@ -557,6 +556,7 @@ let rec h_red_pattern_opt ?(verbose:bool=false) eq
     | Pat_Or _ -> None
     | Pat_Red_Strat _ -> None
     | Pat_Axiom a -> h_red_axiom_opt ~verbose hyps ri s a
+    | Pat_Stmt _ -> None
     | Pat_Fun_Symbol (symbol,lp) ->
        match symbol, lp with
        (* β-reduction *)

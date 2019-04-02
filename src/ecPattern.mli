@@ -1,10 +1,10 @@
-open EcUtils
 open EcFol
 open EcTypes
 open EcPath
 open EcMemory
 open EcIdent
 open EcModules
+open EcGenRegexp
 
 module Name  = EcIdent
 module MName = Mid
@@ -70,12 +70,6 @@ type fun_symbol =
   (* generalized *)
   | Sym_Quant             of quantif * pbindings
 
-  (* form type stmt*)
-  | Sym_Stmt_Seq
-  | Sym_Stmt_Repeat       of int option pair * [ `Greedy | `Lazy ]
-  | Sym_Stmt_Offset       of int option pair
-  | Sym_Stmt_Range        of bool pair
-
   (* from type instr *)
   | Sym_Instr_Assign
   | Sym_Instr_Sample
@@ -94,13 +88,13 @@ type fun_symbol =
 (* invariant of pattern : if the form is not Pat_Axiom, then there is
      at least one of the first set of patterns *)
 type p_node =
-  | Pat_Anything
   | Pat_Meta_Name  of pattern option * meta_name * pbindings option
   | Pat_Sub        of pattern
   | Pat_Or         of pattern list
   | Pat_Red_Strat  of pattern * reduction_strategy
 
   | Pat_Fun_Symbol of fun_symbol * pattern list
+  | Pat_Stmt       of pattern gen_regexp
   | Pat_Axiom      of axiom
 
 and pattern = {
@@ -197,8 +191,9 @@ val p_while    : pattern -> pattern -> pattern
 val p_assert   : pattern -> pattern
 
 val p_stmt     : pattern list -> pattern
-val p_repeat   : int option pair -> [ `Greedy | `Lazy ] -> pattern -> pattern
-val p_offset   : int option pair -> pattern -> pattern
+val gen_base   : pattern -> pattern gen_regexp
+val p_gen_stmt : pattern gen_regexp -> pattern
+
 (* -------------------------------------------------------------------- *)
 val p_var_form : EcIdent.t -> ty -> pattern
 
