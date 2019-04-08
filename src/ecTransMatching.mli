@@ -9,10 +9,10 @@
 (* -------------------------------------------------------------------- *)
 open EcParsetree
 open EcPattern
-
+open EcGenRegexp
 
 
 (* -------------------------------------------------------------------- *)
-val trans_stmt : pim_regexp -> pattern
+val trans_stmt : pim_regexp -> EcIdent.t EcMaps.Mstr.t * pattern gen_regexp
 
-val trans_block : pim_block -> pattern
+val trans_block : pim_block -> EcIdent.t EcMaps.Mstr.t * pattern

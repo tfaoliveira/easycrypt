@@ -1,3 +1,4 @@
+open EcUtils
 open EcFol
 open EcTypes
 open EcPath
@@ -190,9 +191,13 @@ val p_instr_if : pattern -> pattern -> pattern -> pattern
 val p_while    : pattern -> pattern -> pattern
 val p_assert   : pattern -> pattern
 
-val p_stmt     : pattern list -> pattern
 val gen_base   : pattern -> pattern gen_regexp
 val p_gen_stmt : pattern gen_regexp -> pattern
+
+val p_stmt     : pattern list -> pattern
+val p_repeat   : int option pair -> [ `Greedy | `Lazy ] -> pattern gen_regexp ->
+                 pattern gen_regexp
+
 
 (* -------------------------------------------------------------------- *)
 val p_var_form : EcIdent.t -> ty -> pattern

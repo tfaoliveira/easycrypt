@@ -96,7 +96,7 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
   let ct = match oget s with `Left -> es.es_sl | `Right -> es.es_sr in
   let mt = snd (match oget s with `Left -> es.es_ml | `Right -> es.es_mr) in
   (* Translation of the stmt *)
-  let p' = trans_block p in
+  let names, p' = trans_block p in
   let r  = EcReduction.full_red in
   let r' = EcReduction.no_red in
   let e  = EcFMatching.mk_engine (EcPattern.pat_stmt ct) p' hyps r r r' in
@@ -104,11 +104,11 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
     | None -> Mstr.empty
     | Some m ->
        let m = (EcFMatching.get_n_matches m).EcFMatching.me_matches in
-       let m = EcIdent.Mid.fold_left (fun m id pat -> Mstr.add (EcIdent.name id) pat m) Mstr.empty m in
-       let m = Mstr.map
+       let m = Mstr.map_filter (fun n -> EcIdent.Mid.find_opt n m) names in
+       let m = Mstr.map_filter
                  (fun pat ->
-                   try (EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node
-                   with EcFMatching.Translate.Invalid_Type _ -> []) m in
+                   try Some (EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node
+                   with EcFMatching.Translate.Invalid_Type _ -> None) m in
        m
   in
   let p1, q1 =

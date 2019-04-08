@@ -40,10 +40,11 @@ module type IRegexpBase = sig
   type regexp1
   type path
   type pos = int
+  type envir
 
   type regexp = regexp1 gen_regexp
 
-  val mkengine : subject -> LDecl.hyps -> engine
+  val mkengine : subject -> envir -> engine
   val at_start : engine -> bool
   val at_end   : engine -> bool
   val eat      : engine -> engine
@@ -54,13 +55,25 @@ module type IRegexpBase = sig
   val path     : engine -> path
 end
 
+module type GenRegexp = sig
+  type regexp
+  type subject
+  type matches
+  type base_engine
+  type envir
+
+  val search : regexp -> subject -> envir -> (base_engine * matches) option
+end
+
 (* -------------------------------------------------------------------- *)
 module Regexp(B : IRegexpBase) : sig
-  type regexp  = B.regexp
-  type subject = B.subject
-  type matches = subject M.t
+  include GenRegexp with
+            type regexp  = B.regexp and
+            type subject = B.subject and
+            type matches = B.subject M.t and
+            type base_engine  = B.engine and
+            type envir = B.envir
 
-  val search : regexp -> subject -> LDecl.hyps -> (B.engine * matches) option
 end = struct
   type regexp = B.regexp
 
@@ -69,9 +82,11 @@ end = struct
   type matches = subject M.t
   type engine  = { e_sub : B.engine; e_grp : matches; }
   type pos     = B.pos
+  type base_engine = B.engine
+  type envir   = B.envir
 
   (* ------------------------------------------------------------------ *)
-  let mkengine (s : subject) (h : LDecl.hyps) =
+  let mkengine (s : subject) (h : envir) =
     { e_sub = B.mkengine s h; e_grp = M.empty; }
 
   (* ------------------------------------------------------------------ *)
@@ -244,7 +259,7 @@ end = struct
     (fst (apply_on_mr (fun e -> search e r) mr)).e_grp
 
   (* ------------------------------------------------------------------ *)
-  let search (re : regexp) (subject : subject) (h : LDecl.hyps) =
+  let search (re : regexp) (subject : subject) (h : envir) =
     let mr = next_mr (mkengine subject h) in
     try  let e = fst (apply_on_mr (fun e -> search e re) mr) in
          Some (e.e_sub, e.e_grp)
@@ -263,6 +278,7 @@ module StringBaseRegexp
   type engine  = { e_sbj : string; e_pos : int; }
   type pos     = int
   type path    = int
+  type envir   = LDecl.hyps
 
   type regexp = regexp1 gen_regexp
 

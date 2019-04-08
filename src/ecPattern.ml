@@ -422,6 +422,8 @@ let gen_base p = match p.p_node with
   | Pat_Stmt g -> g
   | _ -> Base p
 
+let p_repeat o g p = Repeat (p,o,g)
+
 let p_var_form x ty = let t = OGTty (Some ty) in meta_var x None t
 
 let p_assign (plv : pattern) (pe : pattern) =

@@ -3268,7 +3268,8 @@ and pp_pat_block ppe fmt p =
   | Pat_Stmt g   ->
      Format.fprintf fmt "{@,  @[<v>%a@]@,}"
        (pp_gen_pattern ppe) g
-  | _ -> assert false
+  | _ -> Format.fprintf fmt "{@,  @[<v>%a@]@,}"
+           (pp_pattern ppe) p
 
 and pp_gen_pattern ppe fmt g = match g with
   | Anchor _ -> Format.fprintf fmt "|"
