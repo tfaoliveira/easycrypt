@@ -24,11 +24,11 @@ val full_verbose  : verbose
 val debug_verbose : verbose
 
 type pat_continuation
-type engine
-type nengine
+type eng
+type neng
 
-val get_matches     : engine -> match_env
-val get_n_matches   : nengine -> match_env
+val get_matches     : eng -> match_env
+val get_n_matches   : neng -> match_env
 
 val menv_copy       : match_env -> match_env
 
@@ -47,20 +47,20 @@ val menv_has_memory : ident -> match_env -> bool
 val init_match_env  : ?mtch:pattern Mid.t -> ?unienv:EcUnify.unienv ->
                       ?metas:ogty Mid.t -> unit -> match_env
 
-val search_eng      : engine -> nengine option
+val search_eng      : eng -> neng option
 
-val search_eng_head_no_delta : engine -> nengine option
+val search_eng_head_no_delta : eng -> neng option
 
 val mk_engine       : ?mtch:match_env -> pattern -> pattern -> LDecl.hyps ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info ->
                       EcReduction.reduction_info ->
-                      engine
+                      eng
 
 val pattern_of_form : match_env -> form -> pattern
 val pattern_of_memory : match_env -> EcMemory.memory -> pattern
 
-val rewrite_term    : engine -> EcFol.form -> pattern
+val rewrite_term    : eng -> EcFol.form -> pattern
 
 val menv_is_full    : match_env -> bool
 

@@ -19,7 +19,7 @@ type ogty =
   | OGTmem   of EcMemory.memtype option
   | OGTpv
   | OGTxpath
-  | OGTinstr
+  (* | OGTinstr *)
   | OGTstmt
   | OGTlv
   | OGThcmp

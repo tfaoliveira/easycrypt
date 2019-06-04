@@ -1175,7 +1175,7 @@ let e_next (e : eng) : neng =
     ne_env          = e.e_env;
   }
 
-let n_engine (e_pattern1) (e_pattern2 : pattern) (n : neng) =
+let n_eng (e_pattern1) (e_pattern2 : pattern) (n : neng) =
   { e_pattern1;
     e_pattern2;
     e_continuation = n.ne_continuation;
@@ -1322,7 +1322,7 @@ let empty_matches_env () =
     me_meta_vars = Mid.empty;
     me_unienv    = EcUnify.UniEnv.create None; }
 
-let mk_eng ?mtch f pattern hyps rim ris ric =
+let mk_engine ?mtch f pattern hyps rim ris ric =
   let gstate  = EcEnv.gstate (EcEnv.LDecl.toenv hyps) in
   let verbose = EcGState.getflag "debug" gstate in
 
@@ -1354,15 +1354,93 @@ let add_env_stmt (e : neng) _p1 p2 =
   { e with ne_env = { e.ne_env with env_stmt }}
 
 (* ---------------------------------------------------------------------- *)
-module PMatching (Regexp : GenRegexp with type subject = pattern) : IRegexpBase =
-struct
+type zipath =
+  | ZipTop
+  | ZipWhile  of pattern * zspath
+  | ZipIfThen of pattern * zspath * pattern
+  | ZipIfElse of pattern * pattern * zspath
 
-  type subject = pattern
+and zspath = pattern list pair * zipath
+
+type zipper = {
+    zip_head : pattern list;
+    zip_tail : pattern list;
+    zip_path : zipath;
+  }
+
+type regexp_engine  = {
+    eng_subject      : zipper;
+    eng_envir        : environment;
+    eng_path         : int list;
+  }
+
+module PMatching
+         (Regexp :
+            GenRegexp with type subject = pattern list and
+                           type regexp = pattern gen_regexp and
+                           type envir = environment and
+                           type base_engine = regexp_engine and
+                           type matches = pattern list Mid.t)
+  = struct
+
+  type subject = pattern list
   type regexp1 = pattern
-  type engine  = eng
-  type pos = int
-  type path
-  type regexp = pattern gen_regexp
+  type engine  = regexp_engine
+
+  type pos     = int
+  type path    = int list
+  type regexp  = pattern gen_regexp
+  type envir   = environment
+
+  let zip_top (s : subject) = {
+      zip_head = [];
+      zip_tail = s;
+      zip_path = ZipTop;
+    }
+
+  let mkengine (s : subject) (env : envir) = {
+      eng_subject = zip_top s;
+      eng_envir   = env_copy env;
+      eng_path    = [];
+    }
+
+  let position (e : engine) = List.length e.eng_subject.zip_head
+
+  let path (e : engine) = (position e) :: e.eng_path
+
+  let at_end   (e : engine) = List.is_empty e.eng_subject.zip_tail
+
+  let at_start (e : engine) = List.is_empty e.eng_subject.zip_head
+
+  let get_base = function
+    | Base p -> p
+    | _ -> raise NoMatches
+
+  let is_base = function
+    | Base _ -> true
+    | _      -> false
+
+  let get_subject p = match p.p_node with
+    | Pat_Stmt (Base p) -> [p]
+    | Pat_Stmt (Seq l) when List.for_all is_base l -> List.map get_base l
+    | Pat_Stmt _ -> raise NoMatches
+    | _ when p.p_ogty = OGTstmt -> [p]
+    | _ -> raise NoMatches
+
+  let can_get_subject p = match p.p_node with
+    | Pat_Stmt (Base _) -> true
+    | Pat_Stmt (Seq l) when List.for_all is_base l -> true
+    | Pat_Stmt _ -> false
+    | _ when p.p_ogty = OGTstmt -> true
+    | _ -> false
+
+  let extract (e : engine) ((lo,hi) : pos pair) =
+    if hi <= lo then [] else
+
+      let s = List.rev_append e.eng_subject.zip_head e.eng_subject.zip_tail in
+      List.of_enum (List.enum s |> Enum.skip lo |> Enum.take (hi-lo))
+
+  let zipper s1 s2 path = { zip_head = s1; zip_tail = s2; zip_path = path; }
 
   let rec process (e : eng) : neng =
     let eq = EQ.ogty e.e_env e.e_pattern1.p_ogty e.e_pattern2.p_ogty in
@@ -1438,13 +1516,13 @@ struct
            }
 
       | Pat_Sub p, _ ->
-         let le = sub_engs1 e p in
+         let le = sub_engines1 e p in
          Debug.debug_which_rule e.e_env "sub 1";
          let e    = { e with e_pattern1 = p } in
          process (zor e le)
 
       | _, Pat_Sub p ->
-         let le = sub_engs2 e p in
+         let le = sub_engines2 e p in
          Debug.debug_which_rule e.e_env "sub 2";
          let e    = { e with e_pattern2 = p } in
          process (zor e le)
@@ -1746,8 +1824,8 @@ struct
          end
 
       | Pat_Fun_Symbol
-(Sym_Form_App _,
- { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_), _
+          (Sym_Form_App _,
+           { p_node = Pat_Fun_Symbol (Sym_Quant (Llambda,_),[_])}::_), _
            when e.e_env.env_red_info_match.EcReduction.beta -> begin
           match p_betared_opt e.e_pattern1 with
           | Some e_pattern1 ->
@@ -1763,6 +1841,39 @@ struct
           | Some e_pattern2 ->
              process { e with e_pattern2 }
           | None -> next NoMatch e
+        end
+
+      | _, Pat_Stmt regexp when can_get_subject e.e_pattern1 -> begin
+          match Regexp.search regexp (get_subject e.e_pattern1) (env_copy e.e_env) with
+          | None -> raise NoMatches
+          | Some (base_engine, matches) ->
+             let envir = merge_matches base_engine matches in
+             let ne = { ne_continuation = e.e_continuation;
+                        ne_env          = envir;
+                      } in
+             next_n Match ne
+        end
+
+      | Pat_Stmt regexp, _ when can_get_subject e.e_pattern2 -> begin
+          match Regexp.search regexp (get_subject e.e_pattern2) (env_copy e.e_env) with
+          | None -> raise NoMatches
+          | Some (base_engine, matches) ->
+             let envir = merge_matches base_engine matches in
+             let ne = { ne_continuation = e.e_continuation;
+                        ne_env          = envir;
+                      } in
+             next_n Match ne
+        end
+
+      | Pat_Stmt (Base p), Pat_Stmt regexp -> begin
+          match Regexp.search regexp [p] (env_copy e.e_env) with
+          | None -> raise NoMatches
+          | Some (base_engine, matches) ->
+             let envir = merge_matches base_engine matches in
+             let ne = { ne_continuation = e.e_continuation;
+                        ne_env          = envir;
+                      } in
+             next_n Match ne
         end
 
       | _ -> begin
@@ -1879,13 +1990,13 @@ struct
        next_n Match { e with ne_continuation }
 
 
-  and sub_engs2 e p =
+  and sub_engines2 e p =
     let f e = { e with e_pattern1 = e.e_pattern2; e_pattern2 = e.e_pattern1; } in
     let e = f e in
-    let l = sub_engs1 e p in
+    let l = sub_engines1 e p in
     List.map f l
 
-  and sub_engs1 (e : eng) (p : pattern) : eng list =
+  and sub_engines1 (e : eng) (p : pattern) : eng list =
     match e.e_pattern2.p_node, p.p_node with
     | Pat_Meta_Name (_, _, _) , _ -> []
     | Pat_Sub _               , _ -> []
@@ -1894,21 +2005,21 @@ struct
     | Pat_Axiom (Axiom_Local (id1, { ty_node = Ttuple lt })),
       Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id2, _))}])
          when EQ.name id1 id2     ->
-       List.mapi (fun i t -> sub_eng1 e p (p_proj e.e_pattern2 i t)) lt
+       List.mapi (fun i t -> sub_engine1 e p (p_proj e.e_pattern2 i t)) lt
     | Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id1, _))}]),
       Pat_Fun_Symbol (Sym_Form_Proj _, [{ p_node = Pat_Axiom (Axiom_Local (id2, _))}])
          when EQ.name id1 id2     -> []
     | Pat_Axiom _             , _ -> []
-    | Pat_Fun_Symbol (_, lp)  , _ -> List.map (sub_eng1 e p) lp
-    | Pat_Stmt g              , _ -> sub_engs_gen e g
+    | Pat_Fun_Symbol (_, lp)  , _ -> List.map (sub_engine1 e p) lp
+    | Pat_Stmt g              , _ -> sub_engines_gen e g
 
-  and sub_engs_gen e g = match g with
+  and sub_engines_gen e g = match g with
     | Anchor _ | Any   -> []
-    | Base p           -> sub_engs1 e p
-    | Choice l         -> List.flatten (List.map (sub_engs_gen e) l)
-    | Named (g, _)     -> sub_engs_gen e g
-    | Repeat (g, _, _) -> sub_engs_gen e g
-    | Seq l            -> List.flatten (List.map (sub_engs_gen e) l)
+    | Base p           -> sub_engines1 e p
+    | Choice l         -> List.flatten (List.map (sub_engines_gen e) l)
+    | Named (g, _)     -> sub_engines_gen e g
+    | Repeat (g, _, _) -> sub_engines_gen e g
+    | Seq l            -> List.flatten (List.map (sub_engines_gen e) l)
 
   (* add_match can raise the exception : CannotUnify *)
   and nadd_match (e : neng) (name : meta_name) (p : pattern)
@@ -1951,6 +2062,14 @@ struct
 
   and add_match (e : eng) n p b =
     n_eng e.e_pattern1 e.e_pattern2 (nadd_match (e_next e) n p b)
+
+  and merge_matches (engine : regexp_engine) (m : subject Mid.t) : environment =
+    let env = engine.eng_envir in
+    let ne  = { ne_env = env; ne_continuation = ZTop; } in
+    let f id p ne = nadd_match ne id (p_stmt p) None in
+    let ne = Mid.fold f m ne in
+    ne.ne_env
+
 
   and abstract_opt (e : eng) (p : pattern) (ob : pbindings option)
 ((arg,parg) : Name.t * pattern) : environment * pattern =
@@ -1997,7 +2116,7 @@ struct
     let h   = env.env_hyps in
     let r   = env.env_red_info_match in
     let eq h r p1 p2 =
-      let eng = mk_eng ~mtch:env.env_match p1 p2 h r
+      let eng = mk_engine ~mtch:env.env_match p1 p2 h r
                   env.env_red_info_same_meta env.env_red_info_conv in
       let env = eng.e_env in
       EQ.pattern env r p1 p2 in
@@ -2060,6 +2179,74 @@ struct
     | NoMatches ->
        None
 
+
+
+  let rec next_zipper (z : zipper) =
+    match z.zip_tail with
+    | i :: tail ->
+       begin match i.p_node with
+       | Pat_Fun_Symbol (Sym_Instr_If, [e; stmttrue; stmtfalse]) ->
+          let z = (i::z.zip_head, tail), z.zip_path in
+          let path = ZipIfThen (e, z, stmtfalse) in
+          let z' = zipper [] (get_subject stmttrue) path in
+          Some z'
+
+       | Pat_Fun_Symbol (Sym_Instr_While, [e; block]) ->
+          let z = (i::z.zip_head, tail), z.zip_path in
+          let path = ZipWhile (e, z) in
+          let z' = zipper [] (get_subject block) path in
+          Some z'
+
+       | Pat_Fun_Symbol (Sym_Instr_Assign, _)
+         | Pat_Fun_Symbol (Sym_Instr_Assert, _)
+         | Pat_Fun_Symbol (Sym_Instr_Sample, _)
+         | Pat_Fun_Symbol (Sym_Instr_Call, _)   ->
+          Some { z with zip_head = i :: z.zip_head ; zip_tail = tail }
+
+       | _ -> None
+       end
+
+    | [] ->
+       match z.zip_path with
+       | ZipTop -> None
+
+       | ZipWhile (_e, ((head, tail), path)) ->
+          let z' = zipper head tail path in
+          next_zipper z'
+
+       | ZipIfThen (e, father, stmtfalse) ->
+          let stmttrue = p_stmt (List.rev z.zip_head) in
+          let z' = zipper [] (get_subject stmtfalse)
+                     (ZipIfElse (e, stmttrue, father)) in
+          next_zipper z'
+
+       | ZipIfElse (_e, _stmttrue, ((head, tail), path)) ->
+          let z' = zipper head tail path in
+          next_zipper z'
+
+  let next (e : engine) =
+    next_zipper e.eng_subject |> omap (fun z -> { e with eng_subject = z })
+
+  let eat_subject s = match s.zip_tail with
+    | []        -> raise NoMatch
+    | p :: tail -> zipper (p :: s.zip_head) tail s.zip_path
+
+  let eat (e : engine) =
+    { e with eng_subject = eat_subject e.eng_subject; }
+
+
+  let eat_base (e : engine) (r : regexp1) =
+    match e.eng_subject.zip_tail with
+    | [] -> raise NoMatch
+    | i :: _tail ->
+       let e' = { e_pattern1     = i;
+                  e_pattern2     = r;
+                  e_env          = env_copy e.eng_envir;
+                  e_continuation = ZTop } in
+       match search_eng e' with
+       | None -> raise NoMatch
+       | Some ne -> (eat { e with eng_envir = ne.ne_env }, [])
+
 end
 
 let no_delta p = match p.p_node with
@@ -2068,11 +2255,21 @@ let no_delta p = match p.p_node with
      p_app ~ho (pat_op ~delta:false p lt t) lp t1
   | _ -> p
 
-module rec PMatch  : IRegexpBase = PMatching(PRegexp)
-and        PRegexp : GenRegexp   = Regexp(PMatch)
+module
+  rec PMatch  : sig include IRegexpBase
+                    val search_eng : eng -> neng option
+                end
+      = PMatching(PRegexp)
+  and PRegexp : GenRegexp with type subject = pattern list and
+                               type regexp = pattern gen_regexp and
+                               type base_engine = regexp_engine and
+                               type envir = environment and
+                               type matches = pattern list Mid.t
+      = Regexp(PMatch)
 
 
-let search_eng = PMatching.search_eng
+let search_eng = PMatch.search_eng
+
 
 let search_eng_head_no_delta e =
   search_eng { e with e_pattern1 = no_delta e.e_pattern1 }

@@ -20,7 +20,7 @@ type ogty =
   | OGTmem   of EcMemory.memtype option
   | OGTpv
   | OGTxpath
-  | OGTinstr
+  (* | OGTinstr *)
   | OGTstmt
   | OGTlv
   | OGThcmp
@@ -170,7 +170,7 @@ let ogty_equal o1 o2 = match o1, o2 with
   | OGTmodty (Some (mt1,mr1)), OGTmodty (Some (mt2,mr2)) ->
      EcModules.mty_equal mt1 mt2 && EcModules.mr_equal mr1 mr2
   | OGTmodty _, OGTmodty _ -> true
-  | OGTinstr, OGTstmt | OGTstmt, OGTinstr -> true
+  (* | OGTinstr, OGTstmt | OGTstmt, OGTinstr -> true *)
   | _ -> o1 = o2
 
 let op_equal (p1 : pattern) (op : form) =
@@ -316,7 +316,7 @@ let pat_fun_symbol s lp = match s, lp with
     | Sym_Instr_Call
     | Sym_Instr_If
     | Sym_Instr_While
-    | Sym_Instr_Assert), _  -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTinstr
+    | Sym_Instr_Assert), _  -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTstmt
   (* from type xpath *)
   | Sym_Xpath, _            -> mk_pattern (Pat_Fun_Symbol(s,lp)) OGTxpath
   (* from type mpath *)
@@ -523,7 +523,7 @@ and pat_instr i = match i.i_node with
                          (pat_stmt s1) (pat_stmt s2)
   | Swhile (e, s) -> p_while (pat_form (form_of_expr e)) (pat_stmt s)
   | Sassert e -> p_assert (pat_form (form_of_expr e))
-  | Sabstract id -> meta_var id None OGTinstr
+  | Sabstract id -> meta_var id None OGTstmt
 
 let pat_or l = mk_pattern (Pat_Or l) OGTany
 
