@@ -33,13 +33,15 @@ let default_stmt x = odfl any_stmt x
 let add_default_names (at_begin, at_end) pattern =
   let pattern_sequence = [ set_default_name pattern ] in
   let pattern_sequence =
-    if   at_begin = With_anchor
-    then (Named (Seq [], default_start_name)) :: pattern_sequence
-    else default_start_without_anchor :: pattern_sequence in
+    let p = if   at_begin = With_anchor
+            then Seq []
+            else p_repeat (None, None) `Lazy Any in
+    (Named (p, default_start_name)) :: pattern_sequence in
   let pattern_sequence =
-    if   at_end = With_anchor
-    then pattern_sequence @ [Named (Seq [], default_end_name)]
-    else pattern_sequence @ [default_end_without_anchor] in
+    let p = if   at_end = With_anchor
+            then Seq []
+            else p_repeat (None, None) `Greedy Any in
+    pattern_sequence @ [Named (p, default_end_name)] in
   pattern_sequence
 
 (*-------------------------------------------------------------------- *)
@@ -144,4 +146,8 @@ let trans_stmt p = trans_stmt Mstr.empty p
 (*-------------------------------------------------------------------- *)
 let trans_block ((a,b), pattern_parsed) =
   let names, pattern = trans_stmt pattern_parsed in
+  let names = Mstr.add (EcIdent.name (EcPattern.default_end_name))
+                EcPattern.default_end_name names in
+  let names = Mstr.add (EcIdent.name (EcPattern.default_start_name))
+                EcPattern.default_start_name names in
   names, p_gen_stmt (Seq (add_default_names (a,b) pattern))

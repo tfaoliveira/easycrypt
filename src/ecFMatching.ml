@@ -848,6 +848,7 @@ module Translate = struct
     | Base p       -> instr_of_pattern env p
     | Choice [g]   -> list_of_gen_pattern env g
     | Choice _     -> raise (Invalid_Type "gen_stmt : choice")
+    | Named (Any, name) -> [i_abstract name]
     | Named (g, _) -> list_of_gen_pattern env g
     | Repeat _     -> raise (Invalid_Type "gen_stmt : repeat")
     | Seq l        -> List.flatten (List.map (list_of_gen_pattern env) l)

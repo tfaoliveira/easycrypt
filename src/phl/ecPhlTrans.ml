@@ -107,10 +107,19 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
        let m = Mstr.map_filter (fun n -> EcIdent.Mid.find_opt n m) names in
        let m = Mstr.map_filter
                  (fun pat ->
-                   try Some (EcFMatching.Translate.stmt_of_pattern (EcEnv.LDecl.toenv hyps) pat).s_node
+                   try Some (EcFMatching.Translate.stmt_of_pattern
+                               (EcEnv.LDecl.toenv hyps) pat).s_node
                    with EcFMatching.Translate.Invalid_Type _ -> None) m in
        m
   in
+  let c = c @ [EcLocation.mk_loc EcLocation._dummy
+                 (EcParsetree.PSident
+                    (EcLocation.mk_loc EcLocation._dummy
+                       (EcIdent.name EcPattern.default_end_name)))] in
+  let c = (EcLocation.mk_loc EcLocation._dummy
+             (EcParsetree.PSident
+                    (EcLocation.mk_loc EcLocation._dummy
+                       (EcIdent.name EcPattern.default_start_name)))) :: c in
   let p1, q1 =
     let hyps = LDecl.push_all [es.es_ml; (mright, mt)] hyps in
     TTC.pf_process_form !!tc hyps tbool p1,
