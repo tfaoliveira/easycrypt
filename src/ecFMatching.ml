@@ -118,7 +118,6 @@ type environment = {
     env_red_info_same_meta : EcReduction.reduction_info;
     env_red_info_conv      : EcReduction.reduction_info;
     env_meta_restr_binds   : pbindings Mid.t;
-    env_stmt               : stmt_engine;
     env_verbose            : verbose;
   }
 
@@ -1337,7 +1336,6 @@ let mk_engine ?mtch f pattern hyps rim ris ric =
       env_meta_restr_binds   = Mid.empty;
       env_match              = env_match;
       env_verbose            = verbose;
-      env_stmt               = Mid.empty;
     } in
 
   { e_pattern1     = pattern;
@@ -1345,14 +1343,6 @@ let mk_engine ?mtch f pattern hyps rim ris ric =
     e_continuation = ZTop;
     e_env          = e_env;
   }
-
-let init_env_stmt env name =
-  { env with env_stmt = Mid.add name [] env.env_stmt }
-
-let add_env_stmt (e : neng) _p1 p2 =
-  (* FIXME : this is an arbitrary choice *)
-  let env_stmt = Mid.map (fun stmt -> p2 :: stmt) e.ne_env.env_stmt in
-  { e with ne_env = { e.ne_env with env_stmt }}
 
 (* ---------------------------------------------------------------------- *)
 type zipath =
@@ -1969,13 +1959,8 @@ module PMatching
             NoMatch, { e with ne_continuation; } in
        next_n m e
 
-    | Match, Zand ((p1,p2)::_before,[],ne_continuation) ->
+    | Match, Zand (_,[],ne_continuation) ->
        Debug.debug_which_rule e.ne_env "next : all match in zand";
-       let e = add_env_stmt e p1 p2 in
-       next_n Match { e with ne_continuation; }
-
-    | Match, Zand ([],[], ne_continuation) ->
-       (* assert false *)
        next_n Match { e with ne_continuation; }
 
     | Match, Zand (before,(f,p)::after,z) ->
