@@ -1974,7 +1974,9 @@ module PMatching
        let e = add_env_stmt e p1 p2 in
        next_n Match { e with ne_continuation; }
 
-    | Match, Zand ([],[],_) -> assert false
+    | Match, Zand ([],[], ne_continuation) ->
+       (* assert false *)
+       next_n Match { e with ne_continuation; }
 
     | Match, Zand (before,(f,p)::after,z) ->
        Debug.debug_which_rule e.ne_env "next : next match in zand";
