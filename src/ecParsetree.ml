@@ -206,26 +206,6 @@ type pmodule_decl = {
 }
 
 (* -------------------------------------------------------------------- *)
-type ptyparams = (psymbol * pqsymbol list) list
-type ptydname  = (ptyparams * psymbol) located
-
-type ptydecl = {
-  pty_name   : psymbol;
-  pty_tyvars : ptyparams;
-  pty_body   : ptydbody;
-}
-
-and ptydbody =
-  | PTYD_Abstract of pqsymbol list
-  | PTYD_Alias    of pty
-  | PTYD_Record   of precord
-  | PTYD_Datatype of pdatatype
-
-and pdatatype = (psymbol * pty list) list
-
-and precord = (psymbol * pty) list
-
-(* -------------------------------------------------------------------- *)
 type pmemory   = psymbol
 
 type phoarecmp = EcFol.hoarecmp
@@ -272,6 +252,37 @@ and pgty =
 | PGTY_Type  of pty
 | PGTY_ModTy of pmodule_type_restr
 | PGTY_Mem
+
+(* -------------------------------------------------------------------- *)
+type ptyparams = (psymbol * pqsymbol list) list
+type ptydname  = (ptyparams * psymbol) located
+
+type ptydecl = {
+  pty_name   : psymbol;
+  pty_tyvars : ptyparams;
+  pty_body   : ptydbody;
+}
+
+and ptydbody =
+  | PTYD_Abstract   of pqsymbol list
+  | PTYD_Alias      of pty
+  | PTYD_Record     of precord
+  | PTYD_Datatype   of pdatatype
+  | PTYD_Dependtype of pdependtype
+
+and pdatatype = (psymbol * pty list) list
+
+and precord = (psymbol * pty) list
+
+(* TO DO !!! *)
+
+and pdependtype = {
+  ptd_name : psymbol;
+  ptd_type : pty;
+  ptd_form : pformula;
+}
+
+(* and pdependtype = (psymbol * pty) pformula *)
 
 (* -------------------------------------------------------------------- *)
 let rec pf_ident ?(raw = false) f =

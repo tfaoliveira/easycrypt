@@ -157,7 +157,6 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
     match (normty t).ty_node with
     | Tconstr (p', _) when EcPath.p_equal p p' -> true
     | _ -> EcTypes.ty_sub_exists (occurs p) t
-
   in scheme mode (List.map fst dt.dt_tparams, tpath) dt.dt_ctors
 
 (* -------------------------------------------------------------------- *)

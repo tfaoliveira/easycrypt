@@ -1877,6 +1877,62 @@ module Ty = struct
       tyd_type   = `Record (scheme, record.ELI.rc_fields); }
 
     in bind scope (unloc name, tydecl)
+
+(* -------------------------------------------------------------------- *)
+                               (*  TO DO !!!  *)
+  let add_dependtype (scope : scope) (tydname : ptydname) dnt =
+    assert (scope.sc_pr_uc = None);
+
+    if not (List.is_empty (fst (unloc tydname))) then
+      hierror "weak-dependent types cannot have type parameters";
+
+    let name = snd (unloc tydname) in
+    check_name_available scope name;
+
+    (* Add final dependtype to environment *)
+    let tydecl = {
+      tyd_params = [];
+      tyd_type = `Abstract (Sp.empty); } in
+
+    let tyname = EcPath.pqname (path scope) (unloc name) in
+    let ty     = EcTypes.tconstr tyname [] in
+
+    let ue     = EcUnify.UniEnv.create (Some []) in
+    let opty   = TT.transty TT.tp_relax scope.sc_env ue dnt.ptd_type in
+    let oppath = EcPath.pqname (path scope) (unloc dnt.ptd_name) in
+
+    let opid   = EcIdent.create (unloc dnt.ptd_name) in
+    let env0   = EcEnv.Var.bind_local opid opty scope.sc_env in
+    let ax     = TT.trans_prop env0 ue dnt.ptd_form in
+    let ax     =
+      let the   = EcIdent.create ("the_" ^ unloc name) in
+      let opthe = EcFol.f_app
+                    (EcFol.f_op oppath [] (tfun ty opty))
+                    [EcFol.f_local the ty]
+                    opty in
+      let ax = EcFol.Fsubst.subst_locals (Mid.singleton opid opthe) ax in
+      EcFol.f_forall [(the, GTty ty)] ax in
+
+    let axname = "wdep_" ^ (unloc name) in
+
+    let opdecl = EcDecl.{
+      op_tparams = [];
+      op_ty      = tfun ty opty;
+      op_kind    = OB_oper None;
+    } in
+
+    let axdecl = {
+      ax_tparams = [];
+      ax_spec    = ax;
+      ax_kind    = `Axiom (Ssym.empty, false);
+      ax_nosmt   = true;
+    } in
+
+    let scope = bind scope (unloc name, tydecl) in
+    let scope = Op.bind scope (unloc dnt.ptd_name, opdecl) in
+    let scope = Ax.bind scope false (axname, axdecl) in
+
+    scope
 end
 
 (* -------------------------------------------------------------------- *)

@@ -241,10 +241,11 @@ let rec process_type (scope : EcScope.scope) (tyd : ptydecl located) =
   let tyname = (tyd.pl_desc.pty_tyvars, tyd.pl_desc.pty_name) in
   let scope =
     match tyd.pl_desc.pty_body with
-    | PTYD_Abstract bd -> EcScope.Ty.add          scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Alias    bd -> EcScope.Ty.define       scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Datatype bd -> EcScope.Ty.add_datatype scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Record   bd -> EcScope.Ty.add_record   scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Abstract   bd -> EcScope.Ty.add            scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Alias      bd -> EcScope.Ty.define         scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Datatype   bd -> EcScope.Ty.add_datatype   scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Record     bd -> EcScope.Ty.add_record     scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Dependtype bd -> EcScope.Ty.add_dependtype scope (mk_loc tyd.pl_loc tyname) bd
   in
     EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
     scope

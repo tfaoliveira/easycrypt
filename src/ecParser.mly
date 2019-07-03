@@ -1531,6 +1531,15 @@ typedecl:
 | TYPE td=tyd_name EQ te=datatype_def
     { [mk_tydecl td (PTYD_Datatype te)] }
 
+| TYPE td=tyd_name EQ LBRACE
+    ld=lident COLON te=loc(type_exp)
+    PIPE f=form
+  RBRACE
+    { [mk_tydecl td (PTYD_Dependtype {
+         ptd_name = ld;
+         ptd_type = te;
+         ptd_form = f ; })] }
+
 (* -------------------------------------------------------------------- *)
 (* Type classes                                                         *)
 typeclass:
