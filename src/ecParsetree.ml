@@ -873,6 +873,7 @@ type paxiom_kind =
 
 type paxiom = {
   pa_name    : psymbol;
+  pa_wparams : (psymbol * pty) list;
   pa_tyvars  : (psymbol * pqsymbol list) list option;
   pa_vars    : pgtybindings option;
   pa_formula : pformula;
