@@ -24,11 +24,14 @@ type tydecl = {
   tyd_type   : ty_body;
 }
 
+                   (*  TO DO!!! *)
+
 and ty_body = [
-  | `Concrete of EcTypes.ty
-  | `Abstract of Sp.t
-  | `Datatype of ty_dtype
-  | `Record   of form * (EcSymbols.symbol * EcTypes.ty) list
+  | `Concrete   of EcTypes.ty
+  | `Abstract   of Sp.t
+  | `Datatype   of ty_dtype
+  | `Record     of form * (EcSymbols.symbol * EcTypes.ty) list
+  | `WDependent of ty_dptype
 ]
 
 and ty_dtype = {
@@ -37,10 +40,17 @@ and ty_dtype = {
   tydt_schcase : form;
 }
 
-val tydecl_as_concrete : tydecl -> EcTypes.ty
-val tydecl_as_abstract : tydecl -> Sp.t
-val tydecl_as_datatype : tydecl -> ty_dtype
-val tydecl_as_record   : tydecl -> form * (EcSymbols.symbol * EcTypes.ty) list
+and ty_dptype = {
+  tydp_opname  : EcSymbols.symbol;
+  tydp_type  : EcCoreFol.form;
+  tydp_axiom  : EcCoreFol.form;
+}
+
+val tydecl_as_concrete   : tydecl -> EcTypes.ty
+val tydecl_as_abstract   : tydecl -> Sp.t
+val tydecl_as_datatype   : tydecl -> ty_dtype
+val tydecl_as_record     : tydecl -> form * (EcSymbols.symbol * EcTypes.ty) list
+val tydecl_as_wdependent : tydecl -> ty_dptype
 
 val abs_tydecl : ?tc:Sp.t -> ?params:ty_pctor -> unit -> tydecl
 

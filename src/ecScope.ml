@@ -1893,6 +1893,7 @@ module Ty = struct
     let tydecl = {
       tyd_params = [];
       tyd_type = `Abstract (Sp.empty); } in
+      (*tyd_type   = `WDependent {} *)
 
     let tyname = EcPath.pqname (path scope) (unloc name) in
     let ty     = EcTypes.tconstr tyname [] in

@@ -26,11 +26,14 @@ type tydecl = {
   tyd_type   : ty_body;
 }
 
+                                (* TO DO!! *)
+
 and ty_body = [
-  | `Concrete of EcTypes.ty
-  | `Abstract of Sp.t
-  | `Datatype of ty_dtype
-  | `Record   of EcCoreFol.form * (EcSymbols.symbol * EcTypes.ty) list
+  | `Concrete   of EcTypes.ty
+  | `Abstract   of Sp.t
+  | `Datatype   of ty_dtype
+  | `Record     of EcCoreFol.form * (EcSymbols.symbol * EcTypes.ty) list
+  | `WDependent of ty_dptype
 ]
 
 and ty_dtype = {
@@ -38,6 +41,13 @@ and ty_dtype = {
   tydt_schelim : EcCoreFol.form;
   tydt_schcase : EcCoreFol.form;
 }
+
+and ty_dptype = {
+  tydp_opname  : EcSymbols.symbol;
+  tydp_type  : EcCoreFol.form;
+  tydp_axiom  : EcCoreFol.form;
+}
+
 
 let tydecl_as_concrete (td : tydecl) =
   match td.tyd_type with `Concrete x -> x | _ -> assert false
@@ -50,6 +60,9 @@ let tydecl_as_datatype (td : tydecl) =
 
 let tydecl_as_record (td : tydecl) =
   match td.tyd_type with `Record x -> x | _ -> assert false
+
+let tydecl_as_wdependent (td : tydecl) =
+  match td.tyd_type with `WDependent x -> x | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
 let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) () =
