@@ -320,9 +320,16 @@ let subst_tydecl (s : _subst) (tyd : tydecl) =
         in
           `Datatype dtype
     | `Record (scheme, fields) ->
-      let sty = init_tparams s tyd.tyd_params params' in
+        let sty = init_tparams s tyd.tyd_params params' in
         `Record (Fsubst.f_subst (f_subst_of_subst s) scheme,
                  List.map (snd_map sty.s_ty) fields)
+    | `WDependent infos ->
+        let sty = init_tparams s tyd.tyd_params params' in
+        `WDependent {
+          tydp_opname = infos.tydp_opname; (* FIXME *)
+          tydp_optype = sty.s_ty infos.tydp_optype;
+          tydp_axiom  = Fsubst.f_subst (f_subst_of_subst s) infos.tydp_axiom;
+        }
   in
     { tyd_params = params'; tyd_type = body; }
 

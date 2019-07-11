@@ -1794,7 +1794,8 @@ top_decl:
 (* Global entries                                                       *)
 
 lemma_decl :
-| x=ident tyvars=tyvars_decl? pd=pgtybindings? COLON f=form { x,tyvars,pd,f }
+| x=ident tyvars=tyvars_decl? pd=pgtybindings? COLON f=form
+   { (x, tyvars, pd, f) }
 
 nosmt:
 | NOSMT { true  }

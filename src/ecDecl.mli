@@ -24,8 +24,6 @@ type tydecl = {
   tyd_type   : ty_body;
 }
 
-                   (*  TO DO!!! *)
-
 and ty_body = [
   | `Concrete   of EcTypes.ty
   | `Abstract   of Sp.t
@@ -41,8 +39,8 @@ and ty_dtype = {
 }
 
 and ty_dptype = {
-  tydp_opname  : EcSymbols.symbol;
-  tydp_type  : EcCoreFol.form;
+  tydp_opname : EcSymbols.symbol;
+  tydp_optype : EcTypes.ty;
   tydp_axiom  : EcCoreFol.form;
 }
 
