@@ -770,7 +770,7 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
           tconstr p []
       end
 
-  | PTfun(ty1,ty2) ->
+  | PTfun (ty1, ty2) ->
       tfun (transty tp env ue ty1) (transty tp env ue ty2)
 
   | PTapp ({ pl_desc = name }, tyargs) ->
@@ -788,9 +788,13 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
       let tyargs = transtys tp env ue tyargs in
       tconstr p tyargs
     end
+
   | PTglob gp ->
     let m,_ = trans_msymbol env gp in
     tglob m
+
+  | PTwdep (ty, _e) ->
+      transty tp env ue ty
 
 and transtys tp (env : EcEnv.env) ue tys =
   List.map (transty tp env ue) tys

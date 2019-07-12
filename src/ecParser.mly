@@ -1240,9 +1240,17 @@ type_args:
 | LPAREN tys=plist2(loc(type_exp), COMMA) RPAREN  { tys  }
 
 type_exp:
-| ty=simpl_type_exp                          { ty }
-| ty=plist2(loc(simpl_type_exp), STAR)       { PTtuple ty }
-| ty1=loc(type_exp) RARROW ty2=loc(type_exp) { PTfun(ty1,ty2) }
+| ty=simpl_type_exp
+    { ty }
+
+| ty=plist2(loc(simpl_type_exp), STAR)
+    { PTtuple ty }
+
+| ty1=loc(type_exp) RARROW ty2=loc(type_exp)
+    { PTfun (ty1, ty2) }
+
+| ty=loc(simpl_type_exp) LBRACKET e=expr RBRACKET
+    { PTwdep (ty, e) }
 
 (* -------------------------------------------------------------------- *)
 (* Parameter declarations                                              *)
@@ -1745,13 +1753,8 @@ nt_binding1:
 | x=ident COLON ty=loc(type_exp)
     { (x, ty) }
 
-
-(*
-nt_binding2:
-(*binding weak dependent type *)
-| x=ident COLON ty = loc(type_exp) LBRACKET wp=loc(type_exp) RBRACKET
-    { (wp, ty) }
-*)
+<<<<<<< HEAD
+>>>>>>> ed51f9256cbede879c496d9534d6bce8a8824dbf
 
 nt_argty:
 | ty=loc(type_exp)
