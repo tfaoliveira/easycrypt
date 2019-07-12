@@ -1771,7 +1771,7 @@ nt_bindings:
 
 (* when including lists *)
 (*
-| ... wdep = plist0(nt_binding2, COMMA)...
+| LPAREN wdep = plist0(nt_binding2, COMMA) RPAREN
     { wdep }
 *)
 
