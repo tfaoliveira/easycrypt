@@ -876,6 +876,9 @@ module Ax = struct
      *
      * All the typing functions are in EcTyping
      *)
+    begin
+      (* FIXME *)
+    end;
 
     let (pconcl, tintro) =
       match ax.pa_vars with
