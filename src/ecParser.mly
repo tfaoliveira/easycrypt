@@ -1738,7 +1738,6 @@ ip_ctor_def:
 (* -------------------------------------------------------------------- *)
 (* Notations                                                            *)
 
-(* to do ? *)
 nt_binding1:
 | x=ident
     { (x, mk_loc (loc x) PTunivar) }
@@ -1746,10 +1745,13 @@ nt_binding1:
 | x=ident COLON ty=loc(type_exp)
     { (x, ty) }
 
+
+(*
 nt_binding2:
 (*binding weak dependent type *)
 | x=ident COLON ty = loc(type_exp) LBRACKET wp=loc(type_exp) RBRACKET
-    { (wp, tyvars) }
+    { (wp, ty) }
+*)
 
 nt_argty:
 | ty=loc(type_exp)
