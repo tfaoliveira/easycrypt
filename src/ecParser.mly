@@ -1243,9 +1243,6 @@ type_exp:
 | ty=simpl_type_exp                          { ty }
 | ty=plist2(loc(simpl_type_exp), STAR)       { PTtuple ty }
 | ty1=loc(type_exp) RARROW ty2=loc(type_exp) { PTfun(ty1,ty2) }
-(*
-| x=qident LBRACKET ty=type_exp RBRACKET {PTnamed x [ty]}
-*)
 
 (* -------------------------------------------------------------------- *)
 (* Parameter declarations                                              *)
@@ -1749,6 +1746,11 @@ nt_binding1:
 | x=ident COLON ty=loc(type_exp)
     { (x, ty) }
 
+nt_binding2:
+(*binding weak dependent type *)
+| x=ident COLON ty = loc(type_exp) LBRACKET wp=loc(type_exp) RBRACKET
+    { (wp, tyvars) }
+
 nt_argty:
 | ty=loc(type_exp)
     { ([], ty) }
@@ -1766,6 +1768,12 @@ nt_arg1:
 nt_bindings:
 | DASHLT bd=plist0(nt_binding1, COMMA) GT
     { bd }
+
+(* when including lists *)
+(*
+| ... wdep = plist0(nt_binding2, COMMA)...
+    { wdep }
+*)
 
 notation:
 | NOTATION x=loc(NOP) tv=tyvars_decl? bd=nt_bindings?
