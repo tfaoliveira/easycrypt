@@ -44,6 +44,13 @@ type osymbol_r   = psymbol option
 type osymbol     = osymbol_r located
 
 (* -------------------------------------------------------------------- *)
+type plpattern_r =
+  | LPSymbol of psymbol
+  | LPTuple  of osymbol list
+  | LPRecord of (pqsymbol * psymbol) list
+
+and plpattern = plpattern_r located
+
 type pty_r =
   | PTunivar
   | PTtuple  of pty list
@@ -52,23 +59,14 @@ type pty_r =
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
+  | PTwdep   of pty * pexpr
 and pty = pty_r located
 
-type ptyannot_r =
+and ptyannot_r =
   | TVIunamed of pty list
   | TVInamed  of (psymbol * pty) list
 
 and ptyannot  = ptyannot_r  located
-
-type plpattern_r =
-  | LPSymbol of psymbol
-  | LPTuple  of osymbol list
-  | LPRecord of (pqsymbol * psymbol) list
-
-and plpattern = plpattern_r located
-
-type ptybinding  = osymbol list * pty
-and  ptybindings = ptybinding list
 
 and pexpr_r =
   | PEcast   of pexpr * pty                       (* type cast          *)
@@ -94,6 +92,9 @@ and 'a rfield = {
   rf_tvi   : ptyannot option;
   rf_value : 'a;
 }
+
+and ptybinding  = osymbol list * pty
+and ptybindings = ptybinding list
 
 (* -------------------------------------------------------------------- *)
 type plvalue_r =

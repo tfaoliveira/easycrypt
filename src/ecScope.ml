@@ -864,6 +864,19 @@ module Ax = struct
     if ax.pa_local && not (EcSection.in_section scope.sc_section) then
       hierror "cannot declare a local lemma outside of a section";
 
+    (*
+     * 1. type check the types of the value parameters {...} (in pa_wparams)
+     * 2. type the arguments (x : type) (in pa_vars)
+     *    a. check if there is a top-level parameter application
+     *       (ty[e] -> `ty` is applied to `e`)
+     *       -> type-check the type `ty` and the expression `e`
+     *    b. check that there are no inner parameter applications
+     *       (e.g. word * word[n])
+     * 3. type the formula
+     *
+     * All the typing functions are in EcTyping
+     *)
+
     let (pconcl, tintro) =
       match ax.pa_vars with
       | None ->
