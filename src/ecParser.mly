@@ -88,9 +88,9 @@
   let pflist loc ti (es : pformula    list) : pformula    =
     List.fold_right (fun e1 e2 -> pf_cons loc ti e1 e2) es (pf_nil loc ti)
 
-  let mk_axiom ?(local = false) ?(nosmt = false) (x, tywp, tyv, vd, f) k =
+  let mk_axiom ?(local = false) ?(nosmt = false) (x, wp, tyv, vd, f) k =
     { pa_name    = x;
-      pa_wparams = tywp;
+      pa_wparams = wp;
       pa_tyvars  = tyv;
       pa_vars    = vd;
       pa_formula = f;
@@ -1620,10 +1620,14 @@ tyvars_decl:
 | LBRACKET tyvars=rlist2(tident , empty) RBRACKET
     { List.map (fun x -> (x, [])) tyvars }
 
-(*TO DO !! type weak -dependent parameters*)
-tywparams_decl:
-| LBRACE tyvars=rlist0(typaram, COMMA) RBRACE
-    { tyvars }
+
+wparam:
+| x=ident COLON ty=loc(type_exp)
+   { (x, ty) }
+
+wparams_decl:
+| LBRACE wps=rlist0(wparam, COMMA) RBRACE
+    { wps }
 
 op_or_const:
 | OP    { `Op    }
@@ -1804,10 +1808,9 @@ top_decl:
 (* -------------------------------------------------------------------- *)
 (* Global entries                                                       *)
 
-(* TO DO !!*)
 lemma_decl :
-| x=ident tywparams=tywparams_decl? tyvars=tyvars_decl? pd=pgtybindings? COLON f=form
-   { (x, tywparams, tyvars, pd, f) }
+| x=ident wparams=wparams_decl? tyvars=tyvars_decl? pd=pgtybindings? COLON f=form
+   { (x, odfl [] wparams, tyvars, pd, f) }
 
 nosmt:
 | NOSMT { true  }
@@ -1829,10 +1832,10 @@ axiom:
 | l=local LEMMA o=nosmt d=lemma_decl ao=axiom_tc
     { mk_axiom ~local:l ~nosmt:o d ao }
 
-| l=local  EQUIV x=ident pd=pgtybindings? COLON p=loc( equiv_body(none)) ao=axiom_tc
-| l=local  HOARE x=ident pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
-| l=local PHOARE x=ident pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
-    { mk_axiom ~local:l (x, None, None, pd, p) ao } (* Here error *)
+| l=local  EQUIV x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc( equiv_body(none)) ao=axiom_tc
+| l=local  HOARE x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
+| l=local PHOARE x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
+    { mk_axiom ~local:l (x, odfl [] wp, None, pd, p) ao }
 
 proofend:
 | QED      { `Qed   }
