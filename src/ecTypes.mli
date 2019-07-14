@@ -8,36 +8,31 @@
 
 (* -------------------------------------------------------------------- *)
 open EcBigInt
-open EcMaps
 open EcSymbols
 open EcUid
 open EcIdent
 
 (* -------------------------------------------------------------------- *)
-type ty = private {
+
+include module type of struct include EcAst.TYPES end
+(*type ty = private {
   ty_node : ty_node;
   ty_fv   : int Mid.t;
   ty_tag  : int;
 }
 
-and ty_node =
+and ty_node = EcAst.TYPES.ty_node
   | Tglob   of EcPath.mpath (* The tuple of global variable of the module *)
   | Tunivar of EcUid.uid
   | Tvar    of EcIdent.t
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
-
-module Mty : Map.S with type key = ty
-module Sty : Set.S with module M = Map.MakeBase(Mty)
-module Hty : EcMaps.EHashtbl.S with type key = ty
+ *)
 
 type dom = ty list
 
 val dump_ty : ty -> string
-
-val ty_equal : ty -> ty -> bool
-val ty_hash  : ty -> int
 
 val tuni    : EcUid.uid -> ty
 val tvar    : EcIdent.t -> ty

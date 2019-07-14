@@ -15,6 +15,10 @@ open EcUid
 module BI = EcBigInt
 
 (* -------------------------------------------------------------------- *)
+
+include EcAst.TYPES
+
+(*
 type ty = {
   ty_node : ty_node;
   ty_fv   : int EcIdent.Mid.t; (* only ident appearing in path *)
@@ -28,72 +32,9 @@ and ty_node =
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
+ *)
 
 type dom = ty list
-
-let ty_equal : ty -> ty -> bool = (==)
-let ty_hash ty = ty.ty_tag
-
-module Hsty = Why3.Hashcons.Make (struct
-  type t = ty
-
-  let equal ty1 ty2 =
-    match ty1.ty_node, ty2.ty_node with
-    | Tglob m1, Tglob m2 ->
-        EcPath.m_equal m1 m2
-
-    | Tunivar u1, Tunivar u2 ->
-        uid_equal u1 u2
-
-    | Tvar v1, Tvar v2 ->
-        id_equal v1 v2
-
-    | Ttuple lt1, Ttuple lt2 ->
-        List.all2 ty_equal lt1 lt2
-
-    | Tconstr (p1, lt1), Tconstr (p2, lt2) ->
-        EcPath.p_equal p1 p2 && List.all2 ty_equal lt1 lt2
-
-    | Tfun (d1, c1), Tfun (d2, c2)->
-        ty_equal d1 d2 && ty_equal c1 c2
-
-    | _, _ -> false
-
-  let hash ty =
-    match ty.ty_node with
-    | Tglob m          -> EcPath.m_hash m
-    | Tunivar u        -> u
-    | Tvar    id       -> EcIdent.tag id
-    | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
-    | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
-    | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
-
-  let fv ty =
-    let union ex =
-      List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty in
-
-    match ty with
-    | Tglob m          -> EcPath.m_fv Mid.empty m
-    | Tunivar _        -> Mid.empty
-    | Tvar    _        -> Mid.empty
-    | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
-    | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
-    | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
-
-  let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
-end)
-
-let mk_ty node =
-  Hsty.hashcons { ty_node = node; ty_tag = -1; ty_fv = Mid.empty }
-
-module MSHty = EcMaps.MakeMSH(struct
-  type t = ty
-  let tag t = t.ty_tag
-end)
-
-module Mty = MSHty.M
-module Sty = MSHty.S
-module Hty = MSHty.H
 
 (* -------------------------------------------------------------------- *)
 let rec dump_ty ty =

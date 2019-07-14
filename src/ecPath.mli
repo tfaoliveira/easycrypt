@@ -12,7 +12,10 @@ open EcMaps
 open EcSymbols
 
 (* -------------------------------------------------------------------- *)
-type path = private {
+
+include module type of struct include EcAst.PATH end
+
+(*type path = private {
   p_node : path_node;
   p_tag  : int
 }
@@ -20,17 +23,12 @@ type path = private {
 and path_node =
 | Psymbol of symbol
 | Pqname  of path * symbol
-
+ *)
 (* -------------------------------------------------------------------- *)
 val psymbol : symbol -> path
 val pqname  : path -> symbol -> path
 val pqoname : path option -> symbol -> path
 val pappend : path -> path -> path
-
-val p_equal       : path -> path -> bool
-val p_compare     : path -> path -> int
-val p_ntr_compare : path -> path -> int
-val p_hash        : path -> int
 
 (* -------------------------------------------------------------------- *)
 val tostring    : path -> string
@@ -46,28 +44,19 @@ val tolist      : path -> symbol list
 val p_size      : path -> int
 
 (* -------------------------------------------------------------------- *)
-module Mp : Map.S with type key = path
-module Hp : EcMaps.EHashtbl.S with type key = path
-
-module Sp : sig
-  include Set.S with module M = Map.MakeBase(Mp)
-
-  val ntr_elements : t -> elt list
-end
-
-(* -------------------------------------------------------------------- *)
+(*
 type mpath = private {
-  m_top  : mpath_top;
-  m_args : mpath list;
-  m_tag  : int;
+  m_top   : mpath_top;
+  m_args  : mpath list;
+  m_tag   : int;
 }
 
 and mpath_top =
 [ | `Local of ident
   | `Concrete of path * path option ]
-
+ *)
 (* -------------------------------------------------------------------- *)
-val mpath     : mpath_top -> mpath list -> mpath
+
 val mpath_abs : ident -> mpath list -> mpath
 val mqname    : mpath -> symbol -> mpath
 val mastrip   : mpath -> mpath
@@ -75,13 +64,7 @@ val mastrip   : mpath -> mpath
 val mident    : ident -> mpath
 val mpath_crt : path -> mpath list -> path option -> mpath
 
-val m_equal       : mpath -> mpath -> bool
-val mt_equal      : mpath_top -> mpath_top -> bool
-val m_compare     : mpath -> mpath -> int
-val m_ntr_compare : mpath -> mpath -> int
-val m_hash        : mpath -> int
 val m_apply       : mpath -> mpath list -> mpath
-val m_fv          : int EcIdent.Mid.t -> mpath -> int EcIdent.Mid.t
 
 val m_functor : mpath -> mpath
 
@@ -118,16 +101,6 @@ val xbasename   : xpath -> symbol
 (* -------------------------------------------------------------------- *)
 val m_tostring : mpath -> string
 val x_tostring : xpath -> string
-
-(* -------------------------------------------------------------------- *)
-module Mm : Map.S with type key = mpath
-module Hm : EcMaps.EHashtbl.S with type key = mpath
-
-module Sm : sig
-  include Set.S with module M = Map.MakeBase(Mm)
-
-  val ntr_elements : t -> elt list
-end
 
 (* -------------------------------------------------------------------- *)
 module Mx : Map.S with type key = xpath
