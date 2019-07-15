@@ -112,6 +112,7 @@ type tyerror =
 | PatternNotAllowed
 | MemNotAllowed
 | UnknownScope           of qsymbol
+| InvalidWDepApplication
 
 exception TyError of EcLocation.t * EcEnv.env * tyerror
 
@@ -793,8 +794,8 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
     let m,_ = trans_msymbol env gp in
     tglob m
 
-  | PTwdep (ty, _e) ->
-      transty tp env ue ty
+  | PTwdep _ ->
+    tyerror ty.pl_loc env InvalidWDepApplication
 
 and transtys tp (env : EcEnv.env) ue tys =
   List.map (transty tp env ue) tys

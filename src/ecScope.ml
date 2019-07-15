@@ -876,32 +876,47 @@ module Ax = struct
      *
      * All the typing functions are in EcTyping
      *)
-      (* FIXME *)
-    begin
 
-      let wty = List.map snd ax.pa_wparams in
-      let ( pname , ptype ) =
-        match ax.pa_vars with
-        | None -> (ax.pa_formula, []
-        | Some
-    end
-
-    let (pconcl, tintro) =
-      match ax.pa_vars with
-      | None ->
-          (ax.pa_formula, [])
-      | Some vs ->
-          let pconcl = mk_loc loc (PFforall (vs, ax.pa_formula)) in
-          (pconcl, List.flatten (List.map fst vs))
+    let (env as env0), wparams =
+      let wparams =
+        List.map
+          (fst_map (fun x -> [mk_loc x.pl_loc (Some x)]))
+          ax.pa_wparams
+      in TT.trans_binding scope.sc_env ue wparams
     in
+
+    let (env, args), wexprs =
+      let args, wexprs =
+        let do1 (x, xty) =
+          match xty with
+          | PGTY_Type { pl_desc = PTwdep (xty, xe) } ->
+              ((x, PGTY_Type xty), Some xe)
+          | _ ->
+              ((x, xty), None)
+        in List.split (List.map do1 ax.pa_vars)
+      in
+        (TT.trans_gbinding env ue args, wexprs)
+    in
+
+    let concl = TT.trans_prop env ue ax.pa_formula in
+
+    (* Add the constraints for wdependent types *)
+
+    let concl = EcFol.f_forall args concl in
+    let concl =
+      EcFol.f_forall
+        (List.map (fun (x, xty) -> (x, EcFol.GTty xty)) wparams)
+        concl in
+
+    let tintro =
+        (List.map (fun (x, _) -> mk_loc x.pl_loc (Some x)) ax.pa_wparams)
+      @ (List.flatten (List.map fst ax.pa_vars)) in
 
     let ip =
       let ip x = x |> omap (fun x -> `Named (unloc x)) |> odfl `Clear in
       List.map (lmap (fun x -> IPCore (ip x))) tintro in
     let tintro = mk_loc loc (Plogic (Pmove prevertv0)) in
     let tintro = { pt_core = tintro; pt_intros = [`Ip ip]; } in
-
-    let concl = TT.trans_prop scope.sc_env ue pconcl in
 
     if not (EcUnify.UniEnv.closed ue) then
       hierror "the formula contains free type variables";

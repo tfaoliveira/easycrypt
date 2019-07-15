@@ -1753,9 +1753,6 @@ nt_binding1:
 | x=ident COLON ty=loc(type_exp)
     { (x, ty) }
 
-<<<<<<< HEAD
->>>>>>> ed51f9256cbede879c496d9534d6bce8a8824dbf
-
 nt_argty:
 | ty=loc(type_exp)
     { ([], ty) }
@@ -1823,7 +1820,7 @@ top_decl:
 
 lemma_decl :
 | x=ident wparams=wparams_decl? tyvars=tyvars_decl? pd=pgtybindings? COLON f=form
-   { (x, odfl [] wparams, tyvars, pd, f) }
+   { (x, odfl [] wparams, tyvars, odfl [] pd, f) }
 
 nosmt:
 | NOSMT { true  }
@@ -1848,7 +1845,7 @@ axiom:
 | l=local  EQUIV x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc( equiv_body(none)) ao=axiom_tc
 | l=local  HOARE x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
 | l=local PHOARE x=ident wp=wparams_decl? pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
-    { mk_axiom ~local:l (x, odfl [] wp, None, pd, p) ao }
+    { mk_axiom ~local:l (x, odfl [] wp, None, odfl [] pd, p) ao }
 
 proofend:
 | QED      { `Qed   }
