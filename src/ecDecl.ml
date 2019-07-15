@@ -41,7 +41,7 @@ and ty_dtype = {
 }
 
 and ty_dptype = {
-  tydp_opname : EcSymbols.symbol;
+  tydp_opname : EcPath.path;
   tydp_optype : EcTypes.ty;
   tydp_axiom  : EcCoreFol.form;
 }
