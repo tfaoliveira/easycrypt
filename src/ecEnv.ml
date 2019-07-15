@@ -713,6 +713,7 @@ module MC = struct
       match tyd.tyd_type with
       | `Concrete _  -> mc
       | `Abstract _ -> mc
+      | `WDependent _ -> mc
 
       | `Datatype dtype ->
           let cs      = dtype.tydt_ctors   in
