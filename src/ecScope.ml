@@ -1926,12 +1926,6 @@ module Ty = struct
     let name = snd (unloc tydname) in
     check_name_available scope name;
 
-    (* Add final dependtype to environment *)
-    let tydecl = {
-      tyd_params = [];
-      tyd_type = `Abstract (Sp.empty); } in
-      (*tyd_type   = `WDependent {} *)
-
     let tyname = EcPath.pqname (path scope) (unloc name) in
     let ty     = EcTypes.tconstr tyname [] in
 
@@ -1942,6 +1936,7 @@ module Ty = struct
     let opid   = EcIdent.create (unloc dnt.ptd_name) in
     let env0   = EcEnv.Var.bind_local opid opty scope.sc_env in
     let ax     = TT.trans_prop env0 ue dnt.ptd_form in
+
     let ax     =
       let the   = EcIdent.create ("the_" ^ unloc name) in
       let opthe = EcFol.f_app
@@ -1952,6 +1947,14 @@ module Ty = struct
       EcFol.f_forall [(the, GTty ty)] ax in
 
     let axname = "wdep_" ^ (unloc name) in
+
+    let tydecl = {
+      tyd_params = [];
+      tyd_type   = `WDependent { tydp_opname =
+                                   EcPath.pqname (path scope) (unloc dnt.ptd_name);
+                                 tydp_optype = opty   ;
+                                 tydp_axiom  = ax     ;};
+    } in
 
     let opdecl = EcDecl.{
       op_tparams = [];
