@@ -876,9 +876,15 @@ module Ax = struct
      *
      * All the typing functions are in EcTyping
      *)
-    begin
       (* FIXME *)
-    end;
+    begin
+
+      let wty = List.map snd ax.pa_wparams in
+      let ( pname , ptype ) =
+        match ax.pa_vars with
+        | None -> (ax.pa_formula, []
+        | Some
+    end
 
     let (pconcl, tintro) =
       match ax.pa_vars with
