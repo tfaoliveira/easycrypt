@@ -1948,13 +1948,15 @@ module Ty = struct
 
     let axname = "wdep_" ^ (unloc name) in
 
-    let tydecl = {
-      tyd_params = [];
-      tyd_type   = `WDependent { tydp_opname =
-                                   EcPath.pqname (path scope) (unloc dnt.ptd_name);
-                                 tydp_optype = opty   ;
-                                 tydp_axiom  = ax     ;};
-    } in
+    let tydecl =
+      let oppath = EcPath.pqname (path scope) (unloc dnt.ptd_name) in
+        { tyd_params = [];
+          tyd_type   = `WDependent {
+                           tydp_opname = oppath;
+                           tydp_optype = opty  ;
+                           tydp_axiom  = ax    ;
+                         };
+        } in
 
     let opdecl = EcDecl.{
       op_tparams = [];
