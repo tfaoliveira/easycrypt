@@ -2098,15 +2098,14 @@ let form_of_opselect
   in f_app op args codom
 
 (* -------------------------------------------------------------------- *)
-let trans_gbinding env ue decl =
+let trans_gbinding_r env ue decl =
   let trans1 env (xs, pgty) =
       match pgty with
       | PGTY_Type ty ->
         let ty  = transty tp_relax env ue ty in
-        let xs  = List.map (fun x -> ident_of_osymbol (unloc x), ty) xs in
-        let env = EcEnv.Var.bind_locals xs env in
-        let xs  = List.map (fun (x,ty) -> x,GTty ty) xs in
-        (env, xs)
+        let xs  = List.map (fun x -> ident_of_osymbol (unloc x)) xs in
+        let env = List.fold_left (fun env x -> EcEnv.Var.bind_local x ty env) env xs in
+        (env, (xs, GTty ty))
 
       | PGTY_ModTy (mi, restr) ->
         let mi = fst (transmodtype env mi) in
@@ -2117,19 +2116,29 @@ let trans_gbinding env ue decl =
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in
           let env = EcEnv.Mod.bind_local x mi restr env in
-          (env, (x, ty))
+          (env, x)
 
-        in List.map_fold add1 env xs
+        in snd_map (fun xs -> xs, ty) (List.map_fold add1 env xs)
 
       | PGTY_Mem ->
+        let ty = GTmem None in
+
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in
           let env = EcEnv.Memory.push (EcMemory.abstract x) env in
-          (env, (x, GTmem None))
+          (env, x)
 
-        in List.map_fold add1 env xs
+        in snd_map (fun xs -> xs, ty) (List.map_fold add1 env xs) in
 
-  in snd_map List.flatten (List.map_fold trans1 env decl)
+  List.map_fold trans1 env decl
+
+(* -------------------------------------------------------------------- *)
+let flatten_gbinding bindings =
+  List.flatten (List.map (fun (xs, ty) -> List.map (fun x -> (x, ty)) xs) bindings)
+
+(* -------------------------------------------------------------------- *)
+let trans_gbinding env ue decl =
+  snd_map flatten_gbinding (trans_gbinding_r env ue decl)
 
 (* -------------------------------------------------------------------- *)
 let trans_form_or_pattern env (ps, ue) pf tt =

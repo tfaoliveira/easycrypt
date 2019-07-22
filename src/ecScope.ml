@@ -885,24 +885,62 @@ module Ax = struct
       in TT.trans_binding scope.sc_env ue wparams
     in
 
-    let (env, args), wexprs =
+    let (env, args, wexprs) =
       let args, wexprs =
         let do1 (x, xty) =
           match xty with
           | PGTY_Type { pl_desc = PTwdep (xty, xe) } ->
-              ((x, PGTY_Type xty), Some xe)
+               let xe, _ = TT.transexp env0 `InOp ue xe in
+               let loc = EcLocation.mergeall (List.map EcLocation.loc x) in
+              ((x, PGTY_Type xty), Some (mk_loc loc xe))
           | _ ->
               ((x, xty), None)
-        in List.split (List.map do1 ax.pa_vars)
-      in
-        (TT.trans_gbinding env ue args, wexprs)
+        in List.split (List.map do1 ax.pa_vars) in
+
+      let env, args = TT.trans_gbinding_r env ue args in
+
+      (env, args, wexprs) in
+
+    let dowtype1 ((axs, aty), wexpr) =
+      match wexpr with
+      | None ->
+         []
+
+      | Some { pl_desc = wexpr; pl_loc = loc } -> begin
+          let wdecl =
+            match aty with
+            | EcFol.GTty aty ->
+               EcEnv.Ty.get_normed_wdep_decl aty env
+            | _ ->
+               None in
+
+          match wdecl with
+          | None ->
+             hierror ~loc "only weak dependent types can be applied to expressions"
+
+          | Some wdecl ->
+             let dom   =  EcFol.gty_as_ty aty in
+             let codom = wdecl.tydp_optype in
+
+             (try  EcUnify.unify env ue wexpr.e_ty codom
+              with EcUnify.UnificationFailure _ ->
+                hierror ~loc "invalid type for weak argument");
+
+             let mkform x =
+               let form = EcFol.f_op wdecl.tydp_opname [] (tfun dom codom) in
+               let form = EcFol.f_app form [EcFol.f_local x dom] codom in
+               let form = EcFol.f_eq form (EcFol.form_of_expr EcFol.mhr wexpr) in
+               form in
+
+             List.map mkform axs
+        end
     in
 
+    let wforms = List.flatten (List.map dowtype1 (List.combine args wexprs)) in
+
     let concl = TT.trans_prop env ue ax.pa_formula in
-
-    (* Add the constraints for wdependent types *)
-
-    let concl = EcFol.f_forall args concl in
+    let concl = EcFol.f_imps wforms concl in
+    let concl = EcFol.f_forall (TT.flatten_gbinding args) concl in
     let concl =
       EcFol.f_forall
         (List.map (fun (x, xty) -> (x, EcFol.GTty xty)) wparams)

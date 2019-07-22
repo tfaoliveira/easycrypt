@@ -322,6 +322,10 @@ module Ty : sig
   val unfold  : path -> EcTypes.ty list -> env -> EcTypes.ty
   val hnorm   : EcTypes.ty -> env -> EcTypes.ty
 
+  val get_normed_decl : EcTypes.ty -> env -> (t * ty list) option
+
+  val get_normed_wdep_decl : EcTypes.ty -> env -> EcDecl.ty_dptype option
+
   val decompose_fun : EcTypes.ty -> env -> EcTypes.dom * EcTypes.ty
 
   val scheme_of_ty :

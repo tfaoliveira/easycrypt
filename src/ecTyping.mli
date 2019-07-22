@@ -135,6 +135,12 @@ val transtvi : env -> EcUnify.unienv -> ptyannot -> EcUnify.tvar_inst
 val trans_binding : env -> EcUnify.unienv -> ptybindings ->
   env * (EcIdent.t * EcTypes.ty) list
 
+val trans_gbinding_r : env -> EcUnify.unienv -> pgtybindings ->
+  env * (EcIdent.t list * EcFol.gty) list
+
+val flatten_gbinding :
+  (EcIdent.t list * EcFol.gty) list -> (EcIdent.t * EcFol.gty) list
+
 val trans_gbinding : env -> EcUnify.unienv -> pgtybindings ->
   env * (EcIdent.t * EcFol.gty) list
 

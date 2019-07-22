@@ -1440,6 +1440,20 @@ module Ty = struct
       | _ -> (List.rev acc, ty)
     in fun ty -> doit [] ty
 
+  let get_normed_decl ty env =
+    match (hnorm ty env).ty_node with
+    | Tconstr (p, tys) ->
+        Some (by_path p env, tys)
+    | _ ->
+       None
+
+  let get_normed_wdep_decl ty env =
+    match get_normed_decl ty env with
+    | Some ({ tyd_type = `WDependent decl }, []) ->
+       Some decl
+    | _ ->
+       None
+
   let scheme_of_ty mode (ty : ty) (env : env) =
     let ty = hnorm ty env in
       match ty.ty_node with

@@ -1736,6 +1736,9 @@ let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
     | `Concrete ty ->
         Format.fprintf fmt " =@ %a" (pp_type ppe) ty
 
+    | `WDependent { tydp_opname = opn } ->
+        Format.fprintf fmt "%a" pp_opname (PPEnv.op_symb ppe opn None)
+
     | `Datatype { tydt_ctors = cs } ->
         let pp_ctor fmt (c, cty) =
           match cty with
