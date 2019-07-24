@@ -1524,6 +1524,13 @@ rec_field_def:
 | LBRACE fields=rlist1(rec_field_def, SEMICOLON) SEMICOLON? RBRACE
     { fields }
 
+%inline dptype_def:
+| ld = lident COLON te=loc(type_exp) { (ld, te) }
+
+dependtype_def:
+| LBRACE dptypes=plist1(dptype_def, COMMA) PIPE f=plist1(form, COMMA) RBRACE
+    { (dptypes, f) }
+
 typedecl:
 | TYPE td=rlist1(tyd_name, COMMA)
     { List.map (mk_tydecl^~ (PTYD_Abstract [])) td }
@@ -1540,14 +1547,17 @@ typedecl:
 | TYPE td=tyd_name EQ te=datatype_def
     { [mk_tydecl td (PTYD_Datatype te)] }
 
-| TYPE td=tyd_name EQ LBRACE
+| TYPE td=tyd_name EQ te=dependtype_def
+    { [mk_tydecl td (PTYD_Dependtype te)] } (* FIXME *)
+
+(*| TYPE td=tyd_name EQ LBRACE
     ld=lident COLON te=loc(type_exp)
     PIPE f=form
   RBRACE
     { [mk_tydecl td (PTYD_Dependtype {
          ptd_name = ld;
          ptd_type = te;
-         ptd_form = f ; })] }
+         ptd_form = f ; })] }*) (* FIXME *)
 
 (* -------------------------------------------------------------------- *)
 (* Type classes                                                         *)
@@ -1770,12 +1780,6 @@ nt_arg1:
 nt_bindings:
 | DASHLT bd=plist0(nt_binding1, COMMA) GT
     { bd }
-
-(* when including lists *)
-(*
-| LPAREN wdep = plist0(nt_binding2, COMMA) RPAREN
-    { wdep }
-*)
 
 notation:
 | NOTATION x=loc(NOP) tv=tyvars_decl? bd=nt_bindings?

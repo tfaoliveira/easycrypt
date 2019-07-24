@@ -275,15 +275,15 @@ and pdatatype = (psymbol * pty list) list
 
 and precord = (psymbol * pty) list
 
-(* TO DO !!! *)
+(* FIXME *)
 
-and pdependtype = {
+(*and pdependtype = {
   ptd_name : psymbol;
   ptd_type : pty;
   ptd_form : pformula;
-}
+}*)
 
-(* and pdependtype = (psymbol * pty) pformula *)
+and pdependtype = (psymbol * pty) list * (pformula list)
 
 (* -------------------------------------------------------------------- *)
 let rec pf_ident ?(raw = false) f =

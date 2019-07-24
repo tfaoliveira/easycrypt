@@ -1954,7 +1954,7 @@ module Ty = struct
     in bind scope (unloc name, tydecl)
 
 (* -------------------------------------------------------------------- *)
-                               (*  TO DO !!!  *)
+                               (*  FIXME  *)
   let add_dependtype (scope : scope) (tydname : ptydname) dnt =
     assert (scope.sc_pr_uc = None);
 
@@ -1967,13 +1967,16 @@ module Ty = struct
     let tyname = EcPath.pqname (path scope) (unloc name) in
     let ty     = EcTypes.tconstr tyname [] in
 
-    let ue     = EcUnify.UniEnv.create (Some []) in
-    let opty   = TT.transty TT.tp_relax scope.sc_env ue dnt.ptd_type in
-    let oppath = EcPath.pqname (path scope) (unloc dnt.ptd_name) in
+    let ptd_vars, ptd_form = List.split(dnt) in
+    let ptd_name, ptd_type = List.split(ptd_vars) in
 
-    let opid   = EcIdent.create (unloc dnt.ptd_name) in
+    let ue     = EcUnify.UniEnv.create (Some []) in
+    let opty   = TT.transty TT.tp_relax scope.sc_env ue ptd_type in
+    let oppath = EcPath.pqname (path scope) (unloc ptd_name) in
+
+    let opid   = EcIdent.create (unloc ptd_name) in
     let env0   = EcEnv.Var.bind_local opid opty scope.sc_env in
-    let ax     = TT.trans_prop env0 ue dnt.ptd_form in
+    let ax     = TT.trans_prop env0 ue ptd_form in
 
     let ax     =
       let the   = EcIdent.create ("the_" ^ unloc name) in
@@ -1987,7 +1990,7 @@ module Ty = struct
     let axname = "wdep_" ^ (unloc name) in
 
     let tydecl =
-      let oppath = EcPath.pqname (path scope) (unloc dnt.ptd_name) in
+      let oppath = EcPath.pqname (path scope) (unloc ptd_name) in
         { tyd_params = [];
           tyd_type   = `WDependent {
                            tydp_opname = oppath;
