@@ -1249,8 +1249,8 @@ type_exp:
 | ty1=loc(type_exp) RARROW ty2=loc(type_exp)
     { PTfun (ty1, ty2) }
 
-| ty=loc(simpl_type_exp) LBRACKET e=expr RBRACKET
-    { PTwdep (ty, e) }
+| ty=loc(simpl_type_exp) LBRACKET es=plist1(expr, COMMA) RBRACKET
+    { PTwdep (ty, es) }
 
 (* -------------------------------------------------------------------- *)
 (* Parameter declarations                                              *)
@@ -1524,12 +1524,12 @@ rec_field_def:
 | LBRACE fields=rlist1(rec_field_def, SEMICOLON) SEMICOLON? RBRACE
     { fields }
 
-%inline dptype_def:
-| ld = lident COLON te=loc(type_exp) { (ld, te) }
-
-dependtype_def:
-| LBRACE dptypes=plist1(dptype_def, COMMA) PIPE f=plist1(form, COMMA) RBRACE
-    { (dptypes, f) }
+%inline wdependent_def:
+| LBRACE
+    ptd_ops=plist1(ld=lident COLON te=loc(type_exp) { (ld, te) }, COMMA)
+    PIPE ptd_forms=plist1(form, COMMA)
+  RBRACE
+    { { ptd_ops; ptd_forms; } }
 
 typedecl:
 | TYPE td=rlist1(tyd_name, COMMA)
@@ -1547,17 +1547,8 @@ typedecl:
 | TYPE td=tyd_name EQ te=datatype_def
     { [mk_tydecl td (PTYD_Datatype te)] }
 
-| TYPE td=tyd_name EQ te=dependtype_def
-    { [mk_tydecl td (PTYD_Dependtype te)] } (* FIXME *)
-
-(*| TYPE td=tyd_name EQ LBRACE
-    ld=lident COLON te=loc(type_exp)
-    PIPE f=form
-  RBRACE
-    { [mk_tydecl td (PTYD_Dependtype {
-         ptd_name = ld;
-         ptd_type = te;
-         ptd_form = f ; })] }*) (* FIXME *)
+| TYPE td=tyd_name EQ wt=wdependent_def
+    { [mk_tydecl td (PTYD_Dependtype wt)] }
 
 (* -------------------------------------------------------------------- *)
 (* Type classes                                                         *)
@@ -1634,7 +1625,6 @@ tyvars_decl:
 
 | LBRACKET tyvars=rlist2(tident , empty) RBRACKET
     { List.map (fun x -> (x, [])) tyvars }
-
 
 wparam:
 | x=ident COLON ty=loc(type_exp)

@@ -1736,8 +1736,10 @@ let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
     | `Concrete ty ->
         Format.fprintf fmt " =@ %a" (pp_type ppe) ty
 
-    | `WDependent { tydp_opname = opn } ->
-        Format.fprintf fmt "%a" pp_opname (PPEnv.op_symb ppe opn None)
+    | `WDependent { tydp_ops = opn } ->
+        Format.fprintf fmt "%a"
+          (pp_list ",@ " pp_opname)
+          (List.map (fun (p, _) -> PPEnv.op_symb ppe p None) opn)
 
     | `Datatype { tydt_ctors = cs } ->
         let pp_ctor fmt (c, cty) =

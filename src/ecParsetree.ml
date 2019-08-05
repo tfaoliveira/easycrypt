@@ -59,7 +59,7 @@ type pty_r =
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
-  | PTwdep   of pty * pexpr
+  | PTwdep   of pty * pexpr list
 and pty = pty_r located
 
 and ptyannot_r =
@@ -275,15 +275,10 @@ and pdatatype = (psymbol * pty list) list
 
 and precord = (psymbol * pty) list
 
-(* FIXME *)
-
-(*and pdependtype = {
-  ptd_name : psymbol;
-  ptd_type : pty;
-  ptd_form : pformula;
-}*)
-
-and pdependtype = (psymbol * pty) list * (pformula list)
+and pdependtype = {
+  ptd_ops   : (psymbol * pty) list;
+  ptd_forms : pformula list;
+}
 
 (* -------------------------------------------------------------------- *)
 let rec pf_ident ?(raw = false) f =

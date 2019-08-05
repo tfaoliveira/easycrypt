@@ -41,9 +41,8 @@ and ty_dtype = {
 }
 
 and ty_dptype = {
-  tydp_opname : EcPath.path;
-  tydp_optype : EcTypes.ty;
-  tydp_axiom  : EcCoreFol.form;
+  tydp_ops    : (EcPath.path * EcTypes.ty) list;
+  tydp_axioms : EcCoreFol.form list;
 }
 
 let tydecl_as_concrete (td : tydecl) =

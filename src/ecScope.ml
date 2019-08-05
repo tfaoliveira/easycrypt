@@ -889,10 +889,10 @@ module Ax = struct
       let args, wexprs =
         let do1 (x, xty) =
           match xty with
-          | PGTY_Type { pl_desc = PTwdep (xty, xe) } ->
-               let xe, _ = TT.transexp env0 `InOp ue xe in
+          | PGTY_Type { pl_desc = PTwdep (xty, xes) } ->
+               let xes, _ = List.split (List.map (TT.transexp env0 `InOp ue) xes) in
                let loc = EcLocation.mergeall (List.map EcLocation.loc x) in
-              ((x, PGTY_Type xty), Some (mk_loc loc xe))
+              ((x, PGTY_Type xty), Some (mk_loc loc xes))
           | _ ->
               ((x, xty), None)
         in List.split (List.map do1 ax.pa_vars) in
@@ -901,12 +901,12 @@ module Ax = struct
 
       (env, args, wexprs) in
 
-    let dowtype1 ((axs, aty), wexpr) =
-      match wexpr with
+    let dowtype1 ((axs, aty), wexprs) =
+      match wexprs with
       | None ->
          []
 
-      | Some { pl_desc = wexpr; pl_loc = loc } -> begin
+      | Some { pl_desc = wexprs; pl_loc = loc } -> begin
           let wdecl =
             match aty with
             | EcFol.GTty aty ->
@@ -919,20 +919,27 @@ module Ax = struct
              hierror ~loc "only weak dependent types can be applied to expressions"
 
           | Some wdecl ->
-             let dom   =  EcFol.gty_as_ty aty in
-             let codom = wdecl.tydp_optype in
+             let dom    = EcFol.gty_as_ty aty in
+             let codoms = List.snd wdecl.tydp_ops in
 
-             (try  EcUnify.unify env ue wexpr.e_ty codom
-              with EcUnify.UnificationFailure _ ->
-                hierror ~loc "invalid type for weak argument");
+             if List.length codoms <> List.length wexprs then
+               hierror ~loc "invalid number of arguments";
+
+             List.iteri (fun i (codom, wexpr) ->
+               try  EcUnify.unify env ue wexpr.e_ty codom
+               with EcUnify.UnificationFailure _ ->
+                 hierror ~loc "invalid type for weak argument %d" i)
+             (List.combine codoms wexprs);
 
              let mkform x =
-               let form = EcFol.f_op wdecl.tydp_opname [] (tfun dom codom) in
-               let form = EcFol.f_app form [EcFol.f_local x dom] codom in
-               let form = EcFol.f_eq form (EcFol.form_of_expr EcFol.mhr wexpr) in
-               form in
+               let for1 (oppath, opty) wexpr =
+                 let form = EcFol.f_op oppath [] (tfun dom opty) in
+                 let form = EcFol.f_app form [EcFol.f_local x dom] opty in
+                 let form = EcFol.f_eq form (EcFol.form_of_expr EcFol.mhr wexpr) in
+                 form in
+               List.map2 for1 wdecl.tydp_ops wexprs in
 
-             List.map mkform axs
+             List.flatten (List.map mkform axs)
         end
     in
 
@@ -1954,7 +1961,6 @@ module Ty = struct
     in bind scope (unloc name, tydecl)
 
 (* -------------------------------------------------------------------- *)
-                               (*  FIXME  *)
   let add_dependtype (scope : scope) (tydname : ptydname) dnt =
     assert (scope.sc_pr_uc = None);
 
@@ -1966,55 +1972,62 @@ module Ty = struct
 
     let tyname = EcPath.pqname (path scope) (unloc name) in
     let ty     = EcTypes.tconstr tyname [] in
-
-    let ptd_vars, ptd_form = List.split(dnt) in
-    let ptd_name, ptd_type = List.split(ptd_vars) in
-
     let ue     = EcUnify.UniEnv.create (Some []) in
-    let opty   = TT.transty TT.tp_relax scope.sc_env ue ptd_type in
-    let oppath = EcPath.pqname (path scope) (unloc ptd_name) in
 
-    let opid   = EcIdent.create (unloc ptd_name) in
-    let env0   = EcEnv.Var.bind_local opid opty scope.sc_env in
-    let ax     = TT.trans_prop env0 ue ptd_form in
+    let env0, ops =
+      List.fold_left_map (fun env0 (opname, opty) ->
+          let opty   = TT.transty TT.tp_relax scope.sc_env ue opty in
+          let oppath = EcPath.pqname (path scope) (unloc opname) in
+          let opid   = EcIdent.create (unloc opname) in
+          let env0   = EcEnv.Var.bind_local opid opty env0 in
+          (env0, (opty, oppath, opid))
+        ) (env scope) dnt.ptd_ops in
 
-    let ax     =
-      let the   = EcIdent.create ("the_" ^ unloc name) in
-      let opthe = EcFol.f_app
-                    (EcFol.f_op oppath [] (tfun ty opty))
-                    [EcFol.f_local the ty]
-                    opty in
-      let ax = EcFol.Fsubst.subst_locals (Mid.singleton opid opthe) ax in
-      EcFol.f_forall [(the, GTty ty)] ax in
+    let the = EcIdent.create ("the_" ^ unloc name) in
 
-    let axname = "wdep_" ^ (unloc name) in
+    let subst =
+        List.fold_left (fun subst (opty, oppath, opid) ->
+          let opthe =
+            EcFol.f_app
+              (EcFol.f_op oppath [] (tfun ty opty))
+              [EcFol.f_local the ty]
+              opty in
+          (EcFol.Fsubst.f_bind_local subst opid opthe)
+       ) EcFol.Fsubst.f_subst_id ops in
+
+    let axs = List.map (fun ax ->
+        let ax = TT.trans_prop env0 ue ax in
+        EcFol.f_forall [(the, GTty ty)] (EcFol.Fsubst.f_subst subst ax)
+      ) dnt.ptd_forms in
 
     let tydecl =
-      let oppath = EcPath.pqname (path scope) (unloc ptd_name) in
-        { tyd_params = [];
-          tyd_type   = `WDependent {
-                           tydp_opname = oppath;
-                           tydp_optype = opty  ;
-                           tydp_axiom  = ax    ;
-                         };
-        } in
+      let infos = {
+        tydp_ops    = List.map (fun (ty, p, _) -> (p, ty)) ops;
+        tydp_axioms = axs;
+      } in { tyd_params = []; tyd_type = `WDependent infos; } in
 
-    let opdecl = EcDecl.{
-      op_tparams = [];
-      op_ty      = tfun ty opty;
-      op_kind    = OB_oper None;
-    } in
+    let opdecls = List.map (fun (opty, oppath, _) ->
+      let decl =
+        EcDecl.{
+          op_tparams = [];
+          op_ty      = tfun ty opty;
+          op_kind    = OB_oper None;
+        }
+      in (EcPath.basename oppath, decl)) ops in
 
-    let axdecl = {
-      ax_tparams = [];
-      ax_spec    = ax;
-      ax_kind    = `Axiom (Ssym.empty, false);
-      ax_nosmt   = true;
-    } in
+    let axdecls = List.mapi (fun i ax ->
+     let decl =
+       EcDecl.{
+         ax_tparams = [];
+         ax_spec    = ax;
+         ax_kind    = `Axiom (Ssym.empty, false);
+         ax_nosmt   = true;
+       }
+     in (Printf.sprintf "wdep_%s_%d" (unloc name) i, decl)) axs in
 
     let scope = bind scope (unloc name, tydecl) in
-    let scope = Op.bind scope (unloc dnt.ptd_name, opdecl) in
-    let scope = Ax.bind scope false (axname, axdecl) in
+    let scope = List.fold_left Op.bind scope opdecls in
+    let scope = List.fold_left (Ax.bind^~ false) scope axdecls in
 
     scope
 end

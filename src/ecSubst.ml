@@ -326,9 +326,8 @@ let subst_tydecl (s : _subst) (tyd : tydecl) =
     | `WDependent infos ->
         let sty = init_tparams s tyd.tyd_params params' in
         `WDependent {
-          tydp_opname = infos.tydp_opname; (* FIXME *)
-          tydp_optype = sty.s_ty infos.tydp_optype;
-          tydp_axiom  = Fsubst.f_subst (f_subst_of_subst s) infos.tydp_axiom;
+          tydp_ops    = List.map (snd_map sty.s_ty) infos.tydp_ops; (* FIXME *)
+          tydp_axioms = List.map (Fsubst.f_subst (f_subst_of_subst s)) infos.tydp_axioms;
         }
   in
     { tyd_params = params'; tyd_type = body; }
