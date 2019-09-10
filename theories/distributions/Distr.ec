@@ -1160,6 +1160,11 @@ rewrite /f -mulr_sumr ler_pimulr 1:normr_ge0.
 by apply/(@le1_mass_fin d).
 qed.
 
+lemma hasEZ d f (c : real) : hasE<:'a> d f => hasE d (fun x => c * f x).
+proof.
+by move=> /summableZ /( _ c) /= @/hasE; apply eq_summable => /= /#.
+qed.
+
 lemma summable_hasE (d : 'a distr) (f : 'a -> real) :
   summable f => hasE d f.
 proof.
@@ -1189,6 +1194,11 @@ move=> h1 h2; pose f := fun x => f1 x * mass d x + f2 x * mass d x.
 by rewrite /E -(@eq_sum f) /f 1?sumD //= => x; rewrite mulrDl.
 qed.
 
+lemma expZ d f (c : real) : E<:'a> d (fun x => c * f x) = c * E d f.
+proof.
+by rewrite /E -sumZ /=; apply eq_sum => /= x; rewrite mulrA.
+qed.
+
 lemma eq_exp (d : 'a distr) (f g : 'a -> real) :
      (forall x, x \in d => f x = g x)
   => E d f = E d g.
@@ -1214,4 +1224,9 @@ proof.
 move=> hef le_fg; apply/ler_exp => //.
 + by apply/(hasE_le _ hef) => x /#.
 + by move=> x; case: (le_fg x).
+qed.
+
+lemma exp_mu d p : mu<:'a> d p = E d (b2r \o p).
+proof.
+by rewrite /E muE /(\o); apply eq_sum => /= /#.
 qed.

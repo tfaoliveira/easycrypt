@@ -55,6 +55,10 @@ hint exact : e_gt0 e_ge0.
 lemma nosmt exp_neq0 x : exp x <> 0%r.
 proof. by have := (exp_gt0 x); rewrite ltr_neqAle eq_sym => -[]. qed.
 
+lemma nosmt exp_ge0 x : 0%r <= exp x.
+apply ltrW; exact : exp_gt0.
+qed.
+
 lemma nosmt ln0 : ln 0%r = 0%r.
 proof. by rewrite ln_le0. qed.
 
