@@ -94,12 +94,76 @@ lemma addrN (m : 'a zmodule) (x : 'a) :
   (o m) x ((n m) x) = e m.
 proof. by move=> m_zmod x_in_m; rewrite addrC // addNr. qed.
 
-lemma addrK (m : 'a zmodule) (x : 'a) (y : 'a) :
+lemma addrCA (m : 'a zmodule) (x y z : 'a) :
+  iszmodule m =>
+  x \in m => y \in m => z \in m =>
+  (o m) x ((o m) y z) = (o m) y ((o m) x z).
+proof.
+move=> m_zmod x_in_m y_in_m z_in_m.
+by rewrite !addrA // (@addrC _ x y).
+qed.
+
+lemma addrAC (m : 'a zmodule) (x y z : 'a) :
+  iszmodule m =>
+  x \in m => y \in m => z \in m =>
+  (o m) ((o m) x y) z = (o m) ((o m) x z) y.
+proof.
+move=> m_zmod x_in_m y_in_m z_in_m.
+by rewrite -!addrA // (@addrC _ y z).
+qed.
+
+lemma addrACA (m : 'a zmodule) (x y z t : 'a) :
+  iszmodule m =>
+  x \in m => y \in m => z \in m => t \in m =>
+  (o m) ((o m) x y) ((o m) z t) = (o m) ((o m) x z) ((o m) y t).
+proof.
+move=> m_zmod x_in_m y_in_m z_in_m t_in_m.
+by rewrite -!addrA // (@addrCA _ y z).
+qed.
+
+lemma addKr (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (o m) ((n m) x) ((o m) x y) = y.
+proof.
+move=> m_zmod x_in_m y_in_m.
+by rewrite addrA // addNr // add0r.
+qed.
+
+lemma addNKr (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (o m) x ((o m) ((n m) x) y) = y.
+proof.
+move=> m_zmod x_in_m y_in_m.
+by rewrite addrA // addrN // add0r.
+qed.
+
+lemma addrK (m : 'a zmodule) (x y : 'a) :
   iszmodule m =>
   x \in m => y \in m =>
   (o m) ((o m) x y) ((n m) y) = x.
 proof.
-by move=> m_zmod x_in_m y_in_m; rewrite -addrA // addrN // addr0.
+move=> m_zmod x_in_m y_in_m.
+by rewrite -addrA // addrN // addr0.
+qed.
+
+lemma addrNK (m : 'a zmodule) (y x : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (o m) ((o m) x ((n m) y)) y = x.
+proof.
+move=> m_zmod x_in_m y_in_m.
+by rewrite -addrA // addNr // addr0.
+qed.
+
+lemma addrI (m : 'a zmodule) (x y y' : 'a) :
+  iszmodule m =>
+  x \in m => y \in m => y' \in m =>
+  (o m) x y = (o m) x y' => y = y'.
+proof.
+move=> m_zmod x_in_m y_in_m z_in_m h.
+by rewrite -(@addKr m x y') // -h addKr.
 qed.
 
 lemma addIr (m : 'a zmodule) (y x x' : 'a) :
@@ -121,12 +185,52 @@ move=> m_zmod x_in_m; apply (@addIr m (n m x))=> //.
 by rewrite addNr // addrN.
 qed.
 
+lemma oppr_inj (m : 'a zmodule) (x x' : 'a) :
+  iszmodule m =>
+  x \in m => x' \in m =>
+  (n m) x = (n m) x' => x = x'.
+proof.
+move=> m_zmod x_in_m x'_in_m h.
+by apply/(addIr m (n m x))=> //; rewrite addrN // h addrN.
+qed.
+
 lemma oppr0 (m : 'a zmodule) :
   iszmodule m =>
   (n m) (e m) = e m.
 proof.
 move=> m_zmod.
 by rewrite -(@addr0 m ((n m) (e m))) ?addNr ?opprM ?erM.
+qed.
+
+lemma oppr_eq0 (m : 'a zmodule) (x : 'a) :
+  iszmodule m =>
+  x \in m =>
+  (n m) x = e m <=> x = e m.
+proof.
+move=> m_zmod x_in_m.
+split=> [|->>]; last by exact/oppr0.
+by move/(congr1 (n m)); rewrite opprK // oppr0.
+qed.
+
+lemma opprD (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (n m) ((o m) x y) = (o m) ((n m) x) ((n m) y).
+proof.
+move=> m_zmod x_in_m y_in_m.
+apply/(@addrI m ((o m) x y))=> //.
++ by rewrite opprM.
++ by rewrite addrM.
+by rewrite addrA // addrN // addrAC // addrK // addrN.
+qed.
+
+lemma opprB (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (n m) ((o m) x ((n m) y)) = (o m) y ((n m) x).
+proof.
+move=> m_zmod x_in_m y_in_m.
+by rewrite opprD // opprK // addrC.
 qed.
 
 (** And some derived operations **)
