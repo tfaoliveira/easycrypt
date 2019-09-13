@@ -66,21 +66,21 @@ val menv_is_full    : match_env -> bool
 
 (* -------------------------------------------------------------------------- *)
 module Translate : sig
-  exception Invalid_Type of string
+  exception Invalid_Type of pattern
 
   val form_of_pattern      : EcEnv.env -> pattern -> form
-  val memory_of_pattern    : pattern -> EcMemory.memory
-  val memenv_of_pattern    : pattern -> EcMemory.memenv
+  val memory_of_pattern    : EcEnv.env -> pattern -> EcMemory.memory
+  val memenv_of_pattern    : EcEnv.env -> pattern -> EcMemory.memenv
   val prog_var_of_pattern  : EcEnv.env -> pattern -> EcTypes.prog_var
   val xpath_of_pattern     : EcEnv.env -> pattern -> EcPath.xpath
   val mpath_of_pattern     : EcEnv.env -> pattern -> EcPath.mpath
   val mpath_top_of_pattern : EcEnv.env -> pattern -> EcPath.mpath_top
-  val path_of_pattern      : pattern -> EcPath.path
+  val path_of_pattern      : EcEnv.env -> pattern -> EcPath.path
   val stmt_of_pattern      : EcEnv.env -> pattern -> EcModules.stmt
   val instr_of_pattern     : EcEnv.env -> pattern -> EcModules.instr list
   val lvalue_of_pattern    : EcEnv.env -> pattern -> EcModules.lvalue
   val expr_of_pattern      : EcEnv.env -> pattern -> EcTypes.expr
-  val cmp_of_pattern       : pattern -> hoarecmp
+  val cmp_of_pattern       : EcEnv.env -> pattern -> hoarecmp
 end
 
 val psubst_of_menv  : match_env -> Psubst.p_subst

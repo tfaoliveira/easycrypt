@@ -2974,7 +2974,6 @@ let pp_ogty ppe fmt = function
   | OGTstmt           -> Format.fprintf fmt "stmt"
   | OGTpv             -> Format.fprintf fmt "pv"
   | OGTxpath          -> Format.fprintf fmt "xpath"
-  | OGTlv             -> Format.fprintf fmt "lv"
   | OGTpath           -> Format.fprintf fmt "path"
   | OGThcmp           -> Format.fprintf fmt "cmp"
 
@@ -3198,6 +3197,11 @@ and pp_pattern ppe fmt p = match p.p_node with
 
      | Sym_Instr_Call, [xp;args] ->
         Format.fprintf fmt "%a(@[%a@]);"
+          (pp_pattern ppe) xp
+          (pp_pattern ppe) args
+     | Sym_Instr_Call, [lv;xp;args] ->
+        Format.fprintf fmt "%a = %a(@[%a@]);"
+          (pp_pattern ppe) lv
           (pp_pattern ppe) xp
           (pp_pattern ppe) args
      | Sym_Instr_Call, _ -> assert false

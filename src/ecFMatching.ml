@@ -739,21 +739,30 @@ let is_modty (env : EcEnv.env) (m : mpath) (mt : module_type) (mr : mod_restr) =
 (* -------------------------------------------------------------------------- *)
 module Translate = struct
 
-  exception Invalid_Type of string
+  exception Invalid_Type of pattern
 
-  let rec form_of_pattern env (p : pattern) =
+  let invalid env p =
+    let gstate  = EcEnv.gstate env in
+    let verbose = EcGState.getflag "debug" gstate in
+    if (if verbose then debug_verbose else env_verbose).verbose_translate_error then
+      let ppe = EcPrinting.PPEnv.ofenv env in
+      EcEnv.notify env `Warning "--!-- Invalid translation in : %a"
+        (EcPrinting.pp_pattern ppe) p
+
+
+  let rec form_of_pattern env (p : pattern) : form =
     match p.p_node with
     | Pat_Meta_Name (Some p,_,_) -> form_of_pattern env p
-    | Pat_Meta_Name (_,_,_)   -> raise (Invalid_Type "formula")
-    | Pat_Sub _               -> raise (Invalid_Type "sub in form")
+    | Pat_Meta_Name (_,_,_)   -> invalid env p; raise (Invalid_Type p)
+    | Pat_Sub _               -> invalid env p; raise (Invalid_Type p)
     | Pat_Or [p]              -> form_of_pattern env p
-    | Pat_Or _                -> raise (Invalid_Type "formula")
+    | Pat_Or _                -> invalid env p; raise (Invalid_Type p)
     | Pat_Red_Strat (p,_)     -> form_of_pattern env p
     | Pat_Axiom (Axiom_Int z) -> f_int z
     | Pat_Axiom (Axiom_Local (id,ty)) -> f_local id ty
     | Pat_Axiom (Axiom_Op (_, op,lty, Some ty)) -> f_op op lty ty
-    | Pat_Axiom _             -> raise (Invalid_Type "formula : other axiom")
-    | Pat_Stmt _              -> raise (Invalid_Type "formula : stmt")
+    | Pat_Axiom _             -> invalid env p; raise (Invalid_Type p)
+    | Pat_Stmt _              -> invalid env p; raise (Invalid_Type p)
     | Pat_Fun_Symbol (s, lp)  ->
        match s, lp with
        | Sym_Form_If, [p1;p2;p3]   -> f_if (form_of_pattern env p1)
@@ -769,87 +778,96 @@ module Translate = struct
        | Sym_Form_Let lp, [p1;p2]  -> f_let lp (form_of_pattern env p1)
                                         (form_of_pattern env p2)
        | Sym_Form_Pvar ty, [pv;pm] -> f_pvar (prog_var_of_pattern env pv) ty
-                                        (memory_of_pattern pm)
-       | Sym_Form_Prog_var _, _    -> raise (Invalid_Type "formula : prog_var")
-       | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp) (memory_of_pattern mem)
+                                        (memory_of_pattern env pm)
+       | Sym_Form_Prog_var _, _    -> invalid env p; raise (Invalid_Type p)
+       | Sym_Form_Glob, [mp;mem]   -> f_glob (mpath_of_pattern env mp)
+                                        (memory_of_pattern env mem)
        | Sym_Form_Hoare_F, [pr;xp;po] ->
-          f_hoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
+          f_hoareF (form_of_pattern env pr)
+            (xpath_of_pattern env xp) (form_of_pattern env po)
        | Sym_Form_Hoare_S, [pm;pr;s;po] ->
-          f_hoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
-            (form_of_pattern env po)
+          f_hoareS (memenv_of_pattern env pm) (form_of_pattern env pr)
+            (stmt_of_pattern env s) (form_of_pattern env po)
        | Sym_Form_bd_Hoare_F, [pr;xp;po;cmp;bd] ->
-          f_bdHoareF (form_of_pattern env pr) (xpath_of_pattern env xp) (form_of_pattern env po)
-            (cmp_of_pattern cmp) (form_of_pattern env bd)
+          f_bdHoareF (form_of_pattern env pr) (xpath_of_pattern env xp)
+            (form_of_pattern env po) (cmp_of_pattern env cmp)
+            (form_of_pattern env bd)
        | Sym_Form_bd_Hoare_S, [pm;pr;s;po;cmp;bd] ->
-          f_bdHoareS (memenv_of_pattern pm) (form_of_pattern env pr) (stmt_of_pattern env s)
-            (form_of_pattern env po) (cmp_of_pattern cmp) (form_of_pattern env bd)
+          f_bdHoareS (memenv_of_pattern env pm) (form_of_pattern env pr) (stmt_of_pattern env s)
+            (form_of_pattern env po) (cmp_of_pattern env cmp) (form_of_pattern env bd)
        | Sym_Form_Equiv_F, [pr;f1;f2;po] ->
           f_equivF (form_of_pattern env pr) (xpath_of_pattern env f1) (xpath_of_pattern env f2)
             (form_of_pattern env po)
        | Sym_Form_Equiv_S, [pm1;pm2;pr;s1;s2;po] ->
-          f_equivS (memenv_of_pattern pm1) (memenv_of_pattern pm2) (form_of_pattern env pr)
+          f_equivS (memenv_of_pattern env pm1) (memenv_of_pattern env pm2) (form_of_pattern env pr)
             (stmt_of_pattern env s1) (stmt_of_pattern env s2) (form_of_pattern env po)
        | Sym_Form_Eager_F, [po;s1;f1;f2;s2;pr] ->
           f_eagerF (form_of_pattern env po) (stmt_of_pattern env s1) (xpath_of_pattern env f1)
             (xpath_of_pattern env f2) (stmt_of_pattern env s2) (form_of_pattern env pr)
        | Sym_Form_Pr, [pm;f;args;event] ->
-          f_pr (memory_of_pattern pm) (xpath_of_pattern env f) (form_of_pattern env args)
+          f_pr (memory_of_pattern env pm) (xpath_of_pattern env f) (form_of_pattern env args)
             (form_of_pattern env event)
        | Sym_Quant (q,pb), [p] ->
           let f (id,ogt) = match gty_of_ogty ogt with
             | Some gty -> id, gty
-            | _        -> raise (Invalid_Type "formula : quant binds")
+            | _        -> invalid env p; raise (Invalid_Type p)
           in
           f_quant q (List.map f pb) (form_of_pattern env p)
-       | _ -> raise (Invalid_Type "formula : other fun symbol")
+       | _ -> invalid env p; raise (Invalid_Type p)
 
-  and memory_of_pattern p = match p.p_node with
+  and memory_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Memory m) -> m
-    | _ -> raise (Invalid_Type "memory")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and prog_var_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Prog_Var pv) -> pv
     | Pat_Fun_Symbol (Sym_Form_Prog_var k, [xp]) ->
        pv (xpath_of_pattern env xp) k
-    | _ -> raise (Invalid_Type "prog_var")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and xpath_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Xpath xp) -> xp
     | Pat_Fun_Symbol (Sym_Xpath, [mp;p]) ->
-       EcPath.xpath (mpath_of_pattern env mp) (path_of_pattern p)
-    | _ -> raise (Invalid_Type "xpath")
+       EcPath.xpath (mpath_of_pattern env mp) (path_of_pattern env p)
+    | _ -> invalid env p; raise (Invalid_Type p)
 
-  and path_of_pattern p = match p.p_node with
+  and path_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Op (_, p,[],_)) -> p
-    | _ -> raise (Invalid_Type "path")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and mpath_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Mpath mp) -> mp
     | Pat_Fun_Symbol (Sym_Mpath, mp::margs) ->
        mpath (mpath_top_of_pattern env mp) (List.map (mpath_of_pattern env) margs)
-    | _ -> raise (Invalid_Type "mpath")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
-  and mpath_top_of_pattern _env p = match p.p_node with
+  and mpath_top_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Mpath_top m) -> m
-    | _ -> raise (Invalid_Type "mpath_top")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
-  and memenv_of_pattern p = match p.p_node with
+  and memenv_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_MemEnv m) -> m
-    | _ -> raise (Invalid_Type "memenv")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and stmt_of_pattern env p = match p.p_node with
     | Pat_Stmt g -> stmt (list_of_gen_pattern env g)
-    | _ -> raise (Invalid_Type "stmt")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and list_of_gen_pattern env g = match g with
     | Anchor _     -> []
-    | Any          -> raise (Invalid_Type "gen_stmt : any")
+    | Any          ->
+       let p = meta_var (EcIdent.create "any_stmt") None OGTstmt in
+       invalid env p; raise (Invalid_Type p)
     | Base p       -> instr_of_pattern env p
     | Choice [g]   -> list_of_gen_pattern env g
-    | Choice _     -> raise (Invalid_Type "gen_stmt : choice")
+    | Choice _     ->
+       let p = meta_var (EcIdent.create "More or less than one choice") None OGTstmt in
+       invalid env p; raise (Invalid_Type p)
     | Named (Any, name) -> [i_abstract name]
     | Named (g, _) -> list_of_gen_pattern env g
-    | Repeat _     -> raise (Invalid_Type "gen_stmt : repeat")
+    | Repeat _     ->
+       let p = meta_var (EcIdent.create "repeat") None OGTstmt in
+       invalid env p; raise (Invalid_Type p)
     | Seq l        -> List.flatten (List.map (list_of_gen_pattern env) l)
 
   and instr_of_pattern env p = match p.p_node with
@@ -862,6 +880,16 @@ module Translate = struct
          | Pat_Fun_Symbol (Sym_Form_Tuple, lp) -> lp
          | _ -> [args] in
        [i_call (None, xpath_of_pattern env f, List.map (expr_of_pattern env) args)]
+    | Pat_Fun_Symbol (Sym_Instr_Call, [{ p_node = Pat_Meta_Name (None, id, None)};f;args])
+         when EcIdent.name id = "$anything" ->
+       instr_of_pattern env (p_call None f args)
+    | Pat_Fun_Symbol (Sym_Instr_Call, [lv;f;args]) ->
+       let args = match args.p_node with
+         | Pat_Fun_Symbol (Sym_Form_Tuple, lp) -> lp
+         | _ -> [args] in
+       [i_call (Some (lvalue_of_pattern env lv),
+                xpath_of_pattern env f,
+                List.map (expr_of_pattern env) args)]
     | Pat_Fun_Symbol (Sym_Instr_If, [cond;s1;s2]) ->
        [i_if (expr_of_pattern env cond, stmt_of_pattern env s1, stmt_of_pattern env s2)]
     | Pat_Fun_Symbol (Sym_Instr_While, [cond;s]) ->
@@ -869,39 +897,32 @@ module Translate = struct
     | Pat_Fun_Symbol (Sym_Instr_Assert, [e]) ->
        [i_assert (expr_of_pattern env e)]
     | Pat_Stmt g -> list_of_gen_pattern env g
-    | _ -> raise (Invalid_Type "instr")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and lvalue_of_pattern env p =
-    match p.p_ogty with
-    | OGTlv -> begin
-        match p.p_node with
-        | Pat_Axiom (Axiom_Lvalue lv) -> lv
-        | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
-           let t = List.map (lvalue_of_pattern env) t in
-           let t = List.map (function LvVar (x,t) -> (x,t)
-                                    | _ -> raise (Invalid_Type "lvalue tuple")) t in
-           LvTuple t
-        | _ -> raise (Invalid_Type "lvalue")
-      end
-    | _ -> raise (Invalid_Type "lvalue")
+    match p.p_node with
+    | Pat_Axiom (Axiom_Lvalue lv) -> lv
+    | Pat_Fun_Symbol (Sym_Form_Tuple, t) ->
+       let t = List.map (lvalue_of_pattern env) t in
+       let t = List.map (function LvVar (x,t) -> (x,t)
+                                | _ -> invalid env p; raise (Invalid_Type p)) t in
+       LvTuple t
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   and expr_of_pattern env p =
     try match expr_of_form (form_of_pattern env p) with
         | Some e -> e
-        | None -> raise (Invalid_Type "expr from form")
+        | None -> invalid env p; raise (Invalid_Type p)
     with
-    | Invalid_Type s -> raise (Invalid_Type (String.concat " in " [s;"expr"]))
+    | Invalid_Type p -> invalid env p; raise (Invalid_Type p)
 
-  and cmp_of_pattern p = match p.p_node with
+  and cmp_of_pattern env p = match p.p_node with
     | Pat_Axiom (Axiom_Hoarecmp cmp) -> cmp
-    | _ -> raise (Invalid_Type "hoarecmp")
+    | _ -> invalid env p; raise (Invalid_Type p)
 
   let form_of_pattern env p =
     match p.p_node with
-    | Pat_Sub p -> begin
-        try form_of_pattern env p with
-        | Invalid_Type "sub in form" -> assert false
-      end
+    | Pat_Sub p -> form_of_pattern env p
     | _ -> form_of_pattern env p
 
 end
@@ -1066,7 +1087,7 @@ end = struct
        (try_translate_eq (form env ri)
           (Translate.form_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
     || (try_translate_eq (memory env)
-          Translate.memory_of_pattern p1 p2)
+          (Translate.memory_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
     || (try_translate_eq (mpath env)
           (Translate.mpath_of_pattern (EcEnv.LDecl.toenv env.env_hyps)) p1 p2)
     ||
@@ -1724,6 +1745,25 @@ module PMatching
          Debug.debug_which_rule e.e_env "same fun symbol";
          let e_continuation = Zand ([], List.combine lp1 lp2, e.e_continuation) in
          next Match { e with e_continuation }
+
+      | Pat_Fun_Symbol (Sym_Instr_Call, [{p_node = Pat_Meta_Name (None,id,None)};
+                                         f1;args1]),
+        Pat_Fun_Symbol (Sym_Instr_Call, [f2;args2])
+           when EcIdent.name id = "$anything"
+        (* $anything : same name as in ecTransMatching in function pat_anything *)->
+         let e_continuation = Zand ([], List.combine [f1;args1] [f2;args2],
+                                    e.e_continuation) in
+         next Match { e with e_continuation }
+
+      | Pat_Fun_Symbol (Sym_Instr_Call, [f1;args1]),
+        Pat_Fun_Symbol (Sym_Instr_Call, [{p_node = Pat_Meta_Name (None,id,None)};
+                                         f2;args2])
+           when EcIdent.name id = "$anything"
+        (* $anything : same name as in ecTransMatching in function pat_anything *)->
+         let e_continuation = Zand ([], List.combine [f1;args1] [f2;args2],
+                                    e.e_continuation) in
+         next Match { e with e_continuation }
+
 
       (* Pattern / Axiom *)
       | Pat_Fun_Symbol (Sym_Mpath, p::rest), Pat_Axiom (Axiom_Mpath m) ->
@@ -2421,7 +2461,7 @@ let fsubst_of_menv (me : match_env) (env : env) =
   let bind_pattern id p s =
     try Fsubst.f_bind_local s id (Translate.form_of_pattern env p)
     with Translate.Invalid_Type _ ->
-      try Fsubst.f_bind_mem s id (Translate.memory_of_pattern p)
+      try Fsubst.f_bind_mem s id (Translate.memory_of_pattern env p)
       with Translate.Invalid_Type _ ->
         try Fsubst.f_bind_mod s id (Translate.mpath_of_pattern env p)
         with Translate.Invalid_Type _ -> s in

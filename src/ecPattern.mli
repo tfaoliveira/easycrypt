@@ -21,7 +21,6 @@ type ogty =
   | OGTxpath
   (* | OGTinstr *)
   | OGTstmt
-  | OGTlv
   | OGThcmp
   | OGTpath
   | OGTany

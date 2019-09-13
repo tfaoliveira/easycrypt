@@ -59,7 +59,7 @@ let add_anchors (at_begin, at_end) pattern_sequence =
   Seq pattern_sequence
 
 let pat_anything ogty =
-  meta_var (EcIdent.create " ") None ogty
+  meta_var (EcIdent.create "$anything") None ogty
 
 (*-------------------------------------------------------------------- *)
 let rec trans_block names (anchors, pattern_parsed) =
@@ -72,9 +72,9 @@ let rec trans_block names (anchors, pattern_parsed) =
 and trans_stmt names = function
   | IM_Any      -> names, any_stmt
   | IM_Parens r -> trans_stmt names r
-  | IM_Assign   -> names, Base (p_assign (pat_anything OGTlv) (pat_anything (OGTty None)))
-  | IM_Sample   -> names, Base (p_sample (pat_anything OGTlv) (pat_anything (OGTty None)))
-  | IM_Call     -> names, Base (p_call (Some (pat_anything OGTlv))
+  | IM_Assign   -> names, Base (p_assign (pat_anything (OGTty None)) (pat_anything (OGTty None)))
+  | IM_Sample   -> names, Base (p_sample (pat_anything (OGTty None)) (pat_anything (OGTty None)))
+  | IM_Call     -> names, Base (p_call (Some (pat_anything (OGTty None)))
                                   (pat_anything OGTxpath)
                                   (pat_anything (OGTty None)))
 

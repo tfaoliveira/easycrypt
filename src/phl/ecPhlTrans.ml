@@ -105,11 +105,20 @@ let process_replace_stmt s p c p1 q1 p2 q2 tc =
     | Some m ->
        let m = (EcFMatching.get_n_matches m).EcFMatching.me_matches in
        let m = Mstr.map_filter (fun n -> EcIdent.Mid.find_opt n m) names in
-       let m = Mstr.map_filter
-                 (fun pat ->
-                   try Some (EcFMatching.Translate.stmt_of_pattern
-                               (EcEnv.LDecl.toenv hyps) pat).s_node
-                   with EcFMatching.Translate.Invalid_Type _ -> None) m in
+       let m =
+         let env = EcEnv.LDecl.toenv hyps in
+         Mstr.map_filter
+           (fun pat ->
+             try Some (EcFMatching.Translate.stmt_of_pattern env pat).s_node
+             with EcFMatching.Translate.Invalid_Type p ->
+               let gstate  = EcEnv.gstate env in
+               let verbose = EcGState.getflag "debug" gstate in
+               let ppe = EcPrinting.PPEnv.ofenv env in
+               if verbose then
+                 EcEnv.notify env `Warning "----- translating stmt failed : %a : %a"
+                   (EcPrinting.pp_pattern ppe) p
+                   (EcPrinting.pp_ogty ppe) p.EcPattern.p_ogty;
+               None) m in
        m
   in
   let c = c @ [EcLocation.mk_loc EcLocation._dummy

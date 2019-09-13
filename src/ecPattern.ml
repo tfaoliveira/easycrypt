@@ -22,7 +22,6 @@ type ogty =
   | OGTxpath
   (* | OGTinstr *)
   | OGTstmt
-  | OGTlv
   | OGThcmp
   | OGTpath
   | OGTany
@@ -235,7 +234,7 @@ let pat_mpath m     = mk_pattern (Pat_Axiom (Axiom_Mpath m))       (OGTmodty Non
 let pat_mpath_top m = mk_pattern (Pat_Axiom (Axiom_Mpath_top m))   (OGTmodty None)
 let pat_xpath x     = mk_pattern (Pat_Axiom (Axiom_Xpath x))       OGTxpath
 let pat_op ?(delta:bool=true) op lty o = mk_pattern (Pat_Axiom (Axiom_Op (delta,op,lty,o))) (OGTty o)
-let pat_lvalue lv   = mk_pattern (Pat_Axiom (Axiom_Lvalue lv))     OGTlv
+let pat_lvalue lv   = mk_pattern (Pat_Axiom (Axiom_Lvalue lv))     (OGTty None)
 let pat_local id ty = mk_pattern (Pat_Axiom (Axiom_Local (id,ty))) (OGTty (Some ty))
 let pat_cmp cmp     = mk_pattern (Pat_Axiom (Axiom_Hoarecmp cmp))  OGThcmp
 let pat_pv pv       = mk_pattern (Pat_Axiom (Axiom_Prog_Var pv))   OGTpv
@@ -358,7 +357,7 @@ let p_lvalue_var (p : pattern) (ty : ty) =
   | p -> (* FIXME *) mk_pattern p (OGTty (Some ty))
 
 let p_lvalue_tuple (p : pattern list) =
-  mk_pattern (Pat_Fun_Symbol(Sym_Form_Tuple,p)) OGTlv
+  mk_pattern (Pat_Fun_Symbol(Sym_Form_Tuple,p)) (OGTty None)
 
 let p_pvar (pv : pattern) (ty : ty) (m : pattern) =
   pat_fun_symbol (Sym_Form_Pvar ty) [pv;m]
@@ -516,7 +515,7 @@ and pat_stmt s = p_stmt (List.map pat_instr s.s_node)
 
 and pat_instr i = match i.i_node with
   | Sasgn (lv, e) -> p_assign (pat_lvalue lv) (pat_form (form_of_expr e))
-  | Srnd  (lv, e) -> p_sample (pat_lvalue lv) (pat_form (form_of_expr e))
+  | Srnd (lv, e) -> p_sample (pat_lvalue lv) (pat_form (form_of_expr e))
   | Scall (olv, f, args) -> p_call (omap pat_lvalue olv) (pat_xpath f)
                               (p_tuple (List.map (fun e -> pat_form (form_of_expr e)) args))
   | Sif (e, s1, s2) -> p_instr_if (pat_form (form_of_expr e))
