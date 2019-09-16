@@ -1072,6 +1072,52 @@ qident_or_res_or_glob:
 | x=loc(RES) { GVvar (mk_loc x.pl_loc ([], "res")) }
 | GLOB mp=loc(mod_qident) { GVglob mp }
 
+pfpos:
+| i=sword
+    { `Index i }
+
+| f=bracket(form_h) off=pfoffset?
+    { `Match (f, off) }
+
+pfoffset:
+| PLUS  w=word {  w }
+| MINUS w=word { -w }
+
+pffilter:
+| LBRACKET flat=iboption(SLASH)
+    rg=plist0(
+      i=pfpos? COLON j=pfpos? { `Range (i, j) }
+    | i=pfpos { `Single i }, COMMA)
+  RBRACKET
+
+  { PFRange (flat, rg) }
+
+| LPBRACE flat=iboption(SLASH) x=ident IN h=form_h RPBRACE
+
+  { PFMatch (flat, x, h) }
+
+| LPBRACE flat=iboption(SLASH)
+    f=form FOR xs=plist1(ident, COMMA) IN h=form_h
+  RPBRACE
+
+  { PFMatchBuild (flat, xs, f, h) }
+
+| LBRACE
+    flat=iboption(SLASH)
+    exclude=iboption(TILD)
+    rooted=iboption(HAT)
+    h=pffilter_pattern
+  RBRACE
+
+  { PFKeep (flat, rooted, exclude, h) }
+
+pffilter_pattern:
+| f=form_h
+    { `Pattern f}
+
+| LBRACE xs=plist0(x=qoident s=loc(pside)? { (x, s) }, COMMA) RBRACE
+    { `VarSet xs }
+
 sform_u(P):
 | x=P
    { x }
@@ -1090,6 +1136,9 @@ sform_u(P):
          parse_error p.pl_loc (Some "invalid scope name");
        PFscope (pqsymb_of_symb p.pl_loc "<top>", f)
      end }
+
+| SHARP pf=pffilter* x=ident
+   { PFref (x, pf) }
 
 | LPAREN f=form_r(P) COLONTILD ty=loc(type_exp) RPAREN
    { PFcast (f, ty) }
@@ -2562,7 +2611,6 @@ crushmode:
 
 | SLASHSLASHGT { { cm_simplify = true ; cm_solve = true ; } }
 
-
 intro_pattern:
 | x=ipcore
    { IPCore x }
@@ -3330,8 +3378,8 @@ phltactic:
         pfel_inv   = inv;
       } in Pfel (at_pos, info) }
 
-| SIM info=eqobs_in
-    { Psim info }
+| SIM cm=crushmode? info=eqobs_in
+    { Psim (cm, info) }
 
 | REPLACE rk=repl_kind h1=repl_hyp h2=repl_hyp
     { Ptrans_stmt (rk, fst h1, snd h1, fst h2, snd h2) }
@@ -3555,7 +3603,7 @@ tactic:
 | t=tactic_ip %prec prec_below_IMPL
     { t }
 
-| t1=tactic_ip ORA t2=tactic_ip
+| t1=tactic_ip ORA t2=tactic
     { let loc = EcLocation.make $startpos $endpos in
         mk_core_tactic (mk_loc loc (Por (t1, t2))) }
 
