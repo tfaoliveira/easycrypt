@@ -327,8 +327,7 @@ let main () =
                      try
 
                        let tdelta =
-                       EcCommands.process
-                         ~timed:p.EP.gl_timed ~debug:p.EP.gl_debug
+                         EcCommands.process ~timed:p.EP.gl_timed ~debug:p.EP.gl_debug p.EP.gl_action
                        in tstats loc tdelta
 
                      with

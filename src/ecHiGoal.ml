@@ -1553,7 +1553,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let p = EcTyping.trans_pattern senv ps ue p in
     let ev = Mid.map (fun ty -> EcPattern.OGTty (Some ty)) !ps in
     let menv = EcFMatching.init_match_env ~unienv:ue ~metas:ev () in
-    (ptenv !!tc hyps (ue, ev),
+    (ptenv !!tc hyps menv,
      f_lambda (List.map (snd_map gtty) bds) p)
   in
 

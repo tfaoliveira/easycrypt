@@ -42,7 +42,7 @@ val addnotifier : notifier -> unit
 (* -------------------------------------------------------------------- *)
 val process :
      ?timed:bool -> ?debug:bool
-  -> EcParsetree.global_action located -> unit
+  -> EcParsetree.global_action located -> float option
 
 val undo  : int  -> unit
 val reset : unit -> unit
