@@ -7,22 +7,22 @@ pragma +implicits.
 type 'a zmodule =
   [ PreZMod of ('a -> bool)     (* support *)
              & 'a               (* zero *)
-             & ('a -> 'a -> 'a) (* operation *)
              & ('a -> 'a)       (* inverse *)
+             & ('a -> 'a -> 'a) (* operation *)
   ].
 
 (** Notations **)
-op (\in) (x : 'a) (m : 'a zmodule) =
+op (\in) (x : 'a) (m : 'a zmodule): bool =
   with m = PreZMod m _ _ _ => m x.
 
-op e (m : 'a zmodule) =
+op e (m : 'a zmodule): 'a =
   with m = PreZMod _ e _ _ => e.
 
-op o (m : 'a zmodule) =
-  with m = PreZMod _ _ o _ => o.
+op n (m : 'a zmodule): 'a -> 'a =
+  with m = PreZMod _ _ n _ => n.
 
-op n (m : 'a zmodule) =
-  with m = PreZMod _ _ _ n => n.
+op o (m : 'a zmodule): 'a -> 'a -> 'a =
+  with m = PreZMod _ _ _ o => o.
 
 (** Some of those are not Z-modules **)
 inductive iszmodule (m : 'a zmodule) =
@@ -30,11 +30,11 @@ inductive iszmodule (m : 'a zmodule) =
             & (forall x y, x \in m => y \in m => (o m) x y \in m)
             & (forall x, x \in m => (n m) x \in m)
 
-            & (forall x, x \in m => (o m) (e m) x = x)
-            & (forall x y, x \in m => y \in m => (o m) x y = (o m) y x)
             & (forall x y z, x \in m => y \in m => z \in m =>
                              (o m) x ((o m) y z) = (o m) ((o m) x y) z)
+            & (forall x y, x \in m => y \in m => (o m) x y = (o m) y x)
 
+            & (forall x, x \in m => (o m) (e m) x = x)
             & (forall x, x \in m => (o m) ((n m) x) x = e m).
 
 (** But those that are enjoy great properties **)
@@ -59,7 +59,7 @@ lemma addrA (m : 'a zmodule) (x y z : 'a) :
   iszmodule m =>
   x \in m => y \in m => z \in m =>
   (o m) x ((o m) y z) = (o m) ((o m) x y) z.
-proof. by case=> _ _ _ _ _ + _ x_in_m y_in_m z_in_m - ->. qed.
+proof. by case=> _ _ _ + _ _ _ x_in_m y_in_m z_in_m - ->. qed.
 
 lemma addrC (m : 'a zmodule) (x y : 'a) :
   iszmodule m =>
@@ -71,7 +71,7 @@ lemma add0r (m : 'a zmodule) (x : 'a) :
   iszmodule m =>
   x \in m =>
   (o m) (e m) x = x.
-proof. by case=> _ _ _ + _ _ _ x_in_m - ->. qed.
+proof. by case=> _ _ _ _ _ + _ x_in_m - ->. qed.
 
 lemma addNr (m : 'a zmodule) (x : 'a) :
   iszmodule m =>
@@ -231,6 +231,45 @@ lemma opprB (m : 'a zmodule) (x y : 'a) :
 proof.
 move=> m_zmod x_in_m y_in_m.
 by rewrite opprD // opprK // addrC.
+qed.
+
+lemma addrKA (m : 'a zmodule) (z x y : 'a) :
+  iszmodule m =>
+  z \in m => x \in m => y \in m =>
+  (o m) ((o m) x z) ((n m) ((o m) z y)) = (o m) x ((n m) y).
+proof.
+move=> m_zmod z_in_m x_in_m y_in_m.
+by rewrite opprD //  addrA // addrK.
+qed.
+
+lemma addr_eq0 (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  (o m) x y = e m <=> x = (n m) y.
+proof.
+move=> m_zmod x_in_m y_in_m.
+split.
++ by rewrite addrC // -(@addr0 m ((n m) y))=> // <-; rewrite addKr.
+by move=> ->; exact/addNr.
+qed.
+
+lemma eqr_opp (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  ((n m) x = (n m) y) <=> (x = y).
+proof.
+move=> m_zmod x_in_m y_in_m; split=> [|-> //].
+exact/oppr_inj.
+qed.
+
+lemma eqr_oppLR (m : 'a zmodule) (x y : 'a) :
+  iszmodule m =>
+  x \in m => y \in m =>
+  ((n m) x = y) <=> (x = (n m) y).
+proof.
+move=> m_zmod x_in_m y_in_m.
+rewrite -{1}(@opprK m y) //; split=> [|-> //].
+exact/oppr_inj.
 qed.
 
 (** And some derived operations **)
