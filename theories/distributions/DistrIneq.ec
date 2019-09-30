@@ -111,7 +111,7 @@ lemma incfun_inf f (g : real -> real) P : (forall x y, x >= y => f x >= f y) =>
 move => incf.
 rewrite /inf.
 
-qed.
+admitted.
 
 theory Chernoff.
 
@@ -173,6 +173,7 @@ have: expr (- h a) = inf (fun t => t >= 0%r)
 (fun t => expr (- (t * a - ln (phi t)))).
 
 rewrite /h.
+admitted.
 end Chernoff.
 
 theory Additive_Chernoff.
@@ -198,6 +199,7 @@ axiom gt0_e : e > 0%r.
 
 lemma AddChernoff1 : mu X (fun vs => BRA.big predT idfun vs >=
                       n%r * (p + e)) <= expr (-2%r * (e^2) * n%r).
-
+proof.
+admitted.
 
 end Additive_Chernoff.
