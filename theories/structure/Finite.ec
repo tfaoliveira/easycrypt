@@ -95,17 +95,17 @@ proof. by move=> fin_A; apply/(finite_leq A)=> //= x @/predD. qed.
 (* -------------------------------------------------------------------- *)
 (* Finite sets have a well-behaved notion of cardinality.               *)
 (* -------------------------------------------------------------------- *)
-op card (A : 'a -> bool): int = size (to_seq A)
-axiomatized by cardE.
+op pcard (A : 'a -> bool): int = size (to_seq A)
+axiomatized by pcardE.
 
-lemma card_ge0 (A : 'a -> bool) :
-  0 <= card A.
-proof. by rewrite cardE size_ge0. qed.
+lemma pcard_ge0 (A : 'a -> bool) :
+  0 <= pcard A.
+proof. by rewrite pcardE size_ge0. qed.
 
-lemma card_eq0 (A : 'a -> bool) :
+lemma pcard_eq0 (A : 'a -> bool) :
   is_finite A =>
-  card A = 0 => A = pred0.
+  pcard A = 0 => A = pred0.
 proof.
-move=> fin_A. rewrite cardE=> /size_eq0 A_is_empty.
-by rewrite pred_ext=> x; rewrite -mem_to_seq // A_is_empty.
+move=> fin_A; rewrite pcardE=> /size_eq0 A_is_empty.
+by apply/pred_ext=> x; rewrite -mem_to_seq // A_is_empty.
 qed.
