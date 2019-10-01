@@ -1,4 +1,4 @@
-require import AllCore.
+require import AllCore Finite.
 
 pragma -oldip.
 pragma +implicits.
@@ -12,8 +12,10 @@ type 'a zmodule =
   ].
 
 (** Notations **)
-op (\in) (x : 'a) (m : 'a zmodule): bool =
-  with m = PreZMod m _ _ _ => m x.
+op mem (m : 'a zmodule): 'a -> bool =
+  with m = PreZMod m _ _ _ => m.
+
+abbrev (\in) (x : 'a) (m : 'a zmodule) = mem m x.
 
 op e (m : 'a zmodule): 'a =
   with m = PreZMod _ e _ _ => e.
