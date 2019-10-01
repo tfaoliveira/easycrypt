@@ -27,6 +27,7 @@ op o (m : 'a zmodule): 'a -> 'a -> 'a =
   with m = PreZMod _ _ _ o => o.
 
 (** Some of those are not Z-modules **)
+(** PROBLEM: We now have plenty of distinct representations of the same group. **)
 inductive iszmodule (m : 'a zmodule) =
   | IsZMod of (e m \in m)
             & (forall x y, x \in m => y \in m => (o m) x y \in m)
@@ -324,4 +325,69 @@ rewrite /intmul oppz_lt0 oppzK ltz_def nz_c lezNgt /=.
 case: (c < 0)=> // lt0_c.
 rewrite ?opprK //; apply/iteropM=> //.
 by rewrite oppz_ge0; exact/ltzW.
+qed.
+
+(** Order of a group **)
+op order ['a] (m : 'a zmodule): int.
+
+axiom orderP (m : 'a zmodule) :
+  iszmodule m =>
+  order m =
+    if   is_finite (mem m)
+    then pcard (mem m)
+    else 0.
+
+inductive (\subgroup) (H : 'a -> bool) (G : 'a zmodule) =
+  | IsSubgroup of (forall x, H x => x \in G)
+                & (exists h, H h)
+                & (forall x y, H x => H y =>
+                     H ((o G) x ((n G) y))).
+
+lemma subgroup0 (H : 'a -> bool) (G : 'a zmodule) :
+  iszmodule G =>
+  H \subgroup G =>
+  H (e G).
+proof.
+move=> G_zmod [] H_subset_G H_neq_pred0 H_sub_closed.
+move: H_neq_pred0=> [] h ^ /H_subset_G /(addrN _ _ G_zmod) <- h_in_H.
+exact/H_sub_closed.
+qed.
+
+lemma subgroupN (H : 'a -> bool) (G : 'a zmodule) x :
+  iszmodule G =>
+  H \subgroup G =>
+  H x =>
+  H (n G x).
+proof.
+move=> G_zmod H_sub_G x_in_H.
+move: (subgroup0 H G _ _)=> //= e_in_H.
+case: H_sub_G=> H_sub_G _ /(_ _ _ e_in_H x_in_H).
+by rewrite add0r // opprM //; exact/H_sub_G.
+qed.
+
+lemma subgroupA (H : 'a -> bool) (G : 'a zmodule) x y :
+  iszmodule G =>
+  H \subgroup G =>
+  H x => H y =>
+  H (o G x y).
+proof.
+move=> G_zmod H_sub_G x_in_H y_in_H.
+move: (subgroupN H G y _ _ _)=> //= Ny_in_H.
+case: H_sub_G=> H_sub_G _ /(_ x (n G y) _ _) //.
+by rewrite opprK //; exact/H_sub_G.
+qed.
+
+lemma subgroup_isgroup (H : 'a -> bool) (G : 'a zmodule) :
+  iszmodule G =>
+  H \subgroup G =>
+  iszmodule (PreZMod H (e G) (n G) (o G)).
+proof.
+move=> G_zmod H_sub_G; split=> //=.
++ exact/subgroup0.
++ move=> x y; exact/(subgroupA G_zmod H_sub_G).
++ move=> x; exact/(subgroupN).
++ by case: H_sub_G=> H_sub_G _ _ x y z /H_sub_G + /H_sub_G + /H_sub_G.
++ by case: H_sub_G=> H_sub_G _ _ x y /H_sub_G + /H_sub_G.
++ by case: H_sub_G=> H_sub_G _ _ x /H_sub_G.
+by case: H_sub_G=> H_sub_G _ _ x /H_sub_G.
 qed.
