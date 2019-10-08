@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -536,12 +537,14 @@ module Prover = struct
     po_cpufactor  : int option;
     po_nprovers   : int option;
     po_provers    : string list option * (include_exclude * string) list;
+    po_quorum     : int option;
     po_verbose    : int option;
     pl_all        : bool option;
     pl_max        : int option;
     pl_iterate    : bool option;
     pl_wanted     : EcProvers.hints option;
     pl_unwanted   : EcProvers.hints option;
+    pl_selected   : bool option;
   }
 
   (* -------------------------------------------------------------------- *)
@@ -550,12 +553,14 @@ module Prover = struct
     po_cpufactor = None;
     po_nprovers  = None;
     po_provers   = (None, []);
+    po_quorum    = None;
     po_verbose   = None;
     pl_all       = None;
     pl_max       = None;
     pl_iterate   = None;
     pl_wanted    = None;
     pl_unwanted  = None;
+    pl_selected  = None;
   }
 
   (* -------------------------------------------------------------------- *)
@@ -564,12 +569,16 @@ module Prover = struct
       match ppr.pprov_names with
       | None -> None, []
       | Some pl ->
-        let do_uo s =
-          if s.pl_desc = "ALL" then all_provers ()
-          else [check_prover_name s] in
+        let do_uo uo s =
+          match s.pl_desc with
+          | "!" -> all_provers ()
+          | ""  -> []
+          | _   ->
+            let x = check_prover_name s in
+            if List.exists ((=) x) uo then uo else x :: uo in
         let uo =
           if pl.pp_use_only = [] then None
-          else Some (List.flatten (List.map do_uo pl.pp_use_only)) in
+          else Some (List.fold_left do_uo [] pl.pp_use_only) in
         let do_ar (k,s) = k, check_prover_name s in
         uo, List.map do_ar pl.pp_add_rm in
     let verbose = omap (odfl 1) ppr.pprov_verbose in
@@ -578,6 +587,7 @@ module Prover = struct
       po_cpufactor = ppr.pprov_cpufactor;
       po_nprovers  = ppr.pprov_max;
       po_provers   = provers;
+      po_quorum    = ppr.pprov_quorum;
       po_verbose   = verbose;
       pl_all       = ppr.plem_all;
       pl_max       =
@@ -589,6 +599,7 @@ module Prover = struct
       pl_iterate   = ppr.plem_iterate;
       pl_wanted    = omap (process_dbhint env) ppr.plem_wanted;
       pl_unwanted  = omap (process_dbhint env) ppr.plem_unwanted;
+      pl_selected  = ppr.plem_selected;
     }
 
   (* -------------------------------------------------------------------- *)
@@ -600,12 +611,13 @@ module Prover = struct
     let pr_timelimit = max 0 (odfl dft.pr_timelimit options.po_timeout) in
     let pr_cpufactor = max 0 (odfl dft.pr_cpufactor options.po_cpufactor) in
     let pr_verbose   = max 0 (odfl dft.pr_verbose options.po_verbose) in
-    let pr_wrapper   = dft.pr_wrapper in
     let pr_all       = odfl dft.pr_all options.pl_all in
     let pr_max       = odfl dft.pr_max options.pl_max in
     let pr_iterate   = odfl dft.pr_iterate options.pl_iterate in
     let pr_wanted    = odfl dft.pr_wanted options.pl_wanted in
     let pr_unwanted  = odfl dft.pr_unwanted options.pl_unwanted in
+    let pr_selected  = odfl dft.pr_selected options.pl_selected in
+    let pr_quorum    = max 1 (odfl dft.pr_quorum options.po_quorum) in
     let pr_provers   =
       let l = odfl dft.pr_provers (fst options.po_provers) in
       let do_ar l (k, p) =
@@ -614,15 +626,9 @@ module Prover = struct
         | `Include -> if List.exists ((=) p) l then l else p::l
       in List.fold_left do_ar l (snd options.po_provers) in
 
-    { pr_maxprocs; pr_provers; pr_timelimit; pr_cpufactor;
-      pr_wrapper ; pr_verbose; pr_all      ; pr_max      ;
-      pr_iterate ; pr_wanted ; pr_unwanted }
-
-  (* -------------------------------------------------------------------- *)
-  let set_wrapper scope wrapper =
-    let pi = Prover_info.get scope.sc_options in
-    let pi = { pi with EcProvers.pr_wrapper = wrapper } in
-    { scope with sc_options = Prover_info.set scope.sc_options pi; }
+    { pr_maxprocs; pr_provers ; pr_timelimit; pr_cpufactor;
+      pr_verbose ; pr_all     ; pr_max      ; pr_iterate  ;
+      pr_wanted  ; pr_unwanted; pr_selected ; pr_quorum  ; }
 
   (* -------------------------------------------------------------------- *)
   let do_prover_info scope ppr =
@@ -760,6 +766,43 @@ module Tactics = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module Auto = struct
+  let add_rw scope ~local ~base l =
+    let env = env scope in
+
+    if local then
+      hierror "rewrite hints cannot be local";
+
+    let env, base =
+      match EcEnv.BaseRw.lookup_opt base.pl_desc env with
+      | None ->
+        let pre, ibase = unloc base in
+        if not (List.is_empty pre) then
+          hierror ~loc:base.pl_loc
+            "cannot create rewrite hints out of its enclosing theory";
+        let env = EcEnv.BaseRw.add ibase env in
+        (env, fst (EcEnv.BaseRw.lookup base.pl_desc env))
+
+      | Some (base, _) -> (env, base) in
+
+    let l = List.map (fun l -> EcEnv.Ax.lookup_path (unloc l) env) l in
+    { scope with sc_env = EcEnv.BaseRw.addto base l env }
+
+  let bind_hint scope ~local ~level ?base names =
+    { scope with sc_env =
+        EcEnv.Auto.add ~local ~level ?base names scope.sc_env }
+
+  let add_hint scope hint =
+    let base = omap unloc hint.ht_base in
+
+    let names = List.map
+      (fun l -> EcEnv.Ax.lookup_path (unloc l) scope.sc_env)
+      hint.ht_names in
+
+    bind_hint scope ~local:hint.ht_local ~level:hint.ht_prio ?base names
+end
+
+(* -------------------------------------------------------------------- *)
 module Ax = struct
   open EcParsetree
   open EcDecl
@@ -864,9 +907,12 @@ module Ax = struct
       match EcSection.olocals scope.sc_section with
       | None -> ()
       | Some locals ->
-          if EcSection.form_use_local concl locals then
-            hierror "this lemma uses local modules and must be declared as local"
-    end;
+        match EcSection.form_use_local concl locals with
+        | Some mp ->
+          let ppe = EcPrinting.PPEnv.ofenv scope.sc_env in
+          hierror "@[<hov>this lemma uses local modules : %a@\n and must be declared as local@]" (EcPrinting.pp_topmod ppe) mp
+        | None -> ()
+      end;
 
     if ax.pa_local && EcDecl.is_axiom axd.ax_kind then
       hierror "an axiom cannot be local";
@@ -1206,8 +1252,72 @@ module Op = struct
         in List.fold_left addnew scope op.po_aliases
 
       end else scope
+    in
 
-    in tyop, scope
+    let tags = Sstr.of_list (List.map unloc op.po_tags) in
+
+    let add_distr_tag
+        (pred : path) (bases : string list) (tag : string) (suffix : string) scope
+    =
+      if not (EcAlgTactic.is_module_loaded scope.sc_env) then
+        hierror "for tag %s, load Distr first" tag;
+
+      let oppath   = EcPath.pqname (path scope) (unloc op.po_name) in
+      let nparams  = List.map (EcIdent.fresh |- fst) tyop.op_tparams in
+      let subst    = Tvar.init (List.fst tyop.op_tparams) (List.map tvar nparams) in
+      let ty       = Tvar.subst subst tyop.op_ty in
+      let aty, rty = EcTypes.tyfun_flat ty in
+
+      let dty =
+        match EcTypes.as_tdistr (EcEnv.ty_hnorm rty (env scope)) with
+        | None -> hierror ~loc "[lossless] can only be applied to distributions"
+        | Some dty -> dty
+      in
+
+      let bds = List.combine (List.map EcTypes.fresh_id_of_ty aty) aty in
+      let ax  = EcFol.f_op oppath (List.map tvar nparams) rty in
+      let ax  = EcFol.f_app ax (List.map (curry f_local) bds) rty in
+      let ax  = EcFol.f_app (EcFol.f_op pred [dty] (tfun rty tbool)) [ax] tbool in
+      let ax  = EcFol.f_forall (List.map (snd_map gtty) bds) ax in
+
+      let ax =
+        { ax_tparams = List.map (fun ty -> (ty, Sp.empty)) nparams;
+          ax_spec    = ax;
+          ax_kind    = `Axiom (Ssym.empty, false);
+          ax_nosmt   = false; } in
+
+      let scope, axname =
+        let axname = Printf.sprintf "%s_%s" (unloc op.po_name) suffix in
+        (Ax.bind scope false (axname, ax), axname) in
+
+      let axpath = EcPath.pqname (path scope) axname in
+
+      List.fold_left
+        (fun scope base ->
+            Auto.bind_hint ~local:false ~level:0 ~base scope [axpath])
+        scope bases
+
+    in
+
+    let scope =
+      if   Sstr.mem "lossless" tags
+      then add_distr_tag EcCoreLib.CI_Distr.p_lossless
+             [EcCoreLib.base_ll] "lossless" "ll" scope
+      else scope in
+
+    let scope =
+      if   Sstr.mem "uniform" tags
+      then add_distr_tag EcCoreLib.CI_Distr.p_uniform
+             [EcCoreLib.base_rnd] "uniform" "uni" scope
+      else scope in
+
+    let scope =
+      if   Sstr.mem "full" tags
+      then add_distr_tag EcCoreLib.CI_Distr.p_full
+             [EcCoreLib.base_rnd] "full" "fu" scope
+      else scope in
+
+    tyop, scope
 end
 
 (* -------------------------------------------------------------------- *)
@@ -2048,43 +2158,12 @@ module Section = struct
           | T.CTh_addrw (p, l) ->
               { scope with sc_env = EcEnv.BaseRw.addto p l scope.sc_env }
 
-          | T.CTh_auto (local, ps) ->
-              { scope with sc_env = EcEnv.Auto.add ~local ps scope.sc_env }
+          | T.CTh_auto (local, level, base, ps) ->
+              { scope with sc_env =
+                  EcEnv.Auto.add ~local ~level ?base ps scope.sc_env }
         in
 
         List.fold_left bind1 scope oitems
-end
-
-(* -------------------------------------------------------------------- *)
-module Auto = struct
-  let addrw scope (lc, x, l) =
-    let env = env scope in
-
-    if lc then
-      hierror "rewrite hints cannot be local";
-
-    let env, base =
-      match EcEnv.BaseRw.lookup_opt x.pl_desc env with
-      | None ->
-        let pre, base = unloc x in
-        if not (List.is_empty pre) then
-          hierror ~loc:x.pl_loc
-            "cannot create rewrite hints out of its enclosing theory";
-        let env = EcEnv.BaseRw.add base env in
-        (env, fst (EcEnv.BaseRw.lookup x.pl_desc env))
-
-      | Some (base, _) -> (env, base) in
-
-    let l = List.map (fun l -> EcEnv.Ax.lookup_path (unloc l) env) l in
-    { scope with sc_env = EcEnv.BaseRw.addto base l env }
-
-  let addat scope (local, base) =
-    let base = List.map
-      (fun l -> EcEnv.Ax.lookup_path (unloc l) scope.sc_env)
-      base in
-
-    { scope with sc_env =
-        EcEnv.Auto.add ~local (Sp.of_list base) scope.sc_env }
 end
 
 (* -------------------------------------------------------------------- *)
@@ -2114,7 +2193,8 @@ module Cloning = struct
       R.hexport  = onenv EcEnv.Theory.export;
       R.hbaserw  = onenv EcEnv.BaseRw.add;
       R.haddrw   = onenv (curry EcEnv.BaseRw.addto);
-      R.hauto    = onenv (curry (fun local -> EcEnv.Auto.add ~local));
+      R.hauto    = onenv (fun (local, level, base, names) ->
+                            EcEnv.Auto.add ~local ~level ?base names);
       R.htycl    = onenv (curry EcEnv.TypeClass.bind);
       R.hinst    = onenv (curry EcEnv.TypeClass.add_instance);
       R.hthenter = thenter;
@@ -2230,7 +2310,7 @@ module Search = struct
         | _ ->
           let ps = ref Mid.empty in
           let ue = EcUnify.UniEnv.create None in
-          let fp = EcTyping.trans_pattern scope.sc_env (ps, ue) fp in
+          let fp = EcTyping.trans_pattern scope.sc_env ps ue fp in
           `ByPattern ((ps, ue), fp)
       in List.map do1 qs in
 

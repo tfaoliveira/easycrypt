@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -138,6 +139,12 @@ end = struct
     | UnknownRecFieldName qs ->
         msg "unknown (record) field name: %a" pp_qsymbol qs
 
+    | UnknownInstrMetaVar x ->
+        msg "unkown instruction meta-variable: %a" pp_symbol x
+
+    | UnknownMetaVar x ->
+        msg "unknown meta-variable: %a" pp_symbol x
+
     | DuplicatedRecFieldName qs ->
         msg "duplicated (record) field name: %s" qs
 
@@ -200,6 +207,10 @@ end = struct
 
     | AbbrevLowArgs ->
         msg "this abbreviation is not applied enough"
+
+    | UnknownProgVar (p, mem) ->
+        msg "unknown program variable (in %a): `%a'"
+          (EcPrinting.pp_mem env) mem pp_qsymbol p
 
     | UnknownVarOrOp (name, []) ->
         msg "unknown variable or constant: `%a'" pp_qsymbol name
@@ -298,6 +309,9 @@ end = struct
     | InvalidModAppl err ->
         msg "invalid module application:@ %a" (pp_modappl_error env1) err
 
+    | InvalidModType MTE_IncludeFunctor ->
+        msg "cannot include functors"
+
     | InvalidModType MTE_InnerFunctor ->
         msg "functors must be top-level modules"
 
@@ -312,6 +326,12 @@ end = struct
 
     | InvalidMem (name, MAE_IsConcrete) ->
         msg "the memory %s must be abstract" name
+
+    | InvalidFilter (FE_InvalidIndex i) ->
+        msg "invalid filter index: %d" i
+
+    | InvalidFilter FE_NoMatch ->
+        msg "invalid filter pattern (no match)"
 
     | FunNotInModParam name ->
         msg "the function %a is not provided by a module parameter"
@@ -328,6 +348,9 @@ end = struct
 
     | UnknownScope sc ->
         msg "unknown scope: `%a'" pp_qsymbol sc
+
+    | FilterMatchFailure ->
+        msg "filter pattern does not match"
 
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
@@ -451,8 +474,11 @@ end = struct
     | FXE_CtorAmbiguous ->
         msg "ambiguous constructor name"
 
-    | FXE_CtorInvalidArity _ ->
-        ()
+    | FXE_CtorInvalidArity (cname, i, j) ->
+        msg
+          "the constructor %s expects %d argument(s) (%d argument(s) given)"
+          cname i j
+
 end
 
 (* -------------------------------------------------------------------- *)

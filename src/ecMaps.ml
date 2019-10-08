@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -95,7 +96,7 @@ module EHashtbl = struct
     val memo_rec : int -> ((key -> 'a) -> key -> 'a) -> key -> 'a
   end
 
-  module Make(T : Why3.Stdlib.OrderedHashedType) = struct
+  module Make(T : Why3.Wstdlib.OrderedHashedType) = struct
     include Why3.Exthtbl.Make(T)
 
     let memo_rec size f =
@@ -107,12 +108,12 @@ module EHashtbl = struct
 end
 
 (* -------------------------------------------------------------------- *)
-module MakeMSH (X : Why3.Stdlib.TaggedType) : sig
+module MakeMSH (X : Why3.Wstdlib.TaggedType) : sig
   module M : Map.S with type key = X.t
   module S : Set.S with module M = Map.MakeBase(M)
   module H : EHashtbl.S with type key = X.t
 end = struct
-  module T = Why3.Stdlib.OrderedHashed(X)
+  module T = Why3.Wstdlib.OrderedHashed(X)
   module M = Map.Make(T)
   module S = Set.MakeOfMap(M)
   module H = EHashtbl.Make(T)

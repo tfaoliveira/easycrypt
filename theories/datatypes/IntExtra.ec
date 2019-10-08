@@ -1,19 +1,20 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Option Int.
+require import Int.
 
 (* -------------------------------------------------------------------- *)
 lemma lt0n n : (0 <= n) => (0 < n <=> n <> 0).
 proof. by rewrite ltz_def => ->. qed.
 
 lemma eqn0Ngt n : (0 <= n) => (n = 0) <=> !(0 < n).
-proof. by rewrite eq_sym lez_eqVlt -ora_or => -[<-|?->]. qed.
+proof. by rewrite eq_sym lez_eqVlt -oraE => -[<-|?->]. qed.
 
 lemma ltzS m n : (m < n+1) <=> (m <= n).
 proof. by rewrite -lez_add1r addzC lez_add2r. qed.
@@ -95,7 +96,7 @@ theory IterOp.
     0 <= n => iter (n + 1) opr x = iter n opr (opr x).
   proof.
     elim: n=> /=; first by rewrite (iterS 0) ?iter0.
-    by move=> n geo0 ih; rewrite iterS 2:ih ?iterS // addz_ge0.
+    by move=> n geo0 ih; rewrite (iterS (n+1)) 2:ih ?iterS // addz_ge0.
   qed.
 
   op iterop ['a] (n : int) opr (x z : 'a) : 'a =
@@ -113,7 +114,7 @@ theory IterOp.
     iterop (n+1) opr x z = iter n (opr x) x.
   proof.
     rewrite /iterop; elim: n=> /=; first by rewrite iter0 ?(iteriS 0).
-    move=> n ge0_n /= ih; rewrite iteriS 1:addz_ge0 //= ih.
+    move=> n ge0_n /= ih; rewrite (@iteriS (n+1)) 1:addz_ge0 //= ih.
     by rewrite {1}addzC lez_add1r ltzNge ge0_n /= iterS.
   qed.
 end IterOp.
@@ -130,6 +131,9 @@ lemma odd2 : !odd 2. proof. by rewrite iter2. qed.
 lemma oddN z : odd (-z) = odd z by [].
 lemma odd_abs z : odd `|z| = odd z by [].
 lemma oddS z : odd (z + 1) = !(odd z) by [].
+
+lemma odd3 : odd 3.
+proof. by rewrite (oddS 2) odd2. qed.
 
 lemma oddD z1 z2 : odd (z1 + z2) = (odd z1 = !odd z2).
 proof. by elim/intwlog: z1 z2; smt(odd0 oddS oddN). qed.

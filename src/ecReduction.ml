@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -340,7 +341,7 @@ let rec h_red ri env hyps f =
       when ri.iota && EcEnv.Op.is_projection env p -> begin
         try
           match args with
-          | [mk] -> begin
+          | mk :: args -> begin
               match (odfl mk (h_red_opt ri env hyps mk)).f_node with
               | Fapp ({ f_node = Fop (mkp, _) }, mkargs) ->
                   if not (EcEnv.Op.is_record_ctor env mkp) then
@@ -348,7 +349,8 @@ let rec h_red ri env hyps f =
                   let v = oget (EcEnv.Op.by_path_opt p env) in
                   let v = proj3_2 (EcDecl.operator_as_proj v) in
                   let v = List.nth mkargs v in
-                    odfl v (h_red_opt ri env hyps v)
+                  f_app (odfl v (h_red_opt ri env hyps v)) args f.f_ty
+
               | _ -> raise NotReducible
             end
           | _ -> raise NotReducible
@@ -375,8 +377,10 @@ let rec h_red ri env hyps f =
           let op  = oget (EcEnv.Op.by_path_opt p env) in
           let fix = EcDecl.operator_as_fix op in
 
-            if List.length fargs <> snd (fix.EcDecl.opf_struct) then
-              raise NotReducible;
+          if List.length fargs < snd (fix.EcDecl.opf_struct) then
+            raise NotReducible;
+
+          let fargs, eargs = List.split_at (snd (fix.EcDecl.opf_struct)) fargs in
 
           let args  = Array.of_list fargs in
           let pargs = List.fold_left (fun (opb, acc) v ->
@@ -420,7 +424,7 @@ let rec h_red ri env hyps f =
             EcFol.Fsubst.subst_tvar
               (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
 
-            Fsubst.f_subst subst body
+          f_app (Fsubst.f_subst subst body) eargs f.f_ty
 
         with NotReducible ->
           f_app (h_red ri env hyps f1) fargs f.f_ty
@@ -462,6 +466,7 @@ let rec h_red ri env hyps f =
         | Some (`Int_add  ), [f1;f2] -> f_int_add_simpl f1 f2
         | Some (`Int_opp  ), [f]     -> f_int_opp_simpl f
         | Some (`Int_mul  ), [f1;f2] -> f_int_mul_simpl f1 f2
+        | Some (`Int_edivz), [f1;f2] -> f_int_edivz_simpl f1 f2
         | Some (`Real_add ), [f1;f2] -> f_real_add_simpl f1 f2
         | Some (`Real_opp ), [f]     -> f_real_opp_simpl f
         | Some (`Real_mul ), [f1;f2] -> f_real_mul_simpl f1 f2
@@ -512,9 +517,9 @@ let rec h_red ri env hyps f =
       f_app_simpl op args f.f_ty
 
     (* η-reduction *)
-  | Fquant (Llambda, [x, GTty _], { f_node = Fapp (f, [{ f_node = Flocal y }]) })
-      when id_equal x y && not (Mid.mem x f.f_fv)
-    -> f
+  | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
+      when can_eta x (fn, args)
+    -> f_app fn (List.take (List.length args - 1) args) f.f_ty
 
     (* contextual rule - let *)
   | Flet (lp, f1, f2) -> f_let lp (h_red ri env hyps f1) f2
@@ -540,6 +545,13 @@ let rec h_red ri env hyps f =
     end
 
   | _ -> raise NotReducible
+
+and can_eta x (f, args) =
+  match List.rev args with
+  | { f_node = Flocal y } :: args ->
+      let check v = not (Mid.mem x v.f_fv) in
+      id_equal x y && List.for_all check (f :: args)
+  | _ -> false
 
 and h_red_args ri env hyps args =
   match args with
@@ -744,20 +756,24 @@ and check_alpha_equal ri hyps f1 f2 =
       | None ->
         match h_red_opt ri env hyps f2 with
         | Some f2 -> aux env subst f1 f2
-        | None ->
-          let ty,codom =
-            match f1.f_node, f2.f_node with
-            | Fquant(Llambda,(_,GTty ty)::bd, f1'), _ ->
-              ty, toarrow (List.map (fun (_,gty)-> gty_as_ty gty) bd) f1'.f_ty
-            | _,  Fquant(Llambda,(_,GTty ty)::bd,f2') ->
-              ty, toarrow (List.map (fun (_,gty)-> gty_as_ty gty) bd) f2'.f_ty
-            | _, _ -> raise e in
-          let x = f_local (EcIdent.create "_") ty in
-          let f1 = f_app_simpl f1 [x] codom in
-          let f2 = f_app_simpl f2 [x] codom in
-          aux env subst f1 f2
-  in
-  aux env Fsubst.f_subst_id f1 f2
+        | None when EqTest.for_type env f1.f_ty f2.f_ty -> begin
+            let ty, codom =
+              match f1.f_node, f2.f_node with
+              | Fquant (Llambda, (_, GTty ty) :: bd, f1'), _ ->
+                  ty, toarrow (List.map (gty_as_ty |- snd) bd) f1'.f_ty
+              | _,  Fquant(Llambda, (_, GTty ty) :: bd, f2') ->
+                  ty, toarrow (List.map (gty_as_ty |- snd) bd) f2'.f_ty
+              | _, _ -> raise e
+            in
+
+              let x  = f_local (EcIdent.create "_") ty in
+              let f1 = f_app_simpl f1 [x] codom in
+              let f2 = f_app_simpl f2 [x] codom in
+              aux env subst f1 f2
+        end
+        | _ -> raise e
+
+  in aux env Fsubst.f_subst_id f1 f2
 
 and check_alpha_eq f1 f2 = check_alpha_equal no_red   f1 f2
 and check_conv     f1 f2 = check_alpha_equal full_red f1 f2

@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -16,7 +17,7 @@ instance ring with int
   op add   = (+)
   op opp   = [-]
   op mul   = ( * )
-  op expr  = ( ^ )
+  op expr  = IntExtra.( ^ )
 
   proof oner_neq0 by smt
   proof addr0     by smt

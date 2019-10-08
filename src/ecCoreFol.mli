@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -259,15 +260,17 @@ val fop_int_add : form
 val fop_int_opp : form
 val fop_int_pow : form
 
-val f_i0 : form
-val f_i1 : form
+val f_i0  : form
+val f_i1  : form
+val f_im1 : form
 
-val f_int      : zint -> form
-val f_int_add  : form -> form -> form
-val f_int_sub  : form -> form -> form
-val f_int_opp  : form -> form
-val f_int_mul  : form -> form -> form
-val f_int_pow  : form -> form -> form
+val f_int       : zint -> form
+val f_int_add   : form -> form -> form
+val f_int_sub   : form -> form -> form
+val f_int_opp   : form -> form
+val f_int_mul   : form -> form -> form
+val f_int_pow   : form -> form -> form
+val f_int_edivz : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig
@@ -325,6 +328,7 @@ val destr_app       : form -> form * form list
 val destr_not       : form -> form
 val destr_nots      : form -> bool * form
 val destr_and       : form -> form * form
+val destr_and3      : form -> form * form * form
 val destr_and_r     : form -> [`Sym | `Asym] * (form * form)
 val destr_or        : form -> form * form
 val destr_or_r      : form -> [`Sym | `Asym] * (form * form)
@@ -379,6 +383,10 @@ val is_bdHoareF  : form -> bool
 val is_bdHoareS  : form -> bool
 val is_pr        : form -> bool
 val is_eq_or_iff : form -> bool
+
+(* -------------------------------------------------------------------- *)
+val split_fun  : form -> bindings * form
+val split_args : form -> form * form list
 
 (* -------------------------------------------------------------------- *)
 val form_of_expr : EcMemory.memory -> EcTypes.expr -> form

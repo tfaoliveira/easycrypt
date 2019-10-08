@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -59,14 +60,20 @@ val f_real_abs : form -> form
 (* soft constructors - distributions *)
 val fop_support : EcTypes.ty -> form
 
+val f_predT   : EcTypes.ty -> form
 val f_support : form -> form -> form
 val f_in_supp : form -> form -> form
 val f_mu      : EcEnv.env -> form -> form -> form
 val f_mu_x    : form -> form -> form
-val f_weight  : EcTypes.ty -> form -> form
+val f_weight   : EcTypes.ty -> form -> form
+val f_lossless : EcTypes.ty -> form -> form
 
 (* common functions *)
 val f_identity : ?name:EcSymbols.symbol -> EcTypes.ty -> form
+
+(* -------------------------------------------------------------------- *)
+(* "typed" soft-constructors                                            *)
+val f_ty_app : EcEnv.env -> form -> form list -> form
 
 (* -------------------------------------------------------------------- *)
 (* WARNING : this function should be use only in a context ensuring
@@ -101,10 +108,11 @@ val f_int_lt_simpl  : form -> form -> form
 val f_real_le_simpl : form -> form -> form
 val f_real_lt_simpl : form -> form -> form
 
-val f_int_add_simpl : form -> form -> form
-val f_int_opp_simpl : form -> form
-val f_int_sub_simpl : form -> form -> form
-val f_int_mul_simpl : form -> form -> form
+val f_int_add_simpl   : form -> form -> form
+val f_int_opp_simpl   : form -> form
+val f_int_sub_simpl   : form -> form -> form
+val f_int_mul_simpl   : form -> form -> form
+val f_int_edivz_simpl : form -> form -> form
 
 val f_real_add_simpl : form -> form -> form
 val f_real_opp_simpl : form -> form
@@ -138,6 +146,7 @@ type op_kind = [
   | `Int_mul
   | `Int_pow
   | `Int_opp
+  | `Int_edivz
   | `Real_add
   | `Real_opp
   | `Real_mul

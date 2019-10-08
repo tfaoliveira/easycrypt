@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -48,12 +49,14 @@
     "glob"        , GLOB       ;        (* KW: prog *)
     "let"         , LET        ;        (* KW: prog *)
     "in"          , IN         ;        (* KW: prog *)
+    "for"         , FOR        ;        (* KW: prog *)
     "var"         , VAR        ;        (* KW: prog *)
     "proc"        , PROC       ;        (* KW: prog *)
     "if"          , IF         ;        (* KW: prog *)
     "then"        , THEN       ;        (* KW: prog *)
     "else"        , ELSE       ;        (* KW: prog *)
     "elif"        , ELIF       ;        (* KW: prog *)
+    "for"         , FOR        ;        (* KW: prog *)
     "while"       , WHILE      ;        (* KW: prog *)
     "assert"      , ASSERT     ;        (* KW: prog *)
     "return"      , RETURN     ;        (* KW: prog *)
@@ -93,7 +96,10 @@
     "have"        , HAVE       ;        (* KW: tactic *)
     "suff"        , SUFF       ;        (* KW: tactic *)
     "elim"        , ELIM       ;        (* KW: tactic *)
+    "exlim"       , EXLIM      ;        (* KW: tactic *)
+    "ecall"       , ECALL      ;        (* KW: tactic *)
     "clear"       , CLEAR      ;        (* KW: tactic *)
+    "wlog"        , WLOG       ;        (* KW: tactic *)
 
     (* Auto tactics *)
     "apply"       , APPLY      ;        (* KW: tactic *)
@@ -120,8 +126,10 @@
     "by"          , BY         ;        (* KW: bytac *)
     "reflexivity" , REFLEX     ;        (* KW: bytac *)
     "done"        , DONE       ;        (* KW: bytac *)
+    "solve"       , SOLVE      ;        (* KW: bytac *)
 
     (* PHL: tactics *)
+    "replace"     , REPLACE    ;        (* KW: tactic *)
     "transitivity", TRANSITIVITY;       (* KW: tactic *)
     "symmetry"    , SYMMETRY   ;        (* KW: tactic *)
     "seq"         , SEQ        ;        (* KW: tactic *)
@@ -161,6 +169,7 @@
     "abort"       , ABORT      ;        (* KW: global *)
     "goal"        , GOAL       ;        (* KW: global *)
     "end"         , END        ;        (* KW: global *)
+    "from"        , FROM       ;        (* KW: global *)
     "import"      , IMPORT     ;        (* KW: global *)
     "export"      , EXPORT     ;        (* KW: global *)
     "include"     , INCLUDE    ;        (* KW: global *)
@@ -216,6 +225,8 @@
     ("//=" , (SLASHSLASHEQ     , true ));
     ("/>"  , (SLASHGT          , true ));
     ("|>"  , (PIPEGT           , true ));
+    ("//>" , (SLASHSLASHGT     , true ));
+    ("||>" , (PIPEPIPEGT       , true ));
     ("=>"  , (IMPL             , true ));
     ("|"   , (PIPE             , true ));
     (":="  , (CEQ              , true ));
@@ -302,28 +313,6 @@
   let lex_tick_operator (op : string) =
     let name = Printf.sprintf "`%s`" op in
     lex_std_op ~name op
-
-  (* ------------------------------------------------------------------ *)
-  exception InvalidCodePosition
-
-  let cposition_of_string =
-    let cpos1 x =
-      try  int_of_string x
-      with Failure x when x = "int_of_string" ->
-        raise InvalidCodePosition
-    in
-
-    let rec doit = function
-      | Str.Text c :: []                  -> (cpos1 c, None)
-      | Str.Text c :: Str.Delim "." :: tl -> (cpos1 c, Some (0, doit tl))
-      | Str.Text c :: Str.Delim "?" :: tl -> (cpos1 c, Some (1, doit tl))
-      | _ -> raise InvalidCodePosition
-    in
-      fun s -> doit (Str.full_split (Str.regexp "[.?]") s)
-
-  let cposition_of_string s =
-    try  Some (cposition_of_string s)
-    with InvalidCodePosition -> None
 }
 
 let empty   = ""
@@ -379,11 +368,6 @@ rule main = parse
   | ".`"    { [DOTTICK  ] }
   | "{0,1}" { [RBOOL    ] }
 
-  (* position *)
-  | (digit+ ['.' '?'])+ digit+ {
-      [CPOS (oget (cposition_of_string (Lexing.lexeme lexbuf)))]
-    }
-
   (* punctuation *)
   | '_'   { [UNDERSCORE] }
   | "#<"  { [DASHLT    ] }
@@ -405,6 +389,7 @@ rule main = parse
   | "`|"  { [TICKPIPE  ] }
   | "<$"  { [LESAMPLE  ] }
   | "<@"  { [LEAT      ] }
+  | ":~"  { [COLONTILD ] }
 
   | "/~="  { [SLASHTILDEQ     ] }
   | "//~=" { [SLASHSLASHTILDEQ] }

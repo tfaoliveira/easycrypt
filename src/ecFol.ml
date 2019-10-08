@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -103,14 +104,19 @@ let f_real_div f1 f2 =
   f_real_mul f1 (f_real_inv f2)
 
 (* -------------------------------------------------------------------- *)
-let f_predT     ty = f_op CI.CI_Pred.p_predT      [ty] (tcpred ty)
-let fop_pred1   ty = f_op CI.CI_Pred.p_pred1      [ty] (tcpred ty)
-let fop_support ty = f_op CI.CI_Distr.p_support [ty] (toarrow [tdistr ty; ty] tbool)
-let fop_mu      ty = f_op CI.CI_Distr.p_mu      [ty] (toarrow [tdistr ty; tcpred ty] treal)
+let f_predT     ty = f_op CI.CI_Pred.p_predT [ty] (tcpred ty)
+let fop_pred1   ty = f_op CI.CI_Pred.p_pred1 [ty] (toarrow [ty; ty] tbool)
+
+let fop_support ty =
+  f_op CI.CI_Distr.p_support  [ty] (toarrow [tdistr ty; ty] tbool)
+let fop_mu      ty =
+  f_op CI.CI_Distr.p_mu       [ty] (toarrow [tdistr ty; tcpred ty] treal)
+let fop_lossless ty =
+  f_op CI.CI_Distr.p_lossless [ty] (toarrow [tdistr ty] tbool)
 
 let f_support f1 f2 = f_app (fop_support f2.f_ty) [f1; f2] tbool
 let f_in_supp f1 f2 = f_support f2 f1
-let f_pred1   f1    = f_app (fop_pred1 f1.f_ty) [f1] tbool
+let f_pred1   f1    = f_app (fop_pred1 f1.f_ty) [f1] (toarrow [f1.f_ty] tbool)
 
 let f_mu_x    f1 f2 =
   f_app (fop_mu f2.f_ty) [f1; (f_pred1 f2)] treal
@@ -127,6 +133,9 @@ let f_mu env f1 f2 =
 let f_weight ty d =
   f_app (fop_mu ty) [d; f_predT ty] treal
 
+let f_lossless ty d =
+  f_app (fop_lossless ty) [d] tbool
+
 (* -------------------------------------------------------------------- *)
 let f_losslessF f = f_bdHoareF f_true f f_true FHeq f_r1
 
@@ -136,25 +145,116 @@ let f_identity ?(name = "x") ty =
     f_lambda [name, GTty ty] (f_local name ty)
 
 (* -------------------------------------------------------------------- *)
+let f_ty_app (env : EcEnv.env) (f : form) (args : form list) =
+  let ty, rty = EcEnv.Ty.decompose_fun f.f_ty env in
+  let ty, ety =
+    try  List.split_at (List.length args) ty
+    with Failure _ -> assert false in
+
+  ignore ty; f_app f args (toarrow ety rty)
+
+(* -------------------------------------------------------------------- *)
+module type DestrRing = sig
+  val le  : form -> form * form
+  val lt  : form -> form * form
+  val add : form -> form * form
+  val opp : form -> form
+  val sub : form -> form * form
+  val mul : form -> form * form
+end
+
+(* -------------------------------------------------------------------- *)
+module DestrInt : DestrRing = struct
+  let le  = destr_app2_eq ~name:"int_le"  CI.CI_Int.p_int_le
+  let lt  = destr_app2_eq ~name:"int_lt"  CI.CI_Int.p_int_lt
+  let add = destr_app2_eq ~name:"int_add" CI.CI_Int.p_int_add
+  let opp = destr_app1_eq ~name:"int_opp" CI.CI_Int.p_int_opp
+  let mul = destr_app2_eq ~name:"int_mul" CI.CI_Int.p_int_mul
+
+  let sub f =
+    try  snd_map opp (add f)
+    with DestrError _ -> raise (DestrError "int_sub")
+end
+
+(* -------------------------------------------------------------------- *)
+module type DestrReal = sig
+  include DestrRing
+
+  val inv : form -> form
+  val div : form -> form * form
+  val abs : form -> form
+end
+
+module DestrReal : DestrReal = struct
+  let le  = destr_app2_eq ~name:"real_le"  CI.CI_Real.p_real_le
+  let lt  = destr_app2_eq ~name:"real_lt"  CI.CI_Real.p_real_lt
+  let add = destr_app2_eq ~name:"real_add" CI.CI_Real.p_real_add
+  let opp = destr_app1_eq ~name:"real_opp" CI.CI_Real.p_real_opp
+  let mul = destr_app2_eq ~name:"real_mul" CI.CI_Real.p_real_mul
+  let inv = destr_app1_eq ~name:"real_inv" CI.CI_Real.p_real_inv
+  let abs = destr_app1_eq ~name:"real_abs" CI.CI_Real.p_real_abs
+
+  let sub f =
+    try  snd_map opp (add f)
+    with DestrError _ -> raise (DestrError "real_sub")
+
+  let div f =
+    try  snd_map inv (mul f)
+    with DestrError _ -> raise (DestrError "int_sub")
+end
+
+(* -------------------------------------------------------------------- *)
 let f_int_opp_simpl f =
   match f.f_node with
   | Fapp (op, [f]) when f_equal op fop_int_opp -> f
   | _ -> if f_equal f_i0 f then f_i0 else f_int_opp f
 
-let f_int_add_simpl f1 f2 =
-  try  f_int (destr_int f1 +^ destr_int f2)
-  with DestrError _ ->
-         if f_equal f_i0 f1 then f2
-    else if f_equal f_i0 f2 then f1
-    else match f2.f_node with
-    | Fapp (op, [f2])
-         when f_equal op fop_int_opp && f_equal f1 f2
-      -> f_i0
-    | _ -> f_int_add f1 f2
+(* -------------------------------------------------------------------- *)
+let f_int_add_simpl =
+  let try_add_opp f1 f2 =
+    try
+      let f2 = DestrInt.opp f2 in
+      if f_equal f1 f2 then Some f_i0 else None
+    with DestrError _ -> None in
 
+  let try_addc i f =
+    try
+      let c1, c2 = DestrInt.add f in
+
+      try  let c = destr_int c1 in Some (f_int_add (f_int (c +^ i)) c2)
+      with DestrError _ ->
+      try  let c = destr_int c2 in Some (f_int_add c1 (f_int (c +^ i)))
+      with DestrError _ -> None
+
+    with DestrError _ -> None in
+
+  fun f1 f2 ->
+    let i1 = try Some (destr_int f1) with DestrError _ -> None in
+    let i2 = try Some (destr_int f2) with DestrError _ -> None in
+
+    match i1, i2 with
+    | Some i1, Some i2 -> f_int (i1 +^ i2)
+
+    | Some i1, _ when i1 =^ EcBigInt.zero -> f2
+    | _, Some i2 when i2 =^ EcBigInt.zero -> f1
+
+    | _, _ ->
+        let simpls = [
+           (fun () -> try_add_opp f1 f2);
+           (fun () -> try_add_opp f2 f1);
+           (fun () -> i1 |> obind (try_addc^~ f2));
+           (fun () -> i2 |> obind (try_addc^~ f1));
+        ] in
+
+        ofdfl
+          (fun () -> f_int_add f1 f2)
+          (List.Exceptionless.find_map (fun f -> f ()) simpls)
+
+(* -------------------------------------------------------------------- *)
 let f_int_sub_simpl f1 f2 =
   f_int_add_simpl f1 (f_int_opp_simpl f2)
 
+(* -------------------------------------------------------------------- *)
 let f_int_mul_simpl f1 f2 =
   try  f_int (destr_int f1 *^ destr_int f2)
   with DestrError _ ->
@@ -162,6 +262,19 @@ let f_int_mul_simpl f1 f2 =
     else if f_equal f_i1 f1 then f2
     else if f_equal f_i1 f2 then f1
     else f_int_mul f1 f2
+
+(* -------------------------------------------------------------------- *)
+let f_int_edivz_simpl f1 f2 =
+  if f_equal f2 f_i0 then f_tuple [f_i0; f1]
+  else
+    try
+      let q,r = BI.ediv (destr_int f1) (destr_int f2) in
+      f_tuple [f_int q; f_int r]
+    with DestrError _ ->
+      if f_equal f1 f_i0 then f_tuple [f_i0; f_i0]
+      else if f_equal f2 f_i1 then f_tuple [f1; f_i0]
+      else if f_equal f2 f_im1 then f_tuple [f_int_opp_simpl f1; f_i0]
+      else f_int_edivz f1 f2
 
 (* -------------------------------------------------------------------- *)
 let destr_rdivint =
@@ -235,23 +348,55 @@ let norm_real_int_div n1 n2 =
     if BI.equal n2 BI.one then f_rint n1
     else f_real_div (f_rint n1) (f_rint n2)
 
-let f_real_add_simpl f1 f2 =
-  try  f_rint (destr_rint f1 +^ destr_rint f2)
-  with DestrError _ ->
+let f_real_add_simpl =
+  let try_add_opp f1 f2 =
+    try
+      let f2 = DestrReal.opp f2 in
+      if f_equal f1 f2 then Some f_r0 else None
+    with DestrError _ -> None in
+
+  let try_addc i f =
+    try
+      let c1, c2 = DestrReal.add f in
+
+      try  let c = destr_rint c1 in Some (f_real_add (f_rint (c +^ i)) c2)
+      with DestrError _ ->
+      try  let c = destr_rint c2 in Some (f_real_add c1 (f_rint (c +^ i)))
+      with DestrError _ -> None
+
+    with DestrError _ -> None in
+
+  let try_norm_rintdiv f1 f2 =
     try
       let (n1, d1) = destr_rdivint f1 in
       let (n2, d2) = destr_rdivint f2 in
 
-      norm_real_int_div (n1*^d2 +^ n2*^d1) (d1*^d2)
+      Some (norm_real_int_div (n1*^d2 +^ n2*^d1) (d1*^d2))
 
-    with DestrError _ ->
-           if real_is_zero f1 then f2
-      else if real_is_zero f2 then f1
-      else match f2.f_node with
-      | Fapp (op, [f2])
-           when f_equal op fop_real_opp && f_equal f1 f2
-        -> f_r0
-      | _ -> f_real_add f1 f2
+    with DestrError _ -> None in
+
+  fun f1 f2 ->
+    let r1 = try Some (destr_rint f1) with DestrError _ -> None in
+    let r2 = try Some (destr_rint f2) with DestrError _ -> None in
+
+    match r1, r2 with
+    | Some i1, Some i2 -> f_rint (i1 +^ i2)
+
+    | Some i1, _ when i1 =^ EcBigInt.zero -> f2
+    | _, Some i2 when i2 =^ EcBigInt.zero -> f1
+
+    | _, _ ->
+        let simpls = [
+           (fun () -> try_norm_rintdiv f1 f2);
+           (fun () -> try_add_opp f1 f2);
+           (fun () -> try_add_opp f2 f1);
+           (fun () -> r1 |> obind (try_addc^~ f2));
+           (fun () -> r2 |> obind (try_addc^~ f1));
+        ] in
+
+        ofdfl
+          (fun () -> f_real_add f1 f2)
+          (List.Exceptionless.find_map (fun f -> f ()) simpls)
 
 let f_real_opp_simpl f =
   match f.f_node with
@@ -499,38 +644,6 @@ let rec f_eq_simpl f1 f2 =
 
   | _ -> f_eq f1 f2
 
-let f_int_le_simpl f1 f2 =
-  if f_equal f1 f2 then f_true
-  else match f1.f_node, f2.f_node with
-  | Fint x1, Fint x2 -> f_bool (BI.compare x1 x2 <= 0)
-  | _, _ -> f_int_le f1 f2
-
-let f_int_lt_simpl f1 f2 =
-  if f_equal f1 f2 then f_false
-  else match f1.f_node, f2.f_node with
-  | Fint x1 , Fint x2 -> f_bool (BI.compare x1 x2 < 0)
-  | _, _ -> f_int_lt f1 f2
-
-let f_real_le_simpl f1 f2 =
-  if f_equal f1 f2 then f_true else
-    match f1.f_node, f2.f_node with
-    | Fapp (op1, [{f_node = Fint x1}]), Fapp (op2, [{f_node = Fint x2}])
-        when f_equal op1 f_op_real_of_int
-          && f_equal op2 f_op_real_of_int
-        -> f_bool (BI.compare x1 x2 <= 0)
-
-    | _, _ -> f_real_le f1 f2
-
-let f_real_lt_simpl f1 f2 =
-  if f_equal f1 f2 then f_false else
-    match f1.f_node, f2.f_node with
-    | Fapp (op1, [{f_node = Fint x1}]), Fapp (op2, [{f_node = Fint x2}])
-        when f_equal op1 f_op_real_of_int
-          && f_equal op2 f_op_real_of_int
-        -> f_bool (BI.compare x1 x2 < 0)
-
-    | _, _ -> f_real_lt f1 f2
-
 (* -------------------------------------------------------------------- *)
 type op_kind = [
   | `True
@@ -549,6 +662,7 @@ type op_kind = [
   | `Int_mul
   | `Int_pow
   | `Int_opp
+  | `Int_edivz
   | `Real_add
   | `Real_opp
   | `Real_mul
@@ -573,6 +687,8 @@ let operators =
      CI.CI_Int .p_int_opp , `Int_opp  ;
      CI.CI_Int .p_int_mul , `Int_mul  ;
      CI.CI_Int .p_int_pow , `Int_pow  ;
+     CI.CI_Int .p_int_edivz , `Int_edivz  ;
+
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
      CI.CI_Real.p_real_mul, `Real_mul ;
@@ -595,7 +711,7 @@ let is_logical_op op =
   | Some (
         `Not | `And _ | `Or _ | `Imp | `Iff | `Eq
       | `Int_le   | `Int_lt   | `Real_le  | `Real_lt
-      | `Int_add  | `Int_opp  | `Int_mul
+      | `Int_add  | `Int_opp  | `Int_mul | `Int_edivz
       | `Real_add | `Real_opp | `Real_mul | `Real_inv
    ) -> true
 
@@ -680,6 +796,68 @@ let rec sform_of_form fp =
 
   | _ -> SFother fp
 
+
+(* -------------------------------------------------------------------- *)
+let int_of_form =
+  let module E = struct exception NotAConstant end in
+
+  let rec doit f =
+    match sform_of_form f with
+    | SFint x ->
+        x
+
+    | SFop ((op, []), [a]) when op_kind op = Some `Int_opp ->
+        BI.neg (doit a)
+
+    | SFop ((op, []), [a1; a2]) -> begin
+        match op_kind op with
+        | Some `Int_add -> BI.add (doit a1) (doit a2)
+        | Some `Int_mul -> BI.mul (doit a1) (doit a2)
+        | _ -> raise E.NotAConstant
+      end
+
+    | _ -> raise E.NotAConstant
+
+  in fun f -> try Some (doit f) with E.NotAConstant -> None
+
+let real_of_form f =
+  match sform_of_form f with
+  | SFop ((op, []), [a]) ->
+      if   EcPath.p_equal op CI.CI_Real.p_real_of_int
+      then int_of_form a
+      else None
+  | _ -> None
+
+(* -------------------------------------------------------------------- *)
+let f_int_le_simpl f1 f2 =
+  if f_equal f1 f2 then f_true else
+
+  match opair int_of_form f1 f2 with
+  | Some (x1, x2) -> f_bool (BI.compare x1 x2 <= 0)
+  | None -> f_int_le f1 f2
+
+let f_int_lt_simpl f1 f2 =
+  if f_equal f1 f2 then f_false else
+
+  match opair int_of_form f1 f2 with
+  | Some (x1, x2) -> f_bool (BI.compare x1 x2 < 0)
+  | None -> f_int_lt f1 f2
+
+let f_real_le_simpl f1 f2 =
+  if f_equal f1 f2 then f_true else
+
+  match opair real_of_form f1 f2 with
+  | Some (x1, x2) -> f_bool (BI.compare x1 x2 <= 0)
+  | _ -> f_real_le f1 f2
+
+let f_real_lt_simpl f1 f2 =
+  if f_equal f1 f2 then f_false else
+
+  match opair real_of_form f1 f2 with
+  | Some (x1, x2) -> f_bool (BI.compare x1 x2 < 0)
+  | _ -> f_real_lt f1 f2
+
+(* -------------------------------------------------------------------- *)
 (* destr_exists_prenex destructs recursively existentials in a formula
  *  whenever possible.
  * For instance:
@@ -732,54 +910,3 @@ let destr_exists_prenex f =
     match prenex_exists [] f with
     | [] , _ -> destr_error "exists"
     | bds, f -> (bds, f)
-
-(* -------------------------------------------------------------------- *)
-module type DestrRing = sig
-  val le  : form -> form * form
-  val lt  : form -> form * form
-  val add : form -> form * form
-  val opp : form -> form
-  val sub : form -> form * form
-  val mul : form -> form * form
-end
-
-(* -------------------------------------------------------------------- *)
-module DestrInt : DestrRing = struct
-  let le  = destr_app2_eq ~name:"int_le"  CI.CI_Int.p_int_le
-  let lt  = destr_app2_eq ~name:"int_lt"  CI.CI_Int.p_int_lt
-  let add = destr_app2_eq ~name:"int_add" CI.CI_Int.p_int_add
-  let opp = destr_app1_eq ~name:"int_opp" CI.CI_Int.p_int_opp
-  let mul = destr_app2_eq ~name:"int_mul" CI.CI_Int.p_int_mul
-
-  let sub f =
-    try  snd_map opp (add f)
-    with DestrError _ -> raise (DestrError "int_sub")
-
-end
-
-(* -------------------------------------------------------------------- *)
-module type DestrReal = sig
-  include DestrRing
-
-  val inv : form -> form
-  val div : form -> form * form
-  val abs : form -> form
-end
-
-module DestrReal : DestrReal = struct
-  let le  = destr_app2_eq ~name:"real_le"  CI.CI_Real.p_real_le
-  let lt  = destr_app2_eq ~name:"real_lt"  CI.CI_Real.p_real_lt
-  let add = destr_app2_eq ~name:"real_add" CI.CI_Real.p_real_add
-  let opp = destr_app1_eq ~name:"real_opp" CI.CI_Real.p_real_opp
-  let mul = destr_app2_eq ~name:"real_mul" CI.CI_Real.p_real_mul
-  let inv = destr_app1_eq ~name:"real_inv" CI.CI_Real.p_real_inv
-  let abs = destr_app1_eq ~name:"real_abs" CI.CI_Real.p_real_abs
-
-  let sub f =
-    try  snd_map opp (add f)
-    with DestrError _ -> raise (DestrError "real_sub")
-
-  let div f =
-    try  snd_map inv (mul f)
-    with DestrError _ -> raise (DestrError "int_sub")
-end

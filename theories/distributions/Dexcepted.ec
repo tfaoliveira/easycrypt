@@ -1,12 +1,13 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Int Real Distr FSet Dfilter StdRing.
+require import AllCore Distr FSet Dfilter StdRing.
 (*---*) import RField.
 
 pragma +implicits.
@@ -24,6 +25,14 @@ lemma dexcepted1E d P (x : 'a) :
     then 0%r
     else (mu1 d x / (weight d - mu d (P))).
 proof. by rewrite dscale1E weight_dfilter dfilter1E; case: (P x). qed.
+
+lemma nosmt dexcepted1E_notin (d : 'a distr) P x:
+  !P x => mu1 (d \ P) x = (mu1 d x / (weight d - mu d (P))).
+proof. by rewrite dexcepted1E => ->. qed.
+
+lemma nosmt dexcepted1E_in d P (x:'a):
+  P x => mu1 (d \ P) x = 0%r.
+proof. by rewrite dexcepted1E => ->. qed.
 
 lemma dexceptedE d P (E : 'a -> bool) :
   mu (d \ P) E

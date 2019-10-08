@@ -1,5 +1,5 @@
-require import Fun Pred Option Int IntExtra IntDiv List NewLogic.
-require import Ring StdRing StdOrder StdBigop ABitstring Distr.
+require import AllCore Int IntExtra IntDiv List.
+require import Ring StdRing StdOrder StdBigop Distr.
 require import BitEncoding.
 require (*--*) BitWord MAC_then_Pad_then_CBC.
 (*---*) import BS2Int BitChunking IntID IntOrder Bigint BIA.
@@ -35,10 +35,12 @@ rename "Word" as "Block"
 proof Alphabet.enum_spec, ge0_n by done.
 realize Alphabet.enum_spec by exact/Octet.enum_spec.
 
-lemma dblock_uffu: is_uniform_over dblock predT.
+abbrev dblock = DBlock.dunifin.
+
+lemma dblock_uffu: is_lossless dblock /\ is_funiform dblock.
 proof.
-split=> [x|]; first by rewrite DBlock.support_dblock.
-by rewrite DBlock.dblock_uf.
+split; first by rewrite DBlock.dunifin_ll.
+by rewrite DBlock.dunifin_funi.
 qed.
 
 (** Boolean ring structure **)
@@ -53,7 +55,7 @@ op andb (b1 b2 : block) = Block.offun (fun i=> andw b1.[i] b2.[i]).
 
 lemma oneb_neq0: oneb <> zerob.
 proof.
-rewrite blockP NewLogic.negb_forall /=; exists 0=> /=.
+rewrite blockP negb_forall /=; exists 0=> /=.
 by rewrite !offunE // onew_neq0.
 qed.
 
@@ -250,7 +252,7 @@ lemma cbc_enc_rcons (P : block -> block -> block) k st (p:block list) pn:
   = cbc_enc P k st (rcons p pn).
 proof.
   elim p st=> //= pi p ih st /=.
-  by rewrite add1z_neq0 1:size_ge0 /= -addzA addzC -addzA (addzC (-1)) -ih.
+  by rewrite add1z_neq0 1:size_ge0 /= addzC (addzC (-1)) -ih.
 qed.
 
 lemma cbc_dec_rcons (Pi : block -> block -> block) k st (c:block list) cn:
@@ -259,7 +261,7 @@ lemma cbc_dec_rcons (Pi : block -> block -> block) k st (c:block list) cn:
 proof.
   elim c st=> //= ci c ih st //=.
   rewrite -lez_add1r /= ler_addl size_ge0 /=.
-  rewrite -addzA addzC -addzA (addzC (-1)) -ih /=.
+  rewrite addzC -ih /=.
   by rewrite ltzNge lez_eqVlt negb_or ltzNge size_ge0 /= if_neg.
 qed.
 
@@ -350,7 +352,7 @@ rewrite max_ler.
 + case: (size m < 16)=> [|/lezNgt] szm_16.
   + by rewrite modz_small 1:size_ge0.
   smt (@IntDiv).
-by congr; ringeq; rewrite -divzE modzMl.
+by do 2! congr; ringeq; rewrite -divzE modzMl.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -372,7 +374,7 @@ theory HMAC_SHA256.
   type mK.
 
   op d_mK: mK distr.
-  axiom d_mK_uffu: is_uniform_over d_mK Pred.predT.
+  axiom d_mK_uffu: is_lossless d_mK /\ is_funiform d_mK.
 
   op hmac_sha256: mK -> msg -> tag.
 end HMAC_SHA256.
@@ -459,7 +461,9 @@ phoare mee_encrypt_correct _mk _ek _p _c:
                                       ==> res = _c]
   =(mu (dapply (fun iv => iv :: mee_enc AES hmac_sha256 _ek _mk iv _p) dblock) (pred1 _c)).
 proof.
-  rewrite -/(mu_x _ _) mux_dmap /preim /pred1 /=.
+  have->: mu1 (dapply (fun iv=> iv :: mee_enc AES hmac_sha256 _ek _mk iv _p) dblock) _c
+          = mu1 (dmap dblock (fun iv=> iv :: mee_enc AES hmac_sha256 _ek _mk iv _p)) _c by move.
+  rewrite dmap1E /preim /pred1 /=.
   proc; inline MAC.tag PRPc.PRPr.f.
   swap 6 -5 => //=; alias 2 iv = s.
   while (   0 <= i <= size (pad _p (hmac_sha256 _mk _p))
@@ -477,18 +481,18 @@ proof.
       rewrite (take_nth witness) //= -cbc_enc_rcons -cats1 /=.
       by rewrite size_take // lti_szpadded.
     have -> /=: i{hr} + 1 <> 0 by smt ().
-    by rewrite cats1 nth_rcons size_cbc_enc size_take // lti_szpadded /= -addzA.
+    by rewrite cats1 nth_rcons size_cbc_enc size_take // lti_szpadded /=.
   wp=> //=.
   conseq (_: _ ==> s :: mee_enc AES hmac_sha256 _ek _mk s _p = _c)=> //=.
     move=> &m [->>] ->> iv //=; split=> [[[le0_size _] h]|<<-].
       have -> //=:= h (iv :: mee_enc AES hmac_sha256 _ek _mk iv _p)
+                      (size (pad _p (hmac_sha256 _mk _p)))
                       (nth witness (iv :: mee_enc AES hmac_sha256 _ek _mk iv _p)
-                                   (size (pad _p (hmac_sha256 _mk _p))))
-                      (size (pad _p (hmac_sha256 _mk _p))).
+                                   (size (pad _p (hmac_sha256 _mk _p)))).
       split=> //=.
       split; 1:by rewrite /mee_enc /= size_cbc_enc addzC.
       by rewrite take_size.
-    split=> [|c s0 n]; 1:by split; [rewrite size_ge0|rewrite take0].
+    split=> [|c n s0]; 1:by split; [rewrite size_ge0|rewrite take0].
     split=> [[[le0_n le_n_size] [s0_is_nth [size_c]]] c_is_enc|].
       by rewrite StdOrder.IntOrder.ler_subl_addr add0z=> /StdOrder.IntOrder.ler_gtF.
     rewrite -lezNgt=> le_size_n [[le0_n le_n_size]] [_] [_] ->.

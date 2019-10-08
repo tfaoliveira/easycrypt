@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -57,6 +58,10 @@ val toarrow : ty list -> ty -> ty
 
 val tytuple_flat : ty -> ty list
 val tyfun_flat   : ty -> (dom * ty)
+
+(* -------------------------------------------------------------------- *)
+val is_tdistr : ty -> bool
+val as_tdistr : ty -> ty option
 
 (* -------------------------------------------------------------------- *)
 exception FoundUnivar
@@ -214,6 +219,9 @@ val is_tuple_var : expr -> bool
 val destr_local     : expr -> EcIdent.t
 val destr_var       : expr -> prog_var
 val destr_tuple_var : expr -> prog_var list
+
+(* -------------------------------------------------------------------- *)
+val split_args : expr -> expr * expr list
 
 (* -------------------------------------------------------------------- *)
 val e_map :

@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -186,18 +187,19 @@ module Prover : sig
     po_cpufactor  : int option;
     po_nprovers   : int option;
     po_provers    : string list option * (include_exclude * string) list;
+    po_quorum     : int option;
     po_verbose    : int option;
     pl_all        : bool option;
     pl_max        : int option;
     pl_iterate    : bool option;
     pl_wanted     : EcProvers.hints option;
     pl_unwanted   : EcProvers.hints option;
+    pl_selected   : bool option;
   }
 
   val empty_options : smt_options
 
   val process     : scope -> pprover_infos -> scope
-  val set_wrapper : scope -> string option -> scope
 
   val set_default : scope -> smt_options -> scope
   val full_check  : scope -> scope
@@ -212,8 +214,8 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Auto : sig
-  val addrw : scope -> (bool * pqsymbol * pqsymbol list) -> scope
-  val addat : scope -> (bool * pqsymbol list) -> scope
+  val add_rw   : scope -> local:bool -> base:pqsymbol -> pqsymbol list -> scope
+  val add_hint : scope -> phint -> scope
 end
 
 (* -------------------------------------------------------------------- *)

@@ -1,9 +1,13 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
+
+(* -------------------------------------------------------------------- *)
+module Enum = BatEnum
 
 (* -------------------------------------------------------------------- *)
 exception Unexpected
@@ -33,6 +37,7 @@ val (|-) : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
 
 val (|>) : 'a -> ('a -> 'b) -> 'b
 val (<|) : ('a -> 'b) -> 'a -> 'b
+val (|?) : 'a option -> 'a -> 'a
 
 val curry   : ('a1 -> 'a2 -> 'b) -> 'a1 * 'a2 -> 'b
 val uncurry : ('a1 * 'a2 -> 'b) -> 'a1 -> 'a2 -> 'b
@@ -102,6 +107,7 @@ val swap: 'a * 'b -> 'b * 'a
 type 'a eq  = 'a -> 'a -> bool
 type 'a cmp = 'a -> 'a -> int
 
+val pair_map   : ('a -> 'b) -> 'a pair -> 'b pair
 val pair_equal : 'a eq -> 'b eq -> ('a * 'b) eq
 val opt_equal  : 'a eq -> 'a option eq
 
@@ -124,6 +130,7 @@ val oiter      : ('a -> unit) -> 'a option -> unit
 val obind      : ('a -> 'b option) -> 'a option -> 'b option
 val ofold      : ('a -> 'b -> 'b) -> 'b -> 'a option -> 'b
 val omap       : ('a -> 'b) -> 'a option -> 'b option
+val opair      : ('a -> 'b option) -> 'a -> 'a -> ('b * 'b) option
 val oif        : ('a -> bool) -> 'a option -> bool
 val odfl       : 'a -> 'a option -> 'a
 val ofdfl      : (unit -> 'a) -> 'a option -> 'a
@@ -223,6 +230,13 @@ module Buffer : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module Array : sig
+  include module type of BatArray
+
+  val count : ('a -> bool) -> 'a array -> int
+end
+
+(* -------------------------------------------------------------------- *)
 module List : sig
   include module type of BatList
 
@@ -260,6 +274,7 @@ module List : sig
   val min : ?cmp:('a -> 'a -> int) -> 'a list -> 'a
   val max : ?cmp:('a -> 'a -> int) -> 'a list -> 'a
 
+  val nth_opt    : 'a list -> int -> 'a option
   val mbfilter   : ('a -> bool) -> 'a list -> 'a list
   val fusion     : ('a -> 'a -> 'a) -> 'a list -> 'a list -> 'a list
   val is_unique  : ?eq:('a -> 'a -> bool) -> 'a list -> bool
@@ -268,6 +283,7 @@ module List : sig
   val find_pivot : ('a -> bool) -> 'a list -> 'a list * 'a * 'a list
   val map_fold   : ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val mapi_fold  : (int -> 'a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
+  val pmapi      : (int -> 'a -> 'b option) -> 'a list -> 'b list
   val pmap       : ('a -> 'b option) -> 'a list -> 'b list
   val rev_pmap   : ('a -> 'b option) -> 'a list -> 'b list
   val rotate     : [`Left|`Right] -> int -> 'a list -> int * 'a list
