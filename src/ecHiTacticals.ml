@@ -161,11 +161,11 @@ and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
     | Prewrite (ri, x)    -> process_rewrite ttenv ?target:x ri
     | Psubst   ri         -> process_subst ri
     | Psimplify ri        -> process_simplify ri
+    | Pcbv ri             -> process_cbv ri
     | Pchange pf          -> process_change pf
     | Ppose (x, xs, o, p) -> process_pose x xs o p
     | Pwlog (ids, f)      -> process_wlog ids f
-
-    | _ -> assert false
+    | Prwnormal _         -> assert false
   in
     tx tc
 
@@ -197,6 +197,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pcall (side, info)        -> EcPhlCall.process_call side info
     | Pswap sw                  -> EcPhlSwap.process_swap sw
     | Pinline info              -> EcPhlInline.process_inline info
+    | Pinterleave info          -> EcPhlSwap.process_interleave info
     | Pcfold info               -> EcPhlCodeTx.process_cfold info
     | Pkill info                -> EcPhlCodeTx.process_kill info
     | Palias info               -> EcPhlCodeTx.process_alias info
@@ -205,7 +206,8 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pconseq (opt, info)       -> EcPhlConseq.process_conseq_opt opt info
     | Pconseqauto cm            -> process_conseqauto cm
     | Phrex_elim                -> EcPhlExists.t_hr_exists_elim
-    | Phrex_intro fs            -> EcPhlExists.process_exists_intro fs
+    | Phrex_intro (fs, b)       -> EcPhlExists.process_exists_intro ~elim:b fs
+    | Phecall (oside, x)        -> EcPhlExists.process_ecall oside x
     | Pexfalso                  -> EcPhlAuto.t_exfalso
     | Pbydeno (mode, info)      -> EcPhlDeno.process_deno mode info
     | PPr pr                    -> EcPhlPr.process_ppr pr
@@ -213,7 +215,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Phoare                    -> EcPhlBdHoare.t_hoare_bd_hoare
     | Pbdhoare_split i          -> EcPhlHiBdHoare.process_bdhoare_split i
     | Pprbounded                -> EcPhlPr.t_prbounded true
-    | Psim info                 -> EcPhlEqobs.process_eqobs_in info
+    | Psim (cm, info)           -> EcPhlEqobs.process_eqobs_in cm info
     | Ptrans_stmt info          -> EcPhlTrans.process_equiv_trans info
     | Psymmetry                 -> EcPhlSym.t_equiv_sym
     | Peager_seq infos          -> curry3 EcPhlEager.process_seq infos
