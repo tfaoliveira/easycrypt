@@ -76,7 +76,7 @@ val process_generalize  : ?doeq:bool -> genpattern list -> backward
 val process_move        : ?doeq:bool -> ppterm list -> prevert -> backward
 val process_clear       : psymbol list -> backward
 val process_smt         : ?loc:EcLocation.t -> ttenv -> pprover_infos -> backward
-val process_apply       : implicits:bool -> apply_t -> backward
+val process_apply       : implicits:bool -> apply_t * prevert option -> backward
 val process_delta       : ?target:psymbol -> (rwside * rwocc * pformula) -> backward
 val process_rewrite     : ttenv -> ?target:psymbol -> rwarg list -> backward
 val process_subst       : pformula list -> backward
@@ -94,9 +94,13 @@ val process_solve       : ?bases:symbol list -> ?depth:int -> backward
 val process_trivial     : backward
 val process_change      : pformula -> backward
 val process_simplify    : preduction -> backward
+val process_cbv         : preduction -> backward
 val process_pose        : psymbol -> ptybindings -> rwocc -> pformula -> backward
 val process_done        : backward
 val process_wlog        : psymbol list -> pformula -> backward
 
 (* -------------------------------------------------------------------- *)
 val process_algebra : [`Solve] -> [`Ring|`Field] -> psymbol list -> backward
+
+(* -------------------------------------------------------------------- *)
+val process_crushmode : crushmode -> bool * backward option

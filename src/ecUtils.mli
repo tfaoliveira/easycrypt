@@ -37,6 +37,7 @@ val (|-) : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
 
 val (|>) : 'a -> ('a -> 'b) -> 'b
 val (<|) : ('a -> 'b) -> 'a -> 'b
+val (|?) : 'a option -> 'a -> 'a
 
 val curry   : ('a1 -> 'a2 -> 'b) -> 'a1 * 'a2 -> 'b
 val uncurry : ('a1 * 'a2 -> 'b) -> 'a1 -> 'a2 -> 'b
@@ -226,6 +227,13 @@ module Buffer : sig
 
   val from_string : ?size:int -> string -> t
   val from_char   : ?size:int -> char -> t
+end
+
+(* -------------------------------------------------------------------- *)
+module Array : sig
+  include module type of BatArray
+
+  val count : ('a -> bool) -> 'a array -> int
 end
 
 (* -------------------------------------------------------------------- *)

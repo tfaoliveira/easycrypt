@@ -35,7 +35,11 @@ val p_top  : path
 val i_Pervasive : symbol
 val p_Pervasive : path
 
-(*-------------------------------------------------------------------- *)
+(* -------------------------------------------------------------------- *)
+val base_rnd : string
+val base_ll  : string
+
+(* -------------------------------------------------------------------- *)
 module CI_Unit : sig
   val p_unit : path
   val p_tt   : path
@@ -68,12 +72,13 @@ module CI_Int : sig
 
   val p_int_elim : path
 
-  val p_int_opp : path
-  val p_int_add : path
-  val p_int_mul : path
-  val p_int_pow : path
-  val p_int_le  : path
-  val p_int_lt  : path
+  val p_int_opp   : path
+  val p_int_add   : path
+  val p_int_mul   : path
+  val p_int_pow   : path
+  val p_int_le    : path
+  val p_int_lt    : path
+  val p_int_edivz : path
 end
 
 (* -------------------------------------------------------------------- *)
@@ -120,6 +125,8 @@ module CI_Distr : sig
   val p_support : path
   val p_mu      : path
   val p_lossless: path
+  val p_uniform : path
+  val p_full    : path
 end
 
 (* -------------------------------------------------------------------- *)
@@ -145,6 +152,8 @@ module CI_Logic : sig
   val p_anda_elim     : path
   val p_and_proj_l    : path
   val p_and_proj_r    : path
+  val p_anda_proj_l   : path
+  val p_anda_proj_r   : path
   val p_or_elim       : path
   val p_ora_elim      : path
   val p_iff_elim      : path

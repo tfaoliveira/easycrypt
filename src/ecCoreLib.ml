@@ -23,6 +23,10 @@ let i_Pervasive = "Pervasive"
 let p_Pervasive = EcPath.pqname p_top i_Pervasive
 let _Pervasive  = fun x -> EcPath.pqname p_Pervasive x
 
+(* -------------------------------------------------------------------- *)
+let base_rnd = "random"
+let base_ll  = "lossless"
+
 (*-------------------------------------------------------------------- *)
 module CI_Unit = struct
   let p_unit  = _Pervasive "unit"
@@ -54,15 +58,20 @@ module CI_Int = struct
   let p_Int = EcPath.pqname p_top i_Int
   let p_int = _Pervasive "int"
 
-  let _Int = fun x -> EcPath.pqname p_Int x
+  let i_IntDiv = "IntDiv"
+  let p_IntDiv = EcPath.pqname p_top i_IntDiv
 
-  let p_int_elim = _Int "intind"
-  let p_int_opp = _Int "[-]"
-  let p_int_add = _Int "+"
-  let p_int_mul = _Int "*"
-  let p_int_pow = _Int "^"
-  let p_int_le  = _Int "<="
-  let p_int_lt  = _Int "<"
+  let _Int    = fun x -> EcPath.pqname p_Int x
+  let _IntDiv = fun x -> EcPath.pqname p_IntDiv x
+
+  let p_int_elim  = _Int "intind"
+  let p_int_opp   = _Int "[-]"
+  let p_int_add   = _Int "+"
+  let p_int_mul   = _Int "*"
+  let p_int_pow   = _Int "^"
+  let p_int_le    = _Int "<="
+  let p_int_lt    = _Int "<"
+  let p_int_edivz = _IntDiv "edivz"
 end
 
 (* -------------------------------------------------------------------- *)
@@ -115,7 +124,8 @@ module CI_Distr = struct
   let p_support  = _Distr "support"
   let p_mu       = _Pervasive "mu"
   let p_lossless = _Distr "is_lossless"
-
+  let p_uniform  = _Distr "is_uniform"
+  let p_full     = _Distr "is_full"
 end
 
 (* -------------------------------------------------------------------- *)
@@ -144,6 +154,8 @@ module CI_Logic = struct
   let p_anda_elim     = _Logic "andaW"
   let p_and_proj_l    = _Logic "andWl"
   let p_and_proj_r    = _Logic "andWr"
+  let p_anda_proj_l   = _Logic "andaWl"
+  let p_anda_proj_r   = _Logic "andaWr"
   let p_or_elim       = _Logic "orW"
   let p_ora_elim      = _Logic "oraW"
   let p_iff_elim      = _Logic "iffW"

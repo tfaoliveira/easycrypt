@@ -123,8 +123,8 @@ op chunk r (bs : 'a list) =
 
 lemma nosmt chunk_le0 r (s : 'a list) : r <= 0 => chunk r s = [].
 proof.
-move/ler_eqVlt=> [->|gt0_r] @/chunk; 1: by rewrite divz0 mkseq0.
-rewrite /chunk mkseq0_le // -opprK divzN oppr_le0.
+move/ler_eqVlt=> [->|gt0_r] @/chunk; 1: by rewrite mkseq0.
+rewrite /chunk mkseq0_le // -oppr_ge0 -divzN.
 by rewrite divz_ge0 ?size_ge0 oppr_gt0.
 qed.
 
@@ -153,7 +153,7 @@ case: (i < n) => [lt_in|/lerNgt le_ni]; 2: rewrite ih ?subr_ge0 //.
 + by move=> x bx; have := eqz x; apply; rewrite /= bx.
 rewrite -mulN1r modzMDr; congr.
 case: (n = 0)=> [^zn ->/=|nz_n]; 2: by rewrite divzMDr 1?addrC.
-rewrite divz0 /= eq_sym nth_neg ?oppr_lt0 // => {ih}; move: eqz.
+rewrite eq_sym nth_neg ?oppr_lt0 // => {ih}; move: eqz.
 by case: bs => // c bs /(_ c) /=; rewrite zn size_eq0 => ->.
 qed.
 
@@ -184,7 +184,8 @@ proof.
 move=> gt0_r; rewrite size_flatten sumzE big_map.
 pose F := fun (x : 'a list) => r; rewrite predT_comp /(\o) /= big_seq.
 rewrite (@eq_bigr _ _ F) /F /=; first by move=> i; apply/in_chunk_size.
-by rewrite -big_seq big_constz count_predT size_chunk // mulrC.
+rewrite -(@big_seq _ (chunk r bs)) big_constz count_predT.
+by rewrite size_chunk // mulrC.
 qed.
 
 lemma chunkK r (bs : 'a list) : 0 < r =>

@@ -24,8 +24,7 @@ lemma dlistS (d : 'a distr) n:
 proof.
 elim n=> [|n le0_n ih].
 + by rewrite !dlist_def /= -foldpos // fold0.
-rewrite dlist_def -foldpos 1:/# -dlist_def /=.
-by have <-: n + 1 = n + 1 + 1 - 1 by ring.
+by rewrite dlist_def -foldpos 1:/# -dlist_def /=.
 qed.
 
 lemma dlist01E (d : 'a distr) n x:
@@ -70,6 +69,10 @@ rewrite dlistS // supp_dmap /=;split => [[p]|].
   by rewrite Hp Ha addzC. 
 case xs => //= [/# | x xs [# Hs Hin Ha]];exists (x,xs);smt (supp_dprod).
 qed.
+
+lemma supp_dlist_size (d : 'a distr) n xs:
+  0 <= n => xs \in dlist d n => size xs = n.
+proof. by move=> ge0_n; case/(supp_dlist d n xs ge0_n). qed.
 
 lemma dlist1E (d : 'a distr) n xs:
   0 <= n =>
