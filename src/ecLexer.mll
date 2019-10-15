@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -48,12 +49,14 @@
     "glob"        , GLOB       ;        (* KW: prog *)
     "let"         , LET        ;        (* KW: prog *)
     "in"          , IN         ;        (* KW: prog *)
+    "for"         , FOR        ;        (* KW: prog *)
     "var"         , VAR        ;        (* KW: prog *)
     "proc"        , PROC       ;        (* KW: prog *)
     "if"          , IF         ;        (* KW: prog *)
     "then"        , THEN       ;        (* KW: prog *)
     "else"        , ELSE       ;        (* KW: prog *)
     "elif"        , ELIF       ;        (* KW: prog *)
+    "for"         , FOR        ;        (* KW: prog *)
     "while"       , WHILE      ;        (* KW: prog *)
     "assert"      , ASSERT     ;        (* KW: prog *)
     "return"      , RETURN     ;        (* KW: prog *)
@@ -79,6 +82,7 @@
     "logic"       , LOGIC      ;        (* KW: tactic *)
     "delta"       , DELTA      ;        (* KW: tactic *)
     "simplify"    , SIMPLIFY   ;        (* KW: tactic *)
+    "cbv"         , CBV        ;        (* KW: tactic *)
     "congr"       , CONGR      ;        (* KW: tactic *)
 
     (* Logic tactics *)
@@ -93,6 +97,8 @@
     "have"        , HAVE       ;        (* KW: tactic *)
     "suff"        , SUFF       ;        (* KW: tactic *)
     "elim"        , ELIM       ;        (* KW: tactic *)
+    "exlim"       , EXLIM      ;        (* KW: tactic *)
+    "ecall"       , ECALL      ;        (* KW: tactic *)
     "clear"       , CLEAR      ;        (* KW: tactic *)
     "wlog"        , WLOG       ;        (* KW: tactic *)
 
@@ -147,6 +153,7 @@
     "conseq"      , CONSEQ     ;        (* KW: tactic *)
     "exfalso"     , EXFALSO    ;        (* KW: tactic *)
     "inline"      , INLINE     ;        (* KW: tactic *)
+    "interleave"  , INTERLEAVE ;        (* KW: tactic *)
     "alias"       , ALIAS      ;        (* KW: tactic *)
     "fission"     , FISSION    ;        (* KW: tactic *)
     "fusion"      , FUSION     ;        (* KW: tactic *)
@@ -164,6 +171,7 @@
     "abort"       , ABORT      ;        (* KW: global *)
     "goal"        , GOAL       ;        (* KW: global *)
     "end"         , END        ;        (* KW: global *)
+    "from"        , FROM       ;        (* KW: global *)
     "import"      , IMPORT     ;        (* KW: global *)
     "export"      , EXPORT     ;        (* KW: global *)
     "include"     , INCLUDE    ;        (* KW: global *)
@@ -212,6 +220,7 @@
   let _operators = [
     (":"   , (COLON            , true ));
     ("#"   , (SHARP            , true ));
+    ("#|"   ,(SHARPPIPE        , true ));
     ("//"  , (SLASHSLASH       , true ));
     ("//#" , (SLASHSLASHSHARP  , true ));
     ("/="  , (SLASHEQ          , true ));
@@ -307,28 +316,6 @@
   let lex_tick_operator (op : string) =
     let name = Printf.sprintf "`%s`" op in
     lex_std_op ~name op
-
-  (* ------------------------------------------------------------------ *)
-  exception InvalidCodePosition
-
-  let cposition_of_string =
-    let cpos1 x =
-      try  int_of_string x
-      with Failure x when x = "int_of_string" ->
-        raise InvalidCodePosition
-    in
-
-    let rec doit = function
-      | Str.Text c :: []                  -> (cpos1 c, None)
-      | Str.Text c :: Str.Delim "." :: tl -> (cpos1 c, Some (0, doit tl))
-      | Str.Text c :: Str.Delim "?" :: tl -> (cpos1 c, Some (1, doit tl))
-      | _ -> raise InvalidCodePosition
-    in
-      fun s -> doit (Str.full_split (Str.regexp "[.?]") s)
-
-  let cposition_of_string s =
-    try  Some (cposition_of_string s)
-    with InvalidCodePosition -> None
 }
 
 let empty   = ""
@@ -364,6 +351,11 @@ rule main = parse
   | mident       { [MIDENT (Lexing.lexeme lexbuf)] }
   | uint         { [UINT (BI.of_string (Lexing.lexeme lexbuf))] }
 
+  | (digit+ as n) '.' (digit+ as f) {
+      let nv, fv = BI.of_string n, BI.of_string f in
+      [DECIMAL (nv, (String.length f, fv))]
+    }
+
   | "(*" binop "*)" { main lexbuf }
   | '(' blank* (binop as s) blank* ')' { [PBINOP s] }
 
@@ -383,11 +375,6 @@ rule main = parse
   | ".["    { [DLBRACKET] }
   | ".`"    { [DOTTICK  ] }
   | "{0,1}" { [RBOOL    ] }
-
-  (* position *)
-  | (digit+ ['.' '?'])+ digit+ {
-      [CPOS (oget (cposition_of_string (Lexing.lexeme lexbuf)))]
-    }
 
   (* punctuation *)
   | '_'   { [UNDERSCORE] }
@@ -410,6 +397,7 @@ rule main = parse
   | "`|"  { [TICKPIPE  ] }
   | "<$"  { [LESAMPLE  ] }
   | "<@"  { [LEAT      ] }
+  | ":~"  { [COLONTILD ] }
 
   | "/~="  { [SLASHTILDEQ     ] }
   | "//~=" { [SLASHSLASHTILDEQ] }

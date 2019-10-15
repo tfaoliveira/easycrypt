@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -24,7 +25,12 @@ module PPEnv : sig
 end
 
 (* -------------------------------------------------------------------- *)
+type prpo_display = { prpo_pr : bool; prpo_po : bool; }
+
+(* -------------------------------------------------------------------- *)
 val string_of_hcmp : EcFol.hoarecmp -> string
+val string_of_cpos1 : EcParsetree.codepos1 -> string
+
 (* -------------------------------------------------------------------- *)
 type 'a pp = Format.formatter -> 'a -> unit
 
@@ -69,9 +75,9 @@ val pp_modexp   : PPEnv.t -> (mpath * module_expr          ) pp
 val pp_modsig   : PPEnv.t -> (path * module_sig            ) pp
 
 (* -------------------------------------------------------------------- *)
-val pp_hoareS   : PPEnv.t -> hoareS  pp
-val pp_bdhoareS : PPEnv.t -> bdHoareS pp
-val pp_equivS   : PPEnv.t -> equivS  pp
+val pp_hoareS   : PPEnv.t -> ?prpo:prpo_display -> hoareS  pp
+val pp_bdhoareS : PPEnv.t -> ?prpo:prpo_display -> bdHoareS pp
+val pp_equivS   : PPEnv.t -> ?prpo:prpo_display -> equivS  pp
 
 val pp_stmt  : ?lineno:bool -> PPEnv.t -> stmt pp
 val pp_instr : PPEnv.t -> instr pp
@@ -83,7 +89,7 @@ type ppgoal = (EcBaseLogic.hyps * EcFol.form) * [
 ]
 
 val pp_hyps : PPEnv.t -> EcEnv.LDecl.hyps pp
-val pp_goal : PPEnv.t -> ppgoal pp
+val pp_goal : PPEnv.t -> prpo_display -> ppgoal pp
 
 (* -------------------------------------------------------------------- *)
 module ObjectInfo : sig
