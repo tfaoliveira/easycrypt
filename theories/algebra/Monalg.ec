@@ -1,5 +1,5 @@
 (* -------------------------------------------------------------------- *)
-require import Option Bool Pred Fun ExtEq Finite Int IntExtra List.
+require import AllCore IntExtra Finite List.
 require (*--*) Monoid Ring Subtype Bigalg.
 
 pragma -oldip.
@@ -54,7 +54,7 @@ split=> [qC|]; pose F := fun x => C x <> zeror.
 + by exists (Finite.to_seq F) => x nz_Cx; apply/Finite.mem_to_seq.
 case=> s x_in_s; exists (undup (filter F s)).
 rewrite undup_uniq /= => x; rewrite mem_undup mem_filter /F.
-by rewrite -eq_iff; apply/andb_idr/x_in_s.
+by apply/andb_idr/x_in_s.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -73,7 +73,7 @@ abbrev "_.[_]" m z = mcoeff m z.
 lemma monalg_eqE m1 m2 : (m1 = m2) <=> (forall x, m1.[x] = m2.[x]).
 proof.
 split=> [->//|eq]; apply/Supp.val_inj.
-by apply/ExtEq.fun_ext=> x; rewrite eq.
+by apply/fun_ext=> x; rewrite eq.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -128,7 +128,7 @@ hint rewrite mcoeff : moppE.
 lemma maddE m1 m2 x : (m1 + m2).[x] = m1.[x] + m2.[x].
 proof.
 rewrite mcoeffE // qnullP; exists (support m1 ++ support m2) => /=.
-move=> {x}x; apply/absurd=> /=; rewrite mem_cat -nor; case.
+move=> {x}x; apply/absurd=> /=; rewrite mem_cat negb_or; case.
 by move=> /supportPn-> /supportPn->; rewrite addr0.
 qed.
 
@@ -172,7 +172,7 @@ split=> [[pM qM]|]; pose F := fun i => M i <> 0.
   by exists (Finite.to_seq F) => x nz_Mx; apply/Finite.mem_to_seq.
 case=> pM [s x_in_s]; split=> //; exists (undup (filter F s)).
 rewrite undup_uniq /= => x; rewrite mem_undup mem_filter /F.
-by rewrite -eq_iff; apply/andb_idr/x_in_s.
+by apply/andb_idr/x_in_s.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -217,7 +217,7 @@ rewrite mpowE // qmonomP => /=; split=> [{i} i|].
 + by rewrite addz_ge0.
 pose s1 := Finite.to_seq (fun x => mpow M1 x <> 0).
 pose s2 := Finite.to_seq (fun x => mpow M2 x <> 0).
-exists (s1 ++ s2) => {i}i; apply/absurd=> /=; rewrite mem_cat -nor.
+exists (s1 ++ s2) => {i}i; apply/absurd=> /=; rewrite mem_cat negb_or.
 by rewrite !mem_to_seq //=; case=> -> ->.
 qed.
 
@@ -228,7 +228,7 @@ lemma monom_eqE M1 M2 : (M1 = M2) <=>
   (forall x, mpow M1 x = mpow M2 x).
 proof.
 split=> [->//|eq]; apply/Monom.val_inj.
-by apply/ExtEq.fun_ext=> x; rewrite eq.
+by apply/fun_ext=> x; rewrite eq.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -264,5 +264,3 @@ realize ZM.Axioms.addmA by exact MonomMonoid.addmA.
 realize ZM.Axioms.addmC by exact MonomMonoid.addmC.
 realize ZM.Axioms.add0m by exact MonomMonoid.add0m.
 end MPoly.
-
-print MPoly.
