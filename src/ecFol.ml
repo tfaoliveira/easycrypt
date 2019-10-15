@@ -103,6 +103,43 @@ let f_real_sub f1 f2 =
 let f_real_div f1 f2 =
   f_real_mul f1 (f_real_inv f2)
 
+let f_decimal (n, (l, f)) =
+  let nv = f_real_of_int (f_int n) in
+
+  if EcBigInt.equal f EcBigInt.zero then nv else
+
+  let f = f_real_of_int (f_int f) in
+  let u = f_int (EcBigInt.pow (EcBigInt.of_int 10) l) in
+  let u = f_real_of_int u in
+  let d = f_real_div f u in
+
+  if EcBigInt.equal n EcBigInt.zero then d else
+
+  f_real_add (f_real_of_int (f_int n)) d
+
+(* -------------------------------------------------------------------- *)
+let tmap aty bty =
+  tconstr CI.CI_Map.p_map [aty; bty]
+
+let fop_map_cst aty bty =
+  f_op CI.CI_Map.p_cst [aty; bty] (toarrow [bty] (tmap aty bty))
+
+let fop_map_get aty bty =
+  f_op CI.CI_Map.p_get [aty; bty] (toarrow [tmap aty bty; aty] bty)
+
+let fop_map_set aty bty =
+  f_op CI.CI_Map.p_set [aty; bty]
+    (toarrow [tmap aty bty; aty; bty] (tmap aty bty))
+
+let f_map_cst aty f =
+  f_app (fop_map_cst aty f.f_ty) [f] (tmap aty f.f_ty)
+
+let f_map_get m x bty =
+  f_app (fop_map_get x.f_ty bty) [m;x] bty
+
+let f_map_set m x e =
+  f_app (fop_map_set x.f_ty e.f_ty) [m;x;e] (tmap x.f_ty e.f_ty)
+
 (* -------------------------------------------------------------------- *)
 let f_predT     ty = f_op CI.CI_Pred.p_predT [ty] (tcpred ty)
 let fop_pred1   ty = f_op CI.CI_Pred.p_pred1 [ty] (toarrow [ty; ty] tbool)
@@ -216,6 +253,7 @@ let f_int_opp_simpl f =
   | Fapp (op, [f]) when f_equal op fop_int_opp -> f
   | _ -> if f_equal f_i0 f then f_i0 else f_int_opp f
 
+(* -------------------------------------------------------------------- *)
 let f_int_add_simpl =
   let try_add_opp f1 f2 =
     try
@@ -256,9 +294,11 @@ let f_int_add_simpl =
           (fun () -> f_int_add f1 f2)
           (List.Exceptionless.find_map (fun f -> f ()) simpls)
 
+(* -------------------------------------------------------------------- *)
 let f_int_sub_simpl f1 f2 =
   f_int_add_simpl f1 (f_int_opp_simpl f2)
 
+(* -------------------------------------------------------------------- *)
 let f_int_mul_simpl f1 f2 =
   try  f_int (destr_int f1 *^ destr_int f2)
   with DestrError _ ->
@@ -266,6 +306,19 @@ let f_int_mul_simpl f1 f2 =
     else if f_equal f_i1 f1 then f2
     else if f_equal f_i1 f2 then f1
     else f_int_mul f1 f2
+
+(* -------------------------------------------------------------------- *)
+let f_int_edivz_simpl f1 f2 =
+  if f_equal f2 f_i0 then f_tuple [f_i0; f1]
+  else
+    try
+      let q,r = BI.ediv (destr_int f1) (destr_int f2) in
+      f_tuple [f_int q; f_int r]
+    with DestrError _ ->
+      if f_equal f1 f_i0 then f_tuple [f_i0; f_i0]
+      else if f_equal f2 f_i1 then f_tuple [f1; f_i0]
+      else if f_equal f2 f_im1 then f_tuple [f_int_opp_simpl f1; f_i0]
+      else f_int_edivz f1 f2
 
 (* -------------------------------------------------------------------- *)
 let destr_rdivint =
@@ -543,6 +596,12 @@ let f_and_simpl f1 f2 =
 
 let f_ands_simpl = List.fold_right f_and_simpl
 
+let f_ands0_simpl fs =
+  match List.rev fs with
+  | [] -> f_true
+  | [x] -> x
+  | f::fs -> f_ands_simpl (List.rev fs) f
+
 let f_anda_simpl f1 f2 =
   if is_true f1 then f2
   else if is_false f1 then f_false
@@ -653,10 +712,14 @@ type op_kind = [
   | `Int_mul
   | `Int_pow
   | `Int_opp
+  | `Int_edivz
   | `Real_add
   | `Real_opp
   | `Real_mul
   | `Real_inv
+  | `Map_get
+  | `Map_set
+  | `Map_cst
 ]
 
 let operators =
@@ -677,12 +740,18 @@ let operators =
      CI.CI_Int .p_int_opp , `Int_opp  ;
      CI.CI_Int .p_int_mul , `Int_mul  ;
      CI.CI_Int .p_int_pow , `Int_pow  ;
+     CI.CI_Int .p_int_edivz , `Int_edivz  ;
+
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
      CI.CI_Real.p_real_mul, `Real_mul ;
      CI.CI_Real.p_real_inv, `Real_inv ;
      CI.CI_Real.p_real_le , `Real_le  ;
-     CI.CI_Real.p_real_lt , `Real_lt  ; ]
+     CI.CI_Real.p_real_lt , `Real_lt  ;
+     CI.CI_Map.p_get      , `Map_get  ;
+     CI.CI_Map.p_set      , `Map_set  ;
+     CI.CI_Map.p_cst      , `Map_cst  ;
+  ]
   in
 
   let tbl = EcPath.Hp.create 11 in
@@ -699,8 +768,9 @@ let is_logical_op op =
   | Some (
         `Not | `And _ | `Or _ | `Imp | `Iff | `Eq
       | `Int_le   | `Int_lt   | `Real_le  | `Real_lt
-      | `Int_add  | `Int_opp  | `Int_mul
+      | `Int_add  | `Int_opp  | `Int_mul | `Int_edivz
       | `Real_add | `Real_opp | `Real_mul | `Real_inv
+      | `Map_get  | `Map_set  | `Map_cst
    ) -> true
 
   | _ -> false
@@ -898,3 +968,13 @@ let destr_exists_prenex f =
     match prenex_exists [] f with
     | [] , _ -> destr_error "exists"
     | bds, f -> (bds, f)
+
+(* -------------------------------------------------------------------- *)
+let destr_ands ~deep =
+  let rec doit f =
+    try
+      let (f1, f2) = destr_and f in
+      (if deep then doit f1 else [f1]) @ (doit f2)
+    with DestrError _ -> [f]
+
+  in fun f -> doit f
