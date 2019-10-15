@@ -908,16 +908,20 @@ lemma dmap_ll (d : 'a distr) (f : 'a -> 'b) :
   is_lossless d => is_lossless (dmap d f).
 proof. by rewrite /is_lossless weight_dmap. qed.
 
-lemma dmap_uni (d : 'a distr) (f : 'a -> 'b) : 
-  injective f => is_uniform d => is_uniform (dmap d f).
-proof. 
-  move=> finj duni x y /supp_dmap [a [ina ->]] /supp_dmap [b [inb ->]].
-  rewrite !dmap1E.
-  have Heq: forall z, pred1 (f z) \o f = pred1 z.
-  + move=> z;apply fun_ext => z' @/(\o) @/pred1 /=.
-    apply eq_iff => />; apply finj.
-  by rewrite !Heq;apply duni.
+lemma dmap_uni_in_inj (d : 'a distr) (f : 'a -> 'b) :
+     (forall (x, y : 'a), x \in d => y \in d => f x = f y => x = y)
+  => is_uniform d => is_uniform (dmap d f).
+proof.
+move=> finj_in duni x y /supp_dmap [a [ina ->]] /supp_dmap [b [inb ->]].
+have eq: forall z, z \in d => mu d (pred1 (f z) \o f) = mu d (pred1 z).
++ move=> z inz; rewrite (@mu_eq_support d (pred1 (f z) \o f) (pred1 z)) //.
+  move=> x0 inx0 @/(\o) @/pred1 /=; rewrite eq_iff=> />; exact/finj_in.
+by rewrite !dmap1E !eq //; apply/duni.
 qed.
+
+lemma dmap_uni (d : 'a distr) (f : 'a -> 'b) :
+  injective f => is_uniform d => is_uniform (dmap d f).
+proof. by move=> finj; apply dmap_uni_in_inj=> x y _ _; apply/finj. qed.
 
 lemma dmap_funi (d : 'a distr) (f : 'a -> 'b) : 
   bijective f => is_funiform d => is_funiform (dmap d f).
@@ -1174,7 +1178,7 @@ lemma dmap_dprod ['a1 'a2 'b1 'b2]
   = dmap (d1 `*` d2) (fun xy : _ * _ => (f1 xy.`1, f2 xy.`2)).
 proof.
 apply/eq_distr=> -[b1 b2]; rewrite !dprod1E !dmap1E /(\o) /=.
-by rewrite -dprodE &(mu_eq) /= => -[a1 a2] @/pred1 /=; rewrite andabP.
+by rewrite -dprodE &(mu_eq) /= => -[a1 a2] @/pred1.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -1205,7 +1209,7 @@ elim: ds xs => [|d ds ih] xs /=; 1: rewrite djoin_nil dunitE.
 rewrite djoin_cons /= dmap1E /(\o) /=; case: xs => [|x xs] /=.
 + by rewrite add1z_neq0 1:size_ge0 /= mu0_false.
 rewrite -(@mu_eq _ (pred1 (x, xs))).
-+ by case=> y ys @/pred1 /=; rewrite andabP.
++ by case=> y ys @/pred1 /=.
 rewrite dprod1E ih BRM.big_cons /predT /=; pose B := BRM.big _ _ _.
 by rewrite (@fun_if (( * ) (mu1 d x))) /= /#.
 qed.
@@ -1287,7 +1291,7 @@ lemma djoin_uni (ds:'a distr list):
   (forall d, d \in ds => is_uniform d) => is_uniform (djoin ds).
 proof.
 elim: ds => [|d ds ih] h //=; rewrite !djoinE; 1: by apply/dunit_uni.
-rewrite dmap_uni => [[x xs] [y ys] /= [2!->//]|].
+rewrite dmap_uni => [[x xs] [y ys] //=|].
 apply: dprod_uni; [apply/h | apply/ih] => //.
 by move=> d' hd'; apply/h => /=; rewrite hd'.
 qed.
