@@ -115,7 +115,7 @@ op [ - ] (m : monalg) =
 op ( + ) (m1 m2 : monalg) =
   mkmonalg (fun x => m1.[x] + m2.[x]).
 
-op ( ** ) (c : R) (m : monalg) =
+op ( *& ) (c : R) (m : monalg) =
   mkmonalg (fun x => c * m.[x]).
 
 op ( * ) (m1 m2 : monalg) =
@@ -164,7 +164,7 @@ qed.
 hint rewrite mcoeff : maddE.
 
 (* -------------------------------------------------------------------- *)
-lemma mscaleE c m x : (c ** m).[x] = c * m.[x].
+lemma mscaleE c m x : (c *& m).[x] = c * m.[x].
 proof.
 rewrite mcoeffE // qnullP; exists (support m) => /=.
 by move=> {x}x; rewrite mulf_eq0 negb_or supportP.
@@ -274,6 +274,48 @@ qed.
 (* -------------------------------------------------------------------- *)
 lemma mulm1 : right_id monalg1 ( * ).
 proof. by move=> m; rewrite mulmC &(mul1m). qed.
+
+(* -------------------------------------------------------------------- *)
+op b2r (b : bool) = if b then oner else zeror.
+
+lemma ifb2rE b E : (if b then E else zeror) = b2r b * E.
+proof. by rewrite /b2r; case: b => _; rewrite (mul1r, mul0r). qed.
+
+lemma mulmA : associative ( * ).
+proof.
+move=> m1 m2 m3; apply/monalg_eqE=> x.
+pose E1 := support m1; pose E2 := support m2; pose E3 := support m3.
+pose E := E1 ++ E2 ++ E3 ++ support (m1 * m2) ++ support (m2 * m3).
+pose F (x : M) (x1 x2 x3 : M) :=
+  if   x1 + x2 + x3 = x
+  then m1.[x1] * m2.[x2] * m3.[x3]
+  else zeror.
+pose G := BAdd.big predT (fun x1 =>
+            BAdd.big predT (fun x2 =>
+              BAdd.big predT (fun x3 => F x x1 x2 x3) (undup E))
+            (undup E)) (undup E).
+apply (@eq_trans _ G) => @/G => {G}.
+rewrite (@mmulELw _ _ (undup E) (undup E)) ?undup_uniq.
+- by move=> ? @/E; rewrite mem_undup !mem_cat => ->.
+- by move=> ? @/E; rewrite mem_undup !mem_cat => ->.
+- apply: BAdd.eq_bigr=> /= x1 _ @/CM1 /=.
+  pose G (y : M) :=
+    BAdd.big predT (fun x2 : M =>
+      BAdd.big predT
+        (fun x3 => b2r (x2 + x3 = y) * F x x1 x2 x3)
+        (undup E))
+    (undup E).
+  rewrite (@BAdd.eq_bigr _ _ G) => /= [y _|].
+  + rewrite /G (@mmulELw _ _ (undup E) (undup E)) ?undup_uniq.
+    * by move=> ? @/E; rewrite mem_undup !mem_cat => ->.
+    * by move=> ? @/E; rewrite mem_undup !mem_cat => ->.
+  + rewrite ifb2rE !BAdd.mulr_sumr; apply: BAdd.eq_bigr=> x2 _ /=.
+    rewrite !BAdd.mulr_sumr; apply: BAdd.eq_bigr=> x3 _ @/CM1 @/F /=.
+    rewrite ifb2rE. case: (x2 + x3 = y) => [<-|]; 2: by rewrite !(mulr0, mul0r).
+    rewrite addmA /=; case: (_ = x) => //=.
+    * by rewrite !(mulr1, mul1r) mulrA.
+    * by rewrite !(mulr0, mul0r).
+  rewrite /G.
 
 (* -------------------------------------------------------------------- *)
 clone Ring.ZModule as MAZM with
