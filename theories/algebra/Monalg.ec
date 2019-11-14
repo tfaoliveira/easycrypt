@@ -14,6 +14,13 @@ clone import Ring.IDomain as ZR with type t <- R.
 clear [ZR.* ZR.AddMonoid.* ZR.MulMonoid.*].
 
 (* -------------------------------------------------------------------- *)
+Monoid[type t; t] <- ZModule[t] <- Ring[t] <- ComRing[t] <- IDomain[t]
+
+Big [ type t; Monoid[t] ] <- BigZModule [ ZModule [t] ] <- BigComRing [ ComRing[t] ].
+
+theory T <- U
+
+
 clone import Bigalg.BigComRing as Big with
   type t <- R,
   pred CR.unit   <- ZR.unit,
@@ -60,6 +67,31 @@ qed.
 (* -------------------------------------------------------------------- *)
 clone Subtype as Supp with
   type T <- (M -> R), type sT <- monalg, pred P C <- qnull C.
+
+M, R
+
+"p, q = \sum_(i \in R) a_i (i)" où les a_i sont presques tous nuls
+
+0 => a_i = 0
+c => c (1)
+(p + q)_i = \sum_i (p_i + q_i) (i)
+c *: p = \sum_i (c * p_i) (i)
+
+(p * q)_i = \sum_(i1, i2 | i1 + i2 = i) (p_i1 * q_i2) (i)
+
+p * q = \sum_(i1, i2 | i1 + i2 = i) (p_i1 (i1) + q_i2 (i2))
+
+M = nat
+
+X, M = X -> nat
+
+XYX <> X2Y
+
+X, M = list X
+
+with theory T <- U.
+
+
 
 (* -------------------------------------------------------------------- *)
 op monalg0 = Supp.insubd (fun _ => zeror).
