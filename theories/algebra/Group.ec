@@ -5,13 +5,8 @@ require (*--*) FinType Ring Number StdOrder.
 import Ring.IntID StdOrder.IntOrder.
 
 (* ==================================================================== *)
-abstract theory FinGroup.
+abstract theory Group.
 type group.
-
-clone include FinType
-  with type t <- group
-  rename "card" as "order"
-  rename "enum" as "elems".
 
 (* -------------------------------------------------------------------- *)
 op e     : group.
@@ -228,13 +223,59 @@ elim/intwlog: k2 => [i| |i ge0_i ih].
 + by rewrite mulr0 !exp0.
 + by rewrite mulrDr /= !expD exp1 ih.
 qed.
-end FinGroup.
+end Group.
+
+(* ==================================================================== *)
+abstract theory ComGroup.
+type group.
+
+op e     : group.
+op ( * ) : group -> group -> group.
+op inv   : group -> group.
+
+axiom mulcC : commutative ( * ).
+
+clone include Group
+  with type group <- group,
+         op e     <- e    ,
+         op ( * ) <- ( * ),
+         op inv   <- inv  
+  proof mulc1, mulcV
+  rename "invM" as "invM_com".
+
+realize mulc1 by move=> x; rewrite mulcC mul1c.
+realize mulcV by move=> x; rewrite mulcC mulVc.
+
+(* -------------------------------------------------------------------- *)
+lemma invM x y : inv (x * y) = inv x * inv y.
+proof. by rewrite invM_com mulcC. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma expcpM x y k : (x * y) ^+ k = x ^+ k * y ^+ k.
+proof. by apply/exppcM_com/mulcC. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma expcM x y k : (x * y) ^ k = x ^ k * y ^ k.
+proof. by apply/expcM_com/mulcC. qed.
+end ComGroup.
 
 (* ==================================================================== *)
 abstract theory CyclicGroup.
 
+type group.
+
 (* -------------------------------------------------------------------- *)
-clone include FinGroup.
+clone include FinType
+  with type t <- group
+  rename "card" as "order"
+  rename "enum" as "elems".
+
+(* -------------------------------------------------------------------- *)
+(* FIXME: add a mechanism to add the generator during the clone         *)
+(*        s.t. mulcC is provable (see below)                            *)
+clone include ComGroup
+  with type group <- group
+  rename "mulcC" as "mulcC_com".
 
 (* -------------------------------------------------------------------- *)
 op g : group.
@@ -247,14 +288,6 @@ proof.
 move=> x y; move: (monogenous x) (monogenous y).
 by move=> [kx ->] [ky ->]; rewrite -!expD addrC.
 qed.
-
-(* -------------------------------------------------------------------- *)
-lemma expcpM x y k : (x * y) ^+ k = x ^+ k * y ^+ k.
-proof. by apply/exppcM_com/mulcC. qed.
-
-(* -------------------------------------------------------------------- *)
-lemma expcM x y k : (x * y) ^ k = x ^ k * y ^ k.
-proof. by apply/expcM_com/mulcC. qed.
 
 (* -------------------------------------------------------------------- *)
 op log_spec (x : group) =
