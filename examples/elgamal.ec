@@ -1,5 +1,5 @@
 (* -------------------------------------------------------------------- *)
-require import AllCore Int Real Distr DBool.
+require import AllCore Int IntDiv Real Distr DBool.
 require (*--*) DiffieHellman PKE_CPA.
 
 (* ---------------- Sane Default Behaviours --------------------------- *)
@@ -8,13 +8,12 @@ pragma +implicits.
 
 (* ---------------------- Let's Get Started --------------------------- *)
 (** Assumption: set DDH *)
-(*** WARNING: DiffieHellman is really out of date ***)
 clone import DiffieHellman as DH.
-import DDH FDistr.
+import DDH G.
 
 (** Construction: a PKE **)
 type pkey = group.
-type skey = F.t.
+type skey = int.
 type ptxt = group.
 type ctxt = group * group.
 
@@ -29,14 +28,14 @@ module ElGamal : Scheme = {
   proc kg(): pkey * skey = {
     var sk;
 
-    sk <$ dt;
+    sk <$ dp;
     return (g ^ sk, sk);
   }
 
   proc enc(pk:pkey, m:ptxt): ctxt = {
     var y;
 
-    y <$ dt;
+    y <$ dp;
     return (g ^ y, pk ^ y * m);
   }
 
@@ -44,7 +43,7 @@ module ElGamal : Scheme = {
     var gy, gm;
 
     (gy, gm) <- c;
-    return Some (gm * gy^(-sk));
+    return Some (gm * gy ^ -sk);
   }
 }.
 
@@ -52,6 +51,7 @@ module ElGamal : Scheme = {
 module DDHAdv (A:Adversary) = {
   proc guess (gx, gy, gz) : bool = {
     var m0, m1, b, b';
+
     (m0, m1) <- A.choose(gx);
     b        <$ {0,1};
     b'       <@ A.guess(gy, gz * (b?m1:m0));
@@ -76,17 +76,17 @@ section Security.
   swap{1} 7 -5.
   auto; call (_:true).
   auto; call (_:true).
-  by auto=> /> sk _ y _ r b _; rewrite pow_pow.
+  by auto=> /> sk _ y _ r b _; rewrite -expM.
   qed.
 
   local module Gb = {
     proc main () : bool = {
       var x, y, z, m0, m1, b, b';
-      x       <$ FDistr.dt;
-      y       <$ FDistr.dt;
-      (m0,m1) <@ A.choose(g^x);
-      z       <$ FDistr.dt;
-      b'      <@ A.guess(g^y, g^z);
+      x       <$ dp;
+      y       <$ dp;
+      (m0,m1) <@ A.choose(g ^ x);
+      z       <$ dp;
+      b'      <@ A.guess(g ^ y, g ^ z);
       b       <$ {0,1};
       return b' = b;
     }
@@ -99,15 +99,19 @@ section Security.
   byequiv=> //; proc; inline *.
   swap{1} 3 2; swap{1} [5..6] 2; swap{2} 6 -2.
   auto; call (_:true); wp.
-  rnd (fun z, z + log (if b then m1 else m0){2})
-      (fun z, z - log (if b then m1 else m0){2}).
+  rnd (fun z=> (z + log (if b then m1 else m0){2}) %% order)
+      (fun z=> (z - log (if b then m1 else m0){2}) %% order).
   auto; call (_:true).
   auto=> /> x _ y _ [m0 m1] b _; progress.
-  + by algebra.
-  + exact/FDistr.dt_funi.
-  + exact/FDistr.dt_fu.
-  + by algebra.
-  + by algebra.
+  + rewrite modzDml Ring.IntID.subrK modz_small //.
+    by move: H; rewrite DInterval.supp_dinter /#.
+  + apply/DInterval.dinter_uni.
+    + exact/H0.
+    by rewrite DInterval.supp_dinter [smt(gt0_order edivzP)].
+  + by rewrite DInterval.supp_dinter [smt(gt0_order edivzP)].
+  + rewrite /(+%) modzDml -addzA /= modz_small //.
+    by move: H1; rewrite DInterval.supp_dinter /#.
+  by rewrite expg_modz expD expgK.
   qed.
 
   local lemma Gb_half &m:
@@ -119,7 +123,7 @@ section Security.
   + by move=> /> b; rewrite dbool1E pred1E.
   call Ag_ll.
   auto; call Ac_ll.
-  by auto=> />; exact/dt_ll.
+  by auto=> />; apply/DInterval.dinter_ll; smt(gt0_order).
   qed.
 
   lemma conclusion &m :
