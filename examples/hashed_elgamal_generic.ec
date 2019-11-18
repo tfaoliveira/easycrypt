@@ -1,5 +1,5 @@
 require import AllCore Int Real FSet.
-require (*--*) BitWord Distr DInterval.
+require (*--*) BitWord Distr.
 (*---*) import StdOrder.RealOrder.
 require (*--*) DiffieHellman ROM PKE_CPA.
 (*---*) import DiffieHellman.
@@ -253,7 +253,7 @@ section.
     rewrite (G0_D &m) (G1_D &m) (G2_D &m).
     apply (OnBound.ROM_BadCall D _ _ &m).
     + move=> H0 H0_o_ll; proc; auto; call (choose_ll H0 _)=> //; auto=> />.
-      smt(gt0_order DInterval.dinter_ll DBool.dbool_ll).
+      smt(dp_ll DBool.dbool_ll).
     by progress; proc; call (guess_ll H _)=> //; auto.
   qed.
 
@@ -305,7 +305,7 @@ section.
       first by progress; apply (choose_ll O).
       by proc; sp; if=> //; wp; call (Log_o_ll RO _).
     inline H.init RO.init; auto=> />.
-    smt(gt0_order DInterval.dinter_ll dbits_ll DBool.dbool1E).
+    smt(dp_ll dbits_ll DBool.dbool1E).
   qed.
 
   local module G2' = {

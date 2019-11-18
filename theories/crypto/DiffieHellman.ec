@@ -6,11 +6,12 @@
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
-require import AllCore IntDiv RealExtra StdRing StdOrder Distr List FSet DInterval.
+require import AllCore IntDiv RealExtra StdRing StdOrder Distr List FSet.
 (*---*) import RField RealOrder.
-require (*  *) Group.
+require (*  *) Group DInterval.
 
 clone import Group.CyclicGroup as G.
+
 
 clone include MFinite with
   type            t <- group,
@@ -18,7 +19,34 @@ clone include MFinite with
 proof Support.enum_spec by exact/elems_spec
 rename "dunifin" as "dg".
 
+
 op dp = [0..order - 1].
+
+lemma dp_ll: is_lossless dp.
+proof. exact/DInterval.dinter_ll/ltzS/gt0_order. qed.
+
+lemma supp_dp x:
+  x \in dp <=> 0 <= x < order.
+proof. by rewrite DInterval.supp_dinter -(ltzS x). qed.
+
+lemma mod_in_dp x: x %% order \in dp.
+proof. by rewrite supp_dp; smt(edivzP gt0_order). qed.
+
+lemma dp_uni x y :
+  x \in dp =>
+  y \in dp =>
+  mu1 dp x = mu1 dp y.
+proof. by move=> x_in_dp y_in_dp; exact/DInterval.dinter_uni. qed.
+
+lemma dp1E x :
+  x \in dp =>
+  mu1 dp x = inv order%r.
+proof. by rewrite DInterval.dinter1E supp_dp -(ltzS x)=> ->. qed.
+
+lemma dp1E_mod x :
+  mu1 dp (x %% order) = inv order%r.
+proof. by apply/dp1E/supp_dp; smt(edivzP gt0_order). qed.
+
 
 (** Decisional Diffie-Hellman problem **)
 theory DDH.
