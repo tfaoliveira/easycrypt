@@ -1,8 +1,58 @@
 (* -------------------------------------------------------------------- *)
-require import AllCore List IntExtra IntDiv.
+require import AllCore List IntExtra IntMin IntDiv.
 require (*--*) FinType Ring Number StdOrder.
 
 import Ring.IntID StdOrder.IntOrder.
+
+(* ==================================================================== *)
+op gcd : int -> int -> int.
+
+lemma gcdP a b :
+     gcd a b %| a
+  /\ gcd a b %| b
+  /\ (forall z, z %| a => z %| b => z %| gcd a b).
+proof. admitted.
+
+lemma gcd_uniq a b z : ! (a = 0 /\ b = 0) =>
+     0 <= z => z %| a => z %| b
+  => (forall x, x %| a => x %| b => x %| z)
+  => z = gcd a b.
+proof. admitted.
+
+lemma gcd0z a : gcd 0 a = `|a|.
+proof. admitted.
+
+lemma Bachet_Bezout (a b : int) :
+  exists u v, u * a + v * b = gcd a b.
+proof.
+case: (a = 0) => [->/=|nz_a].
++ by exists (signz b); rewrite gcd0z signVzE.
+pose E d := 0 < d /\ exists u v, d = u * a + v * b.
+have nzE: !empty (pcap E).
++ apply/emptyNP; exists `|a| => @/E @/pcap /=.
+ rewrite normr_ge0 normr_gt0 nz_a /=.
+  by exists (signz a) 0 => /=; apply: signVzE.
+case: (pmin_mem _ nzE); (pose d0 := pmin E) => gt0_d [a0 b0] d0E.
+exists a0 b0; apply: gcd_uniq; rewrite ?nz_a // -?d0E.
++ by rewrite ltrW.
++ rewrite eqr_le modz_ge0 1:gtr_eqF //= lerNgt; apply/negP.
+  move=> gt0_ad0; have: E (a %% d0); 1: move=> @/E.
+  * rewrite gt0_ad0 /=; rewrite modzE {2}d0E.
+    rewrite mulrDr opprD addrA !mulrA -{1}(mul1r a) -mulrBl.
+    move: (1 - _)%Int => u; move: (_ %/ _ * _)%Int => v.
+    by exists u (-v); rewrite mulNr.
+  move=> Ead0; have := pmin_min _ _ nzE _ Ead0.
+  * by rewrite ltrW. * by rewrite lerNgt /= ltz_pmod.
++ rewrite eqr_le modz_ge0 1:gtr_eqF //= lerNgt; apply/negP.
+  move=> gt0_bd0; have: E (b %% d0); 1: move=> @/E.
+  * rewrite gt0_bd0 /=; rewrite modzE {2}d0E.
+    rewrite mulrDr opprD !addrA !mulrA -addrAC -{1}(mul1r b) -mulrBl.
+    move: (1 - _)%Int => u; move: (_ %/ _ * _)%Int => v.
+    by exists (-v) u; rewrite mulNr addrC.
+  move=> Ebd0; have := pmin_min _ _ nzE _ Ebd0.
+  * by rewrite ltrW. * by rewrite lerNgt /= ltz_pmod.
++ by move=> z za zb; rewrite d0E &(dvdzD) dvdz_mull.
+qed.
 
 (* ==================================================================== *)
 abstract theory Group.
