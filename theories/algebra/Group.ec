@@ -170,6 +170,46 @@ exists a0 b0; apply: gcd_uniq; rewrite ?nz_a // -?d0E.
 qed.
 
 (* ==================================================================== *)
+op coprime a b = gcd a b = 1.
+
+lemma Bezout (a b : int) : coprime a b =>
+  exists u v, u * a + v * b = 1.
+proof. by move=> @/coprime <-; apply: Bachet_Bezout. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma modinv p a : coprime p a => exists b, p %| (a * b - 1)%Int.
+proof.
+case/Bezout => u v; rewrite eq_sym (mulrC v a) addrC -subr_eq => h.
+by exists v; rewrite -h addrAC /= &(dvdzN) dvdz_mull dvdzz.
+qed.
+
+(* -------------------------------------------------------------------- *)
+op prime a = 1 < a /\ (forall q, q %| a => `|q| = 1 \/ `|q| = a).
+
+lemma gt1_prime p : prime p => 1 < p.
+proof. by case. qed.
+
+lemma gt0_prime p : prime p => 0 < p.
+proof. by move/gt1_prime/(ltr_trans _ _ _ ltr01). qed.
+
+(* -------------------------------------------------------------------- *)
+lemma modinv_prime p : prime p =>
+  forall a, a %% p <> 0 => exists b, (a * b) %% p = 1.
+proof.
+move=> pm_p a nz_a; have: coprime p (a %% p).
++ have nz_p: p <> 0 by rewrite gtr_eqF // gt0_prime.
+  have h := dvdz_gcdl p (a %% p); case: pm_p => gt1_p.
+  move/(_ _ h) => {h}; rewrite ger0_norm ?ge0_gcd.
+  case=> // /eq_sym pE; have: p %| a %% p.
+  * by rewrite {1}pE dvdz_gcdr.
+  by rewrite dvdzE modz_mod.
+case/modinv=> b /dvdzP[q]; rewrite subr_eq (addrC _ 1) -subr_eq.
+move/(congr1 (fun x => x %% p)) => /=.
+rewrite -mulNr modzMDr modzMml => h; exists b.
+by rewrite h modz_small //= ltr_normr gt1_prime.
+qed.
+
+(* ==================================================================== *)
 abstract theory Group.
 type group.
 
