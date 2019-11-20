@@ -5,28 +5,142 @@ require (*--*) FinType Ring Number StdOrder.
 import Ring.IntID StdOrder.IntOrder.
 
 (* ==================================================================== *)
-op gcd : int -> int -> int.
+op gcd_spec a b = fun z =>
+     (0 <= z /\ z %| a /\ z %| b)
+  /\ (forall x, x %| a => x %| b => x %| z).
+
+lemma gcd_spec a b : (a, b) <> (0, 0) =>
+  exists z, gcd_spec a b z.
+proof.
+admitted.
+
+op gcd a b = if (a, b) = (0, 0) then 0 else choiceb (gcd_spec a b) 0.
 
 lemma gcdP a b :
-     gcd a b %| a
+     0 <= gcd a b
+  /\ gcd a b %| a
   /\ gcd a b %| b
   /\ (forall z, z %| a => z %| b => z %| gcd a b).
-proof. admitted.
+proof.
+case: ((a, b) = (0, 0)) => [@/gcd ^[za zb] ->/=|]; 1: by rewrite !dvd0z.
+by move=> ^nz_ab /gcd_spec/choicebP/(_ 0) /= []; rewrite /gcd nz_ab.
+qed.
 
-lemma gcd_uniq a b z : ! (a = 0 /\ b = 0) =>
+lemma ge0_gcd a b : 0 <= gcd a b.
+proof. by have := gcdP a b. qed.
+
+hint exact : ge0_gcd.
+
+lemma dvdz_gcdr a b : gcd a b %| b.
+proof. by have := gcdP a b. qed.
+
+lemma dvdz_gcdl a b : gcd a b %| a.
+proof. by have := gcdP a b. qed.
+
+hint exact : dvdz_gcdl dvdz_gcdr.
+
+lemma gcd_max a b z : z %| a => z %| b => z %| gcd a b.
+proof. by move: z; have := gcdP a b. qed.
+
+lemma gcd_eq0 a b : gcd a b = 0 <=> ((a, b) = (0, 0)).
+proof.
+split=> [|[-> ->]] //= z_gcd; rewrite -!dvd0z.
+by rewrite -z_gcd !(dvdz_gcdl, dvdz_gcdr).
+qed.
+
+lemma gcd_uniq a b z : (a, b) <> (0, 0) =>
      0 <= z => z %| a => z %| b
   => (forall x, x %| a => x %| b => x %| z)
   => z = gcd a b.
-proof. admitted.
+proof.
+move=> nz_ab + za zb hmax; rewrite ler_eqVlt => -[<<-|gt0_z].
++ by move: za zb; rewrite !dvd0z => -> ->.
+have gt0_gcd: 0 < gcd a b.
++ by rewrite ltr_neqAle ge0_gcd /= eq_sym gcd_eq0.
+rewrite (signzE z) (signzE (gcd _ _)) !signz_gt0 //=.
+have []: z %| gcd a b /\ gcd a b %| z.
++ by rewrite hmax 1,2:(dvdz_gcdl, dvdz_gcdr) /= &(gcd_max).
+case/dvdzP=> q1 -> /dvdzP[q2]; rewrite mulrA.
+rewrite eq_sym -eqz_div 1:gtr_eqF // ?dvdzz divzz.
+rewrite (gtr_eqF z) /b2i //= => /unitP.
+by rewrite -(eqr_norml q1 1) normrM => ->.
+qed.
+
+lemma gcdC a b : gcd a b = gcd b a.
+proof.
+case: ((a, b) = (0, 0)) => [[-> -> //]|nz_ab]; apply: gcd_uniq => //.
++ by apply: contra nz_ab.
++ by move=> z xb xa; apply: gcd_max.
+qed.
+
+lemma gcd00 : gcd 0 0 = 0.
+proof. by []. qed.
+
+hint simplify gcd00.
 
 lemma gcd0z a : gcd 0 a = `|a|.
-proof. admitted.
+proof.
+case: (a = 0) => [->//=|nz_a].
+apply/eq_sym/gcd_uniq => //=; first by rewrite normr_ge0.
++ by rewrite {2}signzE dvdz_mull dvdzz.
++ by move=> x _ xDa; rewrite signVzE dvdz_mull.
+qed.
+
+lemma gcdz0 a : gcd a 0 = `|a|.
+proof. by rewrite gcdC gcd0z. qed.
+
+hint simplify gcd0z, gcdz0.
+
+lemma gcd1z a : gcd 1 a = 1.
+proof. by apply/eq_sym/gcd_uniq. qed.
+
+lemma gcdz1 a : gcd a 1 = 1.
+proof. by rewrite gcdC gcd1z. qed.
+
+hint simplify gcd1z, gcdz1.
+
+lemma gcdNz a b : gcd (- a)%Int b = gcd a b.
+proof.
+case: ((a, b) = (0, 0)) => [[-> ->] //|nz_ab]; apply: gcd_uniq => //.
++ by rewrite -{2}(opprK a) &(dvdzN) dvdz_gcdl.
++ by move=> x xa xb; apply: gcd_max => //; apply: dvdzN.
+qed.
+
+lemma gcdzN a b : gcd a (- b)%Int = gcd a b.
+proof. by rewrite gcdC gcdNz gcdC. qed.
+
+hint simplify gcdNz, gcdzN.
+
+lemma gcd_modr a b : gcd a (b %% a) = gcd a b.
+proof.
+case: ((a, b) = (0, 0)) => [[-> -> //]|nz_ab]; apply: gcd_uniq=> //.
++ by have := dvdz_gcdr a (b %% a); rewrite !dvdzE modz_dvd 1:dvdz_gcdl.
++ by move=> x xa xb; apply: gcd_max => //; rewrite dvdzE modz_dvd.
+qed.
+
+lemma gcd_modl a b : gcd (a %% b) b = gcd a b.
+proof. by rewrite gcdC gcd_modr gcdC. qed.
+
+lemma gcdMDl q a b : gcd a (q * a + b)%Int = gcd a b.
+proof. by rewrite -gcd_modr modzMDl gcd_modr. qed.
+
+lemma gcdDl a b : gcd a (a + b)%Int = gcd a b.
+proof. by rewrite -{2}(mul1r a) gcdMDl. qed.
+
+lemma gcdDr a b : gcd a (b + a)%Int = gcd a b.
+proof. by rewrite addrC gcdDl. qed.
+
+lemma gcdMl b a : gcd b (a * b)%Int = `|b|.
+proof. by rewrite -(addr0 (a * b)) gcdMDl gcdz0. qed.
+
+lemma gcdMr b a : gcd b (b * a)%Int = `|b|.
+proof. by rewrite mulrC gcdMl. qed.
 
 lemma Bachet_Bezout (a b : int) :
   exists u v, u * a + v * b = gcd a b.
 proof.
 case: (a = 0) => [->/=|nz_a].
-+ by exists (signz b); rewrite gcd0z signVzE.
++ by exists (signz b); rewrite signVzE.
 pose E d := 0 < d /\ exists u v, d = u * a + v * b.
 have nzE: !empty (pcap E).
 + apply/emptyNP; exists `|a| => @/E @/pcap /=.
@@ -34,6 +148,7 @@ have nzE: !empty (pcap E).
   by exists (signz a) 0 => /=; apply: signVzE.
 case: (pmin_mem _ nzE); (pose d0 := pmin E) => gt0_d [a0 b0] d0E.
 exists a0 b0; apply: gcd_uniq; rewrite ?nz_a // -?d0E.
++ by apply/negP => -[]; rewrite nz_a.
 + by rewrite ltrW.
 + rewrite eqr_le modz_ge0 1:gtr_eqF //= lerNgt; apply/negP.
   move=> gt0_ad0; have: E (a %% d0); 1: move=> @/E.
