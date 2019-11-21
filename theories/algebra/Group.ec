@@ -7,40 +7,74 @@ import Ring.IntID StdOrder.IntOrder.
 (* ==================================================================== *)
 op gcd_spec a b = fun z =>
      (0 <= z /\ z %| a /\ z %| b)
-  /\ (forall x, x %| a => x %| b => x %| z).
+  /\ (forall x, x %| a => x %| b => x <= z).
 
-lemma gcd_spec a b : (a, b) <> (0, 0) =>
-  exists z, gcd_spec a b z.
+lemma gcd_spec a b : (a, b) <> (0, 0) => exists z, gcd_spec a b z.
 proof.
-admitted.
+wlog: a b / (`|a| <= `|b|) => [wlog|le_ab nz_ab].
++ case: (leVge `|a| `|b|) => [|le_ba nz_ab]; first by apply: wlog.
+  case: (wlog _ _ le_ba _) => [|z [[# 3? h]]].
+  + by apply: contra nz_ab.
+  + by exists z; do! split => //; move=> *; apply: h.
+case: (a = 0) => [->>|]; 1: (exists `|b|; do! split=> //).
++ by rewrite {2}signzE dvdz_mull dvdzz.
++ by move=> x _ xDb; rewrite (ler_trans `|x|) 1:ler_norm dvdz_le.
+move=> nz_a; have nz_b : b <> 0.
++ by apply: contraL le_ab => ->; rewrite normr0 lerNgt /= normr_gt0.
+pose E := fun z => (`|a * b| - z) %| a /\ (`|a * b| - z %| b).
+have ge0_pE: 0 <= `|a * b| - 1.
++ have := normr_ge0 (a * b); rewrite subr_ge0 ler_eqVlt.
+  rewrite ltzE /= => -[] //; rewrite eq_sym.
+  by rewrite normrM mulf_eq0 !normr0P !(nz_a, nz_b).
+have pE: E (`|a * b| - 1); first move=> @/pcap @/E /=; do! split.
++ by rewrite opprB addrCA subrr /= dvd1z.
++ by rewrite opprB addrCA subrr /= dvd1z.
+have nzE: !empty (pcap E); 1: by apply/emptyNP; exists (`|a * b| - 1).
+pose d := `|a * b| - pmin E; have [da db]: d %| a /\ d %| b.
++ by case: (pmin_mem _ nzE).
+exists d; do! split => //.
++ rewrite /d subr_ge0 &(ler_trans (pmin E + 1)) 1:ler_addl //.
+  by have := pmin_min _ _ nzE ge0_pE pE; rewrite ler_subr_addl addrC.
+move=> x xDa xDb @/d; rewrite ler_subr_addl addrC -ler_subr_addl.
+apply: pmin_min; first exact nzE.
++ rewrite subr_ge0 (ler_trans _ _ _ (ler_norm _)).
+  by rewrite dvdz_le 1:mulf_neq0 // dvdz_mull.
++ by rewrite /E !opprB !(addrCA _ x) subrr.
+qed.
 
 op gcd a b = if (a, b) = (0, 0) then 0 else choiceb (gcd_spec a b) 0.
 
-lemma gcdP a b :
+lemma gcdP a b : (a, b) <> (0, 0) =>
      0 <= gcd a b
   /\ gcd a b %| a
   /\ gcd a b %| b
-  /\ (forall z, z %| a => z %| b => z %| gcd a b).
+  /\ (forall z, z %| a => z %| b => z <= gcd a b).
 proof.
-case: ((a, b) = (0, 0)) => [@/gcd ^[za zb] ->/=|]; 1: by rewrite !dvd0z.
 by move=> ^nz_ab /gcd_spec/choicebP/(_ 0) /= []; rewrite /gcd nz_ab.
 qed.
 
 lemma ge0_gcd a b : 0 <= gcd a b.
-proof. by have := gcdP a b. qed.
+proof. by case: ((a, b) = (0, 0)) => [@/gcd ->//|/gcdP]. qed.
 
 hint exact : ge0_gcd.
 
 lemma dvdz_gcdr a b : gcd a b %| b.
-proof. by have := gcdP a b. qed.
+proof. 
+case: (b = 0) => [->|nz_b]; 1: by apply: dvdz0.
+by have /gcdP: (a, b) <> (0, 0) by apply: contra nz_b.
+qed.
 
 lemma dvdz_gcdl a b : gcd a b %| a.
-proof. by have := gcdP a b. qed.
+proof. 
+case: (a = 0) => [->|nz_a]; 1: by apply: dvdz0.
+by have /gcdP: (a, b) <> (0, 0) by apply: contra nz_a.
+qed.
 
 hint exact : dvdz_gcdl dvdz_gcdr.
 
-lemma gcd_max a b z : z %| a => z %| b => z %| gcd a b.
-proof. by move: z; have := gcdP a b. qed.
+lemma gcd_max a b z : (a, b) <> (0, 0) =>
+  z %| a => z %| b => z <= gcd a b.
+proof. by case/gcdP => _ [# 2?]; apply. qed.
 
 lemma gcd_eq0 a b : gcd a b = 0 <=> ((a, b) = (0, 0)).
 proof.
@@ -50,27 +84,19 @@ qed.
 
 lemma gcd_uniq a b z : (a, b) <> (0, 0) =>
      0 <= z => z %| a => z %| b
-  => (forall x, x %| a => x %| b => x %| z)
+  => (forall x, x %| a => x %| b => x <= z)
   => z = gcd a b.
 proof.
 move=> nz_ab + za zb hmax; rewrite ler_eqVlt => -[<<-|gt0_z].
 + by move: za zb; rewrite !dvd0z => -> ->.
-have gt0_gcd: 0 < gcd a b.
-+ by rewrite ltr_neqAle ge0_gcd /= eq_sym gcd_eq0.
-rewrite (signzE z) (signzE (gcd _ _)) !signz_gt0 //=.
-have []: z %| gcd a b /\ gcd a b %| z.
-+ by rewrite hmax 1,2:(dvdz_gcdl, dvdz_gcdr) /= &(gcd_max).
-case/dvdzP=> q1 -> /dvdzP[q2]; rewrite mulrA.
-rewrite eq_sym -eqz_div 1:gtr_eqF // ?dvdzz divzz.
-rewrite (gtr_eqF z) /b2i //= => /unitP.
-by rewrite -(eqr_norml q1 1) normrM => ->.
+by rewrite eqr_le hmax /= 1,2:(dvdz_gcdl, dvdz_gcdr) gcd_max.
 qed.
 
 lemma gcdC a b : gcd a b = gcd b a.
 proof.
-case: ((a, b) = (0, 0)) => [[-> -> //]|nz_ab]; apply: gcd_uniq => //.
-+ by apply: contra nz_ab.
-+ by move=> z xb xa; apply: gcd_max.
+case: ((a, b) = (0, 0)) => [[-> -> //]|nz_ab].
+apply: gcd_uniq => //; first by apply: contra nz_ab.
+by move=> z xb xa; apply: gcd_max.
 qed.
 
 lemma gcd00 : gcd 0 0 = 0.
@@ -83,7 +109,7 @@ proof.
 case: (a = 0) => [->//=|nz_a].
 apply/eq_sym/gcd_uniq => //=; first by rewrite normr_ge0.
 + by rewrite {2}signzE dvdz_mull dvdzz.
-+ by move=> x _ xDa; rewrite signVzE dvdz_mull.
++ by move=> x _ xDa; rewrite &(ler_trans `|x|) 1:ler_norm dvdz_le.
 qed.
 
 lemma gcdz0 a : gcd a 0 = `|a|.
@@ -92,7 +118,10 @@ proof. by rewrite gcdC gcd0z. qed.
 hint simplify gcd0z, gcdz0.
 
 lemma gcd1z a : gcd 1 a = 1.
-proof. by apply/eq_sym/gcd_uniq. qed.
+proof.
+apply/eq_sym/gcd_uniq => // x.
+by rewrite dvdz1 => <- _; rewrite ler_norm.
+qed.
 
 lemma gcdz1 a : gcd a 1 = 1.
 proof. by rewrite gcdC gcd1z. qed.
@@ -103,7 +132,8 @@ lemma gcdNz a b : gcd (- a)%Int b = gcd a b.
 proof.
 case: ((a, b) = (0, 0)) => [[-> ->] //|nz_ab]; apply: gcd_uniq => //.
 + by rewrite -{2}(opprK a) &(dvdzN) dvdz_gcdl.
-+ by move=> x xa xb; apply: gcd_max => //; apply: dvdzN.
++ move=> x xDa xDb; rewrite &(gcd_max) // 2:&(dvdzN) //.
+  by apply: contra nz_ab => /=; rewrite oppr_eq0.
 qed.
 
 lemma gcdzN a b : gcd a (- b)%Int = gcd a b.
@@ -115,7 +145,8 @@ lemma gcd_modr a b : gcd a (b %% a) = gcd a b.
 proof.
 case: ((a, b) = (0, 0)) => [[-> -> //]|nz_ab]; apply: gcd_uniq=> //.
 + by have := dvdz_gcdr a (b %% a); rewrite !dvdzE modz_dvd 1:dvdz_gcdl.
-+ by move=> x xa xb; apply: gcd_max => //; rewrite dvdzE modz_dvd.
++ move=> x xa xb; apply: gcd_max => //; 1: by apply: contra nz_ab.
+  by rewrite dvdzE modz_dvd.
 qed.
 
 lemma gcd_modl a b : gcd (a %% b) b = gcd a b.
@@ -166,7 +197,9 @@ exists a0 b0; apply: gcd_uniq; rewrite ?nz_a // -?d0E.
     by exists (-v) u; rewrite mulNr addrC.
   move=> Ebd0; have := pmin_min _ _ nzE _ Ebd0.
   * by rewrite ltrW. * by rewrite lerNgt /= ltz_pmod.
-+ by move=> z za zb; rewrite d0E &(dvdzD) dvdz_mull.
++ move=>z za zb; rewrite &(ler_trans `|z|) 1:ler_norm.
+  rewrite -(gtr0_norm d0) // dvdz_le 1:gtr_eqF //.
+  by rewrite d0E &(dvdzD) dvdz_mull.
 qed.
 
 (* ==================================================================== *)

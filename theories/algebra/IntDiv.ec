@@ -412,6 +412,15 @@ qed.
 lemma nosmt dvdz_trans n d m : d %| n => n %| m => d %| m.
 proof. by move=> dv_dn /dvdzP[q ->]; apply/dvdz_mull. qed.
 
+lemma nosmt dvdz_le m n : n <> 0 => m %| n => `|m| <= `|n|.
+proof.
+move=> nz_n /dvdzP [q ^nE ->]; rewrite normrM.
+case: (m = 0) => [->//|nz_m]; rewrite ler_pmull 1:normr_gt0 //.
+have := normr_ge0 q; rewrite ler_eqVlt => -[|].
++ by rewrite eq_sym normr0P => ->>; move: nE nz_n.
++ by rewrite ltzE.
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma nosmt dvdzD d m1 m2 : d %| m1 => d %| m2 => d %| (m1 + m2).
 proof.
