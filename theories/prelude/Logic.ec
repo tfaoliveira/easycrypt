@@ -234,12 +234,12 @@ op predC1 ['a] = fun (c : 'a) (x : 'a) => x <> c.
 op predD1 ['a] = fun (p : 'a -> bool) (c : 'a) (x : 'a) => x <> c /\ p x.
 
 (* -------------------------------------------------------------------- *)
-op empty ['a] (E : 'a -> bool) =
+op sempty ['a] (E : 'a -> bool) =
   forall x, !E x.
 
-lemma emptyNP ['a] (E : 'a -> bool) :
-  !empty E <=> exists x, E x.
-proof. by rewrite /empty -negb_exists. qed.
+lemma semptyNP ['a] (E : 'a -> bool) :
+  !sempty E <=> exists x, E x.
+proof. by rewrite /sempty -negb_exists. qed.
 
 (* -------------------------------------------------------------------- *)
 type 'a rel = 'a -> 'a -> bool.

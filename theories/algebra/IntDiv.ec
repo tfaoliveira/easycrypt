@@ -592,7 +592,7 @@ have ge0_pE: 0 <= `|a * b| - 1.
 have pE: E (`|a * b| - 1); first move=> @/pcap @/E /=; do! split.
 + by rewrite opprB addrCA subrr /= dvd1z.
 + by rewrite opprB addrCA subrr /= dvd1z.
-have nzE: !empty (pcap E); 1: by apply/emptyNP; exists (`|a * b| - 1).
+have nzE: !sempty (pcap E); 1: by apply/semptyNP; exists (`|a * b| - 1).
 pose d := `|a * b| - pmin E; have [da db]: d %| a /\ d %| b.
 + by case: (pmin_mem _ nzE).
 exists d; do! split => //.
@@ -740,8 +740,8 @@ proof.
 case: (a = 0) => [->/=|nz_a].
 + by exists (signz b); rewrite signVzE.
 pose E d := 0 < d /\ exists u v, d = u * a + v * b.
-have nzE: !empty (pcap E).
-+ apply/emptyNP; exists `|a| => @/E @/pcap /=.
+have nzE: !sempty (pcap E).
++ apply/semptyNP; exists `|a| => @/E @/pcap /=.
  rewrite normr_ge0 normr_gt0 nz_a /=.
   by exists (signz a) 0 => /=; apply: signVzE.
 case: (pmin_mem _ nzE); (pose d0 := pmin E) => gt0_d [a0 b0] d0E.

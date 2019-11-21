@@ -22,7 +22,7 @@ op pmin (E : int -> bool) =
   choiceb (pmin_spec E) 0.
 
 lemma pmin_spec E :
-  !empty (pcap E) => exists x, pmin_spec E x.
+  !sempty (pcap E) => exists x, pmin_spec E x.
 proof.
 apply: contraR; rewrite negb_exists /= => h x.
 move: {-2}x (lerr x); elim/ge0ind: x.
@@ -36,14 +36,14 @@ by move=> y [ge0_y Ey]; rewrite lerNgt ltzS; apply/negP=> /ih.
 qed.
 
 lemma pmin_mem (E : int -> bool) :
-  !empty (pcap E) => E (pmin E).
+  !sempty (pcap E) => E (pmin E).
 proof.
 move/pmin_spec/choicebP/(_ 0) => /=.
 by rewrite -/(pmin E); case=> -[].
 qed.
 
 lemma pmin_min (E : int -> bool) x :
-  !empty (pcap E) => 0 <= x => E x => pmin E <= x.
+  !sempty (pcap E) => 0 <= x => E x => pmin E <= x.
 proof.
 move/pmin_spec/choicebP/(_ 0) => /=.
 by rewrite -/(pmin E); case=> _ hmin ge0_x Ex; apply: hmin.
