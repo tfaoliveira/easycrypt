@@ -784,6 +784,16 @@ by exists v; rewrite -h addrAC /= &(dvdzN) dvdz_mull dvdzz.
 qed.
 
 (* -------------------------------------------------------------------- *)
+op invm a p = choiceb (fun b=> a * b %% p = 1) a.
+
+lemma invmM p a : 1 < p => coprime p a => (a * invm a p) %% p = 1.
+proof.
+move=> gt1_p; case/modinv=> b /dvdzP[q]; rewrite subr_eq (addrC _ 1)=> h.
+rewrite /invm; apply/(choicebP (fun b=> a * b %% p = 1)).
+by exists b=> /=; rewrite h modzMDr modz_small // /#.
+qed.
+
+(* -------------------------------------------------------------------- *)
 op prime a = 1 < a /\ (forall q, q %| a => `|q| = 1 \/ `|q| = a).
 
 lemma gt1_prime p : prime p => 1 < p.
@@ -792,21 +802,38 @@ proof. by case. qed.
 lemma gt0_prime p : prime p => 0 < p.
 proof. by move/gt1_prime/(ltr_trans _ _ _ ltr01). qed.
 
+lemma nosmt prime_coprime p : prime p =>
+  forall a, a %% p <> 0 => coprime p a.
+proof.
+move=> pm_p a nz_a; have nz_p: p <> 0 by rewrite gtr_eqF // gt0_prime.
+have h := dvdz_gcdl p a; case: pm_p=> gt1_p.
+move/(_ _ h) => {h}; rewrite ger0_norm ?ge0_gcd.
+case=> // /eq_sym pE; have: p %| a.
+* by rewrite {1}pE dvdz_gcdr.
+by rewrite dvdzE nz_a.
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma nosmt modinv_prime p : prime p =>
   forall a, a %% p <> 0 => exists b, (a * b) %% p = 1.
 proof.
 move=> pm_p a nz_a; have: coprime p (a %% p).
 + have nz_p: p <> 0 by rewrite gtr_eqF // gt0_prime.
-  have h := dvdz_gcdl p (a %% p); case: pm_p => gt1_p.
+  have h := dvdz_gcdl p (a %% p); case: pm_p=> gt1_p.
   move/(_ _ h) => {h}; rewrite ger0_norm ?ge0_gcd.
-  case=> // /eq_sym pE; have: p %| a %% p.
+  case=> // /eq_sym pE; have: p %| (a %% p).
   * by rewrite {1}pE dvdz_gcdr.
   by rewrite dvdzE modz_mod.
 case/modinv=> b /dvdzP[q]; rewrite subr_eq (addrC _ 1) -subr_eq.
 move/(congr1 (fun x => x %% p)) => /=.
 rewrite -mulNr modzMDr modzMml => h; exists b.
 by rewrite h modz_small //= ltr_normr gt1_prime.
+qed.
+
+lemma prime_invmM p a : prime p => a %% p <> 0 => (a * invm a p) %% p = 1.
+proof.
+move=> ^/gt1_prime gt1_p + nz_a - /prime_coprime /(_ a nz_a).
+exact/invmM.
 qed.
 
 (* ==================================================================== *)
