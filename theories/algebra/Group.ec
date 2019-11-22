@@ -436,22 +436,61 @@ axiom ge2_order : 2 <= order.
 clone import ZModP as ZModE with type zmod <- exp, op p <- order
   proof ge2_p by apply: ge2_order.
 
-op (^)  (x : group) (k : exp) = x ^ (asint k).
-op loge (x : group) : exp = inzmod (log x).
+(* -------------------------------------------------------------------- *)
+abbrev (^)  (x : group) (k : exp) = x ^ (asint k).
+abbrev loge (x : group) : exp = inzmod (log x).
 
+(* -------------------------------------------------------------------- *)
+abbrev root (k : exp) (x : group) = x ^ (inv k).
+
+(* -------------------------------------------------------------------- *)
 lemma logK (k : exp) : loge (g ^ k) = k.
 proof. by rewrite /loge logK pmod_small 1:rg_asint asintK. qed.
 
 lemma expK x : g ^ (loge x) = x.
-proof.
-by rewrite /loge /PowZMod.(^) inzmodK pmod_small 1:rg_log expgK.
-qed.
-end PowZMod.
+proof. by rewrite inzmodK pmod_small 1:rg_log expgK. qed.
 
+(* -------------------------------------------------------------------- *)
+lemma exp0 x : x ^ ZModE.zero = e.
+proof. by rewrite inzmodK mod0z exp0. qed.
+
+lemma exp1 x : x ^ ZModE.one = x.
+proof. by rewrite inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
+
+lemma expN x (k : exp) : x ^ (- k) = inv (x ^ k).
+proof.
+rewrite -expN -{2}(expgK x) -expM -expg_modz -modzMmr -oppE expg_modz.
+by rewrite expM expgK.
+qed.
+
+lemma expM (x : group) (a b : exp) : x ^ (a * b) = x ^ a ^ b.
+proof.
+rewrite -{2}(expgK x) -!expM -expg_modz -modzMmr -mulE.
+by rewrite expg_modz expM expgK.
+qed.
+
+lemma expD (x : group) (a b : exp) :  x ^ (a + b) = x ^ a * x ^ b.
+proof.
+rewrite -{1}(expgK x) -expM addE -expg_modz modzMmr.
+by rewrite expg_modz expM expgK expD.
+qed.
+
+lemma expB (x : group) (a b : exp) : x ^ (a - b) = x ^ a / x ^ b.
+proof.
+rewrite -{1}(expgK x) -expM addE -expg_modz modzMmr.
+by rewrite expg_modz expM expgK expD expN.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma expV (x : group) (k : exp) :
+  unit k => root k (x ^ k) = x.
+proof. by rewrite -expM=> /ZModpRing.mulrV ->; exact/exp1. qed.
+
+end PowZMod.
 end CyclicGroup.
 
 (* ==================================================================== *)
-theory ZModPCyclic.
+abstract theory ZModPCyclic.
 type zmod.
 
 const order : { int | 2 <= order } as ge2_order.
@@ -463,7 +502,7 @@ import ZModpRing.
 
 clone CyclicGroup as ZModC with
   type group <- zmod,
-  op   elems <- map (fun i => ZModP.inzmod i) (range 0 order),
+  op   elems <- map ZModP.inzmod (range 0 order),
   op   e     =  ZModP.zero,
   op   ( * ) =  ZModP.( + ),
   op   inv   =  ZModP.([-]),

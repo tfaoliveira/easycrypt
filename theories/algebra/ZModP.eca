@@ -64,6 +64,9 @@ op ( * ) x y = inzmod (asint x * asint y).
 op unit x = exists y, y * x = one.
 op inv  x = choiceb (fun y => y * x = one) x.
 
+abbrev (-) x y = x + -y.
+abbrev (/) x y = x * inv y.
+
 (* -------------------------------------------------------------------- *)
 lemma zeroE: asint Self.zero = 0.
 proof. by rewrite /zero inzmodK mod0z. qed.
