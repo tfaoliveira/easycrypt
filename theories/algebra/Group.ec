@@ -388,6 +388,9 @@ proof.
 by have := log_spec x => @/log /choicebP /= /(_ 0) [].
 qed.
 
+lemma rg_log x : 0 <= log x < order.
+proof. by rewrite ge0_log lt_order_log. qed.
+
 (* -------------------------------------------------------------------- *)
 lemma expg_modz k : g ^ (k %% order) = g ^ k.
 proof.
@@ -423,6 +426,28 @@ qed.
 
 lemma logK_small k : 0 <= k < order => log (g ^ k) = k.
 proof. by move=> rg; rewrite logK pmod_small. qed.
+
+(* ==================================================================== *)
+abstract theory PowZMod.
+type exp.
+
+axiom ge2_order : 2 <= order.
+
+clone import ZModP as ZModE with type zmod <- exp, op p <- order
+  proof ge2_p by apply: ge2_order.
+
+op (^)  (x : group) (k : exp) = x ^ (asint k).
+op loge (x : group) : exp = inzmod (log x).
+
+lemma logK (k : exp) : loge (g ^ k) = k.
+proof. by rewrite /loge logK pmod_small 1:rg_asint asintK. qed.
+
+lemma expK x : g ^ (loge x) = x.
+proof.
+by rewrite /loge /PowZMod.(^) inzmodK pmod_small 1:rg_log expgK.
+qed.
+end PowZMod.
+
 end CyclicGroup.
 
 (* ==================================================================== *)
