@@ -450,6 +450,16 @@ proof. by rewrite /loge logK pmod_small 1:rg_asint asintK. qed.
 lemma expK x : g ^ (loge x) = x.
 proof. by rewrite inzmodK pmod_small 1:rg_log expgK. qed.
 
+lemma exp_inj (a b : exp) : g ^ a = g ^ b <=> a = b.
+proof.
+by split=> //; apply/(can_inj (fun (x : exp)=> g ^ x) loge logK).
+qed.
+
+lemma log_inj (x y : group) : loge x = loge y <=> x = y.
+proof.
+by split=> //; apply/(can_inj loge (fun (x : exp)=> g ^ x) expK).
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma exp0 x : x ^ ZModE.zero = e.
 proof. by rewrite inzmodK mod0z exp0. qed.
