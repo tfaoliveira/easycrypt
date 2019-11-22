@@ -1,6 +1,6 @@
 (* -------------------------------------------------------------------- *)
 require import AllCore List IntExtra IntMin IntDiv.
-require (*--*) FinType Ring Number StdOrder.
+require (*--*) FinType Ring Number StdOrder ZModP.
 
 import Ring.IntID StdOrder.IntOrder.
 
@@ -52,7 +52,7 @@ lemma inv_inj : injective inv.
 proof. by apply/inv_inj/invK. qed.
 
 (* -------------------------------------------------------------------- *)
-op ( ^+ ) x k = iter `|k|%Int (fun y => y * x) e.
+op ( ^+ ) x k = iter `|k|%Int (( * ) x) e.
 op ( ^  ) x k = if k < 0 then inv (x ^+ k) else x ^+ k.
 
 (* -------------------------------------------------------------------- *)
@@ -97,7 +97,7 @@ lemma expp0 x : x ^+ 0 = e.
 proof. by rewrite /(^+) normr0 iter0. qed.
 
 lemma expp1 x : x ^+ 1 = x.
-proof. by rewrite /(^+) normr1 iter1 /= mul1c. qed.
+proof. by rewrite /(^+) normr1 iter1 /= mulc1. qed.
 
 lemma exppN x (k : int) : x ^+ (-k) = x ^+ k.
 proof. by rewrite /(^+) normrN. qed.
@@ -107,7 +107,8 @@ proof. by rewrite /(^+) normr_id. qed.
 
 lemma exppS x (k : int) : 0 <= k => x ^+ (k + 1) = x ^+ k * x.
 proof.
-by move=> ge0_k; rewrite /(^+) !ger0_norm 1,2://# iterS.
+move=> ge0_k; rewrite /(^+) !ger0_norm 1,2://# iterS //=.
+by rewrite -(ger0_norm k) // comXr.
 qed.
 
 lemma exppSN x (k : int) : k < 0 => x ^+ (k + 1) = x ^+ k / x.
@@ -420,4 +421,48 @@ rewrite -(pmod_small (log _) order) 1:!(ge0_log, lt_order_log).
 by rewrite &(expg_inj_mod) expgK.
 qed.
 
+lemma logK_small k : 0 <= k < order => log (g ^ k) = k.
+proof. by move=> rg; rewrite logK pmod_small. qed.
 end CyclicGroup.
+
+(* ==================================================================== *)
+theory ZModPCyclic.
+type zmod.
+
+const order : { int | 2 <= order } as ge2_order.
+
+clone import ZModP with type zmod <- zmod, op p <- order
+  proof ge2_p by apply: ge2_order.
+
+import ZModpRing.
+
+clone CyclicGroup as ZModC with
+  type group <- zmod,
+  op   elems <- map (fun i => ZModP.inzmod i) (range 0 order),
+  op   e     =  ZModP.zero,
+  op   ( * ) =  ZModP.( + ),
+  op   inv   =  ZModP.([-]),
+  op   g     =  ZModP.one
+  proof *.
+
+realize elems_spec.
+move=> x; rewrite count_uniq_mem 2:b2i_eq1; last first.
++ apply/mapP => /=; exists (asint x).
+  by rewrite mem_range rg_asint asintK.
+rewrite map_inj_in_uniq ?range_uniq // => {x} x y.
+rewrite !mem_range => rgx rgy /= /(congr1 asint).
+by rewrite !inzmodK !pmod_small.
+qed.
+
+realize mulcC_com by apply: ZModP.ZModpRing.addrC.
+realize mul1c     by apply: ZModP.ZModpRing.add0r.
+realize mulcA     by apply: ZModP.ZModpRing.addrA.
+realize mulVc     by apply: ZModP.ZModpRing.addNr.
+
+realize monogenous.
+proof.
+move=> x; exists (asint x) => @/g; rewrite {1}(intmul_asint x).
+rewrite /intmul /(^) ltrNge ge0_asint /=.
+by rewrite AddMonoid.iteropE /(^+) ger0_norm ?ge0_asint.
+qed.
+end ZModPCyclic.

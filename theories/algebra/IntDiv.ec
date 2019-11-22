@@ -784,9 +784,9 @@ by exists v; rewrite -h addrAC /= &(dvdzN) dvdz_mull dvdzz.
 qed.
 
 (* -------------------------------------------------------------------- *)
-op invm a p = choiceb (fun b=> a * b %% p = 1) a.
+op invm a p = choiceb (fun b => a * b %% p = 1) a.
 
-lemma invmM p a : 1 < p => coprime p a => (a * invm a p) %% p = 1.
+lemma invmP p a : 1 < p => coprime p a => (a * invm a p) %% p = 1.
 proof.
 move=> gt1_p; case/modinv=> b /dvdzP[q]; rewrite subr_eq (addrC _ 1)=> h.
 rewrite /invm; apply/(choicebP (fun b=> a * b %% p = 1)).
@@ -805,11 +805,9 @@ proof. by move/gt1_prime/(ltr_trans _ _ _ ltr01). qed.
 lemma nosmt prime_coprime p : prime p =>
   forall a, a %% p <> 0 => coprime p a.
 proof.
-move=> pm_p a nz_a; have nz_p: p <> 0 by rewrite gtr_eqF // gt0_prime.
-have h := dvdz_gcdl p a; case: pm_p=> gt1_p.
-move/(_ _ h) => {h}; rewrite ger0_norm ?ge0_gcd.
-case=> // /eq_sym pE; have: p %| a.
-* by rewrite {1}pE dvdz_gcdr.
+move=> pm_p a nz_a; have h := dvdz_gcdl p a.
+case: pm_p => gt1_p /(_ _ h) => {h}; rewrite ger0_norm ?ge0_gcd.
+case=> // /eq_sym pE; have: p %| a  by rewrite {1}pE dvdz_gcdr.
 by rewrite dvdzE nz_a.
 qed.
 
@@ -830,10 +828,10 @@ rewrite -mulNr modzMDr modzMml => h; exists b.
 by rewrite h modz_small //= ltr_normr gt1_prime.
 qed.
 
-lemma prime_invmM p a : prime p => a %% p <> 0 => (a * invm a p) %% p = 1.
+lemma mulmV p a : prime p => a %% p <> 0 => (a * invm a p) %% p = 1.
 proof.
-move=> ^/gt1_prime gt1_p + nz_a - /prime_coprime /(_ a nz_a).
-exact/invmM.
+move=> ^/gt1_prime gt1_p + nz_a - /prime_coprime.
+by move=> /(_ a nz_a); apply/invmP.
 qed.
 
 (* ==================================================================== *)
