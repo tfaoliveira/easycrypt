@@ -427,6 +427,19 @@ qed.
 lemma logK_small k : 0 <= k < order => log (g ^ k) = k.
 proof. by move=> rg; rewrite logK pmod_small. qed.
 
+(* -------------------------------------------------------------------- *)
+lemma logMr (x : group) (a : int) : log (x ^ a) = a * log x %% order.
+proof. by rewrite -{1}expgK -expM logK mulrC. qed.
+
+lemma logVr (x : group) : log (inv x) = (- log x) %% order.
+proof. by rewrite -mulN1r -logMr expN exp1. qed.
+
+lemma logDr (x y : group) : log (x * y) = (log x + log y) %% order.
+proof. by rewrite -{1}expgK -{1}(expgK y) -expD logK. qed.
+
+lemma logDrN (x y : group) : log (x / y) = (log x - log y) %% order.
+proof. by rewrite logDr logVr modzDmr. qed.
+
 (* ==================================================================== *)
 abstract theory PowZMod.
 type exp.
@@ -437,58 +450,82 @@ clone import ZModP as ZModE with type zmod <- exp, op p <- order
   proof ge2_p by apply: ge2_order.
 
 (* -------------------------------------------------------------------- *)
-op (^)  (x : group) (k : exp) = x ^ (asint k).
-op loge (x : group) : exp = inzmod (log x).
+op (^)  (x : group) (k : exp) = x ^ (asint k)
+axiomatized by expE.
+
+op loge (x : group) : exp = inzmod (log x)
+axiomatized by logE.
 
 (* -------------------------------------------------------------------- *)
 abbrev root (k : exp) (x : group) = x ^ (inv k).
 
 (* -------------------------------------------------------------------- *)
-lemma logK (k : exp) : loge (g ^ k) = k.
-proof. by rewrite /loge logK pmod_small 1:rg_asint asintK. qed.
+lemma loggK (k : exp) : loge (g ^ k) = k.
+proof. by rewrite logE expE logK pmod_small 1:rg_asint asintK. qed.
 
-lemma expK x : g ^ (loge x) = x.
-proof. by rewrite /(^) inzmodK pmod_small 1:rg_log expgK. qed.
-
-lemma exp_inj (a b : exp) : g ^ a = g ^ b <=> a = b.
-proof.
-by split=> //; apply/(can_inj (fun (x : exp)=> g ^ x) loge logK).
-qed.
-
-lemma log_inj (x y : group) : loge x = loge y <=> x = y.
-proof.
-by split=> //; apply/(can_inj loge (fun (x : exp)=> g ^ x) expK).
-qed.
+lemma expgK x : g ^ (loge x) = x.
+proof. by rewrite logE expE inzmodK pmod_small 1:rg_log expgK. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma exp0 x : x ^ ZModE.zero = e.
-proof. by rewrite /(^) inzmodK mod0z exp0. qed.
+proof. by rewrite expE inzmodK mod0z exp0. qed.
 
 lemma exp1 x : x ^ ZModE.one = x.
-proof. by rewrite /(^) inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
+proof. by rewrite expE inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
 
 lemma expN x (k : exp) : x ^ (- k) = inv (x ^ k).
 proof.
-rewrite -expN -{2}(expgK x) -expM -expg_modz -modzMmr -oppE expg_modz.
-by rewrite expM expgK.
+rewrite -{2}(expgK x) !expE -expM -expN -mulrN -expg_modz -modzMmr -oppE.
+by rewrite expg_modz expM -!expE expgK.
 qed.
 
 lemma expM (x : group) (a b : exp) : x ^ (a * b) = x ^ a ^ b.
 proof.
-rewrite -{2}(expgK x) -!expM -expg_modz -modzMmr -mulE.
-by rewrite expg_modz expM expgK.
+rewrite -{2}(expgK x) !expE -!expM -expg_modz -modzMmr -mulE.
+by rewrite expg_modz expM -!expE expgK.
 qed.
 
 lemma expD (x : group) (a b : exp) :  x ^ (a + b) = x ^ a * x ^ b.
 proof.
-rewrite -{1}(expgK x) -expM addE -expg_modz modzMmr.
-by rewrite expg_modz expM expgK expD.
+rewrite -{1}(expgK x) !expE -expM addE -expg_modz modzMmr.
+by rewrite expg_modz expM expD -!expE expgK.
 qed.
 
 lemma expB (x : group) (a b : exp) : x ^ (a - b) = x ^ a / x ^ b.
 proof.
-rewrite -{1}(expgK x) -expM addE -expg_modz modzMmr.
-by rewrite expg_modz expM expgK expD expN.
+rewrite -{1}(expgK x) !expE -expM addE -expg_modz modzMmr.
+by rewrite expg_modz expM expD -!expE expgK expN.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma logrzM (x : group) (a : exp) : loge (x ^ a) = a * loge x.
+proof. by rewrite -{1}expgK -expM loggK ZModpRing.mulrC. qed.
+
+lemma logrV (x : group) : loge (inv x) = (- loge x).
+proof.
+by rewrite logE logVr (logE x) -inzmodN; apply/eq_inzmod; rewrite modz_mod.
+qed.
+
+lemma logDr (x y : group) : loge (x * y) = loge x + loge y.
+proof. by rewrite -{1}expgK -{1}(expgK y) -expD loggK. qed.
+
+lemma logDrN (x y : group) : loge (x / y) = loge x - loge y.
+proof. by rewrite logDr logrV. qed.
+
+(* -------------------------------------------------------------------- *)
+op logb (b x : group) = loge x / loge b.
+
+lemma expbK (b x : group) : unit (loge b) => b ^ (logb b x) = x.
+proof.
+move=> logb_unit; rewrite -(expgK b) -expM /logb loggK.
+rewrite (ComRing.mulrC (loge x)) ComRing.mulrA ZModpRing.divrr //.
+by rewrite ComRing.mul1r expgK.
+qed.
+
+lemma logbK (b : group) (a : exp) : unit (loge b) => logb b (b ^ a) = a.
+proof.
+move=> logb_unit @/logb.
+by rewrite logrzM -ComRing.mulrA ZModpRing.divrr // ComRing.mulrC ComRing.mul1r.
 qed.
 
 (* -------------------------------------------------------------------- *)
