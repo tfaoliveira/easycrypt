@@ -437,8 +437,8 @@ clone import ZModP as ZModE with type zmod <- exp, op p <- order
   proof ge2_p by apply: ge2_order.
 
 (* -------------------------------------------------------------------- *)
-abbrev (^)  (x : group) (k : exp) = x ^ (asint k).
-abbrev loge (x : group) : exp = inzmod (log x).
+op (^)  (x : group) (k : exp) = x ^ (asint k).
+op loge (x : group) : exp = inzmod (log x).
 
 (* -------------------------------------------------------------------- *)
 abbrev root (k : exp) (x : group) = x ^ (inv k).
@@ -448,7 +448,7 @@ lemma logK (k : exp) : loge (g ^ k) = k.
 proof. by rewrite /loge logK pmod_small 1:rg_asint asintK. qed.
 
 lemma expK x : g ^ (loge x) = x.
-proof. by rewrite inzmodK pmod_small 1:rg_log expgK. qed.
+proof. by rewrite /(^) inzmodK pmod_small 1:rg_log expgK. qed.
 
 lemma exp_inj (a b : exp) : g ^ a = g ^ b <=> a = b.
 proof.
@@ -462,10 +462,10 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 lemma exp0 x : x ^ ZModE.zero = e.
-proof. by rewrite inzmodK mod0z exp0. qed.
+proof. by rewrite /(^) inzmodK mod0z exp0. qed.
 
 lemma exp1 x : x ^ ZModE.one = x.
-proof. by rewrite inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
+proof. by rewrite /(^) inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
 
 lemma expN x (k : exp) : x ^ (- k) = inv (x ^ k).
 proof.
