@@ -22,6 +22,3 @@ module TCR (A:ADV_TCR) = {
     return (H k x = H k y /\ x <> y);
   }
 }.
-
-
-    

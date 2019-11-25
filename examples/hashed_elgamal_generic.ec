@@ -21,10 +21,10 @@ op qH: { int | 0 < qH } as gt0_qH.
 (* Assumption: Set CDH *)
 clone import DiffieHellman.Set_CDH as SCDH with
   op n <- qH.
-import DiffieHellman G.
+import DiffieHellman G Gabs ZModE.
 
 type pkey = group.
-type skey = int.
+type skey = exp.
 type ptxt = bits.
 type ctxt = group * bits.
 
@@ -195,9 +195,9 @@ section.
   local module (D : ROC.Dist) (H : ARO) = {
     module A = A(H)
 
-    var y:int
-    var b:bool
-    var m0, m1:ptxt
+    var y      : exp
+    var b      : bool
+    var m0, m1 : ptxt
 
     proc a1(): group = {
       var x, gxy, gx;

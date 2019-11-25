@@ -6,37 +6,69 @@ require TCR RndExcept.
 
 (** DiffieHellman *)
 require import DiffieHellman.
-import DDH G.
+import DDH G Gabs ZModE.
 
 axiom prime_order : prime order.
+
+lemma unit_nz (x : exp) : unit x <=> x <> ZModE.zero.
+proof.
+split=> //=.
++ by apply/contraLR=> /= ->; exact/ZModpRing.unitr0.
+rewrite -{1}asintK /zero -negP -eq_inzmod=> /= x_neq_0.
+move: (modinv_prime _ prime_order _ x_neq_0)=> [invx] h.
+exists (inzmod invx); rewrite -asintK -inzmodM -eq_inzmod mulzC h.
+by rewrite pmod_small // gt1_prime prime_order.
+qed.
+
+instance field with exp
+  op rzero = ZModE.zero
+  op rone  = ZModE.one
+  op add   = ZModE.( + )
+  op opp   = ZModE.([-])
+  op mul   = ZModE.( * )
+  op expr  = ZModpRing.exp
+  op ofint = ZModpRing.ofint
+  op inv   = ZModE.inv
+
+  proof oner_neq0 by exact/ComRing.oner_neq0
+  proof addr0     by exact/ZModpRing.addr0
+  proof addrA     by exact/ZModpRing.addrA
+  proof addrC     by exact/ZModpRing.addrC
+  proof addrN     by exact/ZModpRing.addrN
+  proof mulr1     by exact/ZModpRing.mulr1
+  proof mulrA     by exact/ZModpRing.mulrA
+  proof mulrC     by exact/ComRing.mulrC
+  proof mulrDl    by exact/ZModpRing.mulrDl
+  proof mulrV     by (move=> x; rewrite -unit_nz=> /ZModpRing.mulrV)
+  proof expr0     by exact/ZModpRing.expr0
+  proof exprS     by exact/ZModpRing.exprS
+  proof exprN     by (move=> x n _; exact/ZModpRing.exprN)
+  proof ofint0    by exact/ZModpRing.ofint0
+  proof ofint1    by exact/ZModpRing.ofint1
+  proof ofintS    by exact/ZModpRing.ofintS
+  proof ofintN    by exact/ZModpRing.ofintN.
 
 theory Ad1.
   clone import RndExcept as RndE with
     type input <- unit,
-    type t     <- int,
+    type t     <- exp,
     op   d     <- fun _ => dp,
     type out   <- bool
     proof *.
     realize d_ll. by move=> _; exact/dp_ll. qed.
-  
+
   clone include Adversary1_1 with
     op n <- order
     proof *.
   realize gt1_n by exact/gt1_prime/prime_order.
-  realize d_uni.
-    move=> _ x; case: (x \in dp)=> [/dp1E ->|] //.
-    rewrite supportP=> /= ->.
-    exact/invr_ge0/le_fromint/ltzW/gt0_prime/prime_order.
-  qed.
-
+  realize d_uni by move=> _ x; rewrite dp1E.
 end Ad1.
 
 theory DDH_ex.
-
   module DDH0_ex (A:Adversary) = {
     proc main() : bool = {
       var b, x, y;
-      x <$ dp \ (pred1 0);
+      x <$ dp \ (pred1 ZModE.zero);
       y <$ dp;
       b <@ A.guess(g ^ x, g ^ y, g ^ (x*y));
       return b;
@@ -47,7 +79,7 @@ theory DDH_ex.
     proc main() : bool = {
       var b, x, y, z;
 
-      x <$ dp \ (pred1 0);
+      x <$ dp \ (pred1 ZModE.zero);
       y <$ dp;
       z <$ dp;
       b <@ A.guess(g ^ x, g ^ y, g ^ z);
@@ -63,14 +95,14 @@ theory DDH_ex.
 
   local module Addh0 : Ad1.ADV = {
     proc a1 () = {
-      return ((), 0);
+      return ((), ZModE.zero);
     }
 
-    proc a2 (x : int) = {
+    proc a2 (x : exp) = {
       var b, y;
 
       y <$ dp;
-      b <@ A.guess(g ^ x, g ^ y, g ^ (x*y));
+      b <@ A.guess(g ^ x, g ^ y, g ^ (x * y));
       return b;
     }
   }.
@@ -78,7 +110,7 @@ theory DDH_ex.
   local module Addh1 = {
     proc a1 = Addh0.a1
 
-    proc a2 (x : int) = {
+    proc a2 (x : exp) = {
       var b, y, z;
 
       y <$ dp;
@@ -99,8 +131,8 @@ theory DDH_ex.
     + by proc;call A_ll;rnd;skip;rewrite /= dp_ll.
     have /= H1 := Ad1.pr_abs Addh1 a1_ll _ &m (fun b _ => b). 
     + by proc;call A_ll;do !rnd;skip;rewrite /= dp_ll.
-    have -> : 2%r / order%r = inv order%r + inv order%r. 
-    + field;smt (gt0_prime prime_order lt_fromint).
+    have -> : 2%r / order%r = inv order%r + inv order%r.
+    + field; smt(gt0_order lt_fromint).
     have <- : Pr[Ad1.MainE(Addh0).main() @ &m : res] = Pr[DDH0_ex(A).main() @ &m : res].
     + by byequiv => //;proc;inline *;sim;auto.
     have <- : Pr[Ad1.MainE(Addh1).main() @ &m : res] = Pr[DDH1_ex(A).main() @ &m : res].
@@ -117,10 +149,9 @@ end DDH_ex.
 import DDH_ex.
 
 (** Target Collision Resistance *)
-
 clone import TCR as TCR_H with 
   type t_from <- group * group * group,
-  type t_to   <- int.
+  type t_to   <- exp.
 
 axiom dk_ll : is_lossless dk.
 
@@ -128,7 +159,7 @@ axiom dk_ll : is_lossless dk.
 
 clone import PKE as PKE_ with
    type pkey = K * group * group * group * group * group,
-   type skey = K * group * group * int * int * int * int * int * int,
+   type skey = K * group * group * exp * exp * exp * exp * exp * exp,
    type plaintext = group,
    type ciphertext = group * group * group * group.
 
@@ -141,7 +172,7 @@ module CramerShoup : Scheme = {
     y2 <$ dp;
     z1 <$ dp;
     z2 <$ dp;
-    w  <$ dp \ (pred1 0);
+    w  <$ dp \ (pred1 ZModE.zero);
     k  <$ dk;
     g_ <- g ^ w;
     pk <- (k, g, g_, g^x1 * g_^x2, g^y1 * g_^y2, g^z1 * g_^z2);
@@ -184,12 +215,14 @@ proof.
     (x1 + H k (g ^ u, g ^ w ^ u, (g ^ z1 * g ^ w ^ z2) ^ u * m{m1}) * y1) *
     g ^ w ^ u ^
     (x2 + H k (g ^ u, g ^ w ^ u, (g ^ z1 * g ^ w ^ z2) ^ u * m{m1}) * y2).
-  + by rewrite -!expM -!expD -!expM -!expD; congr; algebra.
-  by rewrite -(expgK m{m1}) -!expM -!expD -expN -!expM -!expD; congr; algebra.
+  + pose h := H _ _.
+    rewrite -expM -expD -expM -expM -expD -expM -expD -expM -expM- expM -expD.
+    by congr; ring.
+  rewrite -(expgK m{m1}) -expM -expM -expM -expM -expD -expD -expN -expM -expD -expD.
+  by congr; ring.
 qed.
 
 (** IND-CCA Security of the scheme *)
-
 module B_DDH (A:CCA_ADV) = {
 
   module CCA = CCA(CramerShoup, A)
@@ -231,7 +264,7 @@ module B_DDH (A:CCA_ADV) = {
     var cstar : ciphertext option
     var g3    : ( group * group * group) option
     var g_, a, a_, c, d : group
-    var w, u , u', x, y, z, alpha, v' : int
+    var w, u , u', x, y, z, alpha, v' : exp
     var k : K
     module O = {
       proc dec(ci:ciphertext) = {
@@ -256,7 +289,7 @@ module B_DDH (A:CCA_ADV) = {
       log <- [];
       g3 <- None;
       cstar <- None;
-      w <$ dp \ (pred1 0);
+      w <$ dp \ (pred1 ZModE.zero);
       u <$ dp;
       u' <$ dp \ (pred1 u);
       g_ <- g ^ w; 
@@ -272,7 +305,7 @@ module B_DDH (A:CCA_ADV) = {
       z <$ dp; h <- g^z;      
       v' <- H k (a, a_, c);
       x <$ dp; r <$ dp; e <- g^x;
-      alpha <- (r - u * (x + v' * y)) * (invm (w*(u'-u)) order);
+      alpha <- (r - u * (x + v' * y)) / (w*(u'-u));
       d <- g ^ r;
       (m0,m1) <@ A.choose(k, g, g_, e, f, h); 
       cstar <- Some (a,a_,c,d);
@@ -306,14 +339,15 @@ section Security_Aux.
         g ^ u ^ z1 * g ^ (w * u) ^ z2 * if b then r.`2 else r.`1).
     + congr; congr=> //=.
       + by rewrite -expM.
-      by rewrite -!expM -!expD -expM; congr; congr; algebra.
+      rewrite -expM -expD -expM -expM -expM -expD.
+      by algebra.
+    rewrite -expM //=.
     pose h:= H k _.
-    rewrite -!expM -!expD -!expM -!expD //=.
-    split; [split;[split|split]|smt()].
-    + by congr; congr; algebra.
-    + by congr; algebra.
-    + by congr; algebra.
-    by congr; algebra.
+    do!split; last by smt().
+    + by rewrite -expM -expD -expM -expM -expM -expD; algebra.
+    + by rewrite -expM -expD -expM -expM -expD -expM -expD -expM -expM -expD; algebra.
+    + by rewrite -expM -expD -expM -expM -expM -expD; algebra.
+    by rewrite -expM -expD -expM -expM -expD -expM -expD -expM -expM -expD; algebra.
   qed.
 
   lemma pr_CCA_DDH0 &m : 
@@ -325,10 +359,10 @@ section Security_Aux.
     var log     : ciphertext list
     var cstar   : ciphertext option
     var bad     : bool
-    var u,u',w  : int
-    var x,x1,x2 : int
-    var y,y1,y2 : int
-    var z,z1,z2 : int
+    var u,u',w  : exp
+    var x,x1,x2 : exp
+    var y,y1,y2 : exp
+    var z,z1,z2 : exp
     var g_: group
     var k       : K
 
@@ -354,19 +388,19 @@ section Security_Aux.
       log <- [];
       cstar <- None;
       bad <- false;
-      w <$ dp \ (pred1 0);
+      w <$ dp \ (pred1 ZModE.zero);
       u <$ dp;
       return ((),u);
     }
 
-    proc a2 (u0' : int) = {
+    proc a2 (u0' : exp) = {
       var m0, m1, b, b0, a, a_, c, d, v, e, f, h;
       u' <- u0';
       g_ <- g ^ w; k  <$ dk;
       a <- g^u; a_ <- g_^u';
-      x <$ dp; x2 <$ dp; x1 <- (x - w * x2) %% order; e <- g^x;
-      y <$ dp; y2 <$ dp; y1 <- (y - w * y2) %% order; f <- g^y;
-      z <$ dp; z2 <$ dp; z1 <- (z - w * z2) %% order; h <- g^z;
+      x <$ dp; x2 <$ dp; x1 <- x - w * x2; e <- g^x;
+      y <$ dp; y2 <$ dp; y1 <- y - w * y2; f <- g^y;
+      z <$ dp; z2 <$ dp; z1 <- z - w * z2; h <- g^z;
       (m0,m1) <@ A.choose(k, g, g_, e, f, h); 
       b <$ {0,1}; 
       c <- a^z1 * a_^z2 * (b ? m1 : m0);
@@ -381,16 +415,16 @@ section Security_Aux.
   local equiv DDH1_G1_dec : 
     CCA(CramerShoup, A).O.dec ~ G1.O.dec : 
     ( !G1.bad{2} /\ c{1} = ci{2} /\
-      (G1.x{2} = (G1.x1{2} + G1.w{2} * G1.x2{2}) %% order /\
-       G1.y{2} = (G1.y1{2} + G1.w{2} * G1.y2{2}) %% order /\
-       G1.z{2} = (G1.z1{2} + G1.w{2} * G1.z2{2}) %% order) /\
+      (G1.x{2} = G1.x1{2} + G1.w{2} * G1.x2{2} /\
+       G1.y{2} = G1.y1{2} + G1.w{2} * G1.y2{2} /\
+       G1.z{2} = G1.z1{2} + G1.w{2} * G1.z2{2}) /\
        CCA.log{1} = G1.log{2} /\ CCA.cstar{1} = G1.cstar{2} /\
        CCA.sk{1} = (G1.k{2}, g, G1.g_{2}, G1.x1{2}, G1.x2{2}, G1.y1{2}, G1.y2{2}, G1.z1{2}, G1.z2{2})) ==>
     (!G1.bad{2} =>
        ={res} /\
-       (G1.x{2} = (G1.x1{2} + G1.w{2} * G1.x2{2}) %% order /\
-        G1.y{2} = (G1.y1{2} + G1.w{2} * G1.y2{2}) %% order /\
-        G1.z{2} = (G1.z1{2} + G1.w{2} * G1.z2{2}) %% order) /\
+       (G1.x{2} = G1.x1{2} + G1.w{2} * G1.x2{2} /\
+        G1.y{2} = G1.y1{2} + G1.w{2} * G1.y2{2} /\
+        G1.z{2} = G1.z1{2} + G1.w{2} * G1.z2{2}) /\
        CCA.log{1} = G1.log{2} /\ CCA.cstar{1} = G1.cstar{2} /\
        CCA.sk{1} = (G1.k{2}, g, G1.g_{2}, G1.x1{2}, G1.x2{2}, G1.y1{2}, G1.y2{2}, G1.z1{2}, G1.z2{2})).
   proof.
@@ -403,18 +437,11 @@ section Security_Aux.
       a ^ G1.w{m2} ^ (G1.x2{m2} + H G1.k{m2} (a, a ^ G1.w{m2}, c) * G1.y2{m2}) =
       a ^ (G1.x1{m2} + G1.w{m2} * G1.x2{m2} +
            H G1.k{m2} (a, a ^ G1.w{m2}, c) * (G1.y1{m2} + G1.w{m2} * G1.y2{m2})).
-    + by pose h:= H _ _; rewrite -!expM -!expD; congr; algebra.
-    pose h:= H _ _; rewrite -(expgK a) -!expM -expg_modz eq_sym -expg_modz.
-    have <-: (log a * (G1.x1 + G1.w * G1.x2 + h * (G1.y1 + G1.w * G1.y2)) %% order
-              = log a * ((G1.x1 + G1.w * G1.x2) %% order
-                + h * ((G1.y1 + G1.w * G1.y2) %% order)) %% order){m2}.
-    + pose m:= (G1.x1{m2} + _ * _)%Int.
-      pose n:= (G1.y1{m2} + _ * _)%Int.
-      rewrite eq_sym.
-      rewrite -modzMmr modzDml modzMmr.
-      by rewrite -modzMmr -modzDmr (modzMmr h) modzDmr modzMmr.      
-    case: (d = _)=> //=.
-    by rewrite -expD -expg_modz modzMmr expg_modz; congr; congr; congr; algebra.
+    + pose h := H _ _; rewrite -expM -expD.
+      have -> //: (G1.x1 + h * G1.y1 + G1.w * (G1.x2 + h * G1.y2)
+                   = G1.x1 + G1.w * G1.x2 + h * (G1.y1 + G1.w * G1.y2)){m2}.
+      by algebra.
+    by pose h:= H _ _; rewrite -!expM -!expD; algebra.
   qed.
 
   local lemma G1_dec_ll : islossless G1.O.dec. 
@@ -429,9 +456,9 @@ section Security_Aux.
     proc;inline *;wp.
     call (_: G1.bad, 
              (
-              (G1.x = (G1.x1 + G1.w * G1.x2) %% order /\
-               G1.y = (G1.y1 + G1.w * G1.y2) %% order /\
-               G1.z = (G1.z1 + G1.w * G1.z2) %% order){2} /\
+              (G1.x = G1.x1 + G1.w * G1.x2 /\
+               G1.y = G1.y1 + G1.w * G1.y2 /\
+               G1.z = G1.z1 + G1.w * G1.z2){2} /\
               CCA.log{1} = G1.log{2} /\ CCA.cstar{1} = G1.cstar{2} /\ 
               CCA.sk{1} = (G1.k, g, G1.g_, G1.x1, G1.x2, G1.y1, G1.y2, G1.z1, G1.z2){2})).
       + by apply guess_ll.
@@ -441,9 +468,9 @@ section Security_Aux.
     wp;rnd.
     call (_: G1.bad, 
              (
-              (G1.x = (G1.x1 + G1.w * G1.x2) %% order /\
-               G1.y = (G1.y1 + G1.w * G1.y2) %% order /\
-               G1.z = (G1.z1 + G1.w * G1.z2) %% order){2} /\
+              (G1.x = G1.x1 + G1.w * G1.x2 /\
+               G1.y = G1.y1 + G1.w * G1.y2 /\
+               G1.z = G1.z1 + G1.w * G1.z2){2} /\
               CCA.log{1} = G1.log{2} /\ CCA.cstar{1} = G1.cstar{2} /\ 
               CCA.sk{1} = (G1.k, g, G1.g_, G1.x1, G1.x2, G1.y1, G1.y2, G1.z1, G1.z2){2})).
       + by apply choose_ll.
@@ -451,85 +478,51 @@ section Security_Aux.
       + by move=> _ _; apply (CCA_dec_ll A).
       + by move=> _;apply G1_dec_bad.
     swap{1} 16 -9;wp.
-    swap -1;rnd (fun z => (z + G1.w{2} * G1.z2{2}) %% order)
-                (fun z => (z - G1.w{2} * G1.z2{2}) %% order).
+    swap -1;rnd (fun z => z + G1.w{2} * G1.z2{2})
+                (fun z => z - G1.w{2} * G1.z2{2}).
     rnd;wp.
-    swap -1;rnd (fun z => (z + G1.w{2} * G1.y2{2}) %% order)
-                (fun z => (z - G1.w{2} * G1.y2{2}) %% order).
+    swap -1;rnd (fun z => z + G1.w{2} * G1.y2{2})
+                (fun z => z - G1.w{2} * G1.y2{2}).
     rnd;wp.
-    swap -1;rnd (fun z => (z + G1.w{2} * G1.x2{2}) %% order)
-                (fun z => (z - G1.w{2} * G1.x2{2}) %% order).
+    swap -1;rnd (fun z => z + G1.w{2} * G1.x2{2})
+                (fun z => z - G1.w{2} * G1.x2{2}).
     rnd;wp;rnd;wp.
-    rnd (fun z => (z * invm x{1} order) %% order) (fun z => z * x{1} %% order) => /=.
+    rnd (fun z => z / x{1}) (fun z => z * x{1}) => /=.
     auto => &m1 &m2 /= -> xL H;rewrite H /=;move: H => /supp_dexcepted. 
     rewrite /pred1 => -[] InxL HxL yL -> /=.
     split => [ ? _ | eqxL].
-    + rewrite modzMml mulzA -modzMmr prime_invmM /=.
-      + exact/prime_order.
-      + by rewrite modz_small // [smt(gt0_order supp_dp)].
-      by rewrite/modz_small [smt(gt0_order supp_dp)].
-    split => [ ? _ | _].
-    + by apply/dp_uni=> //; exact/mod_in_dp.
-    move=> zL InzL_;split => [ | H{H}]; 1:by exact/mod_in_dp.
+    + by field; rewrite ZModpRing.ofint0.
+    split => [ ? _ | _]; first exact/dp_funi.
+    move=> zL InzL_;split => [ | H{H}]; first exact/supp_dp.
     split => [ | _].
-    + rewrite modzMml mulzA -modzMmr (mulzC _ xL) prime_invmM /=.
-      + exact/prime_order.
-      + by rewrite modz_small // [smt(gt0_order supp_dp)].
-      by rewrite/modz_small [smt(gt0_order supp_dp)].
+    + by field; rewrite ZModpRing.ofint0.
     move=> kL -> x2L -> /=.
-    split => [ ? _ | Eqx2L].
-    + rewrite modzDml (: xR - xL  * x2L + xL * x2L = xR) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    split => [ ? _ | H {H}].
-    + by apply/dp_uni=> //; exact/mod_in_dp.
-    move=> x1L Inx1L;split => [ | Eqx1L]; 1:by exact/mod_in_dp.
-    split => [ | H{H}].
-    + rewrite modzDml (: x1L + xL  * x2L - xL * x2L = x1L) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    move=> y2L -> /=;split => [ ? _ | Eqy2L].
-    + rewrite modzDml (: yR - xL  * y2L + xL * y2L = yR) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    split => [ ? _ | H {H}].
-    + by apply/dp_uni=> //; exact/mod_in_dp.
-    move=> y1L Iny1L;split => [ | H{H}]; 1: by exact/mod_in_dp.
-    split => [ | H{H}].
-    + rewrite modzDml (: y1L + xL  * y2L - xL * y2L = y1L) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    move=> z2L -> /=;split => [ ? _ | Eqz2L].
-    + rewrite modzDml (: zR - xL  * z2L + xL * z2L = zR) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    split => [ ? _ | H {H}].
-    + by apply/dp_uni=> //; exact/mod_in_dp.
-    move=> z1L Inz1L;split => [ | H{H}]; 1: by exact/mod_in_dp.
-    have <- /= : z1L = ((z1L + xL * z2L) %% order - xL * z2L) %% order.
-    + rewrite modzDml (: z1L + xL  * z2L - xL * z2L = z1L) 1:[smt()].
-      by rewrite modz_small // [smt(gt0_order supp_dp)].
-    rewrite -3!expM -3!expD 3!expg_modz //=.
-    rewrite !modzDml -2!addzA 2!modzDml 2!addzA.
-    have !-> //=: forall (x y z : int), x + (-y * z) + y * z = x.
-    + by move=> x y z; algebra.
-    have ->: x1L + xL * x2L - xL * x2L = x1L by algebra.
-    have ->: y1L + xL * y2L - xL * y2L + xL * y2L - xL * y2L = y1L by algebra.
-    rewrite modz_small 1:[smt(gt0_order supp_dp)] //=.
-    rewrite modz_small 1:[smt(gt0_order supp_dp)] //=.
+    split => [ ? _ | Eqx2L]; first by algebra.
+    split => [ ? _ | H {H}]; first exact/dp_funi.
+    move=> x1L Inx1L;split => [ | Eqx1L]; first exact/supp_dp.
+    split => [ | H{H}]; first by algebra.
+    move=> y2L -> /=;split => [ ? _ | Eqy2L]; first by algebra.
+    split => [ ? _ | H {H}]; first exact/dp_funi.
+    move=> y1L Iny1L;split => [ | H{H}]; 1: by exact/supp_dp.
+    split => [ | H{H}]; first by algebra.
+    move=> z2L -> /=;split => [ ? _ | Eqz2L]; first by algebra.
+    split => [ ? _ | H {H}]; first exact/dp_funi.
+    move=> z1L Inz1L;split => [ | H{H}]; first exact/supp_dp.
+    split=> [|_]; first by algebra.
+    split=> [|_].
+    + by (do!split; first 3 by rewrite -expM -expD; algebra); by algebra.
     move=> /> rL rR aL lL aR bad lR Hbad b _.
     split=> [/Hbad />|/#].
-    have -> //=: g ^ xL ^ (zL * invm xL order %% order)
-                 = g ^ zL.
-    rewrite -expM -expg_modz modzMmr (mulzC zL) -mulzA.
-    rewrite -modzMml prime_invmM /=.
-    + exact/prime_order.
-    + rewrite modz_small // [smt(supp_dp gt0_order)].
-    by rewrite expg_modz.
+    have -> //=: g ^ xL ^ (zL / xL) = g ^ zL.
+    + by rewrite -expM; congr; field; rewrite ZModpRing.ofint0.
+    pose h := H _ _. pose h' := H _ _.
+    have ->: h = h'.
+    + by rewrite /h /h'; algebra.
+    by move=> _ _ _ _ _ _; do!split; algebra.
   qed.
 
   lemma dt_r_ll x : is_lossless (dp \ pred1 x).
-  proof.
-    rewrite dexcepted_ll 1:dp_ll.
-    case: (x \in dp).
-    + by move=> /dp1E ->; smt(gt1_prime prime_order).
-    by rewrite supportP=> /= ->.
-  qed.
+  proof. by rewrite dexcepted_ll 1:dp_ll dp1E; smt(gt1_prime prime_order). qed.
   
   local lemma aux1 &m : 
     Pr[CCA(CramerShoup, A).main() @ &m : res] <= 
@@ -560,14 +553,14 @@ section Security_Aux.
 
     module A = G1.A
 
-    var alpha, v: int
+    var alpha, v: exp
 
     proc main1 () = {
       var m0, m1, b, b0, v, e, f, h, r', a, a_, c, d;
       G1.log <- [];
       G1.cstar <- None;
       G1.bad <- false;
-      G1.w <$ dp \ (pred1 0);
+      G1.w <$ dp \ (pred1 ZModE.zero);
       G1.u <$ dp; 
       G1.u' <$ dp \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -591,7 +584,7 @@ section Security_Aux.
       G1.log <- [];
       G1.cstar <- None;
       G1.bad <- false;
-      G1.w <$ dp \ (pred1 0);
+      G1.w <$ dp \ (pred1 ZModE.zero);
       G1.u <$ dp; 
       G1.u' <$ dp \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -601,7 +594,7 @@ section Security_Aux.
       c <- g^r';
       v <- H G1.k (a, a_, c);
       G1.x <$ dp; r <$ dp;
-      alpha <- (r - G1.u*(G1.x + v*G1.y))/ (G1.w*(G1.u'-G1.u));
+      alpha <- (r - G1.u*(G1.x + v*G1.y)) / (G1.w*(G1.u'-G1.u));
       G1.x2 <- alpha - v*G1.y2;
       G1.x1 <- G1.x - G1.w * G1.x2; e <- g^G1.x;
       d <- g ^ r;
@@ -620,28 +613,34 @@ section Security_Aux.
                G1.y1, G1.y2, G1.z, G1.w, G1.k}).
     + by sim => />.
     swap{1} [23..24] 3;wp => /=.
-    rnd  (fun z2 => G1.u*G1.z - G1.u*G1.w*z2 + G1.w*G1.u'* z2 + log (b ? m1 : m0)){1}
-         (fun r' => (r' - G1.u*G1.z - log (b ? m1 : m0)) / (G1.w * (G1.u' - G1.u))){1}.
+    rnd  (fun z2 => G1.u*G1.z - G1.u*G1.w*z2 + G1.w*G1.u'* z2 + loge (b ? m1 : m0)){1}
+         (fun r' => (r' - G1.u*G1.z - loge (b ? m1 : m0)) / (G1.w * (G1.u' - G1.u))){1}.
     rnd.
     call (_: ={G1.bad, G1.cstar, G1.log, G1.x, G1.x1, G1.x2, G1.y,
                G1.y1, G1.y2, G1.z, G1.w, G1.k}).
     + by sim => />.
-    auto => &m1 &m2 />;rewrite /pred1 -ofint0.
+    auto => &m1 &m2 />;rewrite /pred1.
     move=> wL /supp_dexcepted [] _ /= HwL uL _ u'L /supp_dexcepted [] _ /= Hu'L .
     move=> kL _ xL _ x2L _ yL _ y2L _ zL _ resu bL _.
-    have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> ofint 0.
-    + rewrite H1 ofint0 mulf_eq0 negb_or -{1}ofint0 HwL /=.
-      by move: Hu'L;apply: contra => H;ring H.
-    split => [? _ | _ ]; 1: by field.
-    split => [? _ | _ z2L _]; 1: by apply dp_funi.
-    split;1: by apply dp_fu.
-    move=> _;split => [ | _]; 1: by field.
-    pose HH1 := H _ _; pose HH2 := H _ _.    
-    have -> : HH1 = HH2.
-    + rewrite /HH1 /HH2;do 2!congr.
-      by rewrite log_bij !(log_g, log_pow, log_mul);ring.
-    progress; rewrite log_bij !(log_g, log_pow, log_mul);field => //.
+    split => [? _ | _ ].
+    + field.
+      rewrite -ZModpRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+    split => [? _ | _ z2L _]; first exact/dp_funi.
+    split; first exact/supp_dp.
+    move=> _;split => [ | _].
+    + field.
+      rewrite -ZModpRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+    rewrite -expM -{1 3 4 7 9 10}(expgK (if bL then resu.`2 else resu.`1)).
+    pose lb := loge (if bL then resu.`2 else resu.`1).
+    pose h := H _ _. pose h' := H _ _.
+    have ->: h = h'.
+    + rewrite /h /h'; move: lb h h'=> lb h h'; do 2!congr.
+      by rewrite -expM -expM -expD -expD; algebra. (* slow!!! *)
+    do !split.
+    + by rewrite -expM -expM -expD -expD; algebra.
+    by rewrite -expM -expM -expD -expD; algebra.
   qed.
 
   local equiv G21_G2 : G2.main1 ~ G2.main : ={glob A} ==> ={res, G1.bad}.
@@ -656,19 +655,64 @@ section Security_Aux.
     + by sim => />.
     wp.
     rnd (fun x2 => (x2 + G2.v*G1.y2) * (G1.w*(G1.u'-G1.u)) + G1.u*(G1.x + G2.v*G1.y)){2}
-        (fun r => (r - G1.u*(G1.x + G2.v*G1.y))/ (G1.w*(G1.u'-G1.u)) - G2.v*G1.y2){2}.
-    auto => &m1 &m2 />;rewrite /pred1 -ofint0.
-    move=> wL /supp_dexcepted [] _ /= HwL uL _ u'L /supp_dexcepted [] _ /= Hu'L .
-    move=> kL _ yL _ y2L _ zL _ r'L _ xL _.  
-    have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> ofint 0.
-    + rewrite H1 ofint0 mulf_eq0 negb_or -{1}ofint0 HwL /=.
-      by move: Hu'L;apply: contra => H;ring H.
-    split => [? _ | _ ]; 1: by field.
-    split => [? _ | _ z2L _]; 1: by apply dp_funi.
-    split;1: by apply dp_fu.
-    move=> _;split => [ | _]; 1: by field.
-    by progress;2..3:rewrite log_bij !(log_g, log_pow, log_mul);field.
+        (fun r => (r - G1.u*(G1.x + G2.v*G1.y)) / (G1.w*(G1.u'-G1.u)) - G2.v*G1.y2){2}.
+    do !(wp; rnd; wp); skip=> &1 &2 <-; split=> [//|_].
+    split=> [//|_ w /Dexcepted.supp_dexcepted [] _ @{1}/pred1 w_nz].
+    split=> [|_]; first by rewrite Dexcepted.supp_dexcepted.
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ u u_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ u' /Dexcepted.supp_dexcepted [] _ @{1}/pred1 u'_nz].
+    split=> [|_]; first by rewrite Dexcepted.supp_dexcepted.
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ k k_in_dk].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ y y_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ y2 y2_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ z z_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ r' r'_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [//|_ x x_in_dp].
+    split=> [//|_].
+    split=> [//|_].
+    split=> [r r_in_dp|_].
+    + pose h := H _ _; field.
+      rewrite -ComRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+    split=> [r r_in_dp|_ x2 x2_in_dp]; first exact/dp_funi.
+    split=> [|_]; first exact/supp_dp.
+    split=> [|_].
+    + pose h := H _ _; field.
+      rewrite -ComRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+    split=> [/=|_].
+    + split.
+      + pose h := H _ _; field.
+        rewrite -ComRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+        by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+      pose h := H _ _; field.
+      rewrite -ComRing.mulrDl ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
+    move=> /> _ _ b _; split.
+    + by rewrite -expM -expM -expM -expD; algebra.
+    by rewrite -expM -expM -expM -expD; algebra.
   qed.
 
   local lemma pr_G2_res &m: Pr[G2.main() @ &m : res] <= 1%r/2%r.
@@ -679,7 +723,7 @@ section Security_Aux.
 
   local module G3 = {
     var g3 : ( group * group * group) option
-    var y2log : t list
+    var y2log : exp list
     var cilog : ciphertext list
     var a, a_, c, d: group
 
@@ -695,7 +739,7 @@ section Security_Aux.
           if (a_ <> a^G1.w) {
             if (v = G2.v /\ (a,a_,c) <> (G3.a,G3.a_,G3.c)) g3 <- Some (a,a_,c);
             else {
-              y2' <- ((log d - log a*(G1.x + v*G1.y))/(log a_ - log a*G1.w) - G2.alpha) / (v -G2.v);
+              y2' <- ((loge d - loge a*(G1.x + v*G1.y))/(loge a_ - loge a*G1.w) - G2.alpha) / (v -G2.v);
               y2log <-  y2' :: y2log;
             }
           }
@@ -715,7 +759,7 @@ section Security_Aux.
       G3.cilog <- [];
       G3.g3 <- None;
       G1.cstar <- None;
-      G1.w <$ dp \ (pred1 F.zero);
+      G1.w <$ dp \ (pred1 ZModE.zero);
       G1.u <$ dp; 
       G1.u' <$ dp \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -766,9 +810,11 @@ section Security_Aux.
     case (v = G2.v{m2}) => [->> /= ? [#]!->> Hstar1 ->>| /=].
     + by case: (G1.cstar{m2}) Hstareq Hstar Hstar1.
     move=> Hv Ha _ ->>;left.
-    rewrite !(log_g, log_pow, log_mul);field => //.
-    + by move: Hv;apply: contra;rewrite ofint0 => H;ring H.
-    by move: Ha;apply: contra; rewrite log_bij log_pow ofint0 => H;ring H.
+    rewrite logDr !logrzM; field.
+    + rewrite ZModpRing.ofint0 ZModpRing.addrC ZModpRing.addr_eq0 -ZModpRing.mulNr.
+      rewrite -logrzM -negP=> /(congr1 (fun (x : exp)=> g^x)) /=.
+      by rewrite !expgK ZModpRing.opprK.
+    by rewrite ZModpRing.ofint0 ZModpRing.addrC ZModpRing.addr_eq0 ZModpRing.opprK.
   qed.
 
   local equiv G2_G3 : G2.main ~ G3.main : 
@@ -805,27 +851,27 @@ section Security_Aux.
     + by move=> &m2 _;apply G1_dec_ll.
     + by move=> /=;proc;auto => /#.
     auto => &m1 &m2 />.
-    move=> wL /supp_dexcepted [] _;rewrite /pred1 -F.ofint0 => HwL0.
+    move=> wL /supp_dexcepted [] _;rewrite /pred1 => HwL0.
     move=> uL _ u'L /supp_dexcepted [] _ /= HuL kL _.
     move=> yL _ y2L _ zL _ r'L _ xL _ rL _.
     have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> ofint 0.
-    + rewrite H1 ofint0 mulf_eq0 negb_or -{1}ofint0 HwL0 /=.
-      by move: HuL;apply: contra => H;ring H.
+    have H2 : (-uL) * wL + u'L * wL <> ZModpRing.ofint 0.
+    + rewrite H1 ZModpRing.ofint0 -unit_nz ZModpRing.unitrMr unit_nz //.
+      by rewrite ZModpRing.addr_eq0 ZModpRing.opprK.
     split => [ | _].
-    + by rewrite log_bij !(log_g, log_pow, log_mul);field.
-    by rewrite DBool.dbool_ll /= /#.
+    + by rewrite -expM -expM -expM -expD; congr; field.
+    by rewrite DBool.dbool_ll=> /#.
   qed.
 
   local lemma pr_G3_y2log &m : 
-    Pr[G3.main() @ &m : G1.y2 \in G3.y2log] <= PKE_.qD%r / q%r.
+    Pr[G3.main() @ &m : G1.y2 \in G3.y2log] <= PKE_.qD%r / order%r.
   proof. 
     byphoare => //;proc;wp;rnd.
     conseq (_: _ ==> size G3.y2log <=  PKE_.qD) => /=.
-    + move=> y2log Hsize;apply (ler_trans ((size y2log)%r/q%r)).
-      + by apply (mu_mem_le_mu1 dp y2log (inv q%r)) => x;rewrite dp1E.
+    + move=> y2log Hsize;apply (ler_trans ((size y2log)%r/order%r)).
+      + by apply (mu_mem_le_mu1 dp y2log (inv order%r)) => x;rewrite dp1E.
       apply ler_wpmul2r => //;2: by apply le_fromint.
-      apply invr_ge0;smt (le_fromint gt1_q).
+      apply invr_ge0;smt (le_fromint gt1_prime prime_order).
     call (_: size G3.y2log <= size G1.log /\ size G3.y2log <= PKE_.qD). 
     + proc;auto => /#. 
     auto;call (_: size G3.y2log <= size G1.log /\ size G3.y2log <= PKE_.qD). 
@@ -889,7 +935,7 @@ section Security_Aux.
       G1.log <- [];
       G3.cilog <- [];
       G1.cstar <- None;
-      G1.w <$ dp \ (pred1 F.zero);
+      G1.w <$ dp \ (pred1 ZModE.zero);
       G1.g_ <- g ^ G1.w;
      
       G1.k  <$ dk;
@@ -936,30 +982,32 @@ import StdRing.RField.
 
   local lemma pr_G4 &m:
     Pr[G4.main() @ &m : (G3.a, G3.a_,G3.c, G3.d) \in G3.cilog] <=
-      (PKE_.qD%r/q%r)^3 * (PKE_.qD%r/(q-1)%r).
+      (PKE_.qD%r/order%r)^3 * (PKE_.qD%r/(order-1)%r).
   proof.
     byphoare=> //;proc.
     seq 23 : ((G3.a, G3.a_, G3.c, G3.d) \in G3.cilog) 
-             ((PKE_.qD%r / q%r)^3 * (PKE_.qD%r / (q - 1)%r)) 1%r _ 0%r => //;last first.
+             ((PKE_.qD%r / order%r)^3 * (PKE_.qD%r / (order - 1)%r)) 1%r _ 0%r => //;last first.
     + hoare; call (_ : G1.cstar <> None /\ !(G3.a, G3.a_, G3.c, G3.d) \in G3.cilog).
       + by proc;auto => /#.
       by auto.      
-    seq 13 : true 1%r ((PKE_.qD%r / q%r) ^ 3 * (PKE_.qD%r / (q - 1)%r))
-                 0%r _ (size G3.cilog <= PKE_.qD /\ G1.w <> F.zero /\ G1.g_ = g ^ G1.w) => //.
+    seq 13 : true 1%r ((PKE_.qD%r / order%r) ^ 3 * (PKE_.qD%r / (order - 1)%r))
+                 0%r _ (size G3.cilog <= PKE_.qD /\ G1.w <> ZModE.zero /\ G1.g_ = g ^ G1.w) => //.
     + call (_ : size G3.cilog <= size G1.log /\ size G1.log <= PKE_.qD).
       + proc;auto => /#.
       auto => /= w /supp_dexcepted;smt (qD_pos).
-    wp;conseq (_ : _ ==> G1.u \in map (fun (g4:ciphertext) => log g4.`1) G3.cilog /\
-                      G1.u' \in map (fun (g4:ciphertext) => log g4.`2 / G1.w) G3.cilog /\
-                      r' \in map (fun (g4:ciphertext) => log g4.`3) G3.cilog /\
-                      r \in map (fun (g4:ciphertext) => log g4.`4) G3.cilog).
-    + move=> &hr />;rewrite -ofint0 => _ Hw u u' r r' Hlog.
-      do !split;apply mapP;
-       exists (G.g ^ u, g ^ G1.w{hr} ^ u', G.g ^ r', G.g ^ r);
-       rewrite Hlog /= !log_pow ?log_g;1,3,4: by ring. 
-       by field.
-    seq 1 : (G1.u \in map (fun (g4 : ciphertext) => log g4.`1) G3.cilog)
-            (PKE_.qD%r / q%r) ((PKE_.qD%r / q%r)^2 * (PKE_.qD%r / (q - 1)%r))
+    wp;conseq (_ : _ ==> G1.u \in map (fun (g4:ciphertext) => loge g4.`1) G3.cilog /\
+                      G1.u' \in map (fun (g4:ciphertext) => loge g4.`2 / G1.w) G3.cilog /\
+                      r' \in map (fun (g4:ciphertext) => loge g4.`3) G3.cilog /\
+                      r \in map (fun (g4:ciphertext) => loge g4.`4) G3.cilog).
+    + move=> &hr /> => _ Hw u u' r r' Hlog.
+      do !split;apply/mapP;
+       exists (G.g ^ u, g ^ G1.w{hr} ^ u', G.g ^ r', G.g ^ r); rewrite Hlog /=.
+       + by rewrite loggK.
+       + by rewrite -expM loggK; algebra.
+       + by rewrite loggK.
+       by rewrite loggK.
+    seq 1 : (G1.u \in map (fun (g4 : ciphertext) => loge g4.`1) G3.cilog)
+            (PKE_.qD%r / order%r) ((PKE_.qD%r / order%r)^2 * (PKE_.qD%r / (order - 1)%r))
             _ 0%r (size G3.cilog <= PKE_.qD) => //;
     last 2 first.
     + hoare;conseq (_ : _ ==> true) => // /#.
@@ -969,8 +1017,8 @@ import StdRing.RField.
       apply (mu_mem_le_mu1_size dp m') => //.
       + by rewrite /m' size_map.
       by move=> ?;rewrite dp1E.
-    seq 1 : (G1.u' \in map (fun (g4 : ciphertext) => log g4.`2 / G1.w) G3.cilog)
-            (PKE_.qD%r / (q-1)%r) ((PKE_.qD%r / q%r)^2) _ 0%r 
+    seq 1 : (G1.u' \in map (fun (g4 : ciphertext) => loge g4.`2 / G1.w) G3.cilog)
+            (PKE_.qD%r / (order-1)%r) ((PKE_.qD%r / order%r)^2) _ 0%r 
             (size G3.cilog <= PKE_.qD) => //;last 2 first.
     + hoare;conseq (_ : _ ==> true) => // /#.
     + move=> &hr _;apply lerr_eq;ring.
@@ -980,22 +1028,22 @@ import StdRing.RField.
       + by rewrite /m' size_map.
       move=> x;rewrite dexcepted1E {1}/pred1. 
       case: (x = G1.u{hr}) => _.
-      + apply invr_ge0;smt (le_fromint gt1_q).
+      + apply invr_ge0;smt (le_fromint gt1_prime prime_order).
       rewrite dp_ll !dp1E;apply lerr_eq.
-      field;smt (gt1_q le_fromint). 
-    seq 1 : (r' \in map (fun (g4 : ciphertext) => log g4.`3) G3.cilog)
-            (PKE_.qD%r / q%r) (PKE_.qD%r / q%r) _ 0%r 
+      field;smt (gt1_prime prime_order le_fromint). 
+    seq 1 : (r' \in map (fun (g4 : ciphertext) => loge g4.`3) G3.cilog)
+            (PKE_.qD%r / order%r) (PKE_.qD%r / order%r) _ 0%r 
             (size G3.cilog <= PKE_.qD) => //;last 2 first.
     + hoare;conseq (_ : _ ==> true) => // /#.
     + move=> &hr _;apply lerr_eq;field.
-      + rewrite (_: 2 = (0 + 1) + 1) // !powrS // powr0;smt (le_fromint gt1_q). 
-      smt (le_fromint gt1_q). 
+      + rewrite (_: 2 = (0 + 1) + 1) // !powrS // powr0;smt (le_fromint gt1_prime prime_order). 
+      smt (le_fromint gt1_prime prime_order). 
     + by auto.
     + rnd;skip => /> &hr Hsize _;pose m' := map _ _.
       apply (mu_mem_le_mu1_size dp m') => //.
       + by rewrite /m' size_map.
       by move=> ?;rewrite dp1E.
-    conseq (_ : _ ==> (r \in map (fun (g4 : ciphertext) => log g4.`4) G3.cilog)) => //.
+    conseq (_ : _ ==> (r \in map (fun (g4 : ciphertext) => loge g4.`4) G3.cilog)) => //.
     rnd;skip => /> &hr Hsize _;pose m' := map _ _.
     apply (mu_mem_le_mu1_size dp m') => //.
     + by rewrite /m' size_map.
@@ -1007,7 +1055,7 @@ import StdRing.RField.
     `|Pr[DDH0(B_DDH(A)).main() @ &m : res] -
       Pr[DDH1(B_DDH(A)).main() @ &m : res]| +
     Pr[TCR(B_TCR(A)).main() @ &m : res] + 
-    1%r/2%r + (PKE_.qD + 3)%r / q%r + (PKE_.qD%r/q%r)^3 * (PKE_.qD%r/(q-1)%r).
+    1%r/2%r + (PKE_.qD + 3)%r / order%r + (PKE_.qD%r/order%r)^3 * (PKE_.qD%r/(order-1)%r).
   proof.
     have := aux1 &m.
     have -> : Pr[Ad1.MainE(G1).main() @ &m : res \/ G1.bad] = 
@@ -1029,7 +1077,7 @@ import StdRing.RField.
     + byequiv G3_G4=> //.
     have := pr_G4 &m.
     have := pr_G3_y2log &m.
-    have -> : (PKE_.qD + 3)%r / q%r = PKE_.qD%r/q%r + 3%r/q%r.
+    have -> : (PKE_.qD + 3)%r / order%r = PKE_.qD%r/order%r + 3%r/order%r.
     + by rewrite fromintD;ring.
     smt (mu_bounded).
   qed.
@@ -1067,7 +1115,7 @@ section Security.
     call (choose_ll (<:CCA(CramerShoup,A).O) (CCA_dec_ll A));auto.
     auto => />;rewrite dp_ll dk_ll DBool.dbool_ll /= => *.
     apply dexcepted_ll; 1: by apply dp_ll.
-    rewrite dp1E;smt (le_fromint gt1_q).  
+    rewrite dp1E;smt (le_fromint gt1_prime prime_order).  
   qed.
 
   local lemma DDH0_NA &m : Pr[DDH0(B_DDH(NA)).main() @ &m : res] = 
@@ -1115,7 +1163,7 @@ section Security.
     `|Pr[CCA(CramerShoup, A).main() @ &m : res] - 1%r/2%r | <=
     `|Pr[DDH0(B_DDH(A)).main() @ &m : res] - Pr[DDH1(B_DDH(A)).main() @ &m : res]| +
     Pr[TCR(B_TCR(A)).main() @ &m : res] + 
-    (PKE_.qD + 3)%r / q%r + (PKE_.qD%r/q%r)^3 * (PKE_.qD%r/(q-1)%r).
+    (PKE_.qD + 3)%r / order%r + (PKE_.qD%r/order%r)^3 * (PKE_.qD%r/(order-1)%r).
   proof.
     case (Pr[CCA(CramerShoup, A).main() @ &m : res] <= 1%r/2%r);last first.
     + have /# := aux2 A guess_ll choose_ll &m.
