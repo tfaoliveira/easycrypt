@@ -1,0 +1,113 @@
+require import AllCore Distr List.
+require (****) AEAD.
+
+type nonce.
+type associated_data.
+type block.
+type small_block.
+type plaintext = block list * small_block.
+type ciphertext = block list * small_block.
+type tag.
+type poly_key.
+type input.
+
+op dcipher : plaintext -> ciphertext distr.
+axiom dcipher_ll : forall p, is_lossless (dcipher p).
+op dtag : tag distr.
+axiom dtag_ll : is_lossless dtag.
+
+op update_cost_enc : int -> nonce -> associated_data -> plaintext -> int.
+op update_cost_dec : int -> nonce -> associated_data -> ciphertext -> tag -> int.
+op max_cost : int.
+axiom max_cost_gt0: 0 < max_cost.
+
+clone AEAD as A with
+  type nonce <- nonce,
+  type associated_data <- associated_data,
+  type plaintext <- plaintext,
+  type ciphertext <- ciphertext,
+  type tag <- tag,
+  op dcipher <- dcipher,
+  op dtag <- dtag,
+  op max_cost <- max_cost,
+  op update_cost_dec <- update_cost_dec,
+  op update_cost_enc <- update_cost_enc
+
+
+  proof * by smt(max_cost_gt0 dcipher_ll).
+  
+
+op xor : block -> block -> block.
+op concat : int -> nonce -> block.
+(* op trunc : block ->  *)
+op ssize : small_block -> int.
+op last_block_size (p : plaintext) : int = ssize (p.`2).
+op nth_block (b : block) (p : plaintext) (i : int) : block = nth witness p.`1 i.
+op last_block (p : plaintext) : small_block = p.`2.
+op nb_block (p : plaintext) : int = size p.`1.
+
+op to_small : small_block -> block -> small_block.
+op trunc : block -> poly_key * tag.
+op long_concat : associated_data -> ciphertext -> input.
+op plus : tag -> tag -> tag.
+
+
+module type Block = {
+  proc init () : unit
+  proc f (b : block) : block
+}.
+
+module type MacKeyed = {
+  proc init() : unit
+  proc mac (k : poly_key, m : input) : tag
+}.
+
+
+module ChachaPoly (Chacha : Block, Poly : MacKeyed) = {
+  proc init () : unit = {
+    Chacha.init();
+    Poly.init();
+  }
+  proc enc (n : nonce, a : associated_data, p : plaintext) = {
+    var r, s, i, res1, c, c1, res2, c2, t, z;
+    res1 <@ Chacha.f(concat 0 n);
+    (r,s) <- trunc res1;
+    i <- 1;
+    c1 <- [];
+    while (i <= nb_block p) {
+      z <- Chacha.f(concat i n);
+      c1 <- rcons c1 (xor z (nth_block witness p (i-1)));
+      i <- i + 1;
+    }
+    res2 <@ Chacha.f(concat (nb_block p + 1) n);
+    c2 <- to_small (last_block p) res2;
+    c <- (c1, c2);
+    t <@ Poly.mac(r, long_concat a c);
+    t <- plus t s;
+    return (c,t);
+  }
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : plaintext option = {
+    var res1, r, s, t', p, i, z, p1, p2, res2;
+    res1 <@ Chacha.f(concat 0 n);
+    (r, s) <- trunc res1;
+    t' <@ Poly.mac(r, long_concat a c);
+    t' <- plus t' s;
+    if (t <> t') {
+      p <- None;
+    } else {
+      i <- 1;
+      p1 <- [];
+      while (i <= nb_block c) {
+        z <@ Chacha.f(concat i n);
+        p1 <- rcons p1 (xor z (nth_block witness c (i-1)));
+        i <- i + 1;
+      }
+      res2 <@ Chacha.f(concat (nb_block c + 1) n);
+      p2 <- to_small (last_block c) res2;
+      p <- Some (p1,p2);
+    }
+    return p;
+  }
+}.
+
+

@@ -1,0 +1,709 @@
+require import AllCore Distr DBool FSet Real SmtMap List.
+
+
+type nonce.
+type associated_data.
+type plaintext.
+type ciphertext.
+type tag.
+
+op dcipher : plaintext -> ciphertext distr.
+axiom dcipher_ll : forall (p : plaintext), is_lossless (dcipher p).
+
+op dtag : tag distr.
+
+type counter.
+op initial_counter : counter.
+op update_cost_enc (c : counter) (n : nonce) (a : associated_data) (p : plaintext) : counter.
+op update_cost_dec (c : counter) (n : nonce) (a : associated_data) (c : ciphertext) (t : tag) : counter.
+op overcome_cost_enc (c : counter) (n : nonce) (a : associated_data) (p : plaintext) : bool.
+op overcome_cost_dec (c : counter) (n : nonce) (a : associated_data) (c : ciphertext) (t : tag) : bool.
+
+module Counter = {
+  var c : counter
+}.
+
+module type Encrypt = {
+  proc init () : unit
+  proc enc (n : nonce, a : associated_data, p : plaintext) : 
+    ciphertext * tag
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : 
+    plaintext option
+}.
+
+module type Oracle = {
+  proc enc (n : nonce, a : associated_data, p : plaintext) : 
+    ciphertext * tag
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : 
+    plaintext option
+}.
+
+module type Adversary (E : Oracle) = {
+  proc challenge () : nonce * associated_data * plaintext
+  proc guess (c : ciphertext, t : tag) : bool
+}.
+
+module None (O : Encrypt) = {
+  proc init () : unit = {
+    O.init();
+  }
+  proc enc = O.enc
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) :
+    plaintext option = {
+    return None;
+  }
+}.
+
+module Count (E : Encrypt) = {
+  proc init () = {
+    Counter.c <- initial_counter;
+    E.init();
+  }
+  proc enc (n : nonce, a : associated_data, p : plaintext) = {
+    var c,t;
+    if (overcome_cost_enc Counter.c n a p) {
+      (c,t) <@ E.enc(n,a,p);
+      Counter.c <- update_cost_enc Counter.c n a p;
+    } else {
+      c <- witness;
+      t <- witness;
+    }
+    return (c,t);
+  }
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) = {
+    var ret;
+    if (overcome_cost_dec Counter.c n a c t) {
+      ret <@ E.dec(n,a,c,t);
+      Counter.c <- update_cost_dec Counter.c n a c t;
+    } else {
+      ret <- None;
+    }
+    return ret;
+  }
+}.
+
+module Log (E : Encrypt) : Encrypt = {
+  var queries : (nonce * associated_data * ciphertext * tag, plaintext) fmap
+  var challenge : (nonce * associated_data * ciphertext * tag) option
+  
+  proc init () : unit = {
+    queries <- empty;
+    challenge <- None;
+    E.init();
+  }
+  proc enc (n : nonce, a : associated_data, p : plaintext) = {
+    var c,t;
+    (c,t) <@ E.enc(n,a,p);
+    queries.[(n,a,c,t)] <- p;
+    return (c,t);
+  }
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : plaintext option = {
+    var ret;
+    if (Some (n,a,c,t) = challenge) {
+      ret <- None;
+    } elif ((n,a,c,t) \in queries) {
+      ret <- None;
+    } else {
+      ret <@ E.dec(n,a,c,t);
+    }
+    return ret;
+  }
+}.
+
+module IND (A : Adversary, E : Encrypt) = {
+  proc cpa () : bool = {
+    var b, b', n, a, p, c, t;
+    Count(Log(None(E))).init();
+    (n,a,p) <@ A(Count(Log(None(E)))).challenge();
+    b <$ dbool;
+    if (b) {
+      (c,t) <@ Count(Log(E)).enc(n,a,p);
+    } else {
+      c <$ dcipher p;
+      t <$ dtag;
+    }
+    Log.challenge <- Some (n,a,c,t);
+    b' <@ A(Count(Log(None(E)))).guess(c,t);
+    return b = b';
+  }
+  proc cca () : bool = {
+    var b, b', n, a, p, c, t;
+    Count(Log(E)).init();
+    (n,a,p) <@ A(Count(Log(E))).challenge();
+    b <$ dbool;
+    if (b) {
+      (c,t) <@ Count(Log(E)).enc(n,a,p);
+    } else {
+      c <$ dcipher p;
+      t <$ dtag;
+    }
+    Log.challenge <- Some (n,a,c,t);
+    b' <@ A(Count(Log(E))).guess(c,t);
+    return b = b';
+  }
+}.
+
+module type Forgery (E : Oracle) = {
+  proc forge () : unit
+}.
+
+
+module Forged (O : Encrypt) = {
+  var valid_tag : bool
+
+  proc init () = {
+    valid_tag <- false;
+    Log(O).init();
+  }
+  proc enc = Log(O).enc
+  proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : plaintext option = {
+    var ret;
+    ret <@ Log(O).dec(n,a,c,t);
+    if ((n,a,c,t) \notin Log.queries) {
+      if (ret <> None) {
+        valid_tag <- true;
+      }
+    }
+    return ret;
+  }
+}.
+
+module INT (A : Forgery, E : Encrypt) = {
+  proc ctxt () : bool = {
+    Count(Forged(E)).init();
+    A(Count(Forged(E))).forge();
+    return Forged.valid_tag;
+  }
+}.
+
+module (CTXT (A : Adversary) : Forgery) (O : Oracle) = {
+  proc forge ()  = {
+    var n, a, p, c, t, b;
+    (n,a,p) <@ A(O).challenge();
+    b <$ {0,1};
+    if (b) {
+      (c,t) <@ O.enc(n,a,p);
+    } else {
+      c <$ dcipher p;
+      t <$ dtag;
+    }
+    Log.challenge <- Some (n,a,c,t);
+    b <@ A(O).guess(c,t);
+  }
+}.
+
+module E2 (E : Encrypt) = {
+  proc enc_dec (arg1 : nonce * associated_data * plaintext,
+    arg2 : nonce * associated_data * ciphertext * tag)
+    : (ciphertext * tag) * (plaintext option) = {
+    var r1, r2;
+    r1 <@ E.enc(arg1);
+    r2 <@ E.dec(arg2);
+    return (r1, r2);
+  }
+  proc dec_enc (arg1 : nonce * associated_data * ciphertext * tag,
+    arg2 : nonce * associated_data * plaintext)
+      : (plaintext option) * (ciphertext * tag) = {
+    var r1, r2;
+    r1 <@ E.dec(arg1);
+    r2 <@ E.enc(arg2);
+    return (r1, r2);
+  }
+}.
+
+section CPA_AND_CTXT_implies_CCA.
+
+  declare module E : Encrypt {Count, Forged, Log}.
+  axiom E_enc_ll : islossless E.enc.
+  axiom E_dec_ll : islossless E.dec.
+
+  declare module A : Adversary {Count, Log, Forged, E}.
+
+  axiom A_guess_ll : forall (E0 <: Oracle{A}),
+    islossless E0.enc => islossless E0.dec => islossless A(E0).guess.
+
+  axiom A_challenge_ll : forall (E0 <: Oracle{A}),
+    islossless E0.enc => islossless E0.dec => islossless A(E0).challenge.
+
+  local module DecNone (O : Encrypt) = {
+    proc init() = {
+      Forged.valid_tag <- false;
+      O.init();
+    }
+    proc enc = O.enc
+    proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag)
+             : plaintext option = {
+      var ret;
+      ret <@ O.dec(n, a, c, t);
+      if ((n,a,c,t) \notin Log.queries) {
+        if (ret <> None) {
+          Forged.valid_tag <- true;
+        }
+      }
+      return None;
+    }
+  }.
+
+  local module CPA (A : Adversary) (E : Encrypt) = {
+    proc ind_cpa () : bool = {
+      var b, b', n, a, p, c, t;
+      Count(Log(Forged(DecNone(E)))).init();
+      (n,a,p) <@ A(Count(Log(DecNone(E)))).challenge();
+      b <$ dbool;
+      if (b) {
+        (c,t) <@ Count(Log(Forged(E))).enc(n,a,p);
+      } else {
+        c <$ dcipher p;
+        t <$ dtag;
+      }
+      Log.challenge <- Some (n,a,c,t);
+      b' <@ A(Count(Log(DecNone(E)))).guess(c,t);
+      return b = b';
+    }
+  }.
+
+
+  local module Order (E : Encrypt) : Encrypt = {
+    var queries : (nonce * associated_data * ciphertext * tag) list
+    var eager_bool : bool
+    var eager_challenge : nonce * associated_data * plaintext
+    proc init() : unit = {
+      queries <- [];
+      eager_bool <- false;
+      eager_challenge <- witness;
+      E.init();
+    }
+    proc enc = E.enc
+    proc dec (n : nonce, a : associated_data, c : ciphertext, t : tag) : plaintext option = {
+      var r;
+      queries <- rcons queries (n,a,c,t);
+      r <@ E.dec(n,a,c,t);
+      return r;
+    }
+    
+    proc while_dec() : unit = {
+      var i;
+      i <- 0;
+      while (i < size queries) {
+        E.dec(nth witness queries i);
+        i <- i + 1;
+      }
+    }
+  }.
+      
+
+  local lemma equiv_cca_Forged_E &m :
+    Pr[IND(A, E).cca() @ &m : res] = 
+    Pr[IND(A, Forged(E)).cca() @ &m : res].
+  proof.
+  byequiv=>//=; proc.
+  call(: ={glob E, glob Count, glob Log}); auto.
+  + by proc; inline*; sim.
+  + proc; inline*; sim. 
+    if; auto; sp; if; auto; if; auto; sp; rcondf{2}1; auto; rcondf{2}1; auto; call(: true); auto.
+  conseq(:_==> ={b, n, a, c, t, glob A, glob E, glob Count, glob Log})=>//=; inline*; sim.
+  call(: ={glob E, glob Count, glob Log}); auto.
+  + by proc; inline*; sim.
+  + proc; inline*; sim. 
+    by if; auto; sp; if; auto; if; auto; sp; rcondf{2}1; auto; rcondf{2}1; auto; call(: true); auto.
+  by call(: true); auto.
+  qed.
+
+
+  local module OCPA (A : Adversary) (E : Encrypt) = {
+    proc ind_cpa() : bool = {
+      var b, b', n, a, p, c, t;
+      Count(Log(Forged(Order(E)))).init();
+      (n,a,p) <@ A(Count(Log(Order(E)))).challenge();
+      b <$ dbool;
+      if (b) {
+        (c,t) <@ Count(Log(Order(E))).enc(n,a,p);
+      } else {
+        c <$ dcipher p;
+        t <$ dtag;
+      }
+      Log.challenge <- Some (n,a,c,t);
+      b' <@ A(Count(Log(Order(E)))).guess(c,t);
+      return b = b';
+    }
+  }.
+
+
+  local lemma eager_enc :
+    equiv [ E2(E).enc_dec ~ E2(E).dec_enc :
+      arg{1}.`1 = arg{2}.`2 /\ arg{1}.`2 = arg{2}.`1 /\ ={glob E} ==>
+      res{1}.`1 = res{2}.`2 /\ res{1}.`2 = res{2}.`1 /\ ={glob E}] =>
+    eager [ Order(E).while_dec();,             Count(Log(Order(DecNone(E)))).enc ~
+            Count(Log(Order(None(E)))).enc, Order(E).while_dec(); :
+        ={n, a, p} /\
+        ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+          Log.queries, Log.challenge, Counter.c} ==>
+        ={res} /\
+        ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+          Log.queries, Log.challenge, Counter.c}].
+  proof.
+  move=> H_enc_dec.
+  eager proc.
+  if{2}; last first.
+  + rcondf{1} 2; auto.
+    - by inline*; while (! overcome_cost_enc Counter.c n a p); auto; call(: true); auto.
+    by swap{2} -3; wp; sim.
+  rcondt{1} 2; auto.
+  - by inline*; while (overcome_cost_enc Counter.c n a p); auto; call(: true); auto.
+  swap{2} -2; wp; sim.
+  conseq(:_==> ={glob E, Log.queries, Order.queries, c, t})=>//=; progress.
+  inline Log(Order(DecNone(E))).enc  Log(Order(None(E))).enc.
+  swap{2}-2;swap{1}3; sp; wp.
+  conseq(:_==> ={t0, c0, Order.queries, glob E})=>//=; progress.
+  inline Order(E).while_dec.
+  swap{2} 1; sp.
+  replace{1} { all } by {
+      c0 <- witness;
+      t0 <- witness;
+      all;
+    }
+    (={i, n0, a0, p0, glob E, Order.queries} ==> ={glob E, Order.queries, c0, t0})
+    (={i, n0, a0, p0, glob E, Order.queries} ==> ={glob E, Order.queries, c0, t0})
+    =>//=; progress; 1: smt().
+  + by sim; auto.
+  replace{2} { all } by {
+      c0 <- witness;
+      t0 <- witness;
+      all;
+    }
+    (={i, n0, a0, p0, glob E, Order.queries} ==> ={glob E, Order.queries, c0, t0})
+    (={i, n0, a0, p0, glob E, Order.queries} ==> ={glob E, Order.queries, c0, t0})
+    =>//=; progress; 1: smt(); last first.
+  + by sim; auto.
+  sp; symmetry; sim.
+  conseq(:  ={Order.queries, glob E, i, n0, a0, p0, c0, t0} ==>
+      ={Order.queries, glob E, i, n0, a0, p0, c0, t0})=>//=; progress.
+  eager while (W :
+      (c0, t0) <@ Order(None(E)).enc(n0,a0,p0);
+      ~
+      (c0, t0) <@ Order(DecNone(E)).enc(n0,a0,p0);
+      :
+      ={Order.queries, glob E, i, n0, a0, p0, c0, t0}
+      ==>
+      ={Order.queries, glob E, i, n0, a0, p0, c0, t0});
+    auto; 1, 3: by sim.
+  swap{2} -1; wp; sim.
+  alias{1} 1 r2 = Some p; sp.
+  alias{1} 1 r1 = (c0,t0); sp.
+  conseq(:_==> ={glob E, c0, t0})=>//=.
+  transitivity{1} {
+      (r1,r2) <@ E2(E).enc_dec((n0,a0,p0),(nth witness Order.queries i));
+      (c0,t0) <- r1;
+    }
+    (={n0, a0, p0, Order.queries, i, glob E} ==> ={glob E, c0, t0})
+    (={n0, a0, p0, Order.queries, i, glob E} ==> ={glob E, c0, t0})
+    =>//=; progress; 1: smt().
+  + by inline*; sp; wp; call(: true); auto; call(: true); auto; progress.
+  transitivity{1} {
+      (r2,r1) <@ E2(E).dec_enc((nth witness Order.queries i),(n0,a0,p0));
+      (c0,t0) <- r1;
+    }
+    (={n0, a0, p0, Order.queries, i, glob E} ==> ={glob E, c0, t0})
+    (={n0, a0, p0, Order.queries, i, glob E} ==> ={glob E, c0, t0})
+    =>//=; progress; 1: smt(); last first.
+  + by inline*; wp; call(: true); auto; call(: true); auto.
+  by sim; call(H_enc_dec); auto.
+  qed.
+
+
+  local lemma eager_dec :
+    eager [ Order(E).while_dec();,          Count(Log(Order(DecNone(E)))).dec ~
+            Count(Log(Order(None(E)))).dec, Order(E).while_dec(); :
+        ={n, a, c, t} /\
+        ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+          Log.queries, Log.challenge, Counter.c} ==>
+        ={res} /\
+        ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+          Log.queries, Log.challenge, Counter.c}].
+  proof.
+  eager proc.
+  if{2}; last first.
+  + rcondf{1} 2; auto.
+    - by inline*; while (! overcome_cost_dec Counter.c n a c t); auto; call(: true); auto.
+    by swap{2} -2; wp; sim.
+  rcondt{1} 2; auto.
+  - by inline*; while (overcome_cost_dec Counter.c n a c t); auto; call(: true); auto.
+  swap{2} 4 -2; wp; sim.
+  inline Log(Order(None(E))).dec Log(Order(DecNone(E))).dec.
+  swap{1} 4; sp; if{2}.
+  + rcondt{1} 2; 1: auto.
+    - by inline*; while (Some (n0, a0, c0, t0) = Log.challenge); auto; call(: true); auto.
+    by swap{2} -2; sim.
+  rcondf{1} 2; 1: auto.
+  - by inline*; while (Some (n0, a0, c0, t0) <> Log.challenge); auto; call(: true); auto.
+  if{2}.
+  + rcondt{1} 2; 1: auto.
+    - by inline*; while ((n0, a0, c0, t0) \in Log.queries); auto; call(: true); auto.
+    by swap{2} -2; sim.
+  rcondf{1} 2; 1: auto.
+  - by inline*; while (!(n0, a0, c0, t0) \in Log.queries); auto; call(: true); auto.
+  swap{2}-1; sim.
+  inline *; sp; wp.
+  swap{1} 4; sp; swap{1} 2 5; wp; swap{1} 4; sp.
+  splitwhile{2} 1 : i < size Order.queries - 1.
+  rcondt{2} 2; 1: auto.
+  + while(0 <= i <= size Order.queries - 1); auto.
+    - by call(: true); auto; smt(size_rcons size_ge0).
+    smt(size_rcons size_ge0).
+  rcondf{2} 4; 1: auto.
+  + call(: true); auto; while(0 <= i <= size Order.queries - 1); auto.
+    - by call(: true); auto; smt(size_rcons size_ge0).
+    smt(size_rcons size_ge0).
+  wp.
+  conseq(:_==>
+    rcons Order.queries{1} (n2{1}, a2{1}, c2{1}, t2{1}) = Order.queries{2} /\
+    ={glob E})=> //=.
+  seq 1 1 : (={glob E} /\ i{2} = size Order.queries{1} /\
+      rcons Order.queries{1} (n2{1}, a2{1}, c2{1}, t2{1}) = Order.queries{2}); last first.
+  + call(: true); auto; smt(nth_rcons).
+  while(={i, glob E} /\ 0 <= i{2} <= size Order.queries{1} /\
+      rcons Order.queries{1} (n2{1}, a2{1}, c2{1}, t2{1}) = Order.queries{2}).
+  + auto; call(: true); auto.
+    move=> &1 &2 [#] 2<<- hi0 his <<- {his} his h{h}h{h} //=.
+    rewrite size_rcons/=; split; 2: smt().
+    by rewrite nth_rcons his/=.
+  by auto; smt(size_ge0 size_rcons).
+  qed.
+
+
+  local lemma rewrite_cpa &m :
+    equiv [ E2(E).enc_dec ~ E2(E).dec_enc : 
+      arg{1}.`1 = arg{2}.`2 /\ arg{1}.`2 = arg{2}.`1 /\ ={glob E} ==>
+      res{1}.`1 = res{2}.`2 /\ res{1}.`2 = res{2}.`1 /\ ={glob E}] =>
+    Pr [ IND(A, E).cpa() @ &m : res ] = 
+    Pr [ CPA(A, E).ind_cpa() @ &m : res ].
+  proof.
+  move=> H_enc_dec.
+  have-> : Pr[IND(A, E).cpa() @ &m : res] = 
+           Pr[OCPA(A, None(E)).ind_cpa() @ &m : res].
+  + byequiv=>//=; proc; inline*; sp.
+    seq 4 4 : (={glob A, glob E, glob Count, glob Log, c, t, b, n, a}); 1: sim; last first.
+    - call(: ={glob E, glob Count, glob Log}); auto.
+      * by proc; inline*; sim.
+      * by proc; inline*; sim. 
+    call(: ={glob E, glob Count, glob Log})=>//=.
+    * by proc; inline*; sim.
+    * by proc; inline*; sim.
+    by conseq(:_==> ={glob E})=>//=; sim.
+  have-> : Pr[CPA(A, E).ind_cpa() @ &m : res] =
+           Pr[OCPA(A, DecNone(E)).ind_cpa() @ &m : res].
+  + byequiv=>//=; proc; inline*; sp.
+    seq 4 4 : (={glob A, glob E, glob Count, glob Forged, c, t, b, n, a}); 1: sim; last first.
+    - call(: ={glob E, glob Count, glob Forged}); auto.
+      * by proc; inline*; sim.
+      by proc; inline*; sim.
+    call(: ={glob E, glob Count, glob Forged})=>//=.
+    * by proc; inline*; sim.
+    * by proc; inline*; sim.
+    by conseq(:_==> ={glob E})=>//=; sim.
+  rewrite eq_sym; byequiv=>//=; proc; sim.
+  replace{2} { all; <@ } by {
+      all;
+      Order.eager_bool <@ A(Count(Log(Order(None(E))))).guess(c,t);
+      Order(E).while_dec();
+      b' <- Order.eager_bool;
+    }
+    (={glob A, glob E} ==> ={b', b})
+    (={glob A, glob E} ==> ={b', b}); progress; 1: smt(); last first.
+  + swap{1} -1; inline*; sp; seq 7 6 : (={b', b}); 1: sim.
+    conseq(:_==> true)=>//=; sp; while{1} (true)(size Order.queries{1} - i{1}); auto.
+    - by call E_dec_ll; auto; smt().
+    - smt().
+  replace{2} { all; <@ ; (<@ as order); <- |} by {
+      all;
+      Order.eager_challenge <- (n,a,p);
+      order;
+      Order.eager_bool <@ A(Count(Log(Order(DecNone(E))))).guess(c,t);
+      b' <- Order.eager_bool;
+    }
+    (={glob A, glob E} ==> ={b', b})
+    (={glob A, glob E} ==> ={b', b})=>//=; progress; 1: smt(); last first.
+  + sim. 
+    swap{1} 6 2; wp.
+    seq 5 5 : (={b, c, t, glob A, glob E, glob Count, Log.queries, Log.challenge, 
+      Order.eager_bool, Order.queries, Order.eager_challenge}); 1: sim.
+    eager call (: ={arg, glob A, glob E, glob Order, glob Counter, glob Log} ==>
+      ={res, glob A, glob E, glob Order, glob Counter, glob Log}); auto. 
+    eager proc (P : Order(E).while_dec(); ~ Order(E).while_dec(); :
+      ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c} ==>
+      ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c})
+      (={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c})=>//=; 1,3,5:sim; last first.
+    + exact eager_dec.
+    exact(eager_enc H_enc_dec).
+  sim.
+  replace{2} { all; (<@ as adv); (<$ as sample); if; affect ;(<@ as order) |} by {
+        all;
+        Order.eager_challenge <@ A(Count(Log(Order(None(E))))).challenge();
+        (n, a, p) <- Order.eager_challenge;
+        sample;
+        order;
+        if (b) {
+          (c, t) <@ Count(Log(Order(DecNone(E)))).enc(n,a,p);
+        } else {
+          c <$ dcipher p;
+          t <$ dtag;
+        }
+        affect;
+      }
+      (={glob A, glob E} ==> ={t, c, b, glob Counter, glob A, glob E, glob Log})
+      (={glob A, glob E} ==> ={t, c, b, glob Counter, glob A, glob E, glob Log})=>//=;
+    progress; 1: smt(); last first. 
+  + swap{2} 6 -3; swap{2} 7 -1; sim.
+    seq 4 4 : (={b, n, a, p, glob A, glob E, glob Counter, glob Log, 
+        Order.queries, Order.eager_bool, Order.eager_challenge}).
+    - sim; wp.
+      inline*; sp.
+      sp; conseq(:_==> ={glob A, glob E, glob Count, glob Log, Order.queries} /\ 
+        Order.eager_challenge{1} = (n,a,p){2})=>//=; progress.
+      call(: ={glob E, glob Count, glob Log, Order.queries}); auto.
+      * by proc; sim.
+      * by proc; sim.
+      by inline*; call(: true); auto; smt().
+    if{2}; last first.
+    - rcondf{1} 2; 1: auto.
+      - by inline*; while (!b); auto; call(: true); auto.
+      by swap{2} -2; sim.
+    rcondt{1} 2; 1: auto.
+    - by inline*; while (b); auto; call(: true); auto.
+    by eager call (eager_enc H_enc_dec); auto.
+  sim.
+  swap{2} -2; sim.
+  replace{2} { all; <@ ; (<@ as order); (<- as set) } by {
+        all;
+        order;
+        Order.eager_challenge <@ A(Count(Log(Order(DecNone(E))))).challenge();
+        set;
+      }
+      (={glob A, glob E} ==> ={p, a, n, glob Log, Counter.c, glob A, glob E})
+      (={glob A, glob E} ==> ={p, a, n, glob Log, Counter.c, glob A, glob E})
+      =>//=; progress; 1: smt().
+  + wp; call(: ={glob E, glob Count, glob Log}); auto.
+    + by proc; sim.
+    + by proc; sim.
+    inline*; auto.
+    sp; rcondf{2} 3; auto; call(: true); auto.
+  sim.    
+  seq 1 1 : (={glob A, glob E, glob Count, glob Log, glob Order}); 1: sim.
+  eager call (: ={arg, glob A, glob E, glob Log, Order.eager_bool, Order.eager_challenge, Order.queries, glob Count} ==>
+    ={res, glob A, glob E, glob Log, Order.eager_challenge, Order.queries, glob Count}); auto. 
+  eager proc (P : Order(E).while_dec(); ~ Order(E).while_dec(); :
+      ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c} ==>
+      ={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c})
+      (={glob E, Order.queries, Order.eager_bool, Order.eager_challenge, 
+        Log.queries, Log.challenge, Counter.c})=>//=; 1,3,5:sim.
+  + exact(eager_enc H_enc_dec).
+  exact eager_dec.
+  qed.
+
+
+
+  local lemma int_ctxt_ind_cca &m :
+    Pr[INT(CTXT(A), E).ctxt() @ &m : res] =
+    Pr[IND(A, Forged(E)).cca() @ &m : Forged.valid_tag].
+  proof.
+  byequiv=>//=; proc; inline*; sp; wp; sim; auto.
+  call(: ={glob E, glob Log, glob Count, Forged.valid_tag})=>//=.
+  + proc; inline*; auto; if; auto; call(: true); auto.
+    by move=> &1 &2 [#] 8<<- h //= []r1 r2 r3 e1 e2 [#] 2<<- /=; rewrite set_setE/=.
+  + proc; inline *; if; 1,3:auto; sp; if; 1,2: auto; if=> /=; 1,2: auto.
+    by sp; rcondf{2} 1; 1: auto; rcondf{2} 1; 1: auto; sim.
+  conseq(: ={c, t, glob A, glob E, glob Log, glob Count, Forged.valid_tag})=>//=.
+  seq 3 3 : (={b, n, a, p, glob A, glob E, glob Count, glob Log, Forged.valid_tag}); last first.
+  + if; 1,3:auto; sp; if; auto; call(: true); auto.
+    by move=> &1 &2 [#] 16<<- b_ h //= []r1 r2 r3 e1 e2 [#] 2<<- /=; rewrite set_setE/=.
+  sim.
+  call(: ={glob E, glob Log, glob Count, Forged.valid_tag})=>//=.
+  + proc; inline*; auto; if; auto; call(: true); auto.
+    by move=> &1 &2 [#] 8<<- h //= []r1 r2 r3 e1 e2 [#] 2<<- /=; rewrite set_setE/=.
+  + proc; inline *; if; 1,3:auto; sp; if; 1,2: auto; if=> /=; 1,2: auto.
+    by sp; rcondf{2} 1; 1: auto; rcondf{2} 1; 1: auto; sim.
+  by call(: true); auto.
+  qed.
+
+  local lemma Count_Log_Forged_E_ll : islossless Count(Log(Forged(E))).enc.
+  proof. by proc; if; auto; inline*; sp; wp; call E_enc_ll; auto. qed.
+
+  lemma CCA_from_CPA_and_CTXT &m :
+    equiv [ E2(E).enc_dec ~ E2(E).dec_enc : 
+        arg{1}.`1 = arg{2}.`2 /\ arg{1}.`2 = arg{2}.`1 /\ ={glob E} ==>
+        res{1}.`1 = res{2}.`2 /\ res{1}.`2 = res{2}.`1 /\ ={glob E}] =>
+    `| Pr [ IND(A,E).cca() @ &m : res ] - inv 2%r | <= 
+    `| Pr [ IND(A,E).cpa() @ &m : res ] - inv 2%r | +
+    Pr [ INT(CTXT(A),E).ctxt() @ &m : res ].
+  proof.
+  move=>H_enc_dec.
+  pose p1 := Pr [ IND(A,E).cca() @ &m : res ].
+  pose p2 := Pr [ IND(A,E).cpa() @ &m : res ].
+  pose p3 := Pr[ INT(CTXT(A), E).ctxt() @ &m : res].
+  have /# : `|p2 - p1| <= p3.
+  rewrite/p1/p2/p3=> {p1 p2 p3}.
+  rewrite (int_ctxt_ind_cca &m).
+  rewrite (equiv_cca_Forged_E &m).
+  rewrite (rewrite_cpa &m H_enc_dec).
+  byequiv: Forged.valid_tag=> //=; -1: smt(). 
+  proc.
+  call(: Forged.valid_tag,
+            (={glob E, glob Forged, glob Counter}),
+            ={Forged.valid_tag})=>//=.
+  + exact A_guess_ll.
+  + by proc; inline*; conseq(:_==> ={c, t, glob E, glob Forged, glob Counter})=>//=; sim.
+  + by move=> &h h {&m}; proc; inline*; if; auto; call E_enc_ll; auto.
+  + by move=> &1; proc; inline*; if; auto; call E_enc_ll; auto.
+  + proc=> /=; inline*; if; 1, 3: auto; sp; if; 1, 2: auto; if; 1, 2: auto.
+    sp; rcondf{2} 1; 1: auto; rcondf{2} 1; 1: auto; rcondt{2} 3; 1: by auto; call(: true); auto.
+    rcondt{1} 2; 1: by auto; call(: true); auto.
+    wp 4 5; conseq(:_==> if Forged.valid_tag{2} then ={Forged.valid_tag}
+            else ={glob E, ret, Forged.valid_tag})=>//=; 1: smt().
+    by seq 1 2 : (={glob E, ret1, Forged.valid_tag}); auto; 2: smt(); call(: true); auto.
+  + by move=> &h h {&m}; proc; inline*; if; auto; sp; if; auto; if; auto; call E_dec_ll; auto; smt().
+  + by move=> &1; proc; inline*; if; auto; sp; if; auto; if; auto; sp; 
+              if; auto; if; auto; call E_dec_ll; auto; smt().
+  conseq(:_==> ={b} /\ if Forged.valid_tag{2} then ={Forged.valid_tag}
+      else ={c, t, glob A, glob E, Forged.valid_tag, glob Log, Counter.c}); 1:smt(). 
+  wp=>//=.
+  seq 2 2 : (if Forged.valid_tag{2} then ={Forged.valid_tag}
+      else ={p, a, n, glob A, glob E, Forged.valid_tag, glob Log, Counter.c}); last first.
+  + case: (Forged.valid_tag{2}).
+    - conseq(:_==> ={b}); 1: smt().
+      seq 1 1 : (={b}); 1: sim; if; 1: auto.
+      * call{1}(: true ==> true); 2:call{2}(: true ==> true); auto.
+        exact Count_Log_Forged_E_ll.
+        exact Count_Log_Forged_E_ll.
+      rnd=>//=; conseq(:_==> ={b})=>//=.
+      by rnd{1};rnd{2}; auto; smt(dcipher_ll).
+    seq 1 1 : (={b, p, a, n, glob E, glob Forged, glob Counter, glob A}); 1: (sim; smt()).
+    by conseq(:_==> ={b, c, t, glob E, glob Forged, glob Counter, glob A})=>//=; sim.
+  call(: Forged.valid_tag,
+            (={glob E, glob Forged, glob Counter}),
+            ={Forged.valid_tag})=>//=.
+  + exact A_challenge_ll.
+  + by proc; inline*; conseq(:_==> ={c, t, glob E, glob Forged, glob Counter})=>//=; sim.
+  + by move=> &h h {&m}; proc; inline*; if; auto; call E_enc_ll; auto.
+  + by move=> &1; proc; inline*; if; auto; call E_enc_ll; auto.
+  + proc=> /=; inline*; if; 1, 3: auto; sp; if; auto; if; 1,2:auto.
+    sp; rcondt{1} 2; 1: by auto; call(: true); auto.
+    rcondf{2} 1; 1: auto; rcondf{2} 1; 1: auto.
+    rcondt{2} 3; 1: by auto; call(: true); auto.
+    conseq(:_==> if Forged.valid_tag{2} then ={Forged.valid_tag}
+            else ={ret0, glob E, Forged.valid_tag})=>//=.
+    seq 1 2 : (={glob E, ret1, Forged.valid_tag}); last by auto; smt(). 
+    by auto; call(: true); auto. 
+  + by move=> &h h {&m}; proc; inline*; if; auto; sp; if; auto; if; auto; call E_dec_ll; auto; smt().
+  + by move=> &1; proc; inline*; if; auto; sp; if; auto; if; auto; sp; if; auto; if; auto; call E_dec_ll; auto; smt().
+  by inline*; auto; sp; call(: true); auto; smt().
+  qed.  
+
+end section CPA_AND_CTXT_implies_CCA.
+ print CCA_from_CPA_and_CTXT.
+
+print IND.

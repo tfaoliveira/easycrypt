@@ -1,0 +1,389 @@
+require import Int Real SmtMap List.
+require (****) SKE.
+
+type plain, cipher, key.
+
+clone export SKE as MySKE with
+  type plain <- plain,
+  type cipher <- cipher,
+  type key <- key.
+
+module type CCA_SKE = {
+  proc enc (_: plain) : cipher option
+  proc dec (_: cipher) : plain option
+}.
+
+module type CCA_Adv (C : CCA_SKE) = {
+  proc guess () : bool { C.dec C.enc }
+}.
+
+module EncDec (A : CCA_Adv) (S : SKE) = {
+  proc game () : bool = {
+    var b;
+
+    Wrap(S).init();
+    b <@ A(Wrap(S)).guess();
+    return b;
+  }
+}.
+
+module type CPA_SKE = {
+  proc enc (_: plain) : cipher option
+}.
+
+module type CPA_Adv (C : CPA_SKE) = {
+  proc guess () : bool { C.enc }
+}.
+
+module Enc (A : CPA_Adv) (S : SKE) = {
+  proc game () : bool = {
+    var b;
+
+    Wrap(S).init();
+    b <@ A(Wrap(S)).guess();
+    return b;
+  }
+}.
+
+module type UF_SKE = {
+  proc enc (_: plain) : cipher option
+  proc dec (_: cipher) : plain option
+}.
+
+module WrapForgery (S : SKE) = {
+  var success : bool
+  proc init () = {
+    success <- false;
+    Wrap(S).init();
+  }
+  proc enc = Wrap(S).enc
+  proc dec (c : cipher) = {
+    var opt;
+    
+    opt <@ Wrap(S).dec(c);
+    if (opt <> None) {
+      success <- true;
+    }
+    return opt;
+  }
+}.
+
+module type UF_Adv (C : UF_SKE) = {
+  proc guess () : bool
+}.
+
+
+module Forge (A : UF_Adv) (S : SKE) = {
+  proc game () : bool = {
+    WrapForgery(S).init();
+    A(WrapForgery(S)).guess();
+    return WrapForgery.success;
+  }
+}.
+
+module None (S : CPA_SKE) = {
+  proc init () = {}
+  proc enc = S.enc
+  proc dec (c : cipher) : plain option = {
+    return None;
+  }
+}.
+
+module (Adv_Dec_None (A : CCA_Adv) : CPA_Adv) (S : CPA_SKE) = A(None(S)).
+
+module E2 (E : SKE) = {
+  proc enc_dec (kp : key * plain, kc : key * cipher) : cipher option * plain option = {
+    var k1, k2, p1, p2, c1, c2;
+    (k1,p1) <- kp;
+    (k2,c2) <- kc;
+    c1 <@ E.enc(k1,p1);
+    p2 <@ E.dec(k2,c2);
+    return (c1,p2);
+  }
+  proc dec_enc (kp : key * plain, kc : key * cipher) : cipher option * plain option = {
+    var k1, k2, p1, p2, c1, c2;
+    (k1,p1) <- kp;
+    (k2,c2) <- kc;
+    p2 <@ E.dec(k2,c2);
+    c1 <@ E.enc(k1,p1);
+    return (c1,p2);
+  }
+}.
+
+section.
+
+declare module S : SKE { Wrap, WrapForgery }.
+declare module A : CCA_Adv{ S, Wrap, WrapForgery }.
+
+local module (TestForge (S : SKE) : SKE) = {
+  proc keygen () = {
+    WrapForgery.success <- false;
+    Wrap(S).init();
+    return Wrap.k;
+  }
+  proc enc = S.enc
+  proc dec (k : key, c : cipher) = {
+    var opt;
+    
+    opt <@ S.dec(k, c);
+    if (opt <> None) {
+      WrapForgery.success <- true;
+    }
+    return opt;
+  }
+}.
+
+local lemma forge_game1 &m :
+    Pr [ Forge(A,S).game() @ &m : res ] = 
+    Pr [ EncDec(A,TestForge(S)).game() @ &m : WrapForgery.success ].
+proof.
+byequiv=> //=; proc; inline*; sim.
+call(: ={glob WrapForgery, glob S})=> /> //=.
++ by proc; inline*; swap{1} [3..4] 2; sp; sim.
++ by sim.
+by sim=> />.
+qed.
+
+
+local lemma cca_game1 &m  (S <: SKE { Wrap, WrapForgery })
+    (A <: CCA_Adv { S, Wrap, WrapForgery }) :
+    Pr [ EncDec(A,S).game() @ &m : res ] =
+    Pr [ EncDec(A,TestForge(S)).game() @ &m : res ].
+proof.
+byequiv=> //=; proc; inline*; sim.
+call(: ={glob Wrap, glob S})=> /> //=.
++ by proc; inline*; sim.
++ by sim.
+sim=> />.
+qed.
+
+local module (DecNone (S : SKE) : SKE) = {
+  proc keygen = S.keygen
+  proc enc = S.enc
+  proc dec (k : key, c : cipher) : plain option = {
+    S.dec(k,c);
+    return None;
+  }
+}.
+
+local module (Order (S : SKE) : SKE)= {
+  var adv_bool : bool
+  var eager_enc : cipher option
+  var decs : (key * cipher) list
+  proc keygen () = {
+    var k;
+
+    eager_enc <- None;
+    adv_bool <- false;
+    decs <- [];
+    k <@ S.keygen();
+    return k;
+  }
+  proc enc = S.enc
+  proc dec (k : key, c : cipher) = {
+    var o;
+
+    decs <- rcons decs (k,c);
+    o <@ S.dec(k,c);
+    return o;
+  }
+  proc all_decs() : unit = {
+    var i : int <- 0;
+    while (i < size decs) {
+      S.dec(nth witness decs i);
+      i <- i + 1;
+    }
+  }
+}.
+
+local module DNone (S : SKE) : SKE = {
+  proc keygen = S.keygen
+  proc enc = S.enc
+  proc dec (k: key, c: cipher) : plain option = {
+    return None;
+  }
+}.
+
+local lemma cpa_game1 &m :
+    islossless S.dec =>
+    (equiv [ E2(S).enc_dec ~ E2(S).dec_enc : ={arg, glob S} ==> ={res, glob S}]) =>
+    Pr [ Enc(Adv_Dec_None(A),S).game() @ &m : res ] =
+    Pr [ EncDec(A,DecNone(TestForge(S))).game() @ &m : res ].
+proof.
+move=> S_dec_ll S_swap.
+have-> : Pr [ Enc(Adv_Dec_None(A),S).game() @ &m : res ] =
+         Pr [ EncDec(A,TestForge(Order(DNone(S)))).game() @ &m : res ].
++ byequiv=> //=; proc; inline*; sim.
+  call(: ={glob S, Wrap.k})=> //=.
+  - by proc; inline*; auto.
+  - by proc; inline*; sim.
+  by auto; call(: true); auto.
+have-> : Pr [ EncDec(A,DecNone(TestForge(S))).game() @ &m : res ] =
+         Pr [ EncDec(A,TestForge(Order(DecNone(S)))).game() @ &m : res ].
++ byequiv=> //=; proc; inline*; sim.
+  call(: ={glob S, Wrap.k})=> //=.
+  - by proc; inline*; auto; call(: true); auto.
+  - by proc; inline*; sim.
+  by auto; call(: true); auto.
+byequiv=> //=; proc.
+replace{1} { all; <@ |} by {
+    all;
+    Order.adv_bool <@ A(Wrap(TestForge(Order(DNone(S))))).guess();
+    b <- Order.adv_bool;
+    Order(S).all_decs();
+  }
+  (={glob A, glob S} ==> ={b})
+  (={glob A, glob S} ==> ={b})=> />; 1: smt().
++ seq 2 3 : (={b}); 1: by wp; sim.
+  inline*; sp; while{2}(={b})(size Order.decs{2} - i{2})=> />; auto; -1: smt().
+  by call(S_dec_ll); auto; smt().
+replace{2} { all; <@ |} by {
+    all;
+    Order(S).all_decs();
+    Order.adv_bool <@ A(Wrap(TestForge(Order(DecNone(S))))).guess();
+    b <- Order.adv_bool;
+  }
+  (={glob A, glob S} ==> ={b})
+  (={glob A, glob S} ==> ={b})=> />; 1: smt(); last first.
++ by wp; sim; inline*; sp; rcondf{1} 5; auto; call(: true); auto.
+swap{1} -1; sim.
+seq 1 1 : (={glob A, glob S, glob Order, glob TestForge}); 1: by sim.
+symmetry; eager call (: ={glob A, glob S, glob Order, glob TestForge}
+    ==> ={res, glob A, glob S, glob Order, glob TestForge}); auto.
+eager proc (H : Order(S).all_decs(); ~ Order(S).all_decs(); :
+    ={glob S, glob Order, glob TestForge}
+    ==> ={glob S, glob Order, glob TestForge})
+    (={glob S, glob Order, glob TestForge})=> />; 1, 3, 5: sim.
++ eager proc.
+  swap{2} -3; sim.
+  inline{1} 2; inline{2} 1.
+  swap{2} -2; sim; swap{1} 2; sp.
+  inline{1} 2; inline{2} 1.
+  swap{2} -1; sim; swap{1} 2; sp.
+  swap{1} -1; wp.
+  inline{1} 2; inline{2} 1.
+  swap{2} -3; swap{1} 2; sp; wp; inline*; sp.
+  splitwhile{2} 1 : i < size Order.decs - 1.
+  rcondt{2} 2; auto.
+  + by while(i <= size Order.decs - 1); auto; 1: call(: true); auto; smt(size_rcons size_ge0).
+  rcondf{2} 4; auto.
+  + by wp; call(: true); while(i <= size Order.decs - 1); 
+      auto; 1: call(: true); auto; smt(size_rcons size_ge0).
+  call(: true)=> /> /=.
+  conseq(:_==> ={glob S, i} /\ i{2} = size Order.decs{1})=> />.
+  + by move=> &1 &2; rewrite nth_rcons /=.
+  while(0 <= i{2} <= size Order.decs{1} /\ ={glob S, i} /\
+      rcons Order.decs{1} (k0{2}, c1{2}) = Order.decs{2}); auto.
+  + call(: true); auto=> /> &1 &2.
+    rewrite size_rcons /= nth_rcons /= => hi0 h{h} hisize h{h} h{h}.
+    by rewrite hisize/=; smt().
+  by move=> /> &1 &2; rewrite size_rcons /= size_ge0 /=; smt().
+eager proc; sim.
+swap{2} -2; sim.
+inline*.
+swap{2} 1; sp.
+conseq(:_==> ={c, glob S})=>/>.
+replace{1} { all } by {
+      c <- witness;
+      all;
+    }
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})=> />; 1: smt().
++ by sim.
+replace{2} { all } by {
+      c <- witness;
+      all;
+    }
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})=> />; 1: smt(); -1: by sim.
+sp=> {H}.
+symmetry; conseq(: ={c, i, p, Wrap.k, Order.decs, glob S} ==>
+      ={c, i, p, Wrap.k, Order.decs, glob S})=>/>.
+eager while(H: c <@ TestForge(Order(DNone(S))).enc(Wrap.k,p);
+      ~ c <@ TestForge(Order(DecNone(S))).enc(Wrap.k,p); :
+      ={c, i, p, Wrap.k, Order.decs, glob S} ==>
+      ={c, i, p, Wrap.k, Order.decs, glob S})=> />; sim.
+swap{2} -1; sim.
+alias{1} 1 po = Some p.
+replace{1} { all } by {
+      (c,po) <@ E2(S).enc_dec((Wrap.k,p),nth witness Order.decs i);
+    }
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})=> />; 1: smt().
++ by inline*; sp; sim; call(: true); call(: true); auto=> />; smt().
+replace{1} { all } by {
+      (c,po) <@ E2(S).dec_enc((Wrap.k,p),nth witness Order.decs i);
+    }
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})
+    (={i, p, Order.decs, Wrap.k, glob S} ==>
+      ={c, i, p, Order.decs, Wrap.k, glob S})=> />; 1: smt(); last first.
++ by inline*; sp; sim; call(: true); auto=> />; smt().
+by call S_swap; auto.
+qed.
+
+local lemma forge_game2 &m :
+    (forall (C <: CCA_SKE{A}), islossless C.dec => islossless C.enc => islossless A(C).guess) =>
+    (islossless S.enc) => islossless S.dec =>
+    Pr[EncDec(A, TestForge(S)).game() @ &m : WrapForgery.success] =
+    Pr[EncDec(A, DecNone(TestForge(S))).game() @ &m : WrapForgery.success].
+proof.
+move=> A_ll S_enc_ll S_dec_ll.
+byequiv=> //=; proc; inline*.
+call(: WrapForgery.success, ={glob Wrap, glob TestForge, glob S},
+  ={WrapForgery.success})=> />.
++ smt().
++ by proc; inline*; auto; call(: true); auto; smt().
++ by move=> {&m} &m Hsucc; proc; inline*; wp; call(S_dec_ll); auto.
++ by move=> {&m} &m; proc; inline*; auto; call(S_dec_ll); auto=> />.
++ by proc; inline*; auto; call(: true); auto; smt().
++ by move=> {&m} &m Hsucc; proc; inline*; wp; call(S_enc_ll); auto.
++ by move=> {&m} &m; proc; wp; call(S_enc_ll); auto.
++ smt().
+by sp; conseq(:_==> ={glob S, glob TestForge, glob Wrap})=> />; 1:smt(); sim.
+qed.
+
+local lemma cca_game2 &m :
+    Pr [ EncDec(A,S).game() @ &m : res ] = 
+    Pr [ EncDec(A,TestForge(S)).game() @ &m : res ].
+proof.
+byequiv=> />; proc; inline*.
+call(: ={glob S, glob Wrap}); auto=> />.
++ by proc; inline*; auto; call(: true); auto.
++ by proc; inline*; sim.
+by call(: true); auto.
+qed.
+
+lemma cca_from_cpa_and_uf_cma &m : 
+    islossless S.dec => islossless S.enc =>
+    (forall (C <: CCA_SKE{A}), islossless C.dec => islossless C.enc => islossless A(C).guess) =>
+    (equiv [ E2(S).enc_dec ~ E2(S).dec_enc : ={arg, glob S} ==> ={res, glob S}]) =>
+    `| Pr [ EncDec(A,S).game() @ &m : res ] - 
+       Pr [ Enc(Adv_Dec_None(A),S).game() @ &m : res ] |
+    <= Pr [ Forge(A,S).game() @ &m : res ].
+proof.
+move=> S_dec_ll S_enc_ll A_ll S_swap.
+rewrite (forge_game1 &m) (forge_game2 &m (A_ll) S_enc_ll S_dec_ll).
+rewrite (cpa_game1 &m S_dec_ll S_swap) (cca_game2 &m). 
+byequiv : WrapForgery.success => />; -1: smt().
+proc; inline*.
+call(: WrapForgery.success, ={glob S, glob Wrap, glob TestForge},
+  ={WrapForgery.success})=> />.
++ smt().
++ by proc; inline*; auto; call(: true); auto; smt().
++ by move=> {&m} &m Hsucc; proc; inline*; auto; call S_dec_ll; auto.
++ by move=> {&m} &m; proc; inline*; wp; call S_dec_ll; auto=> />.
++ by conseq(:_==> ={res, glob S, glob Wrap})=> />; sim.
++ by move=> {&m} &m Hsucc; proc; wp; call S_enc_ll.
++ by move=> {&m} &m; proc; wp; call S_enc_ll.
++ smt().
+by sp; conseq(:_==> ={glob S, glob Wrap, glob TestForge})=> />; 1: smt(); sim.
+qed.
+
+end section.
