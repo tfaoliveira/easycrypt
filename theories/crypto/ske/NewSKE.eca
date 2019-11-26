@@ -38,7 +38,11 @@ module Wrap (S : SKE) = {
   var dqs: cipher fset
   var log: (cipher, plain) fmap
 
-  proc init(): unit = { k = S.keygen(); }
+  proc init(): unit = {
+    dqs <- fset0;
+    log <- empty;
+    k = S.keygen();
+  }
 
   proc enc(p: plain): cipher option = {
     var c;
