@@ -8,7 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 require import Bool AllCore IntDiv List Ring StdRing StdOrder StdBigop.
-require (*--*) FinType Word.
+require (*--*) Word.
 (*---*) import IntID IntOrder Bigint Bigint.BIA.
 
 pragma +implicits.

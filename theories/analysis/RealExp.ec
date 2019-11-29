@@ -342,7 +342,7 @@ abstract theory CauchySchwarz.
 (* -------------------------------------------------------------------- *)
 type t.
 
-clone FinType with type t <- t.
+clone FinType.FinType with type t <- t.
 
 abbrev dim = FinType.card.
 
