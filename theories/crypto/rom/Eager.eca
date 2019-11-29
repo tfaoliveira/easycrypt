@@ -10,7 +10,7 @@ require import AllCore Distr List SmtMap.
 require (*--*) FinType NewROM.
 
 clone include NewROM.
-clone include FinType with
+clone include FinType.FinType with
   type t <- from.
 
 module RO: Oracle = {

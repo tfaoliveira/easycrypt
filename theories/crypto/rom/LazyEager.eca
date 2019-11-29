@@ -7,7 +7,7 @@
  * -------------------------------------------------------------------- *)
 
 require import AllCore Distr List SmtMap.
-require (*--*) FinType Eager Lazy.
+require (*--*) Eager Lazy.
 
 clone include NewROM.
 

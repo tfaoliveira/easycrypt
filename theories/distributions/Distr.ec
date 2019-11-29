@@ -669,7 +669,7 @@ export MUniform.
 abstract theory MFinite.
 type t.
 
-clone import FinType as Support with type t <- t.
+clone import FinType.FinType as Support with type t <- t.
 
 op dunifin : t distr = MUniform.duniform enum.
 

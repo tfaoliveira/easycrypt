@@ -8,7 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 require import Bool Core Int List.
-require (*--*) FinType Word Ring.
+require (*--*) Word Ring.
 
 pragma +implicits.
 

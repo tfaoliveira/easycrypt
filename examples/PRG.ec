@@ -2,7 +2,6 @@
 require import AllCore Int List Real Distr FSet SmtMap.
 require import IntExtra IntDiv RealExtra Mu_mem StdRing StdOrder StdBigop.
 (*---*) import Bigint Ring.IntID RField IntOrder RealOrder BIA.
-require (*--*) FinType.
 
 (* ---------------- Sane Default Behaviours --------------------------- *)
 pragma -oldip.
