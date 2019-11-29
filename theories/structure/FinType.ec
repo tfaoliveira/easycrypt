@@ -44,8 +44,8 @@ clone FinType as FT1 with type t <- t1.
 clone FinType as FT2 with type t <- t2.
 
 clone include FinType
-  with type t    <- t1 * t2,
-         op enum =  allpairs (fun x y => (x, y)) FT1.enum FT2.enum
+  with type t    = t1 * t2,
+         op enum = allpairs (fun x y => (x, y)) FT1.enum FT2.enum
   proof *.
 
 realize enum_spec.
