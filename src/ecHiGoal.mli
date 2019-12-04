@@ -24,7 +24,9 @@ type ttenv = {
   tt_redlogic  : bool;
 }
 
-type engine  = ptactic_core -> backward
+type engine  = ttenv -> ptactic_core -> backward
+
+val register_engine : engine -> unit
 
 (* -------------------------------------------------------------------- *)
 type cut_t    = intropattern * pformula * (ptactics located) option
@@ -80,7 +82,7 @@ val process_apply       : implicits:bool -> apply_t * prevert option -> backward
 val process_delta       : ?target:psymbol -> (rwside * rwocc * pformula) -> backward
 val process_rewrite     : ttenv -> ?target:psymbol -> rwarg list -> backward
 val process_subst       : pformula list -> backward
-val process_cut         : ?mode:cutmode -> engine -> ttenv -> cut_t -> backward
+val process_cut         : ?mode:cutmode -> ttenv -> cut_t -> backward
 val process_cutdef      : ttenv -> cutdef_t -> backward
 val process_left        : backward
 val process_right       : backward

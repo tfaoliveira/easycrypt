@@ -42,7 +42,12 @@ type ttenv = {
   tt_redlogic  : bool;
 }
 
-type engine = ptactic_core -> FApi.backward
+type engine = ttenv -> ptactic_core -> FApi.backward
+
+let engine = ref (None : engine option)
+
+let register_engine (the : engine) =
+  engine := Some the
 
 (* -------------------------------------------------------------------- *)
 let t_simplify_lg ?target ?delta (ttenv, logic) (tc : tcenv1) =
@@ -747,11 +752,8 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       | Some target -> process_apply_fwd ~implicits (fp, target) tc
     end
 
-  | RWTactic `Ring ->
-      process_algebra `Solve `Ring [] tc
-
-  | RWTactic `Field ->
-      process_algebra `Solve `Field [] tc
+  | RWTactic t ->
+      (oget !engine) ttenv t tc
 
 (* -------------------------------------------------------------------- *)
 let rec process_rewrite1 ttenv ?target ri tc =
@@ -1684,14 +1686,14 @@ let process_subst syms (tc : tcenv1) =
 type cut_t = intropattern * pformula * (ptactics located) option
 type cutmode  = [`Have | `Suff]
 
-let process_cut ?(mode = `Have) engine ttenv ((ip, phi, t) : cut_t) tc =
+let process_cut ?(mode = `Have) ttenv ((ip, phi, t) : cut_t) tc =
   let phi = TTC.tc1_process_formula tc phi in
   let tc  = EcLowGoal.t_cut phi tc in
 
   let applytc tc =
     t |> ofold (fun t tc ->
       let t = mk_loc (loc t) (Pby (Some (unloc t))) in
-      t_onall (engine t) tc) (FApi.tcenv_of_tcenv1 tc)
+      t_onall (oget !engine ttenv t) tc) (FApi.tcenv_of_tcenv1 tc)
   in
 
   match mode with

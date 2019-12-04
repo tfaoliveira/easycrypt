@@ -699,27 +699,9 @@ let empty_pprover = {
 }
 
 (* -------------------------------------------------------------------- *)
-type trepeat = [`All | `Maybe] * int option
-type tfocus1 = (int option) pair
-type tfocus  = (tfocus1 list option) pair
-
-type rwarg = (tfocus located) option * rwarg1 located
-
-and rwarg1 =
-  | RWSimpl  of [`Default | `Variant]
-  | RWDelta  of (rwoptions * pformula)
-  | RWRw     of (rwoptions * (rwside * ppterm) list)
-  | RWPr     of (psymbol * pformula option)
-  | RWDone   of [`Default | `Variant] option
-  | RWSmt    of (bool * pprover_infos)
-  | RWApp    of ppterm
-  | RWTactic of rwtactic
-
-and rwoptions = rwside * trepeat option * rwocc
-and rwside    = [`LtoR | `RtoL]
-and rwocc     = rwocci option
-and rwocci    = [`Inclusive of Sint.t | `Exclusive of Sint.t | `All]
-and rwtactic  = [`Ring | `Field]
+type rwocc  = rwocci option
+and  rwocci = [`Inclusive of Sint.t | `Exclusive of Sint.t | `All]
+and  rwside = [`LtoR | `RtoL]
 
 (* -------------------------------------------------------------------- *)
 let norm_rwocci (x : rwocci) =
@@ -804,7 +786,26 @@ type apply_info = [
 ]
 
 (* -------------------------------------------------------------------- *)
-type logtactic =
+type trepeat = [`All | `Maybe] * int option
+type tfocus1 = (int option) pair
+type tfocus  = (tfocus1 list option) pair
+
+type rwarg = (tfocus located) option * rwarg1 located
+
+and rwarg1 =
+  | RWSimpl  of [`Default | `Variant]
+  | RWDelta  of (rwoptions * pformula)
+  | RWRw     of (rwoptions * (rwside * ppterm) list)
+  | RWPr     of (psymbol * pformula option)
+  | RWDone   of [`Default | `Variant] option
+  | RWSmt    of (bool * pprover_infos)
+  | RWApp    of ppterm
+  | RWTactic of ptactic_core
+
+and rwoptions = rwside * trepeat option * rwocc
+
+(* -------------------------------------------------------------------- *)
+and logtactic =
   | Preflexivity
   | Passumption
   | Psmt        of pprover_infos

@@ -136,8 +136,6 @@ and process1_nstrict (ttenv : ttenv) (t : ptactic_core) (tc : tcenv1) =
 
 (* -------------------------------------------------------------------- *)
 and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
-  let engine = process1_core ttenv in
-
   let tx =
     match unloc t with
     | Preflexivity        -> process_reflexivity
@@ -154,7 +152,7 @@ and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
     | Ptrivial            -> process_trivial
     | Pelim pe            -> process_elim pe
     | Papply pe           -> process_apply ~implicits:ttenv.tt_implicits pe
-    | Pcut (m, ip, f, t)  -> process_cut ~mode:m engine ttenv (ip, f, t)
+    | Pcut (m, ip, f, t)  -> process_cut ~mode:m ttenv (ip, f, t)
     | Pcutdef (ip, f)     -> process_cutdef ttenv (ip, f)
     | Pmove pr            -> process_move pr.pr_view pr.pr_rev
     | Pclear l            -> process_clear l
@@ -343,6 +341,9 @@ and process1_core (ttenv : ttenv) (t : ptactic_core) (tc : tcenv1) =
 (* -------------------------------------------------------------------- *)
 and process1 (ttenv : ttenv) (t : ptactic) (tc : tcenv1) =
   process ttenv t (tcenv_of_tcenv1 tc)
+
+(* -------------------------------------------------------------------- *)
+let () = EcHiGoal.register_engine process1_core
 
 (* -------------------------------------------------------------------- *)
 let process (ttenv : ttenv) (t : ptactic list) (pf : proof) =

@@ -2292,11 +2292,8 @@ rwarg1:
 | SMT
    { RWSmt (false, SMT.mk_smt_option []) }
 
-| LBRACKET SMT pi=smt_info RBRACKET
-   { RWSmt (false, pi) }
-
-| LBRACKET SMT LPAREN dbmap=dbmap1* RPAREN RBRACKET
-   { RWSmt (false, SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
+| LBRACKET t=tactic_core RBRACKET
+   { RWTactic t }
 
 | AMP f=pterm
    { RWApp f }
@@ -2304,7 +2301,14 @@ rwarg1:
 | SHARP x=ident {
     let tactics = [("ring", `Ring); ("field", `Field)] in
     match List.Exceptionless.assoc (unloc x) tactics with
-    | Some x -> RWTactic x
+    | Some `Ring ->
+        let theloc = EcLocation.make $startpos $endpos in
+        RWTactic (mk_loc theloc (Plogic (Pring [])))
+
+    | Some `Field ->
+        let theloc = EcLocation.make $startpos $endpos in
+        RWTactic (mk_loc theloc (Plogic (Pfield [])))
+
     | None ->
         let msg = "invalid rw-tactic: " ^ (unloc x) in
         parse_error (loc x) (Some msg)
