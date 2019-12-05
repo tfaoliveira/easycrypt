@@ -104,6 +104,15 @@ lemma nosmt eq_except_sub ['a 'b] (X Y : 'a -> bool) (m1 m2 : ('a, 'b) map) :
    X <= Y => eq_except X m1 m2 => eq_except Y m1 m2.
 proof. by move=> hsub + x hx => -> //; apply: contra (hsub x) hx. qed.
 
+(* -------------------------------------------------------------------- *)
+op merge ['a 'b 'c 'd] (f: 'a -> 'b -> 'c -> 'd) 
+     (m1 : ('a, 'b) map) (m2 : ('a, 'c) map) = 
+  offun (fun a => f a m1.[a] m2.[a]). 
+
+lemma nosmt mergeE (f: 'a -> 'b -> 'c -> 'd) m1 m2 x:
+  (merge f m1 m2).[x] = f x m1.[x] m2.[x].
+proof. by rewrite /merge offunE. qed.
+
 end Map.
 
 (* -------------------------------------------------------------------- *)
@@ -741,3 +750,42 @@ rewrite !(restrP, remE); rewrite /in_dom_with; case (z = x)=> // ->.
 rewrite negb_and => -[Nxm|]; first by rewrite (iffLR _ _ (domNE m x)).
 by case: m.[x] => //= x' ->.
 qed.
+
+(* -------------------------------------------------------------------- *)
+(*                             Merging map                              *)
+(* -------------------------------------------------------------------- *)
+
+op merge (f:'a -> 'b1 option -> 'b2 option -> 'b3 option) 
+         (m1 : ('a, 'b1)fmap) (m2: ('a,'b2)fmap) = 
+  ofmap (Map.merge f (tomap m1) (tomap m2)).
+
+import CoreMap Map.
+
+lemma is_finite_merge (f:'a -> 'b1 option -> 'b2 option -> 'b3 option) 
+         (m1 : ('a, 'b1)fmap) (m2: ('a,'b2)fmap) : 
+  (forall a, f a None None = None) => 
+  Finite.is_finite 
+     (fun (x0 : 'a) => (offun (fun (a : 'a) => f a (tomap m1).[a] (tomap m2).[a])).[x0] <> None).
+proof.
+  move=> hnone; apply (Finite.finite_leq (predU (dom m1) (dom m2))) => /=.
+  + by move=> z /=; rewrite Map.offunE /= /predU /dom getE /#.
+  by apply Finite.finiteU; apply finite_dom.
+qed.
+
+lemma mergeE (f:'a -> 'b1 option -> 'b2 option -> 'b3 option) (m1 : ('a, 'b1)fmap) (m2: ('a,'b2)fmap) x: 
+  (forall a, f a None None = None) => 
+  (merge f m1 m2).[x] = f x m1.[x] m2.[x].
+proof.
+  by move=> h; rewrite getE /merge ofmapK /= 1:is_finite_merge // Map.offunE /= !getE.
+qed.
+
+lemma merge_empty (f:'a -> 'b1 option -> 'b2 option -> 'b3 option) : 
+  (forall a, f a None None = None) =>
+  merge f empty empty = empty.
+proof. by move=> h; apply fmap_eqP => x; rewrite mergeE //  !emptyE h. qed.
+
+lemma rem_merge (f:'a -> 'b1 option -> 'b2 option -> 'b3 option) (m1 : ('a, 'b1)fmap) (m2: ('a,'b2)fmap) x: 
+  (forall a, f a None None = None) => 
+  rem (merge f m1 m2) x = merge f (rem m1 x) (rem m2 x).
+proof. move=> h; apply fmap_eqP => z; rewrite mergeE // !remE mergeE // /#. qed.
+

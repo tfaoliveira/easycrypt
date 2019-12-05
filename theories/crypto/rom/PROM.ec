@@ -30,6 +30,15 @@ module type RO_Distinguisher(G : RO) = {
   proc distinguish(_:input): output 
 }.
 
+module MainD(D:RO_Distinguisher, RO:RO) = {
+  proc distinguish(x:input) = {
+    var r;
+    RO.init();
+    r <@ D(RO).distinguish(x);
+    return r;
+  }
+}.
+
 module type FRO = {
   proc init  ()                   : unit
   proc get   (x : from)           : to
@@ -45,34 +54,37 @@ module type FRO_Distinguisher(G : FRO) = {
   proc distinguish(_ : input): output
 }.
 
-module RO : RO = {
-  var m : (from, to) fmap
+abstract theory MkRO.
 
-  proc init () = { m <- empty; }
+  module RO : RO = {
+    var m : (from, to) fmap
+  
+    proc init () = { m <- empty; }
+  
+    proc get(x : from) = {
+      var r;
+      r <$ sampleto x;
+      if (! dom m x) m.[x] <- r;
+      return (oget m.[x]);
+    }
+  
+    proc set(x : from, y : to) = {
+      m.[x] <- y;
+    }
+  
+    proc rem(x : from) = {
+      m <- rem m x;
+    }
+  
+    proc sample(x : from) = {
+      get(x);
+    }
+  
+  }.
 
-  proc get(x : from) = {
-    var r;
-    r <$ sampleto x;
-    if (! dom m x) m.[x] <- r;
-    return (oget m.[x]);
-  }
+end MkRO.
 
-  proc set(x : from, y : to) = {
-    m.[x] <- y;
-  }
-
-  proc rem(x : from) = {
-    m <- rem m x;
-  }
-
-  proc sample(x : from) = {
-    get(x);
-  }
-
-  proc restrK() = {
-    return m;
-  }
-}.
+clone include MkRO.
 
 module FRO : FRO = {
   var m : (from, to * flag) fmap
@@ -769,8 +781,8 @@ abstract theory FinGenEager.
 
 clone include GenEager.
 
-clone FinType as FinFrom with
-  type t <- from.
+clone FinType.FinType as FinFrom with
+  type t = from.
 
 module FinRO : RO = {
   include RO [set, rem]
@@ -792,15 +804,6 @@ module FinRO : RO = {
   proc sample(x : from) = { 
   }
 
-}.
-
-module MainD (D:RO_Distinguisher, RO:RO) = {
-  proc distinguish(x:input) = {
-    var b;
-    RO.init();
-    b <@ D(RO).distinguish(x);
-    return b;
-  }
 }.
 
 module type FinRO_Distinguisher(G : RO) = {
@@ -867,6 +870,10 @@ proof.
   + by proc;inline *;rcondf{1} ^if; auto => />; 1: smt(); move=> ??; apply sampleto_ll.
   by call GFinRO_RO_init; wp.
 qed.
+
+lemma pr_RO_FinRO_D &m x (p:output -> bool): 
+  Pr[MainD(D,RO).distinguish(x) @ &m : p res] = Pr[MainD(D,FinRO).distinguish(x) @ &m : p res].
+proof. by byequiv RO_FinRO_D. qed. 
 
 end section PROOFS.
 

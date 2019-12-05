@@ -27,6 +27,29 @@ elim n=> [|n le0_n ih].
 by rewrite dlist_def -foldpos 1:/# -dlist_def /=.
 qed.
 
+lemma dapply_dmap ['a 'b] (d:'a distr) (F:'a -> 'b): dapply F d = dmap d F by done.
+
+lemma dlist_add (d:'a distr) n1 n2: 
+  0 <= n1 => 0 <= n2 =>
+  dlist d (n1 + n2) = 
+    dmap (dlist d n1 `*` dlist d n2) (fun (p:'a list * 'a list) => p.`1 ++ p.`2).
+proof.
+  move=> hn1 hn2;elim: n1 hn1 => /= [ | n1 hn1 hrec].
+  + rewrite dprod_dlet dlet_dlet (dlist0 d 0) 1:// dlet_unit /= dlet_dlet
+     -{1}(dlet_d_unit (dlist d n2)) &(eq_dlet) // => l.
+    by rewrite dlet_unit.
+  rewrite addzAC !dlistS 1:/# 1:// hrec.
+  rewrite !dprod_dlet !dlet_dlet dapply_dmap !dlet_dlet.
+  apply eq_dlet => // x.
+  rewrite /(\o) /= !dlet_dlet &(eq_dlet) // => l1 /=.
+  rewrite dlet_unit /= dlet_unit /= dlet_dlet.
+  have /eq_sym:= (dlet_dlet (dlist d n2) (fun (b : 'a list) => dunit (x :: l1, b))
+                (fun (x0 : 'a list * 'a list) => dunit (x0.`1 ++ x0.`2))).
+  apply: eq_trans; rewrite dlet_dlet.
+  apply eq_dlet => // l2 /=. 
+  by rewrite !dlet_unit /= dlet_unit /= dlet_unit.
+qed.
+
 lemma dlist01E (d : 'a distr) n x:
   n <= 0 => mu1 (dlist d n) x = b2r (x = []).
 proof. by move=> /(dlist0 d) ->;rewrite dunit1E (eq_sym x). qed.
