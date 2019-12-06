@@ -1,6 +1,7 @@
 require import AllCore List Int IntDiv Real SmtMap Distr DBool DList DProd FSet PROM SplitRO FelTactic.
 
 require (****) Subtype Ske RndProd Indistinguishability Monoid.
+import StdOrder IntOrder RealOrder.
 
 (* TODO: this come from eclib/JUtil.ec *)
 op map2 ['a, 'b, 'c] (f:'a -> 'b -> 'c) (s:'a list) (t:'b list) = 
@@ -49,11 +50,8 @@ theory Byte.
   lemma xorK1 b1 b2 : b1 = b1 +^ b2 +^ b2.
   proof. by rewrite -addmA addK addm0. qed.
 
-(*  lemma xorK2 b1 b2 b3 : b1 +^ (b2 +^ (b3 +^ b1)) = b3 +^ b2. *)
-
 end Byte.
 import Byte.
-
 
 type bytes = byte list.
 
@@ -351,10 +349,10 @@ axiom topol_inj a1 c1 a2 c2:
   valid_topol a1 c1 => valid_topol a2 c2 =>
   topol a1 c1 = topol a2 c2 => a1 = a2 /\ c1 = c2.
 
+op poly1305_eval : poly_in -> polynomial -> poly_out.
+
 op (+) : poly_out -> poly_out -> poly_out.
 op (-) : poly_out -> poly_out -> poly_out.
-
-op poly1305_eval : poly_in -> polynomial -> poly_out.
 
 op poly1305 (r:poly_in) (s:poly_out) (p:polynomial) = s + poly1305_eval r p.
 
@@ -635,14 +633,14 @@ module IndBlock = {
   }
 }.
 
-clone Indistinguishability as Indist with 
-  type t_in <- nonce * C.counter,
-  type t_out <- block.
-
 module IndRO = {
   proc init = RO.init
   proc f = RO.get
 }.
+
+clone Indistinguishability as Indist with 
+  type t_in <- nonce * C.counter,
+  type t_out <- block.
   
 module D(A:CCA_Adv, RO: Indist.Oracle) = {
   module O = {
@@ -998,7 +996,7 @@ section PROOFS.
 
   declare module A : CCA_Adv { RO, FRO, OpCCinit.OCC, OpCCRO.OCC, IndBlock, Mem, StLSke,
                                Split0.IdealAll.RO, ROT.RO, ROF.RO, SplitC1.I1.RO, SplitC1.I2.RO,
-                               Split1.IdealAll.RO, SplitC2.I1.RO, SplitC2.I2.RO}.
+                               Split1.IdealAll.RO, SplitC2.I1.RO, SplitC2.I2.RO }.
 
   axiom A_ll : forall (O <: CCA_Oracles{A}), islossless O.enc => islossless O.dec => islossless A(O).main.
 
@@ -1196,30 +1194,50 @@ axiom ge0_dec_bytes : 0 <= dec_bytes.
 
 op pr1_poly_out = mu1 dpoly_out witness.
 
+op pr_zeropol : real.
+axiom ge0_pr_zeropol : 0%r <= pr_zeropol.
+
+axiom pr_zeropol_spec ad1 ad2 m1 m2 t1 t2 : 
+   valid_topol ad1 m1 =>
+   valid_topol ad2 m2 =>
+   let p1 = topol ad1 m1 in
+   let p2 = topol ad2 m2 in
+   p2 <> p1 => 
+   mu dpoly_in (fun r => t2 = t1 + (poly1305_eval r p2 - poly1305_eval r p1)) <= pr_zeropol.
+  
 op test_poly_in (n : nonce) (lc : ciphertext list) (r : poly_in)
        (amt: associated_data * message * tag) = 
     let (a,m,t) = amt in
     let p = topol a m in
     let pts = 
        map (fun (c : ciphertext) => (topol c.`2 c.`3, c.`4))
-           (filter (fun (c : ciphertext) => c.`1 = n) lc) in
+           (filter (fun (c : ciphertext) => c.`1 = n /\ valid_topol c.`2 c.`3) lc) in
+     valid_topol a m /\
      has (fun (pt : polynomial * tag) => 
             pt.`1 <> p /\ pt.`2 = t + (poly1305_eval r pt.`1 - poly1305_eval r p)) pts.
 
-op pr_test_poly_in : real.
-
-axiom pr_TPI_ok n lc act : size lc <= qdec => 
-  mu dpoly_in (fun r => test_poly_in n lc r act) <= pr_test_poly_in.
+lemma pr_TPI_ok n (lc:ciphertext list) (amt : associated_data * message * tag) : 
+  size lc <= qdec => 
+  mu dpoly_in (fun r => test_poly_in n lc r amt) <= qdec%r * pr_zeropol.
+proof.
+  move => hlc; rewrite /test_poly_in; case: amt => a m t /=.
+  case: (valid_topol a m) => hv /=;last by rewrite mu0; smt (ge0_qdec ge0_pr_zeropol).
+  pose lc' := List.map _ _; apply (ler_trans ((size lc')%r*pr_zeropol));
+   last by rewrite size_map size_filter; smt (count_size size_ge0 ge0_pr_zeropol).
+  apply mu_has_leM => /= ? /mapP [] [n' a' m' t'] /> /mem_filter |> ??.
+  case: (topol a' m' <> topol a m) => ? /=; last by rewrite mu0; smt (ge0_pr_zeropol).
+  by apply pr_zeropol_spec.
+qed.
 
 op check_plaintext (lenc:nonce list) (p:plaintext) = 
   let (n, a, m) = p in
   ! n \in lenc /\ 
-  size a <= max_ad_size /\ size m <= max_cipher_size /\
+  valid_topol a m /\
   size lenc < qenc.
 
 op check_cipher (ndec:int) (c:ciphertext) =
   let (n, a, m, t) = c in
-  size a <= max_ad_size /\ size m <= max_cipher_size /\
+  valid_topol a m /\
   ndec < qdec.
 
 (* Bounded and Nonce Respecting *)
@@ -1626,8 +1644,9 @@ section PROOFS.
       have /# : t1 = t2; rewrite /t1 /t2 /test_poly /test_poly_in => {t1 t2} /=.
       have := h6 i{2} h7; rewrite h4 => /(_ h8).
       case (oget UFCMA.log{2}.[_]) => a c t /= [# h9 hv ->].
-      apply eq_iff;apply eq_in_has => /= -[p1 t'] /=.
-      smt (poly_out_add_sub' topol_inj mem_filter mapP poly_out_swap).
+      rewrite hv /= !has_map !has_filter /predI /=.
+      apply/eq_iff/eq_in_has => @/preim -[] /=.
+      smt (poly_out_add_sub' topol_inj mem_filter poly_out_swap).
     rcondt{2} ^if; 1: by auto => /#.
     rcondt{2} ^if; 1: by auto=> /> *; smt (size_map size_filter count_size size_ge0).
     do 2! (rcondt{1} ^if{1}; 1: by auto => /#).
@@ -1709,7 +1728,7 @@ section PROOFS.
   }.
 
   local lemma step4_forged &m : 
-    Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] <= qdec%r * pr_test_poly_in.
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] <= qdec%r * qdec%r * pr_zeropol.
   proof.
     have -> : Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] = 
               Pr[UFCMA(ROIN.LRO).distinguish() @ &m : res ].
@@ -1738,7 +1757,7 @@ section PROOFS.
       auto => /> *; smt (undup_uniq size_undup size_map mem_empty size_ge0).
     
     fel 2 UFCMA_f.cbad                      
-        (fun i=> pr_test_poly_in)
+        (fun i=> qdec%r * pr_zeropol)
         qdec
         UFCMA_f.bad
         [UFCMA_f.set_bad : (UFCMA_f.cbad < qdec /\ size Mem.lc <= qdec)] 
@@ -1756,15 +1775,14 @@ section PROOFS.
       Pr[CCA_game(CCA_CPA_Adv(BNR_Adv(A)), EncRnd).main() @ &m : res] +
       (Pr[Indist.Distinguish(D(BNR_Adv(A)), IndBlock).game() @ &m : res] -
        Pr[Indist.Distinguish(D(BNR_Adv(A)), IndRO).game() @ &m : res]) + 
-       qdec%r * pr_test_poly_in +
+       (qdec%r)^2 * pr_zeropol +
        (qenc + qdec)%r * (qdec%r * pr1_poly_out).
-   print step2.
    proof. 
      have := step2 (BNR_Adv(A)) _ &m.
      + by move=> *;islossless;apply (A_ll (BNR(O)));islossless.
      have := step3 &m.
      have := step4_1 &m. have := step4_bad &m. have := step4_forged &m.
-     smt().
+     have -> /#: (qdec%r)^2 = qdec%r * qdec%r by ring.
    qed.
 
 end section PROOFS.
