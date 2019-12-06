@@ -357,9 +357,31 @@ lemma mu_le_weight ['a] (d : 'a distr) p : mu d p <= weight d.
 proof. by apply/mu_le. qed.
 
 (* -------------------------------------------------------------------- *)
+
+lemma mu_has_le ['a 'b] (P : 'a -> 'b -> bool) (d : 'a distr) (s : 'b list) : 
+   mu d (fun a => has (P a) s) <= BRA.big predT (fun b => mu d (fun a => P a b)) s.
+proof.
+elim: s => [|x s ih]; first by rewrite big_nil mu0.
+rewrite big_cons {1}/predT /= mu_or.
+apply (ler_trans (mu d (transpose P x) + mu d (fun (x0 : 'a) => has (P x0) s))).
++ smt(mu_bounded).
+by rewrite ler_add2l.
+qed.
+
+lemma mu_has_leM ['a 'b] (P : 'a -> 'b -> bool) (d : 'a distr) (s : 'b list) r : 
+  (forall b, b \in s => mu d (fun a => P a b) <= r) => 
+  mu d (fun a => has (P a) s) <= (size s)%r * r.
+proof.
+move=> le; apply/(ler_trans (big predT (fun x => r) s)).
++ by have /ler_trans := mu_has_le P d s; apply; apply/ler_sum_seq => ? /le.
+by rewrite Bigreal.sumr_const count_predT.
+qed.
+
+(* -------------------------------------------------------------------- *)
 lemma mu_mem_uniq ['a] (d : 'a distr) (s : 'a list) : 
   uniq s => mu d (mem s) = BRA.big predT (mu1 d) s.
 proof.
+print mem.
 elim: s => [_|x s ih [xs uq_s]]; first by rewrite big_nil mu0.
 rewrite big_cons {1}/predT /= -ih // -mu_disjointL => [y ->//|].
 by apply/mu_eq=> y.
