@@ -193,9 +193,6 @@ abstract theory GenBlock.
   lemma xorK1 b1 b2 : b1 = b1 +^ b2 +^ b2.
   proof. by rewrite -addmA addK addm0. qed.
 
-  lemma xorK2 b1 b2 b3 : b1 +^ (b2 +^ (b3 +^ b1)) = b3 +^ b2. 
-  proof. by rewrite !addmA addmC !addmA addK add0m addmC. qed.
-
 end GenBlock.
 
 (* block : [poly_tin; poly_tout; extra_block] *)
@@ -1288,7 +1285,7 @@ module EncRnd = {
     i     <- 1;
     while (p <> []) {
       z <$ dblock; 
-      c <- c ++ take (size p) (bytes_of_block (extend p +^ z));
+      c <- c ++ take (size p) (bytes_of_block  z);
       p <- drop block_size p;
       i <- i + 1;
     }
@@ -1382,9 +1379,9 @@ section PROOFS.
         by rewrite (StdOrder.IntOrder.pmulr_lgt0 _ _ gt0_block_size) /#.
       rcondf{1} ^if; 1: by auto; smt (C.insubdK).
       inline{1} 5; rcondt{1} ^if; 1: by auto; smt (C.insubdK).
-      wp; rnd (fun z => z +^ (extend p{1} +^ extend p{2})); auto => &1 &2 [#] 3!-> heq hs /= *;split.
+      wp; rnd (fun z => z +^ extend p{1}); auto => &1 &2 [#] 3!-> heq hs /= *;split.
       + move=> ??;apply xorK1.
-      move=> h1 b ?; rewrite -h1 //= get_setE /= xorK2 oget_some . 
+      move=> h1 b ?; rewrite -h1 //= get_setE /= oget_some Block.MB.addmC /= .
       rewrite -!size_eq0 !size_drop 1,2:ge0_block_size hs /= 
         size_cat size_take 1:size_ge0 -heq Block.valP; split;1: smt(); split; 1: smt().
       split; 2: smt(mem_set C.insubdK).
@@ -1458,7 +1455,7 @@ section PROOFS.
           nonce * associated_data * message * tag = {
         var n, a, p, c, t;
         (n,a,p) <- nap;
-        c <@ EncRnd.cc(n,p);
+        c <@ EncRnd.cc(n,p);   
         t <@ set_bad(map (fun c:ciphertext => c.`4) Mem.lc);
         ROin.sample(n,C.ofint 0);
         SplitC2.I2.RO.set((n,C.ofint 0), witness); 
