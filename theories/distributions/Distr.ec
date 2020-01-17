@@ -777,47 +777,51 @@ proof.
 by rewrite -massE dlet_massE &(eq_sum) => x /=; rewrite !massE.
 qed.
 
-lemma dletE (d : 'a distr) (f : 'a -> 'b distr) (P : 'b -> bool):
-  mu (dlet d f) P
-  = sum<:'b> (fun b =>
-      sum<:'a> (fun a =>
-        if P b then mass d a * mass (f a) b else 0%r)).
-proof.
-rewrite muE; have:= dlet_massE d f; rewrite -(@fun_ext (mass _)) => -> /=.
-by apply/eq_sum=> /= b; case: (P b)=> //=; rewrite sum0.
-qed.
-
 lemma summable_dlet ['a 'b] d f:
-  summable (fun (ab : 'a * 'b) => mass d ab.`1 * mass (f ab.`1) ab.`2).
+  summable (fun (ab : 'a * 'b) => mu1 d ab.`1 * mu1 (f ab.`1) ab.`2).
 proof.
-pose G a b := mass (f a) b; apply/(@summableM_dep (mass d) G).
-  by apply/summable_mass.
-exists 1%r => a @/G @/(\o) J uqJ; rewrite (@eq_bigr _ _ (mass (f a))).
-  by move=> b _ /=; rewrite ger0_norm.
+pose G a b := mu1 (f a) b; apply/(@summableM_dep (mu1 d) G).
++ by apply/summable_mu1.
+exists 1%r => a @/G @/(\o) J uqJ; rewrite (@eq_bigr _ _ (mu1 (f a))).
++ by move=> b _ /=; rewrite ger0_norm.
+rewrite (@eq_bigr _ _ (mass (f a))).
++ by move=> x /=; rewrite massE.
 by apply: le1_mass_fin.
 qed.
 
 lemma dletE_swap (d : 'a distr) (f : 'a -> 'b distr) (P : 'b -> bool):
   mu (dlet d f) P
-  = sum<:'a> (fun a =>
-      sum<:'b> (fun b =>
-        if P b then mass d a * mass (f a) b else 0%r)).
+  = sum<:'b> (fun b =>
+      sum<:'a> (fun a =>
+        if P b then mu1 d a * mu1 (f a) b else 0%r)).
+proof.
+rewrite muE; have:= dlet_massE d f; rewrite -(@fun_ext (mass _)) => -> /=.
+apply: eq_sum=> /= b; case: (P b)=> //= [_|].
++ by apply: eq_sum=> x /=; rewrite !massE.
+by rewrite sum0.
+qed.
+
+lemma dletE (d : 'a distr) (f : 'a -> 'b distr) (P : 'b -> bool):
+  mu (dlet d f) P = sum<:'a> (fun a => mu1 d a * mu (f a) P).
 proof.
 pose F (ab : 'a * 'b) :=
-  if P ab.`2 then mass d ab.`1 * mass (f ab.`1) ab.`2 else 0%r.
-rewrite dletE (@sum_swap F) // /F summable_cond summable_dlet.
+  if P ab.`2 then mu1 d ab.`1 * mu1 (f ab.`1) ab.`2 else 0%r.
+rewrite dletE_swap -(@sum_swap F) 1:summable_cond 1:summable_dlet.
+apply: eq_sum=> a /=; rewrite (@muE (f a)) -sumZ.
+by apply: eq_sum=> b /=; rewrite massE (@fun_if (( * ) (mu1 d a))).
 qed.
 
 lemma weight_dlet (d:'a distr) (F:'a -> 'b distr) :
   weight (dlet d F) <= weight d.
 proof.
-rewrite dletE_swap muE /predT ler_sum /=; first last.
+rewrite dletE muE /predT /=; eta; rewrite ler_sum /=; first last.
 + rewrite -(@eq_summable (fun a => mass d a * sum (mass (F a)))).
-    by move=> a /=; rewrite sumZ.
+  + by move=> a /=; rewrite massE (@muE (F a)) /=; eta.
   apply: summable_mass_wght => /= a.
   by rewrite -weightE le1_mu ge0_mu.
 + by apply/summable_mass.
-+ by move=> a; rewrite sumZ -weightE ler_pimulr (ge0_mass,le1_mu).
+move=> a; rewrite -massE muE /=; eta.
+by rewrite -weightE ler_pimulr (ge0_mass,le1_mu).
 qed.
 
 lemma nosmt supp_dlet (d : 'a distr) (F : 'a -> 'b distr) (b : 'b) :
@@ -850,20 +854,20 @@ qed.
 lemma dlet_dlet (d1:'a distr) (F1:'a -> 'b distr) (F2: 'b -> 'c distr):
   dlet (dlet d1 F1) F2 = dlet d1 (fun x1 => dlet (F1 x1) F2).
 proof.
-apply: eq_distr => c; rewrite !dletE; apply eq_sum=> c' /=.
+apply: eq_distr => c; rewrite !dletE_swap; apply eq_sum=> c' /=.
 case: (c' = c) => -> @/pred1 /= {c'}; last by rewrite !sum0.
 pose F a b := mass d1 a * mass (F1 a) b * mass (F2 b) c.
 have smF: summable (fun ab : _ * _ => F ab.`1 ab.`2).
-+ pose G a b := mass d1 a * mass (F1 a) b.
++ pose G a b := mu1 d1 a * mu1 (F1 a) b.
   apply: (@summable_le (fun ab : _ * _ => G ab.`1 ab.`2)).
     by apply/summable_dlet.
-  case=> a b @/F @/G /=; rewrite normrM ler_pimulr 1:normr_ge0.
+  case=> a b @/F @/G /=; rewrite -!massE normrM ler_pimulr 1:normr_ge0.
   by rewrite ger0_norm (le1_mass, ge0_mass).
 rewrite (@eq_sum _ (fun b => sum (transpose F b))).
-+ move=> b @/F /=; rewrite dlet_massE.
++ move=> b @/F /=; rewrite -!massE dlet_massE.
   by rewrite mulrC -sumZ &(eq_sum) => a /=; ring.
 rewrite -(sum_swap smF) &(eq_sum) => /= a.
-by rewrite dlet_massE -sumZ &(eq_sum) => /= b @/F; ring.
+by rewrite -!massE dlet_massE -sumZ &(eq_sum) => /= b @/F; ring.
 qed.
 
 lemma dlet_dnull (F:'a -> 'b distr): dlet dnull F = dnull.
@@ -897,10 +901,10 @@ qed.
 lemma dmapE (d : 'a distr) (f : 'a -> 'b) (P : 'b -> bool):
   mu (dmap d f) P = mu d (P \o f).
 proof.
-rewrite dletE_swap muE.
-apply/eq_sum=> a /=; rewrite (@sumE_fin _ [f a]) //=.
+rewrite dletE muE.
+apply/eq_sum=> a /=. rewrite (@muE (dunit (f a))) (@sumE_fin _ [f a]) //=.
 + by move=> b; rewrite (@eq_sym b) !massE MUnit.dunit1E;case: (f a = b);rewrite /b2r.
-by rewrite big_seq1 /= !massE MUnit.dunit1E.
+by rewrite big_seq1 /= !massE MUnit.dunit1E /(\o); case: (P (f a)).
 qed.
 
 lemma supp_dmap (d : 'a distr) (f : 'a -> 'b) (b : 'b):
@@ -1206,21 +1210,21 @@ lemma dlet_swap ['a 'b 'c] (d1 : 'a distr) (d2 : 'b distr) (F : 'a -> 'b -> 'c d
     dlet d1 (fun x1 => dlet d2 (F x1))
   = dlet d2 (fun x2 => (dlet d1 (fun x1 => F x1 x2))).
 proof.
-apply/eq_distr => c; rewrite !dletE &(eq_sum) => /= x @/pred1.
+apply/eq_distr => c; rewrite !dletE_swap &(eq_sum) => /= x @/pred1.
 case: (x = c) => [->> |]; last by rewrite !sum0_eq.
 pose G a b := mass d2 b * (mass d1 a * (mass (F a b) c)).
 pose H1 a := sum (fun b => G a b).
 pose H2 b := sum (fun a => G a b).
 rewrite -(@eq_sum H1) => [@/H1 @/G /= a|].
-+ by rewrite dlet_massE -sumZ /= &(eq_sum) => /= b; ring.
++ by rewrite -!massE dlet_massE -sumZ /= &(eq_sum) => /= b; ring.
 rewrite eq_sym -(@eq_sum H2) => [@/H2 @/G /= b|].
-+ by rewrite dlet_massE -sumZ /= &(eq_sum).
++ by rewrite -!massE dlet_massE -sumZ /= &(eq_sum).
 rewrite (@sum_swap (fun ab : _ * _ => G ab.`1 ab.`2)) // /G.
 apply: (@summable_le (fun ab : _ * _ => mass d1 ab.`1 * mass d2 ab.`2)) => /=.
 + have h := summable_mass (d1 `*` d2); apply: (@eqL_summable _ _ h).
   by case=> a b /=; rewrite !massE dprod1E.
-+ move=> ab; rewrite !ger0_norm ?mulr_ge0 ?ge0_mass mulrCA !mulrA.
-  by rewrite ler_pimulr ?mulr_ge0 (ge0_mass, le1_mass).
+move=> ab; rewrite !ger0_norm ?mulr_ge0 ?ge0_mass mulrCA !mulrA.
+by rewrite ler_pimulr ?mulr_ge0 (ge0_mass, le1_mass).
 qed.
 
 lemma dprodC ['a 'b] (d1 : 'a distr) (d2 : 'b distr) :
