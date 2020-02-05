@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -193,5 +194,8 @@ theory FDistr.
 
   lemma dt_funi: is_funiform dt.
   proof. by move=> ??;rewrite !dt1E. qed.
+
+  hint exact random : dt_fu dt_ll dt_funi.
+
 end FDistr.
 

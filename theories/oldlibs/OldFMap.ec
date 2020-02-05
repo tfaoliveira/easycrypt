@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -597,7 +598,7 @@ lemma find_set (m:('a,'b) fmap) y x (p:'a -> 'b -> bool):
   find p m.[x <- y] = if p x y then Some x else None.
 proof.
   cut [[a []->[]] | []-> Hp Hnp]:= findP p (m.[x<-y]);1: rewrite getP dom_set !inE /#.
-  by case (p x y)=> //; cut := Hp x;rewrite getP dom_set !inE /= oget_some.
+  by case (p x y)=> //; cut := Hp x;rewrite getP dom_set !inE.
 qed.
 
 lemma rng_set (m : ('a, 'b) fmap) (a : 'a) (b : 'b):

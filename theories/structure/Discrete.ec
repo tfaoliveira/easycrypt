@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -24,6 +25,14 @@ op cenum ['a] (p : 'a -> bool) =
 lemma nosmt eq_enumerate ['a] E1 E2 (C : int -> 'a option) :
   (forall x, E1 x = E2 x) => enumerate C E1 => enumerate C E2.
 proof. by move/fun_ext=> ->. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt enum_uniq_pmap_range (J : int -> 'a option) p n:
+  enumerate J p => uniq (pmap J (range 0 n)).
+proof.
+case=> injJ _; apply/pmap_inj_in_uniq/range_uniq.
+by move=> x y v _ _; apply/injJ.
+qed.
 
 (* -------------------------------------------------------------------- *)
 op countable ['a] (E : 'a -> bool) =
@@ -150,7 +159,7 @@ theory IntPair.
 
   lemma inj_encode : injective encode.
   proof.
-  case=> [x1 y1] [x2 y2] @/encode /=; rewrite andabP.
+  case=> [x1 y1] [x2 y2] @/encode /=.
   rewrite -(inj_eq _ inj_int2nat x1) -(inj_eq _ inj_int2nat y1).
   by apply/FTA23; apply/ge0_int2nat.
   qed.

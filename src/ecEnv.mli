@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -332,6 +333,8 @@ module Ty : sig
   val unfold  : path -> EcTypes.ty list -> env -> EcTypes.ty
   val hnorm   : EcTypes.ty -> env -> EcTypes.ty
 
+  val decompose_fun : EcTypes.ty -> env -> EcTypes.dom * EcTypes.ty
+
   val scheme_of_ty :
     [`Ind | `Case] -> EcTypes.ty -> env -> (path * EcTypes.ty list) option
 
@@ -376,10 +379,23 @@ module BaseRw : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module Reduction : sig
+  type rule   = EcTheory.rule
+  type topsym = [ `Path of path | `Tuple ]
+
+  val add1 : path * rule option -> env -> env
+  val add  : (path * rule option) list -> env -> env
+  val get  : topsym -> env -> rule list
+end
+
+(* -------------------------------------------------------------------- *)
 module Auto : sig
-  val add1 : local:bool -> path -> env -> env
-  val add  : local:bool -> Sp.t -> env -> env
-  val get  : env -> Sp.t
+  val dname  : symbol
+  val add1   : local:bool -> level:int -> ?base:symbol -> path -> env -> env
+  val add    : local:bool -> level:int -> ?base:symbol -> path list -> env -> env
+  val get    : ?base:symbol -> env -> path list
+  val getall : symbol list -> env -> path list
+  val getx   : symbol -> env ->  (int * path list) list
 end
 
 (* -------------------------------------------------------------------- *)

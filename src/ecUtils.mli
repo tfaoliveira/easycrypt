@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -36,6 +37,7 @@ val (|-) : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
 
 val (|>) : 'a -> ('a -> 'b) -> 'b
 val (<|) : ('a -> 'b) -> 'a -> 'b
+val (|?) : 'a option -> 'a -> 'a
 
 val curry   : ('a1 -> 'a2 -> 'b) -> 'a1 * 'a2 -> 'b
 val uncurry : ('a1 * 'a2 -> 'b) -> 'a1 -> 'a2 -> 'b
@@ -122,6 +124,7 @@ end
 type 'a eq  = 'a -> 'a -> bool
 type 'a cmp = 'a -> 'a -> int
 
+val pair_map   : ('a -> 'b) -> 'a pair -> 'b pair
 val pair_equal : 'a eq -> 'b eq -> ('a * 'b) eq
 val opt_equal  : 'a eq -> 'a option eq
 
@@ -244,6 +247,13 @@ module Buffer : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module Array : sig
+  include module type of BatArray
+
+  val count : ('a -> bool) -> 'a array -> int
+end
+
+(* -------------------------------------------------------------------- *)
 module List : sig
   include module type of BatList
 
@@ -281,6 +291,7 @@ module List : sig
   val min : ?cmp:('a -> 'a -> int) -> 'a list -> 'a
   val max : ?cmp:('a -> 'a -> int) -> 'a list -> 'a
 
+  val nth_opt    : 'a list -> int -> 'a option
   val mbfilter   : ('a -> bool) -> 'a list -> 'a list
   val fusion     : ('a -> 'a -> 'a) -> 'a list -> 'a list -> 'a list
   val is_unique  : ?eq:('a -> 'a -> bool) -> 'a list -> bool
@@ -289,6 +300,7 @@ module List : sig
   val find_pivot : ('a -> bool) -> 'a list -> 'a list * 'a * 'a list
   val map_fold   : ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val mapi_fold  : (int -> 'a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
+  val pmapi      : (int -> 'a -> 'b option) -> 'a list -> 'b list
   val pmap       : ('a -> 'b option) -> 'a list -> 'b list
   val rev_pmap   : ('a -> 'b option) -> 'a list -> 'b list
   val rotate     : [`Left|`Right] -> int -> 'a list -> int * 'a list
@@ -303,23 +315,23 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Parray : sig
-  type 'a t
+  type 'a parray
 
-  val empty : 'a t
-  val get : 'a t -> int -> 'a
-  val length : 'a t -> int
-  val of_list : 'a list -> 'a t
-  val to_list : 'a t -> 'a list
-  val of_array : 'a array -> 'a t
-  val init : int -> (int -> 'a) -> 'a t
-  val map : ('a -> 'b) -> 'a t -> 'b t
-  val fmap : ('a -> 'b) -> 'a list -> 'b t
-  val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
-  val fold_right : ('b -> 'a -> 'a) -> 'b t -> 'a -> 'a
-  val fold_left2 : ('a -> 'b -> 'c -> 'a) -> 'a -> 'b t -> 'c t -> 'a
-  val iter : ('a -> unit) -> 'a t -> unit
-  val iter2 : ('a -> 'b -> unit) -> 'a t -> 'b t -> unit
-  val split : ('a * 'b) t -> ('a t * 'b t)
-  val exists : ('a -> bool) -> 'a t -> bool
-  val for_all : ('a -> bool) -> 'a t -> bool
+  val empty : 'a parray
+  val get : 'a parray -> int -> 'a
+  val length : 'a parray -> int
+  val of_list : 'a list -> 'a parray
+  val to_list : 'a parray -> 'a list
+  val of_array : 'a array -> 'a parray
+  val init : int -> (int -> 'a) -> 'a parray
+  val map : ('a -> 'b) -> 'a parray -> 'b parray
+  val fmap : ('a -> 'b) -> 'a list -> 'b parray
+  val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b parray -> 'a
+  val fold_right : ('b -> 'a -> 'a) -> 'b parray -> 'a -> 'a
+  val fold_left2 : ('a -> 'b -> 'c -> 'a) -> 'a -> 'b parray -> 'c parray -> 'a
+  val iter : ('a -> unit) -> 'a parray -> unit
+  val iter2 : ('a -> 'b -> unit) -> 'a parray -> 'b parray -> unit
+  val split : ('a * 'b) parray -> ('a parray * 'b parray)
+  val exists : ('a -> bool) -> 'a parray -> bool
+  val for_all : ('a -> bool) -> 'a parray -> bool
 end

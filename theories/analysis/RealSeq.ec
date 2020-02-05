@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -256,6 +257,13 @@ suff {2}->: s = fun x => inv c * (c * s x) by apply/cnvZ.
 by apply/fun_ext=> x; rewrite mulrA (@mulrC _ c) divff.
 qed.
 
+lemma cnvN s : converge s => converge (fun x => -s x).
+proof. by move/(@cnvZ (-1)%r) => /#. qed.
+
+lemma cnvB s1 s2 :
+  converge s1 => converge s2 => converge (fun x => s1 x - s2 x).
+proof.  by move=> h1 h2; rewrite cnvD // cnvN. qed.
+
 (* -------------------------------------------------------------------- *)
 op lim (s : int -> real) =
   choiceb (fun l => convergeto s l) 0%r.
@@ -311,3 +319,11 @@ proof.
 case=> [l1 h1] [l2 h2]; rewrite (lim_cnvto h1) (lim_cnvto h2).
 by have := cnvtoD _ _ _ _ h1 h2 => /lim_cnvto ->.
 qed.
+
+lemma limN (s : int -> real) : lim (fun x => - s x) = - lim s.
+proof. by rewrite -mulN1r -limZ /#. qed.
+
+lemma limB (s1 s2 : int -> real) :
+  converge s1 => converge s2 =>
+    lim (fun x => s1 x - s2 x) = lim s1 - lim s2.
+proof. by move=> h1 h2; rewrite limD // 1:cnvN // limN. qed.

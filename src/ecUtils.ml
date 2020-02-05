@@ -1,6 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2017 - Inria
+ * Copyright (c) - 2012--2018 - Inria
+ * Copyright (c) - 2012--2018 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -57,6 +58,8 @@ let (|-) g f = fun x -> g (f x)
 
 let (|>) x f = f x
 let (<|) f x = f x
+
+let (|?) = BatPervasives.(|?)
 
 let curry   f (x, y) = f x y
 let uncurry f x y = f (x, y)
@@ -490,6 +493,10 @@ module List = struct
   include Parallel
 
   (* ------------------------------------------------------------------ *)
+  let nth_opt (s : 'a list) (i : int) =
+    try  Some (List.nth s i)
+    with Failure _ | Invalid_argument _ -> None
+
   let last (s : 'a list) =
     match Exceptionless.last s with
     | None   -> failwith "List.last"
@@ -518,10 +525,15 @@ module List = struct
       | y :: ys -> if f y then acc, y, ys else aux (y::acc) ys
     in aux [] xs
 
-  let rec pmap (f : 'a -> 'b option) (xs : 'a list) =
-    match xs with
-    | []      -> []
-    | x :: xs -> let v = f x in ocons v (pmap f xs)
+  let pmapi (f : int -> 'a -> 'b option) =
+    let rec doit i xs =
+      match xs with
+      | [] -> []
+      | x :: xs -> let v = f i x in ocons v (doit (i + 1) xs)
+    in fun (xs : 'a list) -> doit 0 xs
+
+  let pmap (f : 'a -> 'b option) (xs : 'a list) =
+    pmapi (fun _ -> f) xs
 
   let rev_pmap (f : 'a -> 'b option) (xs : 'a list) =
     let rec aux acc xs =
@@ -594,7 +606,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Parray = struct
-  type 'a t = 'a array
+  type 'a parray = 'a array
 
   include Array
 
@@ -684,18 +696,16 @@ module String = struct
             then List.map fst matched
             else aux matched (i+1)
           end
-
       in aux matched 0
 
     let last_matching tomatch s =
-      first_matching (List.map rev tomatch) (rev s)
+      List.map rev (first_matching (List.map rev tomatch) (rev s))
   end
 
   let option_matching tomatch s =
     match OptionMatching.all_matching tomatch s with
-    | [s] -> [s] | matched ->
-    match OptionMatching.first_matching matched s with
-    | [s] -> [s] | matched -> OptionMatching.last_matching matched s
+    | [s] -> [s]
+    | matched -> OptionMatching.first_matching matched s
 end
 
 (* -------------------------------------------------------------------- *)
@@ -751,4 +761,12 @@ module Os = struct
 
   let listdir (dir : string) =
     BatEnum.fold (fun xs x -> x :: xs) [] (BatSys.files_of dir)
+end
+
+(* -------------------------------------------------------------------- *)
+module Array = struct
+  include BatArray
+
+  let count f a =
+    Array.fold_left (fun i x -> if f x then i+1 else i) 0 a
 end
