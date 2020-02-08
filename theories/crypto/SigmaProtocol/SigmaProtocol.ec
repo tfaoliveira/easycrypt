@@ -83,6 +83,35 @@ abstract theory SP.
         equiv [RealP(P).main ~ S.simulate : (R x w) {1} /\ ={x,e} ==> ={res}]
    *)
 
+  module RealP' (P:Prover) = { 
+    proc main (x:statement, w:witness) = {
+      var a, e, z;
+      e <$ challenges;
+      (a, z) <@ RealP(P).main(x, w, e);
+      return (a, e, z);
+    } 
+  }.
+
+  module type Simulator' = {
+    proc * simulate(x: statement) : message * challenge * response 
+  }.
+
+  module S'(S:Simulator) : Simulator' = {
+    proc simulate(x:statement) = {
+      var a, e, z;
+      e <$ challenges;
+      (a, z) <@ S.simulate(x, e);
+      return (a, e, z);
+    }
+  }.
+
+  lemma sHVZK_HVZK (P<:Prover) (S<:Simulator{P}) :
+    equiv [RealP(P).main ~ S.simulate : (R x w) {1} /\ ={x,e} ==> ={res}] =>
+    equiv [RealP'(P).main ~ S'(S).simulate : (R x w) {1} /\ ={x} ==> ={res}].
+  proof.
+    by move=> h; proc; seq 1 1 : (#pre /\ ={e}); [ auto | call h].
+  qed.
+
 end SP.
 
 abstract theory AndComp.
