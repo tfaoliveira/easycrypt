@@ -7,7 +7,7 @@
 (* A formalisation of generic Sigma protocols *)
 require import AllCore Distr DProd.
 
-abstract theory SigmaProtocol.
+abstract theory SP.
   type statement. (* x in Lindell *)   
   type witness.   (* w in Lindell *)
   type message.   (* a in Lindell, initial message from the prover *)
@@ -57,15 +57,15 @@ abstract theory SigmaProtocol.
     } 
   }.
 
-  (* op SpecialSoundness (A:A_SpecSoundness) = 
-     phoare [SpecialSoundness.main : verify x a e z /\ verify x a e' z' /\ e <> e' ==> res] =  1%r.
+  (* op SpecialSoundness (KE:KnowledgeExtractor) = 
+     phoare [SpecialSoundness(KE).main : verify x a e z /\ verify x a e' z' /\ e <> e' ==> res] =  1%r.
   *)
 
   module type Simulator = { 
     proc * simulate(x: statement, e: challenge) : message * response
   }.
 
-  module Real (P:Prover) = { 
+  module RealP (P:Prover) = { 
     proc main (x:statement, w:witness, e:challenge) = {
       var a, z;
       a <@ P.init (x, w);
@@ -75,24 +75,24 @@ abstract theory SigmaProtocol.
   }.
 
   (* Special honest verifier zero knowledge
-     op sHVZK (M:Simulator) (P:Prover) = 
+     op sHVZK (S:Simulator) (P:Prover) = 
        forall x w e a z &m,  R x w =>  
-         Pr[ Real(P).main(x, w, e) @ &m : res = (a, z)] = 
+         Pr[ RealP(P).main(x, w, e) @ &m : res = (a, z)] = 
          Pr[ M.simulate(x,e) @ &m : res = (a, z)].
      or equivalently 
-        equiv [Real(P).main ~ M.simulate : (R x w) {1} /\ ={x,e} ==> ={res}]
+        equiv [RealP(P).main ~ S.simulate : (R x w) {1} /\ ={x,e} ==> ={res}]
    *)
 
-end SigmaProtocol.
+end SP.
 
 abstract theory AndComp.
   type challenge.
   op challenges : challenge distr.
 
-  clone SigmaProtocol as SP1 with
+  clone SP as SP1 with
     type challenge <- challenge,
     op challenges <- challenges.
-  clone SigmaProtocol as SP2 with 
+  clone SP as SP2 with 
     type challenge <- challenge,
     op challenges <- challenges.
 
@@ -106,7 +106,7 @@ abstract theory AndComp.
   op verify (x:statement) (a:message) e (z:response) = 
     SP1.verify x.`1 a.`1 e z.`1 /\ SP2.verify x.`2 a.`2 e z.`2.
 
-  clone include SigmaProtocol with 
+  clone include SP with 
     type statement <- statement, 
     type witness <- witness, 
     type message <- message, 
@@ -256,13 +256,13 @@ abstract theory AndComp.
     declare module S2 : SP2.Simulator.
 
     lemma sHVZK : 
-      equiv [SP1.Real(P1).main ~ S1.simulate : (SP1.R x w) {1} /\ ={x,e} ==> ={res}] =>
-      equiv [SP2.Real(P2).main ~ S2.simulate : (SP2.R x w) {1} /\ ={x,e} ==> ={res}] =>
-      equiv [Real(P(P1,P2)).main ~ S(S1,S2).simulate : (R x w) {1} /\ ={x,e} ==> ={res}].
+      equiv [SP1.RealP(P1).main ~ S1.simulate : (SP1.R x w) {1} /\ ={x,e} ==> ={res}] =>
+      equiv [SP2.RealP(P2).main ~ S2.simulate : (SP2.R x w) {1} /\ ={x,e} ==> ={res}] =>
+      equiv [RealP(P(P1,P2)).main ~ S(S1,S2).simulate : (R x w) {1} /\ ={x,e} ==> ={res}].
     proof.
       move=> h1 h2; proc; inline *; swap{1} 5 3; wp.
-      transitivity*{1} { (a1,z1) <@ SP1.Real(P1).main(x.`1, w.`1, e);
-                         (a2,z2) <@ SP2.Real(P2).main(x.`2, w.`2, e); } => //; 1: smt().
+      transitivity*{1} { (a1,z1) <@ SP1.RealP(P1).main(x.`1, w.`1, e);
+                         (a2,z2) <@ SP2.RealP(P2).main(x.`2, w.`2, e); } => //; 1: smt().
       + by inline *; swap{2} [5..6] 4; do 4! (wp; call (:true)); auto.
       by call h2; call h1; auto => />.
     qed.
@@ -311,11 +311,11 @@ abstract theory OrComp.
   axiom add_cancel (x y:challenge) : x + y + y = x.
   axiom addC (x y: challenge) : x + y = y + x.
 
-  clone SigmaProtocol as SP1 with
+  clone SP as SP1 with
     type challenge <- challenge,
     op challenges <- challenges.
  
-  clone SigmaProtocol as SP2 with 
+  clone SP as SP2 with 
     type challenge <- challenge,
     op challenges <- challenges.
 
@@ -341,7 +341,7 @@ abstract theory OrComp.
     SP1.verify x.`1 a.`1 e1 z1 /\
     SP2.verify x.`2 a.`2 e2 z2.
     
-  clone include SigmaProtocol with 
+  clone include SP with 
     type statement <- statement, 
     type witness <- witness, 
     type message <- message, 
@@ -425,7 +425,7 @@ abstract theory OrComp.
     proc main(x:statement, w1: SP1.witness, w2:SP2.witness) = {
       var a1,a2,z1,z2,b1,b2,e1,e2;
       e1 <$ challenges;
-      (a1,z1) <@ SP1.Real(P1).main(x.`1, w1, e1);
+      (a1,z1) <@ SP1.RealP(P1).main(x.`1, w1, e1);
       b1 <- SP1.verify x.`1 a1 e1 z1;
       e2 <$ challenges;
       (a2,z2) <@ S2.simulate(x.`2, e2); 
@@ -441,7 +441,7 @@ abstract theory OrComp.
       (a1,z1) <@ S1.simulate(x.`1, e1);
       b1 <- SP1.verify x.`1 a1 e1 z1;
       e2 <$ challenges;
-      (a2,z2) <@ SP2.Real(P2).main(x.`2, w2, e2); 
+      (a2,z2) <@ SP2.RealP(P2).main(x.`2, w2, e2); 
       b2 <- SP2.verify x.`2 a2 e2 z2;
       return b1 /\ b2;
     }
@@ -451,10 +451,10 @@ abstract theory OrComp.
     proc main(x:statement, w1: SP1.witness, w2:SP2.witness) = {
       var a1,a2,z1,z2,b1,b2,e1,e2;
       e1 <$ challenges;
-      (a1,z1) <@ SP1.Real(P1).main(x.`1, w1, e1);
+      (a1,z1) <@ SP1.RealP(P1).main(x.`1, w1, e1);
       b1 <- SP1.verify x.`1 a1 e1 z1;
       e2 <$ challenges;
-      (a2,z2) <@ SP2.Real(P2).main(x.`2, w2, e2); 
+      (a2,z2) <@ SP2.RealP(P2).main(x.`2, w2, e2); 
       b2 <- SP2.verify x.`2 a2 e2 z2;
       return b1 /\ b2;
     }
@@ -488,8 +488,8 @@ abstract theory OrComp.
   lemma Completeness : 
     phoare [SP1.Completeness(P1).main : SP1.R x w ==> res] = 1%r => 
     phoare [SP2.Completeness(P2).main : SP2.R x w ==> res] = 1%r => 
-    equiv [SP1.Real(P1).main ~ S1.simulate : (SP1.R x w){1} /\ ={x,e} ==> ={res}] =>
-    equiv [SP2.Real(P2).main ~ S2.simulate : (SP2.R x w){1} /\ ={x,e} ==> ={res}] =>
+    equiv [SP1.RealP(P1).main ~ S1.simulate : (SP1.R x w){1} /\ ={x,e} ==> ={res}] =>
+    equiv [SP2.RealP(P2).main ~ S2.simulate : (SP2.R x w){1} /\ ={x,e} ==> ={res}] =>
     phoare [Completeness(P(P1,S1,P2,S2)).main : R x w ==> res] = 1%r.
   proof.
     move=> hc1 hc2 hs1 hs2; bypr => &m.
@@ -588,9 +588,9 @@ abstract theory OrComp.
     declare module S2 : SP2.Simulator {P, P1}.
 
     lemma sHVZK : 
-      equiv [SP1.Real(P1).main ~ S1.simulate : (SP1.R x w) {1} /\ ={x,e} ==> ={res}] =>
-      equiv [SP2.Real(P2).main ~ S2.simulate : (SP2.R x w) {1} /\ ={x,e} ==> ={res}] =>
-      equiv [Real(P(P1,S1,P2,S2)).main ~ S(S1,S2).simulate : (R x w){1} /\ ={x,e} ==> ={res}].
+      equiv [SP1.RealP(P1).main ~ S1.simulate : (SP1.R x w) {1} /\ ={x,e} ==> ={res}] =>
+      equiv [SP2.RealP(P2).main ~ S2.simulate : (SP2.R x w) {1} /\ ={x,e} ==> ={res}] =>
+      equiv [RealP(P(P1,S1,P2,S2)).main ~ S(S1,S2).simulate : (R x w){1} /\ ={x,e} ==> ={res}].
     proof.
       move=> h1 h2; proc; inline * => /=.
       sp; if{1}.
@@ -599,7 +599,7 @@ abstract theory OrComp.
         swap{1} 2 3; conseq />.
         seq 4 2 : ((P.e1, P.e2){1} = (e1, e2){2} /\ x0{1} = x{2} /\ SP1.R x0{1}.`1 w1{1}).
         + by auto => /> &1 &2; case: (w{1}).
-        transitivity*{1} { (P.a1, P.z1) <@ SP1.Real(P1).main(x0.`1, w1, P.e1); } => //; 1: smt().
+        transitivity*{1} { (P.a1, P.z1) <@ SP1.RealP(P1).main(x0.`1, w1, P.e1); } => //; 1: smt().
         + by inline *;auto; do 2! call(:true); auto.
         by call h1.        
       rcondf{1} ^if;  1: by move=> *;conseq />.
@@ -610,7 +610,7 @@ abstract theory OrComp.
         case: (w{1}) => //= w2 hR; split => [ e2 ? | heq ??].
         + by rewrite addC (addC _ e2) add_cancel.
         by rewrite funi_ll_full 1:challenges_funi 1:challenges_ll /= -heq. 
-      transitivity*{1} { (P.a2, P.z2) <@ SP2.Real(P2).main(x0.`2, w2, P.e2); } => //; 1: smt().
+      transitivity*{1} { (P.a2, P.z2) <@ SP2.RealP(P2).main(x0.`2, w2, P.e2); } => //; 1: smt().
       + by inline *;auto; do 2! call(:true); auto.
       by call h2.
     qed.
