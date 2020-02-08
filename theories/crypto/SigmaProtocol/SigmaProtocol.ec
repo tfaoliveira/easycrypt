@@ -114,6 +114,122 @@ abstract theory SP.
 
 end SP.
 
+abstract theory HVZK_sHVZK.
+ 
+  clone SP as SP_HVZK.
+
+  type statement = SP_HVZK.statement. 
+  type witness   = SP_HVZK.witness.   
+  type message   = SP_HVZK.message * SP_HVZK.challenge.   
+  type challenge = SP_HVZK.challenge. 
+  type response  = SP_HVZK.response.  
+  op (+) : challenge -> challenge -> challenge.
+  axiom add_cancel (x y:challenge) : x + y + y = x.
+  axiom addC (x y: challenge) : x + y = y + x.
+  axiom addI (x y z: challenge) : x + z = y + z <=> x = y.
+
+  op R = SP_HVZK.R.
+  op challenges = SP_HVZK.challenges.
+  axiom challenges_ll : is_lossless challenges.
+  axiom challenges_funi : is_funiform challenges.
+  hint solve 0 random : challenges_ll challenges_funi.
+  hint solve 1 random : funi_ll_full.
+
+  op verify (x: statement) (a:message) (e:challenge) (z:response) = 
+    SP_HVZK.verify x a.`1 (e + a.`2) z.
+
+  clone include SP with
+    type statement  <- statement,
+    type witness    <- witness,
+    type message    <- message,
+    type challenge  <- challenge,
+    type response   <- response,
+    op   R          <- R,
+    op   challenges <- challenges,
+    op   verify     <- verify.
+
+  (* We prove that any HVZK protocol can be transform into a sHVZK protocol *)
+  module P(P':SP_HVZK.Prover) : Prover = {
+    var e' : challenge
+
+    proc init (x:statement, w: witness) : message = {
+      var a;
+      e' <$ challenges;
+      a <- P'.init(x, w);
+      return (a, e');
+    }
+
+    proc respond (e: challenge) : response = {
+      var z;
+      z <@ P'.respond(e + e');
+      return z;
+    }
+  }.
+
+  module KE(KE': SP_HVZK.KnowledgeExtractor) : KnowledgeExtractor = {
+    proc extract(x: statement, a: message, e: challenge, z: response, e': challenge, z': response) = {
+      var w;
+      w <@ KE'.extract(x,a.`1, e + a.`2, z, e' + a.`2, z');
+      return w;
+    }
+  }.
+
+  module S (S':SP_HVZK.Simulator') : Simulator = {
+    proc simulate(x:statement, e:challenge) = {
+      var a, e', z;
+      (a, e', z) <@ S'.simulate(x);
+      return ((a, e + e'), z);
+    }
+  }.
+
+  lemma Completeness (P' <: SP_HVZK.Prover {P}) : 
+    phoare [SP_HVZK.Completeness(P').main : SP_HVZK.R x w ==> res] = 1%r =>
+    phoare [Completeness(P(P')).main : R x w ==> res] = 1%r.
+  proof.
+    move=> h; bypr => &m Hm.
+    have -> : Pr[Completeness(P(P')).main(x{m}, w{m}) @ &m : res] = 
+              Pr[SP_HVZK.Completeness(P').main(x{m}, w{m}) @ &m : res].
+    + byequiv (: ={x,w} ==> ={res}) => //.
+      proc; inline *; wp; call(:true); wp.
+      rnd (fun e => e + P.e'{1}); wp; call(:true); auto => />.
+      by move=> ??;split => *;rewrite add_cancel.
+    by byphoare h.
+  qed.
+  
+  lemma SpecialSoundness (KE'<:SP_HVZK.KnowledgeExtractor) :
+    phoare [SP_HVZK.SpecialSoundness(KE').main : 
+             SP_HVZK.verify x a e z /\ SP_HVZK.verify x a e' z' /\ e <> e' ==> res]= 1%r
+    =>
+    phoare [SpecialSoundness(KE(KE')).main : verify x a e z /\ verify x a e' z' /\ e <> e' ==> res]= 1%r.
+  proof.
+    move=> h; bypr => &m hpre.
+    have -> : Pr[SpecialSoundness(KE(KE')).main(x{m}, a{m}, e{m}, z{m}, e'{m}, z'{m}) @ &m : res] = 
+           Pr[SP_HVZK.SpecialSoundness(KE').main(x{m}, a{m}.`1, e{m} + a{m}.`2, z{m},
+                                                                e'{m} + a{m}.`2, z'{m}) @ &m : res].
+    + byequiv (: ={x,z,z'} /\ a{1}.`1 = a{2} /\ e{2} = e{1} + a{1}.`2 /\ e'{2} = e'{1} + a{1}.`2 ==>
+                 ={res}) => //.
+      by proc; inline *; wp; call(:true); auto.
+    byphoare h => />.    
+    by move: hpre; rewrite /verify => /> *;rewrite addI.
+  qed.
+
+  lemma sHVZK (P'<:SP_HVZK.Prover {P}) (S'<:SP_HVZK.Simulator'{P}) : 
+    equiv [SP_HVZK.RealP'(P').main ~ S'.simulate : (SP_HVZK.R x w) {1} /\ ={x} ==> ={res}] =>
+    equiv [RealP(P(P')).main ~ S(S').simulate : (R x w){1} /\ ={x,e} ==> ={res}].
+  proof.
+    move=> h; proc => /=.
+    inline P(P').init; exlim w{1} => w_.
+    transitivity{2} { (a, e', z) <@ SP_HVZK.RealP'(P').main(x,w_);}
+      (w_ = w{1} /\ R x{1} w{1} /\ ={x,e} ==> a{1} = (a{2}, e{2} + e'{2}) /\ ={z})
+      (SP_HVZK.R x{1} w_ /\ ={x,e} ==> ={a,e',e, z}) => />; [1: smt() | 3: by call h].
+    inline *; do 2! (wp; call(:true)); wp.
+    rnd (fun e1 =>  e{2} + e1); auto => /> &1 &2 hr; split.
+    + by move=> ??;rewrite addC (addC e{2}) add_cancel.
+    by move=> h1 ??; rewrite -h1.
+  qed.
+
+end HVZK_sHVZK.
+
 abstract theory AndComp.
   type challenge.
   op challenges : challenge distr.
