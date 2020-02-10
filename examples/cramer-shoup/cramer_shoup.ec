@@ -217,9 +217,9 @@ proof.
     (x2 + H k (g ^ u, g ^ w ^ u, (g ^ z1 * g ^ w ^ z2) ^ u * m{m1}) * y2).
   + pose h := H _ _.
     rewrite -expM -expD -expM -expM -expD -expM -expD -expM -expM- expM -expD.
-    by algebra.
+    by congr; ring.
   rewrite -(expgK m{m1}) -expM -expM -expM -expM -expD -expD -expN -expM -expD -expD.
-  by algebra.
+  by congr; ring.
 qed.
 
 (** IND-CCA Security of the scheme *)
@@ -437,7 +437,10 @@ section Security_Aux.
       a ^ G1.w{m2} ^ (G1.x2{m2} + H G1.k{m2} (a, a ^ G1.w{m2}, c) * G1.y2{m2}) =
       a ^ (G1.x1{m2} + G1.w{m2} * G1.x2{m2} +
            H G1.k{m2} (a, a ^ G1.w{m2}, c) * (G1.y1{m2} + G1.w{m2} * G1.y2{m2})).
-    + by pose h := H _ _; rewrite -expM -expD; algebra.
+    + pose h := H _ _; rewrite -expM -expD.
+      have -> //: (G1.x1 + h * G1.y1 + G1.w * (G1.x2 + h * G1.y2)
+                   = G1.x1 + G1.w * G1.x2 + h * (G1.y1 + G1.w * G1.y2)){m2}.
+      by algebra.
     by pose h:= H _ _; rewrite -!expM -!expD; algebra.
   qed.
 
