@@ -104,9 +104,11 @@ section Security.
   auto; call (_:true).
   auto=> /> x _ y _ [m0 m1] b _; progress.
   + rewrite modzDml Ring.IntID.subrK modz_small //.
-    by move: H; rewrite supp_dp /#.
-  + by apply/dp_uni=> //; exact/mod_in_dp.
-  + exact/mod_in_dp.
+    by move: H; rewrite DInterval.supp_dinter /#.
+  + apply/DInterval.dinter_uni.
+    + exact/H0.
+    by rewrite DInterval.supp_dinter [smt(gt0_order edivzP)].
+  + by rewrite DInterval.supp_dinter [smt(gt0_order edivzP)].
   + rewrite /(+%) modzDml -addzA /= modz_small //.
     by move: H1; rewrite DInterval.supp_dinter /#.
   by rewrite expg_modz expD expgK.
@@ -121,7 +123,7 @@ section Security.
   + by move=> /> b; rewrite dbool1E pred1E.
   call Ag_ll.
   auto; call Ac_ll.
-  by auto=> />; exact/dp_ll.
+  by auto=> />; apply/DInterval.dinter_ll; smt(gt0_order).
   qed.
 
   lemma conclusion &m :

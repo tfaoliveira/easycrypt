@@ -184,7 +184,7 @@ section Security.
   + by move=> /> b; rewrite dbool1E pred1E.
   call Ag_ll; auto.
   call Ac_ll; auto=> />.
-  by rewrite dhkey_ll dp_ll dbits_ll.
+  by rewrite dhkey_ll DInterval.dinter_ll 1:[smt(gt0_order)] dbits_ll.
   qed.
 
   lemma conclusion &m :
