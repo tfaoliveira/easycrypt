@@ -424,6 +424,12 @@ proof. by move/dvdzP=> [q ->]; rewrite -mulNr &(dvdz_mull) dvdzz. qed.
 lemma nosmt dvdzB d m1 m2 : d %| m1 => d %| m2 => d %| (m1 - m2).
 proof. by move=> h1 h2; apply/dvdzD/dvdzN. qed.
 
+lemma dvdz_abs d m : d %| m = d %| `|m|.
+proof. 
+rewrite /"`|_|"; case: (0 <= m) => // hm.
+apply eq_iff; split; 2: rewrite -{2}(oppzK m); apply dvdzN.
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma nosmt dvdz_eq d m : (d %| m) <=> (m %/ d * d = m).
 proof. by rewrite dvdzE modzE subr_eq0 eq_sym. qed.

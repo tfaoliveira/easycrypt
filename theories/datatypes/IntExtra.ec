@@ -224,7 +224,7 @@ lemma powS p x: 0 <= p => x ^ (p+1) = x * x ^ p.
 proof. by move=> ge0_p; rewrite !powE foldS. qed.
 
 lemma pow_le0 p x: p <= 0 => x ^ p = 1.
-proof. by move=> ?; rewrite powE foldle0. qed.
+proof. by apply powNeg. qed.
 
 lemma pow_add z p1 p2: 0 <= p1 => 0 <= p2 => z^p1 * z^p2 = z^(p1+p2).
 proof. by move=> ge0_p1; elim/intind: p2; smt(pow0 powS). qed.
@@ -242,10 +242,18 @@ move/ltzNge=> /ltzW h gt0_z; elim/intind: p h; first by rewrite pow0.
 by move=> i ge0_i ih; rewrite powS //#.
 qed.
 
-lemma pow_Mle x y: 0 <= x <= y => 2^x <= 2^y.
+lemma ge0_pow z p: 0 <= z => 0 <= z ^ p.
 proof.
-case=> ge0_x le_xy; have ge0_y : 0 <= y by smt().
-by elim/intind: y ge0_y le_xy; smt(powPos powS).
+case: (p <= 0)=> [le0_p|]; first by rewrite pow_le0.
+move/ltzNge=> /ltzW h gt0_z; elim/intind: p h; first by rewrite pow0.
+by move=> i ge0_i ih; rewrite powS //#.
+qed.
+
+lemma pow_Mle z x y: 0 < z => 0 <= x <= y => z^x <= z^y.
+proof.
+move=> hz; case=> ge0_x le_xy; have ge0_y : 0 <= y by smt().
+elim/intind: y ge0_y le_xy; 2: smt(powPos powS).
+by move=> hx;rewrite pow0 pow_le0.
 qed.
 
 (* -------------------------------------------------------------------- *)
