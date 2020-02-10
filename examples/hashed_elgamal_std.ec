@@ -19,7 +19,7 @@ import DWord.
 
 (** Assumption: DDH **)
 clone import DiffieHellman as DH.
-import DDH G Gabs ZModE.
+import DDH G.
 
 (** Assumption Entropy Smoothing *)
 theory EntropySmoothing.
@@ -57,7 +57,7 @@ import EntropySmoothing.
 
 (** Construction: a PKE **)
 type pkey = hkey * group.
-type skey = hkey * exp.
+type skey = hkey * int.
 type ptxt = bits.
 type ctxt = group * bits.
 

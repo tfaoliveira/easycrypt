@@ -9,11 +9,11 @@ pragma +implicits.
 (* ---------------------- Let's Get Started --------------------------- *)
 (** Assumption: set DDH *)
 clone import DiffieHellman as DH.
-import DDH G Gabs ZModE.
+import DDH G.
 
 (** Construction: a PKE **)
 type pkey = group.
-type skey = exp.
+type skey = int.
 type ptxt = group.
 type ctxt = group * group.
 
@@ -99,18 +99,17 @@ section Security.
   byequiv=> //; proc; inline *.
   swap{1} 3 2; swap{1} [5..6] 2; swap{2} 6 -2.
   auto; call (_:true); wp.
-  rnd (fun (z : exp)=> z + loge (if b then m1 else m0){2})
-      (fun (z : exp)=> z - loge (if b then m1 else m0){2}).
+  rnd (fun z=> (z + log (if b then m1 else m0){2}) %% order)
+      (fun z=> (z - log (if b then m1 else m0){2}) %% order).
   auto; call (_:true).
-  auto=> /> x _ y _ [m0 m1] b _; split=> [|_] />.
-  + by move=> z _; ring.
-  split=> [|_] />.
-  + by move=> z _; apply/dp_funi.
-  move=> z _; split=> [|_] />.
-  + exact/supp_dp.
-  split=> [|_] />.
-  + by ring.
-  by rewrite expD expgK.
+  auto=> /> x _ y _ [m0 m1] b _; progress.
+  + rewrite modzDml Ring.IntID.subrK modz_small //.
+    by move: H; rewrite supp_dp /#.
+  + by apply/dp_uni=> //; exact/mod_in_dp.
+  + exact/mod_in_dp.
+  + rewrite /(+%) modzDml -addzA /= modz_small //.
+    by move: H1; rewrite DInterval.supp_dinter /#.
+  by rewrite expg_modz expD expgK.
   qed.
 
   local lemma Gb_half &m:
