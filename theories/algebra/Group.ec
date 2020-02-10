@@ -444,10 +444,10 @@ proof. by rewrite logDr logVr modzDmr. qed.
 abstract theory PowZMod.
 type exp.
 
-axiom ge2_order : 2 <= order.
+axiom prime_order : prime order.
 
-clone import ZModP as ZModE with type zmod <- exp, op p <- order
-  proof ge2_p by apply: ge2_order.
+clone import ZModP.ZModField as ZModE with type zmod <- exp, op p <- order
+  proof prime_p by apply: prime_order.
 
 (* -------------------------------------------------------------------- *)
 op (^)  (x : group) (k : exp) = x ^ (asint k)
@@ -471,7 +471,7 @@ lemma exp0 x : x ^ ZModE.zero = e.
 proof. by rewrite expE inzmodK mod0z exp0. qed.
 
 lemma exp1 x : x ^ ZModE.one = x.
-proof. by rewrite expE inzmodK modz_small 1:[smt(ge2_order)] exp1. qed.
+proof. by rewrite expE inzmodK modz_small 1:[smt(ge2_p)] exp1. qed.
 
 lemma expN x (k : exp) : x ^ (- k) = inv (x ^ k).
 proof.
@@ -542,18 +542,18 @@ type zmod.
 
 const order : { int | 2 <= order } as ge2_order.
 
-clone import ZModP with type zmod <- zmod, op p <- order
+clone import ZModP.ZModRing with type zmod <- zmod, op p <- order
   proof ge2_p by apply: ge2_order.
 
 import ZModpRing.
 
 clone CyclicGroup as ZModC with
   type group <- zmod,
-  op   elems <- map ZModP.inzmod (range 0 order),
-  op   e     =  ZModP.zero,
-  op   ( * ) =  ZModP.( + ),
-  op   inv   =  ZModP.([-]),
-  op   g     =  ZModP.one
+  op   elems <- map ZModRing.inzmod (range 0 order),
+  op   e     =  ZModRing.zero,
+  op   ( * ) =  ZModRing.( + ),
+  op   inv   =  ZModRing.([-]),
+  op   g     =  ZModRing.one
   proof *.
 
 realize elems_spec.
@@ -565,10 +565,10 @@ rewrite !mem_range => rgx rgy /= /(congr1 asint).
 by rewrite !inzmodK !pmod_small.
 qed.
 
-realize mulcC_com by apply: ZModP.ZModpRing.addrC.
-realize mul1c     by apply: ZModP.ZModpRing.add0r.
-realize mulcA     by apply: ZModP.ZModpRing.addrA.
-realize mulVc     by apply: ZModP.ZModpRing.addNr.
+realize mulcC_com by apply: ZModRing.ZModpRing.addrC.
+realize mul1c     by apply: ZModRing.ZModpRing.add0r.
+realize mulcA     by apply: ZModRing.ZModpRing.addrA.
+realize mulVc     by apply: ZModRing.ZModpRing.addNr.
 
 realize monogenous.
 proof.
