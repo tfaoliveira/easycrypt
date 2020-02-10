@@ -11,8 +11,7 @@ require import AllCore IntDiv RealExtra StdRing StdOrder Distr List FSet.
 require (*  *) Group DInterval.
 
 clone import Group.CyclicGroup as G.
-clone import G.PowZMod as Gabs.
-import ZModE.
+
 
 clone include MFinite with
   type            t <- group,
@@ -20,39 +19,34 @@ clone include MFinite with
 proof Support.enum_spec by exact/elems_spec
 rename "dunifin" as "dg".
 
-op dp = dmap [0..order - 1] inzmod.
+
+op dp = [0..order - 1].
 
 lemma dp_ll: is_lossless dp.
-proof. exact/dmap_ll/DInterval.dinter_ll/ltzS/gt0_order. qed.
+proof. exact/DInterval.dinter_ll/ltzS/gt0_order. qed.
 
-lemma supp_dp x: x \in dp.
-proof.
-rewrite supp_dmap; exists (asint x); rewrite asintK //=.
-by rewrite DInterval.supp_dinter ge0_asint /= -ltzS gtp_asint.
-qed.
+lemma supp_dp x:
+  x \in dp <=> 0 <= x < order.
+proof. by rewrite DInterval.supp_dinter -(ltzS x). qed.
 
-lemma dp_funi x y :
+lemma mod_in_dp x: x %% order \in dp.
+proof. by rewrite supp_dp; smt(edivzP gt0_order). qed.
+
+lemma dp_uni x y :
+  x \in dp =>
+  y \in dp =>
   mu1 dp x = mu1 dp y.
-proof.
-apply/dmap_uni_in_inj.
-+ move=> a b; rewrite !DInterval.supp_dinter=> a_in_zp b_in_zp.
-  by rewrite -eq_inzmod !modz_small //; smt(ge2_order).
-+ exact/DInterval.dinter_uni.
-+ rewrite supp_dmap; exists (asint x); rewrite asintK /=.
-  by rewrite DInterval.supp_dinter ge0_asint /= -ltzS gtp_asint.
-rewrite supp_dmap; exists (asint y); rewrite asintK /=.
-by rewrite DInterval.supp_dinter ge0_asint /= -ltzS gtp_asint.
-qed.
+proof. by move=> x_in_dp y_in_dp; exact/DInterval.dinter_uni. qed.
 
 lemma dp1E x :
+  x \in dp =>
   mu1 dp x = inv order%r.
-proof.
-rewrite dmap1E -(mu_eq_support _ (pred1 (asint x))).
-+ move=> a; rewrite DInterval.supp_dinter=> /> + /ltzS /= - ge0_a gtp_a.
-  rewrite /pred1 /(\o) /= -{2}(asintK x) -eq_inzmod.
-  by rewrite !modz_small // [smt(gt0_order ge0_asint gtp_asint)].
-by rewrite DInterval.dinter1E ge0_asint -ltzS gtp_asint.
-qed.
+proof. by rewrite DInterval.dinter1E supp_dp -(ltzS x)=> ->. qed.
+
+lemma dp1E_mod x :
+  mu1 dp (x %% order) = inv order%r.
+proof. by apply/dp1E/supp_dp; smt(edivzP gt0_order). qed.
+
 
 (** Decisional Diffie-Hellman problem **)
 theory DDH.
@@ -136,7 +130,7 @@ theory List_CDH.
     declare module A: Adversary.
 
     local module LCDH' = {
-      var x, y: exp
+      var x, y: int
 
       proc aux(): group list = {
         var s;
