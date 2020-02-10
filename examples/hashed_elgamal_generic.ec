@@ -2,7 +2,6 @@ require import AllCore Int Real FSet.
 require (*--*) BitWord Distr DInterval.
 (*---*) import StdOrder.RealOrder.
 require (*--*) DiffieHellman ROM PKE_CPA.
-(*---*) import DiffieHellman.
 
 (* The type of plaintexts: bitstrings of length k *)
 op k: { int | 0 < k } as gt0_k.
@@ -21,10 +20,10 @@ op qH: { int | 0 < qH } as gt0_qH.
 (* Assumption: Set CDH *)
 clone import DiffieHellman.Set_CDH as SCDH with
   op n <- qH.
-import DiffieHellman G.
+import DiffieHellman G FDistr.
 
 type pkey = group.
-type skey = int.
+type skey = t.
 type ptxt = bits.
 type ctxt = group * bits.
 
@@ -46,14 +45,14 @@ module Hashed_ElGamal (H:Hash): Scheme = {
     var sk;
 
     H.init();
-    sk <$ dp;
+    sk <$ dt;
     return (g ^ sk, sk);
   }
 
   proc enc(pk:pkey, m:ptxt): ctxt = {
     var y, h;
 
-    y <$ dp;
+    y <$ dt;
     h <@ H.hash(pk ^ y);
     return (g ^ y, h +^ m);
   }
@@ -122,8 +121,8 @@ section.
       var x, y, h, gx;
 
       H.init();
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       gx      <- g ^ x;
       gxy     <- gx ^ y;
       (m0,m1) <@ BA.choose(gx);
@@ -131,7 +130,7 @@ section.
       h       <@ H.hash(gxy);
       c       <- (g ^ y, h +^ (b ? m1 : m0));
       b'      <@ BA.guess(c);
-      return b' = b;
+      return (b' = b);
     }
   }.
 
@@ -158,8 +157,8 @@ section.
       var x, y, h, gx, gxy;
 
       H.init();
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       gx      <- g ^ x;
       gxy     <- gx ^ y;
       (m0,m1) <@ BA.choose(gx);
@@ -167,7 +166,7 @@ section.
       h       <$ dbits;
       c       <- (g ^ y, h +^ (b ? m1 : m0));
       b'      <@ BA.guess(c);
-      return b' = b;
+      return (b' = b);
     }
   }.
 
@@ -179,8 +178,8 @@ section.
       var x, y, h, gx;
 
       H.init();
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       gx      <- g ^ x;
       gxy     <- gx ^ y;
       (m0,m1) <@ BA.choose(gx);
@@ -195,15 +194,15 @@ section.
   local module (D : ROC.Dist) (H : ARO) = {
     module A = A(H)
 
-    var y:int
+    var y:t
     var b:bool
     var m0, m1:ptxt
 
     proc a1(): group = {
       var x, gxy, gx;
 
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       gx      <- g ^ x;
       gxy     <- gx ^ y;
       (m0,m1) <@ A.choose(gx);
@@ -253,7 +252,7 @@ section.
     rewrite (G0_D &m) (G1_D &m) (G2_D &m).
     apply (OnBound.ROM_BadCall D _ _ &m).
     + move=> H0 H0_o_ll; proc; auto; call (choose_ll H0 _)=> //; auto=> />.
-      smt(gt0_order DInterval.dinter_ll DBool.dbool_ll).
+      smt(dt_ll DBool.dbool_ll).
     by progress; proc; call (guess_ll H _)=> //; auto.
   qed.
 
@@ -263,8 +262,8 @@ section.
       var x, y, h, gx, gxy;
 
       H.init();
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       gx      <- g ^ x;
       gxy     <- gx ^ y;
       (m0,m1) <@ BA.choose(gx);
@@ -272,7 +271,7 @@ section.
       h       <$ dbits;
       c       <- (g ^ y, h);
       b'      <@ BA.guess(c);
-      return b' = b;
+      return (b' = b);
     }
   }.
 
@@ -304,8 +303,7 @@ section.
     call (_: true);
       first by progress; apply (choose_ll O).
       by proc; sp; if=> //; wp; call (Log_o_ll RO _).
-    inline H.init RO.init; auto=> />.
-    smt(gt0_order DInterval.dinter_ll dbits_ll DBool.dbool1E).
+    by inline H.init RO.init; auto=> />; smt(dt_ll dbits_ll DBool.dbool1E).
   qed.
 
   local module G2' = {
@@ -316,8 +314,8 @@ section.
       var x, y, h, gx;
 
       H.init();
-      x        <$ dp;
-      y        <$ dp;
+      x        <$ dt;
+      y        <$ dt;
       gx       <- g ^ x;
       gxy      <- gx ^ y;
       (m0,m1)  <@ BA.choose(gx);
@@ -357,7 +355,7 @@ section.
       wp; rnd; call (_: ={glob H} /\ card Log.qs{1} <= qH).
         proc; sp; if=> //; inline Bound(RO).LO.o RO.o; auto=> />.
         by move=> &2 _ szqs_lt_qH _ _; rewrite fcardU fcard1; smt(fcard_ge0).
-      by inline H.init RO.init; auto=> />; rewrite fcards0; smt(gt0_qH expM).
+      by inline H.init RO.init; auto=> />; rewrite fcards0; smt(gt0_qH pow_pow).
     call (_: ={glob H} /\ card Log.qs{1} <= qH).
       proc; sp; if=> //; inline Bound(RO).LO.o RO.o; auto=> /> &2 _ szqs_lt_qH _ _.
       by rewrite fcardU fcard1; smt(fcard_ge0).
@@ -384,13 +382,10 @@ section.
       Pr[CPA(S,A(Bound(RO))).main() @ &m: res] - 1%r / 2%r <=
       qH%r * Pr[CDH.CDH(CDH_from_SCDH(SCDH_from_CPA(A,RO))).main() @ &m: res].
   proof.
-    apply (ler_trans (Pr[SCDH(SCDH_from_CPA(A,RO)).main() @ &m: res]))=> /=.
+    apply (ler_trans (Pr[SCDH(SCDH_from_CPA(A,RO)).main() @ &m: res])).
     + smt(Reduction).
-    apply/(ler_pmul2l (1%r/qH%r)).
-    + by rewrite -invr_gt0 Domain.div1r /= lt_fromint gt0_qH.
-    rewrite Domain.mulrA Domain.div1r StdRing.RField.mulVf /=.
-    + smt(gt0_qH).
-    exact/(Self.SCDH.Reduction (SCDH_from_CPA(A,RO)) &m gt0_qH).
+    have:= Self.SCDH.Reduction (SCDH_from_CPA(A,RO)) &m gt0_qH.    
+    smt(@Real gt0_qH).
   qed.
 end section.
 

@@ -18,8 +18,9 @@ rename
 import DWord.
 
 (** Assumption: DDH **)
+(*** WARNING: DiffieHellman is not up to speed with latest developments ***)
 clone import DiffieHellman as DH.
-import DDH G.
+import DDH FDistr.
 
 (** Assumption Entropy Smoothing *)
 theory EntropySmoothing.
@@ -47,7 +48,7 @@ theory EntropySmoothing.
     proc main () : bool = {
       var b, hk, z;
       hk <$ dhkey;
-      z  <$ dp;
+      z  <$ dt;
       b  <@ A.guess(hk, hash hk (g ^ z));
       return b;
     }
@@ -57,7 +58,7 @@ import EntropySmoothing.
 
 (** Construction: a PKE **)
 type pkey = hkey * group.
-type skey = hkey * int.
+type skey = hkey * F.t.
 type ptxt = bits.
 type ctxt = group * bits.
 
@@ -73,14 +74,14 @@ module Hashed_ElGamal : Scheme = {
     var hk,sk;
 
     hk <$ dhkey;
-    sk <$ dp;
+    sk <$ dt;
     return ((hk,g ^ sk), (hk,sk));
   }
 
   proc enc(pk: pkey, m: ptxt) = {
     var y, h;
 
-    y <$ dp;
+    y <$ dt;
     h <- hash pk.`1 (pk.`2 ^ y);
     return (g ^ y, h +^ m);
   }
@@ -110,8 +111,8 @@ module DDHAdv(A:Adversary) = {
 module ESAdv(A:Adversary) = {
   proc guess (hk, h) : bool = {
     var x, y, m0, m1, b, b';
-    x        <$ dp;
-    y        <$ dp;
+    x        <$ dt;
+    y        <$ dt;
     (m0, m1) <@ A.choose((hk,g^x));
     b        <$ {0,1};
     b'       <@ A.guess(g^y, h +^ (b?m1:m0));
@@ -132,7 +133,7 @@ section Security.
   swap{1} 1 1; swap{1} 8 -6; swap{2} 6 -3.
   auto; call (: true).
   auto; call (: true).
-  by auto=> /> sk _ y _ hk _ [m0 m1] b _ /=; rewrite -expM.
+  by auto=> /> sk _ y _ hk _ [m0 m1] b _ /=; rewrite pow_pow.
   qed.
 
   local lemma ddh1_es1 &m:
@@ -150,8 +151,8 @@ section Security.
     proc main () : bool = {
       var hk, x, y, v,m0, m1, b, b';
       hk      <$ dhkey;
-      x       <$ dp;
-      y       <$ dp;
+      x       <$ dt;
+      y       <$ dt;
       (m0,m1) <@ A.choose(hk,g^x);
       v       <$ dbits;
       b'      <@ A.guess(g^y, v);
@@ -183,8 +184,7 @@ section Security.
   rnd (pred1 b')=> /=; conseq (_:_ ==> true).
   + by move=> /> b; rewrite dbool1E pred1E.
   call Ag_ll; auto.
-  call Ac_ll; auto=> />.
-  by rewrite dhkey_ll DInterval.dinter_ll 1:[smt(gt0_order)] dbits_ll.
+  by call Ac_ll; auto=> />; rewrite dhkey_ll dt_ll dbits_ll.
   qed.
 
   lemma conclusion &m :
