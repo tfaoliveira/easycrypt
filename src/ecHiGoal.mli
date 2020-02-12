@@ -52,7 +52,8 @@ module LowRewrite : sig
   val find_rewrite_patterns:
     rwside -> pt_ev -> (pt_ev * rwmode * (form * form)) list
 
-  val t_rewrite_r: ?target:EcIdent.t ->
+  val t_rewrite_r: ?target:EcIdent.t -> ?keyed:EcProofTerm.keyed ->
+    ?kmode:EcMatching.fmoptions ->
     rwside * EcMatching.occ option -> pt_ev -> backward
 
   val t_rewrite:?target:EcIdent.t ->

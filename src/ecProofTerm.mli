@@ -124,10 +124,10 @@ exception FindOccFailure of [`MatchFailure | `IncompleteMatch]
 type keyed = [`Yes | `No | `Lazy]
 
 val pf_find_occurence :
-  pt_env -> ?keyed:keyed -> ptn:form -> form -> unit
+  pt_env -> ?kmode:EcMatching.fmoptions -> ?keyed:keyed -> ptn:form -> form -> bool
 
 val pf_find_occurence_lazy :
-  pt_env -> ptn:form -> form -> bool
+  pt_env -> ?kmode:EcMatching.fmoptions -> ptn:form -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 val pattern_form :

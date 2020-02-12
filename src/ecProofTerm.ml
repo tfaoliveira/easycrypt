@@ -269,7 +269,9 @@ let pf_form_match (pt : pt_env) ?mode ~ptn subject =
 (* -------------------------------------------------------------------- *)
 exception FindOccFailure of [`MatchFailure | `IncompleteMatch]
 
-let rec pf_find_occurence (pt : pt_env) ?(keyed = false) ~ptn subject =
+let rec pf_find_occurence
+  (pt : pt_env) ?(kmode = EcMatching.fmdelta) ?(keyed = false) ~ptn subject
+=
   let module E = struct exception MatchFound end in
 
   let na = List.length (snd (EcFol.destr_app ptn)) in
@@ -299,7 +301,7 @@ let rec pf_find_occurence (pt : pt_env) ?(keyed = false) ~ptn subject =
   let mode =
     if   key = `NoKey
     then EcMatching.fmrigid
-    else EcMatching.fmdelta in
+    else kmode in
 
   let trymatch bds tp =
     if not (keycheck tp key) then `Continue else
@@ -336,17 +338,17 @@ let rec pf_find_occurence (pt : pt_env) ?(keyed = false) ~ptn subject =
 (* -------------------------------------------------------------------- *)
 type keyed = [`Yes | `No | `Lazy]
 
-let pf_find_occurence_lazy (pt : pt_env) ~ptn subject =
-  try  pf_find_occurence pt ~keyed:true ~ptn subject; true
+let pf_find_occurence_lazy (pt : pt_env) ?kmode ~ptn subject =
+  try  pf_find_occurence pt ~keyed:true ~ptn ?kmode subject; true
   with FindOccFailure _ ->
-    pf_find_occurence pt ~keyed:false ~ptn subject; false
+    pf_find_occurence pt ~keyed:false ~ptn ?kmode subject; false
 
 
-let pf_find_occurence (pt : pt_env) ?(keyed = `No) ~ptn subject =
+let pf_find_occurence (pt : pt_env) ?kmode ?(keyed = `No) ~ptn subject =
   match keyed with
-  | `Yes  -> pf_find_occurence pt ~keyed:true  ~ptn subject
-  | `No   -> pf_find_occurence pt ~keyed:false ~ptn subject
-  | `Lazy -> ignore (pf_find_occurence_lazy pt ~ptn subject)
+  | `Yes  -> pf_find_occurence pt ?kmode ~keyed:true  ~ptn subject; true
+  | `No   -> pf_find_occurence pt ?kmode ~keyed:false ~ptn subject; false
+  | `Lazy -> pf_find_occurence_lazy pt ~ptn subject
 
 (* -------------------------------------------------------------------- *)
 let pf_unify (pt : pt_env) ty1 ty2 =
