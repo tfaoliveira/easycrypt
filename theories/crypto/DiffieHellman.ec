@@ -6,61 +6,24 @@
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
-require import AllCore IntDiv RealExtra StdRing StdOrder Distr List FSet.
+require import Int Real RealExtra StdRing StdOrder Distr List FSet.
 (*---*) import RField RealOrder.
-require (*  *) Group DInterval.
+require (*  *) CyclicGroup.
 
-clone import Group.CyclicGroup as G.
+clone export CyclicGroup as G.
 
-
-clone include MFinite with
-  type            t <- group,
-  op   Support.enum <- G.elems
-proof Support.enum_spec by exact/elems_spec
-rename "dunifin" as "dg".
-
-
-op dp = [0..order - 1].
-
-lemma dp_ll: is_lossless dp.
-proof. exact/DInterval.dinter_ll/ltzS/gt0_order. qed.
-
-lemma supp_dp x:
-  x \in dp <=> 0 <= x < order.
-proof. by rewrite DInterval.supp_dinter -(ltzS x). qed.
-
-lemma mod_in_dp x: x %% order \in dp.
-proof. by rewrite supp_dp; smt(edivzP gt0_order). qed.
-
-lemma dp_uni x y :
-  x \in dp =>
-  y \in dp =>
-  mu1 dp x = mu1 dp y.
-proof. by move=> x_in_dp y_in_dp; exact/DInterval.dinter_uni. qed.
-
-lemma dp1E x :
-  x \in dp =>
-  mu1 dp x = inv order%r.
-proof. by rewrite DInterval.dinter1E supp_dp -(ltzS x)=> ->. qed.
-
-lemma dp1E_mod x :
-  mu1 dp (x %% order) = inv order%r.
-proof. by apply/dp1E/supp_dp; smt(edivzP gt0_order). qed.
-
-
-(** Decisional Diffie-Hellman problem **)
 theory DDH.
+
   module type Adversary = {
-    proc guess(gx gy gz : group): bool
+    proc guess(gx gy gz:G.group): bool
   }.
 
   module DDH0 (A:Adversary) = {
     proc main() : bool = {
       var b, x, y;
-
-      x <$ dp;
-      y <$ dp;
-      b <@ A.guess(g ^ x, g ^ y, g ^ (x * y));
+      x = $FDistr.dt;
+      y = $FDistr.dt;
+      b = A.guess(g ^ x, g ^ y, g ^ (x*y));
       return b;
     }
   }.
@@ -69,17 +32,19 @@ theory DDH.
     proc main() : bool = {
       var b, x, y, z;
 
-      x <$ dp;
-      y <$ dp;
-      z <$ dp;
-      b <@ A.guess(g ^ x, g ^ y, g ^ z);
+      x = $FDistr.dt;
+      y = $FDistr.dt;
+      z = $FDistr.dt;
+      b = A.guess(g ^ x, g ^ y, g ^ z);
       return b;
     }
   }.
+
 end DDH.
 
 (** Computational Diffie-Hellman problem **)
 theory CDH.
+
   module type Adversary = {
     proc solve(gx gy:group): group
   }.
@@ -88,16 +53,16 @@ theory CDH.
     proc main(): bool = {
       var x, y, r;
 
-      x <$ dp;
-      y <$ dp;
-      r <@ A.solve(g ^ x, g ^ y);
+      x = $FDistr.dt;
+      y = $FDistr.dt;
+      r = A.solve(g ^ x, g ^ y);
       return (r = g ^ (x * y));
     }
   }.
 end CDH.
 
-(** List CDH **)
 theory List_CDH.
+
   const n: int.
 
   module type Adversary = {
@@ -108,10 +73,10 @@ theory List_CDH.
     proc main(): bool = {
       var x, y, s;
 
-      x <$ dp;
-      y <$ dp;
-      s <@ B.solve(g ^ x, g ^ y);
-      return (g ^ (x * y) \in s /\ size s <= n);
+      x = $FDistr.dt;
+      y = $FDistr.dt;
+      s = B.solve(g ^ x, g ^ y);
+      return (mem s (g ^ (x * y)) /\ size s <= n);
     }
   }.
 
@@ -119,8 +84,8 @@ theory List_CDH.
     proc solve(gx:group, gy:group): group = {
       var s, x;
 
-      s <@ A.solve(gx, gy);
-      x <$ MUniform.duniform s;
+      s = A.solve(gx, gy);
+      x = $MUniform.duniform s;
       return x;
     }
   }.
@@ -130,22 +95,22 @@ theory List_CDH.
     declare module A: Adversary.
 
     local module LCDH' = {
-      var x, y: int
+      var x, y: F.t
 
       proc aux(): group list = {
         var s;
 
-        x <$ dp;
-        y <$ dp;
-        s <@ A.solve(g ^ x, g ^ y);
+        x = $FDistr.dt;
+        y = $FDistr.dt;
+        s = A.solve(g ^ x, g ^ y);
         return s;
       }
 
       proc main(): bool = {
         var z, s;
 
-        s <@ aux();
-        z <$ MUniform.duniform s;
+        s = aux();
+        z = $MUniform.duniform s;
         return z = g ^ (x * y);
       }
     }.
@@ -194,10 +159,12 @@ theory List_CDH.
       smt (size_undup).
     qed.
   end section.
+
 end List_CDH.
 
-(** Set-CDH **)
+(** Set version of the Computational Diffie-Hellman problem **)
 theory Set_CDH.
+
   const n: int.
 
   module type Adversary = {
@@ -208,10 +175,10 @@ theory Set_CDH.
     proc main(): bool = {
       var x, y, s;
 
-      x <$ dp;
-      y <$ dp;
-      s <@ B.solve(g ^ x, g ^ y);
-      return (g ^ (x * y) \in s /\ card s <= n);
+      x = $FDistr.dt;
+      y = $FDistr.dt;
+      s = B.solve(g ^ x, g ^ y);
+      return (mem s (g ^ (x * y)) /\ card s <= n);
     }
   }.
 
@@ -219,8 +186,8 @@ theory Set_CDH.
     proc solve(gx:group, gy:group): group = {
       var s, x;
 
-      s <@ A.solve(gx, gy);
-      x <$ MUniform.duniform (elems s);
+      s = A.solve(gx, gy);
+      x = $MUniform.duniform (elems s);
       return x;
     }
   }.
@@ -232,7 +199,6 @@ theory Set_CDH.
     local module AL = {
       proc solve(gx:group, gy:group) = {
         var s;
-
         s = A.solve(gx, gy);
         return elems s;
       }
@@ -252,6 +218,8 @@ theory Set_CDH.
       have -> //: Pr[CDH.CDH(LCDH.CDH_from_LCDH(AL)).main() @ &m : res] =
                 Pr[CDH.CDH(CDH_from_SCDH(A)).main() @ &m : res].
       by byequiv=> //;proc;inline *;auto=> /=;call (_:true);auto.
-    qed.  
+    qed.
+  
   end section.
+
 end Set_CDH.
