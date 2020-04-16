@@ -171,7 +171,7 @@ proof. by rewrite /(^) ltrNge => ->. qed.
 
 lemma expE_le0 x (k : int) : k <= 0 => x ^ k = inv (x ^+ k).
 proof.
-by rewrite ler_eqVlt => -[->|@/(^) ->/=]; 1: rewrite exp0 invc1.
+by rewrite ler_eqVlt => -[->|@/(^) ->/=]; 1: rewrite exp0 expp0 invc1.
 qed.
 
 lemma expS x k : x ^ (k + 1) = x ^ k * x.
@@ -224,6 +224,15 @@ elim/intwlog: k2 => [i| |i ge0_i ih].
 + by rewrite mulr0 !exp0.
 + by rewrite mulrDr /= !expD exp1 ih.
 qed.
+
+(* -------------------------------------------------------------------- *)
+op monogenous_for g = forall x, exists k, x = g^k.
+
+lemma monogenous_mulcC g : monogenous_for g => commutative ( * ).
+proof.
+move=> mn x y; move: (mn x) (mn y).
+by move=> [kx ->] [ky ->]; rewrite -!expD addrC.
+qed.
 end Group.
 
 (* ==================================================================== *)
@@ -275,20 +284,12 @@ clone include FinType
 (* FIXME: add a mechanism to add the generator during the clone         *)
 (*        s.t. mulcC is provable (see below)                            *)
 clone include ComGroup
-  with type group <- group
-  rename "mulcC" as "mulcC_com".
+  with type group <- group.
 
 (* -------------------------------------------------------------------- *)
 op g : group.
 
-axiom monogenous : forall x, exists k, x = g ^ k.
-
-(* -------------------------------------------------------------------- *)
-lemma mulcC : commutative ( * ).
-proof.
-move=> x y; move: (monogenous x) (monogenous y).
-by move=> [kx ->] [ky ->]; rewrite -!expD addrC.
-qed.
+axiom monogenous : monogenous_for g.
 
 (* -------------------------------------------------------------------- *)
 op log_spec (x : group) =
@@ -420,7 +421,7 @@ proof. by rewrite /log; case: (choicebP _ 0 (log_spec x)). qed.
 
 lemma logK k : log (g ^ k) = k %% order.
 proof.
-rewrite -(pmod_small (log _) order) 1:!(ge0_log, lt_order_log).
+rewrite -(pmod_small (log _) order) 1:!(ge0_log, lt_order_log) //.
 by rewrite &(expg_inj_mod) expgK.
 qed.
 
@@ -565,10 +566,10 @@ rewrite !mem_range => rgx rgy /= /(congr1 asint).
 by rewrite !inzmodK !pmod_small.
 qed.
 
-realize mulcC_com by apply: ZModRing.ZModpRing.addrC.
-realize mul1c     by apply: ZModRing.ZModpRing.add0r.
-realize mulcA     by apply: ZModRing.ZModpRing.addrA.
-realize mulVc     by apply: ZModRing.ZModpRing.addNr.
+realize mulcC by apply: ZModRing.ZModpRing.addrC.
+realize mul1c by apply: ZModRing.ZModpRing.add0r.
+realize mulcA by apply: ZModRing.ZModpRing.addrA.
+realize mulVc by apply: ZModRing.ZModpRing.addNr.
 
 realize monogenous.
 proof.
