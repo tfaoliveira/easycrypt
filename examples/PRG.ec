@@ -327,7 +327,7 @@ section.
     = Pr[Exp'(A).main() @ &m: Bad P.logP F.m].
   proof.
   byequiv (_: ={glob A} ==> ={P.logP, F.m})=> //; proc.
-  transitivity{1} { F.init(); Psample.init(); Resample.resample(); b = Exp'A.A.a(); }
+  transitivity{1} { F.init(); Psample.init(); Resample.resample(); b <@ Exp'A.A.a(); }
      (={glob A} ==> ={F.m, P.logP})
      (={glob A} ==> ={F.m, P.logP})=> //.
     (* Equality on A's globals *)
@@ -384,18 +384,18 @@ module C (A:Adv,F:ARF,P:APRG) = {
 
   module CF = {
     proc f(x): seed * output = {
-      var r = witness;
+      var r <- witness;
 
-      if (cF < qF) { cF = cF + 1; r = F.f(x);}
+      if (cF < qF) { cF <- cF + 1; r <@ F.f(x);}
       return r;
     }
   }
 
   module CP = {
     proc prg (): output = {
-      var r = witness;
+      var r <- witness;
 
-      if (cP < qP) { cP = cP + 1; r = P.prg();}
+      if (cP < qP) { cP <- cP + 1; r <@ P.prg();}
       return r;
     }
   }
@@ -405,9 +405,9 @@ module C (A:Adv,F:ARF,P:APRG) = {
   proc a(): bool = {
     var b:bool;
 
-    cF = 0;
-    cP = 0;
-    b = A.a();
+    cF <- 0;
+    cP <- 0;
+    b <@ A.a();
     return b;
   }
 }.
