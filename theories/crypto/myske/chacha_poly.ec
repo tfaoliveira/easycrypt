@@ -1387,7 +1387,8 @@ section PROOFS.
       split; 2: smt(mem_set C.insubdK).
       have := StdOrder.IntOrder.mulr_ge0 (C.max_counter - i{2}) block_size.
       smt (ge0_block_size).
-    auto; smt (size_map max_cipher_size_ok).
+    wp; skip=> &1 &2 [#] //= 4!->> h1 h2 h3 2!<<- //=.
+    rewrite size_map //=; do!split; smt (max_cipher_size_ok).
   qed.
 
   local lemma step3 &m:  
@@ -1432,16 +1433,28 @@ section PROOFS.
   local module UFCMA (ROin:SplitC2.I1.RO) = {
   
     var log : (nonce, associated_data * message * tag)fmap
-    var bad : bool
-    var cbad : int   
+    var bad1 : bool
+    var cbad1 : int   
+    var bad2 : bool
+    var cbad2 : int   
  
-    proc set_bad (lt:tag list) : poly_out = {
+    proc set_bad1 (lt:tag list) : poly_out = {
       var t;
       t <$ dpoly_out;
-      if (cbad < qenc + qdec /\ size lt <= qdec) { 
-         bad <- bad || t \in lt;
-         cbad <- cbad + 1;
+      if (cbad1 < qenc /\ size lt <= qdec) { 
+         bad1 <- bad1 || t \in lt;
+         cbad1 <- cbad1 + 1;
       }
+      return t;
+    } 
+
+    proc set_bad2 (lt:tag list) : poly_out = {
+      var t;
+      t <$ dpoly_out;
+      (* if (cbad2 < qdec /\ size lt <= qdec) {  *)
+         bad2 <- bad2 || t \in lt;
+         cbad2 <- cbad2 + 1;
+      (* } *)
       return t;
     } 
 
@@ -1456,9 +1469,10 @@ section PROOFS.
         var n, a, p, c, t;
         (n,a,p) <- nap;
         c <@ EncRnd.cc(n,p);   
-        t <@ set_bad(map (fun c:ciphertext => c.`4) Mem.lc);
+        (* t <$ dp *)
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) Mem.lc);
         ROin.sample(n,C.ofint 0);
-        SplitC2.I2.RO.set((n,C.ofint 0), witness); 
+        ROout.set((n,C.ofint 0), witness); 
         log.[n] <- (a,c,t);
         return (n,a,c,t);
       }
@@ -1473,7 +1487,8 @@ section PROOFS.
     proc distinguish () = {
       var b, ns, forged, i, n, r, t;
 
-      bad <- false; cbad <- 0;
+      bad1 <- false; cbad1 <- 0;
+      bad2 <- false; cbad2 <- 0;
 
       b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), O).main(); 
 
@@ -1488,16 +1503,17 @@ section PROOFS.
             forged <- forged || test_poly_in n Mem.lc r (oget log.[n]);
           } else { 
             r <@ ROin.get(n,C.ofint 0);
-            t <@ set_bad((map (fun c:ciphertext => c.`4 - poly1305_eval r (topol c.`2 c.`3)) 
-                           (filter (fun c:ciphertext => c.`1 = n) Mem.lc)));
-            SplitC2.I2.RO.set((n,C.ofint 0), witness); 
+            t <@ set_bad2((map 
+                (fun c:ciphertext => c.`4 - poly1305_eval r (topol c.`2 c.`3)) 
+                (filter (fun c:ciphertext => c.`1 = n) Mem.lc)));
+            ROout.set((n,C.ofint 0), witness); 
           }
           i <- i + 1;
         }
       }
       return forged;
     }
-    
+
   }.
 
   local clone import GenEager as ROIN with
@@ -1534,21 +1550,23 @@ section PROOFS.
 
   local lemma step4_1 &m:
     Pr[Split1.IdealAll.MainD(G9(BNR_Adv(A)), SplitC2.RO_Pair(ROin, ROout)).distinguish() @ &m : res] <=
-     Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] + Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad ].
+     Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] + Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1 \/ UFCMA.bad2 ].
   proof. 
-    byequiv (_: ={glob A} ==> !UFCMA.bad{2} => ={res}) => //; last by smt().
+    byequiv (_: ={glob A} ==> !(UFCMA.bad1 \/ UFCMA.bad2){2} => ={res}) => //; last by smt().
     move=> {&m}; proc.
     inline{1} 2; inline{1} 4; inline{1} 5.
-    seq 5 3:
-      (!UFCMA.bad{2} => 
-        b1{1} = b{2} /\ UFCMA.cbad{2} <= size BNR.lenc{1} /\
+    seq 5 5:
+      (!(UFCMA.bad1 \/ UFCMA.bad2){2} => 
+        b1{1} = b{2} /\ UFCMA.cbad1{2} <= size BNR.lenc{1} /\
+        UFCMA.cbad2{2} = 0 /\
         inv ROin.m{1} ROIN.RO.m{2} ROout.m{1} ROout.m{2} 
         Mem.log{1} Mem.log{2} Mem.lc{1} Mem.lc{2} 
            BNR.lenc{1} BNR.lenc{2} BNR.ndec{1} BNR.ndec{2}
            UFCMA.log{2}).
     + inline*;wp;
-      call (_: UFCMA.bad, 
-             UFCMA.cbad{2} <= size BNR.lenc{1} /\
+      call (_: UFCMA.bad1 \/ UFCMA.bad2, 
+             UFCMA.cbad1{2} <= size BNR.lenc{1} /\
+             UFCMA.cbad2{2} = 0 /\
              inv ROin.m{1} ROIN.RO.m{2} ROout.m{1} ROout.m{2} 
                  Mem.log{1} Mem.log{2} Mem.lc{1} Mem.lc{2} 
                  BNR.lenc{1} BNR.lenc{2} BNR.ndec{1} BNR.ndec{2}
@@ -1559,9 +1577,10 @@ section PROOFS.
         wp; inline{1} 1; inline{2} 1; wp.
         inline{1} 2; inline{1} 3; inline{1} 7; inline{2} 2.
         seq 6 4:
-          ( !UFCMA.bad{2} /\ ={c, p, n, a, p0} /\ (p = p0 /\ p = (n, a, p2)){1} /\
+          ( !(UFCMA.bad1 \/ UFCMA.bad2){2} /\
+            ={c, p, n, a, p0} /\ (p = p0 /\ p = (n, a, p2)){1} /\
              p2{1} = p1{2} /\ c2{1} = c1{2} /\ size c2{1} <= max_cipher_size /\
-             UFCMA.cbad{2} <= size BNR.lenc{1} /\
+             UFCMA.cbad1{2} <= size BNR.lenc{1} /\ UFCMA.cbad2{2} = 0 /\
              (forall n' c, (n',c) \in ROF.m => n' \in n::BNR.lenc){1} /\
               inv ROin.m{1} ROIN.RO.m{2} ROout.m{1} ROout.m{2} 
                   Mem.log{1} Mem.log{2} Mem.lc{1} Mem.lc{2} 
@@ -1590,9 +1609,10 @@ section PROOFS.
           smt (size_drop size_eq0 gt0_block_size).
         by auto; smt (size_ge0 size_eq0).         
       + move=> _; proc; inline *; sp; if => //.
-        swap 13 9; wp; conseq (_: true) => />; islossless.
+        swap 13 9; wp; conseq (_: true) => />; 1: smt(); islossless.
         while true (size p2).
         + move=> z; wp; conseq (_: true) => //=; 2: by islossless.
+          move=> &h.
           smt (size_drop size_eq0 gt0_block_size).
         by auto; smt (size_ge0 size_eq0 dpoly_out_ll). 
       + by proc; inline *; sp 1 1; if; auto => /> *; smt(get_setE mem_set).
@@ -1600,11 +1620,11 @@ section PROOFS.
       + by move=> _; conseq />; islossless.
       by auto => />; smt (dkey_ll mem_empty ge0_qenc ge0_qdec).
     inline{1} 1;wp; sp 0 1.
-    case: (UFCMA.bad{2}).
+    case: ((UFCMA.bad1\/UFCMA.bad2){2}).
     + while{1} true (size ns - i){1}.
       + by move=> _ z; wp; conseq (_: true) => //; 1:smt(); islossless.
       if{2}.
-      + while{2} (UFCMA.bad{2}) (size ns - i){2}.
+      + while{2} ((UFCMA.bad1\/UFCMA.bad2){2}) (size ns - i){2}.
         + move=> _ z; sp; wp; if.
           + by conseq (_: true) => //; 1:smt(); islossless.
           by inline *; wp; conseq (_: true) => //; 1:smt(); islossless. 
@@ -1612,9 +1632,9 @@ section PROOFS.
       by auto => /> /#. 
     rcondt{2} 1; 1: by auto => /> /#.
     while ( ={i, ns, Mem.lc} /\ uniq ns{1} /\ 0 <= i{1} /\
-            UFCMA.cbad{2} <= qenc + i{1} /\ size ns{1} <= qdec /\
+            UFCMA.cbad1{2} <= qenc /\ UFCMA.cbad2{2} <= i{1} /\ size ns{1} <= qdec /\
             ROin.m{1} = ROIN.RO.m{2} /\ size Mem.lc{1} <= qdec /\
-            forged0{1} = (forged{2} \/ UFCMA.bad{2}) /\
+            forged0{1} = (forged{2} \/ UFCMA.bad1{2} \/ UFCMA.bad2{2}) /\
             (forall n a c t, (n, a, c, t) \in Mem.lc{1} => valid_topol a c) /\
             (forall s, s \in ROout.m{1} = s \in ROout.m{2}) /\  
             (forall s, s \in ROout.m{1} = s \in ROin.m{1}) /\  
@@ -1635,7 +1655,7 @@ section PROOFS.
     wp; inline *; if{2}.
     + rcondf{2} ^if; 1: by auto => /#.
       do 2! (rcondf{1} ^if{1}; 1: by auto => /#).
-      auto; rnd{1}; auto ; rewrite dpoly_out_ll => /> &1 &2 h1 hi hcbad hns h2 h3 h4 h5 h6 h7 h8 r _ s _ e.
+      auto; rnd{1}; auto ; rewrite dpoly_out_ll => /> &1 &2 h1 hi hcbad hcbad2 hns h2 h3 h4 h5 h6 h7 h8 r _ s _ e.
       rewrite mk_rs_ofpair /=.
       pose t1 := test_poly _ _ _ _; pose t2 := test_poly_in _ _ _ _.
       have /# : t1 = t2; rewrite /t1 /t2 /test_poly /test_poly_in => {t1 t2} /=.
@@ -1645,20 +1665,396 @@ section PROOFS.
       apply/eq_iff/eq_in_has => @/preim -[] /=.
       smt (poly_out_add_sub' topol_inj mem_filter poly_out_swap).
     rcondt{2} ^if; 1: by auto => /#.
-    rcondt{2} ^if; 1: by auto=> /> *; smt (size_map size_filter count_size size_ge0).
+    (* rcondt{2} ^if; 1: by auto=> /> *; smt (size_map size_filter count_size size_ge0). *)
     do 2! (rcondt{1} ^if{1}; 1: by auto => /#).
     swap{1} 6 -5; swap{1} 10 -8; swap{2} 2 -1; swap{2} 6 -4.
     auto => /> *; rewrite mk_rs_ofpair /=; rewrite !get_setE /= !oget_some.
     split; 1:smt(); split; 1:smt();split.
-    + case: (forged{2}) => //; case: (UFCMA.bad{2}) => //= ??.
+    + case: (forged{2}) => //; case: ((UFCMA.bad1\/UFCMA.bad2){2}) => //= ??.
+      - have[|]->//=:=H13.
+      have:=H13; rewrite negb_or => /> *.
       rewrite /test_poly /= /poly1305 /= /test_bad.
       pose f := fun (c : ciphertext) => c.`4 - poly1305_eval r3L (topol c.`2 c.`3).
       pose m := List.filter _ _.
+      rewrite  hasP /=.
+      case: (r4L \in map f m); rewrite mapP. 
+      - rewrite eqT=> [][]c [].
+        smt (poly_out_add_sub poly_out_sub_add hasP mapP).
+      apply contraNF. 
       smt (poly_out_add_sub poly_out_sub_add hasP mapP).
     smt(mem_set index_uniq get_setE).
   qed.
 
   import StdBigop.Bigreal.
+
+  local lemma step4_bad1 &m :
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] <= qenc%r * (qdec%r * pr1_poly_out).
+  proof.
+    have <- : Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1 /\ UFCMA.cbad1 <= qenc] =
+              Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1].
+    + byequiv (_ : ={glob A} ==> ={UFCMA.bad1} /\ (UFCMA.cbad1{1} <= qenc)) => //.
+      proc. sp 2 2.
+      inline{1} 3; inline{1} 4; inline{1} 5.
+      inline{2} 3; inline{2} 4; inline{2} 5.
+      sim (_: ={RO.m, UFCMA.log, UFCMA.bad1, UFCMA.cbad1, SplitC2.I2.RO.m, 
+                SplitD.ROF.RO.m, BNR.ndec, BNR.lenc, Mem.lc, Mem.log}) 
+          /(UFCMA.cbad1{1} <= qenc) : (={UFCMA.bad1}).
+      + proc; auto => /#.
+      auto; smt(ge0_qenc ge0_qdec).
+
+    fel 2 UFCMA.cbad1                     (* the query counter *)
+        (fun i=> (qdec%r * pr1_poly_out)) (* probability of bad first occurring during ith query *)
+        (qenc)                            (* the bound on the counter (after which we stop caring) *)
+        UFCMA.bad1                        (* the bad event *)
+        [UFCMA(RO).set_bad1 : (UFCMA.cbad1 < qenc /\ size lt <= qdec)] 
+                                          (* condition(s) under which the oracle(s) do not respond *)
+        true; auto.                       (* general unconditional invariants *)
+    + by rewrite sumr_const count_predT size_range; smt(ge0_qenc ge0_qdec).
+    + proc; rcondt ^if; 1: by auto.
+      wp; conseq (_: t \in lt) => />; rnd; auto => /> *.
+      apply (StdOrder.RealOrder.ler_trans ((size lt{hr})%r * pr1_poly_out)).
+      + by apply mu_mem_le_mu1 => ?; rewrite (dpoly_out_funi x witness).
+      smt (mu_bounded).
+    + by move=> c;proc; auto => /> /#.
+    by move=> b c; proc; auto => />.
+  qed.
+
+  require IterProc.
+
+  clone import IterProc as IPNonce with
+    type t <- nonce
+    proof *.
+
+  (* print IPNonce.iter_perm. *)
+
+  op sub_map (m1 : (nonce * C.counter, 'a) fmap) (m2 : (nonce * C.counter, 'a) fmap) i l =
+    (forall n, (n, C.ofint 0) \in m2 => (n,C.ofint 0) \in m1) /\
+    (forall n, (n, C.ofint 0) \in m2 => m1.[(n,C.ofint 0)] = m2.[(n,C.ofint 0)]) /\
+    (forall j, 0 <= j < i => (nth witness l j, C.ofint 0) \in m1) /\
+    (forall n, (n, C.ofint 0) \in m1 => (n, C.ofint 0) \in m2 \/ exists j, 0 <= j < i /\ n = nth witness l j).
+
+
+  local module UF = {
+    var forged : bool
+  }.
+
+  local module Orcl : Orcl = {
+    proc f (n : nonce) : unit = {
+      var r, t;
+      if ((n,C.ofint 0) \in ROout.m) {
+        r <@ ROIN.RO.get(n,C.ofint 0);
+        UF.forged <- UF.forged || test_poly_in n Mem.lc r (oget UFCMA.log.[n]);
+      } else { 
+        r <@ ROIN.RO.get(n,C.ofint 0);
+        t <@ UFCMA(ROIN.RO).set_bad2((map 
+                (fun c:ciphertext => c.`4 - poly1305_eval r (topol c.`2 c.`3)) 
+                (filter (fun c:ciphertext => c.`1 = n) Mem.lc)));
+        ROout.set((n,C.ofint 0), witness); 
+      }
+    }
+  }.
+
+  local module UFCMA2 (ROin:SplitC2.I1.RO) = {
+
+    proc set_bad1 = UFCMA(ROin).set_bad1
+
+    proc set_bad2  = UFCMA(ROin).set_bad2
+
+    module O = {
+      proc init () = {
+        UFCMA.log <- empty;
+        ROin.init(); ROout.init(); ROF.init();
+      }
+    
+      proc enc (nap : nonce * associated_data * message) : 
+          nonce * associated_data * message * tag = {
+        var n, a, p, c, t;
+        (n,a,p) <- nap;
+        c <@ EncRnd.cc(n,p);   
+        (* t <$ dp *)
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) Mem.lc);
+        ROin.sample(n,C.ofint 0);
+        ROout.set((n,C.ofint 0), witness); 
+        UFCMA.log.[n] <- (a,c,t);
+        return (n,a,c,t);
+      }
+  
+      proc dec (nact: nonce * associated_data * message * tag) : 
+        (nonce * associated_data * message) option = {
+        return None;
+      }
+   
+    }
+    
+    proc distinguish () = {
+      var b, ns, ns1, ns2;
+
+      UFCMA.bad1 <- false; UFCMA.cbad1 <- 0;
+      UFCMA.bad2 <- false; UFCMA.cbad2 <- 0;
+
+      b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), O).main(); 
+
+      UF.forged <- false;
+      if (size Mem.lc <= qdec) {
+        ns <- undup (List.map (fun (p:ciphertext) => p.`1) Mem.lc);
+        ns1 <- filter (fun n => (n,C.ofint 0) \in ROout.m) ns;
+        ns2 <- filter (fun n => (n,C.ofint 0) \notin ROout.m) ns;
+        Iter(Orcl).iter(ns1++ns2);
+      }
+      return UF.forged;
+    }
+
+  }.
+
+  local module UFCMA3 (ROin:SplitC2.I1.RO) = {
+
+    proc set_bad1 = UFCMA(ROin).set_bad1
+
+    proc set_bad2  = UFCMA(ROin).set_bad2
+
+    module O = {
+      proc init () = {
+        UFCMA.log <- empty;
+        ROin.init(); ROout.init(); ROF.init();
+      }
+    
+      proc enc (nap : nonce * associated_data * message) : 
+          nonce * associated_data * message * tag = {
+        var n, a, p, c, t;
+        (n,a,p) <- nap;
+        c <@ EncRnd.cc(n,p);   
+        (* t <$ dp *)
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) Mem.lc);
+        ROin.sample(n,C.ofint 0);
+        ROout.set((n,C.ofint 0), witness); 
+        UFCMA.log.[n] <- (a,c,t);
+        return (n,a,c,t);
+      }
+  
+      proc dec (nact: nonce * associated_data * message * tag) : 
+        (nonce * associated_data * message) option = {
+        return None;
+      }
+   
+    }
+    
+    proc distinguish () = {
+      var b, ns, ns1, ns2, i, n, r, t;
+
+      UFCMA.bad1 <- false; UFCMA.cbad1 <- 0;
+      UFCMA.bad2 <- false; UFCMA.cbad2 <- 0;
+
+      b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), O).main(); 
+
+      UF.forged <- false;
+      if (size Mem.lc <= qdec) {
+        ns <- undup (List.map (fun (p:ciphertext) => p.`1) Mem.lc);
+        ns1 <- filter (fun n => (n,C.ofint 0) \in ROout.m) ns;
+        ns2 <- filter (fun n => (n,C.ofint 0) \notin ROout.m) ns;
+        i <- 0;
+        while (i < size ns1) {
+          n <- nth witness ns1 i;
+          r <@ ROIN.RO.get(n,C.ofint 0);
+          UF.forged <- UF.forged || test_poly_in n Mem.lc r (oget UFCMA.log.[n]);
+          i <- i + 1;
+        }
+        i <- 0;
+        while (i < size ns2) {
+          n <- nth witness ns2 i;
+          r <@ ROIN.RO.get(n,C.ofint 0);
+          t <@ UFCMA(ROIN.RO).set_bad2((map 
+                (fun c:ciphertext => c.`4 - poly1305_eval r (topol c.`2 c.`3)) 
+                (filter (fun c:ciphertext => c.`1 = n) Mem.lc)));
+          i <- i + 1;
+        }
+      }
+      return UF.forged;
+    }
+
+  }.
+
+
+  local equiv equiv_step4 :
+    UFCMA(ROIN.RO).distinguish ~ UFCMA3(ROIN.RO).distinguish :
+    ={glob A} ==> ={res, UFCMA.bad2}.
+  proof.
+  transitivity UFCMA2(RO).distinguish (={glob A} ==> ={res, UFCMA.bad2}) (={glob A} ==> ={res, UFCMA.bad2})=> //=.
+  + smt().
+  + proc; sim; sp.
+    seq 2 2 : (={glob UFCMA, glob RO} /\ forged{1} = UF.forged{2})=> /=; 1: sim.
+    if; 1, 3: by auto.
+    transitivity{1} {
+            UF.forged <- forged;
+            ns <- undup (map (fun (p:ciphertext) => p.`1) Mem.lc);
+            Iter(Orcl).iter(ns);
+            forged <- UF.forged;
+          }
+          (={glob UFCMA, glob RO, forged} ==> ={UFCMA.bad2, forged})
+          (={glob UFCMA, glob RO} /\ forged{1} = UF.forged{2} ==> ={UFCMA.bad2} /\ forged{1} = UF.forged{2})=> //=; 1: smt().
+    + inline*.
+      sp; wp.
+      while(={ns, glob UFCMA, RO.m} /\ forged{1} = UF.forged{2} /\ l{2} = drop i{1} ns{1} /\ 0 <= i{1}).
+      - sp; if; 1: smt(nth0_head nth_drop).
+        + wp 5 5=> />. 
+          by conseq(:_==> ={RO.m, UFCMA.log,Mem.lc} /\ forged{1} = UF.forged{2})=> />; 2: sim; 
+            smt(nth0_head nth_drop size_drop size_eq0 drop_nth drop0).
+        by wp 8 8=>/>; conseq(:_==> ={UFCMA.bad2, UFCMA.cbad2, RO.m}); 2: sim;
+          smt(nth0_head nth_drop size_drop size_eq0 drop_nth drop0).
+      by auto; smt(drop0 size_ge0 size_eq0).
+      sp 1 0; wp=> />.
+    call (iter_perm Orcl _); auto.
+    - proc=> /=; inline*.
+      case: (t1{1} = t2{1}).
+      - rcondt{1} 4; 2: rcondt{2} 4; 1,2: auto=> />.
+        + sp; if; auto=> />; smt(mem_set).
+        + sp; if; auto=> />; smt(mem_set).
+        by sim.
+      sp; if{2}.
+      + rcondt{1} 3=> />; 1: by auto=> />; if; auto=> />; smt(mem_set).
+        if{1}.
+        - rcondt{2} 7; 1: by auto=> />; auto.
+          sp; swap 7 -6; swap{1} 1.
+          wp; conseq(:_==> (r1,r3){1} = (r3,r1){2}); auto.
+          move=> /> *.
+          rewrite !mem_set !get_setE/= !oget_some/=. 
+          rewrite (eq_sym t2{2}) H /= => />; do ! split=> /> *; -1: smt().
+          by rewrite set_setE /=  (eq_sym t2{2}) H /=; smt().
+        rcondf{2} 7; 1: by auto=> />; auto.
+        sp; swap{1} 5 -3; swap{2} 11 -9; swap{1} 14 -12; swap{2} 8 -6; swap{1} 1.
+        swap{1} [6..12] 5; sim.
+        swap{2} 6 4; sim.
+        wp; rnd; rnd; rnd; skip=> /> *.
+        rewrite !mem_set /= !get_setE /= !oget_some /=.
+        have h: t1{2} <> t2{2} by smt().
+        by rewrite (eq_sym t2{2}) h /= => /> *; rewrite set_setE //=; smt().
+      rcondf{1} 3=> />; 1: auto=> />.
+      - if; auto; smt(mem_set).
+      if{1}.
+      - rcondt{2} 14; 1: by auto=> />; auto; smt(mem_set).
+        sp.
+        swap{1} 7 -5; swap{1} 11 -8; swap{2} 5 -3; swap{2} 14 -13.
+        swap{1} 6 10; sim.
+        swap{2} [13..17] -7; sim.
+        wp; rnd; rnd; rnd; skip=> /> *.        
+        rewrite !mem_set /= !get_setE /= !oget_some /=.
+        have h: t1{2} <> t2{2} by smt().
+        by rewrite (eq_sym t2{2}) h /= => /> *; rewrite set_setE //=; smt().
+      rcondf{2} 14; 1: by auto=> />; auto; smt(mem_set).
+      sp.
+      swap 5 -3; swap 14 -11; swap 18 -14.
+      swap{1} 3; swap{1} 1 3.
+      wp; auto=> /> *.
+      rewrite !mem_set /= !get_setE /= !oget_some /=.
+      have h: t1{2} <> t2{2} by smt().
+      rewrite (eq_sym t2{2}) h /= => /> *. 
+      rewrite set_setE //= (eq_sym t2{2}) h /= => /> *. 
+      by rewrite set_setE //= (eq_sym t2{2}) h /= => /> *; smt().
+    move=> /> *; pose l := undup _.
+    by have:=perm_filterC (fun n => (n,C.ofint 0) \in ROout.m{2}) l; rewrite /predC perm_eq_sym.
+  proc; sp.
+  seq 2 2 : (={glob UFCMA2,RO.m}); 1: by sim.
+  inline*; if; auto; sp.
+  splitwhile {1} 1 : size ns2 < size l.
+  seq 1 1 : (={glob UFCMA2,RO.m,ns,ns1,ns2} /\
+               l{1} = ns2{2} /\
+               ns{2} = undup (map (fun (p : ciphertext) => p.`1) Mem.lc{2}) /\
+               ns1{2} = filter (fun (n0 : nonce) => (n0, C.ofint 0) \in ROout.m{2}) ns{2} /\
+               ns2{2} = filter (fun (n0 : nonce) => (n0, C.ofint 0) \notin ROout.m{2}) ns{2}).
+  + move=> />.
+    while(={glob UFCMA2, RO.m, ns, ns1, ns2} /\
+        ns{2} = undup (map (fun (p : ciphertext) => p.`1) Mem.lc{2}) /\
+        ns1{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \in ROout.m{2}) ns{2} /\
+        ns2{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \notin ROout.m{2}) ns{2} /\
+        l{1} = drop i{2} ns1{2} ++ ns2{2} /\ 0 <= i{2});
+      2: by auto=>/>; smt(drop0 size_eq0 size_ge0 size_cat drop_oversize).    
+    sp=> />.
+    conseq(: n{2} = nth witness ns1{2} i{2} /\ x{2} = (n{2}, (C.ofint 0)%C) /\
+             n{1} = head witness l{1} /\
+             (((UF.forged{1}, UFCMA.bad2{1}, UFCMA.cbad2{1}, UFCMA.bad1{1}, UFCMA.cbad1{1}, RO.m{1}, UFCMA.log{1}, SplitC2.I2.RO.m{1},
+                SplitD.ROF.RO.m{1}, BNR.ndec{1}, BNR.lenc{1}, Mem.lc{1}, Mem.log{1}, (glob A){1}) =
+               (UF.forged{2}, UFCMA.bad2{2}, UFCMA.cbad2{2}, UFCMA.bad1{2},
+                UFCMA.cbad1{2}, RO.m{2}, UFCMA.log{2}, SplitC2.I2.RO.m{2},
+                SplitD.ROF.RO.m{2}, BNR.ndec{2}, BNR.lenc{2}, Mem.lc{2}, Mem.log{2},
+                (glob A){2}) /\
+             ={RO.m, ns, ns1, ns2}) /\
+             ns{2} = undup (map (fun (p : ciphertext) => p.`1) Mem.lc{2}) /\
+             ns1{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \in ROout.m{2}) ns{2} /\
+             ns2{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \notin ROout.m{2}) ns{2} /\
+             l{1} = drop i{2} ns1{2} ++ ns2{2} /\ 0 <= i{2}) /\
+             (l{1} <> [] /\ size ns2{1} < size l{1}) /\ i{2} < size ns1{2} /\
+             ={n} /\ (forall j, 0 <= j < size ns1{2} => (nth witness ns1{2} j, C.ofint 0) \in ROout.m{2}) ==> _).
+    - move=> /> &2.
+      pose l := undup _; pose l1 := List.filter _ _; pose l2 := List.filter _ _.
+      move=> *.
+      have:= H1; rewrite size_cat ltz_addr => h. 
+      rewrite -nth0_head  nth_cat //= h /= nth_drop //= => *.
+      have:=allP (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \in SplitC2.I2.RO.m{2}) l1.
+      have->//=->//=:=filter_all (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \in SplitC2.I2.RO.m{2}) l.
+      by apply mem_nth.
+    rcondt{1} 1; 1: by auto=> /#.
+    wp 5 4.
+    conseq(:_==> ={UF.forged, RO.m}) => />; 2: by sim; auto.
+    move=> /> &2.
+    pose l := undup _; pose l1 := List.filter _ _; pose l2 := List.filter _ _.
+    rewrite size_cat //= ltz_addr => *.
+    by rewrite (drop_nth witness i{2}) //= drop0 //=; smt(size_drop size_eq0 size_ge0 size_cat).
+
+  sp.
+  while(={UF.forged,UFCMA.bad2,UFCMA.cbad2,UFCMA.log,Mem.lc,Mem.log,RO.m,ns,ns1,ns2} /\
+        l{1} = drop i{2} ns2{2} /\ 0 <= i{2} /\
+        ns{2} = undup (map (fun (p : ciphertext) => p.`1) Mem.lc{2}) /\
+        ns1{2} = filter (fun (n0 : nonce) => (n0, C.ofint 0) \in ROout.m{2}) ns{2} /\
+        ns2{2} = filter (fun (n0 : nonce) => (n0, C.ofint 0) \notin ROout.m{2}) ns{2} /\
+        sub_map ROout.m{1} ROout.m{2} i{2} ns2{2}); 2: by auto; smt(drop0 size_eq0 size_ge0).
+  sp.
+  conseq(: n{2} = nth witness ns2{2} i{2} /\ x0{2} = (n{2}, C.ofint 0) /\
+      n{1} = head witness l{1} /\
+      (={UF.forged, UFCMA.bad2, UFCMA.cbad2, UFCMA.log, Mem.lc, Mem.log, RO.m, ns, ns1, ns2} /\
+      l{1} = drop i{2} ns2{2} /\ 0 <= i{2} /\ ns{2} = undup (map (fun (p : ciphertext) => p.`1) Mem.lc{2}) /\
+      ns1{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \in ROout.m{2}) ns{2} /\
+      ns2{2} = filter (fun (n0 : nonce) => (n0, (C.ofint 0)%C) \notin ROout.m{2}) ns{2} /\
+      sub_map ROout.m{1} ROout.m{2} i{2} ns2{2}) /\ l{1} <> [] /\ i{2} < size ns2{2} /\ ={n} ==> _).
+  + by move=> /> *; rewrite (drop_nth witness) //=.
+  rcondf{1} 1; 1: auto=> />.
+  + move=> *.
+    rewrite -nth0_head nth_drop //=.
+    pose l:= undup _.
+    pose l2 := List.filter _ _ .
+    have/=:=H3 (nth witness l2 i{m}).
+    apply absurd=> /= -> /=.
+    rewrite negb_or negb_exists/=; split=> /> *.
+    - have:=allP (fun (n0 : nonce) => (n0, C.ofint 0) \notin SplitC2.I2.RO.m{m}) l2.
+      have-> /= -> //=:=filter_all (fun (n0 : nonce) => (n0, C.ofint 0) \notin SplitC2.I2.RO.m{m}) l.
+      by rewrite mem_nth //=.
+    case: (0 <= a < i{m})=> //= [#]*.
+    have := before_index witness (nth witness l2 i{m}) l2 a.
+    have huniq:uniq l2 by rewrite filter_uniq undup_uniq.
+    by rewrite index_uniq //=; smt().
+  wp 9 8; conseq(:_==> ={UFCMA.bad2, UFCMA.cbad2, t, RO.m})=> />; 2: by sim; auto.
+  move=> /> &1 &2.
+  pose l := undup _.
+  pose l2 := List.filter _ _.
+  move=> *.
+  have h1: forall j, 0 <= j < size l2 => (nth witness l2 j, C.ofint 0) \notin ROout.m{2}.
+  + move=> j [#] *.
+    - have:=allP (fun (n0 : nonce) => (n0, C.ofint 0) \notin ROout.m{2}) l2.
+      have-> /= -> //=:=filter_all (fun (n0 : nonce) => (n0, C.ofint 0) \notin SplitC2.I2.RO.m{2}) l.
+      by rewrite mem_nth //=.
+  rewrite (drop_nth witness i{2} l2) //= drop0 //=; do ! split=> /> *.
+  + smt().
+  + smt(mem_set).
+  + rewrite get_set_neqE /=; smt(mem_nth).
+  + smt(mem_set).
+  + smt(mem_set).
+  + smt(mem_set size_drop size_ge0 size_eq0).
+  + smt(mem_set size_drop size_ge0 size_eq0).
+  qed.
+
+
+  local lemma step4_bad2 &m :
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad2] <= qdec%r * pr1_poly_out.
+  proof.
+    
  
   local lemma step4_bad &m : 
     Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad] <= (qenc + qdec)%r * (qdec%r * pr1_poly_out) .
