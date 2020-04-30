@@ -795,7 +795,7 @@ proof.
   + smt (size_map2 Block.valP size_cat size_take gt0_block_size size_ge0).
   rewrite (nth_map2 Byte.zero Byte.zero) ?(size_cat, size_map2, Block.valP) 1:[smt(size_ge0)].
   rewrite nth_cat ?(size_cat, size_map2, Block.valP) /min hsz /= hj1.
-  by rewrite (nth_map2 Byte.zero Byte.zero) ?Block.valP 1:/# -Byte.xorK1 nth_take 1:ge0_block_size.
+  by rewrite (nth_map2 Byte.zero Byte.zero) ?Block.valP 1:/# /= -Byte.xorK1 nth_take 1:ge0_block_size.
 qed.
 
 module St = {
@@ -1062,7 +1062,7 @@ section PROOFS.
       by if => //; wp; call chacha_enc2.
     inline D(A, G2(FinRO).CCRO).O.init RealOrcls(GenChaChaPoly(OCC(IFinRO))).init 
      GenChaChaPoly(OCC(IFinRO)).kg; auto.
-    conseq (_: ={glob A} /\ OCC.gs{1} = RO.m{2}) => />; 1: apply dkey_ll.
+    conseq (_: ={glob A} /\ OCC.gs{1} = RO.m{2}) => />. 
     by inline GenChaChaPoly(OCC(IFinRO)).init IFinRO.init;sim.
   qed.
 
@@ -1381,7 +1381,7 @@ section PROOFS.
       inline{1} 5; rcondt{1} ^if; 1: by auto; smt (C.insubdK).
       wp; rnd (fun z => z +^ extend p{1}); auto => &1 &2 [#] 3!-> heq hs /= *;split.
       + move=> ??;apply xorK1.
-      move=> h1 b ?; rewrite -h1 //= get_setE /= oget_some Block.MB.addmC /= .
+      move=> h1 b ?; rewrite -h1 //= get_setE /= Block.MB.addmC /=.
       rewrite -!size_eq0 !size_drop 1,2:ge0_block_size hs /= 
         size_cat size_take 1:size_ge0 -heq Block.valP; split;1: smt(); split; 1: smt().
       split; 2: smt(mem_set C.insubdK).
@@ -1470,7 +1470,7 @@ section PROOFS.
         (n,a,p) <- nap;
         c <@ EncRnd.cc(n,p);   
         (* t <$ dp *)
-        t <@ set_bad1(map (fun c:ciphertext => c.`4) Mem.lc);
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) (filter (fun (c:ciphertext) => c.`1 = n) Mem.lc));
         ROin.sample(n,C.ofint 0);
         ROout.set((n,C.ofint 0), witness); 
         log.[n] <- (a,c,t);
@@ -1550,8 +1550,11 @@ section PROOFS.
 
   local lemma step4_1 &m:
     Pr[Split1.IdealAll.MainD(G9(BNR_Adv(A)), SplitC2.RO_Pair(ROin, ROout)).distinguish() @ &m : res] <=
-     Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] + Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1 \/ UFCMA.bad2 ].
+     Pr[UFCMA(ROIN.RO).distinguish() @ &m : res \/ UFCMA.bad2] + Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1].
   proof. 
+    apply (ler_trans
+             Pr[UFCMA(ROIN.RO).distinguish() @ &m : (res \/ UFCMA.bad2) \/ UFCMA.bad1]); last first.
+    + by rewrite Pr [mu_or]; smt(mu_bounded).
     byequiv (_: ={glob A} ==> !(UFCMA.bad1 \/ UFCMA.bad2){2} => ={res}) => //; last by smt().
     move=> {&m}; proc.
     inline{1} 2; inline{1} 4; inline{1} 5.
@@ -1596,13 +1599,21 @@ section PROOFS.
         inline *.
         rcondt{1} ^if{1}; 1: by move=> &m; auto => /> /#.
         rcondt{1} ^if; 1: by move=> &m; auto => /> /#.
-        rcondt{2} ^if{1}; 1: by auto => /> *; smt (size_map ge0_qdec).
+        rcondt{2} ^if{1}; 1: by auto => /> *; smt (size_map size_filter count_size ge0_qdec).
         rcondt{2} ^if; 1: by move=> &m; auto => /> /#.
         swap{1} 12 -11; swap{1} 16 -14; swap{2} 8 -7; swap{2} 3 -1 ;wp.
         rnd (fun s => s + poly1305_eval r{2} (topol a{2} c1{2}))
             (fun s => s - poly1305_eval r{2} (topol a{2} c1{2})); rnd; skip => /> *.
-        by smt (size_map mapP dpoly_in_ll poly_out_sub_add 
-                poly_out_add_sub get_setE mk_rs_ofpair mem_set mapP).
+        have hh : forall c1 c2 c3 c4, 
+          (c1, c2, c3, c4) \in Mem.lc{2} =>
+          c4 \in map (fun (c : ciphertext) => c.`4) (filter (fun (c : ciphertext) => c.`1 = c1) Mem.lc{2}).
+        + by move=> c1 c2 c3 c4 h;rewrite mapP; exists (c1,c2,c3,c4); rewrite mem_filter.
+        progress; 1..14, 16:
+          smt (size_map size_filter count_size mapP dpoly_in_ll poly_out_sub_add 
+                  poly_out_add_sub get_setE mk_rs_ofpair mem_set). 
+        apply/negP; rewrite get_setE; case : (n2 = n{2}). 
+        + by move=> <<- [] 3!<<-; apply H24; rewrite (hh _ _ _ _ H25).
+        smt (size_map size_filter count_size mapP get_setE mem_set). 
       + move=> &2 _; islossless.
         while true (size p).
         + move=> z; wp; conseq (_: true) => />; 2: by islossless.
@@ -1655,7 +1666,7 @@ section PROOFS.
     wp; inline *; if{2}.
     + rcondf{2} ^if; 1: by auto => /#.
       do 2! (rcondf{1} ^if{1}; 1: by auto => /#).
-      auto; rnd{1}; auto ; rewrite dpoly_out_ll => /> &1 &2 h1 hi hcbad hcbad2 hns h2 h3 h4 h5 h6 h7 h8 r _ s _ e.
+      auto; rnd{1}; auto => /> &1 &2 h1 hi hcbad hcbad2 hns h2 h3 h4 h5 h6 h7 h8 r _ s _ e.
       rewrite mk_rs_ofpair /=.
       pose t1 := test_poly _ _ _ _; pose t2 := test_poly_in _ _ _ _.
       have /# : t1 = t2; rewrite /t1 /t2 /test_poly /test_poly_in => {t1 t2} /=.
@@ -1668,7 +1679,7 @@ section PROOFS.
     (* rcondt{2} ^if; 1: by auto=> /> *; smt (size_map size_filter count_size size_ge0). *)
     do 2! (rcondt{1} ^if{1}; 1: by auto => /#).
     swap{1} 6 -5; swap{1} 10 -8; swap{2} 2 -1; swap{2} 6 -4.
-    auto => /> *; rewrite mk_rs_ofpair /=; rewrite !get_setE /= !oget_some.
+    auto => /> *; rewrite mk_rs_ofpair /=; rewrite !get_setE /=.
     split; 1:smt(); split; 1:smt();split.
     + case: (forged{2}) => //; case: ((UFCMA.bad1\/UFCMA.bad2){2}) => //= ??.
       - have[|]->//=:=H13.
