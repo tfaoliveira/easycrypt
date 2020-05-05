@@ -14,13 +14,6 @@ clone import Ring.IDomain as ZR with type t <- R.
 clear [ZR.* ZR.AddMonoid.* ZR.MulMonoid.*].
 
 (* -------------------------------------------------------------------- *)
-Monoid[type t; t] <- ZModule[t] <- Ring[t] <- ComRing[t] <- IDomain[t]
-
-Big [ type t; Monoid[t] ] <- BigZModule [ ZModule [t] ] <- BigComRing [ ComRing[t] ].
-
-theory T <- U
-
-
 clone import Bigalg.BigComRing as Big with
   type t <- R,
   pred CR.unit   <- ZR.unit,
@@ -67,31 +60,6 @@ qed.
 (* -------------------------------------------------------------------- *)
 clone Subtype as Supp with
   type T <- (M -> R), type sT <- monalg, pred P C <- qnull C.
-
-M, R
-
-"p, q = \sum_(i \in R) a_i (i)" où les a_i sont presques tous nuls
-
-0 => a_i = 0
-c => c (1)
-(p + q)_i = \sum_i (p_i + q_i) (i)
-c *: p = \sum_i (c * p_i) (i)
-
-(p * q)_i = \sum_(i1, i2 | i1 + i2 = i) (p_i1 * q_i2) (i)
-
-p * q = \sum_(i1, i2 | i1 + i2 = i) (p_i1 (i1) + q_i2 (i2))
-
-M = nat
-
-X, M = X -> nat
-
-XYX <> X2Y
-
-X, M = list X
-
-with theory T <- U.
-
-
 
 (* -------------------------------------------------------------------- *)
 op monalg0 = Supp.insubd (fun _ => zeror).
@@ -314,7 +282,8 @@ lemma ifb2rE b E : (if b then E else zeror) = b2r b * E.
 proof. by rewrite /b2r; case: b => _; rewrite (mul1r, mul0r). qed.
 
 lemma mulmA : associative ( * ).
-proof.
+proof. admitted.
+(*
 move=> m1 m2 m3; apply/monalg_eqE=> x.
 pose E1 := support m1; pose E2 := support m2; pose E3 := support m3.
 pose E := E1 ++ E2 ++ E3 ++ support (m1 * m2) ++ support (m2 * m3).
@@ -348,6 +317,7 @@ rewrite (@mmulELw _ _ (undup E) (undup E)) ?undup_uniq.
     * by rewrite !(mulr1, mul1r) mulrA.
     * by rewrite !(mulr0, mul0r).
   rewrite /G.
+*)
 
 (* -------------------------------------------------------------------- *)
 clone Ring.ZModule as MAZM with
@@ -370,6 +340,7 @@ realize addNr.
 proof. by move=> m; apply/monalg_eqE=> x; rewrite !mcoeff addNr. qed.
 end MonAlg.
 
+(*
 (* -------------------------------------------------------------------- *)
 abstract theory MPoly.
 type vars, monom.
@@ -462,7 +433,7 @@ proof. by move=> M N; apply/monom_eqE=> x; rewrite !mpow addzC. qed.
 realize Axioms.add0m.
 proof. by move=> M; apply/monom_eqE=> x; rewrite !mpow. qed.
 
-clear [MonomMonoid.Axioms.*].   (* FIXME: do not work?! *)
+clear [MonomMonoid.Axioms.*].   (* FIXME: does not work?! *)
 
 (* -------------------------------------------------------------------- *)
 type mpoly.
@@ -478,4 +449,134 @@ clone include MonAlg with
 realize ZM.Axioms.addmA by exact MonomMonoid.addmA.
 realize ZM.Axioms.addmC by exact MonomMonoid.addmC.
 realize ZM.Axioms.add0m by exact MonomMonoid.add0m.
+
+op deg  : mpoly -> int.
+op eval : mpoly -> R -> R.
+print Monom.
+
+op monom_of_var (x : vars) =
+  Monom.insubd (fun y => if x = y then 1 else 0).
+
+op V (x : vars) = MC (monom_of_var x).
+
+
 end MPoly.
+*)
+
+(* -------------------------------------------------------------------- *)
+(* Axiomatizing polynomials (temp)                                      *)
+abstract theory Polynomials.
+type coeff.
+type poly.
+
+clone import Ring.IDomain as ZR with type t <- coeff.
+
+clear [ZR.* ZR.AddMonoid.* ZR.MulMonoid.*].
+
+(* -------------------------------------------------------------------- *)
+clone import Bigalg.BigComRing as Big with
+  type t <- coeff,
+  pred CR.unit   <- ZR.unit,
+    op CR.zeror  <- ZR.zeror,
+    op CR.oner   <- ZR.oner,
+    op CR.( + )  <- ZR.( + ),
+    op CR.([-])  <- ZR.([-]),
+    op CR.( * )  <- ZR.( * ),
+    op CR.invr   <- ZR.invr,
+    op CR.intmul <- ZR.intmul,
+    op CR.ofint  <- ZR.ofint,
+    op CR.exp    <- ZR.exp
+
+    proof * remove abbrev CR.(-) remove abbrev CR.(/).
+
+realize CR.addrA     . proof. by apply/ZR.addrA     . qed.
+realize CR.addrC     . proof. by apply/ZR.addrC     . qed.
+realize CR.add0r     . proof. by apply/ZR.add0r     . qed.
+realize CR.addNr     . proof. by apply/ZR.addNr     . qed.
+realize CR.oner_neq0 . proof. by apply/ZR.oner_neq0 . qed.
+realize CR.mulrA     . proof. by apply/ZR.mulrA     . qed.
+realize CR.mulrC     . proof. by apply/ZR.mulrC     . qed.
+realize CR.mul1r     . proof. by apply/ZR.mul1r     . qed.
+realize CR.mulrDl    . proof. by apply/ZR.mulrDl    . qed.
+realize CR.mulVr     . proof. by apply/ZR.mulVr     . qed.
+realize CR.unitP     . proof. by apply/ZR.unitP     . qed.
+realize CR.unitout   . proof. by apply/ZR.unitout   . qed.
+
+(* -------------------------------------------------------------------- *)
+op polyC : coeff -> poly.
+op polyX : poly.
+
+abbrev poly0 = polyC zeror.
+
+op [ - ] : poly -> poly.
+op ( + ) : poly -> poly -> poly.
+op ( * ) : poly -> poly -> poly.
+
+abbrev (-) p q = p + (-q).
+
+(* -------------------------------------------------------------------- *)
+clone Ring.IDomain as MAZM with
+  type t     <- poly,
+    op zeror <- poly0,
+    op [-]   <- ([-]),
+    op (+)   <- (+),
+    op ( * ) <- ( * )
+  proof * by admit.
+
+(* -------------------------------------------------------------------- *)
+op coeff   : poly -> int -> coeff.
+op deg     : poly -> int.
+op "_.[_]" : poly -> coeff -> coeff.
+
+abbrev leadc p = coeff p (deg p).
+
+axiom eval0   c : poly0.[c] = zeror.
+axiom evalC k c : (polyC k).[c] = k.
+axiom evalX   c : polyX.[c] = c.
+
+axiom evalD p q c : (p + q).[c] = c.
+axiom evalN p   c : (-p).[c] = -p.[c].
+axiom evalB p q c : (p - q).[c] = p.[c] - q.[c].
+axiom evalM p q c : (p * q).[c] = p.[c] * q.[c].
+
+axiom neq0_leadc p : p <> poly0 => leadc p <> zeror.
+
+(* -------------------------------------------------------------------- *)
+axiom deg0   : deg poly0 = 0.
+axiom degC c : deg (polyC c) = 0.
+axiom degX   : deg polyX = 1.
+
+axiom degN p   : deg (-p) = deg p.
+axiom degD p q : deg (p + q) <= max (deg p) (deg q).
+axiom degB p q : deg (p - q) <= max (deg p) (deg q).
+axiom degM p q : p <> poly0 => p <> poly0 => deg (p * q) = deg p + deg q.
+
+axiom degD_eq p q : deg p <> deg p =>
+  deg (p + q) = max (deg p) (deg q).
+
+axiom degD_eq_lc p q : deg p = deg q => leadc p <> leadc q =>
+  deg (p + q) = max (deg p) (deg q).
+
+axiom degMX p c : p <> poly0 => deg (p * (polyX - polyC c)) = 1 + deg p.
+
+(* -------------------------------------------------------------------- *)
+abbrev root p c = p.[c] = zeror.
+
+op roots : poly -> coeff list.
+
+axiom uniq_roots p : uniq (roots p).
+axiom root_roots p : forall c, c \in roots p => root p c.
+axiom size_roots p : size (roots p) <= deg p.
+
+axiom roots_root p : forall c, root p c => c \in roots p.
+
+axiom roots0 : roots poly0 = [].
+axiom rootsC k : roots (polyC k) = [].
+
+axiom rootsXBc k : roots (polyX - polyC k) = [k].
+axiom rootsX : roots polyX = [zeror].
+
+axiom rootsM p q : p <> poly0 => q <> poly0 =>
+  mem (roots (p * q)) == mem (roots p ++ roots q).
+
+end Polynomials.
