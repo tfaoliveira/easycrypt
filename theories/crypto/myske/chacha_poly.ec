@@ -1,6 +1,6 @@
 require import AllCore List Int IntDiv Real SmtMap Distr DBool DList DProd FSet PROM SplitRO FelTactic.
 
-require (****) Subtype Ske RndProd Indistinguishability Monoid.
+require (****) Subtype Ske RndProd Indistinguishability Monoid EventPartitioning.
 import StdOrder IntOrder RealOrder.
 
 (* TODO: this come from eclib/JUtil.ec *)
@@ -1240,10 +1240,9 @@ lemma pr_TPI_ok_filter n (lc:ciphertext list) (amt : associated_data * message *
 proof.
   have->:mu dpoly_in (fun r => test_poly_in n lc r amt) = 
          mu dpoly_in (fun r => test_poly_in n (filter (fun (c : ciphertext) => c.`1 = n) lc) r amt).
-  + by congr; apply fun_ext=> x; smt(filter_test_poly_in).
+  + by congr; apply fun_ext=> x; apply filter_test_poly_in.
   by move=> *; apply pr_TPI_ok=> //.
 qed.
-
 
 op check_plaintext (lenc:nonce list) (p:plaintext) = 
   let (n, a, m) = p in
@@ -2260,6 +2259,164 @@ section PROOFS.
   by rewrite/n1/n2 2!size_filter count_predC.
   qed.
 
+  local module UFCMA_l = {
+  
+    var lbad1 : (tag * tag) list
+ 
+    proc set_bad1 (lt:tag list) : poly_out = {
+      var t;
+      t <$ dpoly_out;
+      if (UFCMA.cbad1 < qenc /\ size lt <= qdec) { 
+         lbad1 <- lbad1 ++ (List.map (fun t' => (t,t')) lt);
+         UFCMA.cbad1 <- UFCMA.cbad1 + 1;
+      }
+      return t;
+    } 
+
+    module O = {
+      proc init () = {
+        UFCMA.log <- empty;
+        ROIN.RO.init(); ROout.init(); ROF.init();
+      }
+    
+      proc enc (nap : nonce * associated_data * message) : 
+          nonce * associated_data * message * tag = {
+        var n, a, p, c, t;
+        (n,a,p) <- nap;
+        c <@ EncRnd.cc(n,p);   
+        (* t <$ dp *)
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) (filter (fun (c:ciphertext) => c.`1 = n) Mem.lc));
+        ROIN.RO.sample(n,C.ofint 0);
+        ROout.set((n,C.ofint 0), witness); 
+        UFCMA.log.[n] <- (a,c,t);
+        return (n,a,c,t);
+      }
+  
+      proc dec (nact: nonce * associated_data * message * tag) : 
+        (nonce * associated_data * message) option = {
+        return None;
+      }
+   
+    }
+    
+    proc f () = {
+      var b;
+
+      lbad1 <- []; UFCMA.cbad1 <- 0;
+      b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), O).main(); 
+    }
+  }.
+
+  local lemma step4_bad1_lbad1 &m: 
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] =
+    Pr[UFCMA_l.f() @ &m : size UFCMA_l.lbad1 <= qdec /\ exists tt, tt \in UFCMA_l.lbad1 /\ tt.`1 = tt.`2].
+  proof.
+  admitted.
+
+  local clone EventPartitioning as EP with 
+    type input <- unit,
+    type output <- unit.
+
+  local clone EP.ListPartitioning as LP with
+    type partition <- int.
+  
+  local lemma step4_lbad1_sum &m :
+    Pr[UFCMA_l.f() @ &m : size UFCMA_l.lbad1 <= qdec /\ exists tt, tt \in UFCMA_l.lbad1 /\ tt.`1 = tt.`2] <=
+     BRA.big predT (fun (i : int) => Pr[UFCMA_l.f() @ &m : let tt = nth witness UFCMA_l.lbad1 i in tt.`1 = tt.`2])
+       (iota_ 0 qdec).
+  proof.
+    pose E := 
+      fun (_:unit) (g:glob UFCMA_l) (_:unit) => size g.`1 <= qdec /\ exists tt, tt \in g.`1 /\ tt.`1 = tt.`2.
+    pose phi :=
+      fun (_:unit) (g:glob UFCMA_l) (_:unit) => find (fun (tt:tag * tag) => tt.`1 = tt.`2) g.`1.
+    have -> := LP.list_partitioning UFCMA_l () E phi (iota_ 0 qdec) &m (iota_uniq 0 qdec).
+    have -> /= : Pr[UFCMA_l.f() @ &m : E tt (glob UFCMA_l) res /\ ! (phi tt (glob UFCMA_l) res \in iota_ 0 qdec)] = 0%r.
+    + byphoare => //. 
+      by hoare; conseq (:true) => // /> *; smt (has_find hasP mem_iota find_ge0).
+    apply StdBigop.Bigreal.ler_sum_seq => i /mem_iota hi _ /=.
+    byequiv (:_ ==> ={UFCMA_l.lbad1})=> //; first by sim.
+    smt (nth_find hasP).
+  qed.
+
+  local module UFCMA_li = {
+
+    var i : int
+    var badi : bool
+    var cbadi : int
+
+    proc set_bad1i (ti:tag) = {
+      var t;
+      t <$ dpoly_out;
+      if (cbadi < 1) {
+          badi <- badi || t = ti;
+          cbadi <- cbadi + 1;
+      }
+      return t;
+    }
+        
+    proc set_bad1 (lt:tag list) : poly_out = {
+      var t;
+      t <$ dpoly_out;
+      if (UFCMA.cbad1 < qenc /\ size lt <= qdec) { 
+        if (size UFCMA_l.lbad1 <= i < size UFCMA_l.lbad1 + size lt) {
+          t <@ set_bad1i (nth witness lt (i - size UFCMA_l.lbad1));
+        }
+        UFCMA_l.lbad1 <- UFCMA_l.lbad1 ++ (List.map (fun t' => (t,t')) lt);
+        UFCMA.cbad1 <- UFCMA.cbad1 + 1;
+      }
+      return t;
+    } 
+
+    module O = {
+      proc init () = {
+        UFCMA.log <- empty;
+        ROIN.RO.init(); ROout.init(); ROF.init();
+      }
+    
+      proc enc (nap : nonce * associated_data * message) : 
+          nonce * associated_data * message * tag = {
+        var n, a, p, c, t;
+        (n,a,p) <- nap;
+        c <@ EncRnd.cc(n,p);   
+        (* t <$ dp *)
+        t <@ set_bad1(map (fun c:ciphertext => c.`4) (filter (fun (c:ciphertext) => c.`1 = n) Mem.lc));
+        ROIN.RO.sample(n,C.ofint 0);
+        ROout.set((n,C.ofint 0), witness); 
+        UFCMA.log.[n] <- (a,c,t);
+        return (n,a,c,t);
+      }
+  
+      proc dec (nact: nonce * associated_data * message * tag) : 
+        (nonce * associated_data * message) option = {
+        return None;
+      }
+   
+    }
+    
+    proc f (i0:int) = {
+      var b;
+
+      cbadi <- 0; badi <- false; i <- i0;
+
+      UFCMA_l.lbad1 <- []; UFCMA.cbad1 <- 0;
+      b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), O).main(); 
+    }
+  }.
+
+  local lemma step4_badi &m i0 :
+    0 <= i0 < qdec => 
+    Pr[UFCMA_l.f() @ &m : let tt = nth witness UFCMA_l.lbad1 i0 in tt.`1 = tt.`2] =
+    Pr[UFCMA_li.f(i0) @ &m : UFCMA_li.badi].
+  proof. 
+  admitted.
+
+  local lemma pr_step4_badi &m i0 :
+    0 <= i0 < qdec => 
+    Pr[UFCMA_li.f(i0) @ &m : UFCMA_li.badi] = pr1_poly_out.
+  proof.
+  admitted.
+
+
 
 
   local lemma step4_bad1 &m :
@@ -2283,7 +2440,7 @@ section PROOFS.
         UFCMA.bad1                        (* the bad event *)
         [UFCMA(RO).set_bad1 : (UFCMA.cbad1 < qenc /\ size lt <= qdec)] 
                                           (* condition(s) under which the oracle(s) do not respond *)
-        true; auto.                       (* general unconditional invariants *)
+        true; auto.                       (* general unconditional invariants *) 
     + by rewrite sumr_const count_predT size_range; smt(ge0_qenc ge0_qdec).
     + proc; rcondt ^if; 1: by auto.
       wp; conseq (_: t \in lt) => />; rnd; auto => /> *.
