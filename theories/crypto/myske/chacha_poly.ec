@@ -1251,8 +1251,8 @@ op check_plaintext (lenc:nonce list) (p:plaintext) =
   size lenc < qenc.
 
 op check_cipher (ndec:int) (c:ciphertext) =
-  let (n, a, m, t) = c in
-  valid_topol a m /\
+  (let (n, a, m, t) = c in
+  valid_topol a m) /\
   ndec < qdec.
 
 (* Bounded and Nonce Respecting *)
@@ -2307,11 +2307,158 @@ section PROOFS.
     }
   }.
 
+
+  op make_lbad1 
+    (log : (nonce, associated_data * message * tag) fmap) 
+    (lc : ciphertext list) 
+    (lenc : nonce list) =
+    flatten
+    (map (fun n:nonce => 
+            map (fun c:ciphertext => ((oget log.[n]).`3, c.`4))
+                (filter (fun c:ciphertext => c.`1 = n) lc))
+         lenc).
+
+  
+
+  lemma make_lbad1_size_cons2 log lc lenc c :
+      uniq lenc =>
+      size (make_lbad1 log (c::lc) lenc) = 
+      if c.`1 \in lenc
+      then size (make_lbad1 log lc lenc) + 1
+      else size (make_lbad1 log lc lenc).
+  proof.
+  move:log lc c; elim:lenc=> //=.
+  move=> n lenc Hrec [#] log lc c [] H1 H2.
+  have/=:=Hrec log lc c H2.
+  rewrite !size_flatten /= !sumzE /= !BIA.big_cons /=.
+  pose p1 := predT _; have->/={p1}:p1=true by done. 
+  case: (c.`1 \in lenc) => * /=.
+  + rewrite H0 //=. 
+    have-> /= :c.`1 <> n by smt().
+    by rewrite addzA; congr=> /=.
+  rewrite H0.
+  case: (c.`1 = n)=> //= <<-.
+  by pose x1 := size _; pose x2 := BIA.big _ _ _; smt().
+  qed.    
+
+
+  lemma leq_make_lbad1 log lc lenc :
+      uniq lenc =>
+      size (make_lbad1 log lc lenc) <= size lc.
+  proof.
+  rewrite size_flatten sumzE=> *.
+  rewrite!BIA.big_map /= !predTofV/(\o) /=.
+  pose x:=BIA.big _ _ _.
+  have->:x = BIA.big predT (fun n => count (pred1 n) (map (fun c:ciphertext => c.`1) lc)) lenc.
+  + apply BIA.congr_big_seq=> //=; rewrite {1}/predT {1}/predT /==> *.
+    by rewrite size_map size_filter count_map /preim; congr; apply fun_ext=> y *; rewrite (eq_sym y.`1).
+  have<-:= size_map (fun c:ciphertext => c.`1).
+  rewrite -(filter_predT (map (fun c:ciphertext => c.`1) lc)).
+  rewrite -big_count. search filter predC.
+  pose nlc := map _ lc.
+  have *:=perm_filterC (mem lenc) (undup nlc).
+  rewrite -(BIA.eq_big_perm _ _ _ _ H0) BIA.big_cat.
+  rewrite filter_predT. 
+  have * :perm_eq (filter (mem lenc) (undup nlc)) (filter (mem nlc) lenc). search perm_eq mem.
+  + have->:=uniq_perm_eq (filter (mem lenc) (undup nlc)) (filter (mem nlc) lenc);
+    rewrite ?filter_uniq ?undup_uniq /= //= ?filter_uniq //=.
+    by move=> *; rewrite !mem_filter mem_undup.
+  rewrite (BIA.eq_big_perm _ _ _ _ H1).
+  rewrite BIA.big_filter (BIA.big_mkcond (mem nlc)) /= IntOrder.ler_paddr. 
+  + by apply sumr_ge0=> //=; smt(count_ge0).
+  apply ler_sum_seq=> //=; rewrite /predT/= => *.
+  smt(count_eq0 has_pred1).
+  qed.
+
+  lemma make_lbad1_size_cons3 log lc lenc n a c t:
+      uniq lenc =>
+      ! n \in lenc =>
+      size (make_lbad1 log.[n <- (a,c,t)] lc (n::lenc)) =
+      size (filter (fun (c0 : ciphertext) => c0.`1 = n) lc) +
+      size (make_lbad1 log lc lenc).
+  proof.
+  move=> huniq hnin.
+  rewrite !size_flatten /= !sumzE /= !BIA.big_cons /=.
+  pose p1 := predT _; have->/={p1}:p1=true by done. 
+  rewrite !size_map; congr.
+  rewrite !BIA.big_map /= !predTofV/(\o) /=. search BIA.big mem (=).
+  apply BIA.congr_big_seq  => />; rewrite {1}/predT /= => *.
+  by rewrite !size_map.
+  qed.
+
+  op inv_lbad1
+    (lbad1 : (tag * tag) list) 
+    (lenc : nonce list)
+    (ufcmalog : (nonce, associated_data * message * tag) fmap) 
+    (log : (ciphertext, plaintext) fmap)
+    (lc : ciphertext list) 
+    (cbad1 : int)
+    (ndec : int) =
+    uniq lenc /\
+    cbad1 <= qenc /\
+    size lenc <= qenc /\
+    size lbad1 <= size (make_lbad1 ufcmalog lc lenc) <= qdec /\
+    size lc <= ndec <= qdec /\
+    uniq lenc /\
+    (forall n, n \in lenc => let (a,c,t) = oget ufcmalog.[n] in (n,a,c,t) \in log) /\
+    (forall n, n \in lenc = n \in ufcmalog) /\
+    (* (forall n a c t, (n,a,c,t) \in lc1 => n \in nlog => nlog.[n] <> Some (a, c, t)) /\ *)
+    (forall t t', (t,t') \in lbad1 => 
+      (exists n, n \in lenc /\
+        (oget ufcmalog.[n]).`3 = t /\
+        exists a c, (n, a, c, t') \in lc)).
+
+
   local lemma step4_bad1_lbad1 &m: 
-    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] =
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] <=
     Pr[UFCMA_l.f() @ &m : size UFCMA_l.lbad1 <= qdec /\ exists tt, tt \in UFCMA_l.lbad1 /\ tt.`1 = tt.`2].
   proof.
-  admitted.
+  byequiv=> //=; proc; sp.
+  seq 1 1 : (size UFCMA_l.lbad1{2} <= qdec /\ (UFCMA.bad1{1} =>
+      exists (tt : tag * tag), (tt \in UFCMA_l.lbad1{2}) /\ tt.`1 = tt.`2)); last first.
+  + sp; if{1}; auto=> />; sp; wp=> />; while{1}(true)(size ns{1}-i{1}); auto=> />; 2: smt().
+    by inline*; sp; if; auto; smt(dpoly_in_ll dpoly_out_ll).
+  inline*; sp; wp. 
+  call(: ={glob BNR, UFCMA.cbad1, UFCMA.cbad1, glob RO, Mem.log, Mem.lc} /\ 
+    inv_lbad1 UFCMA_l.lbad1{2} BNR.lenc{2} UFCMA.log{2} Mem.log{2} Mem.lc{2} UFCMA.cbad1{2} BNR.ndec{2} /\
+    (UFCMA.bad1{1} => exists (tt : tag * tag), (tt \in UFCMA_l.lbad1{2}) /\ tt.`1 = tt.`2)); first last.
+  + by proc; inline*; sp 1 1; if; auto; smt(in_cons make_lbad1_size_cons2 leq_make_lbad1). 
+  + by skip; smt( mem_empty ge0_qenc ge0_qdec). 
+  proc; sp; if; 1, 3: auto=> />.
+  sp; wp=> /=.
+  case: (UFCMA.cbad1{1} < qenc); last first.
+  + inline*; sp.
+    rcondf{1} 5; 1: auto=> />.
+    - by conseq(:_==> true)=> />; while(true); auto.
+    rcondf{2} 5; 1: auto=> />.
+    - by conseq(:_==> true)=> />; while(true); auto.
+    wp -7 -7=> />; 1: smt(get_setE).
+    conseq(:_==> ={c1, t, RO.m, Mem.log, t, c1}); 2: sim.
+    smt(get_setE leq_make_lbad1 make_lbad1_size_cons3 size_ge0).
+  inline*; sp.
+  rcondt{1} 5; 1: auto=> />.
+  - conseq(:_==> true)=> />; 1: smt(size_map size_filter count_size).
+    by while(true); auto.
+  rcondt{2} 5; 1: auto=> />.
+  - conseq(:_==> true)=> />; 1: smt(size_map size_filter count_size).
+    by while(true); auto.
+  swap 3 1; swap [4..6] 12; wp -10 -10=> /=.
+  swap 4 4; wp -1 -1.
+  conseq(:_==> ={c1, t0, RO.m, Mem.log, Mem.lc}); 2: sim.
+  move=> /> *; do ! split => /> *.
+  - smt().  
+  - smt().  
+  - rewrite size_cat !size_map make_lbad1_size_cons3 //= /#.
+  - smt(leq_make_lbad1).
+  - smt(get_setE).
+  - smt(get_setE).
+  - have:=H15; rewrite mem_cat=> [#][] *.
+    + smt(get_setE).
+    have:= H16; rewrite mapP /= => [#][] t2 [#] h <<- <<-; have:=h.
+    rewrite mapP /==> [#] [][] x1 x2 x3 x4 /=; rewrite mem_filter /= => [#] <<- ? ->>.
+    smt(get_setE).
+  smt(mem_filter mem_cat mapP).
+  qed.
 
   local clone EventPartitioning as EP with 
     type input <- unit,
