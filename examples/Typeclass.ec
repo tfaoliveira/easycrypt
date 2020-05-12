@@ -12,9 +12,11 @@ type class comoid = {
 lemma addm0 ['a <: comoid] (x : 'a) : x + '0 = x.
 proof. by rewrite addmC add0m. qed.
 
+op zero = 0.
+
 instance monoid with int
   op ('0) = zero
-  op (+)  = add
+  op (+)  = Int.(+)
 
   proof add0m by exact/add0z
   proof addmC by exact/addzC
