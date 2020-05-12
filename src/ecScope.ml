@@ -900,6 +900,7 @@ module Ax = struct
       let kind =
         match ax.pa_kind with
         | PAxiom tags -> `Axiom (Ssym.of_list (List.map unloc tags), false)
+        | PCAxiom     -> hierror "a type class axiom cannot be top-level"
         | _ -> `Lemma
 
       in { ax_tparams = tparams;
@@ -939,10 +940,12 @@ module Ax = struct
           (Some tintro) pucflags (mode, mk_loc loc tc) check
           ~name:(unloc ax.pa_name) axd
 
-    | PAxiom _
-    | PCAxiom  ->
+    | PAxiom _ ->
         Some (unloc ax.pa_name),
         bind scope (snd pucflags).puc_local (unloc ax.pa_name, axd)
+
+    | PCAxiom  ->
+        hierror "a typeclass axiom cannot be top-level"
 
   (* ------------------------------------------------------------------ *)
   and add_defer (scope : scope) proofs =
@@ -1578,11 +1581,22 @@ module Ty = struct
       (* Check axioms *)
       let axioms =
         let scenv = EcEnv.Var.bind_locals operators scenv in
-        let check1 { pa_name = x; pa_formula = ax; _ } =
-          let ue = EcUnify.UniEnv.create (Some []) in
-          let ax = trans_prop scenv ue ax in
-          let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in
-            (unloc x, ax)
+        let check1 { pa_name = x; pa_tyvars = tv; pa_vars = vd; pa_formula = ax; _ } =
+          let ue = TT.transtyvars scenv (loc x, tv) in
+	  let pconcl =
+	    match vd with
+	    | None -> ax
+	    | Some vs ->
+		mk_loc (loc x) (PFforall (vs, ax))
+	  in
+
+	  let concl = TT.trans_prop scenv ue pconcl in
+
+          if not (EcUnify.UniEnv.closed ue) then
+            hierror "the formula contains free type variables";
+
+          let concl   = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) concl in
+            (unloc x, concl)
         in
           tcd.ptc_axs |> List.map check1 in
 
