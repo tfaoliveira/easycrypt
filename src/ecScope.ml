@@ -939,7 +939,8 @@ module Ax = struct
           (Some tintro) pucflags (mode, mk_loc loc tc) check
           ~name:(unloc ax.pa_name) axd
 
-    | PAxiom _ ->
+    | PAxiom _
+    | PCAxiom  ->
         Some (unloc ax.pa_name),
         bind scope (snd pucflags).puc_local (unloc ax.pa_name, axd)
 
@@ -1560,7 +1561,7 @@ module Ty = struct
       Msym.odup unloc (List.map fst tcd.ptc_ops)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated operator name: `%s'" x.pl_desc);
-      Msym.odup unloc (List.map fst tcd.ptc_axs)
+      Msym.odup unloc (List.map (fun x-> x.pa_name) tcd.ptc_axs)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated axiom name: `%s'" x.pl_desc);
 
@@ -1577,7 +1578,7 @@ module Ty = struct
       (* Check axioms *)
       let axioms =
         let scenv = EcEnv.Var.bind_locals operators scenv in
-        let check1 (x, ax) =
+        let check1 { pa_name = x; pa_formula = ax; _ } =
           let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in

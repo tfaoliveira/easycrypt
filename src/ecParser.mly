@@ -1624,13 +1624,13 @@ tc_inth:
 | LTCOLON x=lqident { x }
 
 tc_body:
-| ops=tc_op* axs=tc_ax* { (ops, axs) }
+| ops=tc_op* axs=tc_ax* { ops, axs }
 
 tc_op:
-| OP x=oident COLON ty=loc(type_exp) { (x, ty) }
+| OP x=oident COLON ty=loc(type_exp) { x, ty }
 
 tc_ax:
-| AXIOM x=ident COLON ax=form { (x, ax) }
+| AXIOM d=lemma_decl { mk_axiom d PCAxiom }
 
 (* -------------------------------------------------------------------- *)
 (* Type classes (instances)                                             *)

@@ -887,6 +887,7 @@ and pcut =
 (* -------------------------------------------------------------------- *)
 type paxiom_kind =
 | PAxiom of psymbol list
+| PCAxiom
 | PLemma of ptactics option
 | PILemma
 
@@ -911,7 +912,7 @@ type ptypeclass = {
   ptc_name : psymbol;
   ptc_inth : pqsymbol option;
   ptc_ops  : (psymbol * pty) list;
-  ptc_axs  : (psymbol * pformula) list;
+  ptc_axs  : paxiom list;
 }
 
 type ptycinstance = {
