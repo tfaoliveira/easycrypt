@@ -2467,9 +2467,15 @@ section PROOFS.
   local clone EP.ListPartitioning as LP with
     type partition <- int.
   
+
+  op w1 : poly_out.
+  op w2 : poly_out.
+
+  axiom neq_w1_w2 : w1 <> w2.
+
   local lemma step4_lbad1_sum &m :
     Pr[UFCMA_l.f() @ &m : size UFCMA_l.lbad1 <= qdec /\ exists tt, tt \in UFCMA_l.lbad1 /\ tt.`1 = tt.`2] <=
-     BRA.big predT (fun (i : int) => Pr[UFCMA_l.f() @ &m : let tt = nth witness UFCMA_l.lbad1 i in tt.`1 = tt.`2])
+     BRA.big predT (fun (i : int) => Pr[UFCMA_l.f() @ &m : let tt = nth (w1,w2) UFCMA_l.lbad1 i in tt.`1 = tt.`2])
        (iota_ 0 qdec).
   proof.
     pose E := 
@@ -2550,160 +2556,130 @@ section PROOFS.
     }
   }.
 
-  local lemma step4_badi &m i0 :
-    0 <= i0 < qdec => 
-    Pr[UFCMA_l.f() @ &m : let tt = nth witness UFCMA_l.lbad1 i0 in tt.`1 = tt.`2] =
-    Pr[UFCMA_li.f(i0) @ &m : UFCMA_li.badi].
+  op inv_lbad1_i
+    (lbad1 : (tag * tag) list) 
+    (lenc : nonce list)
+    (ufcmalog : (nonce, associated_data * message * tag) fmap) 
+    (log : (ciphertext, plaintext) fmap)
+    (lc : ciphertext list) 
+    (cbad1 : int)
+    (ndec : int) =
+    uniq lenc /\
+    cbad1 <= qenc /\
+    size lenc <= qenc /\
+    size lbad1 <= size (make_lbad1 ufcmalog lc lenc) <= qdec /\
+    size lc <= ndec <= qdec /\
+    uniq lenc.
+
+
+  local lemma step4_badi &m nth0 :
+    0 <= nth0 < qdec => 
+    Pr[UFCMA_l.f() @ &m : let tt = nth (w1,w2) UFCMA_l.lbad1 nth0 in tt.`1 = tt.`2] <=
+    Pr[UFCMA_li.f(nth0) @ &m : UFCMA_li.badi].
   proof. 
-  admitted.
+  move=> [#] Hi0 Hiq.
+  byequiv=> //=; proc; inline*; sp; wp=> />. 
+  call(: ={RO.m, BNR.ndec, Mem.log, BNR.lenc, UFCMA.cbad1, Mem.lc, UFCMA.log, UFCMA_l.lbad1} /\
+      UFCMA_li.i{2} = nth0 /\
+      (size UFCMA_l.lbad1{2} <= nth0 => 0 = UFCMA_li.cbadi{2}) /\
+      inv_lbad1_i UFCMA_l.lbad1{1} BNR.lenc{1} UFCMA.log{1} Mem.log{1} Mem.lc{1} UFCMA.cbad1{1} BNR.ndec{1} /\
+      (((nth (w1,w2) UFCMA_l.lbad1{1} nth0).`1 =
+        (nth (w1,w2) UFCMA_l.lbad1{1} nth0).`2) => UFCMA_li.badi{2})); first last.
+  + proc; sp; if; auto; inline*; auto; smt(make_lbad1_size_cons2 size_ge0 leq_make_lbad1).
+  + by auto; smt(neq_w1_w2 size_ge0 ge0_qdec size_flatten ge0_qenc).
+  + proc; inline*; sp; if; 1, 3: auto; sp.
+    swap [5..6] 7.
+    swap 3 -2; sp.
+    swap [4..5] -3; sp.
+    case: (UFCMA.cbad1{1} < qenc /\ size lt{1} <= qdec); last first.
+    - rcondf{1} 9; 1: by auto=> />; while(true); auto.
+      rcondf{2} 9; 1: by auto=> />; while(true); auto.
+      wp -9 -9=> /> /=.
+      by conseq(:_==> ={c1, t0, RO.m}); 2: sim; 1: smt(make_lbad1_size_cons3 leq_make_lbad1 size_ge0).
+    rcondt{1} 9; 1: by auto=> />; while(true); auto.
+    rcondt{2} 9; 1: by auto=> />; while(true); auto.
+    case: (size UFCMA_l.lbad1{2} + size lt{2} <= UFCMA_li.i{2}).
+    + rcondf{2} 9; 1: by auto=> />; while(true); auto; smt().
+      wp -11 -11=> /> /=.
+      conseq(:_==> ={c1, t0, RO.m}); 2: sim. 
+      move=> &1 &2 /> *.
+      rewrite !size_cat !size_map //= => {&1}; split; 1: smt(size_map size_ge0).
+      rewrite nth_cat; split. 
+      - pose ns := size (make_lbad1 _ _ _).
+        pose ks := size (List.filter _ _).
+        split; 1: smt().
+        split; 1: smt().
+        split; 2: smt(make_lbad1_size_cons3 leq_make_lbad1).
+        by rewrite make_lbad1_size_cons3 //= /#. 
+      case: (size UFCMA_l.lbad1{2} <= UFCMA_li.i{2})=> //= h.
+      - have->/=: ! UFCMA_li.i{2} < size UFCMA_l.lbad1{2} by smt().
+        rewrite nth_default //= ?neq_w1_w2 /=; smt(size_map).
+      by have/=: UFCMA_li.i{2} < size UFCMA_l.lbad1{2}; smt().
+    case: (size UFCMA_l.lbad1{2} <= UFCMA_li.i{2}); last first.
+    + rcondf{2} 9; 1: by auto=> />; while(true); auto; smt().
+      wp -11 -11=> /> /=.
+      conseq(:_==> ={c1, t0, RO.m}); 2: sim. 
+      move=> &1 &2 /> *.
+      rewrite !size_cat !size_map //= => {&1}; split; 1: smt(size_map size_ge0).
+      rewrite nth_cat; split. 
+      - pose ns := size (make_lbad1 _ _ _).
+        pose ks := size (List.filter _ _).
+        split; 1: smt().
+        split; 1: smt().
+        split; 2: smt(make_lbad1_size_cons3 leq_make_lbad1).
+        by rewrite make_lbad1_size_cons3 //= /#. 
+      by have->/=: UFCMA_li.i{2} < size UFCMA_l.lbad1{2} by smt().
+    rcondt{2} 9; 1: by auto=> />; while(true); auto; smt().
+    rcondt{2} 11; 1: by auto=> />; while(true); auto; smt().
+    swap {2} 10 -6; wp 5 6=> />.
+    conseq(:_==> ={c1, RO.m} /\ t0{1} = t1{2}); last first.
+    + by sim; auto=> />; sim.
+    move=> &1 &2 /> {&1} *.
+    move:H12 H13; rewrite !size_map !size_cat !size_map => *; do ! split.
+    + smt(size_map).
+    + smt().
+    + smt().
+    + by rewrite make_lbad1_size_cons3 //=; smt().
+    + smt(leq_make_lbad1).
+    + rewrite nth_cat=> [].
+      have h :! (UFCMA_li.i{2} < size UFCMA_l.lbad1{2}) by smt(nth_default neq_w1_w2).
+      rewrite h /=.
+      by rewrite (nth_map witness) //=; smt(size_map).
+  qed.
 
-  local lemma pr_step4_badi &m i0 :
-    0 <= i0 < qdec => 
-    Pr[UFCMA_li.f(i0) @ &m : UFCMA_li.badi] = pr1_poly_out.
+  local lemma pr_step4_badi &m nth0 :
+    0 <= nth0 < qdec => 
+    Pr[UFCMA_li.f(nth0) @ &m : UFCMA_li.badi] <= pr1_poly_out.
   proof.
-  admitted.
+  move=> [#] *. 
+  fel 2 UFCMA_li.cbadi
+    (fun _ => pr1_poly_out)
+    1
+    UFCMA_li.badi
+    [UFCMA_li.set_bad1i :(UFCMA_li.cbadi < 1)]
+    (UFCMA_li.cbadi <= 1) => />.
 
-
+  + by rewrite /= BRA.big_int1 /=. 
+  + by auto=> />.
+  + proc. 
+    rcondt 2; 1: auto; wp=> />; rnd=> />; skip=> /> *.
+    by have->//=:=dpoly_out_funi witness ti{hr}.
+  + move=> c; proc; auto=> />; smt().
+  by move=> b c; proc; auto.
+  qed.
 
 
   local lemma step4_bad1 &m :
-    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] <= qenc%r * (qdec%r * pr1_poly_out).
+    Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1] <= qdec%r * pr1_poly_out.
   proof.
-    have <- : Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1 /\ UFCMA.cbad1 <= qenc] =
-              Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad1].
-    + byequiv (_ : ={glob A} ==> ={UFCMA.bad1} /\ (UFCMA.cbad1{1} <= qenc)) => //.
-      proc. sp 2 2.
-      inline{1} 3; inline{1} 4; inline{1} 5.
-      inline{2} 3; inline{2} 4; inline{2} 5.
-      sim (_: ={RO.m, UFCMA.log, UFCMA.bad1, UFCMA.cbad1, SplitC2.I2.RO.m, 
-                SplitD.ROF.RO.m, BNR.ndec, BNR.lenc, Mem.lc, Mem.log}) 
-          /(UFCMA.cbad1{1} <= qenc) : (={UFCMA.bad1}).
-      + proc; auto => /#.
-      auto; smt(ge0_qenc ge0_qdec).
-
-    fel 2 UFCMA.cbad1                     (* the query counter *)
-        (fun i=> (qdec%r * pr1_poly_out)) (* probability of bad first occurring during ith query *)
-        (qenc)                            (* the bound on the counter (after which we stop caring) *)
-        UFCMA.bad1                        (* the bad event *)
-        [UFCMA(RO).set_bad1 : (UFCMA.cbad1 < qenc /\ size lt <= qdec)] 
-                                          (* condition(s) under which the oracle(s) do not respond *)
-        true; auto.                       (* general unconditional invariants *) 
-    + by rewrite sumr_const count_predT size_range; smt(ge0_qenc ge0_qdec).
-    + proc; rcondt ^if; 1: by auto.
-      wp; conseq (_: t \in lt) => />; rnd; auto => /> *.
-      apply (StdOrder.RealOrder.ler_trans ((size lt{hr})%r * pr1_poly_out)).
-      + by apply mu_mem_le_mu1 => ?; rewrite (dpoly_out_funi x witness).
-      smt (mu_bounded).
-    + by move=> c;proc; auto => /> /#.
-    by move=> b c; proc; auto => />.
+  apply (RealOrder.ler_trans _ _ _ (step4_bad1_lbad1 &m)).
+  apply (RealOrder.ler_trans _ _ _ (step4_lbad1_sum &m)).
+  apply (RealOrder.ler_trans _ _ _ (StdBigop.Bigreal.ler_sum_seq _ _ (fun _ => pr1_poly_out) _ _)); 
+    last by rewrite sumr_const count_predT size_iota; smt(ge0_qdec).
+  move=> nth0; rewrite mem_iota /predT /= => [#] *.
+  apply (RealOrder.ler_trans _ _ _ (step4_badi &m nth0 _))=> //.
+  exact (pr_step4_badi &m).
   qed.
- 
-  (* local lemma step4_bad &m :  *)
-  (*   Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad] <= (qenc + qdec)%r * (qdec%r * pr1_poly_out) . *)
-  (* proof. *)
-  (*   have <- : Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad /\ UFCMA.cbad <= qenc + qdec] = *)
-  (*             Pr[UFCMA(ROIN.RO).distinguish() @ &m : UFCMA.bad]. *)
-  (*   + byequiv (_ : ={glob A} ==> ={UFCMA.bad} /\ (UFCMA.cbad{1} <= qenc + qdec)) => //. *)
-  (*     proc.  *)
-  (*     inline{1} 3; inline{1} 4; inline{1} 5. *)
-  (*     inline{2} 3; inline{2} 4; inline{2} 5. *)
-  (*     sim (_: ={RO.m, UFCMA.log, UFCMA.bad, UFCMA.cbad, SplitC2.I2.RO.m,  *)
-  (*               SplitD.ROF.RO.m, BNR.ndec, BNR.lenc, Mem.lc, Mem.log})  *)
-  (*         /(UFCMA.cbad{1} <= qenc + qdec) : (={UFCMA.bad}). *)
-  (*     + proc; auto => /#. *)
-  (*     auto; smt(ge0_qenc ge0_qdec). *)
-
-  (*   fel 2 UFCMA.cbad                      (* the query counter *) *)
-  (*       (fun i=> (qdec%r * pr1_poly_out)) (* probability of bad first occurring during ith query *) *)
-  (*       (qenc + qdec)                     (* the bound on the counter (after which we stop caring) *) *)
-  (*       UFCMA.bad                         (* the bad event *) *)
-  (*       [UFCMA(RO).set_bad : (UFCMA.cbad < qenc + qdec /\ size lt <= qdec)]  *)
-  (*                                         (* condition(s) under which the oracle(s) do not respond *) *)
-  (*       true; auto.                       (* general unconditional invariants *) *)
-  (*   + by rewrite sumr_const count_predT size_range; smt(ge0_qenc ge0_qdec). *)
-  (*   + proc; rcondt ^if; 1: by auto. *)
-  (*     wp; conseq (_: t \in lt) => />; rnd; auto => /> *. *)
-  (*     apply (StdOrder.RealOrder.ler_trans ((size lt{hr})%r * pr1_poly_out)). *)
-  (*     + by apply mu_mem_le_mu1 => ?; rewrite (dpoly_out_funi x witness). *)
-  (*     smt (mu_bounded). *)
-  (*   + by move=> c;proc; auto => /> /#. *)
-  (*   by move=> b c; proc; auto => />. *)
-  (* qed. *)
-  
-  (* local module UFCMA_f = { *)
-  (*   var bad : bool *)
-  (*   var cbad : int    *)
-     
-  (*   proc set_bad (n: nonce) = { *)
-  (*     var r; *)
-  (*     r <$ dpoly_in; *)
-  (*     if (cbad < qdec /\ size Mem.lc <= qdec) {  *)
-  (*        bad <- bad || test_poly_in n Mem.lc r (oget UFCMA.log.[n]); *)
-  (*        cbad <- cbad + 1; *)
-  (*     } *)
-  (*   }  *)
-
-  (*   proc main () = { *)
-  (*     var b, ns, i, n; *)
-
-  (*     bad <- false; cbad <- 0; *)
-
-  (*     b <@ CPA_game(CCA_CPA_Adv(BNR_Adv(A)), UFCMA(LRO).O).main();  *)
-  (*     if (size Mem.lc <= qdec) { *)
-  (*       ns <- undup (List.map (fun (p:ciphertext) => p.`1) Mem.lc); *)
-  (*       i <- 0; *)
-  (*       while (i < size ns) { *)
-  (*         n  <- List.nth witness ns i; *)
-  (*         if ((n,C.ofint 0) \in ROout.m) set_bad(n); *)
-  (*         else SplitC2.I2.RO.set((n, C.ofint 0), witness); *)
-  (*         i <- i + 1; *)
-  (*       } *)
-  (*     } *)
-  (*   } *)
-  (* }. *)
-
-  (* local lemma step4_forged &m :  *)
-  (*   Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] <= qdec%r * qdec%r * pr_zeropol. *)
-  (* proof. *)
-  (*   have -> : Pr[UFCMA(ROIN.RO).distinguish() @ &m : res ] =  *)
-  (*             Pr[UFCMA(ROIN.LRO).distinguish() @ &m : res ]. *)
-  (*   + byequiv (ROIN.RO_LRO_D UFCMA) => //. *)
-  (*   have -> : Pr[UFCMA(ROIN.LRO).distinguish() @ &m : res ] = *)
-  (*             Pr[UFCMA_f.main() @ &m : UFCMA_f.bad /\ UFCMA_f.cbad <= qdec]. *)
-  (*   + byequiv (_: ={glob A} ==> res{1} = UFCMA_f.bad{2} /\ UFCMA_f.cbad{2} <= qdec) => //.  *)
-  (*     proc. *)
-  (*     seq 3 3 : (={Mem.lc, RO.m, ROout.m, UFCMA.log} /\  *)
-  (*                UFCMA_f.bad{2} = false /\ UFCMA_f.cbad{2} = 0 /\  *)
-  (*                RO.m{2} = empty). *)
-  (*     + by sp 2 2; inline *; wp; sp; sim />. *)
-  (*     sp; if => //; last by auto => />; rewrite ge0_qdec. *)
-  (*     while ( ={i, ns, ROout.m, Mem.lc, UFCMA.log} /\ uniq ns{1} /\ 0 <= i{1} <= size ns{1}/\ *)
-  (*             forged{1} = UFCMA_f.bad{2} /\ UFCMA_f.cbad{2} <= i{2} /\ *)
-  (*             size ns{1} <= qdec /\ size Mem.lc{1} <= qdec /\ *)
-  (*             (forall j, i{1} <= j < size ns{2} => ! (nth witness ns{1} j, C.ofint 0) \in RO.m{1})). *)
-  (*     + sp; if; 1: done. *)
-  (*       + inline *; rcondt{2} ^if; 1: auto => /> * /#. *)
-  (*         rcondt{1} ^if; auto => /> *; 1: smt(). *)
-  (*         smt(get_setE mem_set index_uniq). *)
-  (*       wp; call (_: ={ROout.m}); 1: by auto. *)
-  (*       call{1} (_: true ==> true); 1: by islossless. *)
-  (*       inline *; rcondt{1} ^if; auto => /> *; 1: smt(). *)
-  (*       smt(dpoly_in_ll mem_set index_uniq). *)
-  (*     auto => /> *; smt (undup_uniq size_undup size_map mem_empty size_ge0). *)
-    
-  (*   fel 2 UFCMA_f.cbad                       *)
-  (*       (fun i=> qdec%r * pr_zeropol) *)
-  (*       qdec *)
-  (*       UFCMA_f.bad *)
-  (*       [UFCMA_f.set_bad : (UFCMA_f.cbad < qdec /\ size Mem.lc <= qdec)]  *)
-  (*       true; auto.               *)
-  (*   + by rewrite sumr_const count_predT size_range; smt(ge0_qenc ge0_qdec). *)
-  (*   + proc; rcondt ^if; 1: by auto. *)
-  (*     wp; conseq (_: test_poly_in n Mem.lc r (oget UFCMA.log.[n])) => />; rnd; auto => /> *. *)
-  (*     by apply pr_TPI_ok. *)
-  (*   + by move=> c;proc; auto => /> /#. *)
-  (*   by move=> b c; proc; auto => />. *)
-  (* qed. *)
 
   lemma conclusion &m : 
     Pr[CCA_game(BNR_Adv(A), RealOrcls(ChaChaPoly)).main() @ &m : res] <=
@@ -2711,7 +2687,7 @@ section PROOFS.
       (Pr[Indist.Distinguish(D(BNR_Adv(A)), IndBlock).game() @ &m : res] -
        Pr[Indist.Distinguish(D(BNR_Adv(A)), IndRO).game() @ &m : res]) + 
        qdec%r * (maxr pr_zeropol pr1_poly_out) +
-       qenc%r * (qdec%r * pr1_poly_out).
+       qdec%r * pr1_poly_out.
    proof. 
      have := step2 (BNR_Adv(A)) _ &m.
      + by move=> *;islossless;apply (A_ll (BNR(O)));islossless.
