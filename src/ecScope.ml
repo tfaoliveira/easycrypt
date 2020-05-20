@@ -1833,23 +1833,23 @@ module Ty = struct
         if EcUtils.is_some tci.pti_args then
           hierror "unsupported-option";
         addring scope mode (`Boolean, toptci)
-    end
+      end
 
     | ([], "ring") -> begin
-      let kind =
-        match tci.pti_args with
-        | None -> `Integer
-        | Some (`Ring (c, p)) ->
-            if odfl false (c |> omap (fun c -> c <^ BI.of_int 2)) then
-              hierror "invalid coefficient modulus";
-            if odfl false (p |> omap (fun p -> p <^ BI.of_int 2)) then
-              hierror "invalid power modulus";
-            if      opt_equal BI.equal c (Some (BI.of_int 2))
-                 && opt_equal BI.equal p (Some (BI.of_int 2))
-            then `Boolean
-            else `Modulus (c, p)
-      in addring scope mode (kind, toptci)
-    end
+        let kind =
+          match tci.pti_args with
+          | None -> `Integer
+          | Some (`Ring (c, p)) ->
+              if odfl false (c |> omap (fun c -> c <^ BI.of_int 2)) then
+                hierror "invalid coefficient modulus";
+              if odfl false (p |> omap (fun p -> p <^ BI.of_int 2)) then
+                hierror "invalid power modulus";
+              if      opt_equal BI.equal c (Some (BI.of_int 2))
+                   && opt_equal BI.equal p (Some (BI.of_int 2))
+              then `Boolean
+              else `Modulus (c, p)
+        in addring scope mode (kind, toptci)
+      end
 
     | ([], "field") -> addfield scope mode toptci
 
