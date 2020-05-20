@@ -14,10 +14,11 @@ proof. by rewrite addmC add0m. qed.
 
 op zero = 0.
 
-instance monoid with int
-  op ('0) = zero
-  op (+)  = Int.(+)
+instance comoid with int
+  op ('0) = Self.zero
+  op (+)  = Int.(+).
+realize add0m.
 
-  proof add0m by exact/add0z
+  proof add0m by (exact/add0m<:int>)
   proof addmC by exact/addzC
   proof addmA by exact/addzA.

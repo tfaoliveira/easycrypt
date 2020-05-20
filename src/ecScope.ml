@@ -1793,7 +1793,45 @@ module Ty = struct
         (EcIdent.name x, (true, ty_subst subst opty)))
         tc.tc_ops
 
+  (* ------------------------------------------------------------------ *)
+  let instantiate_tc (sc : scope) _mode ty tcp (tc : EcDecl.typeclass) tci =
+    let tcpp  = fst (EcPath.toqsymbol tcp) in
 (*
+    let extend ms p =
+      let (ms', x) = EcPath.toqsymbol p in
+      EcPath.fromqsymbol (ms @ ms', x)
+    in
+*)
+    let ops = symbols_of_tc sc.sc_env (snd ty) (tcp, tc) in
+    let ops = check_tci_operators sc.sc_env ty tci.pti_ops ops in
+    (* let ops = Mstr.fold (fun x p m -> Mstr.add x (extend tcpp p) m) ops Mstr.empty in *)
+
+    (** Build the type and operator substitution **)
+    (* TODO: this will currently fail on polymorphic TCs *)
+    let subst = EcSubst.add_tydef EcSubst.empty tcp ([], snd ty) in
+    let subst =
+      List.fold_left (fun s (x, _) ->
+                        match Mstr.find_opt x ops with
+                        | None   -> hierror "an operator is not defined"
+                        | Some p ->
+                            let op = EcEnv.Op.by_path p sc.sc_env in
+                            EcSubst.add_opdef s (EcPath.fromqsymbol (tcpp, x)) ([], EcTypes.e_op p [] op.op_ty);)
+                     subst (List.map (fun (x, p) -> (EcIdent.name x, p)) tc.tc_ops)
+    in
+
+    (** This should substitute the ops with their definition in the axioms **)
+    let tc = EcSubst.subst_tc subst tc in
+
+    (** Check axioms **)
+    let axs  = check_tci_axioms sc _mode tci.pti_axs tc.tc_axs in
+
+    (** This is not OK: we need to make sure we don't add the instance until
+     * all axioms are checked. It does allow easier debugging, thought. **)
+    let sc =
+      { sc with
+          sc_env = EcEnv.TypeClass.add_instance ty (`General tcp) sc.sc_env }
+    in Ax.add_defer sc axs
+
   (* ------------------------------------------------------------------ *)
   let add_generic_tc (scope : scope) _mode { pl_desc = tci; pl_loc = loc; } =
     let ty =
@@ -1811,20 +1849,7 @@ module Ty = struct
       | Some tc -> tc
     in
 
-    let  symbols = symbols_of_tc scope.sc_env (snd ty) (tcp, tc) in
-    let _symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
-
-    { scope with
-        sc_env = EcEnv.TypeClass.add_instance ty (`General tcp) scope.sc_env }
-
-(*
-          let ue = EcUnify.UniEnv.create (Some []) in
-          let ty = fst (EcUnify.UniEnv.openty ue (fst ty) None (snd ty)) in
-            try  EcUnify.hastc scope.sc_env ue ty (Sp.singleton (fst tc)); tc
-            with EcUnify.UnificationFailure _ ->
-              hierror "type must be an instance of `%s'" (EcPath.tostring (fst tc))
-*)
-*)
+    instantiate_tc scope _mode ty tcp tc tci
 
   (* ------------------------------------------------------------------ *)
   let add_instance (scope : scope) mode ({ pl_desc = tci } as toptci) =
@@ -1856,7 +1881,7 @@ module Ty = struct
     | _ ->
         if EcUtils.is_some tci.pti_args then
           hierror "unsupported-option";
-        failwith "unsupported"          (* FIXME *)
+        add_generic_tc scope mode toptci
 
   (* ------------------------------------------------------------------ *)
   let add_datatype (scope : scope) (tydname : ptydname) dt =
