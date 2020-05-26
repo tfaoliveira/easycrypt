@@ -17,8 +17,6 @@ op zero = 0.
 instance comoid with int
   op ('0) = Self.zero
   op (+)  = Int.(+).
-realize add0m.
-
-  proof add0m by (exact/add0m<:int>)
-  proof addmC by exact/addzC
-  proof addmA by exact/addzA.
+realize add0m. by exact/add0z.
+realize addmC. by exact/addzC.
+realize addmA. by exact/addzA.
