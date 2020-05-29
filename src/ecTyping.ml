@@ -329,7 +329,7 @@ let gen_select_op
 
   and by_tc ((p, _), _, _, _) =
     match oget (EcEnv.Op.by_path_opt p env) with
-    | { op_kind = OB_oper (Some OP_TC) } -> false
+    | { op_kind = OB_oper (Some (OP_TC _)) } -> false
     | _ -> true
 
   in

@@ -1924,8 +1924,11 @@ let pp_opdecl_op (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
           (pp_type ppe) fix.opf_resty
           (pp_list "@\n" pp_branch) cfix
 
-    | Some (OP_TC) ->
-        Format.fprintf fmt "= < type-class-operator >"
+    | Some (OP_TC (p, t)) ->
+        Format.fprintf fmt
+          " : %a = < type-class-operator: %a >"
+          (pp_type ppe) t
+          pp_path p
   in
 
   match ts with

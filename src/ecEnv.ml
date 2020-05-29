@@ -853,9 +853,10 @@ module MC = struct
       let operators =
         let on1 (opid, optype) =
           let opname = EcIdent.name opid in
+          let oppath = xpath opname in
           let optype = ty_subst tsubst optype in
-          let opdecl = mk_op [(self, Sp.singleton mypath)] optype (Some OP_TC) in
-            (opid, xpath opname, optype, opdecl)
+          let opdecl = mk_op [(self, Sp.singleton mypath)] optype (Some (OP_TC (oppath, optype))) in
+            (opid, oppath, optype, opdecl)
         in
           List.map on1 tc.tc_ops
       in
@@ -864,7 +865,7 @@ module MC = struct
         List.fold_left
           (fun s (x, xp, xty, _) ->
             let fop = EcCoreFol.f_op xp [tvar self] xty in
-              Fsubst.f_bind_local s x fop)
+            Fsubst.f_bind_local s x fop)
           (Fsubst.f_subst_init ~sty:tsubst ())
           operators
       in
@@ -882,8 +883,9 @@ module MC = struct
 
       let mc =
         List.fold_left
-          (fun mc (_, fpath, _, fop) ->
-            _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop))
+          (fun mc (opid, fpath, _, fop) ->
+            Format.eprintf "[W] upping operator %s@." (EcIdent.name opid);
+            _up_operator candup mc (EcIdent.name opid) (IPPath fpath, fop))
           mc operators
       in
         List.fold_left
@@ -2608,7 +2610,7 @@ module Op = struct
         | OB_oper (Some (OP_Record _))
         | OB_oper (Some (OP_Proj _))
         | OB_oper (Some (OP_Fix _))
-        | OB_oper (Some (OP_TC))
+        | OB_oper (Some (OP_TC _))
         | OB_pred None
         | OB_nott _ -> false
 

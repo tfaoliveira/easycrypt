@@ -9,6 +9,9 @@ type class comoid = {
   axiom addmA (x y z : comoid) : (x + y) + z = x + (y + z)
 }.
 
+print op ('0).
+print add0m.
+
 lemma addm0 ['a <: comoid] (x : 'a) : x + '0 = x.
 proof. by rewrite addmC add0m. qed.
 

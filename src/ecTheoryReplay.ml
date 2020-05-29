@@ -486,7 +486,7 @@ and replay_instance
                 | OB_oper (Some (OP_Record _))
                 | OB_oper (Some (OP_Proj   _))
                 | OB_oper (Some (OP_Fix    _))
-                | OB_oper (Some (OP_TC      )) ->
+                | OB_oper (Some (OP_TC     _)) ->
                     Some (EcPath.pappend npath q)
                 | OB_oper (Some (OP_Plain e)) ->
                     match e.EcTypes.e_node with
