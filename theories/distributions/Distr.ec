@@ -30,7 +30,7 @@
  *)
 
 (* -------------------------------------------------------------------- *)
-require import AllCore List.
+require import AllCore List Binomial.
 require import Ring StdRing StdOrder StdBigop Discrete RealSeq RealSeries.
 (*---*) import IterOp Bigint Bigreal Bigreal.BRA.
 (*---*) import IntOrder RealOrder RField.
@@ -1369,6 +1369,9 @@ proof.
 rewrite supp_djoin size_map; congr; apply/eq_iff.
 by rewrite zip_mapl all_map &(eq_all).
 qed.
+
+(* -------------------------------------------------------------------- *)
+
 
 (* -------------------------------------------------------------------- *)
 op E ['a] (d : 'a distr) (f : 'a -> real) =
