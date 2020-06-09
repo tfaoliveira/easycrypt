@@ -103,6 +103,13 @@ case: k ge0_k => [|k ge0_k _]; 1: rewrite bin0 //#.
 by rewrite binSn // addr_ge0 &(ih) /#.
 qed.
 
+lemma bin_gt (n k : int) : n < k => bin n k = 0.
+proof.
+move=> lt_nk; rewrite /bin; case _: (_ \/ _) => //=.
+rewrite negb_or -!lerNgt => -[ge0_n ge0_k].
+by rewrite nth_out // size_bin //= ltzS ge0_k lerNgt.
+qed.
+
 (* -------------------------------------------------------------------- *)
 abstract theory BinomialCoeffs.
 type t.
@@ -168,7 +175,10 @@ qed.
 end BinomialCoeffs.
 
 (* -------------------------------------------------------------------- *)
-clone BinomialCoeffs as BCR with
+import RField.
+
+theory BCR.
+clone include BinomialCoeffs with
   type t <- real,
 
   pred R.unit   <- (fun x => x <> 0%r),
@@ -190,7 +200,9 @@ clone BinomialCoeffs as BCR with
   remove abbrev R.(-)
   remove abbrev R.(/)
   remove abbrev BCR.BAdd.bigi
-  remove abbrev BCR.BMul.bigi.
+  remove abbrev BCR.BMul.bigi
+
+  rename "binomial" as "binomial_r".
 
 realize R.addrA      by exact/RField.addrA     .
 realize R.addrC      by exact/RField.addrC     .
@@ -204,3 +216,11 @@ realize R.mulrDl     by exact/RField.mulrDl    .
 realize R.mulVr      by exact/RField.mulVr     .
 realize R.unitP      by exact/RField.unitP     .
 realize R.unitout    by exact/RField.unitout   .
+
+lemma binomial (x y : real) n : 0 <= n => (x + y) ^ n =
+  Bigreal.BRA.bigi predT (fun i => (bin n i)%r * (x ^ i * y ^ (n - i))) 0 (n + 1).
+proof.
+move=> ge0_n; have := binomial_r x y n ge0_n => ->.
+by apply: Bigreal.BRA.eq_bigr=> /= k _; rewrite intmulr mulrC mulrA.
+qed.
+end BCR.
