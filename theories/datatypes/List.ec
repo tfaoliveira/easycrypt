@@ -10,7 +10,7 @@
  * ssreflect Coq extension. *)
 
 (* -------------------------------------------------------------------- *)
-require import AllCore Ring.
+require import AllCore.
 
 (* -------------------------------------------------------------------- *)
 type 'a list = [

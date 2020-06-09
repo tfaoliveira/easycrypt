@@ -393,51 +393,6 @@ lemma fold_add (f : 'a -> 'a) a n1 n2 : 0 <= n1 => 0 <= n2 =>
 proof. elim/intind: n1; smt(fold0 foldS). qed.
 
 (* -------------------------------------------------------------------- *)
-(* Power *)
-
-(*
-op ( ^ ) (x:int) (p:int) = fold (( * ) x) 1 p
-  axiomatized by powE.
-
-lemma nosmt powNeg p x: p <= 0 => x ^ p = 1.
-proof. by move=> le0_p; rewrite powE foldle0. qed.
-
-lemma pow0 x: x ^ 0 = 1.
-proof. by rewrite powE fold0. qed.
-
-lemma pow1 (n:int): n ^ 1 = n.
-proof. by rewrite powE -foldpos //= fold0 mulz1. qed.
-
-lemma powS p x: 0 <= p => x ^ (p+1) = x * x ^ p.
-proof. by move=> ge0_p; rewrite !powE foldS. qed.
-
-lemma pow_le0 p x: p <= 0 => x ^ p = 1.
-proof. by move=> ?; rewrite powE foldle0. qed.
-
-lemma pow_add z p1 p2: 0 <= p1 => 0 <= p2 => z^p1 * z^p2 = z^(p1+p2).
-proof. by move=> ge0_p1; elim/intind: p2; smt(pow0 powS). qed.
-
-lemma pow_mul z p1 p2: 0 <= p1 => 0 <= p2 => (z^p1)^p2 = z^(p1*p2).
-proof.
-move=> ge0_p1; elim/intind: p2 => /=; first by rewrite !pow0.
-by move=> i ge0_i ih; rewrite powS // mulzDr -pow_add /#.
-qed.
-
-lemma powPos z p: 0 < z => 0 < z ^ p.
-proof.
-case: (p <= 0)=> [le0_p|]; first by rewrite pow_le0.
-move/ltzNge=> /ltzW h gt0_z; elim/intind: p h; first by rewrite pow0.
-by move=> i ge0_i ih; rewrite powS //#.
-qed.
-
-lemma pow_Mle x y: 0 <= x <= y => 2^x <= 2^y.
-proof.
-case=> ge0_x le_xy; have ge0_y : 0 <= y by smt().
-by elim/intind: y ge0_y le_xy; smt(powPos powS).
-qed.
-*)
-
-(* -------------------------------------------------------------------- *)
 theory Extrema.
   op min (a b:int) = if (a < b) then a else b.
 

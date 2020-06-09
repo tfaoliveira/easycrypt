@@ -69,13 +69,13 @@ qed.
 lemma nosmt bs2int_mod N i : 0 <= i => int2bs N (i %% 2^N) = int2bs N i.
 proof.
 move=> ge0_i; apply/bs2int_eq=> //; last by rewrite modz_mod.
-by rewrite modz_ge0 // -lt0n ?ltrW // exprz_gt0.
+by rewrite modz_ge0 // -lt0n ?ltrW // expr_gt0.
 qed.
 
 lemma bs2int_ge0 s : 0 <= bs2int s.
 proof.
 elim/last_ind: s => /= [|s b ih]; 1: by rewrite bs2int_nil.
-by rewrite bs2int_rcons addr_ge0 ?ih mulr_ge0 ?b2i_ge0 ltrW exprz_gt0.
+by rewrite bs2int_rcons addr_ge0 ?ih mulr_ge0 ?b2i_ge0 ltrW expr_gt0.
 qed.
 
 lemma bs2int_le2Xs s : bs2int s < 2^(size s).
@@ -83,7 +83,7 @@ proof.
 elim/last_ind: s=> /= [|s b ih]; first by rewrite bs2int_nil expr0.
 rewrite bs2int_rcons size_rcons exprS ?size_ge0.
 (have {2}->: 2=1+1 by done); rewrite mulrDl mul1r ltr_le_add //.
-by rewrite ler_pimulr ?b2i_le1 ltrW exprz_gt0.
+by rewrite ler_pimulr ?b2i_le1 ltrW expr_gt0.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -93,7 +93,7 @@ elim/last_ind: s=> /= [|s b ih]; 1: by rewrite bs2int_nil int2bs0s.
 rewrite bs2int_rcons size_rcons int2bsS ?size_ge0.
 rewrite -(@bs2int_mod (size s)) 1:-bs2int_rcons ?bs2int_ge0.
 rewrite mulrC modzMDr bs2int_mod 1:bs2int_ge0 ih; congr.
-have gt0_2Xs: 0 < 2  ^ (size s) by rewrite exprz_gt0.
+have gt0_2Xs: 0 < 2  ^ (size s) by rewrite expr_gt0.
 rewrite divzMDr 1:gtr_eqF // divz_small /=.
   by rewrite bs2int_ge0 gtr0_norm ?bs2int_le2Xs.
 by rewrite mod2_b2i b2i_eq0.
@@ -106,13 +106,13 @@ move=> ge0N; elim: N ge0N i=> /= [|n ge0_n ih] i.
   rewrite expr0 ltz1 -eqr_le => <-; rewrite int2bs0.
   by rewrite nseq0_le // bs2int_nil.
 case=> [ge0_i lt_i2XSn]; rewrite int2bsS // bs2int_rcons.
-rewrite -{1}bs2int_mod // ih 1:ltz_pmod ?exprz_gt0 //=.
-  by rewrite modz_ge0 gtr_eqF ?exprz_gt0.
+rewrite -{1}bs2int_mod // ih 1:ltz_pmod ?expr_gt0 //=.
+  by rewrite modz_ge0 gtr_eqF ?expr_gt0.
 rewrite size_int2bs max_ler // eq_sym {1}(@divz_eq i (2^n)).
 rewrite addrC mulrC; do 2! congr; move: lt_i2XSn.
-rewrite exprS // -ltz_divLR ?exprz_gt0 // => lt.
+rewrite exprS // -ltz_divLR ?expr_gt0 // => lt.
 rewrite -{1}(@modz_small (i %/ 2^n) 2) ?ger0_norm ?b2i_mod2 //.
-by rewrite lt /= divz_ge0 ?exprz_gt0.
+by rewrite lt /= divz_ge0 ?expr_gt0.
 qed.
 end BS2Int.
 

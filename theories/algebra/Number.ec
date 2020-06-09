@@ -997,7 +997,7 @@ hint rewrite invr_lte1 : invr_le1 invr_lt1.
 hint rewrite invr_cp1  : invr_le1 invr_lt1.
 
 (* -------------------------------------------------------------------- *)
-lemma exprz_ge0 n x : zeror <= x => zeror <= exp x n.
+lemma expr_ge0 n x : zeror <= x => zeror <= exp x n.
 proof.
 move=> ge0_x; elim/intwlog: n.
 + by move=> n; rewrite exprN invr_ge0.
@@ -1005,15 +1005,15 @@ move=> ge0_x; elim/intwlog: n.
 + by move=> n ge0_n ge0_e; rewrite exprS // mulr_ge0.
 qed.
 
-lemma exprz_gt0 n x : zeror < x => zeror < exp x n.
-proof. by rewrite !lt0r expf_eq0 => -[->/=]; apply/exprz_ge0. qed.
+lemma expr_gt0 n x : zeror < x => zeror < exp x n.
+proof. by rewrite !lt0r expf_eq0 => -[->/=]; apply/expr_ge0. qed.
 
-hint rewrite exprz_gte0 : exprz_ge0 exprz_gt0.
+hint rewrite expr_gte0 : expr_ge0 expr_gt0.
 
 lemma nosmt exprn_ile1 n x : 0 <= n => zeror <= x <= oner => exp x n <= oner.
 proof.
 move=> nge0 [xge0 xle1]; elim: n nge0; 1: by rewrite expr0.
-by move=> n ge0_n ih; rewrite exprS // mulr_ile1 ?exprz_ge0.
+by move=> n ge0_n ih; rewrite exprS // mulr_ile1 ?expr_ge0.
 qed.
 
 lemma nosmt exprn_ilt1 n x :
@@ -1021,7 +1021,7 @@ lemma nosmt exprn_ilt1 n x :
 proof.
 move=> nge0 [xge0 xlt1]; case: n nge0; 1: by rewrite expr0 ltrr.
 move=> n nge0 _; rewrite addz_neq0 //=; elim: n nge0; 1: by rewrite expr1.
-by move=> n nge0 ih; rewrite exprS 1:addz_ge0 // mulr_ilt1 ?exprz_ge0.
+by move=> n nge0 ih; rewrite exprS 1:addz_ge0 // mulr_ilt1 ?expr_ge0.
 qed.
 
 hint rewrite exprn_ilte1 : exprn_ile1 exprn_ilt1.
@@ -1086,14 +1086,14 @@ lemma nosmt ler_wiexpn2l x : zeror <= x <= oner =>
   forall m n, 0 <= n <= m => exp x m <= exp x n.
 proof.
 move=> [xge0 xle1] m n [ge0_n le_nm]; have ->: m = (m - n) + n by ring.
-by rewrite exprDn 1:subz_ge0 // ler_pimull ?(exprz_ge0, exprn_ile1) ?subz_ge0.
+by rewrite exprDn 1:subz_ge0 // ler_pimull ?(expr_ge0, exprn_ile1) ?subz_ge0.
 qed.
 
 lemma nosmt ler_weexpn2l x : oner <= x =>
   forall m n, 0 <= m <= n => exp x m <= exp x n.
 proof.
 move=> ge1_x m n [ge0_m le_mn]; have ->: n = (n - m) + m by ring.
-rewrite exprDn 1:subz_ge0 // ler_pemull ?(exprz_ge0, exprn_ege1) //.
+rewrite exprDn 1:subz_ge0 // ler_pemull ?(expr_ge0, exprn_ege1) //.
 + by rewrite (@ler_trans oner). + by rewrite subz_ge0.
 qed.
 
@@ -1128,7 +1128,7 @@ lemma nosmt ler_pexp n x y :
 proof.
 move=> h; elim/intind: n h x y => [|n ge0_n ih] x y [ge0_x le_xy].
 + by rewrite !expr0.
-+ by rewrite !exprS // ler_pmul // ?exprz_ge0 ?ih.
++ by rewrite !exprS // ler_pmul // ?expr_ge0 ?ih.
 qed.
 
 lemma nosmt ge0_sqr (x : t) : zeror <= exp x 2.
