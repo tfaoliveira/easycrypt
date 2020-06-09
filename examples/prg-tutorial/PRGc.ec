@@ -7,7 +7,7 @@
 (* Loading core datatype theories *)
 require import AllCore List FSet SmtMap.
 (* Loading algebraic theories *)
-require import IntExtra RealExtra StdRing StdOrder StdBigop.
+require import StdRing StdOrder StdBigop.
 (*---*) import Ring.IntID RField IntOrder RealOrder Bigreal BRA.
 (* Loading distribution theories *)
 require import Distr DProd Mu_mem.
