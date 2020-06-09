@@ -76,11 +76,11 @@ end
 
 (* -------------------------------------------------------------------- *)
 module CI_Real = struct
-  let i_Real = "Real"
+  let i_Real = "CoreReal"
   let p_Real = EcPath.pqname p_top i_Real
   let p_real = _Pervasive "real"
 
-  let p_RealExtra = EcPath.pqname p_top "RealExtra"
+  let p_RealExtra = EcPath.pqname p_top "Real"
 
 
   let p_RealOrder =
@@ -90,15 +90,15 @@ module CI_Real = struct
 
   let p_real0       = _Real "zero"
   let p_real1       = _Real "one"
-  let p_real_opp    = _Real "[-]"
-  let p_real_add    = _Real "+"
-  let p_real_mul    = _Real "*"
+  let p_real_opp    = _Real "opp"
+  let p_real_add    = _Real "add"
+  let p_real_mul    = _Real "mul"
   let p_real_inv    = _Real "inv"
-  let p_real_pow    = EcPath.extend p_Real ["^"]
-  let p_real_le     = _Real "<="
-  let p_real_lt     = _Real "<"
-  let p_real_of_int = EcPath.extend p_Real ["from_int"]
-  let p_real_abs    = EcPath.extend p_Real ["`|_|"]
+  let p_real_pow    = EcPath.extend p_top ["Real"; "Rfield"; "exp"]
+  let p_real_le     = _Real "le"
+  let p_real_lt     = _Real "lt"
+  let p_real_of_int = _Real "from_int"
+  let p_real_abs    = EcPath.extend p_top ["Real"; "`|_|"]
 end
 
 module CI_Pred = struct

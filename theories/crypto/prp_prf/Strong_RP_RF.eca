@@ -9,7 +9,7 @@
 require import AllCore Distr List FSet SmtMap.
 require import Dexcepted.
 require (*--*) PRP.
-(*---*) import StdRing.RField StdOrder.RealOrder.
+(*---*) import RField StdOrder.RealOrder.
 
 require (*--*) FelTactic.
 
