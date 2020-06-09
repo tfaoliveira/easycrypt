@@ -54,14 +54,14 @@ qed.
 lemma nosmt size_wordn i : size (wordn i) = card ^ (max 0 i).
 proof.
 case: (lezWP 0 i)=> [le|_ le]; last first.
-  by rewrite max_lel ?wordn0 //= pow0.
+  by rewrite max_lel ?wordn0 //= expr0.
 rewrite max_ler //; elim: i le.
-  by rewrite wordn0 // pow0.
+  by rewrite wordn0 // expr0.
 move=> i le0_i ih; rewrite wordnS // size_flatten /=.
 rewrite -map_comp (@eq_map _ (fun x => card^i)).
   by move=> x /=; rewrite /(\o) size_map.
 rewrite Bigint.sumzE big_map /(\o) /predT /=.
-by rewrite Bigint.big_constz count_predT -/card mulzC powS.
+by rewrite Bigint.big_constz count_predT -/card mulzC exprS.
 qed.
 
 (* -------------------------------------------------------------------- *)

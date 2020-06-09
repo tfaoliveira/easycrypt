@@ -7,7 +7,7 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Int IntExtra Real RealExtra StdRing StdOrder RealFun.
+require import AllCore StdRing StdOrder RealFun.
 (*---*) import IntOrder RField RealOrder.
 require import List.
 
@@ -314,7 +314,7 @@ qed.
 lemma poly2_solve (a b c : real) (x : real) :
      a <> 0%r => 0%r <= D2 a b c
   => (   a * exp x 2 + b * x + c = 0%r
-     <=> exists z, exp z 2 = D2 a b c /\ x = (-b + z) / (2%r * a)).
+     <=> exists (z : real), exp z 2 = D2 a b c /\ x = (-b + z) / (2%r * a)).
 proof.
 move=> nz_a ge0_D2; split; last first.
 + case=> z []; rewrite -!powrE => z2E ->; rewrite #field ?mulf_eq0 //.
@@ -327,7 +327,7 @@ move=> h; exists ((x + b / (2%r * a)) * (2%r * a)); split.
 qed.
 
 lemma poly2_same_sign (a b c : real) : a <> 0%r =>
-     (forall x, 0%r <= a * (a * exp x 2 + b * x + c))
+     (forall (x : real), 0%r <= a * (a * exp x 2 + b * x + c))
   => D2 a b c <= 0%r.
 proof.
 move=> nz_a; pose z := -b / (2%r * a); move/(_ z).

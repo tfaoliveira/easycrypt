@@ -232,7 +232,7 @@ move=>x ux; apply/(@mulrI `|x|); first by apply/normr_unit.
 by rewrite -normrM !mulrV ?normr_unit // normr1.
 qed.
 
-lemma nosmt normrX_nat n x : 0 <= n => `|exp x n| = exp `|x| n.
+lemma nosmt normrX_nat n (x : t) : 0 <= n => `|exp x n| = exp `|x| n.
 proof.
 elim: n=> [|n ge0_n ih]; first by rewrite !expr0 normr1.
 by rewrite !exprS //= normrM ih.
@@ -1131,7 +1131,7 @@ move=> h; elim/intind: n h x y => [|n ge0_n ih] x y [ge0_x le_xy].
 + by rewrite !exprS // ler_pmul // ?exprz_ge0 ?ih.
 qed.
 
-lemma nosmt ge0_sqr x : zeror <= exp x 2.
+lemma nosmt ge0_sqr (x : t) : zeror <= exp x 2.
 proof.
 rewrite expr2; case: (zeror <= x); first by move=> h; apply/mulr_ge0.
 by rewrite lerNgt /= => /ltrW le0_x; apply/mulr_le0.

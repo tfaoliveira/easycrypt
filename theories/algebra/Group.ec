@@ -1,5 +1,5 @@
 (* -------------------------------------------------------------------- *)
-require import AllCore List IntExtra IntMin IntDiv.
+require import AllCore List IntMin IntDiv.
 require (*--*) FinType Ring Number StdOrder ZModP.
 
 import Ring.IntID StdOrder.IntOrder.

@@ -54,7 +54,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module CI_Int = struct
-  let i_Int = "Int"
+  let i_Int = "CoreInt"
   let p_Int = EcPath.pqname p_top i_Int
   let p_int = _Pervasive "int"
 
@@ -65,12 +65,12 @@ module CI_Int = struct
   let _IntDiv = fun x -> EcPath.pqname p_IntDiv x
 
   let p_int_elim  = _Int "intind"
-  let p_int_opp   = _Int "[-]"
-  let p_int_add   = _Int "+"
-  let p_int_mul   = _Int "*"
-  let p_int_pow   = _Int "^"
-  let p_int_le    = _Int "<="
-  let p_int_lt    = _Int "<"
+  let p_int_opp   = _Int "opp"
+  let p_int_add   = _Int "add"
+  let p_int_mul   = _Int "mul"
+  let p_int_pow   = EcPath.extend p_top ["Ring"; "IntID"; "exp"]
+  let p_int_le    = _Int "le"
+  let p_int_lt    = _Int "lt"
   let p_int_edivz = _IntDiv "edivz"
 end
 

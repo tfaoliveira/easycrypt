@@ -7,7 +7,7 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Ring StdRing Int IntExtra Real.
+require import AllCore Ring StdRing.
 require (*--*) Number.
 (*---*) import IntID.
 
@@ -24,7 +24,7 @@ clone include Number.RealDomain
   op   Domain.( * )  <- Int.( * ),
   op   Domain.invr   <- (fun (z : int) => z),
   op   Domain.intmul <- IntID.intmul,
-  op   Domain.ofint  <- IntID.ofint,
+  op   Domain.ofint  <- IntID.ofint_id,
   op   Domain.exp    <- IntID.exp,
 
   op   "`|_|" <- Int."`|_|",

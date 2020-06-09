@@ -7,7 +7,7 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Int IntExtra AlgTactic.
+require import Int AlgTactic.
 require export Real.
 
 pragma +implicits.

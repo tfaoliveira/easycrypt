@@ -7,7 +7,7 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import Bool Int IntExtra Real RealExtra.
+require import Bool Int Real RealExtra.
 require (*--*) Ring.
 
 (* -------------------------------------------------------------------- *)
@@ -70,12 +70,12 @@ end RField.
 
 (* -------------------------------------------------------------------- *)
 instance ring with int
-  op rzero = Int.zero
-  op rone  = Int.one
-  op add   = Int.( + )
-  op opp   = Int.([-])
-  op mul   = Int.( * )
-  op expr  = IntExtra.( ^ )
+  op rzero = CoreInt.zero
+  op rone  = CoreInt.one
+  op add   = CoreInt.add
+  op opp   = CoreInt.opp
+  op mul   = CoreInt.mul
+  op expr  = Ring.IntID.exp
 
   proof oner_neq0 by smt()
   proof addr0     by smt()
@@ -86,8 +86,8 @@ instance ring with int
   proof mulrA     by smt()
   proof mulrC     by smt()
   proof mulrDl    by smt()
-  proof expr0     by smt(pow0)
-  proof exprS     by smt(powS).
+  proof expr0     by smt(Ring.IntID.expr0)
+  proof exprS     by smt(Ring.IntID.exprS).
 
 op bid (b:bool) = b.
 
