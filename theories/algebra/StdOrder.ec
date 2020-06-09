@@ -26,6 +26,8 @@ clone include Number.RealDomain
   op   Domain.intmul <- IntID.intmul,
   op   Domain.ofint  <- IntID.ofint_id,
   op   Domain.exp    <- IntID.exp,
+  op   minr          <- min,
+  op   maxr          <- max,
 
   op   "`|_|" <- Int."`|_|",
   op   ( <= ) <- Int.(<=),
@@ -91,6 +93,8 @@ clone Number.RealField as RealOrder
   op   Field.intmul <- RField.intmul,
   op   Field.ofint  <- RField.ofint,
   op   Field.exp    <- RField.exp,
+  op   minr          = fun x y : real => if x <= y then x else y,
+  op   maxr          = fun x y : real => if y <= x then x else y,
 
   op   "`|_|" <- Real."`|_|",
   op   ( <= ) <- Real.(<=),

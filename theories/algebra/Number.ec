@@ -44,6 +44,9 @@ op "`|_|" : t -> t.
 op ( <= ) : t -> t -> bool.
 op ( <  ) : t -> t -> bool.
 
+op minr : t -> t -> t.
+op maxr : t -> t -> t.
+
 theory Axioms.
   axiom nosmt ler_norm_add (x y : t): `|x + y| <= `|x| + `|y|.
   axiom nosmt addr_gt0     (x y : t): zeror < x => zeror < y => zeror < (x + y).
@@ -53,12 +56,11 @@ theory Axioms.
   axiom nosmt ler_def      (x y : t): x <= y <=> `|y - x| = y - x.
   axiom nosmt ltr_def      (x y : t): x < y <=> (y <> x) /\ x <= y.
   axiom nosmt real_axiom   (x   : t): zeror <= x \/ x <= zeror.
+  axiom nosmt minrE        (x y : t): minr x y = if x <= y then x else y.
+  axiom nosmt maxrE        (x y : t): maxr x y = if y <= x then x else y.
 end Axioms.
 
 clear [Axioms.*].
-
-op minr (x y : t) = if x <= y then x else y.
-op maxr (x y : t) = if y <= x then x else y.
 
 lemma nosmt ler_norm_add (x y : t): `|x + y| <= `|x| + `|y|.
 proof. by apply/Axioms.ler_norm_add. qed.
@@ -84,6 +86,12 @@ proof. by apply/Axioms.ltr_def. qed.
 
 lemma real_axiom (x : t): (zeror <= x) \/ (x <= zeror).
 proof. by apply/Axioms.real_axiom. qed.
+
+lemma minrE (x y : t): minr x y = if x <= y then x else y.
+proof. by apply/Axioms.minrE. qed.
+
+lemma maxrE (x y : t): maxr x y = if y <= x then x else y.
+proof. by apply/Axioms.maxrE. qed.
 
 lemma ger0_def (x : t): (zeror <= x) <=> (`|x| = x).
 proof. by rewrite ler_def subr0. qed.
@@ -1236,13 +1244,40 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 lemma maxrC (x y : t) : maxr x y = maxr y x.
-proof. by rewrite /maxr lerNgt ler_eqVlt; case: (x = y); case: (x < y). qed.
+proof. by rewrite !maxrE lerNgt ler_eqVlt; case: (x = y); case: (x < y). qed.
 
 lemma maxrl (x y : t) : x <= maxr x y.
-proof. by rewrite /maxr; case: (y <= x) => [_|/ltrNge/ltrW]. qed.
+proof. by rewrite maxrE; case: (y <= x) => [_|/ltrNge/ltrW]. qed.
 
 lemma maxrr (x y : t) : y <= maxr x y.
 proof. by rewrite maxrC maxrl. qed.
+
+lemma ler_maxr (x y : t) : x <= y => maxr x y = y.
+proof. by rewrite maxrE lerNgt ler_eqVlt => -> /#. qed.
+
+lemma ler_maxl (x y : t) : y <= x => maxr x y = x.
+proof. by rewrite maxrC &(ler_maxr). qed.
+
+lemma maxr_ub (x y : t) : x <= maxr x y /\ y <= maxr x y.
+proof. by rewrite maxrl maxrr. qed.
+
+lemma ler_maxrP m n1 n2 : (maxr n1 n2 <= m) <=> (n1 <= m) /\ (n2 <= m).
+proof. 
+split; last by case=> le1 le2; rewrite maxrE; case: (n2 <= n1).
+rewrite maxrE; case: (n2 <= n1).
+* by move=> le_21 le_n1m; rewrite (ler_trans _ le_21 le_n1m).
+* rewrite lerNgt /= => /ltrW le_12 le_n1m.
+  by rewrite (ler_trans _ le_12 le_n1m).
+qed.
+
+lemma ltr_maxrP m n1 n2 : (maxr n1 n2 < m) <=> (n1 < m) /\ (n2 < m).
+proof.
+split; last by case=> le1 le2; rewrite maxrE; case: (n2 <= n1).
+rewrite maxrE; case: (n2 <= n1).
+* by move=> le_21 lt_n1m; rewrite (ler_lt_trans _ le_21 lt_n1m).
+* rewrite lerNgt /= => lt_12 lt_n1m.
+  by rewrite (ltr_trans _ lt_12 lt_n1m).
+qed.
 end RealDomain.
 
 (* -------------------------------------------------------------------- *)

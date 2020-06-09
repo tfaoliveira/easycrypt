@@ -347,8 +347,7 @@ lemma leak_pad m t:
   size (pad m t)
   = size (pad (mkseq (fun (i : int) => zerow) (size m - size m %% 16)) t).
 proof.
-rewrite /pad /= !size_os2bs !size_padded size_mkseq.
-rewrite max_ler.
+rewrite /pad /= !size_os2bs !size_padded size_mkseq ler_maxr.
 + case: (size m < 16)=> [|/lezNgt] szm_16.
   + by rewrite modz_small 1:size_ge0.
   smt (@IntDiv).

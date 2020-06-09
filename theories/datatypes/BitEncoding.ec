@@ -45,7 +45,7 @@ proof. by apply/mkseq0_le. qed.
 lemma int2bs0 N : int2bs N 0 = nseq N false.
 proof.
 apply/(eq_from_nth false); rewrite size_int2bs ?size_nseq //.
-case: (N <= 0) => [le0_N i|]; 1: by rewrite max_lel ?ler_lt_asym.
+case: (N <= 0) => [le0_N i|]; 1: by rewrite ler_maxl ?ler_lt_asym.
 move/ltrNge => @/max ^gt0_N ->/= i lt_in.
 by rewrite nth_nseq ?nth_mkseq //= div0z mod0z.
 qed.
@@ -108,7 +108,7 @@ move=> ge0N; elim: N ge0N i=> /= [|n ge0_n ih] i.
 case=> [ge0_i lt_i2XSn]; rewrite int2bsS // bs2int_rcons.
 rewrite -{1}bs2int_mod // ih 1:ltz_pmod ?expr_gt0 //=.
   by rewrite modz_ge0 gtr_eqF ?expr_gt0.
-rewrite size_int2bs max_ler // eq_sym {1}(@divz_eq i (2^n)).
+rewrite size_int2bs ler_maxr // eq_sym {1}(@divz_eq i (2^n)).
 rewrite addrC mulrC; do 2! congr; move: lt_i2XSn.
 rewrite exprS // -ltz_divLR ?expr_gt0 // => lt.
 rewrite -{1}(@modz_small (i %/ 2^n) 2) ?ger0_norm ?b2i_mod2 //.
@@ -160,7 +160,7 @@ qed.
 lemma size_chunk r (bs : 'a list) : 0 < r =>
   size (chunk r bs) = size bs %/ r.
 proof.
-move=> gt0_r; rewrite size_mkseq max_ler //.
+move=> gt0_r; rewrite size_mkseq ler_maxr //.
 by rewrite divz_ge0 ?gt0_r ?size_ge0.
 qed.
 
@@ -174,7 +174,7 @@ rewrite -ler_subr_addr addrAC => /ler_trans/(_ (size bs - r) _).
 rewrite (mulrC i) ler_subr_addl -ler_subr_addr => ler.
 have ge0_r: 0 <= r by apply/ltrW/gt0_r.
 rewrite size_take ?ge0_r size_drop // 1:mulr_ge0 ?ge0_r //.
-rewrite max_ler 1:subr_ge0 1:-subr_ge0 1:(ler_trans r) ?ge0_r //.
+rewrite ler_maxr 1:subr_ge0 1:-subr_ge0 1:(ler_trans r) ?ge0_r //.
 by move/ler_eqVlt: ler=> [<-|->].
 qed.
 
@@ -233,7 +233,7 @@ rewrite ltr_pmul2r ?lt_iq //= take_cat; pose s := drop _ _.
 suff /ler_eqVlt[->|->//]: r <= size s; 1: rewrite ltrr /=.
   by rewrite take0 take_size cats0.
 rewrite size_drop ?mulr_ge0 // 1:ltrW // szxs -mulrBl.
-rewrite max_ler ?mulr_ge0 1,2:ltrW ?subr_gt0 ?ler_pmull //.
+rewrite ler_maxr ?mulr_ge0 1,2:ltrW ?subr_gt0 ?ler_pmull //.
 by rewrite ler_subr_addl -ltzE.
 qed.
 end BitChunking.
