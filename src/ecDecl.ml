@@ -85,7 +85,7 @@ and opbody =
   | OP_Record of EcPath.path
   | OP_Proj   of EcPath.path * int * int
   | OP_Fix    of opfix
-  | OP_TC     of EcPath.path * EcTypes.ty
+  | OP_TC     of EcPath.path * EcSymbols.symbol * EcTypes.ty
 
 and prbody =
   | PR_Plain of form

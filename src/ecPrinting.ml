@@ -1924,10 +1924,16 @@ let pp_opdecl_op (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
           (pp_type ppe) fix.opf_resty
           (pp_list "@\n" pp_branch) cfix
 
-    | Some (OP_TC (p, t)) ->
+    | Some (OP_TC (p, n, t)) ->
+        let pre =
+          match EcPath.prefix p with
+          | None   -> []
+          | Some p -> EcPath.tolist p
+        in
         Format.fprintf fmt
-          " : %a = < type-class-operator: %a >"
+          " : %a = %a (* typeclass operator in class %a *)"
           (pp_type ppe) t
+          pp_opname (pre, n)
           pp_path p
   in
 

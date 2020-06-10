@@ -1,4 +1,6 @@
-require import AllCore Int.
+require import Int.
+
+print Int.(+).
 
 type class comoid = {
   op ('0) : comoid
@@ -9,7 +11,9 @@ type class comoid = {
   axiom addmA (x y z : comoid) : (x + y) + z = x + (y + z)
 }.
 
-print op ('0).
+print ('0).
+print (+).
+
 print add0m.
 
 lemma addm0 ['a <: comoid] (x : 'a) : x + '0 = x.

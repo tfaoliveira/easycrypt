@@ -1484,7 +1484,7 @@ module Ty = struct
 
     if    EcEnv.Ty       .by_path_opt pname (env scope) <> None
        || EcEnv.TypeClass.by_path_opt pname (env scope) <> None then
-      hierror ~loc:x.pl_loc "duplicated type/type-class name `%s'" x.pl_desc
+      hierror ~loc:x.pl_loc "duplicated type or typeclass name `%s'" x.pl_desc
 
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) ((x, tydecl) : (_ * tydecl)) =
@@ -1494,7 +1494,7 @@ module Ty = struct
      | None -> ()
      | Some locals ->
         if EcSection.tydecl_use_local_or_abs tydecl locals then
-          hierror "types cannot use local/abstracts modules");
+          hierror "types cannot use local or abstracts modules");
 
     let scope = { scope with sc_env = EcEnv.Ty.bind x tydecl scope.sc_env; } in
     let scope = maybe_add_to_section scope (EcTheory.CTh_type (x, tydecl)) in
@@ -1550,7 +1550,7 @@ module Ty = struct
         tcd.ptc_inth |> omap
           (fun { pl_loc = uploc; pl_desc = uptc } ->
             match EcEnv.TypeClass.lookup_opt uptc scenv with
-            | None -> hierror ~loc:uploc "unknown type-class: `%s'"
+            | None -> hierror ~loc:uploc "unknown typeclass: `%s'"
                         (string_of_qsymbol uptc)
             | Some (tcp, _) -> tcp)
       in
@@ -1568,7 +1568,7 @@ module Ty = struct
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated axiom name: `%s'" x.pl_desc);
 
-      (* Check operators types *)
+      (* Check operator types *)
       let operators =
         let check1 (x, ty) =
           let ue = EcUnify.UniEnv.create (Some []) in
@@ -1812,7 +1812,7 @@ module Ty = struct
     let subst =
       List.fold_left (fun s (x, _) ->
                         match Mstr.find_opt x ops with
-                        | None   -> hierror "an operator is not defined"
+                        | None   -> hierror "operator %s is not defined" x
                         | Some p ->
                             let op = EcEnv.Op.by_path p sc.sc_env in
                             EcSubst.add_opdef s (EcPath.fromqsymbol (tcpp, x)) ([], EcTypes.e_op p [] op.op_ty);)
@@ -1825,8 +1825,9 @@ module Ty = struct
     (** Check axioms **)
     let axs  = check_tci_axioms sc _mode tci.pti_axs tc.tc_axs in
 
-    (** This is not OK: we need to make sure we don't add the instance until
-     * all axioms are checked. It does allow easier debugging, thought. **)
+    (** FIXME: This is not OK: we need to make sure we don't add the instance
+     * until all axioms are checked. It does allow easier debugging, though.
+     * **)
     let sc =
       { sc with
           sc_env = EcEnv.TypeClass.add_instance ty (`General tcp) sc.sc_env }
@@ -1845,7 +1846,7 @@ module Ty = struct
       match EcEnv.TypeClass.lookup_opt (unloc tci.pti_name) (env scope) with
       | None ->
           hierror ~loc:tci.pti_name.pl_loc
-            "unknown type-class: %s" (string_of_qsymbol (unloc tci.pti_name))
+            "unknown typeclass: %s" (string_of_qsymbol (unloc tci.pti_name))
       | Some tc -> tc
     in
 
@@ -1856,7 +1857,7 @@ module Ty = struct
     match unloc tci.pti_name with
     | ([], "bring") -> begin
         if EcUtils.is_some tci.pti_args then
-          hierror "unsupported-option";
+          hierror "unsupported option";
         addring scope mode (`Boolean, toptci)
       end
 
@@ -1880,7 +1881,7 @@ module Ty = struct
 
     | _ ->
         if EcUtils.is_some tci.pti_args then
-          hierror "unsupported-option";
+          hierror "unsupported option";
         add_generic_tc scope mode toptci
 
   (* ------------------------------------------------------------------ *)

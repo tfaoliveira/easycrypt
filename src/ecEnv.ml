@@ -853,10 +853,10 @@ module MC = struct
       let operators =
         let on1 (opid, optype) =
           let opname = EcIdent.name opid in
-          let oppath = xpath opname in
           let optype = ty_subst tsubst optype in
-          let opdecl = mk_op [(self, Sp.singleton mypath)] optype (Some (OP_TC (oppath, optype))) in
-            (opid, oppath, optype, opdecl)
+          let opkind = OP_TC (mypath, opname, optype) in
+          let opdecl = mk_op [(self, Sp.singleton mypath)] optype (Some opkind) in
+            (opid, xpath opname, optype, opdecl)
         in
           List.map on1 tc.tc_ops
       in
@@ -884,7 +884,6 @@ module MC = struct
       let mc =
         List.fold_left
           (fun mc (opid, fpath, _, fop) ->
-            Format.eprintf "[W] upping operator %s@." (EcIdent.name opid);
             _up_operator candup mc (EcIdent.name opid) (IPPath fpath, fop))
           mc operators
       in

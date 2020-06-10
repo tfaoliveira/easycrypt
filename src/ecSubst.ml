@@ -367,7 +367,7 @@ and subst_op_body (s : _subst) (bd : opbody) =
                  opf_struct   = opfix.opf_struct;
                  opf_branches = subst_branches es opfix.opf_branches; }
 
-  | OP_TC (p, t) -> OP_TC (s.s_p p, s.s_ty t)
+  | OP_TC (p, n, t) -> OP_TC (s.s_p p, n, s.s_ty t)
 
 and subst_branches es = function
   | OPB_Leaf (locals, e) ->
