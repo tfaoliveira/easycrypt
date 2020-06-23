@@ -954,8 +954,8 @@ and trans_fix (genv, lenv) (wdom, o) =
 (* -------------------------------------------------------------------- *)
 and create_op ?(body = false) (genv : tenv) p =
   let op = EcEnv.Op.by_path p genv.te_env in
-  let lenv, wparams = lenv_of_tparams op.op_tparams in
-  let dom, codom = EcEnv.Ty.signature genv.te_env op.op_ty in
+  let lenv, wparams = lenv_of_tparams (op_tparams op) in
+  let dom, codom = EcEnv.Ty.signature genv.te_env (op_ty op) in
 
   let wdom   = trans_tys (genv, lenv) dom in
   let wcodom =
@@ -989,7 +989,7 @@ and create_op ?(body = false) (genv : tenv) p =
 
   if not known then begin
     let decl =
-      match body, op.op_kind with
+      match body, EcDecl.op_kind op with
       | true, OB_oper (Some (OP_Plain body)) ->
           let body = EcFol.form_of_expr EcFol.mhr body in
           let wparams, wbody = trans_body (genv, lenv) wdom wcodom body in
@@ -1323,18 +1323,18 @@ module Frequency = struct
     f_ops_hyps unwanted_op (f_ops unwanted_op concl) hyps
 
   let f_ops_oper unwanted_op env p rs =
-    match EcEnv.Op.by_path_opt p env with
-    | Some {op_kind = OB_pred (Some (PR_Plain f)) } ->
+    match omap EcDecl.op_kind (EcEnv.Op.by_path_opt p env) with
+    | Some (OB_pred (Some (PR_Plain f))) ->
       r_union rs (f_ops unwanted_op f)
-    | Some {op_kind = OB_oper (Some (OP_Plain e)) } ->
+    | Some (OB_oper (Some (OP_Plain e))) ->
       r_union rs (f_ops unwanted_op (form_of_expr mhr e))
-    | Some {op_kind = OB_oper (Some (OP_Fix e)) } ->
+    | Some (OB_oper (Some (OP_Fix e))) ->
       let rec aux rs = function
         | OPB_Leaf (_, e) -> r_union rs (f_ops unwanted_op (form_of_expr mhr e))
         | OPB_Branch bs -> Parray.fold_left (fun rs b -> aux rs b.opb_sub) rs bs
       in
       aux rs e.opf_branches
-    | Some {op_kind = OB_pred (Some (PR_Ind pri)) } ->
+    | Some (OB_pred (Some (PR_Ind pri))) ->
        let for1 rs ctor =
          List.fold_left
            (fun rs f -> r_union rs (f_ops unwanted_op f))

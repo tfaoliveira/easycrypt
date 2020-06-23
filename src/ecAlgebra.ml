@@ -233,7 +233,7 @@ let toring hyps ((r, cr) : cring) (rmap : RState.rstate) (form : form) =
       match f.f_node with
       | Fint n -> PEc n
       | Fapp ({f_node = Fop (p,_)}, [a1; a2]) -> begin
-          match op_kind p with
+          match EcFol.op_kind p with
           | Some `Int_add -> PEadd (of_int a1, of_int a2)
           | Some `Int_mul -> PEmul (of_int a1, of_int a2)
           | Some `Int_pow -> begin
@@ -244,7 +244,7 @@ let toring hyps ((r, cr) : cring) (rmap : RState.rstate) (form : form) =
           | _ -> abstract ()
         end
       | Fapp ({f_node = Fop (p,_)}, [a]) -> begin
-          match op_kind p with
+          match EcFol.op_kind p with
           | Some `Int_opp -> PEsub (PEc c0, of_int a)
           | _ -> abstract ()
         end
@@ -299,7 +299,7 @@ let tofield hyps ((r, cr) : cfield) (rmap : RState.rstate) (form : form) =
     match f.f_node with
     | Fint n -> FEc n
     | Fapp ({f_node = Fop (p,_)}, [a1; a2]) -> begin
-        match op_kind p with
+        match EcFol.op_kind p with
         | Some `Int_add -> FEadd (of_int a1, of_int a2)
         | Some `Int_mul -> FEmul (of_int a1, of_int a2)
         | Some `Int_pow -> begin
@@ -310,7 +310,7 @@ let tofield hyps ((r, cr) : cfield) (rmap : RState.rstate) (form : form) =
         | _ -> abstract ()
       end
     | Fapp({f_node = Fop (p,_)}, [a]) -> begin
-        match op_kind p with
+        match EcFol.op_kind p with
         | Some `Int_opp -> FEsub (FEc c0, of_int a)
         | _ -> abstract ()
       end

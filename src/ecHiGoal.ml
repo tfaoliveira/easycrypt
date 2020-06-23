@@ -529,11 +529,11 @@ let process_delta ?target (s, o, p) tc =
     | SFop (p, args) -> begin
         let op = EcEnv.Op.by_path (fst p) env in
 
-        match op.EcDecl.op_kind with
+        match EcDecl.op_kind op with
         | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->
-            (snd p, op.EcDecl.op_tparams, form_of_expr EcFol.mhr e, args)
+            (snd p, EcDecl.op_tparams op, form_of_expr EcFol.mhr e, args)
         | EcDecl.OB_pred (Some (EcDecl.PR_Plain f)) ->
-            (snd p, op.EcDecl.op_tparams, f, args)
+            (snd p, EcDecl.op_tparams op, f, args)
         | _ ->
             tc_error !!tc "the operator cannot be unfolded"
     end

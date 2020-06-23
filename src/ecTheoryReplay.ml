@@ -205,7 +205,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
   | Some { pl_desc = (opov, opmode); pl_loc = loc; } ->
       let (reftyvars, refty) =
         let refop = EcSubst.subst_op subst oopd in
-        (refop.op_tparams, refop.op_ty)
+        (op_tparams refop, op_ty refop)
       in
 
       let (newop, subst, x, alias) =
@@ -271,7 +271,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
   | Some { pl_desc = (prov, prmode); pl_loc = loc; } ->
       let (reftyvars, refty) =
         let refpr = EcSubst.subst_op subst oopr in
-          (refpr.op_tparams, refpr.op_ty)
+          (op_tparams refpr, op_ty refpr)
       in
 
       let (newpr, subst, x, alias) =
@@ -304,9 +304,8 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
          let body    = EcFol.Fsubst.uni uni body in
          let tparams = EcUnify.UniEnv.tparams ue in
          let newpr   =
-           { op_tparams = tparams;
-             op_ty      = body.EcFol.f_ty;
-             op_kind    = OB_pred (Some (PR_Plain body)); } in
+           gen_op tparams body.EcFol.f_ty (OB_pred (Some (PR_Plain body)))
+         in
 
           match prmode with
           | `Alias ->
@@ -478,7 +477,7 @@ and replay_instance
             match alias with
             | true  -> Some (EcPath.pappend npath q)
             | false ->
-                match op.EcDecl.op_kind with
+                match EcDecl.op_kind op with
                 | OB_pred _
                 | OB_nott _    -> assert false
                 | OB_oper None -> None
@@ -539,14 +538,17 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   | CTh_type (x, otyd) ->
      replay_tyd ove (subst, ops, proofs, scope) (x, otyd)
 
-  | CTh_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
+  | CTh_operator (x, oopd) when is_oper oopd ->
      replay_opd ove (subst, ops, proofs, scope) (x, oopd)
 
-  | CTh_operator (x, ({ op_kind = OB_pred _} as oopr)) ->
+  | CTh_operator (x, oopr) when is_pred oopr ->
      replay_prd ove (subst, ops, proofs, scope) (x, oopr)
 
-  | CTh_operator (x, ({ op_kind = OB_nott _} as oont)) ->
+  | CTh_operator (x, oont) when is_abbrev oont ->
      replay_ntd ove (subst, ops, proofs, scope) (x, oont)
+
+  | CTh_operator _ ->
+      failwith "warning suppression gone wrong"
 
   | CTh_axiom (x, ax) ->
      replay_axd ove (subst, ops, proofs, scope) (x, ax)

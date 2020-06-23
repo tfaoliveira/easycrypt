@@ -1539,7 +1539,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
     and is_proj (rc : EcPath.path) (f : form) =
       match f.f_node with
       | Fapp ({ f_node = Fop (p, _) }, [{ f_node = Flocal x }]) -> begin
-          match (EcEnv.Op.by_path p ppe.PPEnv.ppe_env).op_kind with
+          match EcDecl.op_kind (EcEnv.Op.by_path p ppe.PPEnv.ppe_env) with
           | OB_oper (Some (OP_Proj (rc', i, _))) when EcPath.p_equal rc rc' ->
               Some (x, i)
           | _ -> None
@@ -1974,25 +1974,25 @@ let pp_opdecl ?(long = false) (ppe : PPEnv.t) fmt (x, op) =
   in
 
   let pp_decl fmt op =
-    match op.op_kind with
+    match EcDecl.op_kind op with
     | OB_oper i ->
-      pp_opdecl_op ppe fmt (P.basename x, op.op_tparams, op_ty op, i)
+      pp_opdecl_op ppe fmt (P.basename x, op_tparams op, op_ty op, i)
     | OB_pred i ->
-      pp_opdecl_pr ppe fmt (P.basename x, op.op_tparams, op_ty op, i)
+      pp_opdecl_pr ppe fmt (P.basename x, op_tparams op, op_ty op, i)
     | OB_nott i ->
       let ppe = { ppe with PPEnv.ppe_fb = Sp.add x ppe.PPEnv.ppe_fb } in
-      pp_opdecl_nt ppe fmt (P.basename x, op.op_tparams, op_ty op, i)
+      pp_opdecl_nt ppe fmt (P.basename x, op_tparams op, op_ty op, i)
 
   in Format.fprintf fmt "@[<v>%a%a@]" pp_name x pp_decl op
 
 let pp_added_op (ppe : PPEnv.t) fmt op =
-  let ppe = PPEnv.add_locals ppe (List.map fst op.op_tparams) in
-  match op.op_tparams with
+  let ppe = PPEnv.add_locals ppe (List.map fst (op_tparams op)) in
+  match (op_tparams op) with
   | [] -> Format.fprintf fmt ": @[<hov 2>%a@]"
-    (pp_type ppe) op.op_ty
+    (pp_type ppe) (op_ty op)
   | ts  ->
     Format.fprintf fmt "@[<hov 2>%a :@ %a.@]"
-      (pp_tyvarannot ppe) ts (pp_type ppe) op.op_ty
+      (pp_tyvarannot ppe) ts (pp_type ppe) (op_ty op)
 
 (* -------------------------------------------------------------------- *)
 let pp_opname (ppe : PPEnv.t) fmt (p : EcPath.path) =

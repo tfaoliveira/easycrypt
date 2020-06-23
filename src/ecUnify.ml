@@ -420,11 +420,11 @@ let select_op ?(filter = fun _ -> true) tvi env name ue psig =
       | Some (TVIunamed lt) ->
           let len = List.length lt in
             fun op ->
-              let tparams = op.D.op_tparams in
+              let tparams = D.op_tparams op in
                  List.length tparams = len
 
       | Some (TVInamed ls) -> fun op ->
-          let tparams = List.map (fst_map EcIdent.name) op.D.op_tparams in
+          let tparams = List.map (fst_map EcIdent.name) (D.op_tparams op) in
           let tparams = Msym.of_list tparams in
             List.for_all (fun (x, _) -> Msym.mem x tparams) ls
 
@@ -446,10 +446,10 @@ let select_op ?(filter = fun _ -> true) tvi env name ue psig =
         | Some (TVIunamed lt) ->
             List.iter2
               (fun ty (_, tc) -> hastc env subue ty tc)
-              lt op.D.op_tparams
+              lt (D.op_tparams op)
 
         | Some (TVInamed ls) ->
-            let tparams = List.map (fst_map EcIdent.name) op.D.op_tparams in
+            let tparams = List.map (fst_map EcIdent.name) (D.op_tparams op) in
             let tparams = Msym.of_list tparams in
               List.iter (fun (x, ty) ->
                 hastc env subue ty (oget (Msym.find_opt x tparams)))
@@ -457,15 +457,15 @@ let select_op ?(filter = fun _ -> true) tvi env name ue psig =
         with UnificationFailure _ -> raise E.Failure
       end;
 
-      let (tip, tvs) = UniEnv.openty_r subue op.D.op_tparams tvi in
-      let top = tip op.D.op_ty in
+      let (tip, tvs) = UniEnv.openty_r subue (D.op_tparams op) tvi in
+      let top = tip (D.op_ty op) in
       let texpected = tfun_expected subue psig in
 
       (try  unify env subue top texpected
        with UnificationFailure _ -> raise E.Failure);
 
       let bd =
-        match op.D.op_kind with
+        match D.op_kind op with
         | OB_nott nt ->
            let substnt () =
              let xs = List.map (snd_map tip) nt.D.ont_args in

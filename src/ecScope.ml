@@ -1206,14 +1206,14 @@ module Op = struct
       match op.po_ax with
       | None    -> bind scope (unloc op.po_name, tyop)
       | Some ax -> begin
-          match tyop.op_kind with
+          match EcDecl.op_kind tyop with
           | OB_oper (Some (OP_Plain bd)) ->
               let path  = EcPath.pqname (path scope) (unloc op.po_name) in
               let axop  =
                 let nosmt = op.po_nosmt in
                 let nargs = List.sum (List.map (List.length |- fst) op.po_args) in
-                  EcDecl.axiomatized_op ~nargs  ~nosmt path (tyop.op_tparams, bd) in
-              let tyop  = { tyop with op_kind = OB_oper None; } in
+                  EcDecl.axiomatized_op ~nargs  ~nosmt path (op_tparams tyop, bd) in
+              let tyop  = gen_op (op_tparams tyop) (op_ty tyop) (OB_oper None) in
               let scope = bind scope (unloc op.po_name, tyop) in
               Ax.bind scope false (unloc ax, axop)
 
@@ -1276,9 +1276,9 @@ module Op = struct
         hierror "for tag %s, load Distr first" tag;
 
       let oppath   = EcPath.pqname (path scope) (unloc op.po_name) in
-      let nparams  = List.map (EcIdent.fresh |- fst) tyop.op_tparams in
-      let subst    = Tvar.init (List.fst tyop.op_tparams) (List.map tvar nparams) in
-      let ty       = Tvar.subst subst tyop.op_ty in
+      let nparams  = List.map (EcIdent.fresh |- fst) (op_tparams tyop) in
+      let subst    = Tvar.init (List.fst (op_tparams tyop)) (List.map tvar nparams) in
+      let ty       = Tvar.subst subst (op_ty tyop) in
       let aty, rty = EcTypes.tyfun_flat ty in
 
       let dty =
@@ -1575,13 +1575,13 @@ module Ty = struct
           let ty = transty tp_tydecl scenv ue ty in
           let ty = Tuni.offun (EcUnify.UniEnv.close ue) ty in
             (EcIdent.create (unloc x), ty)
-        in
-          tcd.ptc_ops |> List.map check1 in
+      in
+        tcd.ptc_ops |> List.map check1 in
 
       (* Check axioms *)
       let axioms =
         let scenv = EcEnv.Var.bind_locals operators scenv in
-        let check1 { pa_name = x; pa_tyvars = tv; pa_vars = vd; pa_formula = ax; _ } =
+        let check1 { pa_name = x; pa_tyvars = tv; pa_vars = vd; pa_formula = ax; } =
           let ue = TT.transtyvars scenv (loc x, tv) in
 	  let pconcl =
 	    match vd with
@@ -1632,8 +1632,8 @@ module Ty = struct
               let op   = EcEnv.Op.by_path p env in
               let opty =
                 Tvar.subst
-                  (Tvar.init (List.map fst op.op_tparams) tvi)
-                  op.op_ty
+                  (Tvar.init (List.map fst (op_tparams op)) tvi)
+                  (op_ty op)
               in
                 (p, opty)
 
@@ -1815,7 +1815,7 @@ module Ty = struct
                         | None   -> hierror "operator %s is not defined" x
                         | Some p ->
                             let op = EcEnv.Op.by_path p sc.sc_env in
-                            EcSubst.add_opdef s (EcPath.fromqsymbol (tcpp, x)) ([], EcTypes.e_op p [] op.op_ty);)
+                            EcSubst.add_opdef s (EcPath.fromqsymbol (tcpp, x)) ([], EcTypes.e_op p [] (op_ty op));)
                      subst (List.map (fun (x, p) -> (EcIdent.name x, p)) tc.tc_ops)
     in
 

@@ -100,13 +100,14 @@ and prctor = {
   prc_spec : form list;
 }
 
-type operator = {
-  op_tparams : ty_params;
-  op_ty      : EcTypes.ty;
-  op_kind    : operator_kind;
-}
+type operator
 
-val op_ty     : operator -> ty
+val gen_op     : ty_params -> ty -> operator_kind -> operator
+
+val op_tparams : operator -> ty_params
+val op_ty      : operator -> ty
+val op_kind    : operator -> operator_kind
+
 val is_pred   : operator -> bool
 val is_oper   : operator -> bool
 val is_ctor   : operator -> bool

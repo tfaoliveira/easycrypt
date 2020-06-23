@@ -261,11 +261,11 @@ end = struct
     let (_ : bool) = cancrt in
 
     let () =
-      match find_op oc.oc_oth name with
+      match omap op_kind (find_op oc.oc_oth name) with
       | None
-      | Some { op_kind = OB_pred _ } ->
+      | Some (OB_pred _) ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Operator, name));
-      | Some { op_kind = OB_oper (Some _) } ->
+      | Some (OB_oper (Some _)) ->
          (* FIXME: check convertibility *) ()
       | _ -> () in
 
@@ -284,11 +284,11 @@ end = struct
     let { pl_loc = lc; pl_desc = ((nm, x) as name) } = name in
 
     let () =
-      match find_pr oc.oc_oth name with
+      match omap op_kind (find_pr oc.oc_oth name) with
       | None
-      | Some { op_kind = OB_oper _ } ->
+      | Some (OB_oper _) ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Predicate, name));
-      | Some { op_kind = OB_pred (Some _) } when not cancrt ->
+      | Some (OB_pred (Some _)) when not cancrt ->
          clone_error oc.oc_env (CE_CrtOverride (OVK_Predicate, name));
       | _ -> () in
 
@@ -338,8 +338,8 @@ end = struct
          let ovrd = (params, loced tyd, `Inline) in
          ty_ovrd ~cancrt:true oc (proofs, evc) (loced (xdth @ prefix, x)) ovrd
 
-      | CTh_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
-         let params = List.map (EcIdent.name |- fst) oopd.op_tparams in
+      | CTh_operator (x, oopd) when is_oper oopd ->
+         let params = List.map (EcIdent.name |- fst) (op_tparams oopd) in
          let params = List.map (mk_loc lc) params in
          let ovrd   = {
              opov_tyvars = Some params;
@@ -353,8 +353,8 @@ end = struct
          let ovrd = (ovrd, `Inline) in
          op_ovrd ~cancrt:true oc (proofs, evc) (loced (xdth @ prefix, x)) ovrd
 
-      | CTh_operator (x, ({ op_kind = OB_pred _ } as oprd)) ->
-         let params = List.map (EcIdent.name |- fst) oprd.op_tparams in
+      | CTh_operator (x, oprd) when is_pred oprd ->
+         let params = List.map (EcIdent.name |- fst) (op_tparams oprd) in
          let params = List.map (mk_loc lc) params in
          let ovrd   = {
              prov_tyvars = Some params;

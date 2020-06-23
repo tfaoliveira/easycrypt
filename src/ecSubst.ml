@@ -407,13 +407,11 @@ and subst_pr_body (s : _subst) (bd : prbody) =
 
 (* -------------------------------------------------------------------- *)
 let subst_op (s : _subst) (op : operator) =
-  let tparams = List.map (subst_typaram s) op.op_tparams in
-  let sty     = init_tparams s op.op_tparams tparams in
-  let ty      = sty.s_ty op.op_ty in
-  let kind    = subst_op_kind sty op.op_kind in
-    { op_tparams = tparams;
-      op_ty      = ty     ;
-      op_kind    = kind   ; }
+  let tparams = List.map (subst_typaram s) (op_tparams op) in
+  let sty     = init_tparams s (op_tparams op) tparams in
+  let ty      = sty.s_ty (op_ty op) in
+  let kind    = subst_op_kind sty (op_kind op) in
+    gen_op tparams ty kind
 
 (* -------------------------------------------------------------------- *)
 let subst_ax (s : _subst) (ax : axiom) =
