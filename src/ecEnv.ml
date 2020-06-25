@@ -692,12 +692,12 @@ module MC = struct
 
     let mc = { mc with mc_operators = MMsym.add x obj mc.mc_operators } in
     let ax =
-      let op = (snd obj) in
-      match op_kind op with
+      let op_r = get_op (snd obj) in
+      match op_r.op_kind with
       | OB_pred (Some (PR_Ind pri)) ->
          let pri =
            { ELI.ip_path    = ippath_as_path (fst obj);
-             ELI.ip_tparams = op_tparams op;
+             ELI.ip_tparams = op_r.op_tparams;
              ELI.ip_prind   = pri; } in
          ELI.prind_schemes pri
 
@@ -2418,8 +2418,9 @@ module NormMp = struct
     norm_form
 
   let norm_op env op =
+    let op_r = get_op op in
     let kind =
-      match op_kind op with
+      match op_r.op_kind with
       | OB_pred (Some (PR_Plain f)) ->
          OB_pred (Some (PR_Plain (norm_form env f)))
 
@@ -2432,7 +2433,7 @@ module NormMp = struct
 
       | _ as k -> k
     in
-      gen_op (op_tparams op) (op_ty op) kind
+      wrap_op { op_r with op_kind = kind }
 
   let norm_ax env ax =
     { ax with ax_spec = norm_form env ax.ax_spec }
@@ -2575,12 +2576,12 @@ module Op = struct
     fst (lookup name env)
 
   let bind name op env =
-    let env = MC.bind_operator name op env in
-    let op  = NormMp.norm_op env op in
-    let nt  =
-      match op_kind op with
+    let env  = MC.bind_operator name op env in
+    let op_r = get_op (NormMp.norm_op env op) in
+    let nt   =
+      match op_r.op_kind with
       | OB_nott nt ->
-         Some (EcPath.pqname (root env) name, (op_tparams op, nt))
+         Some (EcPath.pqname (root env) name, (op_r.op_tparams, nt))
       | _ -> None
     in
 
@@ -2599,7 +2600,8 @@ module Op = struct
 
   let reducible env p =
     try
-      match op_kind (by_path p env) with
+      let op_r = get_op (by_path p env) in
+      match op_r.op_kind with
       | OB_oper (Some (OP_Plain _))
       | OB_pred (Some _) -> true
       | OB_oper None
@@ -2614,9 +2616,9 @@ module Op = struct
     with LookupFailure _ -> false
 
   let reduce env p tys =
-    let op = oget (by_path_opt p env) in
-    let f  =
-      match op_kind op with
+    let op_r = get_op (oget (by_path_opt p env)) in
+    let f    =
+      match op_r.op_kind with
       | OB_oper (Some (OP_Plain e)) ->
           form_of_expr EcCoreFol.mhr e
       | OB_pred (Some (PR_Plain f)) ->
@@ -2624,7 +2626,7 @@ module Op = struct
       | _ -> raise NotReducible
     in
       EcCoreFol.Fsubst.subst_tvar
-        (EcTypes.Tvar.init (List.map fst (op_tparams op)) tys) f
+        (EcTypes.Tvar.init (List.map fst op_r.op_tparams) tys) f
 
   let is_projection env p =
     try  EcDecl.is_proj (by_path p env)
@@ -2651,8 +2653,8 @@ module Op = struct
     with LookupFailure _ -> false
 
   let scheme_of_prind env (_mode : [`Case | `Ind]) p =
-    match omap op_kind (by_path_opt p env) with
-    | Some (OB_pred (Some (PR_Ind pri))) ->
+    match omap get_op (by_path_opt p env) with
+    | Some { op_kind = (OB_pred (Some (PR_Ind pri))) } ->
        Some (EcInductive.prind_indsc_path p, List.length pri.pri_ctors)
     | _ -> None
 
@@ -2902,9 +2904,10 @@ module Theory = struct
   let bind_nt_cth =
     let for1 path base = function
       | CTh_operator (x, op) -> begin
-          match op_kind op with
+          let op_r = get_op op in
+          match op_r.op_kind with
           | OB_nott nt ->
-              Some ((EcPath.pqname path x, (op_tparams op, nt)) :: base)
+              Some ((EcPath.pqname path x, (op_r.op_tparams, nt)) :: base)
           | _ -> None
           end
       | _ -> None

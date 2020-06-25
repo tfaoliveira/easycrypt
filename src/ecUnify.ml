@@ -465,7 +465,8 @@ let select_op ?(filter = fun _ -> true) tvi env name ue psig =
        with UnificationFailure _ -> raise E.Failure);
 
       let bd =
-        match D.op_kind op with
+        let op_r = get_op op in
+        match op_r.D.op_kind with
         | OB_nott nt ->
            let substnt () =
              let xs = List.map (snd_map tip) nt.D.ont_args in

@@ -1206,14 +1206,16 @@ module Op = struct
       match op.po_ax with
       | None    -> bind scope (unloc op.po_name, tyop)
       | Some ax -> begin
-          match EcDecl.op_kind tyop with
+          let op_r = get_op tyop in
+          match op_r.op_kind with
           | OB_oper (Some (OP_Plain bd)) ->
               let path  = EcPath.pqname (path scope) (unloc op.po_name) in
               let axop  =
                 let nosmt = op.po_nosmt in
                 let nargs = List.sum (List.map (List.length |- fst) op.po_args) in
-                  EcDecl.axiomatized_op ~nargs  ~nosmt path (op_tparams tyop, bd) in
-              let tyop  = gen_op (op_tparams tyop) (op_ty tyop) (OB_oper None) in
+                  EcDecl.axiomatized_op ~nargs  ~nosmt path (op_r.op_tparams, bd) in
+
+              let tyop  = wrap_op { op_r with op_kind = OB_oper None } in
               let scope = bind scope (unloc op.po_name, tyop) in
               Ax.bind scope false (unloc ax, axop)
 

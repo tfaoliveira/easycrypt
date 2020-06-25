@@ -417,10 +417,11 @@ let rec h_red_x ri env hyps f =
                   subst bds cargs)
               subst bds pargs in
 
+          let tps  = (EcDecl.get_op op).EcDecl.op_tparams in
           let body = EcFol.form_of_expr EcFol.mhr body in
           let body =
             EcFol.Fsubst.subst_tvar
-              (EcTypes.Tvar.init (List.map fst (EcDecl.op_tparams op)) tys) body in
+              (EcTypes.Tvar.init (List.map fst tps) tys) body in
 
           f_app (Fsubst.f_subst subst body) eargs f.f_ty
 

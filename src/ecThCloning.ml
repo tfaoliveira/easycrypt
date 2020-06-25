@@ -261,11 +261,11 @@ end = struct
     let (_ : bool) = cancrt in
 
     let () =
-      match omap op_kind (find_op oc.oc_oth name) with
+      match omap get_op (find_op oc.oc_oth name) with
       | None
-      | Some (OB_pred _) ->
+      | Some { op_kind = OB_pred _ } ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Operator, name));
-      | Some (OB_oper (Some _)) ->
+      | Some { op_kind = OB_oper (Some _) } ->
          (* FIXME: check convertibility *) ()
       | _ -> () in
 
@@ -284,11 +284,11 @@ end = struct
     let { pl_loc = lc; pl_desc = ((nm, x) as name) } = name in
 
     let () =
-      match omap op_kind (find_pr oc.oc_oth name) with
+      match omap get_op (find_pr oc.oc_oth name) with
       | None
-      | Some (OB_oper _) ->
+      | Some { op_kind = OB_oper _ } ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Predicate, name));
-      | Some (OB_pred (Some _)) when not cancrt ->
+      | Some { op_kind = OB_pred (Some _) } when not cancrt ->
          clone_error oc.oc_env (CE_CrtOverride (OVK_Predicate, name));
       | _ -> () in
 

@@ -125,11 +125,13 @@ and prctor = {
   prc_spec : form list;
 }
 
-type operator = {
+type operator_r = {
   op_tparams : ty_params;
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
 }
+
+type operator = operator_r
 
 (* -------------------------------------------------------------------- *)
 type axiom_kind = [`Axiom of (Ssym.t * bool) | `Lemma]
@@ -144,9 +146,11 @@ let is_axiom (x : axiom_kind) = match x with `Axiom _ -> true | _ -> false
 let is_lemma (x : axiom_kind) = match x with `Lemma   -> true | _ -> false
 
 (* -------------------------------------------------------------------- *)
+let wrap_op op = op
+let get_op  op = op
+
 let op_tparams op = op.op_tparams
 let op_ty      op = op.op_ty
-let op_kind    op = op.op_kind
 
 let is_oper op =
   match op.op_kind with

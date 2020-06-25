@@ -304,7 +304,9 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
          let body    = EcFol.Fsubst.uni uni body in
          let tparams = EcUnify.UniEnv.tparams ue in
          let newpr   =
-           gen_op tparams body.EcFol.f_ty (OB_pred (Some (PR_Plain body)))
+           wrap_op { op_tparams = tparams;
+                     op_ty      = body.EcFol.f_ty;
+                     op_kind    = OB_pred (Some (PR_Plain body)) }
          in
 
           match prmode with
@@ -477,7 +479,7 @@ and replay_instance
             match alias with
             | true  -> Some (EcPath.pappend npath q)
             | false ->
-                match EcDecl.op_kind op with
+                match (get_op op).op_kind with
                 | OB_pred _
                 | OB_nott _    -> assert false
                 | OB_oper None -> None
