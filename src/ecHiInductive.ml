@@ -96,7 +96,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
   let ue    = TT.transtyvars env (loc, Some tyvars) in
   let tpath = EcPath.pqname (EcEnv.root env) (unloc name) in
   let env0  =
-    let myself = {
+    let myself = mk_tydecl {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Abstract EcPath.Sp.empty;
     } in
@@ -144,6 +144,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
 
       let tdecl = EcEnv.Ty.by_path_opt tname env0
         |> ofdfl (EcDecl.abs_tydecl ~params:(`Named tparams)) in
+      let tdecl = get_tydecl tdecl in
       let tyinst () =
         fun ty -> ty_instanciate tdecl.tyd_params targs ty in
 
@@ -326,7 +327,7 @@ let trans_matchfix ?(close = true) env ue { pl_loc = loc; pl_desc = name } (bd, 
 
               let ctorty =
                 let tvi = Some (EcUnify.TVIunamed tvi) in
-                  fst (EcUnify.UniEnv.opentys ue indty.tyd_params tvi ctorty) in
+                  fst (EcUnify.UniEnv.opentys ue (get_tydecl indty).tyd_params tvi ctorty) in
               let pty = EcUnify.UniEnv.fresh ue in
 
               (try  EcUnify.unify env ue (toarrow ctorty pty) opty

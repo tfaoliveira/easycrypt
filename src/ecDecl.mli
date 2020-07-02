@@ -19,7 +19,7 @@ type ty_param  = EcIdent.t * EcPath.Sp.t
 type ty_params = ty_param list
 type ty_pctor  = [ `Int of int | `Named of ty_params ]
 
-type tydecl = {
+type tydecl_r = {
   tyd_params : ty_params;
   tyd_type   : ty_body;
 }
@@ -36,6 +36,11 @@ and ty_dtype = {
   tydt_schelim : form;
   tydt_schcase : form;
 }
+
+type tydecl
+
+val get_tydecl : tydecl -> tydecl_r
+val mk_tydecl  : tydecl_r -> tydecl
 
 val tydecl_as_concrete : tydecl -> EcTypes.ty
 val tydecl_as_abstract : tydecl -> Sp.t

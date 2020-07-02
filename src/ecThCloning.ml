@@ -236,7 +236,7 @@ end = struct
     let { pl_loc = lc; pl_desc = ((nm, x) as name) } = name in
 
     let () =
-      match find_type oc.oc_oth name with
+      match omap get_tydecl (find_type oc.oc_oth name) with
       | None ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Type, name));
       | Some { EcDecl.tyd_type = `Concrete _ } when not cancrt ->
@@ -328,6 +328,7 @@ end = struct
     let rec doit prefix (proofs, evc) dth =
       match dth with
       | CTh_type (x, otyd) ->
+         let otyd = get_tydecl otyd in (** only needs tparams **)
          let params = List.map (EcIdent.name |- fst) otyd.tyd_params in
          let params = List.map (mk_loc lc) params in
          let tyd    =

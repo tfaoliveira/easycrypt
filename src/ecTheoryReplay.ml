@@ -154,15 +154,15 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
   | Some { pl_desc = (nargs, ntyd, mode) } -> begin
       let nargs = List.map2
                     (fun (_, tc) x -> (EcIdent.create (unloc x), tc))
-                    otyd.tyd_params nargs in
+                    (get_tydecl otyd).tyd_params nargs in
       let ue    = EcUnify.UniEnv.create (Some nargs) in
       let ntyd  = EcTyping.transty EcTyping.tp_tydecl scenv ue ntyd in
 
       match mode with
       | `Alias ->
           let binding =
-            { tyd_params = nargs;
-              tyd_type   = `Concrete ntyd; } in
+            mk_tydecl { tyd_params = nargs;
+                        tyd_type   = `Concrete ntyd; } in
           let subst, x = rename ove subst (`Type, x) in
           (subst, ops, proofs, ove.ovre_hooks.hty scope (x, binding))
 
@@ -173,9 +173,9 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
 
           let subst =
             (* FIXME: HACK *)
-            match otyd.tyd_type, ntyd.ty_node with
+            match (get_tydecl otyd).tyd_type, ntyd.ty_node with
             | `Datatype { tydt_ctors = octors }, Tconstr (np, _) -> begin
-                match (EcEnv.Ty.by_path np scenv).tyd_type with
+                match (get_tydecl (EcEnv.Ty.by_path np scenv)).tyd_type with
                 | `Datatype { tydt_ctors = _ } ->
                     List.fold_left (fun subst (name, _) ->
                       Printf.printf "%s / %s\n%!"

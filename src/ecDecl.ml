@@ -21,7 +21,7 @@ type ty_param  = EcIdent.t * EcPath.Sp.t
 type ty_params = ty_param list
 type ty_pctor  = [ `Int of int | `Named of ty_params ]
 
-type tydecl = {
+type tydecl_r = {
   tyd_params : ty_params;
   tyd_type   : ty_body;
 }
@@ -38,6 +38,11 @@ and ty_dtype = {
   tydt_schelim : EcCoreFol.form;
   tydt_schcase : EcCoreFol.form;
 }
+
+type tydecl = tydecl_r
+
+let get_tydecl td = td
+let mk_tydecl  td = td
 
 let tydecl_as_concrete (td : tydecl) =
   match td.tyd_type with `Concrete x -> x | _ -> assert false

@@ -375,6 +375,7 @@ and trans_pty genv p =
     | None -> trans_tydecl genv (p, EcEnv.Ty.by_path p genv.te_env)
 
 and trans_tydecl genv (p, tydecl) =
+  let tydecl = get_tydecl tydecl in
   let pid = preid_p p in
   let lenv, tparams = lenv_of_tparams tydecl.tyd_params in
 

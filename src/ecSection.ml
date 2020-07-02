@@ -369,6 +369,7 @@ let opdecl_use_local_or_abs opdecl lc =
 
 (* -------------------------------------------------------------------- *)
 let tydecl_use_local_or_abs tydecl lc =
+  let tydecl = get_tydecl tydecl in
   let cb = check_use_local_or_abs lc in
 
   try

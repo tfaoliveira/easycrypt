@@ -303,6 +303,7 @@ let subst_genty (s : _subst) (typ, ty) =
 
 (* -------------------------------------------------------------------- *)
 let subst_tydecl (s : _subst) (tyd : tydecl) =
+  let tyd = get_tydecl tyd in
   let params' = List.map (subst_typaram s) tyd.tyd_params in
   let body =
     match tyd.tyd_type with
@@ -324,7 +325,7 @@ let subst_tydecl (s : _subst) (tyd : tydecl) =
         `Record (Fsubst.f_subst (f_subst_of_subst sty) scheme,
                  List.map (snd_map sty.s_ty) fields)
   in
-    { tyd_params = params'; tyd_type = body; }
+    mk_tydecl { tyd_params = params'; tyd_type = body; }
 
 (* -------------------------------------------------------------------- *)
 let rec subst_op_kind (s : _subst) (kind : operator_kind) =

@@ -766,6 +766,7 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
           tyerror ty.pl_loc env (UnknownTypeName name)
 
       | Some (p, tydecl) ->
+          let tydecl = get_tydecl tydecl in
           if tydecl.tyd_params <> [] then begin
             let nargs = List.length tydecl.tyd_params in
               tyerror ty.pl_loc env (InvalidTypeAppl (name, nargs, 0))
@@ -782,6 +783,7 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
       tyerror ty.pl_loc env (UnknownTypeName name)
 
     | Some (p, tydecl) ->
+      let tydecl = get_tydecl tydecl in
       let nargs    = List.length tyargs in
       let expected = List.length tydecl.tyd_params in
 
@@ -851,6 +853,7 @@ let transpattern1 env ue (p : EcParsetree.plpattern) =
 
       let recty  = oget (EcEnv.Ty.by_path_opt recp env) in
       let rec_   = snd (EcDecl.tydecl_as_record recty) in
+      let recty  = get_tydecl recty in
       let reccty = tconstr recp (List.map (tvar |- fst) recty.tyd_params) in
       let reccty, rectvi = EcUnify.UniEnv.openty ue recty.tyd_params None reccty in
       let fields =
@@ -991,6 +994,7 @@ let trans_record env ue (subtt, proj) (loc, b, fields) =
 
   let recty  = oget (EcEnv.Ty.by_path_opt recp env) in
   let rec_   = snd (EcDecl.tydecl_as_record recty) in
+  let recty  = get_tydecl recty in
   let reccty = tconstr recp (List.map (tvar |- fst) recty.tyd_params) in
   let reccty, rtvi = EcUnify.UniEnv.openty ue recty.tyd_params None reccty in
   let tysopn = Tvar.init (List.map fst recty.tyd_params) rtvi in

@@ -1016,7 +1016,7 @@ let pp_opapp
 
       let recp = EcDecl.operator_as_rcrd op in
 
-      match EcEnv.Ty.by_path_opt recp env with
+      match omap get_tydecl (EcEnv.Ty.by_path_opt recp env) with
       | Some { tyd_type = `Record (_, fields) }
           when List.length fields = List.length es
         -> begin
@@ -1740,6 +1740,7 @@ let pp_sform ppe fmt f =
 
 (* -------------------------------------------------------------------- *)
 let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
+  let tyd = get_tydecl tyd in
   let ppe = PPEnv.add_locals ppe (List.map fst tyd.tyd_params) in
   let name = P.basename x in
 

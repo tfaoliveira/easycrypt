@@ -733,6 +733,7 @@ module MC = struct
         match obj with IPPath p, x -> (p, x) | _, _ -> assert false in
       let ipath name = IPPath (EcPath.pqoname (EcPath.prefix mypath) name) in
 
+      let tyd = get_tydecl tyd in
       match tyd.tyd_type with
       | `Concrete _  -> mc
       | `Abstract _ -> mc
@@ -1485,12 +1486,12 @@ module Ty = struct
     fst (lookup name env)
 
   let defined (name : EcPath.path) (env : env) =
-    match by_path_opt name env with
+    match omap get_tydecl (by_path_opt name env) with
     | Some { tyd_type = `Concrete _ } -> true
     | _ -> false
 
   let unfold (name : EcPath.path) (args : EcTypes.ty list) (env : env) =
-    match by_path_opt name env with
+    match omap get_tydecl (by_path_opt name env) with
     | Some ({ tyd_type = `Concrete body } as tyd) ->
         EcTypes.Tvar.subst
           (EcTypes.Tvar.init (List.map fst tyd.tyd_params) args)
@@ -1519,7 +1520,7 @@ module Ty = struct
     let ty = hnorm ty env in
       match ty.ty_node with
       | Tconstr (p, tys) -> begin
-          match by_path_opt p env with
+          match omap get_tydecl (by_path_opt p env) with
           | Some ({ tyd_type = (`Datatype _ | `Record _) as body }) ->
               let prefix   = EcPath.prefix   p in
               let basename = EcPath.basename p in
@@ -1537,6 +1538,7 @@ module Ty = struct
   let rebind name ty env =
     let env = MC.bind_tydecl name ty env in
 
+    let ty = get_tydecl ty in
     match ty.tyd_type with
     | `Abstract tc ->
         let myty =
@@ -2832,6 +2834,7 @@ module Theory = struct
         bind_instance_cth (xpath x) inst cth
 
     | CTh_type (x, tyd) -> begin
+        let tyd = get_tydecl tyd in
         match tyd.tyd_type with
         | `Abstract tc ->
             let myty =

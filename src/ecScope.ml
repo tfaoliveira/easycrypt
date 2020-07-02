@@ -1513,7 +1513,7 @@ module Ty = struct
         tcs
     in
     let ue = TT.transtyvars scope.sc_env (loc, Some args) in
-    let tydecl = {
+    let tydecl = mk_tydecl {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Abstract (Sp.of_list tcs);
     } in
@@ -1525,7 +1525,7 @@ module Ty = struct
     let (args, name) = info.pl_desc and loc = info.pl_loc in
     let ue     = TT.transtyvars scope.sc_env (loc, Some args) in
     let body   = transty tp_tydecl scope.sc_env ue body in
-    let tydecl = {
+    let tydecl = mk_tydecl {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Concrete body;
     } in
@@ -1559,7 +1559,7 @@ module Ty = struct
 
       let asty  =
         let body = ofold (fun p tc -> Sp.add p tc) Sp.empty uptc in
-          { tyd_params = []; tyd_type = `Abstract body; } in
+          mk_tydecl { tyd_params = []; tyd_type = `Abstract body; } in
       let scenv = EcEnv.Ty.bind name asty scenv in
 
       (* Check for duplicated field names *)
@@ -1906,7 +1906,7 @@ module Ty = struct
     in
 
     (* Add final datatype to environment *)
-    let tydecl = {
+    let tydecl = mk_tydecl {
       tyd_params = datatype.ELI.dt_tparams;
       tyd_type   = `Datatype { tydt_ctors   = ctors ;
                                tydt_schcase = casesc;
@@ -1924,7 +1924,7 @@ module Ty = struct
     let scheme  = ELI.indsc_of_record record in
 
     (* Add final record to environment *)
-    let tydecl  = {
+    let tydecl  = mk_tydecl {
       tyd_params = record.ELI.rc_tparams;
       tyd_type   = `Record (scheme, record.ELI.rc_fields); }
 
