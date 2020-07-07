@@ -656,7 +656,7 @@ abstract theory UF1_UF.
       + proc;if => //; inline *; auto => /> &m1 &m2 hpki _ hpks hforge hpk. 
         rewrite /is_forgery; have := hpks pk{m2}; rewrite hpk /= /dom => -[->> ->] /=.
         rewrite in_fsetU imageP /= /#. 
-      auto => />; rewrite mem_empty /= => -[??]??? /=; rewrite fset0U image0 /=; smt(mem_empty).
+      auto=> />; rewrite emptyE=> /= - [??]??? /=; rewrite fset0U image0 /=; smt(mem_empty).
     qed.
  
     lemma uf_uf1 &m : Pr[UF(WAkg(A)).main() @ &m : res] <= q_gen%r * Pr[UF1(MkAdvUF1(A)).main() @ &m : res].

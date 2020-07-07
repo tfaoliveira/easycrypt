@@ -137,14 +137,8 @@ local lemma BR93_correct &m m: Pr[Correctness.main(m) @ &m: res] = 1%r.
 proof.
 byphoare=> //; conseq (: _ ==> true) (: _ ==> res)=> //.
 + proc; inline *.
-  rcondf 17.
-  + auto=> /> &hr [pk sk] kp_in_dkeys r _ y _ /=.
-    rewrite fK //; split=> [_ _ _|-> //].
-    by rewrite mem_set.
   auto=> /> &hr [pk sk] kp_in_dkeys r _ y _ /=.
-  rewrite fK //; split=> [_ y' _|].
-  + by rewrite get_set_sameE -addA addKp.
-  rewrite domE; case: (LRO.m{hr}.[r])=> [|p] //= _ _.
+  rewrite fK // !get_set_sameE /= get_set_sameE=> /= _ _.
   by rewrite -addA addKp.
 by proc; inline *; auto=> />; rewrite dkeys_ll drand_ll dptxt_ll.
 qed.
@@ -289,15 +283,10 @@ call (_: Game1.r \in Log.qs,
          eq_except (pred1 Game1.r{2}) LRO.m{1} LRO.m{2}).
 + exact/A_a2_ll.
 + proc; inline LRO.o.
-  auto=> /> &1 &2 _ m1_eqe_m2 yL y_in_dptxt; split.
-  + move=> x_notin_m; split.
-    + by rewrite !get_set_sameE eq_except_set_eq.
-    move: m1_eqe_m2 x_notin_m=> + + + r_neq_x.
-    by rewrite eq_exceptP pred1E !domE=> /(_ x{2} r_neq_x) ->.
-  move=> x_in_m; split.
-  + move: m1_eqe_m2 x_in_m=> + + + r_neq_x.
-    by rewrite eq_exceptP pred1E !domE=> /(_ x{2} r_neq_x) ->.
-  by move: m1_eqe_m2=> + _ r_neq_x- /eq_exceptP /(_ x{2}); rewrite pred1E=> /(_ r_neq_x) ->.
+  auto=> /> &1 &2 _ m1_eqe_m2 yL y_in_dptxt.
+  rewrite !get_set_sameE eq_sym=> /= x_neq_r.
+  have /eq_exceptP /(_ x{2}) @{1}/pred1:= m1_eqe_m2.
+  by rewrite x_neq_r=> /= -> //=; exact/eq_except_set_eq.
 + by move=> &2 _; proc; call (LRO_o_ll dptxt_ll); auto.
 + move=> _ /=; proc; inline *.
   conseq (: true ==> true: =1%r) (: Game1.r \in Log.qs ==> Game1.r \in Log.qs)=> //=.
@@ -307,11 +296,11 @@ inline LRO.o; case: ((r \in LRO.m){1}).
 + conseq (: _ ==> ={b} /\ Game1.r{2} \in Log.qs{2})=> //=.
   + by move=> /> &1 &2 _ _ rR _ _ _ _ _ h /h [] -> //.
   by auto=> /> &2 <- ->.
-rcondt{1} 3; 1:by auto.
 auto=> /> &2 log_is_dom r_notin_m y _; rewrite !get_set_sameE oget_some /=.
-split.
-+ by move=> _; rewrite eq_exceptP /pred1=> x; rewrite get_setE eq_sym=> ->.
-by move=> _ rR aL mL aR qsR mR h /h [] ->.
+split=> [|_].
++ move: r_notin_m; rewrite domE=> /=; case: (LRO.m.[Game1.r]{2})=> /> _.
+  exact/eq_except_setl.
+by move=> rR aL mL aR qsR mR h /h [] ->.
 qed.
 
 (* Step 2: replace h ^ m with h in the challenge encryption            *)
@@ -648,7 +637,7 @@ have <-:   Pr[BR93_CPA(A_CPA(A)).main() @ &m: res]
   call (: H.Lazy.LRO.m{1} = LRO.m{2}).
   + by proc; inline *; auto.
   inline *; auto=> /> [pk sk] _ [m0 m1] c b _ r _ h _ /=.
-  by rewrite addC /= addC.
+  by rewrite addC.
 have <-:   Pr[OW_rand.OW(I(A_CPA(A))).main() @ &m: res]
          = Pr[Exp_OW(Self.I(A,LRO)).main() @ &m: res].
 + byequiv=> //=; proc.

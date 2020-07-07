@@ -680,7 +680,7 @@ wp; call (_: inv (glob MRPKE_lor){1} (glob MRPKE_lor){2} (glob ODH_Orcl){2} Adv1
       move=> /= ? ?; move: H17; rewrite mem_cat mem_join; move=> [?|?]; first left; smt().
       right; rewrite mem_ofassoc -!map_comp /(\o) /=; apply/mapP; exists pk; split; first smt.
       have T: pk \in map fst (map (fun x => (x, (g^ephL, hash(x^ephL)))) (elems pks{2})).
-       rewrite -map_comp /(\o) map_id; smt.
+      + rewrite -map_comp /(\o) /= map_id; smt.
       rewrite (ephmem_foldenc _ _ _ _ _ _ _ _ T H16 H17) /=.
       have ? : 0 <= index pk (elems pks{2}) < size (elems pks{2}).
       + smt(index_ge0 index_mem map_comp mapP).
@@ -1138,7 +1138,7 @@ last by wp; skip; rewrite /inv /= => />; smt (fdom0 emptyE).
    + inline*; wp; rnd; wp; skip; rewrite /inv /=; clear inv; progress.
      - apply eq_distr; congr.
        rewrite (map_comp snd snd) unzip2_zip; first smt (size_map).
-       by rewrite -map_comp /(\o) map_id.
+       by rewrite -map_comp /(\o) /= map_id.
      - by move: H12; rewrite zip_mapr -map_comp /(\o)/= unzip2_zip /#.
      - rewrite !zip_mapr !(map_zip_nth witness witness) /= 1,3:/#.
           rewrite size_map size_iota H2. 
