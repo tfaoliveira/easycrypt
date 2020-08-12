@@ -954,7 +954,7 @@ and trans_fix (genv, lenv) (wdom, o) =
 
 (* -------------------------------------------------------------------- *)
 and create_op ?(body = false) (genv : tenv) p =
-  let op_r = get_op (EcEnv.Op.by_path p genv.te_env) in
+  let op_r = get_opdecl (EcEnv.Op.by_path p genv.te_env) in
 
   let lenv, wparams = lenv_of_tparams op_r.op_tparams in
   let dom, codom = EcEnv.Ty.signature genv.te_env op_r.op_ty in
@@ -1325,7 +1325,7 @@ module Frequency = struct
     f_ops_hyps unwanted_op (f_ops unwanted_op concl) hyps
 
   let f_ops_oper unwanted_op env p rs =
-    match omap get_op (EcEnv.Op.by_path_opt p env) with
+    match omap get_opdecl (EcEnv.Op.by_path_opt p env) with
     | Some { op_kind = OB_pred (Some (PR_Plain f)) } ->
       r_union rs (f_ops unwanted_op f)
     | Some { op_kind = OB_oper (Some (OP_Plain e)) } ->

@@ -527,7 +527,7 @@ let process_delta ?target (s, o, p) tc =
   let (tvi, tparams, body, args) =
     match sform_of_form p with
     | SFop (p, args) -> begin
-        let op_r = EcDecl.get_op (EcEnv.Op.by_path (fst p) env) in
+        let op_r = EcDecl.get_opdecl (EcEnv.Op.by_path (fst p) env) in
 
         match op_r.EcDecl.op_kind with
         | EcDecl.OB_oper (Some (EcDecl.OP_Plain e)) ->

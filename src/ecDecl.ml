@@ -151,8 +151,8 @@ let is_axiom (x : axiom_kind) = match x with `Axiom _ -> true | _ -> false
 let is_lemma (x : axiom_kind) = match x with `Lemma   -> true | _ -> false
 
 (* -------------------------------------------------------------------- *)
-let wrap_op op = op
-let get_op  op = op
+let mk_opdecl  op = op
+let get_opdecl op = op
 
 let op_tparams op = op.op_tparams
 let op_ty      op = op.op_ty

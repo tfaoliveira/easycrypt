@@ -465,7 +465,7 @@ let select_op ?(filter = fun _ -> true) tvi env name ue psig =
        with UnificationFailure _ -> raise E.Failure);
 
       let bd =
-        let op_r = get_op op in
+        let op_r = get_opdecl op in
         match op_r.D.op_kind with
         | OB_nott nt ->
            let substnt () =

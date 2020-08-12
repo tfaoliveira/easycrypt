@@ -1206,7 +1206,7 @@ module Op = struct
       match op.po_ax with
       | None    -> bind scope (unloc op.po_name, tyop)
       | Some ax -> begin
-          let op_r = get_op tyop in
+          let op_r = get_opdecl tyop in
           match op_r.op_kind with
           | OB_oper (Some (OP_Plain bd)) ->
               let path  = EcPath.pqname (path scope) (unloc op.po_name) in
@@ -1215,7 +1215,7 @@ module Op = struct
                 let nargs = List.sum (List.map (List.length |- fst) op.po_args) in
                   EcDecl.axiomatized_op ~nargs  ~nosmt path (op_r.op_tparams, bd) in
 
-              let tyop  = wrap_op { op_r with op_kind = OB_oper None } in
+              let tyop  = mk_opdecl { op_r with op_kind = OB_oper None } in
               let scope = bind scope (unloc op.po_name, tyop) in
               Ax.bind scope false (unloc ax, axop)
 

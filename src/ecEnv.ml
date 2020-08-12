@@ -692,7 +692,7 @@ module MC = struct
 
     let mc = { mc with mc_operators = MMsym.add x obj mc.mc_operators } in
     let ax =
-      let op_r = get_op (snd obj) in
+      let op_r = get_opdecl (snd obj) in
       match op_r.op_kind with
       | OB_pred (Some (PR_Ind pri)) ->
          let pri =
@@ -2420,7 +2420,7 @@ module NormMp = struct
     norm_form
 
   let norm_op env op =
-    let op_r = get_op op in
+    let op_r = get_opdecl op in
     let kind =
       match op_r.op_kind with
       | OB_pred (Some (PR_Plain f)) ->
@@ -2435,7 +2435,7 @@ module NormMp = struct
 
       | _ as k -> k
     in
-      wrap_op { op_r with op_kind = kind }
+      mk_opdecl { op_r with op_kind = kind }
 
   let norm_ax env ax =
     { ax with ax_spec = norm_form env ax.ax_spec }
@@ -2579,7 +2579,7 @@ module Op = struct
 
   let bind name op env =
     let env  = MC.bind_operator name op env in
-    let op_r = get_op (NormMp.norm_op env op) in
+    let op_r = get_opdecl (NormMp.norm_op env op) in
     let nt   =
       match op_r.op_kind with
       | OB_nott nt ->
@@ -2602,7 +2602,7 @@ module Op = struct
 
   let reducible env p =
     try
-      let op_r = get_op (by_path p env) in
+      let op_r = get_opdecl (by_path p env) in
       match op_r.op_kind with
       | OB_oper (Some (OP_Plain _))
       | OB_pred (Some _) -> true
@@ -2618,7 +2618,7 @@ module Op = struct
     with LookupFailure _ -> false
 
   let reduce env p tys =
-    let op_r = get_op (oget (by_path_opt p env)) in
+    let op_r = get_opdecl (oget (by_path_opt p env)) in
     let f    =
       match op_r.op_kind with
       | OB_oper (Some (OP_Plain e)) ->
@@ -2655,7 +2655,7 @@ module Op = struct
     with LookupFailure _ -> false
 
   let scheme_of_prind env (_mode : [`Case | `Ind]) p =
-    match omap get_op (by_path_opt p env) with
+    match omap get_opdecl (by_path_opt p env) with
     | Some { op_kind = (OB_pred (Some (PR_Ind pri))) } ->
        Some (EcInductive.prind_indsc_path p, List.length pri.pri_ctors)
     | _ -> None
@@ -2907,7 +2907,7 @@ module Theory = struct
   let bind_nt_cth =
     let for1 path base = function
       | CTh_operator (x, op) -> begin
-          let op_r = get_op op in
+          let op_r = get_opdecl op in
           match op_r.op_kind with
           | OB_nott nt ->
               Some ((EcPath.pqname path x, (op_r.op_tparams, nt)) :: base)

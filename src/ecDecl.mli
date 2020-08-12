@@ -116,8 +116,8 @@ type operator
 val op_tparams : operator -> ty_params
 val op_ty      : operator -> EcTypes.ty
 
-val wrap_op   : operator_r -> operator
-val get_op    : operator -> operator_r
+val mk_opdecl  : operator_r -> operator
+val get_opdecl : operator -> operator_r
 
 val is_pred   : operator -> bool
 val is_oper   : operator -> bool

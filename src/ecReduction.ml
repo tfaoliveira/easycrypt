@@ -417,7 +417,7 @@ let rec h_red_x ri env hyps f =
                   subst bds cargs)
               subst bds pargs in
 
-          let tps  = (EcDecl.get_op op).EcDecl.op_tparams in
+          let tps  = (EcDecl.get_opdecl op).EcDecl.op_tparams in
           let body = EcFol.form_of_expr EcFol.mhr body in
           let body =
             EcFol.Fsubst.subst_tvar

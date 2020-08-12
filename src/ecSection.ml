@@ -320,7 +320,7 @@ let opdecl_use_local_or_abs opdecl lc =
   let cb = check_use_local_or_abs lc in
 
   try
-    let op_r = get_op opdecl in
+    let op_r = get_opdecl opdecl in
     on_mpath_ty cb op_r.op_ty;
     (match op_r.op_kind with
      | OB_pred None -> ()

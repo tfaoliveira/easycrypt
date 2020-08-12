@@ -1539,7 +1539,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
     and is_proj (rc : EcPath.path) (f : form) =
       match f.f_node with
       | Fapp ({ f_node = Fop (p, _) }, [{ f_node = Flocal x }]) -> begin
-          let op_r = get_op (EcEnv.Op.by_path p ppe.PPEnv.ppe_env) in
+          let op_r = get_opdecl (EcEnv.Op.by_path p ppe.PPEnv.ppe_env) in
           match op_r.op_kind with
           | OB_oper (Some (OP_Proj (rc', i, _))) when EcPath.p_equal rc rc' ->
               Some (x, i)
@@ -1976,7 +1976,7 @@ let pp_opdecl ?(long = false) (ppe : PPEnv.t) fmt (x, op) =
   in
 
   let pp_decl fmt op =
-    let op_r = get_op op in
+    let op_r = get_opdecl op in
     match op_r.op_kind with
     | OB_oper i ->
       pp_opdecl_op ppe fmt (P.basename x, op_r.op_tparams, op_r.op_ty, i)

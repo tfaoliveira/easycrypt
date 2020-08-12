@@ -328,7 +328,7 @@ let gen_select_op
     EcPath.isprefix (oget (EcPath.prefix p)) (EcEnv.root env)
 
   and by_tc ((p, _), _, _, _) =
-    let op_r = get_op (oget (EcEnv.Op.by_path_opt p env)) in
+    let op_r = get_opdecl (oget (EcEnv.Op.by_path_opt p env)) in
     match op_r.op_kind with
     | OB_oper (Some (OP_TC _)) -> false
     | _ -> true
