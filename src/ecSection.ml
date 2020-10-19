@@ -193,6 +193,7 @@ let rec on_mpath_form cb (f : EcFol.form) =
     | EcFol.FbdHoareS bhs          -> on_mpath_bhs cb bhs
     | EcFol.FbdHoareF bhf          -> on_mpath_bhf cb bhf
     | EcFol.Fpr       pr           -> on_mpath_pr  cb pr
+    | EcFol.Fsem      s            -> on_mpath_sem cb s
 
   and on_mpath_hf cb hf =
     on_mpath_form cb hf.EcFol.hf_pr;
@@ -243,6 +244,9 @@ let rec on_mpath_form cb (f : EcFol.form) =
   and on_mpath_pr cb pr =
     cb pr.EcFol.pr_fun.x_top;
     List.iter (on_mpath_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
+
+  and on_mpath_sem cb s =
+    on_mpath_stmt cb s
 
   in
     on_mpath_ty cb f.EcFol.f_ty; fornode ()

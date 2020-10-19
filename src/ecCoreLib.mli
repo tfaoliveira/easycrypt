@@ -130,6 +130,11 @@ module CI_Distr : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module CI_Mem : sig
+  val p_mem : path
+end
+
+(* -------------------------------------------------------------------- *)
 module CI_Map : sig
   val i_Map  : symbol
   val p_Map  : path

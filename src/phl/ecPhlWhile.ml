@@ -433,7 +433,8 @@ module ASyncWhile = struct
       | FhoareF   _ | FhoareS   _
       | FbdHoareF _ | FbdHoareS _
       | FequivF   _ | FequivS   _
-      | FeagerF   _ | Fpr       _ -> raise CannotTranslate
+      | FeagerF   _ | Fpr       _
+      | Fsem      _ -> raise CannotTranslate
 
     and auxkd (kd : quantif) : equantif =
       match kd with

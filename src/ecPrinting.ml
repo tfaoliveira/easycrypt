@@ -1715,7 +1715,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (string_of_hcmp hs.bhs_cmp)
         (pp_form_r ppe (fst outer, (max_op_prec,`NonAssoc))) hs.bhs_bd
 
-  | Fpr pr->
+  | Fpr pr ->
       let ppe = PPEnv.create_and_push_mem ppe ~active:true (EcFol.mhr, pr.pr_fun) in
       Format.fprintf fmt "Pr[@[%a@[%t@] @@ %a :@ %a@]]"
         (pp_funname ppe) pr.pr_fun
@@ -1728,6 +1728,10 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
              (fun fmt -> Format.fprintf fmt "(%a)" (pp_form ppe) pr.pr_args))
         (pp_local ppe) pr.pr_mem
         (pp_form ppe) pr.pr_event
+
+  | Fsem s ->
+      let ppe = PPEnv.push_mem ppe ~active:true (EcFol.mhr, None) in
+      Format.fprintf fmt "Sem[@[%a@]]" (pp_stmt_for_form ppe) s
 
 and pp_form_r (ppe : PPEnv.t) outer fmt f =
   let printers =

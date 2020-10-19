@@ -129,6 +129,11 @@ module CI_Distr = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module CI_Mem = struct
+  let p_mem = _Pervasive "mem"
+end
+
+(* -------------------------------------------------------------------- *)
 module CI_Map = struct
   let i_Map = "CoreMap"
   let p_Map = EcPath.pqname p_top i_Map

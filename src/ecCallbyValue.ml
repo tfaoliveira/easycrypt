@@ -184,7 +184,7 @@ and norm_lambda (st : state) (f : form) =
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
   | Fglob   _ | Fpvar   _ | Fop       _
   | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
-  | FequivF _ | FequivS _ | FeagerF   _ | Fpr _
+  | FequivF _ | FequivS _ | FeagerF   _ | Fpr _ | Fsem _
 
     -> f
 
@@ -541,6 +541,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let pr_args  = norm st s pr.pr_args in
     let pr_event = norm st s pr.pr_event in
     f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
+
+  | Fsem _ ->
+    f
 
 (* -------------------------------------------------------------------- *)
 (* FIXME : initialize the subst with let in hyps *)

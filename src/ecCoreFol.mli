@@ -76,6 +76,8 @@ and f_node =
 
   | Fpr of pr (* hr *)
 
+  | Fsem of stmt (* hr *)
+
 and eagerF = {
   eg_pr : form;
   eg_sl : stmt;  (* No local program variables *)

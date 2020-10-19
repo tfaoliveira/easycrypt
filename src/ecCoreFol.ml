@@ -76,6 +76,8 @@ and f_node =
 
   | Fpr of pr (* hr *)
 
+  | Fsem of stmt (* hr *)
+
 and eagerF = {
   eg_pr : form;
   eg_sl : stmt;  (* No local program variables *)
@@ -260,6 +262,9 @@ let pr_equal pr1 pr2 =
   && f_equal          pr1.pr_event pr2.pr_event
   && f_equal          pr1.pr_args pr2.pr_args
 
+let sem_equal s1 s2 =
+  s_equal s1 s2
+
 (* -------------------------------------------------------------------- *)
 let hf_hash hf =
   Why3.Hashcons.combine2
@@ -302,6 +307,8 @@ let pr_hash pr =
     (f_hash          pr.pr_args)
     (f_hash          pr.pr_event)
 
+let sem_hash s =
+  EcModules.s_hash s
 
 (* -------------------------------------------------------------------- *)
 module Hsform = Why3.Hashcons.Make (struct
@@ -354,6 +361,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | FequivS   eqs1, FequivS   eqs2 -> eqs_equal eqs1 eqs2
     | FeagerF   eg1 , FeagerF   eg2  -> egf_equal eg1 eg2
     | Fpr       pr1 , Fpr       pr2  -> pr_equal pr1 pr2
+    | Fsem      s1  , Fsem      s2   -> sem_equal s1 s2
 
     | _, _ -> false
 
@@ -395,6 +403,7 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | Ftuple args ->
         Why3.Hashcons.combine_list f_hash 0 args
+
     | Fproj(f,i) ->
         Why3.Hashcons.combine (f_hash f) i
 
@@ -406,6 +415,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | FequivS   es  -> es_hash es
     | FeagerF   eg  -> eg_hash eg
     | Fpr       pr  -> pr_hash pr
+    | Fsem      s   -> sem_hash s
 
   let fv_mlr = Sid.add mleft (Sid.singleton mright)
 
@@ -477,6 +487,9 @@ module Hsform = Why3.Hashcons.Make (struct
         let fve = Mid.remove mhr (f_fv pr.pr_event) in
         let fv  = EcPath.x_fv fve pr.pr_fun in
         fv_union (f_fv pr.pr_args) (fv_add pr.pr_mem fv)
+
+    | Fsem s ->
+        EcModules.s_fv s
 
   let tag n f =
     let fv = fv_union (fv_node f.f_node) f.f_ty.ty_fv in
@@ -670,6 +683,9 @@ let f_pr_r pr = mk_form (Fpr pr) treal
 
 let f_pr pr_mem pr_fun pr_args pr_event =
   f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
+
+(* -------------------------------------------------------------------- *)
+let f_sem s = mk_form (Fsem s) (tconstr (EcCoreLib.CI_Mem.p_mem) [])
 
 (* -------------------------------------------------------------------- *)
 let fop_int_opp   = f_op EcCoreLib.CI_Int.p_int_opp [] (toarrow [tint]       tint)
@@ -901,6 +917,9 @@ let f_map gt g fp =
         FSmart.f_pr (fp, pr)
           { pr with pr_args = args'; pr_event = ev'; }
 
+  | Fsem _ ->
+      fp
+
 (* -------------------------------------------------------------------- *)
 let f_iter g f =
   match f.f_node with
@@ -926,6 +945,7 @@ let f_iter g f =
   | FequivS   es  -> g es.es_pr; g es.es_po
   | FeagerF   eg  -> g eg.eg_pr; g eg.eg_po
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
+  | Fsem      _   -> ()
 
 (* -------------------------------------------------------------------- *)
 let form_exists g f =
@@ -952,6 +972,7 @@ let form_exists g f =
   | FequivS   es  -> g es.es_pr   || g es.es_po
   | FeagerF   eg  -> g eg.eg_pr   || g eg.eg_po
   | Fpr       pr  -> g pr.pr_args || g pr.pr_event
+  | Fsem      _   -> false
 
 (* -------------------------------------------------------------------- *)
 let form_forall g f =
@@ -978,6 +999,7 @@ let form_forall g f =
   | FequivS   es  -> g es.es_pr   && g es.es_po
   | FeagerF   eg  -> g eg.eg_pr   && g eg.eg_po
   | Fpr       pr  -> g pr.pr_args && g pr.pr_event
+  | Fsem      _   -> true
 
 (* -------------------------------------------------------------------- *)
 let f_ops f =
@@ -1078,6 +1100,11 @@ let destr_pr f =
   match f.f_node with
   | Fpr pr -> pr
   | _ -> destr_error "pr"
+
+let destr_sem f =
+  match f.f_node with
+  | Fsem s -> s
+  | _ -> destr_error "sem"
 
 let destr_programS side f =
   match side, f.f_node with
