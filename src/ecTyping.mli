@@ -112,6 +112,8 @@ type tyerror =
 | UnknownScope           of qsymbol
 | FilterMatchFailure
 | LvMapOnNonAssign
+| SemOnNonConcrete
+| InvalidName
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror

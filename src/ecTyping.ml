@@ -122,6 +122,8 @@ type tyerror =
 | UnknownScope           of qsymbol
 | FilterMatchFailure
 | LvMapOnNonAssign
+| SemOnNonConcrete
+| InvalidName
 
 exception TyError of EcLocation.t * EcEnv.env * tyerror
 
@@ -2750,6 +2752,25 @@ let rec trans_form_or_pattern env ?mv ?ps ue pf tt =
         unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
         unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
         f_eagerF pre' s1 fpath1 fpath2 s2 post'
+
+    | PFsem gp -> begin
+        let f = trans_gamepath env gp in
+        let m = EcEnv.Fun.by_xpath f env in
+
+        match m.f_def with
+        | FBdef def ->
+          let post = omap (fun e ->
+            let aout = pv_loc f "$result" in
+            i_asgn (LvVar (aout, e.e_ty), e)) def.f_ret in
+          f_sem (stmt (def.f_body.s_node @ otolist post))
+        | _ -> tyerror gp.pl_loc env SemOnNonConcrete
+      end
+
+    | PFname (nm, f, x) -> begin
+        let nm = EcPath.fromqsymbol (unloc nm) in
+        let nm = EcPath.mpath (`Concrete (nm, None)) [] in
+        f_name (EcPath.xqname (EcPath.xpath_fun nm (unloc f)) (unloc x))
+      end
 
   in
 

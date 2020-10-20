@@ -129,6 +129,8 @@ let tunit      = tconstr EcCoreLib.CI_Unit .p_unit  []
 let tbool      = tconstr EcCoreLib.CI_Bool .p_bool  []
 let tint       = tconstr EcCoreLib.CI_Int  .p_int   []
 let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr [ty]
+let tmem       = tconstr EcCoreLib.CI_Mem  .p_mem   []
+let tname      = tconstr EcCoreLib.CI_Mem  .p_name  []
 let treal      = tconstr EcCoreLib.CI_Real .p_real  []
 let tcpred ty  = tfun ty tbool
 

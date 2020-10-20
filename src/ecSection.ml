@@ -175,6 +175,7 @@ let rec on_mpath_form cb (f : EcFol.form) =
     match f.EcFol.f_node with
     | EcFol.Fint      _            -> ()
     | EcFol.Flocal    _            -> ()
+    | EcFol.Fname     _            -> ()
     | EcFol.Fquant    (_, b, f)    -> on_mpath_gbindings cb b; cbrec f
     | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
     | EcFol.Fmatch    (b, fs, ty)  -> on_mpath_ty cb ty; List.iter cbrec (b :: fs)

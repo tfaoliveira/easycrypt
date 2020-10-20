@@ -664,7 +664,7 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
   | FhoareF   _ | FhoareS   _
   | FbdHoareF _ | FbdHoareS _
   | FequivF   _ | FequivS   _
-  | Fsem      _
+  | Fsem      _ | Fname     _   (* FIXME *)
 
     -> trans_gen env fp
 
@@ -1280,7 +1280,7 @@ module Frequency = struct
     let sf = ref Sx.empty in
     let rec doit f =
       match f.f_node with
-      | Fint _ | Flocal _ | Fpvar _ | Fglob _ -> ()
+      | Fint _ | Flocal _ | Fpvar _ | Fglob _ | Fname _ -> ()
       | Fop (p,_) ->
         if not (Sp.mem p unwanted_op) then sp := Sp.add p !sp
       | Fquant (_ , _ , f1) -> doit f1

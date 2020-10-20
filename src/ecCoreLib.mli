@@ -127,11 +127,17 @@ module CI_Distr : sig
   val p_lossless: path
   val p_uniform : path
   val p_full    : path
+
+  val p_dunit   : path
+  val p_dlet    : path
 end
 
 (* -------------------------------------------------------------------- *)
 module CI_Mem : sig
-  val p_mem : path
+  val p_mem  : path
+  val p_name : path
+  val p_mget : path
+  val p_mset : path
 end
 
 (* -------------------------------------------------------------------- *)

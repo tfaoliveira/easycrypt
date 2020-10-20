@@ -76,7 +76,8 @@ and f_node =
 
   | Fpr of pr (* hr *)
 
-  | Fsem of stmt (* hr *)
+  | Fname of EcPath.xpath
+  | Fsem  of stmt (* hr *)
 
 and eagerF = {
   eg_pr : form;
@@ -362,6 +363,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | FeagerF   eg1 , FeagerF   eg2  -> egf_equal eg1 eg2
     | Fpr       pr1 , Fpr       pr2  -> pr_equal pr1 pr2
     | Fsem      s1  , Fsem      s2   -> sem_equal s1 s2
+    | Fname     p1  , Fname     p2   -> EcPath.x_equal p1 p2
 
     | _, _ -> false
 
@@ -416,6 +418,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | FeagerF   eg  -> eg_hash eg
     | Fpr       pr  -> pr_hash pr
     | Fsem      s   -> sem_hash s
+    | Fname     p   -> EcPath.x_hash p
 
   let fv_mlr = Sid.add mleft (Sid.singleton mright)
 
@@ -490,6 +493,9 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | Fsem s ->
         EcModules.s_fv s
+
+    | Fname _ ->
+        Mid.empty
 
   let tag n f =
     let fv = fv_union (fv_node f.f_node) f.f_ty.ty_fv in
@@ -685,7 +691,10 @@ let f_pr pr_mem pr_fun pr_args pr_event =
   f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
 
 (* -------------------------------------------------------------------- *)
-let f_sem s = mk_form (Fsem s) (tconstr (EcCoreLib.CI_Mem.p_mem) [])
+let f_sem s = mk_form (Fsem s) (EcTypes.tfun EcTypes.tmem (tdistr EcTypes.tmem))
+
+(* -------------------------------------------------------------------- *)
+let f_name p = mk_form (Fname p) EcTypes.tname
 
 (* -------------------------------------------------------------------- *)
 let fop_int_opp   = f_op EcCoreLib.CI_Int.p_int_opp [] (toarrow [tint]       tint)
@@ -920,6 +929,9 @@ let f_map gt g fp =
   | Fsem _ ->
       fp
 
+  | Fname _ ->
+     fp
+
 (* -------------------------------------------------------------------- *)
 let f_iter g f =
   match f.f_node with
@@ -946,6 +958,7 @@ let f_iter g f =
   | FeagerF   eg  -> g eg.eg_pr; g eg.eg_po
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
   | Fsem      _   -> ()
+  | Fname     _   -> ()
 
 (* -------------------------------------------------------------------- *)
 let form_exists g f =
@@ -973,6 +986,7 @@ let form_exists g f =
   | FeagerF   eg  -> g eg.eg_pr   || g eg.eg_po
   | Fpr       pr  -> g pr.pr_args || g pr.pr_event
   | Fsem      _   -> false
+  | Fname     _   -> false
 
 (* -------------------------------------------------------------------- *)
 let form_forall g f =
@@ -1000,6 +1014,7 @@ let form_forall g f =
   | FeagerF   eg  -> g eg.eg_pr   && g eg.eg_po
   | Fpr       pr  -> g pr.pr_args && g pr.pr_event
   | Fsem      _   -> true
+  | Fname     _   -> true
 
 (* -------------------------------------------------------------------- *)
 let f_ops f =
@@ -1105,6 +1120,11 @@ let destr_sem f =
   match f.f_node with
   | Fsem s -> s
   | _ -> destr_error "sem"
+
+let destr_name f =
+  match f.f_node with
+  | Fname p -> p
+  | _ -> destr_error "name"
 
 let destr_programS side f =
   match side, f.f_node with

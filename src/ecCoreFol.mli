@@ -76,7 +76,8 @@ and f_node =
 
   | Fpr of pr (* hr *)
 
-  | Fsem of stmt (* hr *)
+  | Fname of xpath
+  | Fsem  of stmt (* hr *)
 
 and eagerF = {
   eg_pr : form;
@@ -221,6 +222,12 @@ val f_eagerF   : form -> stmt -> xpath -> xpath -> stmt -> form -> form
 (* soft-constructors - Pr *)
 val f_pr_r : pr -> form
 val f_pr   : memory -> xpath -> form -> form -> form
+
+(* soft-constructors - Sem *)
+val f_sem : stmt -> form
+
+(* soft-constructors - name *)
+val f_name : xpath -> form
 
 (* soft-constructors - unit *)
 val f_tt : form

@@ -66,13 +66,19 @@ val f_map_set : form -> form -> form -> form
 (* soft constructors - distributions *)
 val fop_support : EcTypes.ty -> form
 
-val f_predT   : EcTypes.ty -> form
-val f_support : form -> form -> form
-val f_in_supp : form -> form -> form
-val f_mu      : EcEnv.env -> form -> form -> form
-val f_mu_x    : form -> form -> form
+val f_predT    : EcTypes.ty -> form
+val f_support  : form -> form -> form
+val f_in_supp  : form -> form -> form
+val f_mu       : EcEnv.env -> form -> form -> form
+val f_mu_x     : form -> form -> form
 val f_weight   : EcTypes.ty -> form -> form
 val f_lossless : EcTypes.ty -> form -> form
+val f_dunit    : form -> form
+val f_dlet     : EcTypes.ty * EcTypes.ty -> form -> form -> form
+
+(* memory *)
+val f_mset : form -> (xpath * ty) -> form -> form
+val f_mget : form -> (xpath * ty) -> form
 
 (* common functions *)
 val f_identity : ?name:EcSymbols.symbol -> EcTypes.ty -> form

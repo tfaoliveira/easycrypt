@@ -310,12 +310,13 @@ module PV = struct
           if f_equal f f' then add_glob env mp fv
           else aux env fv f'
         else fv
-      | Fint _ | Flocal _ | Fop _ -> fv
+      | Fint _ | Flocal _ | Fop _ | Fname _ -> fv
       | Fapp(e, es) -> List.fold_left (aux env) (aux env fv e) es
       | Ftuple es   -> List.fold_left (aux env) fv es
       | Fproj(e,_)  -> aux env fv e
       | FhoareF _  | FhoareS _ | FbdHoareF _  | FbdHoareS _
-      | FequivF _ | FequivS _ | FeagerF _ | Fpr _ | Fsem _ -> assert false
+      | FequivF _ | FequivS _ | FeagerF _ | Fpr _
+      | Fsem _ -> assert false
     in
     aux env empty f
 

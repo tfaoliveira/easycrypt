@@ -182,7 +182,7 @@ and norm_lambda (st : state) (f : form) =
   | Fproj (f1, i) -> f_proj (norm_lambda st f1) i f.f_ty
 
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
-  | Fglob   _ | Fpvar   _ | Fop       _
+  | Fname   _ | Fglob   _ | Fpvar   _ | Fop       _
   | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
   | FequivF _ | FequivS _ | FeagerF   _ | Fpr _ | Fsem _
 
@@ -289,6 +289,60 @@ and app_red st f1 args =
 
       cbv st subst body (mk_args eargs (Aempty ty))
     with E.NoCtor -> reduce_user st (f_app f1 args ty)
+  end
+
+  | Fsem s -> begin
+      let mident () =
+        let m = EcIdent.create "m" in
+        (m, f_local m tmem) in
+
+      let aout =
+        match s.s_node with
+        | [] ->
+          let m, mf = mident () in
+          Some (f_lambda [(m, GTty tmem)] (f_dunit mf))
+
+        | i :: s -> begin
+            let aout =
+              match i.i_node with
+              | Sasgn (LvVar (x, ty), e) ->
+                let (m, mf) = mident () in
+                Some (f_lambda [(m, GTty tmem)]
+                        (f_dunit (f_mset mf (x.pv_name, ty) (form_of_expr mhr e))))
+
+              | Srnd (LvVar (x, ty), d) ->
+                let (m, mf) = mident () in
+                let vx = EcIdent.create "v" in
+                Some (f_lambda [(m, GTty tmem)]
+                        (f_dlet (ty, tmem) (form_of_expr mhr d)
+                           (f_lambda [(vx, GTty ty)]
+                              (f_dunit (f_mset mf (x.pv_name, ty) (f_local vx ty))))))
+
+              | Sif (e, s1, s2) ->
+                Some (f_if (form_of_expr mhr e) (f_sem s1) (f_sem s2))
+
+              | _ ->
+                None in
+
+            match aout with None -> None | Some f ->
+              if List.is_empty s then Some f else
+
+              let m, mf = mident () in
+              Some (f_lambda [(m, GTty tmem)]
+                      (f_dlet
+                         (tmem, tmem)
+                         (f_app f [mf] (tdistr tmem)) (f_sem (EcModules.stmt s))))
+
+          end
+      in
+
+      match aout with
+      | None ->
+        let args, ty = flatten_args args in
+        reduce_user st (f_app f1 args ty)
+
+      | Some f ->
+        app_red st f args
   end
 
   | _ ->
@@ -543,7 +597,10 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
 
   | Fsem _ ->
-    f
+    app_red st (Subst.subst s f) args
+
+  | Fname _ ->
+    assert (is_Aempty args); f
 
 (* -------------------------------------------------------------------- *)
 (* FIXME : initialize the subst with let in hyps *)

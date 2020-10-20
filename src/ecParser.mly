@@ -531,6 +531,7 @@
 %token SEARCH
 %token SECTION
 %token SELF
+%token SEM
 %token SEMICOLON
 %token SEQ
 %token SHARP
@@ -1188,6 +1189,16 @@ sform_u(P):
     COLON event=form_r(P)
   RBRACKET
     { PFprob (mp, args, pn, event) }
+
+| SEM LBRACKET mp=loc(fident) RBRACKET
+    { PFsem mp }
+
+| LBRACKET PIPE
+    p=loc(rlist1(_uident, DOT)) DOT f=lident DOT x=lident PIPE RBRACKET
+    {  let nm, m =
+        let nmm = List.rev (unloc p) in
+        (List.rev (List.tl nmm), List.hd nmm) in
+       PFname (mk_loc (loc p) (nm, m), f, x) }
 
 | r=loc(RBOOL)
     { PFident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }

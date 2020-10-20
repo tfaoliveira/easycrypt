@@ -1733,6 +1733,9 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       let ppe = PPEnv.push_mem ppe ~active:true (EcFol.mhr, None) in
       Format.fprintf fmt "Sem[@[%a@]]" (pp_stmt_for_form ppe) s
 
+  | Fname p ->
+      Format.fprintf fmt "[| %s |]" (EcPath.x_tostring p)
+
 and pp_form_r (ppe : PPEnv.t) outer fmt f =
   let printers =
     [try_pp_notations;

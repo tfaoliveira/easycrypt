@@ -443,6 +443,17 @@ let rec h_red_x ri env hyps f =
       when ri.eta && can_eta x (fn, args)
     -> f_app fn (List.take (List.length args - 1) args) f.f_ty
 
+    (* Sem *)
+(*
+  | Fsem s -> begin
+      match s.s_node with
+      | [] -> raise NotReducible
+
+      | i :: s ->
+        raise NotReducible
+    end
+*)
+
   | _ ->
       let strategies =
         [ reduce_logic;
@@ -849,6 +860,12 @@ and check_alpha_equal ri hyps f1 f2 =
       check_xp env subst pr1.pr_fun pr2.pr_fun;
       aux env subst pr1.pr_args pr2.pr_args;
       aux env subst pr1.pr_event pr2.pr_event
+
+    | Fsem s1, Fsem s2 ->
+      check_s env subst s1 s2
+
+    | Fname p1, Fname p2 ->
+      check_xp env subst p1 p2
 
     | _, _ -> error ()
 

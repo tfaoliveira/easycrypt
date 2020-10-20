@@ -1030,6 +1030,7 @@ module FPosition = struct
           | FequivS   _ -> raise InvalidPosition
           | FeagerF   _ -> raise InvalidPosition
           | Fsem      _ -> raise InvalidPosition
+          | Fname     _ -> raise InvalidPosition
       end
 
     and doit ps fps =

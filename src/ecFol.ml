@@ -173,6 +173,19 @@ let f_weight ty d =
 let f_lossless ty d =
   f_app (fop_lossless ty) [d] tbool
 
+let f_dunit f =
+  f_app (f_op EcCoreLib.CI_Distr.p_dunit [f.f_ty] (tdistr f.f_ty)) [f] (tdistr f.f_ty)
+
+let f_dlet (ty1, ty2) d f =
+  f_app (f_op EcCoreLib.CI_Distr.p_dlet [ty1; ty2] (tdistr ty2)) [d; f] (tdistr ty2)
+
+(* -------------------------------------------------------------------- *)
+let f_mget mem (name, ty) =
+  f_app (f_op EcCoreLib.CI_Mem.p_mget [ty] ty) [mem; f_name name] ty
+
+let f_mset mem (name, ty) value =
+  f_app (f_op EcCoreLib.CI_Mem.p_mset [ty] tmem) [mem; f_name name; value] tmem
+
 (* -------------------------------------------------------------------- *)
 let f_losslessF f = f_bdHoareF f_true f f_true FHeq f_r1
 

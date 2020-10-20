@@ -38,3 +38,13 @@ type real.
 type 'a distr.
 
 op mu: 'a distr -> ('a -> bool) -> real.
+
+(* -------------------------------------------------------------------- *)
+type mem.
+type name.
+
+op mget ['a] : mem -> name -> 'a.
+op mset ['a] : mem -> name -> 'a -> mem.
+
+abbrev "_.[_]" ['a] = mget<:'a>.
+abbrev "_.[_<-_]" ['a] = mset<:'a>.

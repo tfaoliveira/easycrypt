@@ -126,11 +126,17 @@ module CI_Distr = struct
   let p_lossless = _Distr "is_lossless"
   let p_uniform  = _Distr "is_uniform"
   let p_full     = _Distr "is_full"
+
+  let p_dunit    = EcPath.extend p_Distr ["MUnit"; "dunit"]
+  let p_dlet     = EcPath.extend p_Distr ["dlet"]
 end
 
 (* -------------------------------------------------------------------- *)
 module CI_Mem = struct
-  let p_mem = _Pervasive "mem"
+  let p_mem  = _Pervasive "mem"
+  let p_name = _Pervasive "name"
+  let p_mget = _Pervasive "mget"
+  let p_mset = _Pervasive "mset"
 end
 
 (* -------------------------------------------------------------------- *)
