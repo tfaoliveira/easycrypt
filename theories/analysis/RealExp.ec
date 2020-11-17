@@ -337,7 +337,7 @@ by rewrite invfM (mulrCA a) divff // mulr1 pmulr_lle0 ?invr_gt0.
 qed.
 
 (* -------------------------------------------------------------------- *)
-abstract theory CauchySchwarz.
+abstract theory Rn.
 
 (* -------------------------------------------------------------------- *)
 type t.
@@ -535,4 +535,16 @@ have ge0_rhs : 0%r <= 2%r * norm x * norm y.
 by rewrite -!rpow_int // rpow_mono // -!mulrA ler_pmul2l.
 qed.
 
-end CauchySchwarz.
+(* -------------------------------------------------------------------- *)
+lemma normvD_le (x y : Rn.vector) : norm (x + y) <= norm x + norm y.
+proof.
+rewrite -(@homo_exp 2) 1:// sqnormvD sqrrD intmulr.
+by apply/ler_add2r/ler_add2l; rewrite mulrC &(ler_wpmul2r) 1:// &(CZ).
+qed.
+
+lemma normvB_le (x y : Rn.vector) : norm (x - y) <= norm x + norm y.
+proof.
+by have /ler_trans := normvD_le x (-y); apply; rewrite normvN.
+qed.
+
+end Rn.
