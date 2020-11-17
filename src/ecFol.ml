@@ -181,10 +181,14 @@ let f_dlet (ty1, ty2) d f =
 
 (* -------------------------------------------------------------------- *)
 let f_mget mem (name, ty) =
-  f_app (f_op EcCoreLib.CI_Mem.p_mget [ty] ty) [mem; f_name name] ty
+  f_app
+    (f_op EcCoreLib.CI_Mem.p_mget [ty] (toarrow [tmem; tname] ty))
+    [mem; f_name name] ty
 
 let f_mset mem (name, ty) value =
-  f_app (f_op EcCoreLib.CI_Mem.p_mset [ty] tmem) [mem; f_name name; value] tmem
+  f_app
+    (f_op EcCoreLib.CI_Mem.p_mset [ty] (toarrow [tmem; tname; ty] tmem))
+    [mem; f_name name; value] tmem
 
 (* -------------------------------------------------------------------- *)
 let f_losslessF f = f_bdHoareF f_true f f_true FHeq f_r1

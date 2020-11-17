@@ -129,6 +129,7 @@ module CI_Distr = struct
 
   let p_dunit    = EcPath.extend p_Distr ["MUnit"; "dunit"]
   let p_dlet     = EcPath.extend p_Distr ["dlet"]
+  let p_dfold    = EcPath.extend p_Distr ["dfold"]
 end
 
 (* -------------------------------------------------------------------- *)

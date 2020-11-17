@@ -2760,7 +2760,7 @@ let rec trans_form_or_pattern env ?mv ?ps ue pf tt =
         match m.f_def with
         | FBdef def ->
           let post = omap (fun e ->
-            let aout = pv_loc f "$result" in
+            let aout = pv_loc f "res" in
             i_asgn (LvVar (aout, e.e_ty), e)) def.f_ret in
           f_sem (stmt (def.f_body.s_node @ otolist post))
         | _ -> tyerror gp.pl_loc env SemOnNonConcrete

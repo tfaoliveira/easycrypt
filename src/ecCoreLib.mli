@@ -130,6 +130,7 @@ module CI_Distr : sig
 
   val p_dunit   : path
   val p_dlet    : path
+  val p_dfold   : path
 end
 
 (* -------------------------------------------------------------------- *)

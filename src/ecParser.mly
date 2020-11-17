@@ -1047,6 +1047,13 @@ ptybindings_decl:
 %inline hole: UNDERSCORE { PFhole }
 %inline none: IMPOSSIBLE { assert false }
 
+lident_or_res:
+| x=loc(RES)
+    { mk_loc x.pl_loc "res" }
+
+| x=lident
+    { x }
+
 qident_or_res_or_glob:
 | x=qident
     { GVvar x }
@@ -1201,10 +1208,11 @@ sform_u(P):
     { PFsem mp }
 
 | LBRACKET PIPE
-    p=loc(rlist1(_uident, DOT)) DOT f=lident DOT x=lident PIPE RBRACKET
+    p=loc(rlist1(_uident, DOT)) DOT f=lident DOT x=lident_or_res
+  PIPE RBRACKET
     {  let nm, m =
         let nmm = List.rev (unloc p) in
-        (List.rev (List.tl nmm), List.hd nmm) in
+        ("Top" :: List.rev (List.tl nmm), List.hd nmm) in
        PFname (mk_loc (loc p) (nm, m), f, x) }
 
 | r=loc(RBOOL)

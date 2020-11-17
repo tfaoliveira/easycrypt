@@ -1579,6 +1579,15 @@ module Fsubst = struct
         let mp' = s.fs_sty.ts_mp mp in
         FSmart.f_glob (fp, (mp, m)) (mp', m')
 
+    | Fsem cs ->
+        let es =
+          e_subst_init s.fs_freshen s.fs_sty.ts_p
+            s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
+        f_sem (EcModules.s_subst es cs)
+
+    | Fname name ->
+        f_name (EcPath.x_substm s.fs_sty.ts_p s.fs_mp name)
+
     | FhoareF hf ->
         assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
         let pr' = f_subst ~tx s hf.hf_pr in

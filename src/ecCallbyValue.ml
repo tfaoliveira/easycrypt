@@ -66,6 +66,8 @@ let rec f_eq_simpl st f1 f2 =
   match f1.f_node, f2.f_node with
   | Ftuple args1, Ftuple args2 ->
     f_ands0_simpl (List.map2 (f_eq_simpl st) args1 args2)
+  | Fname p1, Fname p2 ->
+    if EcEnv.NormMp.x_equal st.st_env p1 p2 then f_true else f_false
   | _, _ ->
     match fst_map f_node (destr_app f1), fst_map f_node (destr_app f2) with
     | (Fop (p1, _), args1), (Fop (p2, _), args2)
@@ -292,57 +294,180 @@ and app_red st f1 args =
   end
 
   | Fsem s -> begin
-      let mident () =
-        let m = EcIdent.create "m" in
-        (m, f_local m tmem) in
+      let mident () = let m = EcIdent.create "m" in (m, f_local m tmem) in
 
-      let aout =
-        match s.s_node with
+      let rec of_expr m f =
+        match f.f_node with
+        | Fpvar (pv, m') when EcMemory.mem_equal m m' ->
+            f_mget (f_local m tmem) (pv.pv_name, f.f_ty)
+        | _ -> EcFol.f_map (fun ty -> ty) (of_expr m) f in
+
+      let rec doit1 i =
+        match i.EcModules.i_node with
+        | Sasgn (LvVar (x, ty), e) ->
+          let (m, mf) = mident () in
+          `Det (m, f_mset mf (x.pv_name, ty) (of_expr m (form_of_expr m e)))
+
+        | Srnd (LvVar (x, ty), d) ->
+          let (m, mf) = mident () in
+          let vx = EcIdent.create "v" in
+          `Prob (m, f_dlet (ty, tmem) (of_expr m (form_of_expr m d))
+                      (f_lambda [(vx, GTty ty)]
+                        (f_dunit (f_mset mf (x.pv_name, ty) (f_local vx ty)))))
+
+        | Sif (e, s1, s2) ->
+          let (m, mf) = mident () in
+          let ((_, f1), (_, f2)) = doit_f s1.s_node, doit_f s2.s_node in
+          let isdet, (m1, m2), (f1, f2) =
+            match f1, f2 with
+            | `Det  (m1, f1), `Det  (m2, f2) -> true , (m1, m2), (f1, f2)
+            | `Prob (m1, f1), `Det  (m2, f2) -> false, (m1, m2), (f1, f_dunit f2)
+            | `Det  (m1, f1), `Prob (m2, f2) -> false, (m1, m2), (f_dunit f1, f2)
+            | `Prob (m1, f1), `Prob (m2, f2) -> false, (m1, m2), (f1, f2)
+          in
+
+          let f1 = EcFol.Fsubst.f_subst_local m1 mf f1 in
+          let f2 = EcFol.Fsubst.f_subst_local m2 mf f2 in
+
+          if   isdet
+          then `Det  (m, f_if (of_expr m (form_of_expr m e)) f1 f2)
+          else `Prob (m, f_if (of_expr m (form_of_expr m e)) f1 f2)
+
+        | _ ->
+          `None [i]
+
+      and doit (tops : EcModules.instr list) =
+        let module E  = struct exception SemFailure end in
+        let module ET = EcReduction.EqTest in
+
+        let try_forloop (tops : EcModules.instr list) =
+          match List.map EcModules.i_node tops with
+          | Sasgn (LvVar (x, xty), e) :: Swhile (c, body) :: _ ->
+              if not (ET.for_type st.st_env xty tint) then
+                raise E.SemFailure;
+
+              if not (ET.for_expr st.st_env e (e_int EcBigInt.zero)) then
+                raise E.SemFailure;
+
+              let body =
+                let inc, body =
+                  match List.rev body.s_node with
+                  | inc :: body -> inc, List.rev body
+                  | _ -> raise E.SemFailure in
+
+                match inc.i_node with
+                | Sasgn (LvVar (y, _), ic) ->
+                    if not (ET.for_pv st.st_env x y) then
+                      raise E.SemFailure
+                    else begin match ic.e_node with
+                      | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar y' }; z])
+                        when ET.for_pv   st.st_env y y'
+                          && ET.for_expr st.st_env z (e_int EcBigInt.one)
+                          && EcPath.p_equal op EcCoreLib.CI_Int.p_int_add -> body
+                      | _ -> raise E.SemFailure
+                    end;
+                | _ -> raise E.SemFailure in
+
+              let bd =
+                match c.e_node with
+                | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar y }; bd])
+                    when ET.for_pv st.st_env x y
+                      && EcPath.p_equal op EcCoreLib.CI_Int.p_int_lt -> bd
+                | _ -> raise E.SemFailure in
+
+              let wr = EcPV.s_write st.st_env (EcModules.stmt body) in
+
+              if EcPV.PV.mem_pv st.st_env x wr then
+                raise E.SemFailure;
+
+              if not (EcPV.PV.is_empty (EcPV.e_read st.st_env bd)) then
+                raise E.SemFailure;
+
+              let _, mb, body = doit_u body in
+
+              let i  = EcIdent.create "i" in
+              let fi = f_local i tint in
+              let m, mf = mident () in
+
+              let body = EcFol.Fsubst.f_subst_local mb
+                  (f_mset (f_local mb tmem) (x.pv_name, tint) fi) body in
+              let body = f_lambda [(i, GTty tint); (mb, GTty tmem)] body in
+              let aout = f_op EcCoreLib.CI_Distr.p_dfold [tmem] in
+              let aout = aout (toarrow [tint; tmem] (tdistr tmem)) in
+              let aout = f_app aout [body; mf; of_expr m (form_of_expr m bd)] (tdistr tmem) in
+
+              `Prob (m, aout), List.drop 2 tops
+
+          | _ ->
+            raise E.SemFailure in
+
+        match tops with
         | [] ->
-          let m, mf = mident () in
-          Some (f_lambda [(m, GTty tmem)] (f_dunit mf))
+            let m, mf = mident () in
+            `Det (m, mf)
 
         | i :: s -> begin
-            let aout =
-              match i.i_node with
-              | Sasgn (LvVar (x, ty), e) ->
-                let (m, mf) = mident () in
-                Some (f_lambda [(m, GTty tmem)]
-                        (f_dunit (f_mset mf (x.pv_name, ty) (form_of_expr mhr e))))
+          let i, s =
+            try try_forloop tops with E.SemFailure -> (doit1 i, s) in
 
-              | Srnd (LvVar (x, ty), d) ->
-                let (m, mf) = mident () in
-                let vx = EcIdent.create "v" in
-                Some (f_lambda [(m, GTty tmem)]
-                        (f_dlet (ty, tmem) (form_of_expr mhr d)
-                           (f_lambda [(vx, GTty ty)]
-                              (f_dunit (f_mset mf (x.pv_name, ty) (f_local vx ty))))))
+          if List.is_empty s then i else
+            match i, doit s with
+            | `Det (m1, i), `Det (m2, s) ->
+                `Det (m1, EcFol.Fsubst.f_subst_local m2 i s)
 
-              | Sif (e, s1, s2) ->
-                Some (f_if (form_of_expr mhr e) (f_sem s1) (f_sem s2))
+            | `Det (m1, i), `Prob (m2, s) ->
+                `Prob (m1, EcFol.Fsubst.f_subst_local m2 i s)
 
-              | _ ->
-                None in
+            | `Prob (m1, i), `Det (m2, s) ->
+                `Prob (m1, f_dlet (tmem, tmem) i (f_lambda [(m2, GTty tmem)] (f_dunit s)))
 
-            match aout with None -> None | Some f ->
-              if List.is_empty s then Some f else
+            | `Prob (m1, i), `Prob (m2, s) ->
+                `Prob (m1, f_dlet (tmem, tmem) i (f_lambda [(m2, GTty tmem)] s))
 
-              let m, mf = mident () in
-              Some (f_lambda [(m, GTty tmem)]
-                      (f_dlet
-                         (tmem, tmem)
-                         (f_app f [mf] (tdistr tmem)) (f_sem (EcModules.stmt s))))
+            | `None i, `Det (m2, s) ->
+                let m1, mf1 = mident () in
+                `Prob (m1, f_dlet (tmem, tmem)
+                         (f_app (f_sem (EcModules.stmt i)) [mf1] (tdistr tmem))
+                         (f_lambda [(m2, GTty tmem)] (f_dunit s)))
 
-          end
-      in
+            | `None i, `Prob (m2, s) ->
+                let m1, mf1 = mident () in
+                `Prob (m1, f_dlet (tmem, tmem)
+                         (f_app (f_sem (EcModules.stmt i)) [mf1] (tdistr tmem))
+                         (f_lambda [(m2, GTty tmem)] s))
 
-      match aout with
-      | None ->
+            | `Det (m1, i), `None s ->
+              `Prob (m1, f_app (f_sem (EcModules.stmt s)) [i] (tdistr tmem))
+
+            | `Prob (m1, i), `None s ->
+              `Prob (m1, f_dlet (tmem, tmem)
+                       i (f_app (f_sem (EcModules.stmt s)) [i] (tdistr tmem)))
+
+            | `None i, `None s ->
+                `None (i @ s)
+        end
+
+      and doit_f s =
+        match doit s with
+        | `Det  (m, f) -> true, `Det  (m, f)
+        | `Prob (m, f) -> true, `Prob (m, f)
+        | `None s ->
+            let m, mf = mident () in
+            let aout = f_app (f_sem (EcModules.stmt s)) [mf] (tdistr tmem) in
+            false, `Prob (m, aout)
+
+      and doit_u s =
+        match doit_f s with
+        | b, `Det  (m, f) -> b, m, f_dunit f
+        | b, `Prob (m, f) -> b, m, f in
+
+      match doit_u s.s_node with
+      | false, _, _ ->
         let args, ty = flatten_args args in
         reduce_user st (f_app f1 args ty)
 
-      | Some f ->
-        app_red st f args
+      | true, m, f ->
+        app_red st (f_lambda [m, GTty tmem] f) args
   end
 
   | _ ->
