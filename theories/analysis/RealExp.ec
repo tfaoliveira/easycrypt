@@ -476,13 +476,6 @@ abbrev norm x = sqrt (dotp x x).
 lemma normv0 : norm zerov = 0%r.
 proof. by rewrite dotpv0 sqrt0. qed.
 
-lemma normvZ a v : norm (a ** v) = `|a| * norm v.
-proof.
-rewrite !(dotpZl, dotpZr) mulrA sqrtM ?ge0_dotp.
-+ by rewrite -expr2 ge0_sqr.
-+ by rewrite -expr2 sqrtsq.
-qed.
-
 lemma ge0_normv x : 0%r <= norm x.
 proof. by apply/ge0_sqrt. qed.
 
@@ -492,6 +485,29 @@ proof. by rewrite sqsqrt // ge0_dotp. qed.
 lemma sqnormvD x y :
   (norm (x + y))^2 = (norm x)^2 + 2%r * dotp x y + (norm y)^2.
 proof. by rewrite !sqnormv !(dotpDl, dotpDr) (@dotpC y x) #ring. qed.
+
+lemma normvC (x y : vector) :
+  norm (x - y) = norm (y - x).
+proof. by rewrite -(opprB x y) dotpNl dotpNr opprK. qed.
+
+lemma normvN (x : vector) : norm (- x) = norm x.
+proof. by rewrite dotpNl dotpNr opprK. qed.
+
+lemma normvZ (c : real) (x : vector) : norm (c ** x) = `|c| * norm x.
+proof.
+by rewrite dotpZl dotpZr mulrA -expr2 sqrtM ?(ge0_sqr, ge0_dotp) sqrtsq.
+qed.
+
+lemma normvD_sq (x y : vector) :
+  (norm (x + y))^2 = (norm x)^2 + 2%r * dotp x y + (norm y)^2.
+proof.
+rewrite !sqnormv dotpDl !dotpDr (@dotpC x y) addrACA.
+by rewrite (@mulrC 2%r _) -intmulr mulr2z !addrA.
+qed.
+
+lemma normvB_sq (x y : vector) :
+  (norm (x - y))^2 = (norm x)^2 - 2%r * dotp x y + (norm y)^2.
+proof. by rewrite normvD_sq normvN dotpNr mulrN. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma CZ x y : dotp x y <= norm x * norm y.
