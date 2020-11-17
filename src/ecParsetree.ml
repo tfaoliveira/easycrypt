@@ -680,7 +680,8 @@ type pprover_infos = {
   plem_iterate    : bool option;
   plem_wanted     : pdbhint option;
   plem_unwanted   : pdbhint option;
-  plem_selected   : bool option
+  plem_selected   : bool option;
+  psmt_debug      : bool option;
 }
 
 let empty_pprover = {
@@ -697,6 +698,7 @@ let empty_pprover = {
   plem_wanted     = None;
   plem_unwanted   = None;
   plem_selected   = None;
+  psmt_debug      = None;
 }
 
 (* -------------------------------------------------------------------- *)
