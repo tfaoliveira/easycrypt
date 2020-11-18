@@ -538,8 +538,9 @@ qed.
 (* -------------------------------------------------------------------- *)
 lemma normvD_le (x y : Rn.vector) : norm (x + y) <= norm x + norm y.
 proof.
-rewrite -(@homo_exp 2) 1:// sqnormvD sqrrD intmulr.
-by apply/ler_add2r/ler_add2l; rewrite mulrC &(ler_wpmul2r) 1:// &(CZ).
+rewrite -(@Bigreal.ler_pexpn2r 2) 1:// ?addr_ge0 ?ge0_normv.
+rewrite sqnormvD sqrrD intmulr; apply/ler_add2r/ler_add2l.
+by rewrite mulrC &(ler_wpmul2r) 1:// &(CZ).
 qed.
 
 lemma normvB_le (x y : Rn.vector) : norm (x - y) <= norm x + norm y.
