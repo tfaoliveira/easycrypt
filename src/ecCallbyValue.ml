@@ -217,10 +217,8 @@ and app_red st f1 args =
       st.st_ri.iota && EcEnv.Op.is_projection st.st_env p
     -> begin
 
-    let mk, args1 = oget (get1_args args) in
-
-    match mk.f_node with
-    | Fapp ({ f_node = Fop (mkp, _) }, mkargs)
+    match get1_args args with
+    | Some ({ f_node = Fapp ({ f_node = Fop (mkp, _) }, mkargs)}, args1)
         when (EcEnv.Op.is_record_ctor st.st_env mkp) ->
       let v = oget (EcEnv.Op.by_path_opt p st.st_env) in
       let v = proj3_2 (EcDecl.operator_as_proj v) in

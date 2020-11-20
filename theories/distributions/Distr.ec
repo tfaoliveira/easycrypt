@@ -1132,7 +1132,7 @@ rewrite /dmap !dlet_dlet; split; apply: in_eq_dlet => // -[a b] /= abd.
 qed.
 
 (* -------------------------------------------------------------------- *)
-abbrev dapply (F: 'a -> 'b) : 'a distr -> 'b distr =
+abbrev [-printing] dapply (F: 'a -> 'b) : 'a distr -> 'b distr =
   fun d => dmap d F.
 
 (* -------------------------------------------------------------------- *)
