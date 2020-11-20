@@ -548,4 +548,38 @@ proof.
 by have /ler_trans := normvD_le x (-y); apply; rewrite normvN.
 qed.
 
+(* -------------------------------------------------------------------- *)
+theory BigRn.
+
+clone include Bigalg.BigZModule with
+  type t <- Rn.vector,
+    op ZM.zeror  <- zerov,
+    op ZM.( + )  <- ( + ),
+    op ZM.([-])  <- ([-]),
+    op ZM.intmul <- intmul
+
+    proof ZM.*
+
+    remove abbrev ZM.(-).
+
+realize ZM.addrA by exact/addrA.
+realize ZM.addrC by exact/addrC.
+realize ZM.add0r by exact/add0r.
+realize ZM.addNr by exact/addNr.
+
+lemma dotp_sumr ['a] P F (s : 'a list) x :
+  dotp x (big P F s) = BRA.big P (fun y => dotp x (F y)) s.
+proof.
+elim: s => [|y s ih]; first by rewrite !big_nil dotpv0.
+by rewrite !big_cons; case: (P y) => // _; rewrite dotpDr ih.
+qed.
+
+lemma dotp_suml ['a] P F (s : 'a list) x :
+  dotp (big P F s) x = BRA.big P (fun y => dotp (F y) x) s.
+proof.
+by rewrite dotpC dotp_sumr; apply: BRA.eq_bigr => i _ /=; rewrite dotpC.
+qed.
+
+end BigRn.
+
 end Rn.
