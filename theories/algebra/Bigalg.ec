@@ -321,4 +321,14 @@ rewrite {2}(_ : n = n - 1 + 1) 1:#ring BAdd.big_int_recr /= 1:/#.
 rewrite expr0 /= ltr_spaddr ?mul1r; 1: by rewrite expr_gt0 ltr_neqAle /#.
 by rewrite sumr_ge0 => /= i _; rewrite mulr_ge0 ?expr_ge0.
 qed.
+
+lemma big_normr ['a] P F s :
+  `|BAdd.big<:'a> P F s| <= BAdd.big P (fun x => `|F x|) s.
+proof.
+elim: s => [|x s ih]; first by rewrite !BAdd.big_nil normr0.
+rewrite !BAdd.big_cons /=; case: (P x) => // Px.
+have /ler_trans := ler_norm_add (F x) (BAdd.big P F s); apply.
+by rewrite ler_add2l.
+qed.
+
 end BigOrder.
