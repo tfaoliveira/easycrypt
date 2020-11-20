@@ -378,7 +378,7 @@ and app_red st f1 args =
               if EcPV.PV.mem_pv st.st_env x wr then
                 raise E.SemFailure;
 
-              if not (EcPV.PV.is_empty (EcPV.e_read st.st_env bd)) then
+              if not (EcPV.PV.indep st.st_env (EcPV.e_read st.st_env bd) wr) then
                 raise E.SemFailure;
 
               let _, mb, body = doit_u body in
