@@ -102,6 +102,9 @@ op ( ^ ) (x a : real) =
   if x <= 0%r then b2r (a = 0%r) else exp (a * ln x).
 
 (* -------------------------------------------------------------------- *)
+axiom cvx_sqr a b : convex (fun x : real => x^2) a b.
+
+(* -------------------------------------------------------------------- *)
 lemma rpowE (x a : real) : 0%r < x => x^a = exp (a * ln x).
 proof. by rewrite /(^) ltrNge => ->. qed.
 
