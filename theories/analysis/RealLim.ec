@@ -70,22 +70,6 @@ case=> p1 Np0 le_p pI; split=> //.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma limP l f x : nlim l f x =>
-  forall e, 0%r < e => exists a, forall y, `|x - y| < a => `|f x - f y| < l.
-proof.
-move=> lim_fx e gt0_e.
-admitted.
-
-(* -------------------------------------------------------------------- *)
-lemma limD l1 l2 f1 f2 x : nlim l1 f1 x => nlim l2 f2 x =>
-  nlim (l1 + l2) (f1 + f2) x.
-proof.
-move=> lim_f1 lim_f2; split; 1: by apply/filter_fimage/filter_isnbh.
-move=> p; case: lim_f1 => _ le1; case: lim_f2 => _ le2.
-rewrite /fimage /preimage.
-admitted.
-
-(* -------------------------------------------------------------------- *)
 op nbh (a : real) (b : bool * bool) =
   fun x => a - b2r b.`1 <= x <= a + b2r b.`2.
 
@@ -129,31 +113,3 @@ qed.
 lemma eq_haslim b (g f : real -> real) x :
   f == g => haslim_g b f x <=> haslim_g b g x.
 proof. by move/fun_ext=> ->. qed.
-
-(* -------------------------------------------------------------------- *)
-abbrev invf (f : real -> real) = fun x => 1%r / f x.
-
-lemma haslimD b (f g : real -> real) x :
-  haslim_g b f x => haslim_g b g x => haslim_g b (f + g) x.
-proof.
-case=> [l1].
-
-
-admitted.
-
-lemma haslimZ b (f : real -> real) c x :
-  haslim_g b (fun x => c * f x) x <=> haslim_g b f x.
-proof. admitted.
-
-lemma haslimV b (f : real -> real) x :
-  lim f x <> 0%r => haslim_g b (invf f) x.
-proof. admitted.
-
-lemma haslimP f x : haslim f x <=> (haslim_up f x /\ haslim_dw f x).
-proof. admitted.
-
-(* -------------------------------------------------------------------- *)
-lemma haslim_shift b (f : real -> real) x0 a :
-      haslim_g b (fun x : real => f (x + a)) x0
-  <=> haslim_g b f (x0 + a).
-proof. admitted.
