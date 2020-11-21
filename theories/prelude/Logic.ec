@@ -10,6 +10,15 @@
 require import Tactics.
 
 (* -------------------------------------------------------------------- *)
+axiom mget_mset_eq ['a] (m : mem) (v : 'a) (x y : name) :
+  x = y => mget<:'a> (mset<:'a> m x v) y = v.
+
+axiom mget_mset_neq ['a 'b] (m : mem) (v : 'a) (x y : name) :
+  x <> y => mget<:'b> (mset m x v) y = mget m y.
+
+hint simplify mget_mset_eq, mget_mset_neq.
+
+(* -------------------------------------------------------------------- *)
 op witness : 'a.                (* All types are inhabited in EC *)
 
 (* -------------------------------------------------------------------- *)
