@@ -2255,10 +2255,17 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
               | `Local x -> x in
             let x1 = get v1 in
             let x2 = get v2 in
-            if Sid.mem x1 st.cs_undosubst && not (Sid.mem x2 st.cs_undosubst) then
-              t_subst_x ~clear:SCnone ~kind:sk ~tside:`RtoL ~eqid:eqid ~except:st.cs_sbeq tc
-            else
-              t_subst_x ~clear:SCnone ~kind:sk ~tside:`LtoR ~eqid:eqid ~except:st.cs_sbeq tc
+            let tside =
+              match Sid.mem x1 st.cs_undosubst, Sid.mem x2 st.cs_undosubst with
+              | true, false -> `RtoL
+              | false, true -> `LtoR
+              | _, _ ->
+                match v1, v2 with
+                | `Local _, _ -> `LtoR
+                | _, `Local _ -> `RtoL
+                | _, _        -> `LtoR
+            in
+            t_subst_x ~clear:SCnone ~kind:sk ~tside ~eqid:eqid ~except:st.cs_sbeq tc
         in
 
 (*      let _, _, side = gen in
