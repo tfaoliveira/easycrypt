@@ -1,0 +1,100 @@
+(* -------------------------------------------------------------------- *)
+require import AllCore List Ring Bigalg.
+
+(* -------------------------------------------------------------------- *)
+type t.
+
+clone import IDomain as Domain with type t <- t.
+
+clone import Bigalg.BigComRing as BigDom with
+  type  t        <- t,
+    op  CR.zeror <- Domain.zeror,
+    op  CR.oner  <- Domain.oner,
+    op  CR.(+)   <- Domain.(+),
+    op  CR.([-]) <- Domain.([-]),
+    op  CR.( * ) <- Domain.( * ),
+    op  CR.invr  <- Domain.invr,
+  pred  CR.unit  <- Domain.unit
+  proof CR.*.
+
+realize CR.addrA     by exact: Domain.addrA    .
+realize CR.addrC     by exact: Domain.addrC    .
+realize CR.add0r     by exact: Domain.add0r    .
+realize CR.addNr     by exact: Domain.addNr    .
+realize CR.oner_neq0 by exact: Domain.oner_neq0.
+realize CR.mulrA     by exact: Domain.mulrA    .
+realize CR.mulrC     by exact: Domain.mulrC    .
+realize CR.mul1r     by exact: Domain.mul1r    .
+realize CR.mulrDl    by exact: Domain.mulrDl   .
+realize CR.mulVr     by exact: Domain.mulVr    .
+realize CR.unitP     by exact: Domain.unitP    .
+realize CR.unitout   by exact: Domain.unitout  .
+
+(* -------------------------------------------------------------------- *)
+abbrev "_.[_]" (xs : t list) (i : int) = nth zeror xs i.
+
+(* -------------------------------------------------------------------- *)
+op sth : t -> int.
+
+op (%/) : t -> t -> t.
+op (%%) : t -> t -> t.
+
+axiom sth0     : sth zeror = 0.
+axiom gt0_sth  : forall x, x <> zeror => 0 < sth x.
+axiom mono_sth : forall x y, y <> zeror => sth y <= sth (x * y).
+
+axiom divr0 : forall x, x %/ zeror = zeror.
+axiom modr0 : forall x, x %% zeror = x.
+
+axiom euclide :
+  forall x y, y <> zeror =>
+    x = (x %/ y) * y + x %% y /\ sth (x %% y) < sth x.
+
+(* -------------------------------------------------------------------- *)
+op (%|) (m d : t) = (d %% m = zeror).
+
+op gcd (x y : t) = fun (d : t) =>
+     (d %| x /\ d %| y)
+  /\ (forall d', d' %| x => d' %| y => d' %| d).
+
+op coprime (x y : t) = gcd x y oner.
+
+op coprimes (xs : t list) =
+  forall i j, 0 <= i < size xs => 0 <= i < size xs => i <> j =>
+    coprime xs.[i] xs.[j].
+
+(* -------------------------------------------------------------------- *)
+op crt_solution (xs : t list) (cs : t list) Y =
+  forall i, 0 <= i < size xs =>
+    Y %% xs.[i] = cs.[i] %% xs.[i].
+
+lemma crt_exists (xs : t list) :
+  forall cs, exists Y, crt_solution xs cs Y.
+proof. admitted.
+
+lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
+  let M = BMul.big predT idfun xs in
+  crt_solution xs cs Y1 => crt_solution xs cs Y2 => Y1 %% M = Y2 %% M.
+proof. admitted.
+
+lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
+  let M = BMul.big predT idfun xs in
+    crt_solution xs cs  Y  =>
+    crt_solution cs cs1 Y1 =>
+    crt_solution cs cs2 Y2 =>
+
+      Y %% M = (Y1 + Y2) %% M
+  <=> (forall i, 0 <= i < size xs =>
+         cs.[i] %% M = (cs1.[i] + cs2.[i]) %% M).
+proof. admitted.
+
+lemma crt_multiplicative (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
+  let M = BMul.big predT idfun xs in
+    crt_solution xs cs  Y  =>
+    crt_solution cs cs1 Y1 =>
+    crt_solution cs cs2 Y2 =>
+
+      Y %% M = (Y1 + Y2) %% M
+  <=> (forall i, 0 <= i < size xs =>
+         cs.[i] %% M = (cs1.[i] * cs2.[i]) %% M).
+proof. admitted.
