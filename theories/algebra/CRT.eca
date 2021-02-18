@@ -69,19 +69,24 @@ op crt_solution (xs : t list) (cs : t list) Y =
     Y %% xs.[i] = cs.[i] %% xs.[i].
 
 lemma crt_exists (xs : t list) :
-  forall cs, exists Y, crt_solution xs cs Y.
+  coprimes xs => forall cs, exists Y, crt_solution xs cs Y.
 proof. admitted.
 
 lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
-  crt_solution xs cs Y1 => crt_solution xs cs Y2 => Y1 %% M = Y2 %% M.
+    coprimes xs
+  => crt_solution xs cs Y1
+  => crt_solution xs cs Y2
+  => Y1 %% M = Y2 %% M.
 proof. admitted.
 
 lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
-    crt_solution xs cs  Y  =>
-    crt_solution cs cs1 Y1 =>
-    crt_solution cs cs2 Y2 =>
+     coprimes xs
+  => crt_solution xs cs  Y
+  => crt_solution cs cs1 Y1
+  => crt_solution cs cs2 Y2
+  =>
 
       Y %% M = (Y1 + Y2) %% M
   <=> (forall i, 0 <= i < size xs =>
@@ -90,9 +95,11 @@ proof. admitted.
 
 lemma crt_multiplicative (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
-    crt_solution xs cs  Y  =>
-    crt_solution cs cs1 Y1 =>
-    crt_solution cs cs2 Y2 =>
+     coprimes xs
+  => crt_solution xs cs  Y
+  => crt_solution cs cs1 Y1
+  => crt_solution cs cs2 Y2
+  =>
 
       Y %% M = (Y1 + Y2) %% M
   <=> (forall i, 0 <= i < size xs =>
