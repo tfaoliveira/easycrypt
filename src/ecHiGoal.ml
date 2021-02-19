@@ -384,7 +384,7 @@ let process_crushmode d =
 
 (* -------------------------------------------------------------------- *)
 let process_done tc =
-  let tc = process_trivial tc in
+  let tc = EcPhlAuto.t_pl_trivial ~conv:`Conv tc in
 
   if not (FApi.tc_done tc) then
     tc_error (FApi.tc_penv tc) "[by]: cannot close goals";

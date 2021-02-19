@@ -2331,13 +2331,39 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
     } in
   FApi.t_seq (entry state) (t_simplify_with_info EcReduction.nodelta) tc
 
+(* -------------------------------------------------------------------- *)
+let rec t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(depth = 1) (tc : tcenv1) =
+  let bases = EcEnv.Auto.getall bases (FApi.tc1_env tc) in
+
+  let t_apply1 p tc =
+    let pt = PT.pt_of_uglobal !!tc (FApi.tc1_hyps tc) p in
+    try
+      Apply.t_apply_bwd_r ~mode:fmdelta ~canview:false pt tc
+    with Apply.NoInstance _ -> t_fail tc in
+
+  let rec t_apply ctn p  =
+    if   ctn > depth
+    then t_fail
+    else t_apply1 p @! t_trivial @! t_solve (ctn + 1) bases
+
+  and t_solve ctn bases =
+    match bases with
+    | [] -> t_abort
+    | p::bases -> FApi.t_or (t_apply ctn p) (t_solve ctn bases) in
+
+  let t = t_solve 0 bases in
+  let t = if canfail then FApi.t_try t else t in
+
+  t tc
 
 (* -------------------------------------------------------------------- *)
-let t_trivial
-  ?(subtc : FApi.backward option) ?(keep = false) ?(conv = `Alpha) (tc : tcenv1)
+and t_trivial
+  ?(subtc : FApi.backward option) ?(keep = false)
+  ?(conv = `Alpha) ?(solve = false) (tc : tcenv1)
 =
-  let core  = FApi.t_or (t_assumption conv) (t_absurd_hyp ~conv:`AlphaEq) in
-  let core  = FApi.t_try core in
+  let core  = [t_assumption conv; t_absurd_hyp ~conv:`AlphaEq] in
+  let core  = if solve then core @ [t_solve] else core in
+  let core  = FApi.t_try (FApi.t_ors core) in
   let core  = FApi.t_seqs [core; t_progress t_id; core] in
 
   let subtc = omap (fun tc -> FApi.t_seq tc (FApi.t_try (FApi.t_seq core t_fail))) subtc in
@@ -2398,31 +2424,6 @@ let t_smt ~(mode:smtmode) pi tc =
   if   EcSmt.check ~notify pi hyps concl
   then FApi.xmutate1 tc `Smt []
   else error ()
-
-(* -------------------------------------------------------------------- *)
-let t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(depth = 1) (tc : tcenv1) =
-  let bases = EcEnv.Auto.getall bases (FApi.tc1_env tc) in
-
-  let t_apply1 p tc =
-    let pt = PT.pt_of_uglobal !!tc (FApi.tc1_hyps tc) p in
-    try
-      Apply.t_apply_bwd_r ~mode:fmdelta ~canview:false pt tc
-    with Apply.NoInstance _ -> t_fail tc in
-
-  let rec t_apply ctn p  =
-    if   ctn > depth
-    then t_fail
-    else t_apply1 p @! t_trivial @! t_solve (ctn + 1) bases
-
-  and t_solve ctn bases =
-    match bases with
-    | [] -> t_abort
-    | p::bases -> FApi.t_or (t_apply ctn p) (t_solve ctn bases) in
-
-  let t = t_solve 0 bases in
-  let t = if canfail then FApi.t_try t else t in
-
-  t tc
 
 (* --------------------------------------------------------------------- *)
 let t_crush_fwd ?(delta = true) nb_intros (tc : tcenv1) =
