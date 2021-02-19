@@ -57,20 +57,77 @@ op gcd (x y : t) = fun (d : t) =>
      (d %| x /\ d %| y)
   /\ (forall d', d' %| x => d' %| y => d' %| d).
 
+lemma gcd_sym (x y d : t):
+  gcd x y d => gcd y x d.
+proof.
+  by move => [[divdx divdy] Hd]; split => // d' divd'x divd'y; apply Hd.
+qed.
+
 op coprime (x y : t) = gcd x y oner.
 
+lemma coprime_sym (x y : t):
+  coprime x y => coprime y x.
+proof. by apply gcd_sym. qed.
+
 op coprimes (xs : t list) =
-  forall i j, 0 <= i < size xs => 0 <= i < size xs => i <> j =>
+  forall i j, 0 <= i < size xs => 0 <= j < size xs => i <> j =>
     coprime xs.[i] xs.[j].
 
+lemma coprimes_cons (x : t) (xs : t list):
+  coprimes (x :: xs) =>
+  coprimes xs /\
+  (forall i, 0 <= i < size xs => coprime x xs.[i]).
+proof.
+  move => Hcps; split.
+  + move => i j [le0i ltisxs] [le0j ltjsxs] neqij.
+    move: (Hcps (i+1) (j+1)) => /=.
+    (* Why is IntID.invr_neq0 ?*)
+    have Hneqi:= (addz1_neqC0 _ le0i).
+    have ->: (i + 1 <> 0) by smt().
+    have Hneqj:= (addz1_neqC0 _ le0j).
+    have ->: (j + 1 <> 0) by smt().
+    move => /= -> //; smt().
+  move => i [le0i ltisxs].
+  move: (Hcps 0 (i+1)) => /=.
+  have Hneqi:= (addz1_neqC0 _ le0i).
+  have ->: (i + 1 <> 0) by smt().
+  move => /= -> //; smt().
+qed.
+
 (* -------------------------------------------------------------------- *)
+op duo_solution (x1 x2 c1 c2 : t) Y =
+  Y %% x1 = c1 %% x1 /\
+  Y %% x2 = c2 %% x2.
+
+lemma duo_exists (x1 x2 : t) :
+  coprime x1 x2 => forall c1 c2, exists Y, duo_solution x1 x2 c1 c2 Y.
+proof.
+admitted.
+
 op crt_solution (xs : t list) (cs : t list) Y =
   forall i, 0 <= i < size xs =>
     Y %% xs.[i] = cs.[i] %% xs.[i].
 
 lemma crt_exists (xs : t list) :
   coprimes xs => forall cs, exists Y, crt_solution xs cs Y.
-proof. admitted.
+proof.
+  elim: xs => [|x xs IHxs] Hcps cs.
+  + exists zeror => i /=.
+    have:= (StdOrder.IntOrder.ler_lt_asym 0 i).
+    smt().
+  move: (coprimes_cons _ _ Hcps) => [{Hcps} Hcps Hcp].
+  case: cs => [|c cs].
+  + by exists zeror => i.
+  move: (IHxs Hcps cs) => [Y] Hcrtsol.
+  exists (c * zeror + x * Y).
+  move => i; case: (i = 0) => [eqi|neqi].
+  + rewrite eqi /= => _.
+    admit.
+  rewrite neqi /= => -[le0i ltissxs].
+  rewrite -(Hcrtsol (i-1)).
+  + split; smt().
+  
+qed.
 
 lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
