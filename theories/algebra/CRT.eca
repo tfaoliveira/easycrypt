@@ -1,10 +1,41 @@
 (* -------------------------------------------------------------------- *)
-require import AllCore List Ring Bigalg.
+require import AllCore List Ring StdOrder Bigalg Binomial.
+(*---*) import IntOrder.
+
+(* -------------------------------------------------------------------- *)
+lemma size_eq1P ['a] (xs : 'a list) :
+  (size xs = 1) <=> (exists x, xs = [x]).
+proof.
+split=> [|[x ->//]]; case: xs => // x [|y xs] sz.
+- by exists x. - smt(size_ge0).
+qed.
+
+(* -------------------------------------------------------------------- *)
+op fmin_spec ['a] (f : 'a -> int) (p : 'a -> bool) (x : 'a) =
+  0 <= f x /\ p x /\ forall y, 0 <= f y => p y => f x <= f y.
+
+op fmin ['a] f p = choiceb (fmin_spec<:'a> f p) witness.
+
+lemma fminP ['a] (f : 'a -> int) (p : 'a -> bool) :
+  (exists x, 0 <= f x /\ p x) =>
+    0 <= f (fmin f p) /\ p (fmin f p) /\
+      forall y, 0 <= f y => p y => f (fmin f p) <= f y.
+proof.
+case=> x [ge0_fx px]; apply: (choicebP (fmin_spec f p) witness).
+suff h: forall n, 0 <= n => forall x, n = f x => p x =>
+  exists y, fmin_spec f p y by apply: (h (f x) _ x).
+elim/sintind=> {x ge0_fx px} i ge0_i ih x ->> px.
+case: (exists y, 0 <= f y /\ p y /\ f y < f x) => [[y [# 3?]]|].
+- by apply: (ih (f y) _ y).
+rewrite negb_exists /= => hx; exists x; do! split => //.
+by move=> y ge0_fy py; have := hx y; rewrite ge0_fy py /= ltrNge.
+qed.
 
 (* -------------------------------------------------------------------- *)
 type t.
 
 clone import IDomain as Domain with type t <- t.
+clear [Domain.* Domain.AddMonoid.* Domain.MulMonoid.*].
 
 clone import Bigalg.BigComRing as BigDom with
   type  t        <- t,
@@ -30,8 +61,289 @@ realize CR.mulVr     by exact: Domain.mulVr    .
 realize CR.unitP     by exact: Domain.unitP    .
 realize CR.unitout   by exact: Domain.unitout  .
 
+clear [BigDom.* BigDom.BAdd.* BigDom.BMul.*].
+
 (* -------------------------------------------------------------------- *)
 abbrev "_.[_]" (xs : t list) (i : int) = nth zeror xs i.
+
+(* -------------------------------------------------------------------- *)
+op (%|) (x y : t) = (exists c, y = c * x).
+op (%=) (x y : t) = (x %| y) /\ (y %| x).
+
+(* -------------------------------------------------------------------- *)
+lemma dvdrP x y : (x %| y) <=> (exists q, y = q * x).
+proof. by rewrite /(%|). qed.
+
+(* -------------------------------------------------------------------- *)
+op ideal (I : t -> bool) =
+     I zeror
+  /\ (forall x y, I x => I y => I (x - y))
+  /\ (forall a x, I x => I (a * x)).
+
+lemma idealP (I : t -> bool) :
+    I zeror
+ => (forall x y, I x => I y => I (x - y))
+ => (forall a x, I x => I (a * x))
+ => ideal I.
+proof. by move=> *; do! split. qed.
+
+lemma idealW (P : (t -> bool) -> bool) :
+  (forall I,
+        I zeror
+     => (forall (x y : t), I x => I y => I (x - y))
+     => (forall a x, I x => I (a * x))
+     => P I)
+  => forall i, ideal i => P i.
+proof. by move=> ih i [? [??]]; apply: ih. qed.
+
+lemma ideal0 I : ideal I => I zeror.
+proof. by case. qed.
+
+lemma idealN I x : ideal I => I x => I (- x).
+proof.
+move=> ^iI [_ [+ _]] Ix - /(_ zeror x); rewrite sub0r.
+by apply=> //; apply/ideal0.
+qed.
+
+lemma idealD I x y : ideal I => I x => I y => I (x + y).
+proof.
+move=> ^iI [_ [+ _] Ix Iy] - /(_ x (-y)); rewrite opprK.
+by apply=> //; apply/idealN.
+qed.
+
+lemma idealB I x y : ideal I => I x => I y => I (x - y).
+proof. by move=> iI Ix Iy; rewrite idealD -1:idealN. qed.
+
+lemma idealMl I x y : ideal I => I y => I (x * y).
+proof. by case=> _ [_ +]; apply. qed.
+
+lemma idealMr I x y : ideal I => I x => I (x * y).
+proof. by move=> iI Ix; rewrite mulrC; apply: idealMl. qed.
+
+(* -------------------------------------------------------------------- *)
+op id0 = pred1<:t> zeror.
+op idT = predT<:t>.
+op idI = predI<:t>.
+
+op idD (I J : t -> bool) : t -> bool =
+  fun x => exists i j, (I i /\ J j) /\ x = i + j.
+
+op idR (I : t -> bool) : t -> bool =
+  fun x => exists n, 0 <= n /\ I (Domain.exp x n).
+
+(* -------------------------------------------------------------------- *)
+lemma mem_id0 x : id0 x <=> x = zeror.
+proof. by []. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ideal_id0 : ideal id0.
+proof.
+rewrite /id0 /pred1; apply/idealP => //.
+- by move=> x y -> -> /=; rewrite subrr.
+- by move=> a x -> /=; rewrite mulr0.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ideal_idT : ideal idT.
+proof. by []. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ideal_idI I J : ideal I => ideal J => ideal (idI I J).
+proof.
+move=> iI iJ @/idI @/predI; apply/idealP => //=.
+- by rewrite !ideal0.
+- by move=> x y [Ix Jx] [Iy Jy]; rewrite !idealB.
+- by move=> a x [Ix Jx]; rewrite !idealMl.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ideal_idD I J : ideal I => ideal J => ideal (idD I J).
+proof.
+move=> iI iJ; apply/idealP.
+- by exists zeror zeror; rewrite addr0 !ideal0.
+- move=> _ _ [xi xj [[Ixi Jxj] ->]] [yi yj [[Iyi Jyj] ->]].
+  by rewrite subrACA; exists (xi - yi) (xj - yj) => /=; rewrite !idealB.
+- move=> a _ [i j [[Ii Jj] ->]]; rewrite mulrDr.
+  by exists (a * i) (a * j) => /=; rewrite !idealMl.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma idDC I J : idD I J = idD J I.
+proof.
+apply/fun_ext=> x @/idD; apply: eq_iff; split; 
+  by case=> i j [? ->]; exists j i; rewrite addrC /= andbC.
+qed.
+
+lemma mem_idDl I J x : I x => ideal J => (idD I J) x.
+proof.
+by move=> Ix iJ; exists x zeror; rewrite Ix addr0 ideal0.
+qed.
+
+lemma mem_idDr I J x : J x => ideal I => (idD I J) x.
+proof.
+by move=> Jx iI; rewrite idDC; apply: mem_idDl.
+qed.
+
+(* -------------------------------------------------------------------- *)
+op idgen (xs : t list) = fun (x : t) =>
+  exists cs, x = BAdd.bigi predT (fun i => cs.[i] * xs.[i]) 0 (size xs).
+
+lemma idgenP (xs : t list) (x : t) :
+  idgen xs x => exists cs, size cs = size xs
+    /\ x = BAdd.bigi predT (fun i => cs.[i] * xs.[i]) 0 (size xs).
+proof.
+case=> cs ->; exists (mkseq (fun i => cs.[i]) (size xs)); split.
+- by rewrite size_mkseq ler_maxr // size_ge0.
+rewrite !BAdd.big_seq &(BAdd.eq_bigr) /= => i /mem_range rg_i.
+by rewrite nth_mkseq.
+qed.
+
+lemma ideal_idgen (xs : t list) : ideal (idgen xs).
+proof. do! split.
+- by exists []; rewrite BAdd.big1 //= => i _; rewrite mul0r.
+- move=> x y /idgenP[cxs [szx ->]] /idgenP[cys [szy ->]].
+  rewrite BAdd.sumrB /=; exists (mkseq (fun i => cxs.[i] - cys.[i]) (size xs)).
+  rewrite !BAdd.big_seq &(BAdd.eq_bigr) /= => i /mem_range rg_i.
+  by rewrite nth_mkseq //= mulrBl.
+- move=> a x /idgenP[cs [sz ->]]; exists (mkseq (fun i => a * cs.[i]) (size xs)).
+  rewrite BAdd.mulr_sumr !BAdd.big_seq &(BAdd.eq_bigr) /=.
+  by move=> i /mem_range rg_i; rewrite nth_mkseq //= mulrA.
+qed.
+
+hint exact : ideal_idgen.
+
+lemma mem_idgen1 x a : idgen [x] a <=> exists b, a = b * x.
+proof. split => [/idgenP /= [cs]|].
+- by case=> [/size_eq1P[c ->] ->]; exists c; rewrite BAdd.big_int1.
+- by case=> c ->; exists [c] => /=; rewrite BAdd.big_int1.
+qed.
+
+lemma mem_idgen1_gen x : idgen [x] x.
+proof.
+by rewrite mem_idgen1; exists oner; rewrite mul1r.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma le_idDl (I1 I2 J : t -> bool) :
+  ideal J => I1 <= J => I2 <= J => idD I1 I2 <= J.
+proof.
+move=> iJ le1 le2 x [x1 x2 [+ ->]].
+by case=> [/le1 Jx1 /le2 Jx2]; apply: idealD.
+qed.
+
+(* -------------------------------------------------------------------- *)
+op principal (I : t -> bool) =
+  exists a : t, forall x, (I x <=> exists b, x = b * a).
+
+lemma principal_ideal I : principal I => ideal I.
+proof.
+case=> a inI; suff ->: I = idgen [a] by apply/ideal_idgen.
+by apply/fun_ext=> x; rewrite inI -mem_idgen1.
+qed.
+
+lemma principal_idgen1 x : principal (idgen [x]).
+proof. by exists x=> y; rewrite mem_idgen1. qed.
+
+lemma idgen1_0 : idgen [zeror] = id0.
+proof.
+apply/fun_ext=> x; rewrite mem_id0 mem_idgen1.
+apply/eq_iff; split=> [[b ->]|->].
+- by rewrite mulr0.
+- by exists zeror; rewrite mulr0.
+qed.
+
+lemma principalP I : principal I <=> exists d, I = idgen [d].
+proof.
+split=> [|[d ->]]; last by apply/principal_idgen1.
+by case=> d IE; exists d; apply/fun_ext => x; rewrite IE mem_idgen1.
+qed.
+
+lemma principal_id0 : principal id0.
+proof. by rewrite -idgen1_0 &(principal_idgen1). qed.
+
+(* -------------------------------------------------------------------- *)
+lemma mem_idgen1_dvd x y : idgen [x] y <=> x %| y.
+proof. by rewrite mem_idgen1 -dvdrP. qed.
+
+lemma le_idgen1_dvd x y : x %| y <=> idgen [y] <= idgen [x].
+proof.
+split=> [[c ->>] y /mem_idgen1_dvd [d ->]|].
+- by rewrite mulrA mem_idgen1_dvd; exists (d * c).
+- move/(_ y); rewrite !mem_idgen1_dvd; apply.
+  by exists oner; rewrite mul1r.
+qed.
+
+lemma dvdrr x : x %| x.
+proof. by rewrite -mem_idgen1_dvd mem_idgen1_gen. qed.
+
+lemma dvdr_mull d x y : d %| y => d %| x * y.
+proof.
+by rewrite -!mem_idgen1_dvd => ?; apply/(@idealMl (idgen [d])).
+qed.
+
+lemma dvdr_mulr d x y : d %| x => d %| x * y.
+proof. by move=> dx; rewrite mulrC dvdr_mull. qed.
+
+lemma dvdr_trans : transitive (%|).
+proof.
+move=> z x y; rewrite !le_idgen1_dvd => h1 h2.
+by apply: (subpred_trans _ _ _ h2 h1).
+qed.
+
+lemma dvdr0 x : x %| zeror.
+proof. by exists zeror; rewrite mul0r. qed.
+
+lemma dvd0r x : (zeror %| x) <=> (x = zeror).
+proof.
+split=> [|->]; last by exists zeror; rewrite mulr0.
+by case=> ?; rewrite mulr0.
+qed.
+
+lemma eqmodP x y : (x %= y) <=> (exists u, unit u /\ x = u * y).
+proof.
+split=> [[dxy dyx]|[u [invu ->]]]; last first.
+- rewrite /(%=) dvdr_mull 1:dvdrr /=; apply/dvdrP.
+  by exists (invr u); rewrite mulrA mulVr // mul1r. (* FIXME *)
+case: (y = zeror) => [->>|nz_y].
+- rewrite (_ : x = zeror) 1:-dvd0r //.
+  by exists oner; rewrite mul1r /= unitr1.
+case/dvdrP: dyx=> u xE; exists u; rewrite xE eq_refl /=.
+apply/unitrP; case/dvdrP: dxy=> v yE; exists v.
+by apply: (mulIf y) => //; rewrite mul1r -mulrA -xE yE.
+qed.
+
+lemma idgen_mulVl x y : unit x => idgen [x * y] = idgen [y].
+proof.
+move=> invx; apply/fun_ext=> z; apply/eq_iff.
+apply: subpred_eqP z => /=; split.
+- by apply/le_idgen1_dvd/dvdr_mull/dvdrr.
+move=> z /mem_idgen1[c ->]; apply/mem_idgen1.
+by exists (c * invr x); rewrite !mulrA mulrVK.
+qed.
+
+lemma eqmod_idP x y : (x %= y) <=> (idgen [x] = idgen [y]).
+proof.
+split; first by case/eqmodP=> [u [invu ->]]; rewrite idgen_mulVl.
+move=> eq; have: idgen[x] <= idgen[y] /\ idgen[y] <= idgen[x].
+- by apply/subpred_eqP=> z; rewrite eq.
+by case=> /le_idgen1_dvd dyx /le_idgen1_dvd dxy.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma eqp_refl x : x %= x.
+proof. by rewrite eqmod_idP. qed.
+
+lemma eqp_sym x y : x %= y => y %= x.
+proof. by rewrite !eqmod_idP eq_sym. qed.
+
+lemma eqp_trans y x z : x %= y => y %= z => x %= z.
+proof. by rewrite !eqmod_idP => <-. qed.
+
+lemma eqp0P x : (x %= zeror) <=> (x = zeror).
+proof.
+split=> [/eqmodP[u [_ ->]]|]; first by rewrite mulr0.
+by move=> ->; apply/eqp_refl.
+qed.
 
 (* -------------------------------------------------------------------- *)
 op sth : t -> int.
@@ -48,14 +360,24 @@ axiom modr0 : forall x, x %% zeror = x.
 
 axiom euclide :
   forall x y, y <> zeror =>
-    x = (x %/ y) * y + x %% y /\ sth (x %% y) < sth x.
+    x = (x %/ y) * y + x %% y /\ sth (x %% y) < sth y.
 
 (* -------------------------------------------------------------------- *)
-op (%|) (m d : t) = (d %% m = zeror).
+lemma ge0_sth (x : t) : 0 <= sth x.
+proof.
+by case: (x = zeror) => [->|?]; [rewrite sth0 | rewrite ltrW gt0_sth].
+qed.
 
+(* -------------------------------------------------------------------- *)
 op gcd (x y : t) = fun (d : t) =>
      (d %| x /\ d %| y)
   /\ (forall d', d' %| x => d' %| y => d' %| d).
+
+lemma gcd_exists (x y : t) :
+  exists d , gcd x y d.
+proof.
+  
+admitted.
 
 lemma gcd_sym (x y d : t):
   gcd x y d => gcd y x d.
@@ -63,11 +385,55 @@ proof.
   by move => [[divdx divdy] Hd]; split => // d' divd'x divd'y; apply Hd.
 qed.
 
+lemma eqmod_gcd x y d1 d2 : gcd x y d1 => d1 %= d2 => gcd x y d2.
+proof.
+case=> [# d1x d1y max1] [d12 d21].
+do!split => [ | |d ddx ddy]; apply (dvdr_trans d1) => //.
+by apply max1.
+qed.
+
+lemma gcd_mulr (x y z d dy dz : t) :
+  gcd x y dy =>
+  gcd x z dz =>
+  gcd x (y * z) d =>
+  d %| dy * dz.
+proof.
+  move => [[divdyx divdyy] Hdivdy] [[divdzx divdzz] Hdivdz] [[divdx divdmulyz] Hdivd].
+  
+admitted.
+
 op coprime (x y : t) = gcd x y oner.
 
-lemma coprime_sym (x y : t):
-  coprime x y => coprime y x.
+lemma coprime_sym (x y : t) :
+  coprime x y =>
+  coprime y x.
 proof. by apply gcd_sym. qed.
+
+lemma oner_div_all (x : t) : oner %| x
+by exists x; rewrite mulr1.
+
+lemma div_oner_unit (x : t) :
+  x %| oner =>
+  unit x.
+proof.
+  by move => [y] eq1mulxy; apply (unitP x y); rewrite eq1mulxy.
+qed.
+
+lemma coprime_mulr (x y z : t) :
+  coprime x y =>
+  coprime x z =>
+  coprime x (y * z).
+proof.
+  move => Hcpxy Hcpxz.
+  case: (gcd_exists x (y * z)) => d Hgcd.
+  have:= (gcd_mulr _ _ _ _ _ _ Hcpxy Hcpxz Hgcd).
+  rewrite mulr1 => Hunit.
+  apply (eqmod_gcd _ _ _ _ Hgcd).
+  by split => //; apply oner_div_all.
+qed.
+
+op coprime_with (x : t) (xs : t list) =
+  (forall i, 0 <= i < size xs => coprime x xs.[i]).
 
 op coprimes (xs : t list) =
   forall i j, 0 <= i < size xs => 0 <= j < size xs => i <> j =>
@@ -75,58 +441,144 @@ op coprimes (xs : t list) =
 
 lemma coprimes_cons (x : t) (xs : t list):
   coprimes (x :: xs) =>
-  coprimes xs /\
-  (forall i, 0 <= i < size xs => coprime x xs.[i]).
+  coprime_with x xs /\
+  coprimes xs.
 proof.
   move => Hcps; split.
-  + move => i j [le0i ltisxs] [le0j ltjsxs] neqij.
-    move: (Hcps (i+1) (j+1)) => /=.
-    (* Why is IntID.invr_neq0 ?*)
+  + move => i [le0i ltisxs].
+    move: (Hcps 0 (i+1)) => /=.
     have Hneqi:= (addz1_neqC0 _ le0i).
     have ->: (i + 1 <> 0) by smt().
-    have Hneqj:= (addz1_neqC0 _ le0j).
-    have ->: (j + 1 <> 0) by smt().
     move => /= -> //; smt().
-  move => i [le0i ltisxs].
-  move: (Hcps 0 (i+1)) => /=.
+  move => i j [le0i ltisxs] [le0j ltjsxs] neqij.
+  move: (Hcps (i+1) (j+1)) => /=.
   have Hneqi:= (addz1_neqC0 _ le0i).
   have ->: (i + 1 <> 0) by smt().
+  have Hneqj:= (addz1_neqC0 _ le0j).
+  have ->: (j + 1 <> 0) by smt().
   move => /= -> //; smt().
 qed.
 
-(* -------------------------------------------------------------------- *)
-op duo_solution (x1 x2 c1 c2 : t) Y =
-  Y %% x1 = c1 %% x1 /\
-  Y %% x2 = c2 %% x2.
-
-lemma duo_exists (x1 x2 : t) :
-  coprime x1 x2 => forall c1 c2, exists Y, duo_solution x1 x2 c1 c2 Y.
+lemma coprimes_big (x : t) (xs : t list) :
+  coprime_with x xs =>
+  coprime x (BMul.big predT idfun xs).
 proof.
-admitted.
+  elim: xs => [_|hxs txs IHxs Hcpw].
+  + by rewrite BMul.big_nil; do!split => //; apply oner_div_all.
+  rewrite BMul.big_consT /idfun; apply coprime_mulr.
+  + have /= cphxsc:= (Hcpw 0); apply: cphxsc.
+    by apply ltzE; rewrite addzC lez_addl; apply size_ge0.
+  apply IHxs => i [le0i ltistxs]; have /=:= (Hcpw (i + 1)).
+  rewrite (addz1_neq0 _ le0i) /= => cpxtxsi; apply cpxtxsi.
+  by split; smt().
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma divr_eq x y : x = x %/ y * y + x %% y.
+proof.
+case: (y = zeror) => [->|nz_y]; first by rewrite mulr0 modr0 add0r.
+by have [xE _] := euclide x y nz_y.
+qed.
+
+lemma modrE x y : x %% y = x - x %/ y * y.
+proof. by rewrite {2}(divr_eq x y) addrAC subrr add0r. (* FIXME *) qed.
+
+lemma divrE x y : x %/ y * y = x - x %% y.
+proof. by rewrite modrE opprB addrCA subrr addr0. qed. (* FIXME *)
+
+(* -------------------------------------------------------------------- *)
+lemma gcd_eqmod x y d1 d2 : gcd x y d1 => gcd x y d2 => d1 %= d2.
+proof.
+case=> [# d1x d1y max1] [] [# d2x d2y max2] @/(%=).
+by split; [apply: max2 | apply: max1].
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ideal_principal I : ideal I => principal I.
+proof.
+move=> iI; pose P x := x <> zeror /\ I x; case: (exists x, P x); last first.
+- rewrite negb_exists /= => zI; suff ->: I = id0 by apply/principal_id0.
+  apply/fun_ext=> x; apply/eq_iff; rewrite mem_id0; split.
+  - by apply: contraLR => nz_x; have := zI x; rewrite /P nz_x.
+  - by move=> ->; apply: ideal0.
+case=> x Px; have: exists x, P x /\ forall y, P y => sth x <= sth y.
+- exists (fmin sth P); have := fminP sth P _.
+  - by exists x; rewrite ge0_sth.
+  by move=> [#] _ -> /= + y Py; apply=> //; apply/ge0_sth.
+case=> @/P b /= [#] nz_b Ib min_b; exists b => a; split; last first.
+- by case=> ? ->; apply/idealMl/Ib.
+move=> Ia; have [aE le_sth] := euclide a b nz_b.
+case: (a %% b = zeror) => [z_ab|nz_ab].
+- by rewrite aE z_ab addr0; exists (a %/ b).
+have Iab: I (a %% b) by rewrite modrE idealB // idealMl.
+by have @/P := min_b (a %% b); rewrite nz_ab Iab /= lerNgt.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma Bachet_Bezout x y d : gcd x y d =>
+  exists u v, u * x + v * y = d.
+proof.
+move=> gcd_xy; pose I := idD (idgen [x]) (idgen [y]).
+have: principal I by apply/ideal_principal/ideal_idD; apply/ideal_idgen.
+case/principalP=> d' IE; have gcd'_xy: gcd x y d'; first do! split.
+- by rewrite -mem_idgen1_dvd -IE /I mem_idDl ?mem_idgen1_gen ideal_idgen.
+- by rewrite -mem_idgen1_dvd -IE /I mem_idDr ?mem_idgen1_gen ideal_idgen.
+- move=> e dex dey; suff: I <= idgen [e] by rewrite IE le_idgen1_dvd.
+  by apply: le_idDl; (try by apply: ideal_idgen); apply: le_idgen1_dvd.
+have: I d' by rewrite IE mem_idgen1_gen.
+case=> ?? [#] /mem_idgen1[u ->>] /mem_idgen1[v ->>] d'E.
+have /eqmodP[c [invc ->]] := gcd_eqmod _ _ _ _ gcd_xy gcd'_xy.
+by exists (c * u) (c * v); rewrite d'E mulrDr !mulrA.
+qed.
 
 op crt_solution (xs : t list) (cs : t list) Y =
   forall i, 0 <= i < size xs =>
     Y %% xs.[i] = cs.[i] %% xs.[i].
 
+lemma diagonal_ind P (xs cs : t list) :
+  (forall cs , P [] cs) =>
+  (forall x c xs cs , P xs cs => P (x :: xs) (c :: cs)) =>
+  P xs cs.
+proof.
+  
+admitted.
+
+lemma addr_mulr_mod (x y z : t) :
+  (x + y * z) %% z = x %% z.
+proof.
+  rewrite !modrE.
+admitted.
+
 lemma crt_exists (xs : t list) :
   coprimes xs => forall cs, exists Y, crt_solution xs cs Y.
 proof.
-  elim: xs => [|x xs IHxs] Hcps cs.
-  + exists zeror => i /=.
+  move => Hcps cs; move : Hcps.
+  apply (diagonal_ind (fun xs cs => coprimes xs => exists (Y : t), crt_solution xs cs Y) xs cs) => {xs cs} /=.
+  + move => cs _; exists zeror => i /=.
     have:= (StdOrder.IntOrder.ler_lt_asym 0 i).
     smt().
-  move: (coprimes_cons _ _ Hcps) => [{Hcps} Hcps Hcp].
-  case: cs => [|c cs].
-  + by exists zeror => i.
-  move: (IHxs Hcps cs) => [Y] Hcrtsol.
-  exists (c * zeror + x * Y).
-  move => i; case: (i = 0) => [eqi|neqi].
-  + rewrite eqi /= => _.
-    admit.
-  rewrite neqi /= => -[le0i ltissxs].
-  rewrite -(Hcrtsol (i-1)).
-  + split; smt().
-  
+  move => x c xs cs IHxscs Hcps.
+  move: (coprimes_cons _ _ Hcps) => [{Hcps} Hcpw Hcps].
+  case: (IHxscs Hcps) => Y Hcrtsol.
+  (*Why not working?*)
+  have Hexists:= (Bachet_Bezout x (BMul.big predT idfun xs) oner(* (coprimes_big _ _ Hcpw)*)).
+  (*Can't case here?*)
+  have cpbxsx:= (coprimes_big _ _ Hcpw).
+  case: (Hexists cpbxsx) => u v equv.
+  exists (Y + (c - Y) * (v * (BMul.big predT idfun xs))).
+  move => i /= [le0i ltissxs].
+  case: (i = 0) => [_|neqi0].
+  + have ->: (v * (BMul.big predT idfun xs) = oner - u * x) (*by smt().*) by admit.
+    rewrite mulrDr mulr1 !addrA (addrC Y) addrK.
+    have <-:= (addr_mulr_mod c ((c - Y)%CR * - u) x).
+    (*by trivial.*)
+    by admit.
+  rewrite -(Hcrtsol (i - 1)).
+  + by split => //; smt().
+  rewrite (BMul.big_nth zeror) (BMul.big_cat_int i) //; first by apply ltzS; rewrite addrC.
+  rewrite (BMul.big_cat_int (i - 1) 0) //; first by smt().
+  + by admit.
+  by admit.
 qed.
 
 lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
@@ -135,7 +587,10 @@ lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
   => crt_solution xs cs Y1
   => crt_solution xs cs Y2
   => Y1 %% M = Y2 %% M.
-proof. admitted.
+proof.
+  move => /= Hcps.
+  by admit.
+qed.
 
 lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
@@ -148,7 +603,12 @@ lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
       Y %% M = (Y1 + Y2) %% M
   <=> (forall i, 0 <= i < size xs =>
          cs.[i] %% M = (cs1.[i] + cs2.[i]) %% M).
-proof. admitted.
+proof.
+  move => /= Hcps Hcrtsol Hcrtsol1 Hcrtsol2.
+  split => [eqmod i [le0i ltisxs]|].
+  + by admit.
+    
+admitted.
 
 lemma crt_multiplicative (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in

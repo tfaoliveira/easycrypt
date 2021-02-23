@@ -117,7 +117,7 @@ let t_phl_trivial = FApi.t_low0 "phl-trivial" t_phl_trivial_r
 let t_pl_trivial_r ?conv ?bases tc =
   let subtc =
     FApi.t_seqs [t_phl_trivial; EcLowGoal.t_solve ?bases]
-  in EcLowGoal.t_trivial ?conv ~subtc tc
+  in EcLowGoal.t_trivial ?conv ~subtc ~solve:true tc
 
 (* -------------------------------------------------------------------- *)
 let t_pl_trivial ?conv ?bases =

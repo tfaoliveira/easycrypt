@@ -48,7 +48,8 @@ val alpha_find_in_hyps : EcEnv.LDecl.hyps -> EcFol.form -> EcIdent.t
 val t_assumption       : [`Alpha | `Conv] -> FApi.backward
 val t_absurd_hyp       : ?conv:xconv -> ?id:EcIdent.t -> FApi.backward
 val t_trivial          :
-  ?subtc:FApi.backward -> ?keep:bool -> ?conv:[`Alpha | `Conv] -> FApi.backward
+     ?subtc:FApi.backward -> ?keep:bool -> ?conv:[`Alpha | `Conv] -> ?solve:bool
+  -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
 type simplify_t =
