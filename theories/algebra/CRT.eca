@@ -398,9 +398,9 @@ lemma gcd_mulr (x y z d dy dz : t) :
   gcd x (y * z) d =>
   d %| dy * dz.
 proof.
-  move => [[divdyx divdyy] Hdivdy] [[divdzx divdzz] Hdivdz] [[divdx divdmulyz] Hdivd].
-  
-admitted.
+move=> [[# dyx dyy maxy]] [[# dzx dzz maxz]] [[# dx dyz maxyz]].
+
+qed.
 
 op coprime (x y : t) = gcd x y oner.
 
