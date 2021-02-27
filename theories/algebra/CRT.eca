@@ -359,6 +359,7 @@ axiom gt0_sth  : forall x, x <> zeror => 0 < sth x.
 axiom mono_sth : forall x y, y <> zeror => sth y <= sth (x * y).
 
 axiom divr0 : forall x, x %/ zeror = zeror.
+axiom divr1 : forall x, x %/ oner = x.
 axiom modr0 : forall x, x %% zeror = x.
 
 axiom euclide :
@@ -575,6 +576,10 @@ case: cs lesz => [|c cs] lesz; first smt(size_ge0).
 by apply/hS/ih => /#.
 qed.
 
+op crt_solution (xs : t list) (cs : t list) Y =
+  forall i, 0 <= i < size xs =>
+    Y %% xs.[i] %= cs.[i] %% xs.[i].
+
 op eq_csol n (cs1 cs2 : t list) =
   forall i, 0 <= i < n => cs1.[i] = cs2.[i].
 
@@ -602,15 +607,6 @@ lemma norm_crt_solution (xs : t list) (cs : t list) Y :
   crt_solution xs cs Y => crt_solution xs (norm (size xs) cs) Y.
 proof. by move=> sol i rgi @/norm; rewrite nth_mkseq //= &(sol). qed.
 
-lemma addr_mulr_mod (x y z : t) :
-  (x + y * z) %% z = x %% z.
-proof.
-  rewrite !modrE.
-admitted.
-
-lemma modrDdr x y d : d %| y => (x + y) %% d = x %% d.
-proof. by case=> c ->; rewrite addr_mulr_mod. qed.
-
 lemma dvdr_prod ['a] P F r y :
   (exists x, (x \in r /\ P x /\ y %| F x)) => y %| BMul.big<:'a> P F r.
 proof.
@@ -619,49 +615,97 @@ rewrite (BMul.eq_big_perm _ _ _ _ xr) BMul.big_cons.
 by rewrite Px /= dvdr_mulr.
 qed.
 
+lemma modP (x y d : t) : (x %% d %= y %% d) <=> (d %| (x - y)).
+proof.
+admitted.
+
+lemma crt_solution_cons (Y x c : t) (xs cs : t list) :
+  crt_solution (x :: xs) (c :: cs) Y <=>
+  (Y %% x %= c %% x) /\ (crt_solution xs cs Y).
+proof.
+split => [crtsolcons|[crtsolx crtsolxs] i [le0i ltisxxs] /=].
+- split.
+  - by apply (crtsolcons 0) => /=; rewrite addzC -(addz0 0); apply ler_lt_add => //; apply size_ge0.
+  move => i [le0i ltisxs].
+  move: (crtsolcons (1 + i)) => /=.
+  have -> /=: (1 + i <> 0)  by smt().
+  by move => -> //; split; smt().
+case: (i = 0) => // neq0i.
+by apply crtsolxs; split; smt().
+qed.
+
+lemma dvd_add (x y d : t) : d %| x => d %| y => d %| (x + y).
+proof.
+by move => [cx ->>] [cy ->>]; rewrite -mulrDl; exists (cx + cy).
+qed.
+
+lemma dvd_big (xs : t list) : forall i , xs.[i] %| (BMul.big predT idfun xs).
+proof.
+admitted.
+
 lemma crt_exists (xs : t list) :
   coprimes xs => forall cs, exists Y, crt_solution xs cs Y.
 proof.
-  move => Hcps cs; wlog: cs / (size xs = size cs).
-  - move=> wlog; case: (wlog (norm (size xs) cs) _).
-    - by rewrite size_norm // size_ge0.
-    move=> Y sol; exists Y; apply: eq_sol sol.
-    by move=> i rgi; rewrite nth_mkseq.
-  rewrite eqr_le => -[h _]; move: h Hcps.
-  apply: diagonal_ind xs cs.
-  + move => cs _; exists zeror => i /=.
-    have:= (StdOrder.IntOrder.ler_lt_asym 0 i).
-    smt().
-  move => x c xs cs IHxscs Hcps.
-  move: (coprimes_cons _ _ Hcps) => [{Hcps} Hcpw Hcps].
-  case: (IHxscs Hcps) => Y Hcrtsol.
-  (*Why not working?*)
-  have [u v equv] := Bachet_Bezout x (BMul.big predT idfun xs) oner _.
-  - by apply/coprimes_big.
-  exists (Y + (c - Y) * (v * (BMul.big predT idfun xs))).
-  move => i /= [le0i ltissxs].
-  case: (i = 0) => [_|neqi0].
-  + have ->: (v * (BMul.big predT idfun xs) = oner - u * x).
-    - by rewrite -equv addrAC subrr add0r. (* FIXME: ring *)
-    rewrite mulrDr mulr1 !addrA (addrC Y) addrK.
-    have <-:= (addr_mulr_mod c ((c - Y)%CR * - u) x).
-    (*by trivial.*)
-    by rewrite -mulNr mulrA.       (* FIXME: pp bug *)
-  rewrite -(Hcrtsol (i - 1)).
-  + by split => //; smt().
-  rewrite modrDdr // 2!dvdr_mull dvdr_prod.
-  by exists (xs.[i-1]); rewrite mem_nth 1:/# dvdrr.
+move => Hcps cs; wlog: cs / (size xs = size cs).
+- move=> wlog; case: (wlog (norm (size xs) cs) _).
+  - by rewrite size_norm // size_ge0.
+  move=> Y sol; exists Y; apply: eq_sol sol.
+  by move=> i rgi; rewrite nth_mkseq.
+rewrite eqr_le => -[h _]; move: h Hcps.
+apply: diagonal_ind xs cs.
+- move => cs _; exists zeror => i /=.
+  have:= (StdOrder.IntOrder.ler_lt_asym 0 i).
+  smt().
+move => x c xs cs IHxscs Hcps.
+move: (coprimes_cons _ _ Hcps) => [{Hcps} Hcpw Hcps].
+case: (IHxscs Hcps) => Y Hcrtsol.
+(*Why not working?*)
+have [u v equv] := Bachet_Bezout x (BMul.big predT idfun xs) oner _.
+- by apply/coprimes_big.
+exists (Y + (c - Y) * (v * (BMul.big predT idfun xs))).
+apply crt_solution_cons; split.
+- have ->: (v * (BMul.big predT idfun xs) = oner - u * x).
+  - by rewrite -equv addrAC subrr add0r. (* FIXME: ring *)
+  apply modP; rewrite mulrDr mulr1 !addrA (addrC Y) addrK (addrC c) .
+  by rewrite -(addrA _ c) subrr addr0 -mulNr mulrA dvdr_mull dvdrr.
+move => i Hi; apply modP; rewrite (addrC Y (_ * _)%Domain) -(addrA _ Y).
+apply dvd_add; last by move: (Hcrtsol i Hi) => /modP.
+by rewrite mulrA dvdr_mull; apply dvd_big.
 qed.
+
+lemma dvd_sub (x y d : t) : d %| x => d %| y => d %| (x - y).
+proof.
+by move => [cx ->>] [cy ->>]; rewrite -mulNr -mulrDl; exists (cx - cy).
+qed.
+
+lemma dvd_mul_coprime (x d1 d2 : t) : coprime d1 d2 => d1 %| x => d2 %| x => (d1 * d2) %| x.
+proof.
+admitted.
 
 lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
-    coprimes xs
+     coprimes xs
   => crt_solution xs cs Y1
   => crt_solution xs cs Y2
-  => Y1 %% M = Y2 %% M.
+  => Y1 %% M %= Y2 %% M.
 proof.
-  move => /= Hcps.
-  by admit.
+move => /= Hcps; wlog: cs / (size xs = size cs).
+- move=> wlog crtsol1 crtsol2.
+  apply (wlog (norm (size xs) cs)).
+  - by rewrite size_norm // size_ge0.
+  - by apply norm_crt_solution.
+  by apply norm_crt_solution.
+move => Hsize crtsol1 crtsol2; apply modP; move: Hsize Hcps crtsol1 crtsol2.
+rewrite eqr_le => -[h _]; move: h.
+apply: diagonal_ind xs cs => /=.
+- by move => cs _ _ _; rewrite BMul.big_nil dvd1r.
+move => x c xs cs IHxscs; case/coprimes_cons => Hcpw Hcps.
+move => /crt_solution_cons [/modP dvdx1 crtsol1] /crt_solution_cons [/modP dvdx2 crtsol2].
+rewrite BMul.big_consT {1}/idfun.
+apply dvd_mul_coprime.
+- by apply coprimes_big.
+- by move: (dvd_sub _ _ _ dvdx1 dvdx2); rewrite subr_add2r.
+by apply IHxscs.
 qed.
 
 lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
@@ -676,11 +720,12 @@ lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   <=> (forall i, 0 <= i < size xs =>
          cs.[i] %% M = (cs1.[i] + cs2.[i]) %% M).
 proof.
-  move => /= Hcps Hcrtsol Hcrtsol1 Hcrtsol2.
-  split => [eqmod i [le0i ltisxs]|].
-  + by admit.
-    
-admitted.
+move => /= Hcps; wlog: cs cs1 cs2 / (size xs = size cs /\ size cs = size cs1 /\ size cs = size cs2).
+- move=> wlog crtsol crtsol1 crtsol2.
+  move: (wlog (norm (size xs) cs) (norm (size xs) cs1) (norm (size xs) cs2) _ _ _ _).
+  - by rewrite !size_norm // size_ge0.
+  - by apply norm_crt_solution.
+qed.
 
 lemma crt_multiplicative (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
