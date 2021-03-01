@@ -615,7 +615,7 @@ rewrite (BMul.eq_big_perm _ _ _ _ xr) BMul.big_cons.
 by rewrite Px /= dvdr_mulr.
 qed.
 
-lemma modP (x y d : t) : (x %% d %= y %% d) <=> (d %| (x - y)).
+lemma modeqmodP (x y d : t) : (x %% d %= y %% d) <=> (d %| (x - y)).
 proof.
 admitted.
 
@@ -639,7 +639,7 @@ proof.
 by move => [cx ->>] [cy ->>]; rewrite -mulrDl; exists (cx + cy).
 qed.
 
-lemma dvd_big (xs : t list) : forall i , xs.[i] %| (BMul.big predT idfun xs).
+lemma dvd_big_cons (xs : t list) : forall i , xs.[i] %| (BMul.big predT idfun xs).
 proof.
 admitted.
 
@@ -666,11 +666,11 @@ exists (Y + (c - Y) * (v * (BMul.big predT idfun xs))).
 apply crt_solution_cons; split.
 - have ->: (v * (BMul.big predT idfun xs) = oner - u * x).
   - by rewrite -equv addrAC subrr add0r. (* FIXME: ring *)
-  apply modP; rewrite mulrDr mulr1 !addrA (addrC Y) addrK (addrC c) .
+  apply modeqmodP; rewrite mulrDr mulr1 !addrA (addrC Y) addrK (addrC c) .
   by rewrite -(addrA _ c) subrr addr0 -mulNr mulrA dvdr_mull dvdrr.
-move => i Hi; apply modP; rewrite (addrC Y (_ * _)%Domain) -(addrA _ Y).
-apply dvd_add; last by move: (Hcrtsol i Hi) => /modP.
-by rewrite mulrA dvdr_mull; apply dvd_big.
+move => i Hi; apply modeqmodP; rewrite (addrC Y (_ * _)%Domain) -(addrA _ Y).
+apply dvd_add; last by move: (Hcrtsol i Hi) => /modeqmodP.
+by rewrite mulrA dvdr_mull; apply dvd_big_cons.
 qed.
 
 lemma dvd_sub (x y d : t) : d %| x => d %| y => d %| (x - y).
@@ -678,8 +678,15 @@ proof.
 by move => [cx ->>] [cy ->>]; rewrite -mulNr -mulrDl; exists (cx - cy).
 qed.
 
-lemma dvd_mul_coprime (x d1 d2 : t) : coprime d1 d2 => d1 %| x => d2 %| x => (d1 * d2) %| x.
+lemma dvd_sub_mul (x1 x2 y1 y2 d : t) : d %| (x1 - y1) => d %| (x2 - y2) => d %| (x1 * x2 - y1 * y2).
 proof.
+move => [c1 Hc1] [c2 Hc2].
+admit.
+qed.
+
+lemma dvd_mul_coprime (x d1 d2 : t) : coprime d1 d2 => (d1 %| x /\ d2 %| x) <=> (d1 * d2) %| x.
+proof.
+
 admitted.
 
 lemma crt_unicity (xs cs : t list) (Y1 Y2 : t) :
@@ -695,47 +702,116 @@ move => /= Hcps; wlog: cs / (size xs = size cs).
   - by rewrite size_norm // size_ge0.
   - by apply norm_crt_solution.
   by apply norm_crt_solution.
-move => Hsize crtsol1 crtsol2; apply modP; move: Hsize Hcps crtsol1 crtsol2.
+move => Hsize crtsol1 crtsol2; apply modeqmodP; move: Hsize Hcps crtsol1 crtsol2.
 rewrite eqr_le => -[h _]; move: h.
 apply: diagonal_ind xs cs => /=.
 - by move => cs _ _ _; rewrite BMul.big_nil dvd1r.
 move => x c xs cs IHxscs; case/coprimes_cons => Hcpw Hcps.
-move => /crt_solution_cons [/modP dvdx1 crtsol1] /crt_solution_cons [/modP dvdx2 crtsol2].
+move => /crt_solution_cons [/modeqmodP dvdx1 crtsol1] /crt_solution_cons [/modeqmodP dvdx2 crtsol2].
 rewrite BMul.big_consT {1}/idfun.
 apply dvd_mul_coprime.
 - by apply coprimes_big.
+split.
 - by move: (dvd_sub _ _ _ dvdx1 dvdx2); rewrite subr_add2r.
 by apply IHxscs.
+qed.
+
+(*
+lemma crt_exists_2 (xs : t list) :
+  coprimes xs => forall cs, exists Y, crt_solution xs cs Y.
+proof.
+move=> coxs cs.
+pose F (x y : t) :=
+  choiceb (fun v => exists u, u * x + v * y = oner) zeror.
+pose x := BMul.big predT idfun xs.
+pose e (i : int) := F xs.[i] (x / xs.[i]) * (x / xs.[i]).
+exists (BAdd.bigi predT e 0 (size xs)).
+have h: forall i j, 0 <= i < size xs => 0 <= j < size xs =>
+  (e i) %% xs.[j] = ofint (b2i (i = j)).
+- move=> i j rgi rgj @/e.
+abort.
+*)
+
+lemma dvd_big_coprimes (x : t) (ds : t list) :
+  coprimes ds =>
+  (forall i , 0 <= i && i < size ds => ds.[i] %| x) <=>
+  (BMul.big predT idfun ds) %| x.
+proof.
+elim: ds => [|d ds IHds].
+- move => _; rewrite BMul.big_nil dvd1r; split => //= i []; smt().
+move=> /coprimes_cons [Hcpw Hcps].
+split.
+- move => Hdvd.
+  rewrite BMul.big_consT {1}/idfun.
+  apply dvd_mul_coprime.
+  - by apply coprimes_big.
+  split.
+  - move: (Hdvd 0) => /= Hdvd0; apply Hdvd0.
+    by apply ltzE; rewrite addzC lez_addl; apply size_ge0.
+  apply IHds => // i [le0i ltisds].
+  move: (Hdvd (1 + i)) => /=.
+  have -> /= Hdvdi: (1 + i <> 0) by smt().
+  apply Hdvdi; split; smt().
+rewrite BMul.big_consT {1}/idfun.
+move/(dvd_mul_coprime _ _ _ (coprimes_big _ _ Hcpw)) => [dvddx dvdbigx] i /= [le0i lti].
+case: (i = 0) => // neqi0.
+move: dvdbigx; move/(IHds Hcps) => Hds; apply Hds; split; smt().
 qed.
 
 lemma crt_additive (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
      coprimes xs
   => crt_solution xs cs  Y
-  => crt_solution cs cs1 Y1
-  => crt_solution cs cs2 Y2
+  => crt_solution xs cs1 Y1
+  => crt_solution xs cs2 Y2
   =>
 
-      Y %% M = (Y1 + Y2) %% M
+      Y %% M %= (Y1 + Y2) %% M
   <=> (forall i, 0 <= i < size xs =>
-         cs.[i] %% M = (cs1.[i] + cs2.[i]) %% M).
+         cs.[i] %% xs.[i] %= (cs1.[i] + cs2.[i]) %% xs.[i]).
 proof.
-move => /= Hcps; wlog: cs cs1 cs2 / (size xs = size cs /\ size cs = size cs1 /\ size cs = size cs2).
-- move=> wlog crtsol crtsol1 crtsol2.
-  move: (wlog (norm (size xs) cs) (norm (size xs) cs1) (norm (size xs) cs2) _ _ _ _).
-  - by rewrite !size_norm // size_ge0.
-  - by apply norm_crt_solution.
+move => /= Hcps crtsol crtsol1 crtsol2.
+split.
+- move/modeqmodP/(dvd_big_coprimes _ _ Hcps) => Hdvd i Hi.
+  apply modeqmodP; move: (Hdvd i Hi) => HdvdY12.
+  move: (crtsol i Hi) (crtsol1 i Hi) (crtsol2 i Hi).
+  move => /modeqmodP HdvdY /modeqmodP HdvdY1 /modeqmodP HdvdY2.
+  have ->: (cs.[i] - (cs1.[i] + cs2.[i]) = (Y - (Y1 + Y2)) - (Y - cs.[i]) + (Y1 - cs1.[i]) + (Y2 - cs2.[i])) by admit.
+  by do 2!(apply dvd_add => //); apply dvd_sub.
+move => Hdvd; apply/modeqmodP/(dvd_big_coprimes _ _ Hcps).
+move => i Hi; move: (Hdvd i Hi) => /modeqmodP Hdvdcs.
+move: (crtsol i Hi) (crtsol1 i Hi) (crtsol2 i Hi).
+move => /modeqmodP HdvdY /modeqmodP HdvdY1 /modeqmodP HdvdY2.
+have ->: (Y - (Y1 + Y2) = (cs.[i] - (cs1.[i] + cs2.[i])) + (Y - cs.[i]) - (Y1 - cs1.[i]) - (Y2 - cs2.[i])) by admit.
+by do 2!(apply dvd_sub => //); apply dvd_add.
 qed.
 
 lemma crt_multiplicative (xs cs cs1 cs2 : t list) (Y Y1 Y2 : t) :
   let M = BMul.big predT idfun xs in
      coprimes xs
   => crt_solution xs cs  Y
-  => crt_solution cs cs1 Y1
-  => crt_solution cs cs2 Y2
+  => crt_solution xs cs1 Y1
+  => crt_solution xs cs2 Y2
   =>
 
-      Y %% M = (Y1 + Y2) %% M
+      Y %% M %= (Y1 * Y2) %% M
   <=> (forall i, 0 <= i < size xs =>
-         cs.[i] %% M = (cs1.[i] * cs2.[i]) %% M).
-proof. admitted.
+         cs.[i] %% xs.[i] %= (cs1.[i] * cs2.[i]) %% xs.[i]).
+proof.
+move => /= Hcps crtsol crtsol1 crtsol2.
+split.
+- move/modeqmodP/(dvd_big_coprimes _ _ Hcps) => Hdvd i Hi.
+  apply modeqmodP;  move: (Hdvd i Hi) => HdvdY12.
+  move: (crtsol i Hi) (crtsol1 i Hi) (crtsol2 i Hi).
+  move => /modeqmodP HdvdY /modeqmodP HdvdY1 /modeqmodP HdvdY2.
+  have Hdvdmul:= (dvd_sub_mul _ _ _ _ _ HdvdY1 HdvdY2).
+  have ->: (cs.[i] - (cs1.[i] * cs2.[i]) = (Y - (Y1 * Y2)) - (Y - cs.[i]) - (Y1 * Y2 - cs1.[i] * cs2.[i])) by admit.
+  by do 2!(apply dvd_sub => //).
+move => Hdvd; apply/modeqmodP/(dvd_big_coprimes _ _ Hcps).
+move => i Hi; move: (Hdvd i Hi) => /modeqmodP Hdvdcs.
+move: (crtsol i Hi) (crtsol1 i Hi) (crtsol2 i Hi).
+move => /modeqmodP HdvdY /modeqmodP HdvdY1 /modeqmodP HdvdY2.
+have Hdvdmul:= (dvd_sub_mul _ _ _ _ _ HdvdY1 HdvdY2).
+have ->: (Y - Y1 * Y2 = (cs.[i] - cs1.[i] * cs2.[i]) + (Y - cs.[i]) - (Y1 * Y2 - cs1.[i] * cs2.[i])) by admit.
+by apply dvd_sub => //; apply dvd_add.
+qed.
