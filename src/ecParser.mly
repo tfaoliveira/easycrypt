@@ -2812,6 +2812,9 @@ phltactic:
 | WHILE s=side? info=while_tac_info
     { Pwhile (s, info) }
 
+| FOR q=sform
+    { Pfor (q) }
+
 | ASYNC WHILE info=async_while_tac_info
     { Pasyncwhile info }
 

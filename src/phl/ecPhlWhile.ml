@@ -82,6 +82,44 @@ let t_hoare_while_r inv tc =
   FApi.xmutate1 tc `While [b_concl; concl]
 
 (* -------------------------------------------------------------------- *)
+let eq_one tc z =
+  let dz = EcFol.destr_int z in
+  match (EcBigInt.equal EcBigInt.one dz) with
+  | true -> ()
+  | false -> tc_error !!tc "invalid last instruction"
+
+let eq_lv_form lv e =
+  match lv, e.f_node with
+  | _, Fpvar (pv, m) -> true
+  | _, _ -> false
+
+(*Where should tc come from if Pfor only has one argument?*)
+let t_hoare_for_r inv tc =
+  let env = FApi.tc1_env tc in
+  let hs = tc1_as_hoareS tc in
+  let m = EcMemory.memory hs.hs_m in
+  let (ew, c), s = tc1_last_while tc hs.hs_s in
+  let ew = form_of_expr m ew in
+  (*Recognize c as something ot the form rtc ++ [asgn ]*)
+  let (lvlc, elc), rtc = tc1_last_asgn tc c in
+  let elc = form_of_expr m elc in
+  let (elc_l, elc_r) = EcFol.DestrInt.add elc in
+  (*EcPV.s_write: check if variable is not written*)
+  let _ = eq_one tc elc_r in
+  (* the body preserves the invariant *)
+  let b_pre  = f_and_simpl inv ew in
+  let b_post = inv in
+  let b_concl = f_hoareS hs.hs_m b_pre c b_post in
+  (* the wp of the while *)
+  let post = f_imps_simpl [f_not_simpl ew; inv] hs.hs_po in
+  let modi = s_write env c in
+  let post = generalize_mod env m modi post in
+  let post = f_and_simpl inv post in
+  let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
+
+  FApi.xmutate1 tc `While [b_concl; concl]
+
+(* -------------------------------------------------------------------- *)
 let t_bdhoare_while_r inv vrnt tc =
   let env = FApi.tc1_env tc in
   let bhs = tc1_as_bdhoareS tc in
