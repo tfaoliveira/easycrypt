@@ -85,16 +85,58 @@ let t_hoare_while_r inv tc =
 let eq_one tc z =
   let dz = EcFol.destr_int z in
   match (EcBigInt.equal EcBigInt.one dz) with
-  | true -> ()
-  | false -> tc_error !!tc "invalid last instruction"
+  | true  -> ()
+  | false -> tc_error !!tc "unequal form and one"
 
-let eq_lv_form lv e =
-  match lv, e.f_node with
-  | _, Fpvar (pv, m) -> true
-  | _, _ -> false
+let eq_forms tc e1 e2 =
+  let b = f_equal e1 e2 in
+  match b with
+  | true  -> ()
+  | false -> tc_error !!tc "unequal forms"
+
+let eq_lv_form tc lv e =
+  let b =
+    match lv, e.f_node with
+    | LvVar (pv1, _), Fpvar (pv2, _) -> pv_equal pv1 pv2
+    | _, _ -> false
+  in
+  match b with
+  | true  -> ()
+  | false -> tc_error !!tc "unequal lvalue and form"
+
+let written env x e =
+  match e.f_node with
+  | Fpvar (pv, _) -> EcPV.PV.mem_pv env pv x
+  | _ -> false
+
+let written_on tc env c e =
+  let x = EcPV.s_write env c in
+  let b = written env x e in
+  match b with
+  | true -> ()
+  | false  -> tc_error !!tc "variable not written on"
+
+let not_written_on tc env c e =
+  let x = EcPV.s_write env c in
+  let b = written env x e in
+  match b with
+  | false -> ()
+  | true  -> tc_error !!tc "variable written on"
+
+
+(*TODO: should check that i is initialized to 0 before the loop*)
+let written_on_once tc env c e =
+  let x = EcPV.s_write env c in
+  let b1 = written env x e in
+  let y = x in
+  let b2 = written env y e in
+  match (b1 && (not b2)) with
+  | true  -> ()
+  | false -> tc_error !!tc "variable not written on exactly once"
+
 
 (*Where should tc come from if Pfor only has one argument?*)
-let t_hoare_for_r inv tc =
+let t_hoare_for_r pinv tc =
   let env = FApi.tc1_env tc in
   let hs = tc1_as_hoareS tc in
   let m = EcMemory.memory hs.hs_m in
@@ -103,9 +145,21 @@ let t_hoare_for_r inv tc =
   (*Recognize c as something ot the form rtc ++ [asgn ]*)
   let (lvlc, elc), rtc = tc1_last_asgn tc c in
   let elc = form_of_expr m elc in
+  (*Recognize that the last instruction is of the form i <- i + 1*)
   let (elc_l, elc_r) = EcFol.DestrInt.add elc in
-  (*EcPV.s_write: check if variable is not written*)
+  let _ = eq_lv_form tc lvlc elc_l in
   let _ = eq_one tc elc_r in
+  (*Recognize that the loop condition is of the form i < n*)
+  let (ew_l, ew_r) = EcFol.DestrInt.lt ew in
+  let _ = eq_forms tc ew_l elc_l in
+  (*Check that neither i nor n are changed inside the loop*)
+  let _ = not_written_on tc env rtc ew_l in
+  let _ = not_written_on tc env rtc ew_r in
+  (*Check that i is initialized to 0 before the loop*)
+  let _ = written_on_once tc env c ew_l in
+  (*inv is forall i, 0 <= i < n => pinv i*)
+  (*TODO*)
+  let inv = pinv in
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv ew in
   let b_post = inv in
