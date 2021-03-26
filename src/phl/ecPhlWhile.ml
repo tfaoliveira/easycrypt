@@ -475,7 +475,7 @@ let process_while side winfos tc =
 let process_for inv tc =
 
   match (FApi.tc1_goal tc).f_node with
-  | FhoareS _ -> t_hoare_for (TTC.tc1_process_Xhl_form tc tint inv) tc
+  | FhoareS _ -> t_hoare_for (TTC.tc1_process_Xhl_form tc (tfun tint tbool) inv) tc
   | _ -> tc_error !!tc "expecting a hoare goal"
 
 (* -------------------------------------------------------------------- *)
