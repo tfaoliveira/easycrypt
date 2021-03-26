@@ -84,25 +84,30 @@ let t_hoare_while_r inv tc =
 (* -------------------------------------------------------------------- *)
 let eq_one tc z =
   let dz = EcFol.destr_int z in
-  match (EcBigInt.equal EcBigInt.one dz) with
-  | true  -> ()
-  | false -> tc_error !!tc "unequal form and one"
+  if not (EcBigInt.equal EcBigInt.one dz)
+  then tc_error !!tc "unequal form and one"
 
 let eq_forms tc e1 e2 =
-  let b = f_equal e1 e2 in
-  match b with
-  | true  -> ()
-  | false -> tc_error !!tc "unequal forms"
+  if not (f_equal e1 e2)
+  then tc_error !!tc "unequal forms"
 
-let eq_lv_form tc lv e =
-  let b =
-    match lv, e.f_node with
-    | LvVar (pv1, _), Fpvar (pv2, _) -> pv_equal pv1 pv2
-    | _, _ -> false
-  in
-  match b with
-  | true  -> ()
-  | false -> tc_error !!tc "unequal lvalue and form"
+let pv_of_lv tc lv =
+  match lv with
+  | LvVar (pv, _) -> pv
+  | _ -> tc_error !!tc "lvalue not a variable"
+
+let pv_of_form tc e =
+  match e.f_node with
+  | Fpvar (pv, _) -> pv
+  | _ -> tc_error !!tc "form not a variable"
+
+let eq_pv_lv tc pv lv =
+  if not (pv_equal pv (pv_of_lv tc lv))
+  then tc_error !!tc "unequal lvalue and form"
+
+let eq_pv_form tc pv e =
+  if not (pv_equal pv (pv_of_form tc e))
+  then tc_error !!tc "unequal lvalue and form"
 
 let written env x e =
   match e.f_node with
@@ -111,29 +116,13 @@ let written env x e =
 
 let written_on tc env c e =
   let x = EcPV.s_write env c in
-  let b = written env x e in
-  match b with
-  | true -> ()
-  | false  -> tc_error !!tc "variable not written on"
+  if not (written env x e)
+  then tc_error !!tc "variable not written on"
 
 let not_written_on tc env c e =
   let x = EcPV.s_write env c in
-  let b = written env x e in
-  match b with
-  | false -> ()
-  | true  -> tc_error !!tc "variable written on"
-
-
-(*TODO: should check that i is initialized to 0 before the loop*)
-let written_on_once tc env c e =
-  let x = EcPV.s_write env c in
-  let b1 = written env x e in
-  let y = x in
-  let b2 = written env y e in
-  match (b1 && (not b2)) with
-  | true  -> ()
-  | false -> tc_error !!tc "variable not written on exactly once"
-
+  if written env x e
+  then tc_error !!tc "variable written on"
 
 (*Where should tc come from if Pfor only has one argument?*)
 let t_hoare_for_r pinv tc =
@@ -142,24 +131,30 @@ let t_hoare_for_r pinv tc =
   let m = EcMemory.memory hs.hs_m in
   let (ew, c), s = tc1_last_while tc hs.hs_s in
   let ew = form_of_expr m ew in
-  (*Recognize c as something ot the form rtc ++ [asgn ]*)
+  (*Recognize c as something ot the form rtc ++ [i <- ?]*)
   let (lvlc, elc), rtc = tc1_last_asgn tc c in
   let elc = form_of_expr m elc in
+  let i = pv_of_lv tc lvlc in
   (*Recognize that the last instruction is of the form i <- i + 1*)
   let (elc_l, elc_r) = EcFol.DestrInt.add elc in
-  let _ = eq_lv_form tc lvlc elc_l in
+  let _ = eq_pv_form tc i elc_l in
   let _ = eq_one tc elc_r in
   (*Recognize that the loop condition is of the form i < n*)
   let (ew_l, ew_r) = EcFol.DestrInt.lt ew in
-  let _ = eq_forms tc ew_l elc_l in
+  let _ = eq_pv_form tc i ew_l in
+  let n = pv_of_form tc ew_r in
   (*Check that neither i nor n are changed inside the loop*)
   let _ = not_written_on tc env rtc ew_l in
   let _ = not_written_on tc env rtc ew_r in
-  (*Check that i is initialized to 0 before the loop*)
-  let _ = written_on_once tc env c ew_l in
-  (*inv is forall i, 0 <= i < n => pinv i*)
-  (*TODO*)
-  let inv = pinv in
+  (*TODO: check that i is initialized to 0 before the loop*)
+  let (lvls, els), _ = tc1_last_asgn tc s in
+  let _ = eq_pv_lv tc i lvls in
+  let els = form_of_expr m els in
+  let _ = f_equal els f_i0 in
+  (*inv is 0 <= i <= n /\ pinv i*)
+  let fi = f_pvar i tint (fst hs.hs_m) in
+  let fn = f_pvar n tint (fst hs.hs_m) in
+  let inv = f_and (f_and (f_int_le f_i0 fi) (f_int_le fi fn)) (f_app pinv [fi] tbool) in
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv ew in
   let b_post = inv in
@@ -172,6 +167,8 @@ let t_hoare_for_r pinv tc =
   let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
 
   FApi.xmutate1 tc `While [b_concl; concl]
+
+(*TODO: example in easycrypt/examples*)
 
 (* -------------------------------------------------------------------- *)
 let t_bdhoare_while_r inv vrnt tc =
@@ -417,6 +414,7 @@ let t_equiv_while_r inv tc =
 
 (* -------------------------------------------------------------------- *)
 let t_hoare_while           = FApi.t_low1 "hoare-while"   t_hoare_while_r
+let t_hoare_for             = FApi.t_low1 "hoare-for"     t_hoare_for_r
 let t_bdhoare_while         = FApi.t_low2 "bdhoare-while" t_bdhoare_while_r
 let t_bdhoare_while_rev_geq = FApi.t_low4 "bdhoare-while" t_bdhoare_while_rev_geq_r
 let t_bdhoare_while_rev     = FApi.t_low1 "bdhoare-while" t_bdhoare_while_rev_r
@@ -473,6 +471,12 @@ let process_while side winfos tc =
   end
 
   | _ -> tc_error !!tc "expecting a hoare[...]/equiv[...]"
+
+let process_for inv tc =
+
+  match (FApi.tc1_goal tc).f_node with
+  | FhoareS _ -> t_hoare_for (TTC.tc1_process_Xhl_form tc tint inv) tc
+  | _ -> tc_error !!tc "expecting a hoare goal"
 
 (* -------------------------------------------------------------------- *)
 module ASyncWhile = struct
