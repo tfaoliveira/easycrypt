@@ -927,6 +927,31 @@ let f_iter g f =
   | FeagerF   eg  -> g eg.eg_pr; g eg.eg_po
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
 
+(*-------------------------------------------------------------------- *)
+(*TODO: EcTypes.e_fold is rec, but no actual recursive call is made...*)
+let f_fold ff state f =
+  match f.f_node with
+  | Fquant (_, _, f) -> ff state f
+  | Fif (f, f1, f2) -> List.fold_left ff state [f; f1; f2]
+  | Fmatch (f, fs, _) -> List.fold_left ff state (f :: fs)
+  | Flet (_, f1, f2) -> List.fold_left ff state [f1; f2]
+  | Fint (_) -> state
+  | Flocal (_) -> state
+  | Fpvar (_, _) -> state
+  | Fglob (_, _) -> state
+  | Fop (_, _) -> state
+  | Fapp (f, fs) -> List.fold_left ff state (f :: fs)
+  | Ftuple (fs) -> List.fold_left ff state fs
+  | Fproj (f,_) -> ff state f
+  | FhoareF (hf) -> List.fold_left ff state [hf.hf_pr; hf.hf_po]
+  | FhoareS (hs) -> List.fold_left ff state [hs.hs_pr; hs.hs_po]
+  | FbdHoareF (bhf) -> List.fold_left ff state [bhf.bhf_pr; bhf.bhf_po; bhf.bhf_bd]
+  | FbdHoareS (bhs) -> List.fold_left ff state [bhs.bhs_pr; bhs.bhs_po; bhs.bhs_bd]
+  | FequivF (ef) -> List.fold_left ff state [ef.ef_pr; ef.ef_po]
+  | FequivS (es) -> List.fold_left ff state [es.es_pr; es.es_po]
+  | FeagerF (eg) -> List.fold_left ff state [eg.eg_pr; eg.eg_po]
+  | Fpr (pr) -> List.fold_left ff state [pr.pr_args; pr.pr_event]
+
 (* -------------------------------------------------------------------- *)
 let form_exists g f =
   match f.f_node with

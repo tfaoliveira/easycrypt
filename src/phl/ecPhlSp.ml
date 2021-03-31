@@ -172,6 +172,21 @@ module LowInternal = struct
     EcFol.f_exists_simpl (List.map (snd_map (fun t -> GTty t)) bds) pre
 
   (* ------------------------------------------------------------------ *)
+  let rec pvs_of_form m pre =
+    let aux state f =
+      let pvs = List.concat [pvs_of_form m f; state] in
+      match f.f_node with
+      | Fpvar (pv, _) -> pv :: pvs
+      | _ -> pvs
+    in
+    EcCoreFol.f_fold aux [] pre
+
+  let sp_instr_free m env pre instr =
+    let modi = EcPV.i_write env instr in
+    let aux pv = if not (EcPV.PV.mem_pv env pv modi) then raise No_sp in
+    List.iter aux (pvs_of_form m pre)
+
+  (* ------------------------------------------------------------------ *)
   let rec sp_stmt m env (bds, assoc, pre) stmt =
     match stmt with
     | [] ->
@@ -179,10 +194,14 @@ module LowInternal = struct
 
     | i :: is ->
         try
-          let (bds, assoc, pre) = sp_instr m env (bds, assoc, pre) i in
+          let _ = sp_instr_free m env pre i in
           sp_stmt m env (bds,assoc,pre) is
         with No_sp ->
-          (stmt, (bds, assoc, pre))
+          try
+            let (bds, assoc, pre) = sp_instr m env (bds, assoc, pre) i in
+            sp_stmt m env (bds,assoc,pre) is
+          with No_sp ->
+            (stmt, (bds, assoc, pre))
 
   and sp_instr m env (bds,assoc,pre) instr = match instr.i_node with
     | Sasgn (lv, e) ->
