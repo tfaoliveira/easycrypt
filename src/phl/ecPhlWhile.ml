@@ -62,6 +62,31 @@ let while_info env e s =
     EcModules.aus_calls  = Sx.ntr_elements c; }
 
 (* -------------------------------------------------------------------- *)
+(*TODO: destr_and_r seems to have the name I want but what is it?*)
+let rec destr_and_t_ form forms =
+  try
+    let (form1,form2) = destr_and form in
+    let forms = destr_and_t_ form1 forms in
+    let forms = destr_and_t_ form2 forms in
+    forms
+  with
+    DestrError _ -> form :: forms
+
+let destr_and_t form = destr_and_t_ form []
+
+let rec partial_sp_ env forms free bound stmt =
+  match forms with
+  | [] -> (f_ands free, f_ands bound)
+  | form :: forms ->
+      if EcPhlSp.sp_stmt_free env form stmt
+      then partial_sp_ env forms (form :: free) bound stmt
+      else partial_sp_ env forms free (form :: bound) stmt
+
+let partial_sp env form stmt =
+  let forms = destr_and_t form in
+  partial_sp_ env forms [] [] stmt
+
+(*TODO: anything that allows me to search librairies for functions of a certain type? Doc de Merlin?*)
 let t_hoare_while_r inv tc =
   let env = FApi.tc1_env tc in
   let hs = tc1_as_hoareS tc in
@@ -70,13 +95,14 @@ let t_hoare_while_r inv tc =
   let e = form_of_expr m e in
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv e in
+  (*The body also preserves parts of the precondition not written on in c.*)
+  let free, _ = partial_sp env hs.hs_pr s in
+  let b_pre = f_and_simpl free b_pre in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
   (* the wp of the while *)
   let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in
   let modi = s_write env c in
-  (*TODO: this adds to the precondition all hypotheses not affected by the while.
-    Do this too inside the while loop.*)
   let post = generalize_mod env m modi post in
   let post = f_and_simpl inv post in
   let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
@@ -158,55 +184,6 @@ let t_hoare_for_r pinv tc =
   (* the wp of the while *)
   let post = f_imps_simpl [f_not_simpl ew; inv] hs.hs_po in
   let modi = s_write env c in
-  let post = generalize_mod env m modi post in
-  let post = f_and_simpl inv post in
-  let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
-
-  FApi.xmutate1 tc `While [b_concl; concl]
-
-(* -------------------------------------------------------------------- *)
-(*TODO: destr_and_r seems to have the name I want but what is it?*)
-let rec destr_and_t_ form forms =
-  try
-    let (form1,form2) = destr_and form in
-    let forms = destr_and_t_ form1 forms in
-    let forms = destr_and_t_ form2 forms in
-    forms
-  with
-    DestrError _ -> form :: forms
-
-let destr_and_t form = destr_and_t_ form []
-
-
-(*TODO: anything that takes a form and returns a EcPV.PV.t containing the variables read?*)
-(*TODO: anything that allows me to search librairies for functions of a certain type? Doc de Merlin?*)
-(*
-let filter_free env c forms =
-  let modi = s_write env c in
-  filter () forms
-*)
-(*f_ands*)
-
-(*TODO: where can I get the precondition just before the while loop? Just before the whole tactic application?*)
-let t_hoare_while_r_alt inv tc =
-  let env = FApi.tc1_env tc in
-  let hs = tc1_as_hoareS tc in
-  let _ = hs.hs_pr in
-  let (e, c), s = tc1_last_while tc hs.hs_s in
-  let m = EcMemory.memory hs.hs_m in
-  let e = form_of_expr m e in
-  (* the body preserves the invariant *)
-  let b_pre  = f_and_simpl inv e in
-  (*The body also preserves parts of the precondition not written on in c.*)
-  (*TODO: look at ecPhlSp before doing that.*)
-  let b_pre = f_and_simpl (hs.hs_pr) b_pre in
-  let b_post = inv in
-  let b_concl = f_hoareS hs.hs_m b_pre c b_post in
-  (* the wp of the while *)
-  let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in
-  let modi = s_write env c in
-  (*TODO: this adds to the precondition all hypotheses not affected by the while.
-    Do this too inside the while loop.*)
   let post = generalize_mod env m modi post in
   let post = f_and_simpl inv post in
   let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in

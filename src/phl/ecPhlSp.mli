@@ -9,6 +9,12 @@
 (* -------------------------------------------------------------------- *)
 open EcParsetree
 open EcCoreGoal.FApi
+open EcEnv
+open EcFol
+open EcModules
+
+(* -------------------------------------------------------------------- *)
+val sp_stmt_free : env -> form -> stmt -> bool
 
 (* -------------------------------------------------------------------- *)
 val t_sp : (codepos1 doption) option -> backward
