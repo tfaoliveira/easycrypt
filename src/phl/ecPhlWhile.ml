@@ -87,7 +87,6 @@ let t_hoare_while_r inv tc =
   let b_pre  = f_and_simpl inv e in
   (*The body also preserves parts of the precondition not written on in s and c.*)
   let form = f_ands (snd (partial_sp env (destr_and_t hs.hs_pr) hs.hs_s)) in
-  (*TODO: debug with EcPrinting *)
   let b_pre = f_and_simpl form b_pre in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
@@ -171,11 +170,7 @@ let t_hoare_for_r pinv tc =
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv ew in
   (*The body also preserves parts of the precondition not written on in s and c.*)
-  let forms = destr_and_t hs.hs_pr in
-  let free, _ = partial_sp env forms s in
-  let free, _ = partial_sp env free c in
-  let form = f_ands free in
-  (*TODO: debug with EcPrinting *)
+  let form = f_ands (snd (partial_sp env (destr_and_t hs.hs_pr) hs.hs_s)) in
   let b_pre = f_and_simpl form b_pre in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
