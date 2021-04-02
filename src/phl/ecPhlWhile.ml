@@ -76,14 +76,13 @@ let destr_and_t form = destr_and_t_ form []
 
 let rec partial_sp_ env forms free bound stmt =
   match forms with
-  | [] -> (f_ands free, f_ands bound)
+  | [] -> (free, bound)
   | form :: forms ->
       if EcPhlSp.sp_stmt_free env form stmt
       then partial_sp_ env forms (form :: free) bound stmt
       else partial_sp_ env forms free (form :: bound) stmt
 
-let partial_sp env form stmt =
-  let forms = destr_and_t form in
+let partial_sp env forms stmt =
   partial_sp_ env forms [] [] stmt
 
 (*TODO: anything that allows me to search librairies for functions of a certain type? Doc de Merlin?*)
@@ -95,9 +94,13 @@ let t_hoare_while_r inv tc =
   let e = form_of_expr m e in
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv e in
-  (*The body also preserves parts of the precondition not written on in c.*)
-  let free, _ = partial_sp env hs.hs_pr s in
-  let b_pre = f_and_simpl free b_pre in
+  (*The body also preserves parts of the precondition not written on in s and c.*)
+  let forms = destr_and_t hs.hs_pr in
+  let free, _ = partial_sp env forms s in
+  let free, _ = partial_sp env free c in
+  let form = f_ands free in
+  (*TODO: debug with EcPrinting *)
+  let b_pre = f_and_simpl form b_pre in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
   (* the wp of the while *)
@@ -179,6 +182,13 @@ let t_hoare_for_r pinv tc =
   let inv = f_and (f_and (f_int_le f_i0 fi) (f_int_le fi fn)) (f_app pinv [fi] tbool) in
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv ew in
+  (*The body also preserves parts of the precondition not written on in s and c.*)
+  let forms = destr_and_t hs.hs_pr in
+  let free, _ = partial_sp env forms s in
+  let free, _ = partial_sp env free c in
+  let form = f_ands free in
+  (*TODO: debug with EcPrinting *)
+  let b_pre = f_and_simpl form b_pre in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
   (* the wp of the while *)
