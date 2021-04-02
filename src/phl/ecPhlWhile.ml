@@ -62,28 +62,19 @@ let while_info env e s =
     EcModules.aus_calls  = Sx.ntr_elements c; }
 
 (* -------------------------------------------------------------------- *)
-(*TODO: destr_and_r seems to have the name I want but what is it?*)
-let rec destr_and_t_ form forms =
-  try
-    let (form1,form2) = destr_and form in
-    let forms = destr_and_t_ form1 forms in
-    let forms = destr_and_t_ form2 forms in
-    forms
-  with
-    DestrError _ -> form :: forms
-
-let destr_and_t form = destr_and_t_ form []
-
-let rec partial_sp_ env forms free bound stmt =
-  match forms with
-  | [] -> (free, bound)
-  | form :: forms ->
-      if EcPhlSp.sp_stmt_free env form stmt
-      then partial_sp_ env forms (form :: free) bound stmt
-      else partial_sp_ env forms free (form :: bound) stmt
+let destr_and_t =
+  let rec destr_and_t forms form =
+    try
+      let (form1, form2) = destr_and form in
+      List.fold_left destr_and_t forms [form1; form2]
+    with
+      DestrError _ -> form :: forms
+  in fun form -> destr_and_t [] form
 
 let partial_sp env forms stmt =
-  partial_sp_ env forms [] [] stmt
+  List.partition
+    (fun form -> EcPhlSp.sp_stmt_free env form stmt)
+    forms
 
 (*TODO: anything that allows me to search librairies for functions of a certain type? Doc de Merlin?*)
 let t_hoare_while_r inv tc =
@@ -95,10 +86,7 @@ let t_hoare_while_r inv tc =
   (* the body preserves the invariant *)
   let b_pre  = f_and_simpl inv e in
   (*The body also preserves parts of the precondition not written on in s and c.*)
-  let forms = destr_and_t hs.hs_pr in
-  let free, _ = partial_sp env forms s in
-  let free, _ = partial_sp env free c in
-  let form = f_ands free in
+  let form = f_ands (snd (partial_sp env (destr_and_t hs.hs_pr) hs.hs_s)) in
   (*TODO: debug with EcPrinting *)
   let b_pre = f_and_simpl form b_pre in
   let b_post = inv in
