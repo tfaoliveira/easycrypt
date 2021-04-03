@@ -38,7 +38,7 @@ jobs:
     - name: Detect SMT provers
       run: |
         rm -f ~/.why3.conf
-        opam config exec -- ./ec.native why3config
+        opam config exec -- ./ec.native -why3 ~/.why3.conf why3config
     - name: Compile Library (${{ matrix.target }})
       env:
         TARGET: ${{ matrix.target }}
