@@ -157,7 +157,7 @@ end = struct
       let load_prover p config =
         let name    = p.Whyconf.prover_name in
         let version = p.Whyconf.prover_version in
-        let driver  = Whyconf.load_driver main w3_env config.Whyconf.driver [] in
+        let driver  = Whyconf.load_driver_raw main w3_env config.Whyconf.driver [] in
 
         { pr_prover  =
             { pr_name    = name;
