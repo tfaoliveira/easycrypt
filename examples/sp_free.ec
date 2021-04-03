@@ -15,15 +15,6 @@ module MAIN = {
     i <- id_while(n);
     return i;
   }
-  (*TODO: is this the bad case?*)
-  proc id_if (n : int) : int = {
-    var i;
-    i <- 0;
-    if (n <> 0) {
-      i <- n;
-    }
-    return i;
-  }
 }.
 
 lemma id_while_free m :
@@ -34,6 +25,27 @@ lemma id_call_free m :
   hoare [MAIN.id_call : m = 0 ==> m = 0].
 proof. by proc; sp; skip. qed.
 
-lemma id_if_free m :
-  hoare [MAIN.id_if : m = 0 ==> m = 0].
+module FALSE = {
+  proc incr (n : int) : unit = {
+    n <- n + 1;
+    return ();
+  }
+  proc incr_call (n : int) : int = {
+    incr(n);
+    return n;
+  }
+  proc infinite () : unit = {
+    while(true) {}
+    return ();
+  }
+}.
+
+(*Interesting, does s_write unfold function calls?*)
+lemma incr_call_free m :
+  hoare [FALSE.incr_call : n = m ==> res = m].
+proof. proc. sp. abort.
+
+(*This is really bad.*)
+lemma islossless_infinite_free :
+  islossless FALSE.infinite.
 proof. by proc; sp; skip. qed.
