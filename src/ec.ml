@@ -222,7 +222,11 @@ let main () =
             Unix.stdin Unix.stdout Unix.stderr
         in
 
-        exit (fst (Unix.waitpid [] pid))
+        let code =
+          match snd (Unix.waitpid [] pid) with
+          | WSIGNALED _ -> 127
+          | WEXITED   e -> e
+          | WSTOPPED  _ -> assert false in exit code
       end
 
     | `Cli cliopts -> begin

@@ -147,7 +147,7 @@ end = struct
 
   let load ?(ovrevict = []) ?why3conf () =
     if !theconfig = None then begin
-      let config  = Whyconf.read_config why3conf in
+      let config  = Whyconf.init_config why3conf in
       let main    = Whyconf.get_main config in
 
       Whyconf.load_plugins main;
