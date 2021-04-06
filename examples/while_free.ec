@@ -13,10 +13,11 @@ module MAIN = {
   }
 }.
 
-lemma double_while_double m :
-  hoare [MAIN.id_while : (m = n) /\ (0 <= n) ==> res = m].
+lemma id_while_free m :
+  hoare [MAIN.id_while : (n = m) /\ (0 <= n) ==> res = m].
 proof.
-  proc; sp.
+  proc.
+  sp.
   while(i <= n).
   + by sp; skip => /> /#.
   by skip => /> /#.

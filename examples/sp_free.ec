@@ -23,12 +23,13 @@ module MAIN = {
 
 lemma incr_free m :
   hoare [MAIN.incr : n = m ==> res = m + 1].
-proof. by proc; sp; skip. qed.
+proof. proc. sp. by skip. qed.
 
+(*TODO: Here a seq is required to abandon the i.*)
 lemma id_while_free m :
   hoare [MAIN.id_while : m = 0 ==> m = 0].
-proof. by proc; sp; skip. qed.
+proof. proc. sp. by seq 0 : (m = 0); sp; skip. qed.
 
 lemma id_call_free m :
   hoare [MAIN.id_call : m = 0 ==> m = 0].
-proof. by proc; sp; skip. qed.
+proof. proc. sp. by skip. qed.

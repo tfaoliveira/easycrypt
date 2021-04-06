@@ -224,30 +224,37 @@ module LowInternal = struct
     EcCoreFol.f_fold aux [] pre
 
   let sp_instr_free env pre instr =
-    (*pp_pvt_of_instr env instr "Printing prog_vars written on in program seen by sp";*)
     let modi = EcPV.i_write env instr in
     let aux pv = if (EcPV.PV.mem_pv env pv modi) then raise No_sp in
     List.iter aux (pvs_of_form pre)
 
+  let sp_stmt_free_head env pre stmt =
+    match stmt with
+    | [] -> (true, [])
+    | i :: is ->
+        try sp_instr_free env pre i; (false, is)
+        with No_sp -> (true, stmt)
+
+  let rec sp_stmt_free env pre stmt =
+    let stalled, stmt = sp_stmt_free_head env pre stmt in
+    if stalled then stmt else sp_stmt_free env pre stmt
+
   (* ------------------------------------------------------------------ *)
-  let rec sp_stmt p m env (bds, assoc, pre) stmt =
+  let rec sp_stmt_compute ?(stalled=true) m env (bds, assoc, pre) stmt =
     match stmt with
     | [] ->
-        ([], (bds, assoc, pre))
+        (true, [], (bds, assoc, pre))
 
     | i :: is ->
         try
-          if p then raise No_sp;
-          sp_instr_free env pre i;
-          sp_stmt p m env (bds,assoc,pre) is
+          let (bds, assoc, pre) = sp_instr_compute m env (bds, assoc, pre) i in
+          (*TODO: Why must I use the name stalled?*)
+          let stalled = false in
+          sp_stmt_compute ~stalled m env (bds,assoc,pre) is
         with No_sp ->
-          try
-            let (bds, assoc, pre) = sp_instr p m env (bds, assoc, pre) i in
-            sp_stmt p m env (bds,assoc,pre) is
-          with No_sp ->
-            (stmt, (bds, assoc, pre))
+          (stalled, stmt, (bds, assoc, pre))
 
-  and sp_instr p m env (bds,assoc,pre) instr = match instr.i_node with
+  and sp_instr_compute m env (bds,assoc,pre) instr = match instr.i_node with
     | Sasgn (lv, e) ->
         sp_asgn m env lv e (bds, assoc, pre)
 
@@ -255,8 +262,8 @@ module LowInternal = struct
         let e_form = EcFol.form_of_expr m e in
         let pre_t  = build_sp m bds assoc (f_and_simpl e_form pre) in
         let pre_f  = build_sp m bds assoc (f_and_simpl (f_not e_form) pre) in
-        let stmt_t, (bds_t, assoc_t, pre_t) = sp_stmt p m env (bds, assoc, pre_t) s1.s_node in
-        let stmt_f, (bds_f, assoc_f, pre_f) = sp_stmt p m env (bds, assoc, pre_f) s2.s_node in
+        let _, stmt_t, (bds_t, assoc_t, pre_t) = sp_stmt_compute m env (bds, assoc, pre_t) s1.s_node in
+        let _, stmt_f, (bds_f, assoc_f, pre_f) = sp_stmt_compute m env (bds, assoc, pre_f) s2.s_node in
         if not (List.is_empty stmt_t && List.is_empty stmt_f) then raise No_sp;
         let sp_t = build_sp m bds_t assoc_t pre_t in
         let sp_f = build_sp m bds_f assoc_f pre_f in
@@ -264,19 +271,19 @@ module LowInternal = struct
 
     | _ -> raise No_sp
 
-  let sp_stmt p m env stmt f =
-    let stmt, (bds, assoc, pre) = sp_stmt p m env ([], [], f) stmt in
+  let rec sp_stmt p m env stmt f =
+    let stalled_compute, stmt, (bds, assoc, pre) = sp_stmt_compute m env ([], [], f) stmt in
     let pre = build_sp m bds assoc pre in
-    stmt, pre
+    if p then stmt, pre else
+    let stalled_free, stmt = sp_stmt_free_head env pre stmt in
+    if stalled_compute && stalled_free then stmt, pre else
+    sp_stmt p m env stmt pre
 end
 
 (* -------------------------------------------------------------------- *)
 let sp_stmt_free env pre stmt =
-  try
-    let _ = List.iter (LowInternal.sp_instr_free env pre) stmt.s_node in
-    true
-  with LowInternal.No_sp ->
-    false
+  let stmt = LowInternal.sp_stmt_free env pre stmt.s_node in
+  match stmt with | [] -> true | _ -> false
 
 (* -------------------------------------------------------------------- *)
 let t_sp_side pos tc =
