@@ -248,9 +248,7 @@ module LowInternal = struct
     | i :: is ->
         try
           let (bds, assoc, pre) = sp_instr_compute m env (bds, assoc, pre) i in
-          (*TODO: Why must I use the name stalled?*)
-          let stalled = false in
-          sp_stmt_compute ~stalled m env (bds,assoc,pre) is
+          sp_stmt_compute ~stalled:false m env (bds,assoc,pre) is
         with No_sp ->
           (stalled, stmt, (bds, assoc, pre))
 
