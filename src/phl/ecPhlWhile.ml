@@ -87,13 +87,14 @@ let t_hoare_while_r inv tc =
   let form = f_ands (fst (partial_sp env (destr_and_t hs.hs_pr) hs.hs_s)) in
   (* the body preserves the invariant *)
   (*TODO: is the and of Hoare logic not putting implicit parentheses the same way as that of EasyCrypt?*)
-  let b_pre  = f_and_simpl (f_and_simpl form inv) e in
+  (*TODO: I reversed the invariant and the condition to match the order of the post-condition.*)
+  let b_pre  = f_and_simpl (f_and_simpl form e) inv in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
   (* the wp of the while *)
   (*let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in*)
   (*TODO: I reversed the invariant and the negation of the condition to patch the rules as given in the paper.*)
-  let post = f_imps_simpl [inv; f_not_simpl e] hs.hs_po in
+  let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in
   let modi = s_write env c in
   let post = generalize_mod env m modi post in
   let post = f_and_simpl inv post in
