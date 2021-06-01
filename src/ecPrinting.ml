@@ -35,24 +35,26 @@ type 'a pp = Format.formatter -> 'a -> unit
 (* -------------------------------------------------------------------- *)
 module PPEnv = struct
   type t = {
-    ppe_env    : EcEnv.env;
-    ppe_locals : symbol Mid.t;
-    ppe_inuse  : Ssym.t;
-    ppe_univar : (symbol Mint.t * Ssym.t) ref;
-    ppe_fb     : Sp.t;
-    ppe_width  : int;
+    ppe_env     : EcEnv.env;
+    ppe_locals  : symbol Mid.t;
+    ppe_inuse   : Ssym.t;
+    ppe_univar  : (symbol Mint.t * Ssym.t) ref;
+    ppe_fb      : Sp.t;
+    ppe_width   : int;
+    ppe_shorten : bool;
   }
 
-  let ofenv (env : EcEnv.env) =
+  let ofenv ?(shorten = true) (env : EcEnv.env) =
     let width =
       EcGState.asint 0 (EcGState.getvalue "PP:width" (EcEnv.gstate env)) in
 
-    { ppe_env    = env;
-      ppe_locals = Mid.empty;
-      ppe_inuse  = Ssym.empty;
-      ppe_univar = ref (Mint.empty, Ssym.empty);
-      ppe_fb     = Sp.empty;
-      ppe_width  = max 20 width; }
+    { ppe_env     = env;
+      ppe_locals  = Mid.empty;
+      ppe_inuse   = Ssym.empty;
+      ppe_univar  = ref (Mint.empty, Ssym.empty);
+      ppe_fb      = Sp.empty;
+      ppe_width   = max 20 width;
+      ppe_shorten = shorten; }
 
   let enter_by_memid ppe id =
     match EcEnv.Memory.byid id ppe.ppe_env with
@@ -149,19 +151,27 @@ module PPEnv = struct
             (fun env x -> EcEnv.Mod.bind_local x mty sm env)
             ppe.ppe_env xs; }
 
-  let p_shorten cond p =
-    let rec shorten prefix (nm, x) =
-      match cond (nm, x) with
-      | true  -> (nm, x)
-      | false -> begin
-        match prefix with
-        | [] -> (nm, x)
-        | n :: prefix -> shorten prefix (n :: nm, x)
-      end
-    in
+  let p_shorten ppe cond p =
+    if ppe.ppe_shorten then
+      let rec shorten prefix (nm, x) =
+        match cond (nm, x) with
+        | true  -> (nm, x)
+        | false -> begin
+          match prefix with
+          | [] -> (nm, x)
+          | n :: prefix -> shorten prefix (n :: nm, x)
+        end
+      in
 
-    let (nm, x) = P.toqsymbol p in
-    let (nm, x) = shorten (List.rev nm) ([], x) in
+      let (nm, x) = P.toqsymbol p in
+      shorten (List.rev nm) ([], x)
+
+    else
+      let (nm, x) = P.toqsymbol p in
+      let nm =
+        match nm with
+        | b :: nm when b = EcCoreLib.i_top -> nm
+        | _ -> nm in
       (nm, x)
 
   let ty_symb (ppe : t) p =
@@ -169,28 +179,28 @@ module PPEnv = struct
       try  EcPath.p_equal (EcEnv.Ty.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let tc_symb (ppe : t) p =
       let exists sm =
       try  EcPath.p_equal (EcEnv.TypeClass.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let rw_symb (ppe : t) p =
       let exists sm =
       try  EcPath.p_equal (EcEnv.BaseRw.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let ax_symb (ppe : t) p =
       let exists sm =
       try  EcPath.p_equal (EcEnv.Ax.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let op_symb (ppe : t) p info =
     let specs = [1, EcPath.pqoname (EcPath.prefix EcCoreLib.CI_Bool.p_eq) "<>"] in
@@ -228,21 +238,21 @@ module PPEnv = struct
       (* FIXME: for special operators, do check `info` *)
       if   List.exists (fun (_, sp) -> EcPath.p_equal sp p) specs
       then ([], EcPath.basename p)
-      else p_shorten exists p
+      else p_shorten ppe exists p
 
   let ax_symb (ppe : t) p =
     let exists sm =
       try  EcPath.p_equal (EcEnv.Ax.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let th_symb (ppe : t) p =
     let exists sm =
       try  EcPath.p_equal (EcEnv.Theory.lookup_path sm ppe.ppe_env) p
       with EcEnv.LookupFailure _ -> false
     in
-      p_shorten exists p
+      p_shorten ppe exists p
 
   let rec mod_symb (ppe : t) mp : EcSymbols.msymbol =
     let (nm, x, p2) =
@@ -2988,8 +2998,8 @@ module ObjectInfo = struct
   }
 
   (* -------------------------------------------------------------------- *)
-  let pr_gen_r ?(prcat = false) dumper = fun fmt env qs ->
-    let ppe = PPEnv.ofenv env in
+  let pr_gen_r ?shorten ?(prcat = false) dumper = fun fmt env qs ->
+    let ppe = PPEnv.ofenv ?shorten env in
     let obj =
       try dumper.od_lookup qs env
       with EcEnv.LookupFailure _ -> raise NoObject in
@@ -2998,8 +3008,8 @@ module ObjectInfo = struct
     Format.fprintf fmt "%a@\n@." (dumper.od_printer ppe) obj
 
   (* -------------------------------------------------------------------- *)
-  let pr_gen dumper =
-    let theprinter = pr_gen_r dumper in
+  let pr_gen ?shorten dumper =
+    let theprinter = pr_gen_r ?shorten dumper in
 
     fun fmt env qs ->
       try
@@ -3014,7 +3024,7 @@ module ObjectInfo = struct
       od_lookup  = EcEnv.Ty.lookup;
       od_printer = pp_typedecl; }
 
-  let pr_ty = pr_gen pr_ty_r
+  let pr_ty ?shorten = pr_gen ?shorten pr_ty_r
 
   (* ------------------------------------------------------------------ *)
   let pr_op_r =
@@ -3029,7 +3039,7 @@ module ObjectInfo = struct
           Format.fprintf fmt "@[<v>%a@]"
             (pp_list "@ " (pp_opdecl ~long:true ppe)) l; }
 
-  let pr_op = pr_gen pr_op_r
+  let pr_op ?shorten = pr_gen ?shorten pr_op_r
 
   (* ------------------------------------------------------------------ *)
   let pr_th_r =
@@ -3037,7 +3047,7 @@ module ObjectInfo = struct
       od_lookup  = EcEnv.Theory.lookup ~mode:`All;
       od_printer = pp_theory; }
 
-  let pr_th = pr_gen pr_th_r
+  let pr_th ?shorten = pr_gen ?shorten pr_th_r
 
   (* ------------------------------------------------------------------ *)
   let pr_ax_r =
@@ -3052,7 +3062,7 @@ module ObjectInfo = struct
           Format.fprintf fmt "@[<v>%a@]"
             (pp_list "@ " (pp_axiom ~long:true ppe)) l; }
 
-  let pr_ax = pr_gen pr_ax_r
+  let pr_ax ?shorten = pr_gen ?shorten pr_ax_r
 
   (* ------------------------------------------------------------------ *)
   let pr_mod_r =
@@ -3060,7 +3070,7 @@ module ObjectInfo = struct
       od_lookup  = EcEnv.Mod.lookup;
       od_printer = (fun ppe fmt (p, me) -> pp_modexp ppe fmt (p, me)); }
 
-  let pr_mod = pr_gen pr_mod_r
+  let pr_mod ?shorten = pr_gen ?shorten pr_mod_r
 
   (* ------------------------------------------------------------------ *)
   let pr_mty_r =
@@ -3068,7 +3078,7 @@ module ObjectInfo = struct
       od_lookup  = EcEnv.ModTy.lookup;
       od_printer = pp_modsig; }
 
-  let pr_mty = pr_gen pr_mty_r
+  let pr_mty ?shorten = pr_gen ?shorten pr_mty_r
 
   (* ------------------------------------------------------------------ *)
   let pr_rw_r =
@@ -3076,7 +3086,7 @@ module ObjectInfo = struct
       od_lookup  = EcEnv.BaseRw.lookup;
       od_printer = pp_rwbase; }
 
-  let pr_rw = pr_gen pr_rw_r
+  let pr_rw ?shorten = pr_gen ?shorten pr_rw_r
 
   (* ------------------------------------------------------------------ *)
   let pr_at_r =
@@ -3092,24 +3102,24 @@ module ObjectInfo = struct
       od_lookup  = lookup;
       od_printer = pp_solvedb; }
 
-  let pr_at fmt env x = pr_gen pr_at_r fmt env ([], x)
+  let pr_at ?shorten fmt env x = pr_gen ?shorten pr_at_r fmt env ([], x)
 
   (* ------------------------------------------------------------------ *)
-  let pr_db fmt env db =
+  let pr_db ?shorten fmt env db =
     match db with
-    | `Rewrite name -> pr_rw fmt env name
-    | `Solve   name -> pr_at fmt env name
+    | `Rewrite name -> pr_rw ?shorten fmt env name
+    | `Solve   name -> pr_at ?shorten fmt env name
 
   (* ------------------------------------------------------------------ *)
-  let pr_any fmt env qs =
-    let printers = [pr_gen_r ~prcat:true pr_ty_r ;
-                    pr_gen_r ~prcat:true pr_op_r ;
-                    pr_gen_r ~prcat:true pr_th_r ;
-                    pr_gen_r ~prcat:true pr_ax_r ;
-                    pr_gen_r ~prcat:true pr_mod_r;
-                    pr_gen_r ~prcat:true pr_mty_r;
-                    pr_gen_r ~prcat:true pr_rw_r ;
-                    pr_gen_r ~prcat:true pr_at_r ; ] in
+  let pr_any ?shorten fmt env qs =
+    let printers = [pr_gen_r ?shorten ~prcat:true pr_ty_r ;
+                    pr_gen_r ?shorten ~prcat:true pr_op_r ;
+                    pr_gen_r ?shorten ~prcat:true pr_th_r ;
+                    pr_gen_r ?shorten ~prcat:true pr_ax_r ;
+                    pr_gen_r ?shorten ~prcat:true pr_mod_r;
+                    pr_gen_r ?shorten ~prcat:true pr_mty_r;
+                    pr_gen_r ?shorten ~prcat:true pr_rw_r ;
+                    pr_gen_r ?shorten ~prcat:true pr_at_r ; ] in
 
     let ok = ref (List.length printers) in
 

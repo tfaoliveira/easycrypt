@@ -3488,7 +3488,12 @@ realize:
 
 (* -------------------------------------------------------------------- *)
 (* Printing                                                             *)
-print:
+%inline print:
+| opts=print_options? obj=print_obj {
+    (odfl { ppo_shorten = true; } opts, obj)
+  }
+
+print_obj:
 |             qs=qoident         { Pr_any  qs            }
 | STAR        qs=qoident         { Pr_any  qs            }
 | TYPE        qs=qident          { Pr_ty   qs            }
@@ -3504,6 +3509,19 @@ print:
 | REWRITE     qs=qident          { Pr_db   (`Rewrite qs) }
 | SOLVE       qs=ident           { Pr_db   (`Solve   qs) }
 
+print_option:
+| x=ident {
+    match unloc x with
+    | "full" -> `Full
+    | _ ->
+        parse_error x.pl_loc
+          (Some ("invalid option: " ^ (unloc x)))
+  }
+
+print_options:
+| LBRACKET xs=print_option+ RBRACKET {
+    { ppo_shorten = not (List.mem `Full xs); }
+  }
 
 smt_info:
 | li=smt_info1* { SMT.mk_smt_option li}

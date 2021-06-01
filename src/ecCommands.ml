@@ -202,8 +202,8 @@ let process_search scope qs =
 
 (* -------------------------------------------------------------------- *)
 module HiPrinting = struct
-  let pr_glob fmt env pm =
-    let ppe = EcPrinting.PPEnv.ofenv env in
+  let pr_glob ?shorten fmt env pm =
+    let ppe = EcPrinting.PPEnv.ofenv ?shorten env in
     let (p, _) = EcTyping.trans_msymbol env pm in
     let us = EcEnv.NormMp.mod_use env p in
 
@@ -225,8 +225,7 @@ module HiPrinting = struct
         (EcPrinting.pp_type ppe) ty.EcEnv.vb_type)
       (List.rev (Mx.bindings us.EcEnv.us_pv))
 
-
-  let pr_goal fmt scope n =
+  let pr_goal ?shorten fmt scope n =
     match EcScope.xgoal scope with
     | None | Some { EcScope.puc_active = None} ->
         EcScope.hierror "no active proof"
@@ -238,7 +237,7 @@ module HiPrinting = struct
         | EcScope.PSCheck pf -> begin
             let hds = EcCoreGoal.all_hd_opened pf in
             let sz  = List.length hds in
-            let ppe = EcPrinting.PPEnv.ofenv (EcScope.env scope) in
+            let ppe = EcPrinting.PPEnv.ofenv ?shorten (EcScope.env scope) in
 
             if n > sz then
               EcScope.hierror "only %n goal(s) remaining" sz;
@@ -258,27 +257,28 @@ module HiPrinting = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let process_pr fmt scope p =
+let process_pr fmt scope (opt, p) =
   let env = EcScope.env scope in
+  let shorten = opt.ppo_shorten in
 
   match p with
-  | Pr_ty   qs -> EcPrinting.ObjectInfo.pr_ty   fmt env   (unloc qs)
-  | Pr_op   qs -> EcPrinting.ObjectInfo.pr_op   fmt env   (unloc qs)
-  | Pr_pr   qs -> EcPrinting.ObjectInfo.pr_op   fmt env   (unloc qs)
-  | Pr_th   qs -> EcPrinting.ObjectInfo.pr_th   fmt env   (unloc qs)
-  | Pr_ax   qs -> EcPrinting.ObjectInfo.pr_ax   fmt env   (unloc qs)
-  | Pr_mod  qs -> EcPrinting.ObjectInfo.pr_mod  fmt env   (unloc qs)
-  | Pr_mty  qs -> EcPrinting.ObjectInfo.pr_mty  fmt env   (unloc qs)
-  | Pr_any  qs -> EcPrinting.ObjectInfo.pr_any  fmt env   (unloc qs)
+  | Pr_ty   qs -> EcPrinting.ObjectInfo.pr_ty  ~shorten fmt env   (unloc qs)
+  | Pr_op   qs -> EcPrinting.ObjectInfo.pr_op  ~shorten fmt env   (unloc qs)
+  | Pr_pr   qs -> EcPrinting.ObjectInfo.pr_op  ~shorten fmt env   (unloc qs)
+  | Pr_th   qs -> EcPrinting.ObjectInfo.pr_th  ~shorten fmt env   (unloc qs)
+  | Pr_ax   qs -> EcPrinting.ObjectInfo.pr_ax  ~shorten fmt env   (unloc qs)
+  | Pr_mod  qs -> EcPrinting.ObjectInfo.pr_mod ~shorten fmt env   (unloc qs)
+  | Pr_mty  qs -> EcPrinting.ObjectInfo.pr_mty ~shorten fmt env   (unloc qs)
+  | Pr_any  qs -> EcPrinting.ObjectInfo.pr_any ~shorten fmt env   (unloc qs)
 
   | Pr_db (`Rewrite qs) ->
-      EcPrinting.ObjectInfo.pr_rw fmt env (unloc qs)
+      EcPrinting.ObjectInfo.pr_rw ~shorten fmt env (unloc qs)
 
   | Pr_db (`Solve q) ->
-      EcPrinting.ObjectInfo.pr_at fmt env (unloc q)
+      EcPrinting.ObjectInfo.pr_at ~shorten fmt env (unloc q)
 
-  | Pr_glob pm -> HiPrinting.pr_glob fmt env pm
-  | Pr_goal n  -> HiPrinting.pr_goal fmt scope n
+  | Pr_glob pm -> HiPrinting.pr_glob ~shorten fmt env pm
+  | Pr_goal n  -> HiPrinting.pr_goal ~shorten fmt scope n
 
 (* -------------------------------------------------------------------- *)
 let check_opname_validity (scope : EcScope.scope) (x : string) =

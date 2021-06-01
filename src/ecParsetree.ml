@@ -971,6 +971,10 @@ type pprint =
   | Pr_goal of int
   | Pr_db   of [`Rewrite of pqsymbol | `Solve of psymbol]
 
+and pprint_option = {
+  ppo_shorten : bool;
+}
+
 (* -------------------------------------------------------------------- *)
 type renaming_kind =
   | RNty
@@ -1113,7 +1117,7 @@ type global_action =
   | Gaddrw       of (bool * pqsymbol * pqsymbol list)
   | Greduction   of puserred
   | Ghint        of phint
-  | Gprint       of pprint
+  | Gprint       of (pprint_option * pprint)
   | Gsearch      of pformula list
   | GthOpen      of (bool * psymbol)
   | GthClose     of (theory_clear * psymbol)

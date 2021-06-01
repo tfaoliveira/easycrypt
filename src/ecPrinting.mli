@@ -20,7 +20,7 @@ open EcTheory
 module PPEnv : sig
   type t
 
-  val ofenv : EcEnv.env -> t
+  val ofenv : ?shorten:bool -> EcEnv.env -> t
   val add_locals : ?force:bool -> t -> EcIdent.t list -> t
 end
 
@@ -96,14 +96,14 @@ val pp_goal : PPEnv.t -> prpo_display -> ppgoal pp
 module ObjectInfo : sig
   type db = [`Rewrite of qsymbol | `Solve of symbol]
 
-  val pr_ty  : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_op  : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_th  : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_ax  : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_mod : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_mty : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_rw  : Format.formatter -> EcEnv.env -> qsymbol -> unit
-  val pr_at  : Format.formatter -> EcEnv.env -> symbol -> unit
-  val pr_db  : Format.formatter -> EcEnv.env -> db -> unit
-  val pr_any : Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_ty  : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_op  : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_th  : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_ax  : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_mod : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_mty : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_rw  : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
+  val pr_at  : ?shorten:bool -> Format.formatter -> EcEnv.env -> symbol -> unit
+  val pr_db  : ?shorten:bool -> Format.formatter -> EcEnv.env -> db -> unit
+  val pr_any : ?shorten:bool -> Format.formatter -> EcEnv.env -> qsymbol -> unit
 end
