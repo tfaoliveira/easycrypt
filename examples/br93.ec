@@ -428,7 +428,7 @@ lemma ex_Reduction (cA:adv_cost) (A<:Adv [choose : `{N cA.`cchoose, #ARO.o : cA.
     Pr[CPA(BR93(LRO), A(LRO)).main() @ &m : res] - 1%r/2%r <= Pr[OW(B).main() @ &m: res].  
 proof.
   move=> cA_pos A_choose_ll qH.
-  exists (Ifind(A)); split.  
+  exists (Ifind(A)); split. 
   (* Proof of the complexity *)
   + proc.
     seq 5 : (size Log.qs <= cA.`ochoose + cA.`oguess) time [N((4 + cf + ceqrand) * (cA.`ochoose + cA.`oguess) + 2)] => //.
