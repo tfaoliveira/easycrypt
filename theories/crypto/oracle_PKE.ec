@@ -92,10 +92,10 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
   proc dec (c:ciphertext) : plaintext option = {
     var m;
     
-    ndec <- ndec + 1;
     m <- witness;
     if (! c \in cs) {
       m <- S.dec(sk,c);
+      ndec <- ndec + 1;
     }
     return m;
   }
@@ -148,27 +148,28 @@ op Nenc : int.
 module B (A : Adversary, S : Scheme, O : CCA_Oracle) = {
   var i,iS : int
   var pk : pkey
+  var cs : ciphertext list
   
   module O' : CCA_Oracle = {
     proc l_or_r(m0,m1 : plaintext) = {
       var c;
 
-      if (i < iS) {
-        c <- S.enc(pk,m0);
-      } 
+      if (i < iS) c <- S.enc(pk,m0);
       else { 
-        if (i = iS) {
-          c <- O.l_or_r(m0,m1);
-        }
-        else {
-          c <- S.enc(pk,m1);
-        }
+        if (i = iS) c <- O.l_or_r(m0,m1);
+        else c <- S.enc(pk,m1);
       }
       i <- i+1;
+      cs <- c::cs;
       return c;
     }
 
-    proc dec = O.dec
+    proc dec(c:ciphertext) : plaintext option = {
+      var m;
+      m <- witness;
+      if (! c \in cs) m <@ O.dec(c);
+      return m;
+    }
   }
 
   proc main(pk0 : pkey) : bool = {
@@ -177,6 +178,7 @@ module B (A : Adversary, S : Scheme, O : CCA_Oracle) = {
     i <- 0;
     iS <$ [0..Nenc-1];
     pk <- pk0;
+    cs <- [];
     b' <@ A(O').main(pk);
     return b';
   }
@@ -250,30 +252,39 @@ local module LRB (O : LR) : LR = {
 
 local equiv eqv_WrapLRB (O <: LR {Wrap, S, A, B}) : 
   A(B(A, S, Wrap(S, O)).O').main ~ A(Wrap(S,LRB(O))).main : 
-  ={arg,glob A,glob Wrap,glob S, glob O, glob B} ==> ={Wrap.ndec}.
+  ={glob A,glob Wrap,glob S, glob O, glob B} /\ ={pk} /\ Wrap.pk{1} = B.pk{1} /\
+   B.cs{1} = Wrap.cs{2} /\ (forall c, c \in Wrap.cs{1} => c \in Wrap.cs{2}) ==> ={Wrap.ndec}.
 proof.
-  proc (={glob Wrap,glob S, glob O, glob B}) => />.
-  - proc; inline *; sp; if; first by move => &1 &2 />.
-    + auto. 
-admitted
+  proc (={glob S, glob O} /\ ={Wrap.ndec, Wrap.sk, Wrap.pk, B.iS, B.i, B.pk} /\ 
+         B.cs{1} = Wrap.cs{2} /\ (forall c, c \in Wrap.cs{1} => c \in Wrap.cs{2}) /\
+         Wrap.pk{1} = B.pk{1}) => //.
+  + proc; inline *; sp.
+    if => //.
+    + by wp; call (:true); auto => /> /#.
+    if => //.
+    + by do 2!(wp; call (:true)); auto => /> /#.
+    by wp; call (:true); auto => /> /#.
+  proc. sp; if => //.
+  inline *; rcondt{1} ^if; 1: by auto => /> /#.
+  by wp; call(:true); auto.
+qed.
 
 lemma B_bound (O <: LR {Wrap, S, A,B}): 
   hoare[ B(A,S,Wrap(S,O)).main : 
-    Wrap.ndec = 0 /\ Wrap.cs = [] ==> Wrap.ndec <= Ndec /\ size Wrap.cs <= 1].
+    Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = pk0 ==> Wrap.ndec <= Ndec /\ size Wrap.cs <= 1].
 proof.
-  conseq (_ : Wrap.ndec = 0 /\ Wrap.cs = [] ==> Wrap.ndec <= Ndec) 
+  conseq (_ : Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = pk0 ==> Wrap.ndec <= Ndec) 
          (_ : Wrap.cs = [] ==> size Wrap.cs <= 1).
   - done.
   - proc. 
-    call (_ : size Wrap.cs = b2i (B.iS < B.i)). 
+    call (_ : size Wrap.cs = b2i (B.iS < B.i)).
     + proc. inline *. admit.
     + by conseq />. 
     + auto => />. smt(supp_dinter).
   - proc.
-    call (_ : Wrap.ndec = 0 /\ Wrap.cs = [] ==> Wrap.ndec <= Ndec).
-    conseq (eqv_WrapLRB(O)) (A_bound(<: LRB(O))) => />.
-    smt().
-    by conseq />.
+    call (_ : Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = B.pk /\ B.cs = Wrap.cs ==> Wrap.ndec <= Ndec).
+    conseq (eqv_WrapLRB(O)) (A_bound(<: LRB(O))) => />; 1: smt().
+    by auto.
 qed.
 
 lemma CCA_1n &m :
