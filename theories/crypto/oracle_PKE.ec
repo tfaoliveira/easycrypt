@@ -6,7 +6,7 @@
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
-require import AllCore List Distr DBool DInterval.
+require import AllCore List Distr DBool DInterval Hybrid.
 require (*--*) LorR.
 
 theory CCA.
@@ -125,23 +125,6 @@ module CCA_ (LR:LR, S : Scheme, A:Adversary) = {
 module CCA_L = CCA_(L).
 module CCA_R = CCA_(R).
 
-
-(* module B (S : Scheme) (A : Adversary) (O : CCA_Oracle) = { *)
-(*   proc main(pk:pkey) = {  *)
-(*     var b,b' : bool; *)
-    
-(*     b <$ {0,1}; *)
-(*     if (!b) { *)
-(*       b' <@ A(R(S)).main(pk); *)
-(*     } *)
-(*     else { *)
-(*       b' <@ A(L(S)).main(pk); *)
-(*     } *)
-    
-(*     return b = b'; *)
-(*   } *)
-(* }. *)
-
 op Ndec : int.
 op Nenc : int.
 
@@ -234,16 +217,10 @@ local module LRB (O : LR) : LR = {
   proc l_or_r(m0,m1 : plaintext) = {
     var m;
 
-    if (i < iS) {
-      m <- m0;
-    } 
+    if (i < iS) m <- m0;
     else { 
-      if (i = iS) {
-        m <- O.l_or_r(m0,m1);
-      }
-      else {
-        m <- m1;
-      }
+      if (i = iS) m <- O.l_or_r(m0,m1);
+      else m <- m1;
     }
     i <- i+1;
     return m;
@@ -278,7 +255,10 @@ proof.
   - done.
   - proc. 
     call (_ : size Wrap.cs = b2i (B.iS < B.i)).
-    + proc. inline *. admit.
+    + proc. inline *. 
+      if; first by wp; call (:true); skip; smt().
+      if; last by wp; call (: true); skip; smt().
+      wp; sp; call (: true); call (: true); skip; smt().
     + by conseq />. 
     + auto => />. smt(supp_dinter).
   - proc.
@@ -290,6 +270,8 @@ qed.
 lemma CCA_1n &m :
     `| Pr[ CCA_L(S,A).main() @ &m : res ] - Pr[ CCA_R(S,A).main() @ &m : res ] | <= 
     Nenc%r * `| Pr[ CCA_L(S,B(A,S)).main() @ &m : res ] - Pr[ CCA_R(S,B(A,S)).main() @ &m : res ] |.
+
+
 admitted.
 
 end section.
