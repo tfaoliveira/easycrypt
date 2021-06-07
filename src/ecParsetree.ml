@@ -973,6 +973,12 @@ type pprint =
 
 and pprint_option = {
   ppo_shorten : bool;
+  ppo_debug   : bool;
+}
+
+let pprint_option0 = {
+  ppo_shorten = true;
+  ppo_debug   = false;
 }
 
 (* -------------------------------------------------------------------- *)

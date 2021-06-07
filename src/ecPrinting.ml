@@ -36,25 +36,29 @@ type 'a pp = Format.formatter -> 'a -> unit
 module PPEnv = struct
   type t = {
     ppe_env     : EcEnv.env;
+    ppe_base    : EcPath.path option;
     ppe_locals  : symbol Mid.t;
     ppe_inuse   : Ssym.t;
     ppe_univar  : (symbol Mint.t * Ssym.t) ref;
     ppe_fb      : Sp.t;
     ppe_width   : int;
     ppe_shorten : bool;
+    ppe_debug   : bool;
   }
 
-  let ofenv ?(shorten = true) (env : EcEnv.env) =
+  let ofenv ?(shorten = true) ?(debug = false) (env : EcEnv.env) =
     let width =
       EcGState.asint 0 (EcGState.getvalue "PP:width" (EcEnv.gstate env)) in
 
     { ppe_env     = env;
+      ppe_base    = None;
       ppe_locals  = Mid.empty;
       ppe_inuse   = Ssym.empty;
       ppe_univar  = ref (Mint.empty, Ssym.empty);
       ppe_fb      = Sp.empty;
       ppe_width   = max 20 width;
-      ppe_shorten = shorten; }
+      ppe_shorten = shorten;
+      ppe_debug   = debug; }
 
   let enter_by_memid ppe id =
     match EcEnv.Memory.byid id ppe.ppe_env with
@@ -164,7 +168,40 @@ module PPEnv = struct
       in
 
       let (nm, x) = P.toqsymbol p in
-      shorten (List.rev nm) ([], x)
+      let (nm, x) = shorten (List.rev nm) ([], x) in
+
+      match ppe.ppe_base with
+      | None -> (nm, x)
+      | Some base -> begin
+          let hastop, base =
+            match EcPath.tolist base with
+            | x :: nm when x = EcCoreLib.i_top -> (true, nm)
+            | nm -> (false, nm) in
+
+          let rec shorten ctxt base subnm =
+            match base, subnm with
+            | z1 :: base, z2 :: subnm when z1 = z2 ->
+                shorten (z1 :: ctxt) base subnm
+            | base, subnm ->
+                let rec widen ctxt subnm =
+                  match ctxt with
+                  | [] ->
+                      subnm
+                  | pre :: subctxt ->
+                      let fullp =
+                          (if hastop then [EcCoreLib.i_top] else [])
+                        @ (List.rev ctxt @ base) in
+
+                      Format.eprintf "[W]%s.%s@." (String.join "." fullp) x;
+
+                      if not (cond (fullp, x)) then
+                        widen subctxt (pre :: subnm)
+                      else subnm
+
+                in widen ctxt subnm
+
+          in (shorten [] base nm, x)
+        end
 
     else
       let (nm, x) = P.toqsymbol p in
@@ -342,9 +379,11 @@ module PPEnv = struct
           | _ -> EcIdent.name x
 
   let tyvar (ppe : t) x =
-    match Mid.find_opt x ppe.ppe_locals with
-    | None   -> EcIdent.tostring x
-    | Some x -> x
+    if ppe.ppe_debug then EcIdent.tostring x else
+
+      match Mid.find_opt x ppe.ppe_locals with
+      | None   -> EcIdent.tostring x
+      | Some x -> x
 
   exception FoundUnivarSym of symbol
 
@@ -622,6 +661,12 @@ let maybe_paren (onm, (outer, side)) (inm, inner) pp =
           fun fmt x ->
             Format.fprintf fmt "(%a)%%%s" pp x (String.concat "." inm)
 
+let maybe_scope onm inm pp =
+  if inm <> [] && inm <> onm then
+    let inm = if inm = [EcCoreLib.i_top] then ["top"] else inm in
+    fun fmt x -> Format.fprintf fmt "%a%%%s" pp x (String.concat "." inm)
+  else pp
+
 let maybe_paren_nosc outer inner pp =
   maybe_paren ([], outer) ([], inner) pp
 
@@ -874,8 +919,6 @@ let pp_opapp
   let (nm, opname) =
     PPEnv.op_symb ppe op (Some (pred, tvi, List.map t_ty es)) in
 
-  let inm = if nm = [] then fst outer else nm in
-
   let pp_tuple_sub ppe prec fmt e =
     match is_tuple e with
     | None    -> pp_sub ppe prec fmt e
@@ -893,31 +936,31 @@ let pp_opapp
         | x, [e] when x = EcCoreLib.s_abs ->
             let pp fmt =
               Format.fprintf fmt "`|%a|"
-                (pp_sub ppe (inm, (min_op_prec, `NonAssoc))) e
+                (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e
             in
               (pp, e_app_prio)
 
         | x, [e1; e2] when x = EcCoreLib.s_get ->
             let pp fmt =
               Format.fprintf fmt "@[%a.[%a]@]"
-                (pp_sub       ppe (inm, (e_get_prio , `Left    ))) e1
-                (pp_tuple_sub ppe (inm, (min_op_prec, `NonAssoc))) e2
+                (pp_sub       ppe (fst outer, (e_get_prio , `Left    ))) e1
+                (pp_tuple_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e2
             in
               (pp, e_get_prio)
 
         | x, [e1; e2; e3] when x = EcCoreLib.s_set ->
             let pp fmt =
               Format.fprintf fmt "@[<hov 2>%a.[%a <-@ %a]@]"
-                (pp_sub       ppe (inm, (e_get_prio , `Left    ))) e1
-                (pp_tuple_sub ppe (inm, (min_op_prec, `NonAssoc))) e2
-                (pp_sub       ppe (inm, (min_op_prec, `NonAssoc))) e3
+                (pp_sub       ppe (fst outer, (e_get_prio , `Left    ))) e1
+                (pp_tuple_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e2
+                (pp_sub       ppe (fst outer, (min_op_prec, `NonAssoc))) e3
             in
               (pp, e_get_prio)
 
         | _ ->
             raise E.PrintAsPlain
       in
-        maybe_paren outer (inm, prio) (fun fmt () -> pp fmt) fmt
+        maybe_paren outer (fst outer, prio) (fun fmt () -> pp fmt) fmt
 
     with E.PrintAsPlain ->
       fun () ->
@@ -927,8 +970,8 @@ let pp_opapp
 
         | _  ->
             let pp_subs = ((fun _ _ -> pp_opname), pp_sub) in
-            let pp fmt () = pp_app ppe pp_subs outer fmt (([], opname), es) in
-            maybe_paren outer (inm, max_op_prec) pp fmt ()
+            let pp fmt () = pp_app ppe pp_subs outer fmt ((nm, opname), es) in
+            maybe_paren outer ([], max_op_prec) pp fmt ()
 
   and try_pp_as_uniop () =
     match es with
@@ -944,9 +987,9 @@ let pp_opapp
           let pp fmt =
             Format.fprintf fmt "@[%s%s%a@]" opname
               (if is_trm e then "" else " ")
-              (pp_sub ppe (inm, (opprio, `NonAssoc))) e in
+              (pp_sub ppe (fst outer, (opprio, `NonAssoc))) e in
           let pp fmt =
-            maybe_paren outer (inm, opprio) (fun fmt () -> pp fmt) fmt
+            maybe_paren outer (fst outer, opprio) (fun fmt () -> pp fmt) fmt
           in
             Some pp
     end
@@ -954,6 +997,8 @@ let pp_opapp
     | _ -> None
 
   and try_pp_as_binop () =
+    let inm = if nm = [] then fst outer else nm in
+
     match es with
     | [e1; e2] when opname = EcCoreLib.s_cons -> begin
       let module E = struct exception NotAListLiteral end in
@@ -974,18 +1019,17 @@ let pp_opapp
 
           in e1 :: (destruct e2) in
 
-        let pp_sub = pp_sub ppe (inm, (min_op_prec, `NonAssoc)) in
+        let pp_sub = pp_sub ppe ([], (min_op_prec, `NonAssoc)) in
         let pp fmt = fun () ->
-          Format.fprintf fmt "[@[<hov 2>%a@]]"
-            (pp_list ";@ " pp_sub) aslist
+          Format.fprintf fmt "[@[<hov 2>%a@]]" (pp_list ";@ " pp_sub) aslist
         in
           Some pp
 
       with E.NotAListLiteral ->
         let pp fmt =
           Format.fprintf fmt "%a :: %a"
-            (pp_sub ppe (inm, (e_bin_prio_rop4, `Left ))) e1
-            (pp_sub ppe (inm, (e_bin_prio_rop4, `Right))) e2 in
+            (pp_sub ppe (fst outer, (e_bin_prio_rop4, `Left ))) e1
+            (pp_sub ppe (fst outer, (e_bin_prio_rop4, `Right))) e2 in
         let pp fmt =
           maybe_paren outer (inm, e_bin_prio_rop4) (fun fmt () -> pp fmt) fmt in
 
@@ -998,9 +1042,9 @@ let pp_opapp
       | Some opprio ->
           let pp fmt =
             Format.fprintf fmt "@[%a %s@ %a@]"
-              (pp_sub ppe (inm, (opprio, `Left))) e1
+              (pp_sub ppe (fst outer, (opprio, `Left))) e1
               opname
-              (pp_sub ppe (inm, (opprio, `Right))) e2 in
+              (pp_sub ppe (fst outer, (opprio, `Right))) e2 in
           let pp fmt =
             maybe_paren outer (inm, opprio) (fun fmt () -> pp fmt) fmt
           in
@@ -1010,32 +1054,33 @@ let pp_opapp
     | _ -> None
 
   and try_pp_special () =
-    let qs = P.toqsymbol op in
+    let qs  = P.toqsymbol op in
+    let inm = if nm = [] then fst outer else nm in
+
     match es with
     | [] when qs = EcCoreLib.s_dbool ->
-        Some (fun fmt () -> pp_string fmt "{0,1}")
+        let pp fmt () = pp_string fmt "{0,1}" in Some pp
 
     | [e] when qs = EcCoreLib.s_dbitstring ->
         let pp fmt () =
           Format.fprintf fmt "{0,1}~%a"
             (pp_sub ppe (fst outer, (max_op_prec, `NonAssoc))) e
-        in
-          Some pp
+        in Some pp
 
     | [e] when qs = EcCoreLib.s_real_of_int ->
         let pp fmt () =
           Format.fprintf fmt "%a%%r"
             (pp_sub ppe (fst outer, (e_uni_prio_rint, `NonAssoc))) e
-        in
-          Some pp
+        in Some pp
 
     | [e1; e2] when qs = EcCoreLib.s_dinter ->
         let pp fmt () =
           Format.fprintf fmt "[%a..%a]"
             (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e1
-            (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e2
-        in
-          Some pp
+            (pp_sub ppe (fst outer, (min_op_prec, `NonAssoc))) e2 in
+        let pp fmt =
+          maybe_scope (fst outer) inm (fun fmt () -> pp fmt ()) fmt
+        in Some pp
 
     | _ -> None
 
@@ -1437,34 +1482,46 @@ and try_pp_form_eqveq (ppe : PPEnv.t) _outer fmt f =
 and try_pp_chained_orderings (ppe : PPEnv.t) outer fmt f =
   let isordering op =
     match EcIo.lex_single_token (EcPath.basename op) with
-    | Some (EP.LE | EP.LT | EP.GE | EP.GT) -> true
-    | _ -> false
+    | Some (EP.LE | EP.LT | EP.GE | EP.GT) ->
+        Some op
+
+    | _ when EcPath.p_equal op EcCoreLib.CI_Int.p_int_le ->
+        Some (EcPath.fromqsymbol ([EcCoreLib.i_top; "Int"], "<="))
+
+    | _ when EcPath.p_equal op EcCoreLib.CI_Int.p_int_lt ->
+        Some (EcPath.fromqsymbol ([EcCoreLib.i_top; "Int"], "<"))
+
+    | _ when EcPath.p_equal op EcCoreLib.CI_Real.p_real_le ->
+        Some (EcPath.fromqsymbol ([EcCoreLib.i_top; "Real"], "<="))
+
+    | _ when EcPath.p_equal op EcCoreLib.CI_Real.p_real_lt ->
+        Some (EcPath.fromqsymbol ([EcCoreLib.i_top; "Real"], "<"))
+
+    | _ -> None
   in
 
   let rec collect acc le f =
     match sform_of_form f with
     | SFand (`Asym, (f1, f2)) -> begin
         match f2.f_node with
-        | Fapp ({ f_node = Fop (op, tvi) }, [i1; i2])
-            when isordering op
-          -> begin
-            match le with
-            | None ->
-                collect ((op, tvi, i2) :: acc) (Some i1) f1
-            | Some le when EcFol.f_equal i2 le ->
-                collect ((op, tvi, i2) :: acc) (Some i1) f1
+        | Fapp ({ f_node = Fop (op, tvi) }, [i1; i2]) -> begin
+            match le, isordering op with
+            | None, Some ppop ->
+                collect ((ppop, tvi, i2) :: acc) (Some i1) f1
+            | Some le, Some ppop  when EcFol.f_equal i2 le ->
+                collect ((ppop, tvi, i2) :: acc) (Some i1) f1
             | _ -> None
           end
 
         | _ -> None
     end
 
-    | SFop ((op, tvi), [i1; i2]) when isordering op -> begin
-        match le with
-        | None ->
-            Some (i1, ((op, tvi, i2) :: acc))
-        | Some le when EcFol.f_equal i2 le ->
-            Some (i1, ((op, tvi, i2) :: acc))
+    | SFop ((op, tvi), [i1; i2]) -> begin
+        match le, isordering op with
+        | None, Some ppop ->
+            Some (i1, ((ppop, tvi, i2) :: acc))
+        | Some le, Some ppop when EcFol.f_equal i2 le ->
+            Some (i1, ((ppop, tvi, i2) :: acc))
         | _ -> None
       end
 
@@ -2851,11 +2908,13 @@ let pp_modexp ppe fmt (mp, me) =
   Format.fprintf fmt "%a." (pp_modexp ppe) (mp, me)
 
 let pp_modexp_top ppe fmt (p, me) =
+  let ppe = { ppe with PPEnv.ppe_base = Some p; } in
   let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.me_name)) in
   pp_modexp ppe fmt (mp, me)
 
 let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   let basename = EcPath.basename path in
+  let ppe = { ppe with PPEnv.ppe_base = Some path } in
   let pp_clone fmt desc =
     match desc with
     | EcTheory.CTh_struct _ -> ()

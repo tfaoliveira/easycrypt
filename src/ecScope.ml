@@ -1924,10 +1924,10 @@ module Theory = struct
   exception TopScope
 
   (* ------------------------------------------------------------------ *)
-  let bind (scope : scope) (x, (cth, mode)) =
+  let bind (scope : scope) (x, ppenv, (cth, mode)) =
     assert (scope.sc_pr_uc = None);
     let scope =
-      { scope with sc_env = EcEnv.Theory.bind ~mode x cth scope.sc_env; }
+      { scope with sc_env = EcEnv.Theory.bind ~mode x (cth, ppenv) scope.sc_env; }
     in maybe_add_to_section scope (EcTheory.CTh_theory (x, (cth, mode)))
 
   (* ------------------------------------------------------------------ *)
@@ -2028,11 +2028,12 @@ module Theory = struct
 
     assert (scope.sc_pr_uc = None);
 
+    let ppenv = scope.sc_env in
     let cth = exit_r ~pempty (add_clears clears scope) in
     let ((cth, required), section, (name, mode), scope) = cth in
     let scope = List.fold_right require_loaded required scope in
     let scope = cth |> ofold (fun cth scope ->
-    let scope = bind scope (name, (cth, mode)) in
+    let scope = bind scope (name, ppenv, (cth, mode)) in
       { scope with sc_env =
           add_restr section
             (EcPath.pqname (path scope) name) (cth, mode) scope.sc_env })

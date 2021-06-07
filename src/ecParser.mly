@@ -3490,7 +3490,7 @@ realize:
 (* Printing                                                             *)
 %inline print:
 | opts=print_options? obj=print_obj {
-    (odfl { ppo_shorten = true; } opts, obj)
+    (odfl pprint_option0 opts, obj)
   }
 
 print_obj:
@@ -3512,7 +3512,8 @@ print_obj:
 print_option:
 | x=ident {
     match unloc x with
-    | "full" -> `Full
+    | "full"  -> `Full
+    | "debug" -> `Debug
     | _ ->
         parse_error x.pl_loc
           (Some ("invalid option: " ^ (unloc x)))
@@ -3520,7 +3521,8 @@ print_option:
 
 print_options:
 | LBRACKET xs=print_option+ RBRACKET {
-    { ppo_shorten = not (List.mem `Full xs); }
+    { ppo_shorten = not (List.mem `Full xs);
+      ppo_debug   = List.mem `Debug xs; }
   }
 
 smt_info:

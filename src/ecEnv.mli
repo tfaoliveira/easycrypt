@@ -259,7 +259,7 @@ module Theory : sig
   val lookup_path : ?mode:mode -> qsymbol -> env -> path
 
   val add  : path -> env -> env
-  val bind : ?import:import -> ?mode:thmode -> symbol -> ctheory -> env -> env
+  val bind : ?import:import -> ?mode:thmode -> symbol -> ctheory * env -> env -> env
 
   val require : ?mode:thmode -> symbol -> ctheory -> env -> env
   val import  : path -> env -> env

@@ -20,7 +20,7 @@ open EcTheory
 module PPEnv : sig
   type t
 
-  val ofenv : ?shorten:bool -> EcEnv.env -> t
+  val ofenv : ?shorten:bool -> ?debug:bool -> EcEnv.env -> t
   val add_locals : ?force:bool -> t -> EcIdent.t list -> t
 end
 

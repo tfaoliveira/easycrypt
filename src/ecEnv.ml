@@ -99,21 +99,6 @@ type obj = [
   | `Theory   of (ctheory * thmode)
 ]
 
-type mc = {
-  mc_parameters : ((EcIdent.t * module_type) list) option;
-  mc_variables  : (ipath * varbind) MMsym.t;
-  mc_functions  : (ipath * function_) MMsym.t;
-  mc_modules    : (ipath * module_expr) MMsym.t;
-  mc_modsigs    : (ipath * module_sig) MMsym.t;
-  mc_tydecls    : (ipath * EcDecl.tydecl) MMsym.t;
-  mc_operators  : (ipath * EcDecl.operator) MMsym.t;
-  mc_axioms     : (ipath * EcDecl.axiom) MMsym.t;
-  mc_theories   : (ipath * (ctheory * thmode)) MMsym.t;
-  mc_typeclasses: (ipath * typeclass) MMsym.t;
-  mc_rwbase     : (ipath * path) MMsym.t;
-  mc_components : ipath MMsym.t;
-}
-
 type use = {
   us_pv : ty Mx.t;
   us_gl : Sid.t;
@@ -161,6 +146,21 @@ type preenv = {
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : ctheory_item list;     (* in reverse order *)
   env_norm     : env_norm ref;
+}
+
+and mc = {
+  mc_parameters : ((EcIdent.t * module_type) list) option;
+  mc_variables  : (ipath * varbind) MMsym.t;
+  mc_functions  : (ipath * function_) MMsym.t;
+  mc_modules    : (ipath * module_expr) MMsym.t;
+  mc_modsigs    : (ipath * module_sig) MMsym.t;
+  mc_tydecls    : (ipath * EcDecl.tydecl) MMsym.t;
+  mc_operators  : (ipath * EcDecl.operator) MMsym.t;
+  mc_axioms     : (ipath * EcDecl.axiom) MMsym.t;
+  mc_theories   : (ipath * (ctheory * thmode)) MMsym.t;
+  mc_typeclasses: (ipath * typeclass) MMsym.t;
+  mc_rwbase     : (ipath * path) MMsym.t;
+  mc_components : ipath MMsym.t;
 }
 
 and escope = {
@@ -1100,7 +1100,7 @@ module MC = struct
             (IPPath (root env))
             (Mip.add (IPPath path) mc env.env_comps); }
 
-  and bind_theory x th env =
+  and bind_theory x (ppenv, th) env =
     match mc_of_ctheory env x th with
     | None -> bind _up_theory x th env
     | Some ((_, mc), submcs) ->
@@ -2958,10 +2958,10 @@ module Theory = struct
     in bind_base_cth for1
 
   (* ------------------------------------------------------------------ *)
-  let bind ?(import = import0) ?(mode = `Concrete) name cth env =
+  let bind ?(import = import0) ?(mode = `Concrete) name (cth, ppenv) env =
     let th = (cth, mode) in
 
-    let env = MC.bind_theory name th env in
+    let env = MC.bind_theory name (ppenv, th) env in
     let env = { env with env_item =
       mk_citem import (CTh_theory (name, th)) :: env.env_item } in
 
