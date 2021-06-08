@@ -6,12 +6,23 @@
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
-require import AllCore List Distr DBool DInterval Hybrid.
-require (*--*) LorR.
+require import AllCore List Distr DBool DInterval.
+require (*--*) LorR Hybrid.
 
 theory CCA.
 
 type pkey, skey, plaintext, ciphertext.
+
+op Ndec : int.
+op Nenc : { int | 0 < Nenc } as Nenc_gt0.
+
+clone import Hybrid as Hyb with
+  type input <- plaintext * plaintext,
+  type output <- ciphertext,
+  type inleaks <- unit,
+  type outleaks <- unit,
+  type outputA <- bool,
+  op q <- Nenc.
 
 module type Scheme = {
   proc kg() : pkey * skey
@@ -126,9 +137,6 @@ module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
 module CCA_L (S : Scheme, A : Adversary) = CCA_(S, A, L).
 module CCA_R (S : Scheme, A : Adversary) = CCA_(S, A, R).
 
-op Ndec : int.
-op Nenc : int.
-
 module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
   var i,iS : int
   var pk : pkey
@@ -171,8 +179,8 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
 
 section.
 
-declare module S : Scheme {Wrap, LorR, B}.
-declare module A : Adversary {Wrap, S, LorR, B}.
+declare module S : Scheme {Wrap, LorR, B, Count, HybOrcl}.
+declare module A : Adversary {Wrap, S, LorR, B, Count, HybOrcl}.
 
 axiom A_ll (O <: CCA_Oracle {A}) : 
   islossless O.l_or_r => islossless O.dec => islossless A(O).main.
@@ -273,15 +281,103 @@ proof.
     by auto.
 qed.
 
-lemma CCA_1n &m :
-    `| Pr[ CCA_L(S,A).main() @ &m : res ] -
-       Pr[ CCA_R(S,A).main() @ &m : res ] |
-    <= 
-    Nenc%r
-    *
-    `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] -
-       Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
+local module Ob : Orclb = {
+  var pk : pkey (* where to get the pk *)
+
+  proc leaks(il : unit) : unit = {}
+  
+  proc orclL(m0 m1 : plaintext) : ciphertext = { 
+    var c;
+
+    c <@ S.enc(pk,m0);
+    return c;
+  }
+  
+  proc orclR(m0 m1 : plaintext) : ciphertext = {
+    var c;
+
+    c <@ S.enc(pk,m1);
+    return c;
+  }
+}.
+
+local lemma Obl_ll : islossless Ob.leaks. admitted.
+local lemma orclL_ll : islossless Ob.orclL. admitted.
+local lemma orclR_ll : islossless Ob.orclR. admitted.
+
+(* : AdvOrclb *)
+local module A' (Ob : Orclb) (O : Orcl) = { 
+  var sk : skey
+  var pk : pkey
+  var cs : ciphertext list
+  var ndec : int
+
+  module O' : CCA_Oracle = {
+    proc l_or_r (m0 : plaintext, m1 : plaintext) : ciphertext = {
+      var c;
+
+      c <@ O.orcl(m0,m1);
+      cs <- c::cs;
+      return c;
+    }
+  
+    proc dec(c : ciphertext) : plaintext option = {
+      var m;
+    
+      m <- witness;
+      if (! c \in cs) {
+        m <- S.dec(sk, c);
+        ndec <- ndec + 1;
+      }
+      return m;
+    } 
+  }
+
+  proc main() : bool = {
+    var b';
+
+    (pk,sk) <@ S.kg();
+    ndec <- 0;
+    cs <- [];
+    
+    
+    b' <@ A(O').main(pk);
+    return b';
+  } 
+}.
+
+local lemma A'_ll (Ob <: Orclb{A'}) (LR <: Orcl{A'}) : 
+    islossless LR.orcl =>
+    islossless Ob.leaks => islossless Ob.orclL => islossless Ob.orclR => islossless A'(Ob, LR).main.
+admitted.
+
+local lemma CCA_Ln &m : 
+   Pr[ CCA_L(S,A).main() @ &m : res ] = Pr[ Ln(Ob,A').main() @ &m : res /\ Count.c <= Nenc].
 proof.
+  byequiv => //; proc. inline Count.init Wrap(S,L).init L.init. 
+  inline A'(Ob, OrclCount(Hyb.L(Ob))).main. wp.
+  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,A')).
+  - proc; auto. inline *. wp. call (: true). auto => />. (* how to ensure A'.pk{2} = Wrap.pk{2} *) admit.
+  - proc. sp; auto. if => //. wp. by call(:true); auto => />.
+  - auto; call(:true); auto => />. (* where does this come from *)
+admitted.
+
+local lemma CCA_Rn &m : 
+   Pr[ CCA_R(S,A).main() @ &m : res ] = Pr[ Rn(Ob,A').main() @ &m : res /\ Count.c <= Nenc].
+admitted.
+
+lemma CCA_1n &m :
+    `| Pr[ CCA_L(S,A).main() @ &m : res ] - Pr[ CCA_R(S,A).main() @ &m : res ] |
+    <= 
+    Nenc%r * `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
+proof.
+suff :  `| (Pr[ CCA_L(S,A).main() @ &m : res ] - Pr[ CCA_R(S,A).main() @ &m : res]) / Nenc%r |
+    <=  `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
+admit.
+rewrite CCA_Ln CCA_Rn. 
+(* how to ensure this? *)
+have H := Hybrid Ob A' Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r).
+rewrite /= in H; rewrite -H; clear H.
 admitted.
 
 end section.
