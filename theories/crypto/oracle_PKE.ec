@@ -9,6 +9,20 @@
 require import AllCore List Distr DBool DInterval.
 require (*--*) LorR Hybrid.
 
+type ('a, 'b) sum = [Left of 'a | Right of 'b].
+
+op is_left ['a 'b] (s : ('a,'b) sum) = 
+  with s = Left _ => true
+  with s = Right _ => false.
+
+op left ['a 'b] (s : ('a,'b) sum) = 
+  with s = Left x => x
+  with s = Right _ => witness.
+
+op right ['a 'b] (s : ('a,'b) sum) = 
+  with s = Right x => x
+  with s = Left _ => witness.
+
 theory CCA.
 
 type pkey, skey, plaintext, ciphertext.
@@ -19,8 +33,8 @@ op Nenc : { int | 0 < Nenc } as Nenc_gt0.
 clone import Hybrid as Hyb with
   type input <- plaintext * plaintext,
   type output <- ciphertext,
-  type inleaks <- unit,
-  type outleaks <- unit,
+  type inleaks = (unit,ciphertext) sum,
+  type outleaks = (pkey, plaintext option) sum,
   type outputA <- bool,
   op q <- Nenc.
 
@@ -282,14 +296,37 @@ proof.
 qed.
 
 local module Ob : Orclb = {
-  var pk : pkey (* where to get the pk *)
+  var sk : skey
+  var pk : pkey
+  var cs : ciphertext list
+  var ndec : int
 
-  proc leaks (il : unit) : unit = {}
+  proc leaks (il : inleaks) : outleaks = {
+    var ol, m; 
+
+    if (is_left il) {
+        (pk, sk) <@ S.kg();
+        ndec <- 0;
+        cs <- [];
+          ol <- Left pk;
+
+    }
+    else {
+      m <- witness;
+      if (! right il \in cs) {
+        m <- S.dec(sk, right il);
+        ndec <- ndec + 1;
+      }
+      ol <- Right m;
+    }
+    return ol;
+  }
   
   proc orclL (m0 m1 : plaintext) : ciphertext = { 
     var c;
 
     c <@ S.enc(pk, m0);
+    cs <- c::cs;
     return c;
   }
   
@@ -297,6 +334,7 @@ local module Ob : Orclb = {
     var c;
 
     c <@ S.enc(pk, m1);
+    cs <- c::cs;
     return c;
   }
 }.
@@ -307,40 +345,21 @@ local lemma orclR_ll : islossless Ob.orclR. admitted.
 
 (* : AdvOrclb *)
 local module A' (Ob : Orclb) (O : Orcl) = { 
-  var sk : skey
-  var pk : pkey
-  var cs : ciphertext list
-  var ndec : int
-
   module O' : CCA_Oracle = {
-    proc l_or_r (m0 : plaintext, m1 : plaintext) : ciphertext = {
-      var c;
-
-      c <@ O.orcl(m0, m1);
-      cs <- c::cs;
-      return c;
-    }
-  
+    proc l_or_r = O.orcl
     proc dec(c : ciphertext) : plaintext option = {
-      var m;
-    
-      m <- witness;
-      if (! c \in cs) {
-        m <- S.dec(sk, c);
-        ndec <- ndec + 1;
-      }
-      return m;
+      var m; 
+
+      m <@ Ob.leaks(Right c);
+      return right m;
     } 
   }
 
   proc main() : bool = {
-    var b';
+    var b',ol,pk;
 
-    (pk, sk) <@ S.kg();
-    ndec <- 0;
-    cs <- [];
-    
-    
+    ol <@ Ob.leaks(Left());
+    pk <- left ol;
     b' <@ A(O').main(pk);
     return b';
   } 
@@ -352,32 +371,55 @@ local lemma A'_ll (Ob <: Orclb{A'}) (LR <: Orcl{A'}) :
 admitted.
 
 local lemma CCA_Ln &m : 
-   Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Ln(Ob, A').main() @ &m : res /\ Count.c <= Nenc].
+   Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Ln(Ob, A').main() @ &m : res ].
 proof.
   byequiv => //; proc. inline Count.init Wrap(S,L).init L.init. 
   inline A'(Ob, OrclCount(Hyb.L(Ob))).main. wp.
-  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,A')).
-  - proc; auto. inline *. wp. call (: true). auto => />. (* how to ensure A'.pk{2} = Wrap.pk{2} *) admit.
-  - proc. sp; auto. if => //. wp. by call(:true); auto => />.
-  - auto; call(:true); auto => />. (* where does this come from *)
-admitted.
+  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
+  - proc; auto. inline *. wp. call (: true). auto => /> ?. by ring.
+  - proc; inline *; sp; auto. rcondf{2} 1; 1: by move => &m'; skip => />.
+    sp. if{1}.
+    - rcondt{2} 1; 1: by move=> &m'; skip => />.
+      by wp; call (: true); auto => />.
+    - rcondf{2} 1; 1: by move=> &m'; skip => />.
+      by auto => />.
+  - inline *; sp. rcondt{2} 1; 1: by move=> &m'; skip => />.
+    by wp; call (: true); auto => />.
+qed.
 
 local lemma CCA_Rn &m : 
-   Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Rn(Ob, A').main() @ &m : res /\ Count.c <= Nenc].
-admitted.
+   Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Rn(Ob, A').main() @ &m : res].
+proof.
+  byequiv => //; proc. inline Count.init Wrap(S,R).init R.init. 
+  inline A'(Ob, OrclCount(Hyb.R(Ob))).main. wp.
+  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
+  - proc; auto. inline *. wp. call (: true). auto => /> ?. by ring.
+  - proc; inline *; sp; auto. rcondf{2} 1; 1: by move => &m'; skip => />.
+    sp. if{1}.
+    - rcondt{2} 1; 1: by move=> &m'; skip => />.
+      by wp; call (: true); auto => />.
+    - rcondf{2} 1; 1: by move=> &m'; skip => />.
+      by auto => />.
+  - inline *; sp. rcondt{2} 1; 1: by move=> &m'; skip => />.
+    by wp; call (: true); auto => />.
+qed.
 
+import StdOrder.RealOrder.
+
+(* maybe add the count condition for B *)
 lemma CCA_1n &m :
     `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |
     <= 
     Nenc%r * `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
 proof.
-suff :  `| (Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res]) / Nenc%r |
-    <=  `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
-admit.
+rewrite -ler_pdivr_mull; 1: smt(Nenc_gt0).
+have -> : inv Nenc%r * `|Pr[CCA_L(S, A).main() @ &m : res] - Pr[CCA_R(S, A).main() @ &m : res]| = 
+          `| (Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res]) / Nenc%r |.
+smt(Nenc_gt0).
 rewrite CCA_Ln CCA_Rn. 
-(* how to ensure this? *)
-have H := Hybrid Ob A' Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r).
-rewrite /= in H; rewrite -H; clear H.
+have /= H := Hybrid_restr Ob A' _ Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r). 
+  admit.
+rewrite -H; clear H.
 admitted.
 
 end section.
