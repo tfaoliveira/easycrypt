@@ -25,34 +25,34 @@ clone import Hybrid as Hyb with
   op q <- Nenc.
 
 module type Scheme = {
-  proc kg() : pkey * skey
-  proc enc(pk:pkey, m:plaintext)  : ciphertext
-  proc dec(sk:skey, c:ciphertext) : plaintext option
+  proc kg () : pkey * skey
+  proc enc (pk : pkey, m : plaintext)  : ciphertext
+  proc dec (sk : skey, c : ciphertext) : plaintext option
 }.
 
 module type CCA_Oracle = {
   proc l_or_r (m0 m1 : plaintext) : ciphertext
-  proc dec (c:ciphertext) : plaintext option
+  proc dec (c : ciphertext) : plaintext option
 }.
 
 module type CCA_Oracle_i = {
   include CCA_Oracle
-  proc init() : unit
+  proc init () : unit
 }.
 
 module type Adversary (O : CCA_Oracle) = {
-  proc main(pk : pkey) : bool
+  proc main (pk : pkey) : bool
 }.
 
 module type LR = { 
-  proc init() : unit
+  proc init () : unit
   proc l_or_r (m0 m1 : plaintext) : plaintext
 }.
 
 module LorR : LR = {
   var b : bool
 
-  proc init() = { 
+  proc init () = { 
     b <$ {0,1};
   }
 
@@ -62,7 +62,7 @@ module LorR : LR = {
 }.
 
 module L : LR = {
-  proc init() = { } 
+  proc init () = { } 
 
   proc l_or_r (m0 m1 : plaintext) = {
     return m0;
@@ -70,7 +70,7 @@ module L : LR = {
 }.
 
 module R : LR = {
-  proc init() = { } 
+  proc init () = { } 
 
   proc l_or_r (m0 m1 : plaintext) = {
     return m1;
@@ -85,9 +85,9 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
   var cs : ciphertext list
   var ndec : int
 
-  proc init() = {
+  proc init () = {
     LR.init();
-    (pk,sk) <@ S.kg();
+    (pk, sk) <@ S.kg();
     cs <- [];
     ndec <- 0;
   }
@@ -97,7 +97,7 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
 
     m <@ LR.l_or_r(m0, m1);
     c <@ S.enc(pk, m);
-    cs <- c::cs;
+    cs <- c :: cs;
     return c;
   }
   
@@ -114,7 +114,7 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
 }.
 
 module CCA (S : Scheme, A : Adversary) = {
-  proc main() : bool = {
+  proc main () : bool = {
     var b';
 
     Wrap(S,LorR).init();
@@ -128,7 +128,7 @@ module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
     var b';
 
     Wrap(S,LR).init();
-    b' <@ A(Wrap(S,LR)).main(Wrap.pk);
+    b' <@ A(Wrap(S, LR)).main(Wrap.pk);
 
     return b';
   }
@@ -138,25 +138,25 @@ module CCA_L (S : Scheme, A : Adversary) = CCA_(S, A, L).
 module CCA_R (S : Scheme, A : Adversary) = CCA_(S, A, R).
 
 module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
-  var i,iS : int
+  var i, iS : int
   var pk : pkey
   var cs : ciphertext list
   
   module O' : CCA_Oracle = {
-    proc l_or_r(m0 m1 : plaintext) = {
+    proc l_or_r (m0 m1 : plaintext) = {
       var c;
 
-      if (i < iS) c <- S.enc(pk,m0);
+      if (i < iS) c <- S.enc(pk, m0);
       else { 
-        if (i = iS) c <- O.l_or_r(m0,m1);
-        else c <- S.enc(pk,m1);
+        if (i = iS) c <- O.l_or_r(m0, m1);
+        else c <- S.enc(pk, m1);
       }
-      i <- i+1;
-      cs <- c::cs;
+      i <- i + 1;
+      cs <- c :: cs;
       return c;
     }
 
-    proc dec(c:ciphertext) : plaintext option = {
+    proc dec (c : ciphertext) : plaintext option = {
       var m;
 
       m <- witness;
@@ -165,7 +165,7 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
     }
   }
 
-  proc main(pk0 : pkey) : bool = {
+  proc main (pk0 : pkey) : bool = {
     var b';
 
     i <- 0;
@@ -194,13 +194,13 @@ lemma CCA_LR &m :
   `| Pr[ CCA(S, A).main() @ &m : res] - 1.0/2.0 | = 
   1%r / 2%r * `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |.
 proof.
-  rewrite (Top.LorR.pr_AdvLR_AdvRndLR (CCA_L(S,A)) (CCA_R(S,A)) &m).
+  rewrite (Top.LorR.pr_AdvLR_AdvRndLR (CCA_L(S, A)) (CCA_R(S, A)) &m).
     byphoare => //. 
     islossless; last by apply: kg_ll.
     apply: (A_ll(Wrap(S, R))); first by islossless; apply: enc_ll. 
     islossless; apply: dec_ll.
   suff <- : Pr[CCA(S, A).main() @ &m : res] = 
-            Pr[Top.LorR.RandomLR(CCA_L(S,A),CCA_R(S,A)).main() @ &m : res] by smt().
+            Pr[Top.LorR.RandomLR(CCA_L(S, A),CCA_R(S, A)).main() @ &m : res] by smt().
   byequiv=> //. proc; inline *.
   seq 1 1 : (={glob A,glob S} /\ LorR.b{1} = b{2}); first by rnd.
   if{2}; wp. 
@@ -225,12 +225,12 @@ local module LRB (O : LR) : LR = {
   
   proc init = O.init
 
-  proc l_or_r(m0 m1 : plaintext) = {
+  proc l_or_r (m0 m1 : plaintext) = {
     var m;
 
     if (i < iS) m <- m0;
     else { 
-      if (i = iS) m <- O.l_or_r(m0,m1);
+      if (i = iS) m <- O.l_or_r(m0, m1);
       else m <- m1;
     }
     i <- i+1;
@@ -284,19 +284,19 @@ qed.
 local module Ob : Orclb = {
   var pk : pkey (* where to get the pk *)
 
-  proc leaks(il : unit) : unit = {}
+  proc leaks (il : unit) : unit = {}
   
-  proc orclL(m0 m1 : plaintext) : ciphertext = { 
+  proc orclL (m0 m1 : plaintext) : ciphertext = { 
     var c;
 
-    c <@ S.enc(pk,m0);
+    c <@ S.enc(pk, m0);
     return c;
   }
   
-  proc orclR(m0 m1 : plaintext) : ciphertext = {
+  proc orclR (m0 m1 : plaintext) : ciphertext = {
     var c;
 
-    c <@ S.enc(pk,m1);
+    c <@ S.enc(pk, m1);
     return c;
   }
 }.
@@ -316,7 +316,7 @@ local module A' (Ob : Orclb) (O : Orcl) = {
     proc l_or_r (m0 : plaintext, m1 : plaintext) : ciphertext = {
       var c;
 
-      c <@ O.orcl(m0,m1);
+      c <@ O.orcl(m0, m1);
       cs <- c::cs;
       return c;
     }
@@ -336,7 +336,7 @@ local module A' (Ob : Orclb) (O : Orcl) = {
   proc main() : bool = {
     var b';
 
-    (pk,sk) <@ S.kg();
+    (pk, sk) <@ S.kg();
     ndec <- 0;
     cs <- [];
     
@@ -352,7 +352,7 @@ local lemma A'_ll (Ob <: Orclb{A'}) (LR <: Orcl{A'}) :
 admitted.
 
 local lemma CCA_Ln &m : 
-   Pr[ CCA_L(S,A).main() @ &m : res ] = Pr[ Ln(Ob,A').main() @ &m : res /\ Count.c <= Nenc].
+   Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Ln(Ob, A').main() @ &m : res /\ Count.c <= Nenc].
 proof.
   byequiv => //; proc. inline Count.init Wrap(S,L).init L.init. 
   inline A'(Ob, OrclCount(Hyb.L(Ob))).main. wp.
@@ -363,15 +363,15 @@ proof.
 admitted.
 
 local lemma CCA_Rn &m : 
-   Pr[ CCA_R(S,A).main() @ &m : res ] = Pr[ Rn(Ob,A').main() @ &m : res /\ Count.c <= Nenc].
+   Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Rn(Ob, A').main() @ &m : res /\ Count.c <= Nenc].
 admitted.
 
 lemma CCA_1n &m :
-    `| Pr[ CCA_L(S,A).main() @ &m : res ] - Pr[ CCA_R(S,A).main() @ &m : res ] |
+    `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |
     <= 
     Nenc%r * `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
 proof.
-suff :  `| (Pr[ CCA_L(S,A).main() @ &m : res ] - Pr[ CCA_R(S,A).main() @ &m : res]) / Nenc%r |
+suff :  `| (Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res]) / Nenc%r |
     <=  `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
 admit.
 rewrite CCA_Ln CCA_Rn. 
