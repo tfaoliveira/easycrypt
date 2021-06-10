@@ -151,6 +151,7 @@ module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
 module CCA_L (S : Scheme, A : Adversary) = CCA_(S, A, L).
 module CCA_R (S : Scheme, A : Adversary) = CCA_(S, A, R).
 
+(* CCA Adversary that makes only one query to the *)
 module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
   var i, iS : int
   var pk : pkey
@@ -160,7 +161,7 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
     proc l_or_r (m0 m1 : plaintext) = {
       var c;
 
-      if (i < iS) c <- S.enc(pk, m0);
+      if (iS < i) c <- S.enc(pk, m0);
       else { 
         if (i = iS) c <- O.l_or_r(m0, m1);
         else c <- S.enc(pk, m1);
@@ -242,7 +243,7 @@ local module LRB (O : LR) : LR = {
   proc l_or_r (m0 m1 : plaintext) = {
     var m;
 
-    if (i < iS) m <- m0;
+    if (iS < i) m <- m0;
     else { 
       if (i = iS) m <- O.l_or_r(m0, m1);
       else m <- m1;
@@ -420,6 +421,43 @@ rewrite CCA_Ln CCA_Rn.
 have /= H := Hybrid_restr Ob A' _ Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r). 
   admit.
 rewrite -H; clear H.
-admitted.
+have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.L(Ob)).main() @ &m : res].
+  byequiv => //; proc; inline *; auto. 
+  swap{2} 1 5; swap{1} 6 2; sp. 
+  rcondt{2} 1; 1: by move => &m'; skip => />.
+  call (_ : ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
+            B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
+            (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
+  - proc; auto; inline *. if; 1: by move => />.
+    + by auto; call (:true); auto => /> /#.
+    + if; 1: by move => />.
+      * by auto; call(:true); auto => /> /#.
+      * by auto; call(:true); auto => /> /#.
+  - proc; inline *; sp. rcondf{2} 1; 1: by move => &m'; skip => />.
+    sp. if; 1: by move => &m1 &m2 />. 
+    + sp. rcondt{1} 1. move => &m1; skip => /> /#. 
+      by auto; call(:true); skip => />.
+    + by auto; skip => />.
+  by rnd; auto; call(:true); skip => &m1 &m2 />.
+have <- : Pr[CCA_(S, B(S, A), R).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.R(Ob)).main() @ &m : res].
+  byequiv => //; proc; inline *; auto. 
+  swap{2} 1 5; swap{1} 6 2; sp. 
+  rcondt{2} 1; 1: by move => &m'; skip => />.
+  call (_ : ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
+            B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
+            (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
+  - proc; auto; inline *. if; 1: by move => />.
+    + by auto; call (:true); auto => /> /#.
+    + if; 1: by move => />.
+      * by auto; call(:true); auto => /> /#.
+      * by auto; call(:true); auto => /> /#.
+  - proc; inline *; sp. rcondf{2} 1; 1: by move => &m'; skip => />.
+    sp. if; 1: by move => &m1 &m2 />. 
+    + sp. rcondt{1} 1. move => &m1; skip => /> /#. 
+      by auto; call(:true); skip => />.
+    + by auto; skip => />.
+  by rnd; auto; call(:true); skip => &m1 &m2 />.
+smt().
+qed.
 
 end section.
