@@ -33,7 +33,7 @@ op Nenc : { int | 0 < Nenc } as Nenc_gt0.
 clone import Hybrid as Hyb with
   type input <- plaintext * plaintext,
   type output <- ciphertext,
-  type inleaks = (unit,ciphertext) sum,
+  type inleaks = (unit, ciphertext) sum,
   type outleaks = (pkey, plaintext option) sum,
   type outputA <- bool,
   op q <- Nenc.
@@ -115,7 +115,7 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
     return c;
   }
   
-  proc dec (c:ciphertext) : plaintext option = {
+  proc dec (c : ciphertext) : plaintext option = {
     var m;
     
     m <- witness;
@@ -151,7 +151,6 @@ module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
 module CCA_L (S : Scheme, A : Adversary) = CCA_(S, A, L).
 module CCA_R (S : Scheme, A : Adversary) = CCA_(S, A, R).
 
-(* CCA Adversary that makes only one query to the *)
 module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
   var i, iS : int
   var pk : pkey
@@ -219,16 +218,16 @@ proof.
   byequiv=> //. proc; inline *.
   seq 1 1 : (={glob A,glob S} /\ LorR.b{1} = b{2}); first by rnd.
   if{2}; wp. 
-  - call (_ : ={glob S,glob Wrap} /\ LorR.b{1}).
+  - call (: ={glob S,glob Wrap} /\ LorR.b{1}).
     + proc; inline LorR.l_or_r L.l_or_r; auto. 
-      by call (_ : true); auto => />.
+      by call (: true); auto => />.
     + by sim / (LorR.b{1}) : (={res,glob S, glob Wrap}).
-    + by wp; call (_ : true); auto => />.
-  - call (_ : ={glob S,glob Wrap} /\ !LorR.b{1}).
+    + by wp; call (: true); auto => />.
+  - call (: ={glob S,glob Wrap} /\ !LorR.b{1}).
     + proc; inline LorR.l_or_r R.l_or_r; auto. 
-      by call (_ : true); auto => />.
+      by call (: true); auto => />.
     + by sim / (!LorR.b{1}) : (={res,glob S, glob Wrap}).
-    + by wp; call (_ : true); auto => />.
+    + by wp; call (: true); auto => />.
 qed.
 
 axiom A_bound (O <: LR {Wrap, S, A}): 
@@ -263,34 +262,34 @@ proof.
         B.cs{1} = Wrap.cs{2} /\ (forall c, c \in Wrap.cs{1} => c \in Wrap.cs{2}) /\
         Wrap.pk{1} = B.pk{1}) => //.
   - proc; inline *; sp.
-    if => //; first by wp; call (:true); auto => /> /#.
-    if => //; first by do 2!(wp; call (:true)); auto => /> /#.
-    by wp; call (:true); auto => /> /#.
+    if => //; first by wp; call (: true); auto => /> /#.
+    if => //; first by do 2!(wp; call (: true)); auto => /> /#.
+    by wp; call (: true); auto => /> /#.
   - proc; sp; if => //.
   inline *; rcondt{1} ^if; 1: by auto => /> /#.
-  by wp; call(:true); auto.
+  by wp; call(: true); auto.
 qed.
 
-lemma B_bound (O <: LR {Wrap, S, A, B}): 
+lemma B_bound (O <: LR {Wrap, S, A, B}) : 
   hoare[B(S, A, Wrap(S,O)).main : 
     Wrap.ndec = 0 /\ Wrap.cs = [] /\
     Wrap.pk = pk0 ==> Wrap.ndec <= Ndec /\ size Wrap.cs <= 1].
 proof.
-  conseq (_ :
+  conseq (:
     Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = pk0
     ==>
     Wrap.ndec <= Ndec)
-         (_ : Wrap.cs = [] ==> size Wrap.cs <= 1) => //.
+         (: Wrap.cs = [] ==> size Wrap.cs <= 1) => //.
   - proc. 
-    call (_ : size Wrap.cs = b2i (B.iS < B.i)).
+    call (: size Wrap.cs = b2i (B.iS < B.i)).
     + proc; inline *. 
-      if; first by wp; call (:true); skip; smt().
+      if; first by wp; call (: true); skip; smt().
       if; last by wp; call (: true); skip; smt().
       wp; sp; call (: true); call (: true); skip; smt().
     + by conseq />. 
     + auto => />; smt(supp_dinter).
   - proc.
-    call (_ : Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = B.pk /\
+    call (: Wrap.ndec = 0 /\ Wrap.cs = [] /\ Wrap.pk = B.pk /\
               B.cs = Wrap.cs ==> Wrap.ndec <= Ndec).
     conseq (eqv_WrapLRB(O)) (A_bound(<: LRB(O))) => />; 1: smt().
     by auto.
@@ -303,13 +302,13 @@ local module Ob : Orclb = {
   var ndec : int
 
   proc leaks (il : inleaks) : outleaks = {
-    var ol, m; 
+    var ol, m;
 
     if (is_left il) {
         (pk, sk) <@ S.kg();
         ndec <- 0;
         cs <- [];
-          ol <- Left pk;
+        ol <- Left pk;
 
     }
     else {
@@ -327,7 +326,7 @@ local module Ob : Orclb = {
     var c;
 
     c <@ S.enc(pk, m0);
-    cs <- c::cs;
+    cs <- c :: cs;
     return c;
   }
   
@@ -335,19 +334,31 @@ local module Ob : Orclb = {
     var c;
 
     c <@ S.enc(pk, m1);
-    cs <- c::cs;
+    cs <- c :: cs;
     return c;
   }
 }.
 
-local lemma Obl_ll : islossless Ob.leaks. admitted.
-local lemma orclL_ll : islossless Ob.orclL. admitted.
-local lemma orclR_ll : islossless Ob.orclR. admitted.
+local lemma Obl_ll : islossless Ob.leaks.
+proof.
+  islossless; [exact kg_ll|exact dec_ll].
+qed.
+
+local lemma orclL_ll : islossless Ob.orclL.
+proof.
+  islossless; exact enc_ll.
+qed.
+
+local lemma orclR_ll : islossless Ob.orclR.
+proof.
+  islossless; exact enc_ll.
+qed.
 
 (* : AdvOrclb *)
 local module A' (Ob : Orclb) (O : Orcl) = { 
   module O' : CCA_Oracle = {
     proc l_or_r = O.orcl
+
     proc dec(c : ciphertext) : plaintext option = {
       var m; 
 
@@ -357,7 +368,7 @@ local module A' (Ob : Orclb) (O : Orcl) = {
   }
 
   proc main() : bool = {
-    var b',ol,pk;
+    var b', ol, pk;
 
     ol <@ Ob.leaks(Left());
     pk <- left ol;
@@ -367,16 +378,21 @@ local module A' (Ob : Orclb) (O : Orcl) = {
 }.
 
 local lemma A'_ll (Ob <: Orclb{A'}) (LR <: Orcl{A'}) : 
-    islossless LR.orcl =>
-    islossless Ob.leaks => islossless Ob.orclL => islossless Ob.orclR => islossless A'(Ob, LR).main.
-admitted.
+  islossless LR.orcl => islossless Ob.leaks =>
+  islossless Ob.orclL => islossless Ob.orclR =>
+  islossless A'(Ob, LR).main.
+proof.
+  move=> orcl_ll leaks_ll orclL_ll orclR_ll.
+  proc; call (: true); 2..3 : islossless.
+  exact A_ll.
+qed.
 
 local lemma CCA_Ln &m : 
    Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Ln(Ob, A').main() @ &m : res ].
 proof.
   byequiv => //; proc. inline Count.init Wrap(S,L).init L.init. 
   inline A'(Ob, OrclCount(Hyb.L(Ob))).main. wp.
-  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
+  call (: ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
   - proc; auto. inline *. wp. call (: true). auto => /> ?. by ring.
   - proc; inline *; sp; auto. rcondf{2} 1; 1: by move => &m'; skip => />.
     sp. if{1}.
@@ -393,7 +409,7 @@ local lemma CCA_Rn &m :
 proof.
   byequiv => //; proc. inline Count.init Wrap(S,R).init R.init. 
   inline A'(Ob, OrclCount(Hyb.R(Ob))).main. wp.
-  call (_ : ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
+  call (: ={glob S} /\ size Wrap.cs{1} = Count.c{2} /\ ={sk,pk,cs,ndec}(Wrap,Ob)).
   - proc; auto. inline *. wp. call (: true). auto => /> ?. by ring.
   - proc; inline *; sp; auto. rcondf{2} 1; 1: by move => &m'; skip => />.
     sp. if{1}.
@@ -407,6 +423,11 @@ qed.
 
 import StdOrder.RealOrder.
 
+local lemma A'_call (O <: Orcl{Count, A'}) :
+  hoare[ AdvCount(A'(Ob, OrclCount(O))).main : true ==> Count.c <= Nenc].
+proof.
+admitted.
+
 (* maybe add the count condition for B *)
 lemma CCA_1n &m :
     `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |
@@ -418,45 +439,44 @@ have -> : inv Nenc%r * `|Pr[CCA_L(S, A).main() @ &m : res] - Pr[CCA_R(S, A).main
           `| (Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res]) / Nenc%r |.
 smt(Nenc_gt0).
 rewrite CCA_Ln CCA_Rn. 
-have /= H := Hybrid_restr Ob A' _ Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r). 
-  admit.
+have /= H := Hybrid_restr Ob A' A'_call Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r).
 rewrite -H; clear H.
 have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.L(Ob)).main() @ &m : res].
   byequiv => //; proc; inline *; auto. 
   swap{2} 1 5; swap{1} 6 2; sp. 
   rcondt{2} 1; 1: by move => &m'; skip => />.
-  call (_ : ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
+  call (: ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
             B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
             (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *. if; 1: by move => />.
-    + by auto; call (:true); auto => /> /#.
+    + by auto; call (: true); auto => /> /#.
     + if; 1: by move => />.
-      * by auto; call(:true); auto => /> /#.
-      * by auto; call(:true); auto => /> /#.
+      * by auto; call(: true); auto => /> /#.
+      * by auto; call(: true); auto => /> /#.
   - proc; inline *; sp. rcondf{2} 1; 1: by move => &m'; skip => />.
     sp. if; 1: by move => &m1 &m2 />. 
     + sp. rcondt{1} 1. move => &m1; skip => /> /#. 
-      by auto; call(:true); skip => />.
+      by auto; call(: true); skip => />.
     + by auto; skip => />.
-  by rnd; auto; call(:true); skip => &m1 &m2 />.
+  by rnd; auto; call(: true); skip => &m1 &m2 />.
 have <- : Pr[CCA_(S, B(S, A), R).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.R(Ob)).main() @ &m : res].
   byequiv => //; proc; inline *; auto. 
   swap{2} 1 5; swap{1} 6 2; sp. 
   rcondt{2} 1; 1: by move => &m'; skip => />.
-  call (_ : ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
+  call (: ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
             B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
             (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *. if; 1: by move => />.
-    + by auto; call (:true); auto => /> /#.
+    + by auto; call (: true); auto => /> /#.
     + if; 1: by move => />.
-      * by auto; call(:true); auto => /> /#.
-      * by auto; call(:true); auto => /> /#.
+      * by auto; call(: true); auto => /> /#.
+      * by auto; call(: true); auto => /> /#.
   - proc; inline *; sp. rcondf{2} 1; 1: by move => &m'; skip => />.
     sp. if; 1: by move => &m1 &m2 />. 
     + sp. rcondt{1} 1. move => &m1; skip => /> /#. 
-      by auto; call(:true); skip => />.
+      by auto; call(: true); skip => />.
     + by auto; skip => />.
-  by rnd; auto; call(:true); skip => &m1 &m2 />.
+  by rnd; auto; call(: true); skip => &m1 &m2 />.
 smt().
 qed.
 
