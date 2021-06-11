@@ -230,7 +230,8 @@ proof.
     + by wp; call (: true); auto => />.
 qed.
 
-axiom A_bound (O <: LR {Wrap, S, A}): 
+(* Type used to be (O <: LR {Wrap, S A}) - *)
+axiom A_bound (O <: LR {Wrap, A}): 
   hoare[ A(Wrap(S, O)).main : 
     Wrap.ndec = 0 /\ Wrap.cs = [] ==> Wrap.ndec <= Ndec /\ size Wrap.cs <= Nenc].
 
@@ -423,9 +424,32 @@ qed.
 
 import StdOrder.RealOrder.
 
+local module LR0 (O : Orcl) : LR = { 
+  include var Ob 
+
+  proc init () : unit = { }
+
+  proc l_or_r (m0 m1 : plaintext) : plaintext = {
+    (* Is there a way to implement this? *)
+    return witness;
+  } 
+}.
+
 local lemma A'_call (O <: Orcl{Count, A'}) :
   hoare[ AdvCount(A'(Ob, OrclCount(O))).main : true ==> Count.c <= Nenc].
 proof.
+proc; inline *; sp; rcondt 1 => //; auto.
+suff E : equiv [ A(A'(Ob, OrclCount(O)).O').main ~ A(Wrap(S,LR0(O))).main : 
+   ={cs,ndec,pk,sk}(Ob,Wrap) /\ pk{1} = Ob.pk{1} /\ ={arg,glob A} /\ Count.c{1} = 0 /\ Wrap.cs{2} = []  
+   ==> Count.c{1} = size Wrap.cs{2} ].
+  call (: Ob.ndec = 0 /\ Ob.cs = [] /\ pk = Ob.pk /\ Count.c = 0 ==> Count.c <= Nenc).
+  by conseq E (A_bound (<: LR0(O))) => /> /#.
+  by wp; call(: true).
+proc (={pk,sk,cs,ndec}(Ob,Wrap) /\ Count.c{1} = size Wrap.cs{2}) => //.
+- proc. inline Count.incr; wp. 
+  (* This looks hopeless, as we don't even know that O.orcl 
+     is really performing an encryption. *)
+- admit.
 admitted.
 
 (* maybe add the count condition for B *)
