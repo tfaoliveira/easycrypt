@@ -266,6 +266,16 @@ let m_functor mp =
     | t -> t in
   mpath top []
 
+let m_is_local (mp : mpath) : bool =
+  match mp.m_top with
+  | `Local _ -> true
+  | _ -> false
+
+let m_is_concrete (mp : mpath) : bool =
+  match mp.m_top with
+  | `Concrete _ -> true
+  | _ -> false
+
 let mget_ident mp =
   match mp.m_top with
   | `Local id -> id
@@ -398,7 +408,7 @@ let p_subst (s : path Mp.t) =
     Hp.memo_rec 107 p_subst
 
 (* -------------------------------------------------------------------- *)
-let rec m_subst (sp : path -> path) (sm : mpath EcIdent.Mid.t) m =
+let rec m_subst (sp : path -> path) (sm : (mpath * 'info) EcIdent.Mid.t) m =
   let args = List.Smart.map (m_subst sp sm) m.m_args in
   match m.m_top with
   | `Concrete(p,sub) ->
@@ -408,13 +418,13 @@ let rec m_subst (sp : path -> path) (sm : mpath EcIdent.Mid.t) m =
       mpath top args
   | `Local id ->
     try
-      let m' = EcIdent.Mid.find id sm in
+      let m', _ = EcIdent.Mid.find id sm in
       m_apply m' args
     with Not_found ->
       if m.m_args == args then m else
         mpath m.m_top args
 
-let m_subst (sp : path -> path) (sm : mpath EcIdent.Mid.t) =
+let m_subst (sp : path -> path) (sm : (mpath * 'info) EcIdent.Mid.t) =
   if sp == identity && EcIdent.Mid.is_empty sm then identity
   else m_subst sp sm
 
@@ -426,5 +436,9 @@ let x_subst (sm : mpath -> mpath) =
     if x.x_top == top then x
     else xpath top x.x_sub
 
-let x_substm sp sm =
+let x_substm
+    (sp : path -> path)
+    (sm : (mpath * 'info) EcIdent.Mid.t)
+  : xpath -> xpath
+  =
   x_subst (m_subst sp sm)

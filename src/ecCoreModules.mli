@@ -153,10 +153,15 @@ module PreOI : sig
 end
 
 (* -------------------------------------------------------------------- *)
+(* oracle information of a module.
+   Invariant: all declared procedures must appear *)
+type 'a p_orcl_info = 'a PreOI.t Msym.t
+
+(* -------------------------------------------------------------------- *)
 type 'a p_mod_restr = {
   mr_xpaths : EcPath.Sx.t use_restr;
   mr_mpaths : EcPath.Sm.t use_restr;
-  mr_oinfos : 'a PreOI.t Msym.t;
+  mr_oinfos : 'a p_orcl_info ;
 }
 
 val p_mr_equal :

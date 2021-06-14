@@ -36,6 +36,8 @@ module OI : sig
   val filter : (xpath -> bool) -> t -> t
 end
 
+type orcl_info = OI.t EcSymbols.Msym.t
+
 (* -------------------------------------------------------------------- *)
 type mod_restr         = form p_mod_restr
 type module_type       = form p_module_type

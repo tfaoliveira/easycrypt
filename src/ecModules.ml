@@ -54,6 +54,8 @@ end = struct
   let hash         = PreOI.hash EcCoreFol.f_hash
 end
 
+type orcl_info = OI.t EcSymbols.Msym.t
+
 (* -------------------------------------------------------------------- *)
 type module_type       = EcCoreFol.module_type
 type mod_restr         = EcCoreFol.mod_restr

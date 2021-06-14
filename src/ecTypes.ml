@@ -932,7 +932,11 @@ let is_e_subst_id s =
     s.es_xp == identity && Mid.is_empty s.es_loc
 
 (* -------------------------------------------------------------------- *)
-let e_subst_init freshen on_path on_ty opdef on_mpath esloc =
+let e_subst_init
+    freshen on_path on_ty opdef
+    (on_mpath : (EcPath.mpath * 'info) EcIdent.Mid.t)
+    esloc
+  =
   let on_mp =
     let f = EcPath.m_subst on_path on_mpath in
     if f == identity then f else EcPath.Hm.memo 107 f in

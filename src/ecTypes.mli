@@ -282,7 +282,7 @@ val e_subst_init :
   -> (EcPath.path -> EcPath.path)
   -> (ty -> ty)
   -> (EcIdent.t list * expr) EcPath.Mp.t
-  -> EcPath.mpath EcIdent.Mid.t
+  -> (EcPath.mpath * 'info) EcIdent.Mid.t
   -> expr Mid.t
   -> e_subst
 

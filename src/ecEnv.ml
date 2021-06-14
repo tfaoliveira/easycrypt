@@ -2518,10 +2518,10 @@ module NormMp = struct
         | FcHoareF chf ->
           let pre' = aux chf.chf_pr and p' = norm_xfun env chf.chf_f
           and post' = aux chf.chf_po in
-          let c_self' = aux chf.chf_co.c_self in
+          let c_self' = omap aux chf.chf_co.c_self in
           let c_calls' = Mx.fold (fun f c calls ->
               let f' = f        (* not normalized. *)
-              and c' = call_bound_r (aux c.cb_cost) (aux c.cb_called) in
+              and c' = aux c in
               Mx.change (fun old -> assert (old = None); Some c') f' calls
             ) chf.chf_co.c_calls Mx.empty in
           if chf.chf_pr == pre' && chf.chf_f == p' &&
@@ -2655,7 +2655,7 @@ module ModTy = struct
           let p1 = EcSubst.subst_modtype subst p1 in
           let p2 = EcSubst.subst_modtype subst p2 in
             mod_type_equiv f_equiv env p1 p2;
-            EcSubst.add_module subst x1 (EcPath.mident x2))
+            EcSubst.add_module subst x1 (EcPath.mident x2) None)
         EcSubst.empty mty1.mt_params mty2.mt_params
     in
 
@@ -2675,11 +2675,12 @@ module ModTy = struct
   let has_mod_type (env : env) (dst : module_type list) (src : module_type) =
     List.exists (mod_type_equiv f_equal env src) dst
 
-  let sig_of_mt env (mt:module_type) =
+  let sig_of_mt env (mt : module_type) : module_sig =
     let sig_ = by_path mt.mt_name env in
     let subst =
       List.fold_left2 (fun s (x1,_) a ->
-        EcSubst.add_module s x1 a) EcSubst.empty sig_.mis_params mt.mt_args in
+          EcSubst.add_module s x1 a
+        ) EcSubst.empty sig_.mis_params mt.mt_args in
     let items =
       EcSubst.subst_modsig_body subst sig_.mis_body in
     let params = mt.mt_params in

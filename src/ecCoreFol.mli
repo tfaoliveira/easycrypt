@@ -159,18 +159,11 @@ and pr = {
 
 
 (* Invariant: keys of c_calls are functions of local modules,
-   with no arguments. *)
+   with no arguments.
+   Missing or [None] entries are unbounded. *)
 and cost = private {
-  c_self  : form;
-  c_calls : call_bound EcPath.Mx.t;
-}
-
-(* Call with cost at most [cb_cost], called at mist [cb_called].
-   [cb_cost] is here to properly handle substsitution when instantiating an
-   abstract module by a concrete one. *)
-and call_bound = private {
-  cb_cost  : form;
-  cb_called : form;
+  c_self  : form option;
+  c_calls : form EcPath.Mx.t;
 }
 
 and module_type = form p_module_type
@@ -253,8 +246,7 @@ val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
-val cost_r : form -> call_bound EcPath.Mx.t -> cost
-val call_bound_r : form -> form -> call_bound
+val cost_r : form option -> form EcPath.Mx.t -> cost
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -502,7 +494,7 @@ type mem_pr = EcMemory.memory * form
 (* -------------------------------------------------------------------- *)
 type f_subst = private {
   fs_freshen : bool; (* true means realloc local *)
-  fs_mp      : mpath Mid.t;
+  fs_mp      : (EcPath.mpath * form p_orcl_info option) Mid.t;
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -522,7 +514,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:mpath Mid.t
+    -> ?mods:((EcPath.mpath * form p_orcl_info option) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -531,16 +523,26 @@ module Fsubst : sig
     -> ?mempred:(mem_pr Mid.t)
     -> unit -> f_subst
 
-  val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> mpath -> f_subst
-  val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+  val f_bind_local   : f_subst -> EcIdent.t -> form -> f_subst
+  val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+  val f_bind_loc_mod : f_subst -> EcIdent.t -> mpath -> f_subst
+  val f_bind_mod     :
+    f_subst ->
+    EcIdent.t ->
+    mpath ->
+    form p_orcl_info option ->
+    f_subst
+
+
+
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-  val f_subst_mod   : EcIdent.t -> mpath -> form -> form
+  val f_subst_mod   :
+    EcIdent.t -> mpath -> form p_orcl_info option -> form -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form
