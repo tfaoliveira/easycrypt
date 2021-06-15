@@ -308,26 +308,6 @@ local module LRB (O : CCA_Oracle) : CCA_Oracle = {
   }
 }.
 
-local equiv eqv_CountCCALRB (O <: CCA_Oracle {S, CountCCA, A, B}) : 
-  A(B(S, A, CountCCA(O)).O').main ~ A(CountCCA(LRB(O))).main : 
-  ={glob O, glob S, glob A, B.iS, B.i, B.pk, CountCCA.ndec, arg} /\
-  CountCCA.ndec{1} = 0 /\
-  (forall c, c \in B.cs{1} <=> c \in B.cs{2})
-  ==>
-  CountCCA.ndec{1} <= CountCCA.ndec{2}.
-proof.
-  proc *; inline *; sp; auto.
-  call ( : ={glob O, glob S, B.iS, B.i, B.pk} /\
-           (forall c, c \in B.cs{1} <=> c \in B.cs{2}) /\
-           CountCCA.ndec{1} <= CountCCA.ndec{2}); 3: skip => />.
-  - proc; inline *; sp; auto.
-    if => //; 1: by call (: true); skip => /> /#.
-    if => //; 1: wp; call (: true); auto => /> /#.
-  - proc; inline *; sp; auto.
-    if; 1: move => /> /#; 2: skip => /> /#.
-    sp; auto; call (: true); skip => /> /#.
-qed.
-
 lemma B_bound (O <: CCA_Oracle {S, CountCCA, A, B}): 
   hoare[ CountAdv(B(S, A), O).main : true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= 1].
 proof.
@@ -341,8 +321,23 @@ proc; inline *; swap 5 -2; sp; auto.
     wp; sp; call (: true); skip; smt().
   + by conseq />.
   + auto => />; smt(supp_dinter).
-- call (: CountCCA.ndec = 0 ==> CountCCA.ndec <= Ndec); 2: auto.
-  conseq (eqv_CountCCALRB(O)) (A_bound' (<: LRB(O))) => /> /#.
+- call (: CountCCA.ndec = 0 ==> CountCCA.ndec <= Ndec); 2: auto. 
+  suff E : equiv[ A(B(S, A, CountCCA(O)).O').main ~ A(CountCCA(LRB(O))).main :
+           ={glob O, glob S, glob A, B.iS, B.i, B.pk, CountCCA.ndec, pk} /\
+           CountCCA.ndec{1} = 0 /\
+           forall (c : ciphertext), c \in B.cs{1} <=> c \in B.cs{2} ==>
+           CountCCA.ndec{1} <= CountCCA.ndec{2}];
+  1: conseq E (A_bound' (<: LRB(O))) => /> /#.
+  proc *; inline *; sp; auto.
+  call ( : ={glob O, glob S, B.iS, B.i, B.pk} /\
+           (forall c, c \in B.cs{1} <=> c \in B.cs{2}) /\
+           CountCCA.ndec{1} <= CountCCA.ndec{2}); 3: skip => />.
+  - proc; inline *; sp; auto.
+    if => //; 1: by call (: true); skip => /> /#.
+    if => //; 1: wp; call (: true); auto => /> /#.
+  - proc; inline *; sp; auto.
+    if; 1: move => /> /#; 2: skip => /> /#.
+    sp; auto; call (: true); skip => /> /#.
 qed.
 
 local module Ob : Orclb = {
@@ -460,25 +455,20 @@ proof.
   + by auto; call(: true).
 qed.
 
-local lemma toto (O <: Orcl{Count, A'}) :
-  hoare[ CountAdv(A, A'(Ob, OrclCount(O)).O').main :
-            Count.c = 0 ==> Count.c <= Nenc].
-proof.
-conseq (A_bound (<: A'(Ob, OrclCount(O)).O')) (: Count.c = 0 ==> CountCCA.nenc = Count.c) => />.
-proc.
-call (: CountCCA.nenc = Count.c).
-- by proc; inline *; auto; call (: true); auto.
-- by conseq />.
-- by inline *; auto.
-qed.
-
-local lemma A'_call (O <: Orcl{Count, A'(* , CountCCA , Ob *) }) :
+local lemma A'_call (O <: Orcl{Count, A'}) :
   hoare[ AdvCount(A'(Ob, OrclCount(O))).main : true ==> Count.c <= Nenc].
 proof.
 proc. inline A'(Ob, OrclCount(O)).main; wp.
-call (toto O).
-inline *; rcondt 3; 1: by auto.
-by auto; call (: true); auto.
+suff P : hoare[ CountAdv(A, A'(Ob, OrclCount(O)).O').main :
+                Count.c = 0 ==> Count.c <= Nenc].
+- call P; inline *; rcondt 3; 1: by auto.
+  by auto; call (: true); auto.
+- conseq (A_bound (<: A'(Ob, OrclCount(O)).O'))
+         (: Count.c = 0 ==> CountCCA.nenc = Count.c) => />.
+  proc; call (: CountCCA.nenc = Count.c).
+  + by proc; inline *; auto; call (: true); auto.
+  + by conseq />.
+  + by inline *; auto.
 qed.
 
 import StdOrder.RealOrder.
