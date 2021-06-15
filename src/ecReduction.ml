@@ -290,7 +290,7 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
     ensure (ModTy.mod_type_equiv test env p1 p2);
     Mod.bind_local x1 p1 env,
     if id_equal x1 x2 then subst
-    else Fsubst.f_bind_mod subst x2 (EcPath.mident x1)
+    else Fsubst.f_bind_mod subst x2 (EcPath.mident x1) None
 
   | GTmem me1, GTmem me2  ->
     check_memtype env me1 me2;
@@ -315,17 +315,21 @@ let check_cost_l env subst co1 co2 =
           EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
         ) co2.c_calls EcPath.Mx.empty in
 
-    let aco, aca =
-      EcPath.Mx.fold2_union (fun _ a1 a2 (aco, aca) ->
+    let acc =
+      EcPath.Mx.fold2_union (fun _ a1 a2 acc ->
           match a1,a2 with
           | None, None -> assert false
           | None, Some _ | Some _, None -> raise NotConv
-          | Some cb1, Some cb2 ->
-              ((cb1.cb_cost  , cb2.cb_cost  ) :: aco,
-               (cb1.cb_called, cb2.cb_called) :: aca)
-        ) calls1 calls2 ([], []) in
+          | Some cb1, Some cb2 -> (cb1, cb2) :: acc
+        ) calls1 calls2 [] in
 
-    (co1.c_self, co2.c_self) :: aco @ aca
+    let check_self =
+      match co1.c_self, co2.c_self with
+      | Some self1, Some self2 -> [self1, self2]
+      | None, Some _ | Some _, None -> raise NotConv
+      | None, None -> []
+    in
+    check_self @ acc
 
 let check_cost test env subst co1 co2 =
   List.iter
@@ -1381,20 +1385,49 @@ let zpop ri side f hd =
     f_pr_r {hs with pr_args = a; pr_event = ev }
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
-  | Zhl {f_node = FcHoareF hfc}, chf_pr::chf_po::self_::pcalls -> (* FIXME *)
-    let co, ca = List.split_at (List.length pcalls / 2) pcalls in
+
+  | Zhl {f_node = FcHoareF hfc}, chf_pr::chf_po::self_pcalls -> (* FIXME *)
+    let pcalls_len = Mx.cardinal hfc.chf_co.c_calls in
+    let self_pcalls_len = List.length self_pcalls in
+    let self_, pcalls =
+      if self_pcalls_len = pcalls_len
+      then None, self_pcalls
+      else
+        let _ = assert (self_pcalls_len = pcalls_len + 1) in
+        match self_pcalls with
+        | self :: pcalls -> Some self, pcalls
+        | _ -> assert false
+    in
+
     let calls =
       List.map2
-        (fun (xp, _) (cb_cost, cb_called) -> (xp, call_bound_r cb_cost cb_called))
-        (Mx.bindings hfc.chf_co.c_calls) (List.combine co ca) in
-    f_cHoareF_r { hfc with chf_pr; chf_po; chf_co = cost_r self_ (Mx.of_list calls) }
-  | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_::pcalls -> (* FIXME *)
-    let co, ca = List.split_at (List.length pcalls / 2) pcalls in
+        (fun (xp, _) cb_called -> (xp, cb_called))
+        (Mx.bindings hfc.chf_co.c_calls) pcalls
+    in
+    f_cHoareF_r
+      { hfc with chf_pr; chf_po; chf_co = cost_r self_ (Mx.of_list calls) }
+
+  | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_pcalls -> (* FIXME *)
+    let pcalls_len = Mx.cardinal hfs.chs_co.c_calls in
+    let self_pcalls_len = List.length self_pcalls in
+    let self_, pcalls =
+      if self_pcalls_len = pcalls_len
+      then None, self_pcalls
+      else
+        let _ = assert (self_pcalls_len = pcalls_len + 1) in
+        match self_pcalls with
+        | self :: pcalls -> Some self, pcalls
+        | _ -> assert false
+    in
+
     let calls =
       List.map2
-        (fun (xp, _) (cb_cost, cb_called) -> (xp, call_bound_r cb_cost cb_called))
-        (Mx.bindings hfs.chs_co.c_calls) (List.combine co ca) in
-    f_cHoareS_r { hfs with chs_pr; chs_po; chs_co = cost_r self_ (Mx.of_list calls) }
+        (fun (xp, _) cb_called -> (xp, cb_called))
+        (Mx.bindings hfs.chs_co.c_calls) pcalls
+    in
+    f_cHoareS_r
+      { hfs with chs_pr; chs_po; chs_co = cost_r self_ (Mx.of_list calls) }
+
   | _, _ -> assert false
 
 (* -------------------------------------------------------------------- *)

@@ -227,15 +227,3 @@ module DestrReal : sig
   val div : form -> form * form
   val abs : form -> form
 end
-
-(* -------------------------------------------------------------------- *)
-(*val cost_sub_self : cost -> form -> cost
-val cost_add_self : cost -> form -> cost
-val cost_sub_call : EcEnv.env -> cost -> EcPath.xpath -> form -> cost
-val cost_add_call : EcEnv.env -> cost -> EcPath.xpath -> form -> cost
-
-val cost_map      : (form -> form) -> cost -> cost
-val cost_op       : EcEnv.env -> (form -> form -> form ) -> cost -> cost -> cost
-val cost_app      : cost -> form list -> cost
-
-val cost_flatten  : cost -> form *)

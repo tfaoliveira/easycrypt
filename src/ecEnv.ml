@@ -1654,7 +1654,7 @@ module Fun = struct
            else
              let s =
                List.fold_left2
-                 (fun s (x, _) a -> EcSubst.add_module s x a)
+                 (fun s (x, _) a -> EcSubst.add_module s x a None)
                  EcSubst.empty params args
              in
              EcSubst.subst_function s o
@@ -1893,7 +1893,7 @@ module Mod = struct
 
     let s =
       List.fold_left2
-        (fun s (x, _) a -> EcSubst.add_module s x a)
+        (fun s (x, _) a -> EcSubst.add_module s x a None)
         EcSubst.empty params args
     in
       f s o
@@ -2120,7 +2120,7 @@ module NormMp = struct
           let params = List.take arity me.me_params in
           let s =
             List.fold_left2
-              (fun s (x, _) a -> EcSubst.add_module s x a)
+              (fun s (x, _) a -> EcSubst.add_module s x a None)
               EcSubst.empty params args in
           let mp = EcSubst.subst_mpath s mp in
           let args' = mp.EcPath.m_args in
@@ -2373,7 +2373,7 @@ module NormMp = struct
           Mod.bind_local x mt env
         ) env me.me_params in
 
-      let comp_oi oi it = match it with
+      let comp_oi (oi : orcl_info) it = match it with
         | MI_Module  _ | MI_Variable _ -> oi
         | MI_Function f ->
           let rec f_call c f =
@@ -2400,7 +2400,8 @@ module NormMp = struct
             Sm.mem ftop mparams in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name (OI.mk calls true `Unbounded) oi in
+          Msym.add f.f_name (OI.mk calls true `Unbounded Mx.empty) oi
+      in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in
 
@@ -2679,8 +2680,9 @@ module ModTy = struct
     let sig_ = by_path mt.mt_name env in
     let subst =
       List.fold_left2 (fun s (x1,_) a ->
-          EcSubst.add_module s x1 a
-        ) EcSubst.empty sig_.mis_params mt.mt_args in
+          EcSubst.add_module s x1 a None
+        ) EcSubst.empty sig_.mis_params mt.mt_args
+    in
     let items =
       EcSubst.subst_modsig_body subst sig_.mis_body in
     let params = mt.mt_params in

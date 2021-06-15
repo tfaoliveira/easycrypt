@@ -134,21 +134,26 @@ val ur_union :
 module PreOI : sig
   type 'a t
 
+  type 'a elc =  [`Bounded of 'a | `Unbounded]
+
   val hash : ('a -> int) -> 'a t -> int
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t -> [`Bounded of 'a | `Unbounded]
-  val cost : 'a t -> xpath -> [`Bounded of 'a | `Zero | `Unbounded]
-  val cost_calls : 'a t -> [`Bounded of 'a Mx.t | `Unbounded]
-  val costs : 'a t -> [`Bounded of 'a * 'a Mx.t | `Unbounded]
+  val cost_self : 'a t ->          'a elc
+  val cost      : 'a t -> xpath -> 'a elc
 
-  val allowed : 'a t -> xpath list
+  val cost_calls : 'a t -> 'a elc Mx.t
+
+  val costs : 'a t -> 'a elc * 'a elc Mx.t
+
+  val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk : xpath list -> bool -> [`Bounded of 'a * 'a Mx.t | `Unbounded] -> 'a t
-  (* val change_calls : 'a t -> xpath list -> 'a t *)
+  val mk :
+    xpath list -> bool -> 'a elc -> 'a elc Mx.t -> 'a t
+
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end
 

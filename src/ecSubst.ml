@@ -51,9 +51,9 @@ let is_empty s =
   Mp.is_empty s.sb_path && Mid.is_empty s.sb_modules
 
 let add_module s (x : EcIdent.t) (m : EcPath.mpath) (oinfo : orcl_info option) =
-  assert (match oinfo with
-      | None   -> EcPath.m_is_local m
-      | Some _ -> EcPath.m_is_concrete m);
+  (* assert (match oinfo with
+   *     | None   -> EcPath.m_is_local m
+   *     | Some _ -> EcPath.m_is_concrete m); *)
 
   let merger = function
     | None   -> Some (m, oinfo)

@@ -212,6 +212,10 @@ let gty_hash = function
   | GTmodty p  ->  mty_hash p
   | GTmem _ -> 1
 
+let elc_fv fv = function
+  | `Unbounded -> fv
+  | `Bounded f -> fv_union fv (f_fv f)
+
 let mr_fv mr =
   EcPath.Sm.fold (fun mp fv ->
       EcPath.m_fv fv mp)
@@ -228,13 +232,12 @@ let mr_fv mr =
 
   |> EcSymbols.Msym.fold (fun _ oi fv ->
       let fv = List.fold_left EcPath.x_fv fv (PreOI.allowed oi) in
-      match PreOI.costs oi with
-      | `Unbounded -> fv
-      | `Bounded (self,calls) ->
-        EcPath.Mx.fold (fun xp call fv ->
-            let fv = EcPath.x_fv fv xp in
-            fv_union fv (f_fv call)
-          ) calls (fv_union fv (f_fv self))
+      let self, calls = PreOI.costs oi in
+      let fv = elc_fv fv self in
+      EcPath.Mx.fold (fun xp call fv ->
+          let fv = EcPath.x_fv fv xp in
+          elc_fv fv call
+        ) calls fv
     ) mr.mr_oinfos
 
 let gty_fv = function
@@ -1735,9 +1738,9 @@ module Fsubst = struct
       (oinfo : form p_orcl_info option)
     : f_subst
     =
-    assert (match oinfo with
-        | None   -> EcPath.m_is_local mp
-        | Some _ -> EcPath.m_is_concrete mp);
+    (* assert (match oinfo with
+     *     | None   -> EcPath.m_is_local mp
+     *     | Some _ -> EcPath.m_is_concrete mp); *)
 
     let merger o = assert (o = None); Some (mp, oinfo) in
     let smp = Mid.change merger x s.fs_mp in
@@ -2095,25 +2098,28 @@ module Fsubst = struct
     let sag = { f_subst_id with fs_loc = sag } in
     f_app (f_subst ~tx sag f) args fty
 
+  and subst_elc ~(tx : form -> form -> form) (s : f_subst) = function
+    | `Unbounded -> `Unbounded
+    | `Bounded f -> `Bounded (f_subst ~tx s f)
+
   and subst_oi ~(tx : form -> form -> form) (s : f_subst) (oi : form PreOI.t) =
     let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
 
-    let costs = match PreOI.costs oi with
-      | `Unbounded -> `Unbounded
-      | `Bounded (self,calls) ->
-        let calls = EcPath.Mx.fold (fun x a calls ->
-            EcPath.Mx.change
-              (fun old -> assert (old = None); Some (f_subst ~tx s a))
-              (sx x)
-              calls
-          ) calls EcPath.Mx.empty in
-        let self = f_subst ~tx s self in
-        `Bounded (self,calls) in
+    let self, calls = PreOI.costs oi in
+    let self = subst_elc ~tx s self in
+    let calls =
+      EcPath.Mx.fold (fun x a calls ->
+          EcPath.Mx.change
+            (fun old -> assert (old = None); Some (subst_elc ~tx s a))
+            (sx x)
+            calls
+        ) calls EcPath.Mx.empty
+    in
 
     PreOI.mk
       (List.map sx (PreOI.allowed oi))
       (PreOI.is_in oi)
-      costs
+      self calls
 
   and mr_subst ~tx s mr : form p_mod_restr =
     let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in

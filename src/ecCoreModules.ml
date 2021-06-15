@@ -586,36 +586,54 @@ let ur_inter union inter ur1 ur2 =
 module PreOI : sig
   type 'a t
 
+  type 'a elc =  [`Bounded of 'a | `Unbounded]
+
   val hash : ('a -> int) -> 'a t -> int
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t -> [`Bounded of 'a | `Unbounded]
-  val cost : 'a t -> xpath -> [`Bounded of 'a | `Zero | `Unbounded]
-  val cost_calls : 'a t -> [`Bounded of 'a Mx.t | `Unbounded]
-  val costs : 'a t -> [`Bounded of 'a * 'a Mx.t | `Unbounded]
+  val cost_self : 'a t ->          'a elc
+  val cost      : 'a t -> xpath -> 'a elc
 
-  val allowed : 'a t -> xpath list
+  val cost_calls : 'a t -> 'a elc Mx.t
+
+  val costs : 'a t -> 'a elc * 'a elc Mx.t
+
+  val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk : xpath list -> bool -> [`Bounded of 'a * 'a Mx.t | `Unbounded] -> 'a t
-  (* val change_calls : 'a t -> xpath list -> 'a t *)
+  val mk :
+    xpath list -> bool -> 'a elc -> 'a elc Mx.t -> 'a t
+
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end = struct
+
+  type 'a elc =  [`Bounded of 'a | `Unbounded]
+
+  let elc_eq a_equal a b =
+    match a, b with
+    | `Bounded a, `Bounded b -> a_equal a b
+    | `Unbounded, `Unbounded -> true
+    | _ -> false
+
+  let hash_elc a_hash = function
+    | `Bounded a -> Why3.Hashcons.combine 0 (a_hash a)
+    | `Unbounded -> 42
+
   (* Oracle information of a procedure [M.f]:
    * - oi_calls : list of oracles that can be called by [M.f].
    * - oi_in    : true if equality of globals is required to ensure
    * equality of result and globals (in the post).
    * - oi_costs : self cost, plus a mapping from oracles to the number of time
-   * that they can be called by [M.f]. Missing entries are can be called
-   * zero times. No restrictio of [None]
+   * that they can be called by [M.f]. Missing entries can be called
+   * any number of times.
    *
    * Remark: there is redundancy between oi_calls and oi_costs. *)
   type 'a t = {
     oi_calls : xpath list;
     oi_in    : bool;
-    oi_costs : ('a * 'a Mx.t) option;
+    oi_costs : 'a elc * 'a elc Mx.t;
   }
 
   let is_in t = t.oi_in
@@ -624,60 +642,57 @@ end = struct
 
   let allowed_s oi = allowed oi |> Sx.of_list
 
-  let cost_self (oi : 'a t) =
-    omap_dfl (fun (self,_) -> `Bounded self) `Unbounded oi.oi_costs
+  let cost_self (oi : 'a t) = fst oi.oi_costs
 
-  let cost (oi : 'a t) (x : xpath) =
-    omap_dfl (fun (_,oi) ->
-        let c = Mx.find_opt x oi in
-        omap_dfl (fun c -> `Bounded c) `Zero c)
-      `Unbounded oi.oi_costs
+  (* sanity checks *)
+  let check_xpath (x : xpath) =
+    let m = x.x_top in
+    assert (m_is_local m && m.m_args = [])
 
-  let cost_calls oi = omap_dfl (fun (_,x) -> `Bounded x) `Unbounded oi.oi_costs
+  let cost (oi : 'a t) (x : xpath) : 'a elc =
+    check_xpath x;
 
-  let costs oi = omap_dfl (fun x -> `Bounded x) `Unbounded oi.oi_costs
+    let calls = snd oi.oi_costs in
+    Mx.find x calls
 
-  let mk oi_calls oi_in oi_costs = match oi_costs with
-    | `Bounded oi_costs ->
-      { oi_calls; oi_in; oi_costs = Some (oi_costs) ; }
-    | `Unbounded ->
-      { oi_calls; oi_in; oi_costs = None; }
+  let cost_calls oi = snd oi.oi_costs
 
-  (* let change_calls oi calls =
-   *   mk calls oi.oi_in
-   *     (Mx.filter (fun x _ -> List.mem x calls) oi.oi_costs) *)
+  let costs oi = cost_self oi, cost_calls oi
 
-  let filter f oi =
-    let costs = match oi.oi_costs with
-      | Some (self,costs) -> `Bounded (self, Mx.filter (fun x _ -> f x) costs)
-      | None -> `Unbounded in
-    mk (List.filter f oi.oi_calls) oi.oi_in costs
+  let mk oi_calls oi_in self call_costs =
+    { oi_calls; oi_in; oi_costs = (self, call_costs) ; }
 
-  let equal a_equal oi1 oi2 =
-    let check_costs_eq c1 c2 =
-      match c1,c2 with
-      | None, None -> true
-      | Some _, None | None, Some _ -> false
-      | Some (s1,c1), Some (s2,c2) ->
-        let exception Not_equal in
-        try Mx.fold2_union (fun _ a b () -> match a, b with
-            | Some _, None | None, Some _ -> raise Not_equal
-            | None, None -> ()
-            | Some a, Some b -> if a_equal a b then () else raise Not_equal
-          ) c1 c2 ();
-          a_equal s1 s2
-        with Not_equal -> false in
+  let filter (f : xpath -> bool) (oi : 'a t) : 'a t =
+    let call_costs = Mx.filter (fun x _ -> f x) (snd oi.oi_costs) in
+    mk (List.filter f oi.oi_calls) oi.oi_in (fst oi.oi_costs) call_costs
+
+  let equal (a_equal : 'a -> 'a -> bool) (oi1 : 'a t) (oi2 : 'a t) : bool =
+    let check_calls_eq calls1 calls2 =
+      let exception Not_equal in
+      try Mx.fold2_union (fun _ a b () -> match a, b with
+          | Some a, Some b -> if elc_eq a_equal a b then () else raise Not_equal
+          | _ -> assert false
+        ) calls1 calls2 (); true
+      with Not_equal -> false
+    in
+
+    let check_costs_eq (self1, calls1) (self2, calls2) =
+      elc_eq a_equal self1 self2 &&
+      check_calls_eq calls1 calls2
+    in
 
     oi1.oi_in = oi2.oi_in
     && List.all2 EcPath.x_equal oi1.oi_calls oi1.oi_calls
     && check_costs_eq oi1.oi_costs oi2.oi_costs
 
-  let hash ahash oi =
+  let hash (ahash : 'a -> int) oi : int =
     let costs_hash =
-      Why3.Hashcons.combine_option (fun (self,costs) ->
-          (Why3.Hashcons.combine_list
-             (Why3.Hashcons.combine_pair EcPath.x_hash ahash)
-             (ahash self) (Mx.bindings costs))) oi.oi_costs in
+      Why3.Hashcons.combine
+        (hash_elc ahash (fst oi.oi_costs))
+        (Why3.Hashcons.combine_list
+           (Why3.Hashcons.combine_pair EcPath.x_hash (hash_elc ahash))
+           0 (Mx.bindings (snd oi.oi_costs)))
+    in
 
     Why3.Hashcons.combine2
       (if oi.oi_in then 0 else 1)
@@ -706,7 +721,8 @@ let p_mr_equal a_equal mr1 mr2 =
 
 let has_compl_restriction mr =
   Msym.exists (fun _ oi ->
-      (PreOI.costs oi) <> `Unbounded
+      let self, calls = PreOI.costs oi in
+      self <> `Unbounded || not (Mx.is_empty calls)
     ) mr.mr_oinfos
 
 (* -------------------------------------------------------------------- *)

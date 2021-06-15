@@ -22,24 +22,31 @@ include EcCoreModules
 module OI : sig
   type t = form PreOI.t
 
-  val hash : t -> int
+  type elc =  [`Bounded of form | `Unbounded]
+
+  val hash  : t -> int
   val equal : t -> t -> bool
 
   val is_in : t -> bool
 
-  val cost_self : t -> [`Bounded of form | `Unbounded]
-  val cost : t -> xpath -> [`Bounded of form | `Zero | `Unbounded]
-  val cost_calls : t -> [`Bounded of form Mx.t | `Unbounded]
-  val costs : t -> [`Bounded of form * form Mx.t | `Unbounded]
+  val cost_self : t ->          elc
+  val cost      : t -> xpath -> elc
 
-  val allowed : t -> xpath list
+  val cost_calls : t -> elc Mx.t
+
+  val costs : t -> elc * elc Mx.t
+
+  val allowed   : t -> xpath list
   val allowed_s : t -> Sx.t
 
-  val mk : xpath list -> bool -> [`Bounded of form * form Mx.t | `Unbounded] -> t
-  (* val change_calls : t -> xpath list -> t *)
+  val mk :
+    xpath list -> bool -> elc -> elc Mx.t -> t
+
   val filter : (xpath -> bool) -> t -> t
 end = struct
   type t = EcCoreFol.form PreOI.t
+
+  type elc =  [`Bounded of form | `Unbounded]
 
   let is_in        = PreOI.is_in
   let allowed      = PreOI.allowed
@@ -97,12 +104,14 @@ let oicalls_filter restr f filter =
   | oi -> change_oinfo restr f (OI.filter filter oi)
   | exception Not_found -> restr
 
-let change_oicalls restr f ocalls =
-  let oi = match Msym.find f restr.mr_oinfos with
-    | oi ->
+let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
+  let oi =
+    try
+      let oi = Msym.find f restr.mr_oinfos in
       let filter x = List.mem x ocalls in
       OI.filter filter oi
-    | exception Not_found -> OI.mk ocalls true `Unbounded in
+    with Not_found -> OI.mk ocalls true `Unbounded Mx.empty
+  in
   add_oinfo restr f oi
 
 (* -------------------------------------------------------------------- *)

@@ -327,7 +327,8 @@ module MEV = struct
     let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
-    let subst = EV.fold (fun x m s -> Fsubst.f_bind_mod s x m) ev.evm_mod subst in
+    (* FIXME: A: get information on the binded module *)
+    let subst = EV.fold (fun x m s -> Fsubst.f_bind_mod s x m None) ev.evm_mod subst in
     let seen  = ref Sid.empty in
 
     let rec for_ident x binding subst =
@@ -598,13 +599,18 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
               | None, None -> assert false
               | None, Some _ | Some _, None -> failure ()
               | Some cb1, Some cb2 ->
-                List.iter2 (doit env (subst, mxs))
-                  [cb1.cb_cost; cb1.cb_called]
-                  [cb2.cb_cost; cb2.cb_called]
+                doit env (subst, mxs) cb1 cb2
             ) hf1.chf_co.c_calls calls2 ();
+
+          let () = match hf1.chf_co.c_self, hf2.chf_co.c_self with
+            | None, None -> ()
+            | Some _, None | None, Some _ -> failure ()
+            | Some c1, Some c2 -> doit env (subst, mxs) c1 c2
+          in
+
           List.iter2 (doit env (subst, mxs))
-            [hf1.chf_pr; hf1.chf_po; hf1.chf_co.c_self]
-            [hf2.chf_pr; hf2.chf_po; hf2.chf_co.c_self];
+            [hf1.chf_pr; hf1.chf_po]
+            [hf2.chf_pr; hf2.chf_po];
         end
 
       | FequivF hf1, FequivF hf2 -> begin
@@ -748,7 +754,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             let subst =
               if   id_equal x1 x2
               then subst
-              else Fsubst.f_bind_mod subst x2 (EcPath.mident x1)
+              else Fsubst.f_bind_mod subst x2 (EcPath.mident x1) None
 
             and env = EcEnv.Mod.bind_local x1 p1 env in
 
@@ -883,11 +889,13 @@ module FPosition = struct
           | FcHoareF chs ->
             let subctxt = Sid.add EcFol.mhr ctxt in
             let calls =
-              List.map (fun (_,cb) -> ctxt,cb.cb_called)
-                (EcPath.Mx.bindings chs.chf_co.c_calls) in
+              List.map (fun (_,cb) -> ctxt,cb)
+                (EcPath.Mx.bindings chs.chf_co.c_calls)
+            in
+            let self = omap_dfl (fun c -> [ctxt, c]) [] chs.chf_co.c_self in
             doit pos (`WithSubCtxt ((subctxt, chs.chf_pr) ::
                                     (subctxt, chs.chf_po) ::
-                                    (ctxt, chs.chf_co.c_self) ::
+                                    self @
                                     calls))
 
           | Fcoe coe ->
@@ -1045,25 +1053,37 @@ module FPosition = struct
 
           | FcHoareF chf ->
             let fkeys, calls = EcPath.Mx.bindings chf.chf_co.c_calls
-                               |> List.map (fun (f,cb) -> ((f,cb.cb_cost),
-                                                           cb.cb_called))
+                               |> List.map (fun (f,cb) -> ((f,()), cb))
                                |> List.split in
+            let self = otolist chf.chf_co.c_self in
+
             let sub = doit p (chf.chf_pr ::
                               chf.chf_po ::
-                              chf.chf_co.c_self ::
+                              self @
                               calls) in
-            begin match sub with
-              | chf_pr :: chf_po :: c_self :: calls ->
-                let c_calls = List.fold_left2 (fun acc (f,cb_cost) cb_called ->
-                    EcPath.Mx.change
-                      (fun old ->
-                         assert (old = None);
-                         Some (call_bound_r cb_cost cb_called)) f acc
-                  ) EcPath.Mx.empty fkeys calls in
-                let cost = cost_r c_self c_calls in
-                f_cHoareF_r { chf with chf_pr; chf_po;
-                                       chf_co = cost; }
-              | _ -> assert false end
+
+            let chf_pr, chf_po, c_self, calls =
+              if chf.chf_co.c_self = None then
+                match sub with
+                | chf_pr :: chf_po :: calls -> chf_pr, chf_po, None, calls
+                | _ -> assert false
+              else
+                match sub with
+                | chf_pr :: chf_po :: c_self :: calls ->
+                  chf_pr, chf_po, Some c_self, calls
+                | _ -> assert false
+            in
+
+            let c_calls =
+              List.fold_left2 (fun acc (f,()) cb_called ->
+                  EcPath.Mx.change
+                    (fun old -> assert (old = None); Some (cb_called))
+                    f acc
+                ) EcPath.Mx.empty fkeys calls
+            in
+            let cost = cost_r c_self c_calls in
+            f_cHoareF_r { chf with chf_pr; chf_po;
+                                   chf_co = cost; }
 
           | FbdHoareF hf ->
               let sub = doit p [hf.bhf_pr; hf.bhf_po; hf.bhf_bd] in
