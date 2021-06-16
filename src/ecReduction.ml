@@ -302,6 +302,20 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
 let check_bindings test env subst bd1 bd2 =
     List.fold_left2 (check_binding test) (env,subst) bd1 bd2
 
+
+(* build back the list of call costs *)
+let rec zapp_cost_l calls_l pcalls_l calls =
+  match calls_l, pcalls_l with
+  | [], [] -> calls
+
+  | (xp, C_bounded _) :: calls_l, cb :: pcalls_l ->
+    zapp_cost_l calls_l pcalls_l (Mx.add xp (C_bounded cb) calls)
+
+  | (xp, C_unbounded) :: calls_l, pcalls_l ->
+    zapp_cost_l calls_l pcalls_l (Mx.add xp C_unbounded calls)
+
+  | _ -> assert false
+
 let check_cost_l env subst co1 co2 =
     let calls1 =
       EcPath.Mx.fold (fun f c calls ->
@@ -315,20 +329,21 @@ let check_cost_l env subst co1 co2 =
           EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
         ) co2.c_calls EcPath.Mx.empty in
 
+    let do_cost_bnd c1 c2 =
+      match c1, c2 with
+      | C_bounded c1, C_bounded c2 -> [c1, c2]
+      | C_unbounded, C_bounded _
+      | C_bounded _, C_unbounded -> raise NotConv
+      | C_unbounded, C_unbounded -> []
+    in
+
     let acc =
       EcPath.Mx.fold2_union (fun _ a1 a2 acc ->
-          match a1,a2 with
-          | None, None -> assert false
-          | None, Some _ | Some _, None -> raise NotConv
-          | Some cb1, Some cb2 -> (cb1, cb2) :: acc
+          let a1, a2 = oget a1, oget a2 in (* cannot be None *)
+          do_cost_bnd a1 a2 @ acc
         ) calls1 calls2 [] in
 
-    let check_self =
-      match co1.c_self, co2.c_self with
-      | Some self1, Some self2 -> [self1, self2]
-      | None, Some _ | Some _, None -> raise NotConv
-      | None, None -> []
-    in
+    let check_self = do_cost_bnd co1.c_self co2.c_self in
     check_self @ acc
 
 let check_cost test env subst co1 co2 =
@@ -1391,42 +1406,35 @@ let zpop ri side f hd =
     let self_pcalls_len = List.length self_pcalls in
     let self_, pcalls =
       if self_pcalls_len = pcalls_len
-      then None, self_pcalls
+      then C_unbounded, self_pcalls
       else
         let _ = assert (self_pcalls_len = pcalls_len + 1) in
         match self_pcalls with
-        | self :: pcalls -> Some self, pcalls
+        | self :: pcalls -> C_bounded self, pcalls
         | _ -> assert false
     in
 
-    let calls =
-      List.map2
-        (fun (xp, _) cb_called -> (xp, cb_called))
-        (Mx.bindings hfc.chf_co.c_calls) pcalls
+    let calls = zapp_cost_l (Mx.bindings hfc.chf_co.c_calls) pcalls Mx.empty
     in
     f_cHoareF_r
-      { hfc with chf_pr; chf_po; chf_co = cost_r self_ (Mx.of_list calls) }
+      { hfc with chf_pr; chf_po; chf_co = cost_r self_ calls }
 
   | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_pcalls -> (* FIXME *)
     let pcalls_len = Mx.cardinal hfs.chs_co.c_calls in
     let self_pcalls_len = List.length self_pcalls in
     let self_, pcalls =
       if self_pcalls_len = pcalls_len
-      then None, self_pcalls
+      then C_unbounded, self_pcalls
       else
         let _ = assert (self_pcalls_len = pcalls_len + 1) in
         match self_pcalls with
-        | self :: pcalls -> Some self, pcalls
+        | self :: pcalls -> C_bounded self, pcalls
         | _ -> assert false
     in
 
-    let calls =
-      List.map2
-        (fun (xp, _) cb_called -> (xp, cb_called))
-        (Mx.bindings hfs.chs_co.c_calls) pcalls
-    in
+    let calls = zapp_cost_l (Mx.bindings hfs.chs_co.c_calls) pcalls Mx.empty in
     f_cHoareS_r
-      { hfs with chs_pr; chs_po; chs_co = cost_r self_ (Mx.of_list calls) }
+      { hfs with chs_pr; chs_po; chs_co = cost_r self_ calls }
 
   | _, _ -> assert false
 

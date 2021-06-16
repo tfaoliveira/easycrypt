@@ -585,33 +585,25 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             [hf2.bhf_pr; hf2.bhf_po; hf2.bhf_bd]
       end
 
-      | FcHoareF hf1, FcHoareF hf2 -> begin
-          let x2 = EcFol.Fsubst.subst_xpath subst hf2.chf_f in
+      | FcHoareF hf1, FcHoareF hf2 ->
+        let x2 = EcFol.Fsubst.subst_xpath subst hf2.chf_f in
 
-          if not (EcReduction.EqTest.for_xp env hf1.chf_f x2) then
-            failure ();
-          let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
+        if not (EcReduction.EqTest.for_xp env hf1.chf_f x2) then
+          failure ();
+        let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
 
-          let calls2 = EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls in
+        let calls2 = EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls in
 
-          EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
-              match cb1, cb2 with
-              | None, None -> assert false
-              | None, Some _ | Some _, None -> failure ()
-              | Some cb1, Some cb2 ->
-                doit env (subst, mxs) cb1 cb2
-            ) hf1.chf_co.c_calls calls2 ();
+        EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
+            let cb1, cb2 = oget cb1, oget cb2 in (* cannot be None *)
+            doit_cost_bnd failure env (subst, mxs) cb1 cb2
+          ) hf1.chf_co.c_calls calls2 ();
 
-          let () = match hf1.chf_co.c_self, hf2.chf_co.c_self with
-            | None, None -> ()
-            | Some _, None | None, Some _ -> failure ()
-            | Some c1, Some c2 -> doit env (subst, mxs) c1 c2
-          in
+        doit_cost_bnd failure env (subst, mxs) hf1.chf_co.c_self hf2.chf_co.c_self;
 
-          List.iter2 (doit env (subst, mxs))
-            [hf1.chf_pr; hf1.chf_po]
-            [hf2.chf_pr; hf2.chf_po];
-        end
+        List.iter2 (doit env (subst, mxs))
+          [hf1.chf_pr; hf1.chf_po]
+          [hf2.chf_pr; hf2.chf_po];
 
       | FequivF hf1, FequivF hf2 -> begin
           if not (EcReduction.EqTest.for_xp env hf1.ef_fl hf2.ef_fl) then
@@ -672,6 +664,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           doit_reduce env (doit env ilc ptn) subject.f_ty op2 tys2 args2
 
       | _, _ -> failure ()
+
+  and doit_cost_bnd failure env ilc cb1 cb2 =
+    match cb1, cb2 with
+    | C_unbounded, C_unbounded -> ()
+    | C_unbounded, C_bounded _ | C_bounded _, C_unbounded -> failure ()
+    | C_bounded cb1, C_bounded cb2 ->
+      doit env ilc cb1 cb2
 
   and doit_args env ilc fs1 fs2 =
     if List.length fs1 <> List.length fs2 then
@@ -889,10 +888,17 @@ module FPosition = struct
           | FcHoareF chs ->
             let subctxt = Sid.add EcFol.mhr ctxt in
             let calls =
-              List.map (fun (_,cb) -> ctxt,cb)
-                (EcPath.Mx.bindings chs.chf_co.c_calls)
+              List.filter_map (fun (_,cb) ->
+                  match cb with
+                  | C_bounded c -> Some (ctxt, c)
+                  | C_unbounded -> None
+                ) (EcPath.Mx.bindings chs.chf_co.c_calls)
             in
-            let self = omap_dfl (fun c -> [ctxt, c]) [] chs.chf_co.c_self in
+            let self =
+              match chs.chf_co.c_self with
+              | C_bounded c -> [ctxt, c]
+              | C_unbounded -> []
+            in
             doit pos (`WithSubCtxt ((subctxt, chs.chf_pr) ::
                                     (subctxt, chs.chf_po) ::
                                     self @
@@ -1052,34 +1058,39 @@ module FPosition = struct
               f_hoareF_r { hf with hf_pr; hf_po; }
 
           | FcHoareF chf ->
-            let fkeys, calls = EcPath.Mx.bindings chf.chf_co.c_calls
-                               |> List.map (fun (f,cb) -> ((f,()), cb))
-                               |> List.split in
-            let self = otolist chf.chf_co.c_self in
-
-            let sub = doit p (chf.chf_pr ::
-                              chf.chf_po ::
-                              self @
-                              calls) in
-
-            let chf_pr, chf_po, c_self, calls =
-              if chf.chf_co.c_self = None then
-                match sub with
-                | chf_pr :: chf_po :: calls -> chf_pr, chf_po, None, calls
-                | _ -> assert false
-              else
-                match sub with
-                | chf_pr :: chf_po :: c_self :: calls ->
-                  chf_pr, chf_po, Some c_self, calls
-                | _ -> assert false
+            let calls = EcPath.Mx.bindings chf.chf_co.c_calls
+                        |> List.filter_map (fun (f,cb) ->
+                            match cb with
+                            | C_bounded c -> Some (`Xpath f, c)
+                            | C_unbounded -> None)
+            in
+            let self =
+              match chf.chf_co.c_self with
+              | C_bounded c -> [`Self, c]
+              | C_unbounded -> []
             in
 
-            let c_calls =
-              List.fold_left2 (fun acc (f,()) cb_called ->
-                  EcPath.Mx.change
-                    (fun old -> assert (old = None); Some (cb_called))
-                    f acc
-                ) EcPath.Mx.empty fkeys calls
+            let sub =
+              kdoit p ((`Pre, chf.chf_pr) :: (`Post, chf.chf_po) :: self @ calls)
+            in
+
+            let chf_pr, chf_po, c_self, calls =
+                match sub with
+                  | (_, chf_pr) :: (_, chf_po) :: (`Self, self) :: calls ->
+                    chf_pr, chf_po, C_bounded self, calls
+
+                  | (_, chf_pr) :: (_, chf_po) :: calls ->
+                    chf_pr, chf_po, C_unbounded, calls
+
+                  | _ -> assert false
+            in
+
+            let c_calls : cost_bnd EcPath.Mx.t =
+              EcPath.Mx.mapi (fun xp _ ->
+                  match List.find_opt (fun (key, _) -> key = `Xpath xp) calls with
+                  | Some (_,cb) -> C_bounded cb
+                  | None        -> C_unbounded
+                ) chf.chf_co.c_calls
             in
             let cost = cost_r c_self c_calls in
             f_cHoareF_r { chf with chf_pr; chf_po;
@@ -1106,17 +1117,31 @@ module FPosition = struct
           | FeagerF   _ -> raise InvalidPosition
       end
 
-    and doit ps fps =
-      match Mint.is_empty ps with
-      | true  -> fps
-      | false ->
+    (* no keys *)
+    and doit ps (fps : form list) : form list =
+      let fps = List.map (fun x -> (), x) fps in
+      List.map (fun ((), x) -> x) (kdoit ps fps)
+
+    (* with keys *)
+    and kdoit : type a.
+      'b -> (a * form) list -> (a * form) list
+      =
+      fun ps fps ->
+        match Mint.is_empty ps with
+        | true  -> fps
+        | false ->
           let imin = fst (Mint.min_binding ps)
           and imax = fst (Mint.max_binding ps) in
           if imin < 0 || imax >= List.length fps then
             raise InvalidPosition;
-          let fps = List.mapi (fun i x -> (x, Mint.find_opt i ps)) fps in
-          let fps = List.map (function (f, None) -> f | (f, Some p) -> doit1 p f) fps in
-            fps
+          let fps = List.mapi (fun i (k,x) -> (k,x, Mint.find_opt i ps)) fps in
+          let fps =
+            List.map (function
+                | (k,f, None) -> k,f
+                | (k,f, Some p) -> k,doit1 p f
+              ) fps
+          in
+          fps
 
     in
       as_seq1 (doit p [f])

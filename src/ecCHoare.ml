@@ -22,11 +22,11 @@ let f_xsub (f1 : form) (f2 : form) : form * form =
   f_subcond f1 f2, f_xadd f1 (f_xopp f2)
 
 let cost_sub_self (c : cost) (a : form) : cost =
-  let c_self = omap (fun x -> f_int_sub x a) c.c_self in
+  let c_self = cost_bnd_map (fun x -> f_int_sub x a) c.c_self in
   cost_r c_self c.c_calls
 
 let cost_add_self c a =
-  let c_self = omap (fun x -> f_int_add x a) c.c_self in
+  let c_self = cost_bnd_map (fun x -> f_int_add x a) c.c_self in
   cost_r c_self c.c_calls
 
 (* (\* Add an entry for a oracle to [c.c_calls], if necessary. *\)
@@ -41,8 +41,8 @@ let cost_add_self c a =
  *     let oi = EcSymbols.Msym.find f.EcPath.x_sub restr.mr_oinfos in
  *
  *     let self = match EcCoreModules.PreOI.cost_self oi with
- *       | `Unbounded -> assert false
- *       | `Bounded self -> self in
+ *       | C_unbounded -> assert false
+ *       | C_bounded self -> self in
  *
  *     let cb = call_bound_r self f_i0 in
  *

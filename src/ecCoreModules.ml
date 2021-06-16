@@ -586,40 +586,25 @@ let ur_inter union inter ur1 ur2 =
 module PreOI : sig
   type 'a t
 
-  type 'a elc =  [`Bounded of 'a | `Unbounded]
-
   val hash : ('a -> int) -> 'a t -> int
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t ->          'a elc
-  val cost      : 'a t -> xpath -> 'a elc
+  val cost_self : 'a t ->          'a
+  val cost      : 'a t -> xpath -> 'a
 
-  val cost_calls : 'a t -> 'a elc Mx.t
+  val cost_calls : 'a t -> 'a Mx.t
 
-  val costs : 'a t -> 'a elc * 'a elc Mx.t
+  val costs : 'a t -> 'a * 'a Mx.t
 
   val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk :
-    xpath list -> bool -> 'a elc -> 'a elc Mx.t -> 'a t
+  val mk : xpath list -> bool -> 'a -> 'a Mx.t -> 'a t
 
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end = struct
-
-  type 'a elc =  [`Bounded of 'a | `Unbounded]
-
-  let elc_eq a_equal a b =
-    match a, b with
-    | `Bounded a, `Bounded b -> a_equal a b
-    | `Unbounded, `Unbounded -> true
-    | _ -> false
-
-  let hash_elc a_hash = function
-    | `Bounded a -> Why3.Hashcons.combine 0 (a_hash a)
-    | `Unbounded -> 42
 
   (* Oracle information of a procedure [M.f]:
    * - oi_calls : list of oracles that can be called by [M.f].
@@ -633,7 +618,7 @@ end = struct
   type 'a t = {
     oi_calls : xpath list;
     oi_in    : bool;
-    oi_costs : 'a elc * 'a elc Mx.t;
+    oi_costs : 'a * 'a Mx.t;
   }
 
   let is_in t = t.oi_in
@@ -649,7 +634,7 @@ end = struct
     let m = x.x_top in
     assert (m_is_local m && m.m_args = [])
 
-  let cost (oi : 'a t) (x : xpath) : 'a elc =
+  let cost (oi : 'a t) (x : xpath) : 'a =
     check_xpath x;
 
     let calls = snd oi.oi_costs in
@@ -670,14 +655,14 @@ end = struct
     let check_calls_eq calls1 calls2 =
       let exception Not_equal in
       try Mx.fold2_union (fun _ a b () -> match a, b with
-          | Some a, Some b -> if elc_eq a_equal a b then () else raise Not_equal
+          | Some a, Some b -> if a_equal a b then () else raise Not_equal
           | _ -> assert false
         ) calls1 calls2 (); true
       with Not_equal -> false
     in
 
     let check_costs_eq (self1, calls1) (self2, calls2) =
-      elc_eq a_equal self1 self2 &&
+      a_equal self1 self2 &&
       check_calls_eq calls1 calls2
     in
 
@@ -688,9 +673,9 @@ end = struct
   let hash (ahash : 'a -> int) oi : int =
     let costs_hash =
       Why3.Hashcons.combine
-        (hash_elc ahash (fst oi.oi_costs))
+        (ahash (fst oi.oi_costs))
         (Why3.Hashcons.combine_list
-           (Why3.Hashcons.combine_pair EcPath.x_hash (hash_elc ahash))
+           (Why3.Hashcons.combine_pair EcPath.x_hash ahash)
            0 (Mx.bindings (snd oi.oi_costs)))
     in
 
@@ -718,12 +703,6 @@ let p_mr_equal a_equal mr1 mr2 =
   ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
   && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
   && Msym.equal (PreOI.equal a_equal) mr1.mr_oinfos mr2.mr_oinfos
-
-let has_compl_restriction mr =
-  Msym.exists (fun _ oi ->
-      let self, calls = PreOI.costs oi in
-      self <> `Unbounded || not (Mx.is_empty calls)
-    ) mr.mr_oinfos
 
 (* -------------------------------------------------------------------- *)
 type funsig = {

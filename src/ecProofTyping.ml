@@ -44,10 +44,10 @@ let process_formula ?mv hyps pf =
 
 let process_cost ?mv hyps (EcParsetree.PC_costs (self, calls)) tys =
   let process_elc = function
-    | `Unbounded -> `Unbounded
+    | `Unbounded -> C_unbounded
     | `Bounded c ->
       let c = process_form_opt ?mv hyps c (Some (toarrow tys tint)) in
-      `Bounded c
+      C_bounded c
   in
 
   let env = LDecl.toenv hyps in
@@ -62,8 +62,8 @@ let process_cost ?mv hyps (EcParsetree.PC_costs (self, calls)) tys =
 
   (* FIXME: A: cleanup *)
   let to_opt = function
-    | `Unbounded -> None
-    | `Bounded c -> Some c
+    | C_unbounded -> None
+    | C_bounded c -> Some c
   in
   let self = to_opt self
   and calls = EcPath.Mx.map_filter to_opt calls in

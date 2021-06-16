@@ -2400,7 +2400,7 @@ module NormMp = struct
             Sm.mem ftop mparams in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name (OI.mk calls true `Unbounded Mx.empty) oi
+          Msym.add f.f_name (OI.mk calls true C_unbounded Mx.empty) oi
       in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in
@@ -2428,9 +2428,16 @@ module NormMp = struct
     get_restr_me env me mp
 
   let equal_restr (f_equiv : form -> form -> bool) env r1 r2 =
+    let cost_bnd_equiv a b =
+      match a, b with
+      | C_bounded a, C_bounded b -> f_equiv a b
+      | C_unbounded, C_unbounded -> true
+      | _ -> false
+    in
+
     let us1,us2 = restr_use env r1, restr_use env r2 in
     ur_equal use_equal us1 us2
-    && Msym.equal (PreOI.equal f_equiv) r1.mr_oinfos r2.mr_oinfos
+    && Msym.equal (PreOI.equal cost_bnd_equiv) r1.mr_oinfos r2.mr_oinfos
 
 
   let sig_of_mp env mp =
@@ -2519,10 +2526,10 @@ module NormMp = struct
         | FcHoareF chf ->
           let pre' = aux chf.chf_pr and p' = norm_xfun env chf.chf_f
           and post' = aux chf.chf_po in
-          let c_self' = omap aux chf.chf_co.c_self in
+          let c_self' = cost_bnd_map aux chf.chf_co.c_self in
           let c_calls' = Mx.fold (fun f c calls ->
               let f' = f        (* not normalized. *)
-              and c' = aux c in
+              and c' = cost_bnd_map aux c in
               Mx.change (fun old -> assert (old = None); Some c') f' calls
             ) chf.chf_co.c_calls Mx.empty in
           if chf.chf_pr == pre' && chf.chf_f == p' &&

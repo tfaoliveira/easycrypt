@@ -1797,27 +1797,27 @@ and pp_allowed_orcl ppe fmt orcls =
     Format.fprintf fmt "{@[<hov>%a@]}@ "
       (pp_list ",@ " (pp_funname ppe)) orcls
 
-and pp_costs ppe fmt ((self,calls) : OI.elc * OI.elc EcPath.Mx.t) : unit =
+and pp_costs ppe fmt ((self,calls) : cost_bnd * cost_bnd EcPath.Mx.t) : unit =
   let has_restr =
-    self <> `Unbounded || EcPath.Mx.exists (fun _ x -> x <> `Unbounded) calls
+    self <> C_unbounded || EcPath.Mx.exists (fun _ x -> x <> C_unbounded) calls
   in
   let full_restr =
-    self <> `Unbounded && EcPath.Mx.for_all (fun _ x -> x <> `Unbounded) calls
+    self <> C_unbounded && EcPath.Mx.for_all (fun _ x -> x <> C_unbounded) calls
   in
   if not has_restr then
     Format.fprintf fmt ""
   else
     let pp_self fmt = function
-      | `Unbounded -> ()
-      | `Bounded f -> pp_form ppe fmt f
+      | C_unbounded -> ()
+      | C_bounded f -> pp_form ppe fmt f
     in
     let pp_elc fmt = function
-      | `Unbounded -> ()
-      | `Bounded f -> Format.fprintf fmt ": %a" (pp_form ppe) f
+      | C_unbounded -> ()
+      | C_bounded f -> Format.fprintf fmt ": %a" (pp_form ppe) f
     in
     let pp_cost fmt (f,c) = match c with
-      | `Unbounded -> ()
-      | `Bounded _ ->
+      | C_unbounded -> ()
+      | C_bounded _ ->
         Format.fprintf fmt "@[%a : %a@]"
           (pp_funname ppe) f
           pp_elc c
@@ -1828,7 +1828,7 @@ and pp_costs ppe fmt ((self,calls) : OI.elc * OI.elc EcPath.Mx.t) : unit =
       pp_self self
       (fun fmt ->
          Format.fprintf fmt
-           (if self = `Unbounded || bindings = [] then "" else ",@ "))
+           (if self = C_unbounded || bindings = [] then "" else ",@ "))
       (pp_list ",@ " pp_cost) bindings
       (fun fmt -> if full_restr then () else
         if has_restr then Format.fprintf fmt ", _" else Format.fprintf fmt "_")

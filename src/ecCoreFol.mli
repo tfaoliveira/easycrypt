@@ -157,18 +157,22 @@ and pr = {
   pr_event : form;
 }
 
+and cost_bnd =
+  | C_bounded of form      (* type int *)
+  | C_unbounded
 
 (* Invariant: keys of c_calls are functions of local modules,
-   with no arguments.
-   Missing or [None] entries are unbounded. *)
+   with no arguments. *)
 and cost = private {
-  c_self  : form option;
-  c_calls : form EcPath.Mx.t;
+  c_self  : cost_bnd;
+  c_calls : cost_bnd EcPath.Mx.t;
 }
 
-and module_type = form p_module_type
+and module_type = cost_bnd p_module_type
 
-type mod_restr = form p_mod_restr
+type mod_restr = cost_bnd p_mod_restr
+
+type orcl_info = cost_bnd p_orcl_info
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
@@ -182,6 +186,9 @@ val gty_fv    : gty -> int Mid.t
 (* -------------------------------------------------------------------- *)
 val mty_equal : module_type -> module_type -> bool
 val mty_hash  : module_type -> int
+
+val cost_bnd_hash  : cost_bnd -> int
+val cost_bnd_equal : cost_bnd -> cost_bnd -> bool
 
 val mr_equal : mod_restr -> mod_restr -> bool
 val mr_hash  : mod_restr -> int
@@ -208,6 +215,11 @@ val f_map  : (EcTypes.ty -> EcTypes.ty) -> (form -> form) -> form -> form
 val f_iter : (form -> unit) -> form -> unit
 val form_exists: (form -> bool) -> form -> bool
 val form_forall: (form -> bool) -> form -> bool
+
+(* -------------------------------------------------------------------- *)
+(* not recursive *)
+val cost_bnd_map : (form -> form) -> cost_bnd -> cost_bnd
+val cost_map     : (form -> form) -> cost     -> cost
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
@@ -246,7 +258,7 @@ val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
-val cost_r : form option -> form EcPath.Mx.t -> cost
+val cost_r : cost_bnd -> cost_bnd EcPath.Mx.t -> cost
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -494,7 +506,7 @@ type mem_pr = EcMemory.memory * form
 (* -------------------------------------------------------------------- *)
 type f_subst = private {
   fs_freshen : bool; (* true means realloc local *)
-  fs_mp      : (EcPath.mpath * form p_orcl_info option) Mid.t;
+  fs_mp      : (EcPath.mpath * orcl_info option) Mid.t;
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -514,7 +526,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:((EcPath.mpath * form p_orcl_info option) Mid.t)
+    -> ?mods:((EcPath.mpath * orcl_info option) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -528,21 +540,14 @@ module Fsubst : sig
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
   val f_bind_loc_mod : f_subst -> EcIdent.t -> mpath -> f_subst
   val f_bind_mod     :
-    f_subst ->
-    EcIdent.t ->
-    mpath ->
-    form p_orcl_info option ->
-    f_subst
-
-
-
+    f_subst -> EcIdent.t -> mpath -> orcl_info option -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
   val f_subst_mod   :
-    EcIdent.t -> mpath -> form -> form p_orcl_info option -> form
+    EcIdent.t -> mpath -> form -> orcl_info option -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form
@@ -564,7 +569,7 @@ module Fsubst : sig
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
-  val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t
+  val subst_oi       : f_subst -> cost_bnd PreOI.t -> cost_bnd PreOI.t
   val subst_gty      : f_subst -> gty -> gty
 end
 

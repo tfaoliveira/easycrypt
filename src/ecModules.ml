@@ -20,33 +20,29 @@ include EcCoreModules
 (* -------------------------------------------------------------------- *)
 (* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
 module OI : sig
-  type t = form PreOI.t
-
-  type elc =  [`Bounded of form | `Unbounded]
+  type t = cost_bnd PreOI.t
 
   val hash  : t -> int
   val equal : t -> t -> bool
 
   val is_in : t -> bool
 
-  val cost_self : t ->          elc
-  val cost      : t -> xpath -> elc
+  val cost_self : t ->          cost_bnd
+  val cost      : t -> xpath -> cost_bnd
 
-  val cost_calls : t -> elc Mx.t
+  val cost_calls : t -> cost_bnd Mx.t
 
-  val costs : t -> elc * elc Mx.t
+  val costs : t -> cost_bnd * cost_bnd Mx.t
 
   val allowed   : t -> xpath list
   val allowed_s : t -> Sx.t
 
   val mk :
-    xpath list -> bool -> elc -> elc Mx.t -> t
+    xpath list -> bool -> cost_bnd -> cost_bnd Mx.t -> t
 
   val filter : (xpath -> bool) -> t -> t
 end = struct
-  type t = EcCoreFol.form PreOI.t
-
-  type elc =  [`Bounded of form | `Unbounded]
+  type t = cost_bnd PreOI.t
 
   let is_in        = PreOI.is_in
   let allowed      = PreOI.allowed
@@ -57,25 +53,25 @@ end = struct
   let costs        = PreOI.costs
   let mk           = PreOI.mk
   let filter       = PreOI.filter
-  let equal        = PreOI.equal EcCoreFol.f_equal
-  let hash         = PreOI.hash EcCoreFol.f_hash
+  let equal        = PreOI.equal EcCoreFol.cost_bnd_equal
+  let hash         = PreOI.hash EcCoreFol.cost_bnd_hash
 end
 
-type orcl_info = OI.t EcSymbols.Msym.t
+type orcl_info = EcCoreFol.orcl_info
 
 (* -------------------------------------------------------------------- *)
 type module_type       = EcCoreFol.module_type
 type mod_restr         = EcCoreFol.mod_restr
-type module_sig        = form p_module_sig
-type module_smpl_sig   = form p_module_smpl_sig
-type function_body     = form p_function_body
-type function_         = form p_function_
-type module_expr       = form p_module_expr
-type module_body       = form p_module_body
-type module_structure  = form p_module_structure
-type module_item       = form p_module_item
-type module_comps      = form p_module_comps
-type module_comps_item = form p_module_comps_item
+type module_sig        = cost_bnd p_module_sig
+type module_smpl_sig   = cost_bnd p_module_smpl_sig
+type function_body     = cost_bnd p_function_body
+type function_         = cost_bnd p_function_
+type module_expr       = cost_bnd p_module_expr
+type module_body       = cost_bnd p_module_body
+type module_structure  = cost_bnd p_module_structure
+type module_item       = cost_bnd p_module_item
+type module_comps      = cost_bnd p_module_comps
+type module_comps_item = cost_bnd p_module_comps_item
 
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
@@ -110,9 +106,15 @@ let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
       let oi = Msym.find f restr.mr_oinfos in
       let filter x = List.mem x ocalls in
       OI.filter filter oi
-    with Not_found -> OI.mk ocalls true `Unbounded Mx.empty
+    with Not_found -> OI.mk ocalls true C_unbounded Mx.empty
   in
   add_oinfo restr f oi
+
+let has_compl_restriction mr =
+  Msym.exists (fun _ oi ->
+      let self, calls = PreOI.costs oi in
+      self <> C_unbounded || Mx.exists (fun _ bnd -> bnd <> C_unbounded) calls
+    ) mr.mr_oinfos
 
 (* -------------------------------------------------------------------- *)
 let mty_hash  = EcCoreFol.mty_hash

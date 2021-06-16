@@ -134,25 +134,22 @@ val ur_union :
 module PreOI : sig
   type 'a t
 
-  type 'a elc =  [`Bounded of 'a | `Unbounded]
-
   val hash : ('a -> int) -> 'a t -> int
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t ->          'a elc
-  val cost      : 'a t -> xpath -> 'a elc
+  val cost_self : 'a t ->          'a
+  val cost      : 'a t -> xpath -> 'a
 
-  val cost_calls : 'a t -> 'a elc Mx.t
+  val cost_calls : 'a t -> 'a Mx.t
 
-  val costs : 'a t -> 'a elc * 'a elc Mx.t
+  val costs : 'a t -> 'a * 'a Mx.t
 
   val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk :
-    xpath list -> bool -> 'a elc -> 'a elc Mx.t -> 'a t
+  val mk : xpath list -> bool -> 'a -> 'a Mx.t -> 'a t
 
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end
@@ -176,8 +173,6 @@ val p_mr_equal :
   bool
 
 val p_mr_hash : ('a -> int) -> 'a p_mod_restr -> int
-
-val has_compl_restriction : 'a p_mod_restr -> bool
 
 (* -------------------------------------------------------------------- *)
 (* An oracle in a function provided by a module parameter of a functor *)

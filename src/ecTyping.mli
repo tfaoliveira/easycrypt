@@ -40,7 +40,7 @@ type mismatch_funsig =
 | MF_tres   of ty * ty                               (* expected, got *)
 | MF_restr  of EcEnv.env * Sx.t mismatch_sets
 | MF_compl     of EcEnv.env *
-                  ((OI.elc * OI.elc) option * (OI.elc * OI.elc) Mx.t) suboreq
+                  ((cost_bnd * cost_bnd) option * (cost_bnd * cost_bnd) Mx.t) suboreq
 
 type restr_failure = Sx.t * Sm.t
 

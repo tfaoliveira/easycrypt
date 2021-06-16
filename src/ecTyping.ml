@@ -49,7 +49,7 @@ type mismatch_funsig =
 | MF_tres      of ty * ty                               (* expected, got *)
 | MF_restr     of EcEnv.env * Sx.t mismatch_sets
 | MF_compl     of EcEnv.env *
-                  ((OI.elc * OI.elc) option * (OI.elc * OI.elc) Mx.t) suboreq
+                  ((cost_bnd * cost_bnd) option * (cost_bnd * cost_bnd) Mx.t) suboreq
 
 type restr_failure = Sx.t * Sm.t
 
@@ -523,11 +523,11 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
         check_item_err (MF_restr(env, `Eq(ocalls, icalls))) in
 
   let norm_cost = function
-    | `Unbounded -> `Unbounded
-    | `Bounded c -> `Bounded (EcEnv.NormMp.norm_form env c)
+    | `Unbounded -> C_unbounded
+    | C_bounded c -> C_bounded (EcEnv.NormMp.norm_form env c)
   in
 
-  let norm_costs ((self, calls) : OI.elc * OI.elc Mx.t) =
+  let norm_costs ((self, calls) : cost_bnd * cost_bnd Mx.t) =
     (norm_cost self, Mx.map norm_cost calls) in
 
   (* We check complexity compatibility. *)
@@ -536,24 +536,24 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
 
   let hyps = EcEnv.LDecl.init env [] in
 
-  let check_elc : OI.elc -> OI.elc -> bool =
+  let check_elc : cost_bnd -> cost_bnd -> bool =
     match mode with
     | `Sub -> fun ic oc ->
         begin match ic, oc with
-          | `Unbounded, `Unbounded
-          | `Bounded _, `Unbounded -> true
-          | `Unbounded, `Bounded _ -> false
-          | `Bounded ic, `Bounded oc ->
+          | C_unbounded, C_unbounded
+          | C_bounded _, C_unbounded -> true
+          | C_unbounded, C_bounded _ -> false
+          | C_bounded ic, C_bounded oc ->
             EcReduction.is_conv hyps ic oc
         end
     | `Eq -> fun ic oc ->
       begin match ic, oc with
-        | `Unbounded, `Unbounded -> true
+        | C_unbounded, C_unbounded -> true
 
-        | `Bounded _, `Unbounded
-        | `Unbounded, `Bounded _ -> false
+        | C_bounded _, C_unbounded
+        | C_unbounded, C_bounded _ -> false
 
-        | `Bounded ic, `Bounded oc ->
+        | C_bounded ic, C_bounded oc ->
           EcReduction.is_conv hyps ic oc
       end
   in
@@ -931,9 +931,9 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
           List.fold_left (fun param_restr' (Tys_function fn) ->
               let oi = Msym.find fn.fs_name param_restr.mr_oinfos in
               match OI.cost_self oi with
-              | `Bounded _ -> param_restr'
-              | `Unbounded ->
-                let self = `Bounded f_i0 in
+              | C_bounded _ -> param_restr'
+              | C_unbounded ->
+                let self = C_bounded f_i0 in
                 let calls = OI.cost_calls oi in
                 let oi' = OI.mk (OI.allowed oi) (OI.is_in oi) self calls in
                 let param_restr' = add_oinfo param_restr' fn.fs_name oi' in
@@ -974,7 +974,7 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
 
     let c_self, costs = OI.costs oi in
 
-    let c_calls : OI.elc Mx.t = Mx.fold (fun o obd c_calls ->
+    let c_calls : cost_bnd Mx.t = Mx.fold (fun o obd c_calls ->
         (* We compute the name of the procedure, seen as an oracle of
            [mp_in_app]. That is, if [o] is a parameter of [mp_in], then
            we use the fresh mident. *)
@@ -993,8 +993,8 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
     in
 
     let to_opt = function
-      | `Unbounded -> None
-      | `Bounded c -> Some c
+      | C_unbounded -> None
+      | C_bounded c -> Some c
     in
     let c_self = to_opt c_self
     and c_calls = Mx.map_filter to_opt c_calls in
@@ -2190,7 +2190,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) = function
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
 (* If [r_compl] is None, there are no restrictions *)
 let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
-  OI.elc * OI.elc Mx.t
+  cost_bnd * cost_bnd Mx.t
   =
   let trans_closed_form (form : pformula) (ty : EcTypes.ty) : form =
     let ue = EcUnify.UniEnv.create None in
@@ -2204,7 +2204,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
   in
 
   (* map to be filled after *)
-  let calls : OI.elc Mx.t =
+  let calls : cost_bnd Mx.t =
     Sm.fold (fun param calls ->
         assert (param.m_args = []); (* check that param is not applied *)
 
@@ -2213,18 +2213,18 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
           List.map (fun (Tys_function f) -> f.fs_name) param_me.me_sig_body
         in
         List.fold_left (fun calls f ->
-            Mx.add (xpath param f) `Unbounded calls (* `Unbounded by default *)
+            Mx.add (xpath param f) C_unbounded calls (* C_unbounded by default *)
           ) calls funs
       ) params Mx.empty
   in
 
-  let mk_elc : pformula option -> OI.elc = function
-    | None -> `Unbounded
-    | Some form -> `Bounded (trans_closed_form form EcTypes.tint)
+  let mk_elc : pformula option -> cost_bnd = function
+    | None -> C_unbounded
+    | Some form -> C_bounded (trans_closed_form form EcTypes.tint)
   in
 
   match r_compl with
-  | None -> `Unbounded, calls
+  | None -> C_unbounded, calls
   | Some (PCompl (self, restr_elems)) ->
     let calls =
       List.fold_left (fun calls (name, form) ->
@@ -2255,7 +2255,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
  * Here, the parameter of the functor [S] are not binded in [env], but must be
  * binded in [env_in]. *)
 and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
-  bool * EcSymbols.symbol * OI.elc * OI.elc Mx.t * xpath list
+  bool * EcSymbols.symbol * cost_bnd * cost_bnd Mx.t * xpath list
   =
   let name = unloc r_el.pmre_name in
   let c_self, c_calls = trans_restr_compl env env_in params r_el.pmre_compl in
@@ -3658,11 +3658,11 @@ and trans_form_or_pattern
       EcCHoare.check_loaded env;
 
       let trans_elc = function
-        | `Unbounded -> `Unbounded
-        | `Bounded c ->
+        | C_unbounded -> C_unbounded
+        | C_bounded c ->
           let c' = transf env c in
           unify_or_fail env ue c.pl_loc ~expct:tint c'.f_ty;
-          `Bounded c'
+          C_bounded c'
       in
 
       let trans_choaref pre' post' fpath self calls =
@@ -3677,8 +3677,8 @@ and trans_form_or_pattern
 
         (* FIXME: A: cleanup *)
         let to_opt = function
-          | `Unbounded -> None
-          | `Bounded c -> Some c
+          | C_unbounded -> None
+          | C_bounded c -> Some c
         in
         let self' = to_opt self'
         and calls' = Mx.map_filter to_opt calls' in
