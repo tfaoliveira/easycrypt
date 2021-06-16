@@ -542,7 +542,7 @@ module Fsubst : sig
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
   val f_subst_mod   :
-    EcIdent.t -> mpath -> form p_orcl_info option -> form -> form
+    EcIdent.t -> mpath -> form -> form p_orcl_info option -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form

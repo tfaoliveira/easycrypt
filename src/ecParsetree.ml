@@ -242,10 +242,11 @@ and pfrange = [
 
 and pfindex = [ `Index of int | `Match of pformula * int option]
 
-and pcost_call  = psymbol * psymbol * pformula
+and p_elc       = [`Unbounded | `Bounded of pformula]
+and pcost_call  = psymbol * psymbol * p_elc
 and pcost_calls = pcost_call list
 
-and pcost  = PC_costs of pformula * pcost_calls
+and pcost  = PC_costs of p_elc * pcost_calls
 
 (* if [pmty_mem] is [None], there are no user-supplied restriction, which is
    different from the user supplying an empty restriction.
@@ -263,7 +264,7 @@ and qident_inparam = { inp_in_params : bool;
 
 and poracles = qident_inparam list
 
-and pcompl = PCompl of pformula * (qident_inparam * pformula) list
+and pcompl = PCompl of pformula option * (qident_inparam * pformula option) list
 
 and pmod_restr_el = {
   pmre_in    : bool;

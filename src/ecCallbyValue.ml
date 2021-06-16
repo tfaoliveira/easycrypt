@@ -171,13 +171,12 @@ let rec norm st s f =
  norm_lambda st f
 
 and norm_cost st s c =
-  let self'  = norm st s c.c_self
+  let self'  = omap (norm st s) c.c_self
   and calls' =
     EcPath.Mx.fold (fun f cb calls ->
         (* We do not normalize the xpath, as it is not a valid xpath. *)
         let f' = Subst.subst_xpath s f
-        and cb' = call_bound_r (norm st s cb.cb_cost)
-                               (norm st s cb.cb_called) in
+        and cb' = norm st s cb in
         EcPath.Mx.change (fun old -> assert (old = None); Some cb') f' calls
       ) c.c_calls EcPath.Mx.empty in
   cost_r self' calls'

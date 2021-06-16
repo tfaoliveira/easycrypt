@@ -2241,9 +2241,9 @@ module Fsubst = struct
     let s = f_bind_mem f_subst_id m1 m2 in
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
 
-  let f_subst_mod (x : EcIdent.t) mp info : form -> form =
+  let f_subst_mod (x : EcIdent.t) mp f info : form =
     let s = f_bind_mod f_subst_id x mp info in
-    fun f -> if Mid.mem x f.f_fv then f_subst s f else f
+    if Mid.mem x f.f_fv then f_subst s f else f
 
   (* ------------------------------------------------------------------ *)
   let fty_subst sty =

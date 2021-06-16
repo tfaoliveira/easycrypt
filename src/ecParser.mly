@@ -580,6 +580,7 @@
 %token TICKBRACE
 %token TICKPAREN
 %token TICKPIPE
+%token TICKUNDERSCORE
 %token TILD
 %token TIME
 %token TIMEOUT
@@ -1092,16 +1093,20 @@ sc_ptybindings_decl:
 %inline hole: UNDERSCORE { PFhole }
 %inline none: IMPOSSIBLE { assert false }
 
+cost_elc(P):
+| TICKUNDERSCORE  { `Unbounded }
+| c=form_r(P)     { `Bounded c }
+
 orcl_time(P):
- | m=uident DOT f=lident COLON c=form_r(P) { (m,f, c) }
+ | m=uident DOT f=lident COLON c=cost_elc(P) { (m,f, c) }
 
 cost_calls(P,S):
 | calls=rlist1(orcl_time(P), S) { calls }
 
 costs(P):
-| LBRACKET c=form_r(P) RBRACKET     {PC_costs(c,[])}
-| LBRACKET c=form_r(P) SEMICOLON calls=cost_calls(P,SEMICOLON) RBRACKET
-                                      {PC_costs(c,calls)}
+| LBRACKET c=cost_elc(P) RBRACKET   {PC_costs(c,[])}
+| LBRACKET c=cost_elc(P) SEMICOLON calls=cost_calls(P,SEMICOLON) RBRACKET
+                                    {PC_costs(c,calls)}
 
 qident_or_res_or_glob:
 | x=qident
@@ -1683,17 +1688,26 @@ oracle_restr:
 
 (* -------------------------------------------------------------------- *)
 (* Complexity restrictions *)
+
+compl_elc:
+| UNDERSCORE     { None }
+| c=form_r(none) { Some c }
+
 compl_el:
-| o=qident_inparam COLON c=form_r(none) { (o, c) }
+| o=qident_inparam COLON c=compl_elc { (o, c) }
+
+/* compl_self: */
+/* | UNDERSCORE     { None } */
+/* | c=form_r(none) { Some c } */
 
 compl_restr:
-| TICKBRACE self=form_r(none) RBRACE
+| TICKBRACE self=compl_elc RBRACE
     { PCompl (self,[]) }
-| TICKBRACE self=form_r(none) COMMA c=rlist1(compl_el,COMMA) RBRACE
+| TICKBRACE self=compl_elc COMMA c=rlist1(compl_el,COMMA) RBRACE
     { PCompl (self,c) }
 
 (* -------------------------------------------------------------------- *)
-(* Module restrictions *)
+(* module restrictions *)
 
 fun_restr:
   | orcl=oracle_restr cl=compl_restr

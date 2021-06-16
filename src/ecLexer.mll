@@ -387,6 +387,7 @@ rule main = parse
 
   (* punctuation *)
   | '_'   { [UNDERSCORE] }
+  | "`_"  { [TICKUNDERSCORE] }
   | "#<"  { [DASHLT    ] }
   | '('   { [LPAREN    ] }
   | ')'   { [RPAREN    ] }

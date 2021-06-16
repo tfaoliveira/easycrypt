@@ -44,16 +44,20 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_cost ppe fmt c =
-        EcPrinting.pp_form ppe fmt c in
+    let pp_cost ppe fmt (c : EcModules.OI.elc) =
+      match c with
+      | `Bounded c -> EcPrinting.pp_form ppe fmt c
+      | `Unbounded -> Format.fprintf fmt "+∞"
+    in
 
-    let pp_self ppe mode fmt (iself,oself) =
+    let pp_self ppe mode fmt ((iself,oself) : EcModules.OI.elc * EcModules.OI.elc) =
       Format.fprintf fmt
         "@[<v>self cost:@;  @[%a@]@; cannot be shown \
          to be %s:@;  @[%a@]@]"
         (pp_cost ppe) iself
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oself in
+        (pp_cost ppe) oself
+    in
 
     let pp_diff ppe mode fmt (f,(ic,oc)) =
       Format.fprintf fmt
@@ -62,7 +66,8 @@ end = struct
         (EcPrinting.pp_funname ppe) f
         (pp_cost ppe) ic
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oc in
+        (pp_cost ppe) oc
+    in
 
     match error with
     | MF_targs (ex, got) ->
@@ -103,7 +108,9 @@ end = struct
           if Mx.is_empty diffs then
             pp_self ppe `Sub fmt self
           else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Sub) self in
+            Format.fprintf fmt "%a@;" (pp_self ppe `Sub) self
+      in
+
       Format.fprintf fmt "@[<v>%a%a@]"
         pp_self_sep self
         (EcPrinting.pp_list "@;" (pp_diff ppe `Sub))
@@ -117,16 +124,13 @@ end = struct
           if Mx.is_empty diffs then
             pp_self ppe `Sub fmt self
           else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Eq) self in
+            Format.fprintf fmt "%a@;" (pp_self ppe `Eq) self
+      in
 
       Format.fprintf fmt "@[<v>%a%a@]"
         pp_self_sep self
         (EcPrinting.pp_list "@;" (pp_diff ppe `Eq))
         (Mx.bindings diffs)
-
-    | MF_unbounded ->
-      msg "the function does not satisfy the required complexity restriction \
-          (at least, it cannot be infered from its type)"
 
   let pp_restr_err_aux env fmt error =
     let msg x = Format.fprintf fmt x in
