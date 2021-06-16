@@ -30,6 +30,7 @@ type pkey, skey, plaintext, ciphertext.
 op Ndec : int.
 op Nenc : { int | 0 < Nenc } as Nenc_gt0.
 
+(* can we use hybrid without cloning or not reexport it *)
 clone import Hybrid as Hyb with
   type input <- plaintext * plaintext,
   type output <- ciphertext,
@@ -525,3 +526,5 @@ smt().
 qed.
 
 end section.
+
+end CCA.
