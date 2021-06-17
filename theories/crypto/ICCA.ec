@@ -262,7 +262,6 @@ admitted.
 equiv Ideal_CCA_R :
   Game(Ideal,A).main ~ CCA_R(S, B(A)).main : true ==> ={res}.
 proof.
-(* PB *)
 admitted.
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A}) :
@@ -277,8 +276,13 @@ proof.
 admitted.
 
 lemma ICCA_CCALR &m :
-  Pr[Game(Real',A).main() @ &m : res] - Pr[Game(Ideal,A).main() @ &m : res] =
+  Pr[Game(Real,A).main() @ &m : res] - Pr[Game(Ideal,A).main() @ &m : res] =
   Pr[CCA_L(S, B(A)).main() @ &m : res] - Pr[CCA_R(S, B(A)).main() @ &m : res].
 proof.
-(* PB *)
-admitted.
+have -> : Pr[Game(Real,A).main() @ &m : res] = Pr[Game(Real',A).main() @ &m : res].
+- byequiv => //; conseq (: true ==> ={res}); exact Real_Real'.
+have -> : Pr[Game(Real',A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : res].
+- byequiv => //; conseq (: true ==> ={res}); exact Real'_CCA_L.
+have -> : Pr[Game(Ideal,A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
+byequiv => //; conseq (: true ==> ={res}); exact Ideal_CCA_R.
+qed.
