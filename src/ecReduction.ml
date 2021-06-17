@@ -329,7 +329,7 @@ let check_cost_l env subst co1 co2 =
           EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
         ) co2.c_calls EcPath.Mx.empty in
 
-    let do_cost_bnd c1 c2 =
+    let do_c_bnd c1 c2 =
       match c1, c2 with
       | C_bounded c1, C_bounded c2 -> [c1, c2]
       | C_unbounded, C_bounded _
@@ -340,10 +340,10 @@ let check_cost_l env subst co1 co2 =
     let acc =
       EcPath.Mx.fold2_union (fun _ a1 a2 acc ->
           let a1, a2 = oget a1, oget a2 in (* cannot be None *)
-          do_cost_bnd a1 a2 @ acc
+          do_c_bnd a1 a2 @ acc
         ) calls1 calls2 [] in
 
-    let check_self = do_cost_bnd co1.c_self co2.c_self in
+    let check_self = do_c_bnd co1.c_self co2.c_self in
     check_self @ acc
 
 let check_cost test env subst co1 co2 =

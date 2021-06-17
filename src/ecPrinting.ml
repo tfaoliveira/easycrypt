@@ -1798,7 +1798,7 @@ and pp_allowed_orcl ppe fmt orcls =
     Format.fprintf fmt "{@[<hov>%a@]}@ "
       (pp_list ",@ " (pp_funname ppe)) orcls
 
-and pp_costs ppe fmt ((self,calls) : cost_bnd * cost_bnd EcPath.Mx.t) : unit =
+and pp_costs ppe fmt ((self,calls) : c_bnd * c_bnd EcPath.Mx.t) : unit =
   let has_restr =
     self <> C_unbounded || EcPath.Mx.exists (fun _ x -> x <> C_unbounded) calls
   in

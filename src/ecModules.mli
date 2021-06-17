@@ -16,25 +16,25 @@ include module type of struct include EcCoreModules end
 (* -------------------------------------------------------------------- *)
 (* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
 module OI : sig
-  type t = cost_bnd PreOI.t
+  type t = c_bnd PreOI.t
 
   val hash  : t -> int
   val equal : t -> t -> bool
 
   val is_in : t -> bool
 
-  val cost_self : t ->          cost_bnd
-  val cost      : t -> xpath -> cost_bnd
+  val cost_self : t ->          c_bnd
+  val cost      : t -> xpath -> c_bnd
 
-  val cost_calls : t -> cost_bnd Mx.t
+  val cost_calls : t -> c_bnd Mx.t
 
-  val costs : t -> cost_bnd * cost_bnd Mx.t
+  val costs : t -> c_bnd * c_bnd Mx.t
 
   val allowed   : t -> xpath list
   val allowed_s : t -> Sx.t
 
   val mk :
-    xpath list -> bool -> cost_bnd -> cost_bnd Mx.t -> t
+    xpath list -> bool -> c_bnd -> c_bnd Mx.t -> t
 
   val filter : (xpath -> bool) -> t -> t
 end
@@ -43,17 +43,17 @@ type orcl_info = EcCoreFol.orcl_info
 
 (* -------------------------------------------------------------------- *)
 type mod_restr         = EcCoreFol.mod_restr
-type module_type       = cost_bnd p_module_type
-type module_sig        = cost_bnd p_module_sig
-type module_smpl_sig   = cost_bnd p_module_smpl_sig
-type function_body     = cost_bnd p_function_body
-type function_         = cost_bnd p_function_
-type module_expr       = cost_bnd p_module_expr
-type module_body       = cost_bnd p_module_body
-type module_structure  = cost_bnd p_module_structure
-type module_item       = cost_bnd p_module_item
-type module_comps      = cost_bnd p_module_comps
-type module_comps_item = cost_bnd p_module_comps_item
+type module_type       = c_bnd p_module_type
+type module_sig        = c_bnd p_module_sig
+type module_smpl_sig   = c_bnd p_module_smpl_sig
+type function_body     = c_bnd p_function_body
+type function_         = c_bnd p_function_
+type module_expr       = c_bnd p_module_expr
+type module_body       = c_bnd p_module_body
+type module_structure  = c_bnd p_module_structure
+type module_item       = c_bnd p_module_item
+type module_comps      = c_bnd p_module_comps
+type module_comps_item = c_bnd p_module_comps_item
 
 (* Careful, the available oracles are empty in both [mr_empty] and [mr_full]. *)
 val mr_empty : mod_restr

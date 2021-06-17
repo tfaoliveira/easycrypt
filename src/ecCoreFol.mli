@@ -157,22 +157,22 @@ and pr = {
   pr_event : form;
 }
 
-and cost_bnd =
+and c_bnd =
   | C_bounded of form      (* type int *)
   | C_unbounded
 
 (* Invariant: keys of c_calls are functions of local modules,
    with no arguments. *)
 and cost = private {
-  c_self  : cost_bnd;
-  c_calls : cost_bnd EcPath.Mx.t;
+  c_self  : c_bnd;
+  c_calls : c_bnd EcPath.Mx.t;
 }
 
-and module_type = cost_bnd p_module_type
+and module_type = c_bnd p_module_type
 
-type mod_restr = cost_bnd p_mod_restr
+type mod_restr = c_bnd p_mod_restr
 
-type orcl_info = cost_bnd p_orcl_info
+type orcl_info = c_bnd p_orcl_info
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
@@ -187,8 +187,8 @@ val gty_fv    : gty -> int Mid.t
 val mty_equal : module_type -> module_type -> bool
 val mty_hash  : module_type -> int
 
-val cost_bnd_hash  : cost_bnd -> int
-val cost_bnd_equal : cost_bnd -> cost_bnd -> bool
+val c_bnd_hash  : c_bnd -> int
+val c_bnd_equal : c_bnd -> c_bnd -> bool
 
 val mr_equal : mod_restr -> mod_restr -> bool
 val mr_hash  : mod_restr -> int
@@ -218,10 +218,10 @@ val form_forall: (form -> bool) -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 (* not recursive *)
-val cost_bnd_map : (form -> form) -> cost_bnd -> cost_bnd
+val c_bnd_map : (form -> form) -> c_bnd -> c_bnd
 val cost_map     : (form -> form) -> cost     -> cost
 
-val cost_bnd_fold : (form -> 'a -> 'a) -> cost_bnd -> 'a -> 'a
+val c_bnd_fold : (form -> 'a -> 'a) -> c_bnd -> 'a -> 'a
 val cost_fold     : (form -> 'a -> 'a) -> cost     -> 'a -> 'a
 
 (* -------------------------------------------------------------------- *)
@@ -261,7 +261,7 @@ val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
-val cost_r : cost_bnd -> cost_bnd EcPath.Mx.t -> cost
+val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> cost
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -572,7 +572,7 @@ module Fsubst : sig
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
-  val subst_oi       : f_subst -> cost_bnd PreOI.t -> cost_bnd PreOI.t
+  val subst_oi       : f_subst -> c_bnd PreOI.t -> c_bnd PreOI.t
   val subst_gty      : f_subst -> gty -> gty
 end
 

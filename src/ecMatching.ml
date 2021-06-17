@@ -596,10 +596,10 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
 
         EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
             let cb1, cb2 = oget cb1, oget cb2 in (* cannot be None *)
-            doit_cost_bnd failure env (subst, mxs) cb1 cb2
+            doit_c_bnd failure env (subst, mxs) cb1 cb2
           ) hf1.chf_co.c_calls calls2 ();
 
-        doit_cost_bnd failure env (subst, mxs) hf1.chf_co.c_self hf2.chf_co.c_self;
+        doit_c_bnd failure env (subst, mxs) hf1.chf_co.c_self hf2.chf_co.c_self;
 
         List.iter2 (doit env (subst, mxs))
           [hf1.chf_pr; hf1.chf_po]
@@ -665,7 +665,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
 
       | _, _ -> failure ()
 
-  and doit_cost_bnd failure env ilc cb1 cb2 =
+  and doit_c_bnd failure env ilc cb1 cb2 =
     match cb1, cb2 with
     | C_unbounded, C_unbounded -> ()
     | C_unbounded, C_bounded _ | C_bounded _, C_unbounded -> failure ()
@@ -1085,7 +1085,7 @@ module FPosition = struct
                   | _ -> assert false
             in
 
-            let c_calls : cost_bnd EcPath.Mx.t =
+            let c_calls : c_bnd EcPath.Mx.t =
               EcPath.Mx.mapi (fun xp _ ->
                   match List.find_opt (fun (key, _) -> key = `Xpath xp) calls with
                   | Some (_,cb) -> C_bounded cb

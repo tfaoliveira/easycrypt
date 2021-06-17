@@ -49,7 +49,7 @@ type mismatch_funsig =
 | MF_tres      of ty * ty                               (* expected, got *)
 | MF_restr     of EcEnv.env * Sx.t mismatch_sets
 | MF_compl     of EcEnv.env *
-                  ((cost_bnd * cost_bnd) option * (cost_bnd * cost_bnd) Mx.t) suboreq
+                  ((c_bnd * c_bnd) option * (c_bnd * c_bnd) Mx.t) suboreq
 
 type restr_failure = Sx.t * Sm.t
 
@@ -522,9 +522,9 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
       if not (Sx.equal icalls ocalls) then
         check_item_err (MF_restr(env, `Eq(ocalls, icalls))) in
 
-  let norm_cost = cost_bnd_map (EcEnv.NormMp.norm_form env) in
+  let norm_cost = c_bnd_map (EcEnv.NormMp.norm_form env) in
 
-  let norm_costs ((self, calls) : cost_bnd * cost_bnd Mx.t) =
+  let norm_costs ((self, calls) : c_bnd * c_bnd Mx.t) =
     (norm_cost self, Mx.map norm_cost calls) in
 
   (* We check complexity compatibility. *)
@@ -533,7 +533,7 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
 
   let hyps = EcEnv.LDecl.init env [] in
 
-  let check_elc : cost_bnd -> cost_bnd -> bool =
+  let check_elc : c_bnd -> c_bnd -> bool =
     match mode with
     | `Sub -> fun ic oc ->
         begin match ic, oc with
@@ -971,7 +971,7 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
 
     let c_self, costs = OI.costs oi in
 
-    let c_calls : cost_bnd Mx.t = Mx.fold (fun o obd c_calls ->
+    let c_calls : c_bnd Mx.t = Mx.fold (fun o obd c_calls ->
         (* We compute the name of the procedure, seen as an oracle of
            [mp_in_app]. That is, if [o] is a parameter of [mp_in], then
            we use the fresh mident. *)
@@ -2178,7 +2178,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) = function
 
 (* -------------------------------------------------------------------- *)
 (* make an (empty) call cost map, map to be filled after *)
-let mk_empty_cost_calls env (params : Sm.t) : cost_bnd Mx.t =
+let mk_empty_cost_calls env (params : Sm.t) : c_bnd Mx.t =
   Sm.fold (fun param calls ->
       assert (param.m_args = []); (* check that param is not applied *)
 
@@ -2196,7 +2196,7 @@ let mk_empty_cost_calls env (params : Sm.t) : cost_bnd Mx.t =
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
 (* If [r_compl] is None, there are no restrictions *)
 let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
-  cost_bnd * cost_bnd Mx.t
+  c_bnd * c_bnd Mx.t
   =
   let trans_closed_form (form : pformula) (ty : EcTypes.ty) : form =
     let ue = EcUnify.UniEnv.create None in
@@ -2211,7 +2211,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
 
   let calls = mk_empty_cost_calls env_in params in
 
-  let mk_elc : pformula option -> cost_bnd = function
+  let mk_elc : pformula option -> c_bnd = function
     | None -> C_unbounded
     | Some form -> C_bounded (trans_closed_form form EcTypes.tint)
   in
@@ -2248,7 +2248,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
  * Here, the parameter of the functor [S] are not binded in [env], but must be
  * binded in [env_in]. *)
 and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
-  bool * EcSymbols.symbol * cost_bnd * cost_bnd Mx.t * xpath list
+  bool * EcSymbols.symbol * c_bnd * c_bnd Mx.t * xpath list
   =
   let name = unloc r_el.pmre_name in
   let c_self, c_calls = trans_restr_compl env env_in params r_el.pmre_compl in

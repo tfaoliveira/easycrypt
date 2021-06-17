@@ -12,13 +12,13 @@ open EcFol
 open EcEnv
 
 (* -------------------------------------------------------------------- *)
-let c_bnd_of_opt (f : cost_bnd option) : cost_bnd =
+let c_bnd_of_opt (f : c_bnd option) : c_bnd =
   match f with
   | Some f -> f
   | None -> C_unbounded
 
-(* [xint] from a [cost_bnd] *)
-let xi_of_c_bnd (c : cost_bnd) : form =
+(* [xint] from a [c_bnd] *)
+let xi_of_c_bnd (c : c_bnd) : form =
   match c with
   | C_unbounded -> f_Inf
   | C_bounded f -> f_N f
@@ -33,11 +33,11 @@ let f_xsub (f1 : form) (f2 : form) : form * form =
   f_subcond f1 f2, f_xadd f1 (f_xopp f2)
 
 let cost_sub_self (c : cost) (a : form) : cost =
-  let c_self = cost_bnd_map (fun x -> f_int_sub x a) c.c_self in
+  let c_self = c_bnd_map (fun x -> f_int_sub x a) c.c_self in
   cost_r c_self c.c_calls
 
 let cost_add_self c a =
-  let c_self = cost_bnd_map (fun x -> f_int_add x a) c.c_self in
+  let c_self = c_bnd_map (fun x -> f_int_add x a) c.c_self in
   cost_r c_self c.c_calls
 
 (* (\* Add an entry for a oracle to [c.c_calls], if necessary. *\)

@@ -4,9 +4,9 @@ open EcFol
 val check_loaded : EcEnv.env -> unit
 
 (* -------------------------------------------------------------------- *)
-val c_bnd_of_opt : cost_bnd option -> cost_bnd
+val c_bnd_of_opt : c_bnd option -> c_bnd
 
-val xi_of_c_bnd : cost_bnd -> form
+val xi_of_c_bnd : c_bnd -> form
 
 (* -------------------------------------------------------------------- *)
 val free_expr : EcTypes.expr -> bool
