@@ -148,13 +148,12 @@ module Game (O : ICCA_i, A : Adversary) = {
 
 (*-------------------------------*)
 
-module CountICCA (O : ICCA_i) = {
+module CountICCA (O : ICCA) = {
   var ndec, nenc : int
 
   proc init () : unit = {
     ndec <- 0;
     nenc <- 0;
-    O.init();
   } 
 
   proc enc (m : plaintext) : ciphertext = {
@@ -174,7 +173,7 @@ module CountICCA (O : ICCA_i) = {
   }
 }.
 
-module CountAdv (A : Adversary) (O : ICCA_i) = {
+module CountAdv (A : Adversary) (O : ICCA) = {
   proc main() = {
     var b;
 
@@ -187,7 +186,7 @@ module CountAdv (A : Adversary) (O : ICCA_i) = {
 module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
 
-  module O' : ICCA_i = {
+  module O' : ICCA = {
     proc enc (m : plaintext) = {
       var c;
 
@@ -205,9 +204,6 @@ module B (A : Adversary) (O : CCA_Oracle) = {
       }
       return m;
     }
-    proc init () = {
-      cs <- [];
-    }
   }
 
   proc main (pk : pkey) : bool = {
@@ -223,7 +219,7 @@ section.
 
 declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA, CountICCA}.
 
-axiom A_bound (O <: ICCA_i {CountICCA}) : hoare [CountAdv(A, O).main :
+axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv Real_Real' :
@@ -297,7 +293,7 @@ qed.
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
   C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
-  ={glob A, glob O} ==>
+  ={glob A, glob O} /\ B.cs{2} = [] ==>
   CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
 proof.
 proc; inline*; sp; auto.
