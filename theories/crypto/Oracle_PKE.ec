@@ -246,18 +246,16 @@ axiom dec_ll : islossless S.dec.
 axiom A_bound (O <: CCA_Oracle {A, CountCCA}): 
   hoare[ CountAdv(A, O).main : true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
 
-equiv foo (O <: CCA_Oracle {A,CountCCA}) : A(CountCCA(O)).main ~ CountAdv(A, O).main : 
-  ={glob A, glob O, arg} /\ CountCCA.ndec{1} = 0 /\ CountCCA.nenc{1} = 0 ==> ={glob CountCCA}.
-proof.
-  proc *; inline *; sp; auto. call (: ={glob O, glob CountCCA}); try by sim.
-  by skip => />.
-qed.
-
 lemma A_bound' (O <: CCA_Oracle {A, CountCCA}): 
   hoare[ A(CountCCA(O)).main : 
     CountCCA.ndec = 0 /\ CountCCA.nenc = 0 ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
 proof.
-by conseq (foo (<: O)) (A_bound (<: O)); smt().
+suff E : equiv [A(CountCCA(O)).main ~ CountAdv(A, O).main :
+         ={glob A, glob O, arg} /\ CountCCA.ndec{1} = 0 /\ CountCCA.nenc{1} = 0 ==>
+         ={glob CountCCA}].
+- by conseq E (A_bound (<: O)); smt().
+- proc *; inline *; sp; auto; call (: ={glob O, glob CountCCA}); try by sim.
+  by skip => />.
 qed.
 
 lemma CCA_LR &m : 
