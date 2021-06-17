@@ -262,11 +262,11 @@ module S : Scheme = {
 }.
 
 equiv Real'_CCA_L :
-  Game(Real',A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
+  Game(Real', A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk,sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
-      (forall c m, assoc Ideal.cs c = Some m => dec(c,Real.sk) = Some m){1} /\ 
+call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+      (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){1} /\ 
       (exists ks, (Wrap.pk,Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
       Ideal.cs{1} = B.cs{2}).
 + proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'. 
@@ -277,9 +277,19 @@ call (: ={pk,sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
 qed.
 
 equiv Ideal_CCA_R :
-  Game(Ideal,A).main ~ CCA_R(S, B(A)).main : true ==> ={res}.
+  Game(Ideal, A).main ~ CCA_R(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
-admitted.
+proc; inline *; wp.
+call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+      (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m0){1} /\ 
+      (exists ks, (Wrap.pk,Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
+      Ideal.cs{1} = B.cs{2}).
++ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
+  rewrite assoc_cons. case : (c = enc (m0, pkgen ks, e)) => />; smt(encK).
++ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
+  by rewrite -assocTP.
++ wp; rnd; skip => />; smt().
+qed.
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A}) :
   C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
@@ -287,19 +297,20 @@ equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A}) :
 proof.
 admitted.
 
-lemma B_bound (O <: CCA_Oracle{CountCCA, A}) : hoare [C.CountAdv(B(A), O).main :
+lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A}) : hoare [C.CountAdv(B(A), O).main :
                true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
 proof.
-admitted.
+by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
+qed.
 
 lemma ICCA_CCALR &m :
   Pr[Game(Real,A).main() @ &m : res] - Pr[Game(Ideal,A).main() @ &m : res] =
   Pr[CCA_L(S, B(A)).main() @ &m : res] - Pr[CCA_R(S, B(A)).main() @ &m : res].
 proof.
 have -> : Pr[Game(Real,A).main() @ &m : res] = Pr[Game(Real',A).main() @ &m : res].
-- byequiv => //; conseq (: true ==> ={res}); exact Real_Real'.
+- byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real_Real'.
 have -> : Pr[Game(Real',A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : res].
-- byequiv => //; conseq (: true ==> ={res}); exact Real'_CCA_L.
+- byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real'_CCA_L.
 have -> : Pr[Game(Ideal,A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
-byequiv => //; conseq (: true ==> ={res}); exact Ideal_CCA_R.
+byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Ideal_CCA_R.
 qed.
