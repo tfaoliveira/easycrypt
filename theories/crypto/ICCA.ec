@@ -1,6 +1,5 @@
 require import AllCore List Distr DBool DInterval.
-require (*--*) Oracle_PKE.
-
+require import Oracle_PKE.
 
 (* Real/Ideal variant of IND-CCA2 *)
 
@@ -18,12 +17,21 @@ op enc : plaintext * pkey * encseed -> ciphertext.
 op dec : ciphertext * skey -> plaintext option.
 op pkgen : keyseed -> pkey.
 op skgen : keyseed -> skey.
+op m0 : plaintext.
 
 axiom encK (k : keyseed) (m : plaintext) (e : encseed) : 
-  dec (enc(m,pkgen k,e),skgen k) = Some m.
+  dec (enc(m, pkgen k, e), skgen k) = Some m.
+
+clone import CCA as C with
+  type pkey <- pkey,
+  type skey <- skey,
+  type plaintext <- plaintext,
+  type ciphertext <- ciphertext,
+  op Ndec <- Ndec,
+  op Nenc <- Nenc.
 
 module type ICCA = {
-  proc init() : unit 
+  proc init() : unit
   proc enc (_ : plaintext) : ciphertext
   proc dec (_ : ciphertext)  : plaintext option
 }.
@@ -72,7 +80,7 @@ module Ideal : ICCA = {
     var e,c;
 
     e <$ dencseed;
-    c <- enc(witness,pk,e);
+    c <- enc(m0,pk,e);
     cs <- (c,m) :: cs;
     return c;
   }
@@ -119,11 +127,11 @@ module Real' : ICCA = {
   }
 }.
 
-module type Adv (G : ICCA) = {
+module type Adversary (G : ICCA) = {
   proc main () : bool
 }.
 
-module Game (O : ICCA, A : Adv) = {
+module Game (O : ICCA, A : Adversary) = {
   
   proc main() = {
     var r;
@@ -134,5 +142,143 @@ module Game (O : ICCA, A : Adv) = {
   }
 }.
 
-equiv Real_Real' (A <: Adv {Real, Real'}) : 
+(*-------------------------------*)
+
+module CountICCA (O : ICCA) = {
+  var ndec, nenc : int
+
+  proc init () : unit = {
+    ndec <- 0;
+    nenc <- 0;
+  } 
+
+  proc enc (m : plaintext) : ciphertext = {
+    var c; 
+
+    c <@ O.enc(m);
+    nenc <- nenc + 1;
+    return c;
+  }
+
+  proc dec (c : ciphertext) : plaintext option = {
+    var m; 
+
+    m <@ O.dec(c);
+    ndec <- ndec + 1;
+    return m;
+  }
+}.
+
+module CountAdv (A : Adversary) (O : ICCA) = {
+  proc main() = {
+    var b;
+
+    CountICCA(O).init();
+    b <@ A(CountICCA(O)).main();
+    return b;
+  }
+}.
+
+module B (A : Adversary) (O : CCA_Oracle) = {
+  var cs : (ciphertext * plaintext) list
+           
+  module O' : ICCA = {
+    proc init () = {
+      cs <-[];
+    }
+           
+    proc enc (m : plaintext) = {
+      var c;
+           
+      c <- O.l_or_r(m, m0);
+      cs <- (c, m) :: cs;
+      return c;
+    }      
+           
+    proc dec (c : ciphertext) = {
+      var m;
+           
+      m <- assoc cs c;
+      if (m = None) { 
+        m <- O.dec(c);
+      }    
+      return m;    
+    }      
+  }        
+           
+  proc main(pk : pkey) : bool = {
+    var r; 
+           
+    r <@ A(O').main();
+    return r;
+  }        
+}.
+
+section.
+
+declare module A : Adversary {Real, Real', Ideal}.
+
+axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
+               true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
+
+equiv Real_Real' :
   Game(Real,A).main ~ Game(Real',A).main : true ==> ={res}.
+proof.
+(* CD *)
+admitted.
+
+module S : Scheme = {
+  proc kg () : pkey * skey = {
+    var ks, pk, sk;
+
+    ks <$ dkeyseed;
+    pk <- pkgen ks;
+    sk <- skgen ks;
+    return (pk, sk);
+  }
+
+  proc enc (pk : pkey, m : plaintext) : ciphertext = {
+    var e, c;
+
+    e <$ dencseed;
+    c <- enc (m, pk, e);
+    return c;
+  }
+
+  proc dec(sk : skey, c : ciphertext) : plaintext option = {
+    var m;
+
+    m <- dec (c, sk);
+    return m;
+  }
+}.
+
+equiv Real'_CCA_L :
+  Game(Real',A).main ~ CCA_L(S, B(A)).main : true ==> ={res}.
+proof.
+(* CD *)
+admitted.
+
+equiv Ideal_CCA_R :
+  Game(Ideal,A).main ~ CCA_R(S, B(A)).main : true ==> ={res}.
+proof.
+(* PB *)
+admitted.
+
+equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A}) :
+  C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
+  true ==> CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
+proof.
+admitted.
+
+lemma B_bound (O <: CCA_Oracle{CountCCA, A}) : hoare [C.CountAdv(B(A), O).main :
+               true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
+proof.
+admitted.
+
+lemma ICCA_CCALR &m :
+  Pr[Game(Real',A).main() @ &m : res] - Pr[Game(Ideal,A).main() @ &m : res] =
+  Pr[CCA_L(S, B(A)).main() @ &m : res] - Pr[CCA_R(S, B(A)).main() @ &m : res].
+proof.
+(* PB *)
+admitted.
