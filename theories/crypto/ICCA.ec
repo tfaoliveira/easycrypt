@@ -56,13 +56,13 @@ module Real : ICCA = {
     var e,c;
 
     e <$ dencseed;
-    c <- enc(m,pk,e);
+    c <- enc(m, pk, e);
     return c;
   }
   proc dec (c : ciphertext) : plaintext option = {
     var m;
 
-    m <- dec(c,sk);
+    m <- dec(c, sk);
     return m;    
   }
 }.
@@ -84,8 +84,8 @@ module Ideal : ICCA = {
     var e,c;
 
     e <$ dencseed;
-    c <- enc(m0,pk,e);
-    cs <- (c,m) :: cs;
+    c <- enc(m0, pk, e);
+    cs <- (c, m) :: cs;
     return c;
   }
   proc dec (c : ciphertext) : plaintext option = {
@@ -93,7 +93,7 @@ module Ideal : ICCA = {
     
     m <- assoc cs c;
     if (m = None) { 
-      m <- dec(c,sk);
+      m <- dec(c, sk);
     }
     return m;    
   }
@@ -116,7 +116,7 @@ module Real' : ICCA = {
     var e,c;
 
     e <$ dencseed;
-    c <- enc(m,pk,e);
+    c <- enc(m, pk, e);
     cs <- (c,m) :: cs;
     return c;
   }
@@ -125,7 +125,7 @@ module Real' : ICCA = {
     
     m <- assoc cs c;
     if (m = None) { 
-      m <- dec(c,sk);
+      m <- dec(c, sk);
     }
     return m;    
   }
@@ -148,12 +148,13 @@ module Game (O : ICCA_i, A : Adversary) = {
 
 (*-------------------------------*)
 
-module CountICCA (O : ICCA) = {
+module CountICCA (O : ICCA_i) = {
   var ndec, nenc : int
 
   proc init () : unit = {
     ndec <- 0;
     nenc <- 0;
+    O.init();
   } 
 
   proc enc (m : plaintext) : ciphertext = {
@@ -173,7 +174,7 @@ module CountICCA (O : ICCA) = {
   }
 }.
 
-module CountAdv (A : Adversary) (O : ICCA) = {
+module CountAdv (A : Adversary) (O : ICCA_i) = {
   proc main() = {
     var b;
 
@@ -185,31 +186,34 @@ module CountAdv (A : Adversary) (O : ICCA) = {
 
 module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
-           
-  module O' : ICCA = {           
+
+  module O' : ICCA_i = {
     proc enc (m : plaintext) = {
       var c;
-           
+
       c <- O.l_or_r(m, m0);
       cs <- (c, m) :: cs;
       return c;
-    }      
-           
+    }
+
     proc dec (c : ciphertext) = {
       var m;
-           
+
       m <- assoc cs c;
-      if (m = None) { 
+      if (m = None) {
         m <- O.dec(c);
       }
-      return m;    
+      return m;
+    }
+    proc init () = {
+      cs <- [];
     }
   }
 
-  proc main(pk : pkey) : bool = {
-    var r; 
-      
-    cs <-[];
+  proc main (pk : pkey) : bool = {
+    var r;
+
+    cs <- [];
     r <@ A(O').main();
     return r;
   }
@@ -217,22 +221,22 @@ module B (A : Adversary) (O : CCA_Oracle) = {
 
 section.
 
-declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA}.
+declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA, CountICCA}.
 
-axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
+axiom A_bound (O <: ICCA_i {CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv Real_Real' :
-  Game(Real,A).main ~ Game(Real',A).main : ={glob A} ==> ={res}.
+  Game(Real, A).main ~ Game(Real', A).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *. 
-call (: ={glob Real} /\ (exists ks, (Real.pk,Real.sk){2} = (pkgen ks, skgen ks)) /\
-  (forall c m, assoc Ideal.cs c = Some m => dec(c,Real.sk) = Some m){2}) .
-+ proc. wp. rnd. auto=> /> &m2 ks Hcs e _ c m'.
-  rewrite assoc_cons. case: (c = enc (m{m2}, pkgen ks, e)) => />. by rewrite encK.
-  move => _. apply: Hcs.
-+ proc. wp. skip => /> &m2 ks Hcs. smt().
-+ wp. rnd. skip => />. smt().
+call (: ={glob Real} /\ (exists ks, (Real.pk, Real.sk){2} = (pkgen ks, skgen ks)) /\
+  (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){2}).
+- proc. wp. rnd. auto=> /> &m2 ks Hcs e _ c m'.
+  rewrite assoc_cons. case: (c = enc (m{m2}, pkgen ks, e)) => />; 1: by rewrite encK.
+  move => _; apply: Hcs.
+- proc. wp. skip => /> &m2 ks Hcs /#.
+- wp; rnd; skip => /> /#.
 qed.
 
 module S : Scheme = {
@@ -267,13 +271,13 @@ proof.
 proc; inline *; wp.
 call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
       (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){1} /\ 
-      (exists ks, (Wrap.pk,Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
+      (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
       Ideal.cs{1} = B.cs{2}).
-+ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'. 
-  rewrite assoc_cons. case : (c = enc (m{m2}, pkgen ks, e)) => />; smt(encK).
-+ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
+- proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'. 
+  rewrite assoc_cons; case : (c = enc (m{m2}, pkgen ks, e)) => />; smt(encK).
+- proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
   by rewrite -assocTP.
-+ wp; rnd; skip => />. smt().
+- wp; rnd; skip => /> /#.
 qed.
 
 equiv Ideal_CCA_R :
@@ -282,23 +286,32 @@ proof.
 proc; inline *; wp.
 call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
       (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m0){1} /\ 
-      (exists ks, (Wrap.pk,Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
+      (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
       Ideal.cs{1} = B.cs{2}).
-+ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
-  rewrite assoc_cons. case : (c = enc (m0, pkgen ks, e)) => />; smt(encK).
-+ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
+- proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
+  rewrite assoc_cons; case : (c = enc (m0, pkgen ks, e)) => />; smt(encK).
+- proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
   by rewrite -assocTP.
-+ wp; rnd; skip => />; smt().
+- wp; rnd; skip => /> /#.
 qed.
 
-equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A}) :
+equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
   C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
-  true ==> CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
+  ={glob A, glob O} ==>
+  CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
 proof.
-admitted.
+proc; inline*; sp; auto.
+call (: ={glob O, B.cs} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
+        CountCCA.nenc{1} = CountICCA.nenc{2}) => //.
+- proc; inline *; sp; auto; call (: true); auto => /> /#.
+- proc; inline *; sp; auto.
+  if; auto => />; 2: by smt().
+  sp; call (: true); auto => /> /#.
+qed.
 
-lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A}) : hoare [C.CountAdv(B(A), O).main :
-               true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
+lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A, B}) :
+  hoare [C.CountAdv(B(A), O).main :
+    true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
 proof.
 by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
 qed.
