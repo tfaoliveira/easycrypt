@@ -584,15 +584,15 @@ let t_code_transform
           let concl = f_hoareS_r { hoare with hs_m = me; hs_s = stmt; } in
           FApi.xmutate1 tc (tr None) (cs @ [concl])
 
-      | FcHoareS chs, Some c ->
-        let pr, po = chs.chs_pr, chs.chs_po in
-        let (me, stmt, cs) =
-          tx (pf, hyps) cpos (pr, po) (chs.chs_m, chs.chs_s) in
-        let cond, cost = EcCHoare.cost_sub_self chs.chs_co c in
-        let concl = f_cHoareS_r { chs with chs_m = me;
-                                           chs_s = stmt;
-                                           chs_co = cost; } in
-        FApi.xmutate1 tc (tr None) (cs @ [concl; cond])
+      | FcHoareS _chs, Some _c -> assert false (* TODO *)
+        (* let pr, po = chs.chs_pr, chs.chs_po in
+         * let (me, stmt, cs) =
+         *   tx (pf, hyps) cpos (pr, po) (chs.chs_m, chs.chs_s) in
+         * let cond, cost = EcCHoare.cost_sub_self chs.chs_co c in
+         * let concl = f_cHoareS_r { chs with chs_m = me;
+         *                                    chs_s = stmt;
+         *                                    chs_co = cost; } in
+         * FApi.xmutate1 tc (tr None) (cs @ [cond; concl]) *)
 
       | FbdHoareS bhs, _ when bdhoare ->
           let pr, po = bhs.bhs_pr, bhs.bhs_po in

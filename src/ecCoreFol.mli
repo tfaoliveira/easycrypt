@@ -221,6 +221,9 @@ val form_forall: (form -> bool) -> form -> bool
 val cost_bnd_map : (form -> form) -> cost_bnd -> cost_bnd
 val cost_map     : (form -> form) -> cost     -> cost
 
+val cost_bnd_fold : (form -> 'a -> 'a) -> cost_bnd -> 'a -> 'a
+val cost_fold     : (form -> 'a -> 'a) -> cost     -> 'a -> 'a
+
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
 val gty_as_mem : gty -> EcMemory.memtype

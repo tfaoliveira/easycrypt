@@ -1101,6 +1101,16 @@ let cost_iter (g : form -> unit) (cost : cost) : unit =
   cost_bnd_iter g cost.c_self;
   EcPath.Mx.iter (fun _ -> cost_bnd_iter g) cost.c_calls
 
+let cost_bnd_fold (g : form -> 'a -> 'a) (bnd : cost_bnd) (init : 'a) : 'a =
+  match bnd with
+  | C_bounded f -> g f init
+  | C_unbounded -> init
+
+let cost_fold (g : form -> 'a -> 'a) (cost : cost) (init : 'a) : 'a =
+  cost_bnd_fold g cost.c_self init |>
+  EcPath.Mx.fold (fun _ -> cost_bnd_fold g) cost.c_calls
+
+(* -------------------------------------------------------------------- *)
 let f_map gt g fp =
   match fp.f_node with
   | Fquant(q, b, f) ->

@@ -1767,27 +1767,28 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 (* -------------------------------------------------------------------- *)
-and pp_cost ppe fmt c =
+and pp_cost ppe fmt (c : cost) =
+  let is_full = ref true in
   let pp_el fmt (f,c) =
     match f, c with
-    | `Conc, None  -> ()
-    | `Conc, Some c  -> pp_form ppe fmt c
+    | `Conc, C_unbounded  -> is_full := false
+    | `Conc, C_bounded c  -> pp_form ppe fmt c
 
-    | `Call f, Some c ->
+    | `Call f, C_bounded c ->
       Format.fprintf fmt "%a : %a"
         (pp_funname ppe) f
         (pp_form ppe) c
 
-    | `Call f, None ->
-      Format.fprintf fmt "%a"
-        (pp_funname ppe) f
+    | `Call _, C_unbounded -> is_full := false
+    | `Full, _ -> if !is_full then () else Format.fprintf fmt "_"
   in
 
   Format.fprintf fmt "@[<hv 1>[%a]@]"
     (pp_list ";@ " pp_el)
-    (   (`Conc,c.c_self)
+    ((`Conc,c.c_self)
      :: (EcPath.Mx.bindings c.c_calls
-         |> List.map (fun (x,y) -> `Call x, Some y)))
+         |> List.map (fun (x,y) -> `Call x, y))
+     @ [`Full, C_unbounded])
 
 (* -------------------------------------------------------------------- *)
 

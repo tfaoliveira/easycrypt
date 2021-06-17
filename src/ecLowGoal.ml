@@ -185,7 +185,8 @@ module LowApply = struct
                 else f_and (f_ands obl) f
             in
 
-            (Fsubst.f_bind_mod sbt x mp, f)
+            let orcl_info = emt.mt_restr.mr_oinfos in
+            (Fsubst.f_bind_mod sbt x mp (Some orcl_info), f)
           with _ -> raise InvalidProofTerm
         end
 
@@ -483,7 +484,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
     | GTmodty i ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty i, Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)))
+        (id, LD_modty i, Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)) None)
   in
 
   let add_ld id ld hyps =
@@ -798,7 +799,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
 
       | LD_modty mt ->
         let x    = fresh id in
-        let s    = Fsubst.f_bind_mod s id (EcPath.mident x) in
+        let s    = Fsubst.f_bind_mod s id (EcPath.mident x) None in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
         let bds  = `Forall (x, GTmodty mt) :: bds in

@@ -11,6 +11,17 @@ open EcTypes
 open EcFol
 open EcEnv
 
+(* -------------------------------------------------------------------- *)
+let c_bnd_of_opt (f : cost_bnd option) : cost_bnd =
+  match f with
+  | Some f -> f
+  | None -> C_unbounded
+
+(* [xint] from a [cost_bnd] *)
+let xi_of_c_bnd (c : cost_bnd) : form =
+  match c with
+  | C_unbounded -> f_Inf
+  | C_bounded f -> f_N f
 
 (* -------------------------------------------------------------------- *)
 (* Function for cost                                                    *)

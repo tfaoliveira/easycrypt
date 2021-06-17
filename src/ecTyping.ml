@@ -522,10 +522,7 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
       if not (Sx.equal icalls ocalls) then
         check_item_err (MF_restr(env, `Eq(ocalls, icalls))) in
 
-  let norm_cost = function
-    | `Unbounded -> C_unbounded
-    | C_bounded c -> C_bounded (EcEnv.NormMp.norm_form env c)
-  in
+  let norm_cost = cost_bnd_map (EcEnv.NormMp.norm_form env) in
 
   let norm_costs ((self, calls) : cost_bnd * cost_bnd Mx.t) =
     (norm_cost self, Mx.map norm_cost calls) in
@@ -986,18 +983,9 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
           | Some (m,mt) -> m, mt.mt_restr in
         let o = EcPath.xpath (EcPath.mident omod) ofun in
 
-        let cb = obd in
-
-        Mx.add o cb c_calls
+        Mx.add o obd c_calls
       ) costs Mx.empty
     in
-
-    let to_opt = function
-      | C_unbounded -> None
-      | C_bounded c -> Some c
-    in
-    let c_self = to_opt c_self
-    and c_calls = Mx.map_filter to_opt c_calls in
 
     let cost = cost_r c_self c_calls in
     f_cHoareF f_true xfn f_true cost
@@ -1013,8 +1001,10 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
   List.map (fun hyp -> f_forall mbindings hyp) hyps
 
 (* -------------------------------------------------------------------- *)
-let check_modtype env mp mt i : [> `Ok | `ProofObligation of EcFol.form list ] =
-  let restr = i.mt_restr in
+let check_modtype env (mp : mpath) (mt : module_sig) (i : module_type) :
+  [> `Ok | `ProofObligation of EcFol.form list ]
+  =
+  let restr : mod_restr = i.mt_restr in
   let use = NormMp.mod_use env mp in
   check_mem_restr env mp use restr;
 
@@ -2187,6 +2177,22 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) = function
         pfd_uses
 
 (* -------------------------------------------------------------------- *)
+(* make an (empty) call cost map, map to be filled after *)
+let mk_empty_cost_calls env (params : Sm.t) : cost_bnd Mx.t =
+  Sm.fold (fun param calls ->
+      assert (param.m_args = []); (* check that param is not applied *)
+
+      let param_me = EcEnv.Mod.by_mpath param env in
+      let funs =
+        List.map (fun (Tys_function f) -> f.fs_name) param_me.me_sig_body
+      in
+      List.fold_left (fun calls f ->
+          Mx.add (xpath param f) C_unbounded calls (* C_unbounded by default *)
+        ) calls funs
+    ) params Mx.empty
+
+
+
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
 (* If [r_compl] is None, there are no restrictions *)
 let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
@@ -2203,20 +2209,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
     EcFol.Fsubst.uni subs tform
   in
 
-  (* map to be filled after *)
-  let calls : cost_bnd Mx.t =
-    Sm.fold (fun param calls ->
-        assert (param.m_args = []); (* check that param is not applied *)
-
-        let param_me = EcEnv.Mod.by_mpath param env_in in
-        let funs =
-          List.map (fun (Tys_function f) -> f.fs_name) param_me.me_sig_body
-        in
-        List.fold_left (fun calls f ->
-            Mx.add (xpath param f) C_unbounded calls (* C_unbounded by default *)
-          ) calls funs
-      ) params Mx.empty
-  in
+  let calls = mk_empty_cost_calls env_in params in
 
   let mk_elc : pformula option -> cost_bnd = function
     | None -> C_unbounded
@@ -3658,33 +3651,25 @@ and trans_form_or_pattern
       EcCHoare.check_loaded env;
 
       let trans_elc = function
-        | C_unbounded -> C_unbounded
-        | C_bounded c ->
+        | `Unbounded -> C_unbounded
+        | `Bounded c ->
           let c' = transf env c in
           unify_or_fail env ue c.pl_loc ~expct:tint c'.f_ty;
           C_bounded c'
       in
 
-      let trans_choaref pre' post' fpath self calls =
-        let self'  = trans_elc self in
-        let calls' = List.map (fun (m,fn,c) ->
+      let trans_choaref pre post fpath self calls =
+        let self  = trans_elc self in
+        let calls = List.map (fun (m,fn,c) ->
             let fn = trans_oracle env (m,fn) in
             let f_c = trans_elc c in
             fn, f_c
           ) calls
         in
-        let calls' = Mx.of_list calls' in
+        let calls = Mx.of_list calls in
 
-        (* FIXME: A: cleanup *)
-        let to_opt = function
-          | C_unbounded -> None
-          | C_bounded c -> Some c
-        in
-        let self' = to_opt self'
-        and calls' = Mx.map_filter to_opt calls' in
-
-        let cost' = cost_r self' calls' in
-        f_cHoareF pre' fpath post' cost'
+        let cost = cost_r self calls in
+        f_cHoareF pre fpath post cost
       in
 
       begin match f.pl_desc with
