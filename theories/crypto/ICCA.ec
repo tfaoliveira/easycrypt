@@ -186,11 +186,7 @@ module CountAdv (A : Adversary) (O : ICCA) = {
 module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
            
-  module O' : ICCA = {
-    proc init () = {
-      cs <-[];
-    }
-           
+  module O' : ICCA = {           
     proc enc (m : plaintext) = {
       var c;
            
@@ -205,22 +201,23 @@ module B (A : Adversary) (O : CCA_Oracle) = {
       m <- assoc cs c;
       if (m = None) { 
         m <- O.dec(c);
-      }    
+      }
       return m;    
-    }      
-  }        
-           
+    }
+  }
+
   proc main(pk : pkey) : bool = {
     var r; 
-           
+      
+    cs <-[];
     r <@ A(O').main();
     return r;
-  }        
+  }
 }.
 
 section.
 
-declare module A : Adversary {Real, Real', Ideal, C.Wrap}.
+declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA}.
 
 axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
@@ -268,10 +265,16 @@ equiv Real'_CCA_L :
   Game(Real',A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk,sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2}).
-+ proc. wp.
-(* CD *)
-admitted.
+call (: ={pk,sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+      (forall c m, assoc Ideal.cs c = Some m => dec(c,Real.sk) = Some m){1} /\ 
+      (exists ks, (Wrap.pk,Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
+      Ideal.cs{1} = B.cs{2}).
++ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'. 
+  rewrite assoc_cons. case : (c = enc (m{m2}, pkgen ks, e)) => />; smt(encK).
++ proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
+  by rewrite -assocTP.
++ wp; rnd; skip => />. smt().
+qed.
 
 equiv Ideal_CCA_R :
   Game(Ideal,A).main ~ CCA_R(S, B(A)).main : true ==> ={res}.
