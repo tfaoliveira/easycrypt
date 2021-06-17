@@ -31,9 +31,13 @@ clone import CCA as C with
   op Nenc <- Nenc.
 
 module type ICCA = {
-  proc init() : unit
   proc enc (_ : plaintext) : ciphertext
   proc dec (_ : ciphertext)  : plaintext option
+}.
+
+module type ICCA_i = {
+  include ICCA
+  proc init() : unit
 }.
 
 module Real : ICCA = {
@@ -131,7 +135,7 @@ module type Adversary (G : ICCA) = {
   proc main () : bool
 }.
 
-module Game (O : ICCA, A : Adversary) = {
+module Game (O : ICCA_i, A : Adversary) = {
   
   proc main() = {
     var r;
@@ -216,16 +220,23 @@ module B (A : Adversary) (O : CCA_Oracle) = {
 
 section.
 
-declare module A : Adversary {Real, Real', Ideal}.
+declare module A : Adversary {Real, Real', Ideal, C.Wrap}.
 
 axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv Real_Real' :
-  Game(Real,A).main ~ Game(Real',A).main : true ==> ={res}.
+  Game(Real,A).main ~ Game(Real',A).main : ={glob A} ==> ={res}.
 proof.
-(* CD *)
-admitted.
+proc; inline *. 
+call (: ={glob Real} /\ (exists ks, (Real.pk,Real.sk){2} = (pkgen ks, skgen ks)) /\
+  (forall c m, assoc Ideal.cs c = Some m => dec(c,Real.sk) = Some m){2}) .
++ proc. wp. rnd. auto=> /> &m2 ks Hcs e _ c m'.
+  rewrite assoc_cons. case: (c = enc (m{m2}, pkgen ks, e)) => />. by rewrite encK.
+  move => _. apply: Hcs.
++ proc. wp. skip => /> &m2 ks Hcs. smt().
++ wp. rnd. skip => />. smt().
+qed.
 
 module S : Scheme = {
   proc kg () : pkey * skey = {
@@ -254,8 +265,11 @@ module S : Scheme = {
 }.
 
 equiv Real'_CCA_L :
-  Game(Real',A).main ~ CCA_L(S, B(A)).main : true ==> ={res}.
+  Game(Real',A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
+proc; inline *; wp.
+call (: ={pk,sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2}).
++ proc. wp.
 (* CD *)
 admitted.
 
