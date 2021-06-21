@@ -323,3 +323,7 @@ have -> : Pr[Game(Real',A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : 
 have -> : Pr[Game(Ideal,A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
 byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Ideal_CCA_R.
 qed.
+
+end section.
+
+end ICCA.
