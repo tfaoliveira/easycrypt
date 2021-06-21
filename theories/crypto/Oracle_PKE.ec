@@ -31,6 +31,7 @@ op Ndec : int.
 op Nenc : { int | 0 < Nenc } as Nenc_gt0.
 
 (* can we use hybrid without cloning or not reexport it *)
+(*
 clone import Hybrid as Hyb with
   type input <- plaintext * plaintext,
   type output <- ciphertext,
@@ -38,6 +39,7 @@ clone import Hybrid as Hyb with
   type outleaks = (pkey, plaintext option) sum,
   type outputA <- bool,
   op q <- Nenc.
+*)
 
 module type Scheme = {
   proc kg () : pkey * skey
@@ -233,8 +235,8 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
 
 section.
 
-declare module S : Scheme {Wrap, LorR, B, CountCCA, CountAdv, Count, HybOrcl}.
-declare module A : Adversary {Wrap, S, LorR, B, CountCCA, CountAdv, Count, HybOrcl}.
+declare module S : Scheme {Wrap, LorR, B, CountCCA, CountAdv}.
+declare module A : Adversary {Wrap, S, LorR, B, CountCCA, CountAdv}.
 
 axiom A_ll (O <: CCA_Oracle {A}) : 
   islossless O.l_or_r => islossless O.dec => islossless A(O).main.
@@ -242,6 +244,14 @@ axiom A_ll (O <: CCA_Oracle {A}) :
 axiom kg_ll : islossless S.kg.
 axiom enc_ll : islossless S.enc.
 axiom dec_ll : islossless S.dec.
+
+local clone Hybrid as Hyb with
+  type input <- plaintext * plaintext,
+  type output <- ciphertext,
+  type inleaks = (unit, ciphertext) sum,
+  type outleaks = (pkey, plaintext option) sum,
+  type outputA <- bool,
+  op q <- Nenc.
 
 axiom A_bound (O <: CCA_Oracle {A, CountCCA}): 
   hoare[ CountAdv(A, O).main : true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
@@ -339,13 +349,13 @@ proc; inline *; swap 5 -2; sp; auto.
     sp; auto; call (: true); skip => /> /#.
 qed.
 
-local module Ob : Orclb = {
+local module Ob : Hyb.Orclb = {
   var sk : skey
   var pk : pkey
   var cs : ciphertext list
   var ndec : int
 
-  proc leaks (il : inleaks) : outleaks = {
+  proc leaks (il : Hyb.inleaks) : Hyb.outleaks = {
     var ol, m;
 
     if (is_left il) {
@@ -399,7 +409,7 @@ proof.
 qed.
 
 (* : AdvOrclb *)
-local module A' (Ob : Orclb) (O : Orcl) = {
+local module A' (Ob : Hyb.Orclb) (O : Hyb.Orcl) = {
   module O' : CCA_Oracle = {
     proc l_or_r = O.orcl
 
@@ -421,7 +431,7 @@ local module A' (Ob : Orclb) (O : Orcl) = {
   }
 }.
 
-local lemma A'_ll (Ob <: Orclb{A'}) (LR <: Orcl{A'}) : 
+local lemma A'_ll (Ob <: Hyb.Orclb{A'}) (LR <: Hyb.Orcl{A'}) : 
   islossless LR.orcl => islossless Ob.leaks =>
   islossless Ob.orclL => islossless Ob.orclR =>
   islossless A'(Ob, LR).main.
@@ -431,7 +441,7 @@ proof.
 qed.
 
 local lemma CCA_Ln &m : 
-   Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Ln(Ob, A').main() @ &m : res ].
+   Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Hyb.Ln(Ob, A').main() @ &m : res ].
 proof.
   byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
   call (: ={glob S} /\ ={sk, pk, cs}(Wrap,Ob)).
@@ -443,7 +453,7 @@ proof.
 qed.
 
 local lemma CCA_Rn &m : 
-   Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Rn(Ob, A').main() @ &m : res].
+   Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Hyb.Rn(Ob, A').main() @ &m : res].
 proof.
   byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
   call (: ={glob S} /\ ={sk,pk,cs}(Wrap,Ob)).
@@ -454,17 +464,17 @@ proof.
   + by auto; call(: true).
 qed.
 
-local lemma A'_call (O <: Orcl{Count, A'}) :
-  hoare[ AdvCount(A'(Ob, OrclCount(O))).main : true ==> Count.c <= Nenc].
+local lemma A'_call (O <: Hyb.Orcl{Hyb.Count, A'}) :
+  hoare[ Hyb.AdvCount(A'(Ob, Hyb.OrclCount(O))).main : true ==> Hyb.Count.c <= Nenc].
 proof.
-proc. inline A'(Ob, OrclCount(O)).main; wp.
-suff P : hoare[ CountAdv(A, A'(Ob, OrclCount(O)).O').main :
-                Count.c = 0 ==> Count.c <= Nenc].
+proc. inline A'(Ob, Hyb.OrclCount(O)).main; wp.
+suff P : hoare[ CountAdv(A, A'(Ob, Hyb.OrclCount(O)).O').main :
+                Hyb.Count.c = 0 ==> Hyb.Count.c <= Nenc].
 - call P; inline *; rcondt 3; 1: by auto.
   by auto; call (: true); auto.
-- conseq (A_bound (<: A'(Ob, OrclCount(O)).O'))
-         (: Count.c = 0 ==> CountCCA.nenc = Count.c) => />.
-  proc; call (: CountCCA.nenc = Count.c).
+- conseq (A_bound (<: A'(Ob, Hyb.OrclCount(O)).O'))
+         (: Hyb.Count.c = 0 ==> CountCCA.nenc = Hyb.Count.c) => />.
+  proc; call (: CountCCA.nenc = Hyb.Count.c).
   + by proc; inline *; auto; call (: true); auto.
   + by conseq />.
   + by inline *; auto.
@@ -482,14 +492,14 @@ have -> : inv Nenc%r * `|Pr[CCA_L(S, A).main() @ &m : res] - Pr[CCA_R(S, A).main
           `| (Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res]) / Nenc%r |.
 smt(Nenc_gt0).
 rewrite CCA_Ln CCA_Rn. 
-have /= H := Hybrid_restr Ob A' A'_call Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r).
+have /= H := Hyb.Hybrid_restr Ob A' A'_call Obl_ll orclL_ll orclR_ll A'_ll &m (fun _ _ _ r => r).
 rewrite -H; clear H.
-have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.L(Ob)).main() @ &m : res].
+have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[Hyb.HybGame(A', Ob, Hyb.L(Ob)).main() @ &m : res].
   byequiv => //; proc; inline *; auto. 
   swap{2} 1 5; swap{1} 6 2; sp. 
   rcondt{2} 1; 1: by move => &m'; skip => />.
   call (: ={glob S} /\ ={pk, sk}(Wrap, Ob) /\ 
-            B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs, pk}(B, Ob) /\
+            B.i{1} = Hyb.HybOrcl.l{2} /\ B.iS{1} = Hyb.HybOrcl.l0{2} /\ ={cs, pk}(B, Ob) /\
             (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *; sp; if; 1: by move => />.
     + by auto; call (: true); auto => /> /#.
@@ -502,12 +512,12 @@ have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.L(O
       by auto; call(: true); skip => />.
     + by auto; skip => />.
   by wp; rnd; auto; call(: true); skip => &m1 &m2 />.
-have <- : Pr[CCA_(S, B(S, A), R).main() @ &m : res] = Pr[HybGame(A', Ob, Hyb.R(Ob)).main() @ &m : res].
+have <- : Pr[CCA_(S, B(S, A), R).main() @ &m : res] = Pr[Hyb.HybGame(A', Ob, Hyb.R(Ob)).main() @ &m : res].
   byequiv => //; proc; inline *; auto. 
   swap{2} 1 5; swap{1} 6 2; sp. 
   rcondt{2} 1; 1: by move => &m'; skip => />.
   call (: ={glob S} /\ ={pk,sk}(Wrap,Ob) /\ 
-            B.i{1} = HybOrcl.l{2} /\ B.iS{1} = HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
+            B.i{1} = Hyb.HybOrcl.l{2} /\ B.iS{1} = Hyb.HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
             (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *; sp; if; 1: by move => />.
     + by auto; call (: true); auto => /> /#.
@@ -526,3 +536,4 @@ qed.
 end section.
 
 end CCA.
+
