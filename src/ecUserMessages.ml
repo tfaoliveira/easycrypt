@@ -44,13 +44,13 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_cost ppe fmt (c : EcModules.c_bnd) =
+    let pp_cost ppe fmt (c : EcFol.c_bnd) =
       match c with
       | C_bounded c -> EcPrinting.pp_form ppe fmt c
-      | C_unbounded -> Format.fprintf fmt "+∞"
+      | C_unbounded -> Format.fprintf fmt "`_" (* "+∞" *)
     in
 
-    let pp_self ppe mode fmt ((iself,oself) : EcModules.c_bnd * EcModules.c_bnd) =
+    let pp_self ppe mode fmt ((iself,oself) : EcFol.c_bnd * EcFol.c_bnd) =
       Format.fprintf fmt
         "@[<v>self cost:@;  @[%a@]@; cannot be shown \
          to be %s:@;  @[%a@]@]"

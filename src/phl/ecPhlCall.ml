@@ -23,6 +23,24 @@ module PT  = EcProofTerm
 module TTC = EcProofTyping
 
 (* -------------------------------------------------------------------- *)
+(* As [cost_sub], but raises error messages if the equation cannot be solved. *)
+let tc1_cost_sub (tc : tcenv1) (c1 : cost) (c2 : cost) : form * cost =
+  match EcCHoare.cost_sub c1 c2 with
+  | `Ok (cond1, cost) -> cond1, cost
+  | `XError x ->
+    tc_error_lazy !!tc
+      (fun fmt ->
+         let env = FApi.tc1_env tc in
+         let ppe = EcPrinting.PPEnv.ofenv env in
+         Format.fprintf fmt
+           "invalid cost information: %a is finite in the \
+            conclusion, but is arbitrary in the provided cost"
+           (EcPrinting.pp_funname ppe) x)
+  | `FullError ->
+    tc_error !!tc "invalid cost information: the conclusion is full, but \
+                   the provided cost is not "
+
+(* -------------------------------------------------------------------- *)
 let wp_asgn_call env m lv res post =
   match lv with
   | None -> post
@@ -112,10 +130,12 @@ let t_choare_call fpre fpost fcost tc =
      the cost of the arguments' evaluation.
      Remark: the cost of the evaluation of the return is accounted for in
      [fcost]. *)
-  let args_cost = List.fold_left (fun cost e ->
+  let args_cost : form =
+    List.fold_left (fun cost e ->
       f_xadd cost (EcCHoare.cost_of_expr_any chs.chs_m e)
-    ) f_x0 args in
-  let cond1, cost = EcCHoare.cost_sub env chs.chs_co fcost in
+    ) f_x0 args
+  in
+  let cond1, cost = tc1_cost_sub tc chs.chs_co fcost in
   let cond2, cost = EcCHoare.cost_sub_self cost args_cost in
   let concl = f_cHoareS_r { chs with chs_s = s;
                                      chs_po = post;

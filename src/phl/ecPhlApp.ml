@@ -33,9 +33,8 @@ let t_hoare_app = FApi.t_low2 "hoare-app" t_hoare_app_r
 (* -------------------------------------------------------------------- *)
 let t_choare_app_r i phi cost tc =
   let chs = tc1_as_choareS tc in
-  let env = FApi.tc1_env tc in
   let s1, s2 = s_split i chs.chs_s in
-  let cond, cost1 = EcCHoare.cost_sub env chs.chs_co cost in
+  let cond, cost1 = EcPhlCall.tc1_cost_sub tc chs.chs_co cost in
 
   let a = f_cHoareS_r { chs with chs_s  = stmt s1;
                                  chs_po = phi;

@@ -590,12 +590,16 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
 
         if not (EcReduction.EqTest.for_xp env hf1.chf_f x2) then
           failure ();
+
         let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
 
-        let calls2 = EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls in
+        let calls2 =
+          EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls
+        in
 
         EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
-            let cb1, cb2 = oget cb1, oget cb2 in (* cannot be None *)
+            let cb1 = EcFol.oget_c_bnd cb1 hf1.chf_co.c_full
+            and cb2 = EcFol.oget_c_bnd cb2 hf2.chf_co.c_full in
             doit_c_bnd failure env (subst, mxs) cb1 cb2
           ) hf1.chf_co.c_calls calls2 ();
 
@@ -1092,7 +1096,7 @@ module FPosition = struct
                   | None        -> C_unbounded
                 ) chf.chf_co.c_calls
             in
-            let cost = cost_r c_self c_calls in
+            let cost = cost_r c_self c_calls chf.chf_co.c_full in
             f_cHoareF_r { chf with chf_pr; chf_po;
                                    chf_co = cost; }
 

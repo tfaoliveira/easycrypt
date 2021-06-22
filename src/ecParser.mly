@@ -1097,16 +1097,30 @@ cost_elc(P):
 | TICKUNDERSCORE  { `Unbounded }
 | c=form_r(P)     { `Bounded c }
 
-orcl_time(P):
- | m=uident DOT f=lident COLON c=cost_elc(P) { (m,f, c) }
+cost_self(P):
+| COLON c=cost_elc(P) { c }
 
-cost_calls(P,S):
+orcl_time(P):
+| m=uident DOT f=lident COLON c=cost_elc(P) { (m,f, c) }
+
+%inline cost_calls(P,S):
 | calls=rlist1(orcl_time(P), S) { calls }
 
+%inline cost_body_non_empty(P):
+| s=cost_self(P)                               { s,[] }
+| s=cost_self(P) COMMA c=cost_calls(P,COMMA)   { s,c }
+| c=cost_calls(P,COMMA)                        { `Unbounded,c }
+
+cost_body(P):
+| UNDERSCORE                                 { (`Unbounded, []), false }
+| c=cost_body_non_empty(P) COMMA UNDERSCORE  { c, false } 
+| c=cost_body_non_empty(P)                   { c, true } 
+
+
 costs(P):
-| LBRACKET c=cost_elc(P) RBRACKET   {PC_costs(c,[])}
-| LBRACKET c=cost_elc(P) SEMICOLON calls=cost_calls(P,SEMICOLON) RBRACKET
-                                    {PC_costs(c,calls)}
+| LBRACKET cbody=cost_body(P) RBRACKET   
+    { let c, b = cbody in
+      PC_costs (c,b) }
 
 qident_or_res_or_glob:
 | x=qident

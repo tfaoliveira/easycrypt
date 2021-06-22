@@ -12,16 +12,15 @@ open EcFol
 open EcEnv
 
 (* -------------------------------------------------------------------- *)
-let c_bnd_of_opt (f : c_bnd option) : c_bnd =
-  match f with
-  | Some f -> f
-  | None -> C_unbounded
+let oget_c_bnd = EcCoreFol.oget_c_bnd
 
-(* [xint] from a [c_bnd] *)
-let xi_of_c_bnd (c : c_bnd) : form =
+(* [xint] from a [c_bnd] of type [mode] *)
+let xi_of_c_bnd ~(mode:[`Xint | `Int]) (c : c_bnd) : form =
   match c with
   | C_unbounded -> f_Inf
-  | C_bounded f -> f_N f
+  | C_bounded f -> match mode with
+    | `Xint -> f
+    | `Int  -> f_N f
 
 (* -------------------------------------------------------------------- *)
 (* Function for cost                                                    *)
@@ -32,13 +31,20 @@ let f_subcond (f1 : form) (f2 : form) : form =
 let f_xsub (f1 : form) (f2 : form) : form * form =
   f_subcond f1 f2, f_xadd f1 (f_xopp f2)
 
-let cost_sub_self (c : cost) (a : form) : cost =
-  let c_self = c_bnd_map (fun x -> f_int_sub x a) c.c_self in
-  cost_r c_self c.c_calls
+(* [a] of type [xint] *)
+let cost_sub_self (c : cost) (a : form) : form * cost =
+  let cond, c_self = match c.c_self with
+    | C_unbounded -> f_true, C_unbounded
+    | C_bounded x ->
+      let cond, x = f_xsub x a in
+      cond, C_bounded x
+  in
+  cond, cost_r c_self c.c_calls c.c_full
 
-let cost_add_self c a =
-  let c_self = c_bnd_map (fun x -> f_int_add x a) c.c_self in
-  cost_r c_self c.c_calls
+(* [a] of type [xint] *)
+let cost_add_self (c : cost) (a : form) : cost =
+  let c_self = c_bnd_map (fun x -> f_xadd x a) c.c_self in
+  cost_r c_self c.c_calls c.c_full
 
 (* (\* Add an entry for a oracle to [c.c_calls], if necessary. *\)
  * let cost_add_oracle (env : EcEnv.env) (c : cost) (f : EcPath.xpath) : cost =
@@ -69,9 +75,9 @@ let cost_add_self c a =
  *       |> some
  *     ) f c.c_calls in
  *
- *   cost_r c.c_self c_calls
- *
- * let cost_add_call env c f a =
+ *   cost_r c.c_self c_calls *)
+
+(* let cost_add_call env c f a =
  *   let c = cost_add_oracle env c f in
  *
  *   let c_calls = EcPath.Mx.change (fun cb ->
@@ -80,9 +86,9 @@ let cost_add_self c a =
  *       |> some
  *     ) f c.c_calls in
  *
- *   cost_r c.c_self c_calls
- *
- * let cost_op env op c1 c2 =
+ *   cost_r c.c_self c_calls *)
+
+(* let cost_op env op c1 c2 =
  *   (\* Ensure that [c1] and [c2] have the same support. *\)
  *   let c2 = List.fold_left (cost_add_oracle env) c2 (EcPath.Mx.keys c1.c_calls)
  *   and c1 = List.fold_left (cost_add_oracle env) c1 (EcPath.Mx.keys c2.c_calls) in
@@ -90,18 +96,57 @@ let cost_add_self c a =
  *   EcPath.Mx.union (fun _ cb1 cb2 ->
  *     assert (f_equal cb1.cb_cost cb2.cb_cost);
  *     Some (call_bound_r cb1.cb_cost (op cb1.cb_called cb2.cb_called)))
- *   c1.c_calls c2.c_calls
- *
- * let cost_add env c1 c2 =
+ *   c1.c_calls c2.c_calls *)
+
+(* let cost_add env c1 c2 =
  *   let c_calls = cost_op env EcFol.f_int_add_simpl c1 c2 in
- *   cost_r (f_xadd c1.c_self c2.c_self) c_calls
- *
- * let cost_sub env c1 c2 =
- *   let c_calls = cost_op env EcFol.f_int_sub_simpl c1 c2 in
- *   let cond, self = f_xsub c1.c_self c2.c_self in
- *   cond, cost_r self c_calls
- *
- * let cost_map f_xmap f_map c =
+ *   cost_r (f_xadd c1.c_self c2.c_self) c_calls *)
+
+(* -------------------------------------------------------------------- *)
+(* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
+   the equation [c1 = x + c2] over [x].
+*)
+type cost_backward_res = [
+  | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
+                                   whenever [c] holds. *)
+  | `XError of EcPath.xpath          (* error with oracle call [x] *)
+  | `FullError                  (* full minus not full *)
+]
+
+(* Backward reasoning on cost.
+   [cost_sub c1 c2] looks for a solution [x] of [c1 = x + c2]. *)
+let cost_sub (c1 : cost) (c2 : cost) : cost_backward_res =
+  let exception Failed of [`XError of EcPath.xpath | `FullError ] in
+  try
+    let cond, c_self = match c1.c_self, c2.c_self with
+      | C_bounded s1, C_bounded s2 ->
+        let cond, c = f_xsub s1 s2 in
+        cond, C_bounded c
+      | _ -> f_true, C_unbounded
+    in
+    let c_calls =
+      EcPath.Mx.merge (fun x call1 call2 ->
+          let call1 = oget_c_bnd call1 c1.c_full
+          and call2 = oget_c_bnd call2 c2.c_full in
+          match call1, call2 with
+          | C_bounded call1, C_bounded call2 ->
+            let bnd = C_bounded (f_int_sub_simpl call1 call2) in
+            Some bnd
+          | C_unbounded, _ -> Some C_unbounded
+          | C_bounded _, C_unbounded -> raise (Failed (`XError x))
+        ) c1.c_calls c2.c_calls
+    in
+    let c_full = c1.c_full && c2.c_full in
+
+    if c1.c_full && not c2.c_full then
+      raise (Failed `FullError);
+
+    `Ok (cond, cost_r c_self c_calls c_full)
+  with Failed x -> (x :> cost_backward_res)
+
+
+(* -------------------------------------------------------------------- *)
+(* let cost_map f_xmap f_map c =
  *   EcPath.Mx.fold (fun f cb res ->
  *       let c_calls =
  *         EcPath.Mx.add f
@@ -109,16 +154,16 @@ let cost_add_self c a =
  *           res.c_calls in
  *       cost_r res.c_self c_calls
  *     ) c.c_calls
- *     (cost_r (f_xmap c.c_self) EcPath.Mx.empty)
- *
- * let cost_app c args =
- *   cost_map (fun c -> f_app_simpl c args txint)
- *            (fun c -> f_app_simpl c args tint) c
- *
- * let cost_flatten cost =
- *   EcPath.Mx.fold (fun _ cb cflat ->
- *       f_xadd cflat (f_xmuli cb.cb_called cb.cb_cost))
- *     cost.c_calls cost.c_self *)
+ *     (cost_r (f_xmap c.c_self) EcPath.Mx.empty) *)
+
+let cost_app (c : cost) (args : form list) : cost =
+  cost_map
+    (fun ty c ->
+       let ty = match ty with
+         | `Xint -> txint
+         | `Int -> tint in
+       f_app_simpl c args ty
+    ) c
 
 (* -------------------------------------------------------------------- *)
 let loaded (env : env) : bool =
@@ -169,9 +214,12 @@ let f_xbig f m n =
 let f_big f m n =
   f_app f_op_big [f_predT; f; range m n] tint
 
-(* let choare_sum cost (m, n) =
- *   cost_map (fun f -> f_xbig f m n)
- *            (fun f -> f_big f m n) cost *)
+let choare_sum (cost : cost) (m, n) : cost =
+  cost_map (fun ty f ->
+      match ty with
+      | `Xint -> f_xbig f m n
+      | `Int  -> f_big f m n
+    ) cost
 
 (* -------------------------------------------------------------------- *)
 let rec free_expr (e : EcTypes.expr) : bool =
@@ -181,8 +229,6 @@ let rec free_expr (e : EcTypes.expr) : bool =
   | Eop _
   | Eproj _ | Etuple _ | Eapp _
   | Equant _ | Elet _ | Eif _ | Ematch _ -> false
-
-
 
 let cost_of_expr pre menv e =
   if free_expr e then f_x0 else f_coe pre menv e

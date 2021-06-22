@@ -126,9 +126,10 @@ let t_choare_while_r inv qdec n (lam_cost : cost) tc =
 
   let body_cost = EcCHoare.choare_sum lam_cost (f_i0, n) in
   let cond, cost =
-    EcCHoare.cost_sub env
+    EcPhlCall.tc1_cost_sub tc
       chs.chs_co
-      (EcCHoare.cost_add_self body_cost e_cost_self) in
+      (EcCHoare.cost_add_self body_cost e_cost_self)
+  in
 
   (* The wp of the while. *)
   let post = f_imps_simpl [f_not_simpl e; inv] chs.chs_po in

@@ -42,26 +42,27 @@ let process_form ?mv hyps pf ty =
 let process_formula ?mv hyps pf =
   process_form hyps ?mv pf tbool
 
-let process_cost ?mv hyps (EcParsetree.PC_costs (self, calls)) tys : cost =
-  let process_elc = function
+let process_cost ?mv hyps p_cost tys : cost =
+  let EcParsetree.PC_costs ((self, calls), full) = p_cost in
+  let process_elc ty = function
     | `Unbounded -> C_unbounded
     | `Bounded c ->
-      let c = process_form_opt ?mv hyps c (Some (toarrow tys tint)) in
+      let c = process_form_opt ?mv hyps c (Some (toarrow tys ty)) in
       C_bounded c
   in
 
   let env = LDecl.toenv hyps in
-  let self = process_elc self in
+  let self = process_elc txint self in
   let calls = List.map (fun (m,f,c) ->
       let f = EcTyping.trans_oracle env (m,f) in
-      let f_c = process_elc c in
+      let f_c = process_elc tint c in
       f, f_c
     ) calls
   in
 
   let calls = EcPath.Mx.of_list calls in
 
-  cost_r self calls
+  cost_r self calls full
 
 let process_exp hyps mode oty e =
   let env = LDecl.toenv hyps in

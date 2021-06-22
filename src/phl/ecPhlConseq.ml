@@ -24,15 +24,22 @@ module PT  = EcProofTerm
 module TTC = EcProofTyping
 
 (* -------------------------------------------------------------------- *)
-let conseq_cond pre post spre spost =
+let conseq_cond pre post spre spost : form * form =
   f_imp pre spre, f_imp spost post
 
 let conseq_cost (cost : cost) (scost : cost) : form =
-  let self_le = f_xle (xi_of_c_bnd cost.c_self) (xi_of_c_bnd scost.c_self) in
+  let self_le =
+    f_xle
+      (xi_of_c_bnd ~mode:`Xint  cost.c_self)
+      (xi_of_c_bnd ~mode:`Xint scost.c_self)
+  in
   let calls_le =
     EcPath.Mx.fold2_union (fun _ c1 c2 forms ->
-        let c1, c2 = c_bnd_of_opt c1, c_bnd_of_opt c2 in
-        let le = f_xle (xi_of_c_bnd c1) (xi_of_c_bnd c2) in
+        let c1 = oget_c_bnd c1 cost.c_full
+        and c2 = oget_c_bnd c2 scost.c_full in
+        let le =
+          f_xle (xi_of_c_bnd ~mode:`Int c1) (xi_of_c_bnd ~mode:`Int c2)
+        in
         le :: forms
       ) cost.c_calls scost.c_calls []
   in

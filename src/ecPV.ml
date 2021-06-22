@@ -211,7 +211,7 @@ module PVM = struct
 
       | _ -> EcFol.f_map (fun ty -> ty) aux f)
 
-  let subst_cost env s (c : cost) = EcFol.cost_map (subst env s) c
+  let subst_cost env s (c : cost) = EcFol.cost_map (fun _ -> subst env s) c
 
   let subst1 env pv m f =
     let s = add env pv m f empty in
@@ -327,7 +327,7 @@ module PV = struct
   let fv env m f = aux env m empty f
 
   let fv_cost env m (cost : cost) : t =
-    cost_fold (fun t fv -> aux env m fv t) cost empty
+    cost_fold (fun _ t fv -> aux env m fv t) cost empty
 
   let pp env fmt fv =
     let ppe = EcPrinting.PPEnv.ofenv env in

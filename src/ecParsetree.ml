@@ -246,7 +246,7 @@ and p_elc       = [`Unbounded | `Bounded of pformula]
 and pcost_call  = psymbol * psymbol * p_elc
 and pcost_calls = pcost_call list
 
-and pcost  = PC_costs of p_elc * pcost_calls
+and pcost  = PC_costs of (p_elc * pcost_calls) * bool
 
 (* if [pmty_mem] is [None], there are no user-supplied restriction, which is
    different from the user supplying an empty restriction.
@@ -537,7 +537,7 @@ type poracles_cost = (pgamepath * psymbol option * pcost) list
    ci_vrnts   : list of pairs of oracles and their increasing quantity. *)
 type p_abs_inv_inf = poracles_cost
 
-type p_call_inv_info = [` Std of pcost | `CostAbs of p_abs_inv_inf ]
+type p_call_inv_info = [`Std of pcost | `CostAbs of p_abs_inv_inf ]
 
 type call_info =
   | CI_spec of (pformula * pformula * pcost option)

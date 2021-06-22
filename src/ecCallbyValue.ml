@@ -170,7 +170,7 @@ let rec norm st s f =
  let f = cbv st s f (Aempty (Subst.subst_ty s f.f_ty)) in
  norm_lambda st f
 
-and norm_cost st s c =
+and norm_cost st s (c : cost) : cost =
   let self'  = c_bnd_map (norm st s) c.c_self
   and calls' =
     EcPath.Mx.fold (fun f cb calls ->
@@ -178,8 +178,9 @@ and norm_cost st s c =
         let f' = Subst.subst_xpath s f
         and cb' = c_bnd_map (norm st s) cb in
         EcPath.Mx.change (fun old -> assert (old = None); Some cb') f' calls
-      ) c.c_calls EcPath.Mx.empty in
-  cost_r self' calls'
+      ) c.c_calls EcPath.Mx.empty
+  in
+  cost_r self' calls' c.c_full
 
 
 and norm_lambda (st : state) (f : form) =

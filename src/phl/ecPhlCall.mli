@@ -12,6 +12,11 @@ open EcFol
 open EcCoreGoal.FApi
 
 (* -------------------------------------------------------------------- *)
+(* As [EcCHoare.cost_sub], but raises error messages if the equation
+   cannot be solved. *)
+val tc1_cost_sub : EcCoreGoal.tcenv1 -> cost -> cost -> form * cost
+
+(* -------------------------------------------------------------------- *)
 val wp2_call :
      EcEnv.env -> form -> form
   -> EcModules.lvalue option * EcPath.xpath * EcTypes.expr list

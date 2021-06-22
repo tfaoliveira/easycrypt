@@ -162,10 +162,14 @@ and c_bnd =
   | C_unbounded
 
 (* Invariant: keys of c_calls are functions of local modules,
-   with no arguments. *)
+   with no arguments.
+   Missing entries in [c_calls] are:
+   - unbounded if [c_full] is true;
+   - zero if [c_full] is false. *)
 and cost = private {
   c_self  : c_bnd;
   c_calls : c_bnd EcPath.Mx.t;
+  c_full  : bool;
 }
 
 and module_type = c_bnd p_module_type
@@ -218,11 +222,17 @@ val form_forall: (form -> bool) -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 (* not recursive *)
+val c_bnd_iter : (form -> unit) -> c_bnd -> unit
+val cost_iter  : (form -> unit) -> cost -> unit
+
 val c_bnd_map : (form -> form) -> c_bnd -> c_bnd
-val cost_map     : (form -> form) -> cost     -> cost
+val cost_map  : ([`Xint | `Int] -> form -> form) -> cost -> cost
+
+val c_bnd_bind : (form -> c_bnd) -> c_bnd -> c_bnd
+val cost_bind  : ([`Xint | `Int] -> form -> c_bnd) -> cost -> cost
 
 val c_bnd_fold : (form -> 'a -> 'a) -> c_bnd -> 'a -> 'a
-val cost_fold     : (form -> 'a -> 'a) -> cost     -> 'a -> 'a
+val cost_fold  : ([`Xint | `Int] -> form -> 'a -> 'a) -> cost -> 'a -> 'a
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
@@ -261,7 +271,7 @@ val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
-val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> cost
+val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> bool -> cost
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -363,6 +373,10 @@ val f_xmax  : form -> form -> form
 
 val f_x0 : form
 val f_x1 : form
+
+(* -------------------------------------------------------------------- *)
+val oget_c_bnd : c_bnd option -> bool -> c_bnd
+val cost_add   : cost -> cost -> cost
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig

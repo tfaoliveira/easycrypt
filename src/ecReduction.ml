@@ -339,7 +339,8 @@ let check_cost_l env subst co1 co2 =
 
     let acc =
       EcPath.Mx.fold2_union (fun _ a1 a2 acc ->
-          let a1, a2 = oget a1, oget a2 in (* cannot be None *)
+          let a1 = EcFol.oget_c_bnd a1 co1.c_full
+          and a2 = EcFol.oget_c_bnd a2 co2.c_full in
           do_c_bnd a1 a2 @ acc
         ) calls1 calls2 [] in
 
@@ -1417,7 +1418,7 @@ let zpop ri side f hd =
     let calls = zapp_cost_l (Mx.bindings hfc.chf_co.c_calls) pcalls Mx.empty
     in
     f_cHoareF_r
-      { hfc with chf_pr; chf_po; chf_co = cost_r self_ calls }
+      { hfc with chf_pr; chf_po; chf_co = cost_r self_ calls hfc.chf_co.c_full }
 
   | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_pcalls -> (* FIXME *)
     let pcalls_len = Mx.cardinal hfs.chs_co.c_calls in
@@ -1434,7 +1435,7 @@ let zpop ri side f hd =
 
     let calls = zapp_cost_l (Mx.bindings hfs.chs_co.c_calls) pcalls Mx.empty in
     f_cHoareS_r
-      { hfs with chs_pr; chs_po; chs_co = cost_r self_ calls }
+      { hfs with chs_pr; chs_po; chs_co = cost_r self_ calls hfs.chs_co.c_full }
 
   | _, _ -> assert false
 

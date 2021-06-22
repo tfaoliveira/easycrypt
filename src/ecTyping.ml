@@ -987,7 +987,7 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
       ) costs Mx.empty
     in
 
-    let cost = cost_r c_self c_calls in
+    let cost = cost_r c_self c_calls true in
     f_cHoareF f_true xfn f_true cost
   in
 
@@ -3650,34 +3650,34 @@ and trans_form_or_pattern
     | PFChoareF _ | PFChoareFT _ ->
       EcCHoare.check_loaded env;
 
-      let trans_elc = function
+      let trans_elc ty = function
         | `Unbounded -> C_unbounded
         | `Bounded c ->
           let c' = transf env c in
-          unify_or_fail env ue c.pl_loc ~expct:tint c'.f_ty;
+          unify_or_fail env ue c.pl_loc ~expct:ty c'.f_ty;
           C_bounded c'
       in
 
-      let trans_choaref pre post fpath self calls =
-        let self  = trans_elc self in
+      let trans_choaref pre post fpath self calls full =
+        let self  = trans_elc txint self in
         let calls = List.map (fun (m,fn,c) ->
             let fn = trans_oracle env (m,fn) in
-            let f_c = trans_elc c in
+            let f_c = trans_elc tint c in
             fn, f_c
           ) calls
         in
         let calls = Mx.of_list calls in
 
-        let cost = cost_r self calls in
+        let cost = cost_r self calls full in
         f_cHoareF pre fpath post cost
       in
 
       begin match f.pl_desc with
-        | PFChoareFT (gp, PC_costs (self, calls)) ->
+        | PFChoareFT (gp, PC_costs ((self, calls), full)) ->
           let fpath = trans_gamepath env gp in
-          trans_choaref f_true f_true fpath self calls
+          trans_choaref f_true f_true fpath self calls full
 
-        | PFChoareF (pre, gp, post, PC_costs (self, calls)) ->
+        | PFChoareF (pre, gp, post, PC_costs ((self, calls), full)) ->
           let fpath = trans_gamepath env gp in
           let penv, qenv = EcEnv.Fun.hoareF fpath env in
           let pre'   = transf penv pre in
@@ -3685,7 +3685,7 @@ and trans_form_or_pattern
           unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
 
-          trans_choaref pre' post' fpath self calls
+          trans_choaref pre' post' fpath self calls full
         | _ -> assert false
       end
 

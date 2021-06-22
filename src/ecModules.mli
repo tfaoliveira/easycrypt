@@ -23,8 +23,8 @@ module OI : sig
 
   val is_in : t -> bool
 
-  val cost_self : t ->          c_bnd
-  val cost      : t -> xpath -> c_bnd
+  val cost_self : t ->          c_bnd (* int *)
+  val cost      : t -> xpath -> c_bnd (* int *)
 
   val cost_calls : t -> c_bnd Mx.t
 
