@@ -31,19 +31,18 @@ clone import CCA as C with
   op Nenc <- Nenc,
   axiom Nenc_gt0 <- Nenc_gt0.
 
-(* should be named ICCA_Oracle *)
-module type ICCA = {
+module type ICCA_Oracle = {
   proc pk () : pkey
   proc enc (_ : plaintext) : ciphertext
   proc dec (_ : ciphertext)  : plaintext option
 }.
 
 module type ICCA_i = {
-  include ICCA
+  include ICCA_Oracle
   proc init() : unit
 }.
 
-module Real : ICCA = {
+module Real : ICCA_Oracle = {
   var pk : pkey
   var sk : skey
 
@@ -74,7 +73,7 @@ module Real : ICCA = {
   }
 }.
 
-module Ideal : ICCA = { 
+module Ideal : ICCA_Oracle = { 
   import var Real
   var cs : (ciphertext * plaintext) list
 
@@ -110,7 +109,7 @@ module Ideal : ICCA = {
   }
 }.
 
-module Real' : ICCA = { 
+module Real' : ICCA_Oracle = { 
   import var Real
   import var Ideal
 
@@ -146,7 +145,7 @@ module Real' : ICCA = {
   }
 }.
 
-module type Adversary (G : ICCA) = {
+module type Adversary (G : ICCA_Oracle) = {
   proc main () : bool
 }.
 
@@ -163,7 +162,7 @@ module Game (O : ICCA_i, A : Adversary) = {
 
 (*-------------------------------*)
 
-module CountICCA (O : ICCA) = {
+module CountICCA (O : ICCA_Oracle) = {
   var ndec, nenc : int
 
   proc init () : unit = {
@@ -190,7 +189,7 @@ module CountICCA (O : ICCA) = {
   }
 }.
 
-module CountAdv (A : Adversary) (O : ICCA) = {
+module CountAdv (A : Adversary) (O : ICCA_Oracle) = {
   proc main() = {
     var b;
 
@@ -204,7 +203,7 @@ module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
   var pk : pkey
 
-  module O' : ICCA = {
+  module O' : ICCA_Oracle = {
 
     proc init (p : pkey) = { pk <- p; }
 
@@ -243,7 +242,7 @@ section.
 
 declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA, CountICCA}.
 
-axiom A_bound (O <: ICCA {CountICCA}) : hoare [CountAdv(A, O).main :
+axiom A_bound (O <: ICCA_Oracle {CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv Real_Real' :
