@@ -86,14 +86,13 @@ let t_hoare_while_r inv tc =
   (*The body also preserves parts of the precondition not written on in s and c.*)
   let form = f_ands (fst (partial_sp env (destr_and_t hs.hs_pr) hs.hs_s)) in
   (* the body preserves the invariant *)
-  (*TODO: is the and of Hoare logic not putting implicit parentheses the same way as that of EasyCrypt?*)
-  (*TODO: I reversed the invariant and the condition to match the order of the post-condition.*)
+  (*TODO: I reversed the invariant and the condition to match the order of the post-condition.
+    Propagate to pHL and pRHL, and check if errors in examples.*)
   let b_pre  = f_and_simpl (f_and_simpl form e) inv in
   let b_post = inv in
   let b_concl = f_hoareS hs.hs_m b_pre c b_post in
   (* the wp of the while *)
-  (*let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in*)
-  (*TODO: I reversed the invariant and the negation of the condition to patch the rules as given in the paper.*)
+  (*TODO: Same reversal here.*)
   let post = f_imps_simpl [f_not_simpl e; inv] hs.hs_po in
   let modi = s_write env c in
   let post = generalize_mod env m modi post in
@@ -103,24 +102,113 @@ let t_hoare_while_r inv tc =
   FApi.xmutate1 tc `While [b_concl; concl]
 
 (* -------------------------------------------------------------------- *)
+let pvs_of_lv lv =
+  match lv with
+  | LvVar pt -> [fst pt]
+  | LvTuple pts -> (List.map fst pts)
+
+let bs_pv_of_expr e =
+  match e.e_node with
+  | Evar pv -> BatSet.singleton pv
+  | _ -> BatSet.empty
+
+let bs_pvs_of_expr e =
+  e_fold (fun s e -> BatSet.union s (bs_pv_of_expr e)) BatSet.empty e
+
+let rec s_reduce bs c =
+  EcModules.stmt (List.filter_map (i_reduce bs) c.s_node)
+and i_reduce bs i =
+  match i.i_node with
+  | Sasgn (lv, e) ->
+    begin
+    match (BatSet.is_empty (BatSet.intersect bs (BatSet.of_list (pvs_of_lv lv)))) with
+    | false -> Some (EcModules.i_asgn (lv, e))
+    | _ -> None
+    end
+  | Srnd (lv, e) ->
+    begin
+    match (BatSet.is_empty (BatSet.intersect bs (BatSet.of_list (pvs_of_lv lv)))) with
+    | false -> Some (EcModules.i_rnd (lv, e))
+    | _ -> None
+    end
+  | Scall _ ->  None
+  | Sif (e, c1, c2) ->
+    let c1 = s_reduce bs c1 in
+    let c2 = s_reduce bs c2 in
+    if ((List.is_empty c1.s_node) && (List.is_empty c2.s_node))
+    then None
+    else Some (EcModules.i_if (e, c1, c2))
+  | Swhile (e, c) ->
+    let c = s_reduce bs c in
+    if (List.is_empty c.s_node)
+    then None
+    else Some (EcModules.i_while (e, c))
+  | Sassert e -> Some (EcModules.i_assert e)
+  | Sabstract _ -> None
+
+(* -------------------------------------------------------------------- *)
+let write_dependency tc c =
+  let rec write_dependency_stmt tc c =
+    List.fold_left
+      (BatMap.union_stdlib (fun _ bs1 bs2 -> Some (BatSet.union bs1 bs2)))
+      BatMap.empty
+      (List.map (write_dependency_instr tc) c.s_node)
+  and write_dependency_instr tc i =
+    match i.i_node with
+    (*TODO: will OCaml optimize this on his own by computing (bs_pvs_of_expr e) once?*)
+    | Sasgn (lv, e) | Srnd (lv, e) -> List.fold_left (fun m pv -> BatMap.add pv (bs_pvs_of_expr e) m) BatMap.empty (pvs_of_lv lv)
+    | Scall _ -> tc_error !!tc "write_dependency uncertain when calling function"
+    | Sif (e, c1, c2) ->
+        let m = BatMap.union_stdlib
+                  (fun _ bs1 bs2 -> Some (BatSet.union bs1 bs2))
+                  (write_dependency_stmt tc c1)
+                  (write_dependency_stmt tc c2)
+        in
+        BatMap.map (BatSet.union (bs_pvs_of_expr e)) m
+    | Swhile (e, c) ->
+        BatMap.map (BatSet.union (bs_pvs_of_expr e)) (write_dependency_stmt tc c)
+    | Sassert _ -> BatMap.empty
+    | Sabstract _ -> tc_error !!tc "write_dependency uncertain when abstracting"
+  in
+  let m = write_dependency_stmt tc c in
+  let w = BatSet.of_enum (BatMap.keys m) in
+  let m = BatMap.map (BatSet.intersect w) (write_dependency_stmt tc c) in
+  let s = BatBig_int.num_bits_big_int (BatBig_int.of_int (BatSet.cardinal w)) in
+  let l = List.init (s + 1) (fun _ -> 0) in
+  let f m = BatMap.map (fun bs -> BatSet.fold (fun pv -> BatSet.union (BatMap.find pv m)) bs bs) m in
+  List.fold_left (fun m _ -> f m) m l
+
+let e_incr tc e c =
+  let m = write_dependency tc c in
+  let bs = bs_pvs_of_expr e in
+  BatSet.fold (fun pv -> BatSet.union (BatMap.find pv m)) bs bs
+
+let s_incr tc e c =
+  let bs = e_incr tc e c in
+  s_reduce bs c
+(* -------------------------------------------------------------------- *)
+let t_hoare_change_var_r n tc =
+  let env = FApi.tc1_env tc in
+  let hs = tc1_as_hoareS tc in
+  let (e, c), s = tc1_last_while tc hs.hs_s in
+  let m = EcMemory.memory hs.hs_m in
+  (*A fresh variable i is taken.*)
+  let i = pv_glob in
+  (*The loop does exactly n steps, or does not finish.*)
+  let t_c = s_while (e, s_incr tc e c) in
+  let t_concl = f_hoareS hs.hs_m hs.hs_pr t_c hs.hs_po in
+  FApi.xmutate1 tc `While [t_concl]
+
+(* -------------------------------------------------------------------- *)
+(*
 let eq_one tc z =
   let dz = EcFol.destr_int z in
   if not (EcBigInt.equal EcBigInt.one dz)
-  then tc_error !!tc "unequal form and one"
+  then tc_error !!tc "form unequal to one"
 
 let eq_forms tc e1 e2 =
   if not (f_equal e1 e2)
   then tc_error !!tc "unequal forms"
-
-let pv_of_lv tc lv =
-  match lv with
-  | LvVar (pv, _) -> pv
-  | _ -> tc_error !!tc "lvalue not a variable"
-
-let pv_of_form tc e =
-  match e.f_node with
-  | Fpvar (pv, _) -> pv
-  | _ -> tc_error !!tc "form not a variable"
 
 let eq_pv_lv tc pv lv =
   if not (pv_equal pv (pv_of_lv tc lv))
@@ -139,7 +227,9 @@ let not_written_on tc env c e =
   let x = EcPV.s_write env c in
   if written env x e
   then tc_error !!tc "variable written on"
-
+*)
+(* -------------------------------------------------------------------- *)
+(*
 let t_hoare_for_r pinv tc =
   let env = FApi.tc1_env tc in
   let hs = tc1_as_hoareS tc in
@@ -185,6 +275,7 @@ let t_hoare_for_r pinv tc =
   let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
 
   FApi.xmutate1 tc `While [b_concl; concl]
+*)
 
 (* -------------------------------------------------------------------- *)
 let t_bdhoare_while_r inv vrnt tc =
@@ -430,7 +521,7 @@ let t_equiv_while_r inv tc =
 
 (* -------------------------------------------------------------------- *)
 let t_hoare_while           = FApi.t_low1 "hoare-while"   t_hoare_while_r
-let t_hoare_for             = FApi.t_low1 "hoare-for"     t_hoare_for_r
+(*let t_hoare_for             = FApi.t_low1 "hoare-for"     t_hoare_for_r*)
 let t_bdhoare_while         = FApi.t_low2 "bdhoare-while" t_bdhoare_while_r
 let t_bdhoare_while_rev_geq = FApi.t_low4 "bdhoare-while" t_bdhoare_while_rev_geq_r
 let t_bdhoare_while_rev     = FApi.t_low1 "bdhoare-while" t_bdhoare_while_rev_r
@@ -488,11 +579,13 @@ let process_while side winfos tc =
 
   | _ -> tc_error !!tc "expecting a hoare[...]/equiv[...]"
 
+(*
 let process_for inv tc =
 
   match (FApi.tc1_goal tc).f_node with
   | FhoareS _ -> t_hoare_for (TTC.tc1_process_Xhl_form tc (tfun tint tbool) inv) tc
   | _ -> tc_error !!tc "expecting a hoare goal"
+*)
 
 (* -------------------------------------------------------------------- *)
 module ASyncWhile = struct

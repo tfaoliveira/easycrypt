@@ -19,5 +19,5 @@ val t_equiv_while      : form -> backward
 
 (* -------------------------------------------------------------------- *)
 val process_while : oside -> while_info -> backward
-val process_for : pformula -> backward
+(*val process_for : pformula -> backward*)
 val process_async_while : async_while_info -> backward
