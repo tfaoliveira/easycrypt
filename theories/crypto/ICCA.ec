@@ -31,7 +31,9 @@ clone import CCA as C with
   op Nenc <- Nenc,
   axiom Nenc_gt0 <- Nenc_gt0.
 
+(* should be named ICCA_Oracle *)
 module type ICCA = {
+  proc pk () : pkey
   proc enc (_ : plaintext) : ciphertext
   proc dec (_ : ciphertext)  : plaintext option
 }.
@@ -51,6 +53,10 @@ module Real : ICCA = {
     ks <$ dkeyseed;
     pk <- pkgen ks;
     sk <- skgen ks;
+  }
+
+  proc pk () = {
+    return pk;
   }
 
   proc enc (m : plaintext) : ciphertext = {
@@ -79,6 +85,10 @@ module Ideal : ICCA = {
     pk <- pkgen ks;
     sk <- skgen ks;
     cs <- [];
+  }
+
+  proc pk () = {
+    return pk;
   }
 
   proc enc (m : plaintext) : ciphertext = {
@@ -113,12 +123,16 @@ module Real' : ICCA = {
     cs <- [];
   }
 
+  proc pk () = {
+    return pk;
+  }
+
   proc enc (m : plaintext) : ciphertext = {
     var e,c;
 
     e <$ dencseed;
     c <- enc(m, pk, e);
-    cs <- (c,m) :: cs;
+    cs <- (c, m) :: cs;
     return c;
   }
   proc dec (c : ciphertext) : plaintext option = {
@@ -155,7 +169,9 @@ module CountICCA (O : ICCA) = {
   proc init () : unit = {
     ndec <- 0;
     nenc <- 0;
-  } 
+  }
+
+  proc pk = O.pk
 
   proc enc (m : plaintext) : ciphertext = {
     var c; 
@@ -186,8 +202,14 @@ module CountAdv (A : Adversary) (O : ICCA) = {
 
 module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
+  var pk : pkey
 
   module O' : ICCA = {
+
+    proc init (p : pkey) = { pk <- p; }
+
+    proc pk () = { return pk; }
+
     proc enc (m : plaintext) = {
       var c;
 
@@ -211,6 +233,7 @@ module B (A : Adversary) (O : CCA_Oracle) = {
     var r;
 
     cs <- [];
+    O'.init(pk);
     r <@ A(O').main();
     return r;
   }
@@ -229,7 +252,8 @@ proof.
 proc; inline *. 
 call (: ={glob Real} /\ (exists ks, (Real.pk, Real.sk){2} = (pkgen ks, skgen ks)) /\
   (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){2}).
-- proc. wp. rnd. auto=> /> &m2 ks Hcs e _ c m'.
+- proc; auto.
+- proc. wp; rnd; auto=> /> &m2 ks Hcs e _ c m'.
   rewrite assoc_cons. case: (c = enc (m{m2}, pkgen ks, e)) => />; 1: by rewrite encK.
   move => _; apply: Hcs.
 - proc. wp. skip => /> &m2 ks Hcs /#.
@@ -266,10 +290,11 @@ equiv Real'_CCA_L :
   Game(Real', A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+call (: ={pk, sk}(Real, Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
       (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){1} /\ 
       (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
-      Ideal.cs{1} = B.cs{2}).
+      Ideal.cs{1} = B.cs{2} /\ B.pk{2} = Wrap.pk{2}).
+- by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'. 
   rewrite assoc_cons; case : (c = enc (m{m2}, pkgen ks, e)) => />; smt(encK).
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
@@ -284,7 +309,8 @@ proc; inline *; wp.
 call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
       (forall c m, assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m0){1} /\ 
       (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\ 
-      Ideal.cs{1} = B.cs{2}).
+      Ideal.cs{1} = B.cs{2} /\ B.pk{2} = Wrap.pk{2}).
+- by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
   rewrite assoc_cons; case : (c = enc (m0, pkgen ks, e)) => />; smt(encK).
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ?. 
@@ -297,13 +323,15 @@ equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
   ={glob A, glob O} /\ B.cs{2} = [] ==>
   CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
 proof.
-proc; inline*; sp; auto.
-call (: ={glob O, B.cs} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
+proc; inline*. sp; auto.
+call (: ={glob O, glob B} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
         CountCCA.nenc{1} = CountICCA.nenc{2}) => //.
+- by proc; auto.
 - proc; inline *; sp; auto; call (: true); auto => /> /#.
 - proc; inline *; sp; auto.
   if; auto => />; 2: by smt().
   sp; call (: true); auto => /> /#.
+- auto => />.
 qed.
 
 lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A, B}) :
