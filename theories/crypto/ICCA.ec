@@ -28,7 +28,8 @@ clone import CCA as C with
   type plaintext <- plaintext,
   type ciphertext <- ciphertext,
   op Ndec <- Ndec,
-  op Nenc <- Nenc.
+  op Nenc <- Nenc,
+  axiom Nenc_gt0 <- Nenc_gt0.
 
 module type ICCA = {
   proc enc (_ : plaintext) : ciphertext
