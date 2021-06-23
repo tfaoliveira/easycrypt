@@ -320,10 +320,10 @@ qed.
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
   C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
-  ={glob A, glob O} /\ B.cs{2} = [] ==>
+  ={glob A, glob O} /\ B.cs{2} = [] /\ arg{1} = B.pk{2} ==>
   CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
 proof.
-proc; inline*. sp; auto.
+proc. inline*; sp; auto.
 call (: ={glob O, glob B} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
         CountCCA.nenc{1} = CountICCA.nenc{2}) => //.
 - by proc; auto.
@@ -331,7 +331,6 @@ call (: ={glob O, glob B} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
 - proc; inline *; sp; auto.
   if; auto => />; 2: by smt().
   sp; call (: true); auto => /> /#.
-- auto => />.
 qed.
 
 lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A, B}) :
