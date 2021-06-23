@@ -91,13 +91,13 @@ module B = {
 }.
 
 (* Assignements are free, only the variable evaluation has a cost. *)
-lemma foo : choare[B.g : true ==> true] time [N 3].
+lemma foo : choare[B.g : true ==> true] time [:N 3].
 proof. by proc; auto. qed.
 
 (* Procedure calls are also free. *)
-lemma foo3 : choare[B.f : true ==> true] time [N 4].
+lemma foo3 : choare[B.f : true ==> true] time [:N 4].
 proof.
-  proc; call foo; auto.
+  by proc; call foo; auto.
 qed.
 
 module C = { 
@@ -118,9 +118,9 @@ schema cost_lt `{P} {e e' : int}:
   cost[P : e < e'] = cost[P : e] + cost[P : e'] + N 1.
 hint simplify cost_lt.
 
-(* For if statements, to keep cost expressions simpler, we do not use
-    a max. Instead, we add the cost of both branches. *)
-lemma foo4 : choare[C.f] time [N 5].
+(* For if statements, the cost is the maximum of both branches, plus the cost of
+   evaluating the if expression. *)
+lemma foo4 : choare[C.f] time [:N 3].
 proof.
 proc; auto.
 qed.
@@ -138,7 +138,7 @@ module D = {
 
 lemma foo5 : forall (a : int) (b : int), 
 0 <= a <= b =>
-choare[D.f : x = a /\ y = b /\ x < y ==> true] time [N (2 * (b - a) + 1)].
+choare[D.f : x = a /\ y = b /\ x < y ==> true] time [:N (2 * (b - a) + 1)].
 proof.
 move => a b [Ha Hb].
 proc => /=.
@@ -147,7 +147,7 @@ proc => /=.
    - deacreasing quantity qdec
    - number of loop iterations
    - cost of one loop body, when (qdec = k), given using a lambda. *)
-while (x <= y /\ y = b) (b - x) (b - a) time [fun _ => N 1].
+while (x <= y /\ y = b) (b - x) (b - a) time [:fun _ => N 1].
 
 (* prove that the loop body preserves the invariant, and cost what was stated. *)
 move => z; auto => * /=; by smt ().
@@ -179,7 +179,7 @@ module ExMatch = {
   }
 }.
 
-lemma test_match : choare[ExMatch.gethead] time [N 4].
+lemma test_match : choare[ExMatch.gethead] time [:N 4].
 proof.
 proc; match (::) 0 => //=.
 + by skip=> /#.
@@ -203,20 +203,26 @@ module (MyAdv : Adv) (H0 : H) = {
   }
 }.
 
-
-lemma MyAdv_compl (k : int) (H0   <: H [o : `{N k}]) : 
-  0 <= k => choare[MyAdv(H0).a] time [N 3; H0.o : 2].
+lemma MyAdv_compl (H0 <: H) : 
+  choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
 proof.
-by move=> _; proc; do !(call(_: true; time [])); auto => /=.
+  by proc; do !(call(_: true; time [])); auto => /=.
+qed.
+
+lemma MyAdv_compl_bis (k : int) (H0 <: H [o : `{k}]) : 
+  choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
+proof.
+  by proc; do !(call(_: true; time [])); auto => /=. 
 qed.
 
 (* The same lemma, but in a section. *)
 section.
-op mk : int.
-declare module H0 : H [ o : `{N mk}].
-
-lemma MyAdv_compl_loc : choare[MyAdv(H0).a] time [N 3; H0.o : 2].
-proof. by proc; do !(call(_: true; time [])); auto. qed.
+  declare module H0 : H.
+  
+  lemma MyAdv_compl_loc : choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
+  proof. 
+    by proc; do !(call(_: true; time [])); auto. 
+  qed.
 end section.
 
 module (MyH : H) = { 
@@ -226,11 +232,18 @@ module (MyH : H) = {
   }
 }.
 
-lemma MyH_compl : choare[MyH.o] time [N 1] by proc; auto.
+lemma MyH_compl : choare[MyH.o] time [:N 1] by proc; auto.
 
-lemma advcompl_inst : choare[MyAdv(MyH).a] time [N 5].
+(* lemma advcompl_inst : choare[MyAdv(MyH).a] time [:N 5]. *)
+(* proof. *)
+(*  have A := MyAdv_compl. *)
+(*  have B := MyAdv_compl MyH. *)
+(*  apply (B MyH_compl). *)
+(* qed. *)
+
+lemma advcompl_inst_bis : choare[MyAdv(MyH).a] time [:N 5].
 proof.
-by apply (MyAdv_compl 1 MyH MyH_compl).
+ apply (MyAdv_compl_bis _ MyH MyH_compl). 
 qed.
 
 module Inv (Adv0 : Adv) (HI : H) = {
@@ -244,29 +257,59 @@ module Inv (Adv0 : Adv) (HI : H) = {
 }.
 
 lemma Inv_compl
-    (j k h : int)
-    (Adv0 <: Adv [a : `{N j, #H0.o : k}]) 
-    (H0   <: H [o : `{N h}]) : 
+    (j k : int)
+    (Adv0 <: Adv [a : `{j, #H0.o : k}]) 
+    (H0   <: H) : 
     0 <= k =>
-    choare[Inv(Adv0, H0).i] time [N 1; Adv0.a : 1; H0.o : k ].
+    choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : k ].
 proof.    
 move => hk; proc.
-call (_: true; time [H0.o : [N 0; H0.o : 1]]).
+call (_: true; time [H0.o : [:N 0, H0.o : 1]]).
 move => i Hi /=; proc*; call(_: true; time []); auto => /=.
 by auto => /=; rewrite big_constz count_predT big_constNz !size_range /#.
 qed.
 
-lemma Inv_compl_inst (h : int) (H1   <: H [o : `{N h}]) : 
-  choare[Inv(MyAdv, H1).i] time [N 4; H1.o : 2 ].
+lemma Inv_compl_inst (H1   <: H) :
+  choare[Inv(MyAdv, H1).i] time [:N 4, H1.o : 2 ].
 proof.
-by apply (Inv_compl _ _ h MyAdv MyAdv_compl H1 _).
+  by apply (Inv_compl _ _ MyAdv MyAdv_compl H1 _).
 qed.
+
+(**************************************************)
+(* without self complexity *)
+lemma Inv_compl_partial
+    (k : int)
+    (Adv0 <: Adv [a : `{_, #H0.o : k}]) 
+    (H0   <: H) : 
+    0 <= k =>
+    choare[Inv(Adv0, H0).i] time [:`_, Adv0.a : 1, H0.o : k ].
+proof.    
+move => hk; proc.
+call (_: true; time [H0.o : [:`_, H0.o : 1]]).
+move => i Hi /=; proc*; call(_: true; time []); auto => /=.
+by auto => /=; rewrite big_constz count_predT !size_range /#.
+qed.
+
+lemma test_conseq :
+  (forall (H0 <: H), choare[MyAdv(H0).a] time [: N 3, H0.o : 4]) =>
+  forall (H0 <: H), choare[MyAdv(H0).a] time [: `_, H0.o : 5].
+proof.
+ move => Hyp H0.
+ conseq (_: _ ==> _ : time [: N 3, H0.o : 4]).
+ by apply (Hyp H0).
+qed.
+
+(* lemma Inv_compl_partial_inst (H1   <: H) : *)
+(*   choare[Inv(MyAdv, H1).i] time [:`_, H1.o : 2 ]. *)
+(* proof. *)
+(*   apply (Inv_compl_partial _ MyAdv MyAdv_compl H1) => //. *)
+(* qed. *)
 
 (**************************************************)
 op kab : int.
 
 module type AB (H0 : H) = {
-  proc a () : unit `{ N kab, H0.o : 1 }
+  proc a () : unit `{ kab, H0.o : 1 }
 }.
 
 section.

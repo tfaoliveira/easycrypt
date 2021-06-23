@@ -355,6 +355,8 @@ let x_fv fv xp = m_fv fv xp.x_top
 let xastrip x = { x with x_top = mastrip x.x_top }
 let xbasename xp = xp.x_sub
 
+let pp_x fmt x = Format.fprintf fmt "%a.%s" pp_m x.x_top x.x_sub
+
 (* -------------------------------------------------------------------- *)
 module Mx = XPath.M
 module Hx = XPath.H

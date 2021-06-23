@@ -1767,28 +1767,36 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 (* -------------------------------------------------------------------- *)
-and pp_cost ppe fmt (c : cost) =
-  let is_full = ref true in
-  let pp_el fmt (f,c) =
-    match f, c with
-    | `Conc, C_unbounded  -> is_full := false
-    | `Conc, C_bounded c  -> pp_form ppe fmt c
+and pp_cost ppe fmt (cost : cost) =
+  let pp_self fmt = function
+    | C_bounded self ->
+      Format.fprintf fmt ": %a"
+        (pp_form ppe) self
+    | C_unbounded ->
+      Format.fprintf fmt ": `_"
 
-    | `Call f, C_bounded c ->
+  and pp_call_el fmt (f,c) =
+    match c with
+    | C_bounded c ->
       Format.fprintf fmt "%a : %a"
         (pp_funname ppe) f
         (pp_form ppe) c
 
-    | `Call _, C_unbounded -> is_full := false
-    | `Full, _ -> if !is_full then () else Format.fprintf fmt "_"
-  in
+    | C_unbounded ->
+      Format.fprintf fmt "%a : `_"
+        (pp_funname ppe) f
 
-  Format.fprintf fmt "@[<hv 1>[%a]@]"
-    (pp_list ";@ " pp_el)
-    ((`Conc,c.c_self)
-     :: (EcPath.Mx.bindings c.c_calls
-         |> List.map (fun (x,y) -> `Call x, y))
-     @ [`Full, C_unbounded])
+  and pp_full fmt = if not cost.c_full then Format.fprintf fmt "_" in
+
+  let calls = EcPath.Mx.bindings cost.c_calls in
+
+
+  Format.fprintf fmt "@[<hv 1>[%a%t%a%t%t]@]"
+    pp_self cost.c_self
+    (fun fmt -> if calls <> [] then Format.fprintf fmt ",@ ")
+    (pp_list ",@ " pp_call_el) calls
+    (fun fmt -> if not cost.c_full then Format.fprintf fmt ",@ ")
+    pp_full
 
 (* -------------------------------------------------------------------- *)
 
@@ -1798,41 +1806,34 @@ and pp_allowed_orcl ppe fmt orcls =
     Format.fprintf fmt "{@[<hov>%a@]}@ "
       (pp_list ",@ " (pp_funname ppe)) orcls
 
-and pp_costs ppe fmt ((self,calls) : c_bnd * c_bnd EcPath.Mx.t) : unit =
-  let has_restr =
+and has_cost_restr (self, calls) =
     self <> C_unbounded || EcPath.Mx.exists (fun _ x -> x <> C_unbounded) calls
-  in
-  let full_restr =
-    self <> C_unbounded && EcPath.Mx.for_all (fun _ x -> x <> C_unbounded) calls
-  in
-  if not has_restr then
+
+and pp_costs ppe fmt ((self,calls) : c_bnd * c_bnd EcPath.Mx.t) : unit =
+  if not (has_cost_restr (self, calls)) then
     Format.fprintf fmt ""
   else
     let pp_self fmt = function
       | C_unbounded -> ()
       | C_bounded f -> pp_form ppe fmt f
     in
-    let pp_elc fmt = function
-      | C_unbounded -> ()
-      | C_bounded f -> Format.fprintf fmt ": %a" (pp_form ppe) f
-    in
     let pp_cost fmt (f,c) = match c with
-      | C_unbounded -> ()
-      | C_bounded _ ->
+      | C_unbounded ->
+        Format.fprintf fmt "@[%a : `_@]"
+          (pp_funname ppe) f
+      | C_bounded c ->
         Format.fprintf fmt "@[%a : %a@]"
           (pp_funname ppe) f
-          pp_elc c
+          (pp_form ppe) c
     in
 
     let bindings = (EcPath.Mx.bindings calls) in
-    Format.fprintf fmt "`{@[<hv>%a%t%a%t@]}@ "
+    Format.fprintf fmt "`{@[<hv>%a%t%a@]}@ "
       pp_self self
       (fun fmt ->
          Format.fprintf fmt
            (if self = C_unbounded || bindings = [] then "" else ",@ "))
       (pp_list ",@ " pp_cost) bindings
-      (fun fmt -> if full_restr then () else
-        if has_restr then Format.fprintf fmt ", _" else Format.fprintf fmt "_")
 
 and pp_orclinfo_bare ppe fmt oi =
   let orcls = OI.allowed oi
@@ -1848,8 +1849,21 @@ and pp_orclinfo ppe fmt (sym, oi) =
     (pp_orclinfo_bare ppe) oi
 
 and pp_orclinfos ppe fmt ois =
+  (* if there are no oracle restrictions, we do not print anything *)
+  let orcl_infos =
+    List.filter_map (fun (sym, oi) ->
+        let orcls = OI.allowed oi
+        and costs = OI.costs oi in
+        if not (has_cost_restr costs) && orcls = [] && OI.is_in oi
+        then None
+        else Some (sym, oi)
+      ) (Msym.bindings ois)
+  in
+  if orcl_infos = [] then
+    Format.fprintf fmt ""
+  else
   Format.fprintf fmt "[@[<hv>%a@]]"
-    (pp_list ",@ " (pp_orclinfo ppe)) (Msym.bindings ois)
+    (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos
 
 (* -------------------------------------------------------------------- *)
 and pp_mem_restr ppe fmt mr =

@@ -2288,29 +2288,29 @@ module Fsubst = struct
       ) init_cost.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
     in
 
-    let cost = cost_r c_self c_calls init_cost.c_full in
+    let c_self =
+      EcIdent.Sid.fold (fun mid c_self ->
+          let _, m_info = EcIdent.Mid.find mid s.fs_mp in
+          let m_info = oget m_info in (* must not be [None] *)
+          let mp = EcPath.mident mid in
 
-    EcIdent.Sid.fold (fun mid cost ->
-        let _, m_info = EcIdent.Mid.find mid s.fs_mp in
-        let m_info = oget m_info in (* must not be [None] *)
-        let mp = EcPath.mident mid in
+          EcSymbols.Msym.fold (fun f f_info c_self ->
+              let xf = EcPath.xpath mp f in
+              let f_called = EcPath.Mx.find xf init_cost.c_calls in (* int *)
+              let f_self = PreOI.cost_self f_info in  (* int *)
+              match c_self, f_self, f_called with
+              | C_bounded c_self, C_bounded f_self, C_bounded f_called ->
+                let c_self =
+                  f_xadd_simpl c_self (f_N (f_int_mul f_called f_self))
+                in
+                C_bounded c_self
 
-        EcSymbols.Msym.fold (fun f f_info cost ->
-            let xf : EcPath.xpath = EcPath.xpath mp f in
-            let f_called = EcPath.Mx.find xf init_cost.c_calls in
-            let f_cost : cost =
-              let self, calls = PreOI.costs f_info in
-              cost_r self calls true
-            in
-            match f_called with
-            | C_bounded f_called ->
-              cost_add cost (cost_scalar_mult f_called f_cost)
-            | C_unbounded ->
-              (* all entries are unbounded *)
-              cost_r C_unbounded EcPath.Mx.empty false
-          ) m_info cost
-      ) concs cost
-
+              | C_unbounded, _, _ | _, C_unbounded, _ | _, _, C_unbounded ->
+                C_unbounded
+            ) m_info c_self
+        ) concs c_self
+    in
+    cost_r c_self c_calls init_cost.c_full
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)

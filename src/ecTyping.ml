@@ -489,7 +489,13 @@ let tysig_item_name = function
   | Tys_function f -> f.fs_name
 
 (* Check that the oracle information of two procedures are compatible. *)
-let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
+let check_item_compatible
+    ~(proof_obl:bool)
+    (env : EcEnv.env)
+    (mode : [`Eq | `Sub])
+    ((fin,oin) : EcModules.funsig * EcModules.OI.t)
+    ((fout,oout)  : EcModules.funsig * EcModules.OI.t) : unit
+  =
   assert (fin.fs_name = fout.fs_name);
 
   let check_item_err err =
@@ -539,7 +545,9 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
         begin match ic, oc with
           | C_unbounded, C_unbounded
           | C_bounded _, C_unbounded -> true
+
           | C_unbounded, C_bounded _ -> false
+
           | C_bounded ic, C_bounded oc ->
             EcReduction.is_conv hyps ic oc
         end
@@ -564,8 +572,8 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
     in
     let diff =
       Mx.fold2_union (fun f ic oc acc ->
-          let ic = oget ic in   (* cannot be None *)
-          let oc = oget oc in
+          let ic = odfl C_unbounded ic in
+          let oc = odfl C_unbounded oc in
           if check_elc ic oc then acc
           else Mx.add f (ic, oc) acc
         ) icalls ocalls Mx.empty
@@ -870,9 +878,8 @@ let rec check_sig_cnv
     match i_item with
     | None -> tymod_cnv_failure (E_TyModCnv_MissingComp o_name)
     | Some (Tys_function fin) ->
-      let oin = EcSymbols.Msym.find fin.fs_name sin.mis_restr.mr_oinfos in
-      let oout =
-        EcSymbols.Msym.find fout.fs_name rout.mr_oinfos in
+      let oin  = EcSymbols.Msym.find fin.fs_name sin.mis_restr.mr_oinfos
+      and oout = EcSymbols.Msym.find fout.fs_name rout.mr_oinfos in
       check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout)
   in
   List.iter check_for_item bout;
@@ -923,14 +930,17 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
         let param_restr = param_mt.mt_restr in
         let param_ms = EcEnv.ModTy.sig_of_mt env_mt param_mt in
 
+        (* TODO: A: cleanup comment if it does not apply anymore*)
         (* For any parameter of [mt], replace the self complexity by zero. *)
+
         let param_restr' : mod_restr =
           List.fold_left (fun param_restr' (Tys_function fn) ->
               let oi = Msym.find fn.fs_name param_restr.mr_oinfos in
               match OI.cost_self oi with
               | C_bounded _ -> param_restr'
               | C_unbounded ->
-                let self = C_bounded f_i0 in
+                let self = OI.cost_self oi in
+                (* let self = C_bounded f_i0 in *)
                 let calls = OI.cost_calls oi in
                 let oi' = OI.mk (OI.allowed oi) (OI.is_in oi) self calls in
                 let param_restr' = add_oinfo param_restr' fn.fs_name oi' in
@@ -956,27 +966,26 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
     EcPath.m_apply mp_in (List.map (fun (id,_) -> EcPath.mident id) mbindings)
   in
 
-
-  (* FIXME: A: cleanup*)
-
   (* Compute the choare hypothesis for [mp_in_app]'s procedure [fn]. *)
   let mk_hyp (fn : symbol) : form =
     (* xpath of the function after substitution. *)
     let xfn = EcPath.xpath mp_in_app fn in
-    (* oracle path (i.e. with empty module arguments) of [fn] in [mp_in]. *)
-    let xfn_in_mi = EcPath.xpath mp_in fn in
 
     (* Oracle restriction on [fn] in [mt]. *)
     let oi = EcSymbols.Msym.find fn mt.mt_restr.mr_oinfos in
 
     let c_self, costs = OI.costs oi in
 
+    (* [c_self] is a [xint] in choare statements, and an [int] in module
+       restriction. *)
+    let c_self = c_bnd_map f_N c_self in
+
     let c_calls : c_bnd Mx.t = Mx.fold (fun o obd c_calls ->
         (* We compute the name of the procedure, seen as an oracle of
            [mp_in_app]. That is, if [o] is a parameter of [mp_in], then
            we use the fresh mident. *)
         let omod, ofun = EcPath.mget_ident o.x_top, o.x_sub in
-        let omod, orestr = match List.assoc_opt omod s_params with
+        let omod, _ = match List.assoc_opt omod s_params with
           | None ->
             let orestr = EcEnv.NormMp.get_restr env (EcPath.mident omod) in
             omod, orestr
@@ -2480,7 +2489,8 @@ and transmod_header
       with TymodCnvFailure err ->
         let args = List.map (fun (id,_) -> EcPath.mident id) rm in
         let mp = mpath_crt (psymbol me.me_name) args None in
-        tyerror s.pl_loc env (TypeModMismatch(mp, aty, err)) in
+        tyerror s.pl_loc env (TypeModMismatch(mp, aty, err))
+    in
     List.iter check mts;
 
     n,me

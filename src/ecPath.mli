@@ -116,6 +116,8 @@ val x_fv : int EcIdent.Mid.t -> xpath -> int EcIdent.Mid.t
 
 val xbasename   : xpath -> symbol
 
+val pp_x : Format.formatter -> xpath -> unit
+
 (* -------------------------------------------------------------------- *)
 val m_tostring : mpath -> string
 val x_tostring : xpath -> string
