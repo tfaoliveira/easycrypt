@@ -656,7 +656,7 @@ end = struct
       let exception Not_equal in
       try Mx.fold2_union (fun _ a b () -> match a, b with
           | Some a, Some b -> if a_equal a b then () else raise Not_equal
-          | _ -> assert false
+          | _ -> raise Not_equal
         ) calls1 calls2 (); true
       with Not_equal -> false
     in

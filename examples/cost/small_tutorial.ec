@@ -234,13 +234,6 @@ module (MyH : H) = {
 
 lemma MyH_compl : choare[MyH.o] time [:N 1] by proc; auto.
 
-(* lemma advcompl_inst : choare[MyAdv(MyH).a] time [:N 5]. *)
-(* proof. *)
-(*  have A := MyAdv_compl. *)
-(*  have B := MyAdv_compl MyH. *)
-(*  apply (B MyH_compl). *)
-(* qed. *)
-
 lemma advcompl_inst_bis : choare[MyAdv(MyH).a] time [:N 5].
 proof.
  apply (MyAdv_compl_bis _ MyH MyH_compl). 
@@ -256,24 +249,36 @@ module Inv (Adv0 : Adv) (HI : H) = {
   }
 }.
 
+(* Allow both formulations below: *)
+(*     (Adv0 <: Adv [a : `{j, #H0.o : 0}])  *)
+(*     (Adv0(H1) <: Adv [a : `{j, H1.o : 0}])  *)
+
 lemma Inv_compl
     (j k : int)
     (Adv0 <: Adv [a : `{j, #H0.o : k}]) 
     (H0   <: H) : 
     0 <= k =>
     choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : k ].
-proof.    
+proof.
 move => hk; proc.
-call (_: true; time [H0.o : [:N 0, H0.o : 1]]).
+call (_: true; time [H0.o : [H0.o : 1]]). 
 move => i Hi /=; proc*; call(_: true; time []); auto => /=.
-by auto => /=; rewrite big_constz count_predT big_constNz !size_range /#.
+by auto => /=; rewrite big_constz count_predT !size_range /#.
 qed.
 
-lemma Inv_compl_inst (H1   <: H) :
+(* Alternative future syntax *)
+(* lemma Inv_compl *)
+(*     (Adv0 <: Adv[#])  *)
+(*     (H0   <: H) :  *)
+(*     0 <= k => *)
+(*     choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : #Adv0.a[H0.o] ]. *)
+
+lemma Inv_compl_inst (H1 <: H) :
   choare[Inv(MyAdv, H1).i] time [:N 4, H1.o : 2 ].
 proof.
   by apply (Inv_compl _ _ MyAdv MyAdv_compl H1 _).
 qed.
+
 
 (**************************************************)
 (* without self complexity *)
@@ -282,10 +287,10 @@ lemma Inv_compl_partial
     (Adv0 <: Adv [a : `{_, #H0.o : k}]) 
     (H0   <: H) : 
     0 <= k =>
-    choare[Inv(Adv0, H0).i] time [:`_, Adv0.a : 1, H0.o : k ].
+    choare[Inv(Adv0, H0).i] time [: `_, Adv0.a : 1, H0.o : k]. 
 proof.    
 move => hk; proc.
-call (_: true; time [H0.o : [:`_, H0.o : 1]]).
+call (_: true; time [H0.o : [H0.o : 1]]).
 move => i Hi /=; proc*; call(_: true; time []); auto => /=.
 by auto => /=; rewrite big_constz count_predT !size_range /#.
 qed.
@@ -299,11 +304,13 @@ proof.
  by apply (Hyp H0).
 qed.
 
-(* lemma Inv_compl_partial_inst (H1   <: H) : *)
-(*   choare[Inv(MyAdv, H1).i] time [:`_, H1.o : 2 ]. *)
-(* proof. *)
-(*   apply (Inv_compl_partial _ MyAdv MyAdv_compl H1) => //. *)
-(* qed. *)
+lemma Inv_compl_partial_inst (H1 <: H) :
+  choare[Inv(MyAdv, H1).i] time [:`_, H1.o : 2 ].
+proof.
+  apply (Inv_compl_partial _ MyAdv _ H1) => //.
+  move => H0.
+  by conseq (MyAdv_compl H0). 
+qed.
 
 (**************************************************)
 op kab : int.

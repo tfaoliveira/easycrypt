@@ -245,9 +245,6 @@ module FunAbsLow = struct
     (* We check that the invariant cannot be modified by the adversary. *)
     let fv_inv = PV.fv env mhr inv in
     PV.check_depend env fv_inv top;
-    (* TODO: (Adrien) why are we checking this for bdhoareF_abs_spec, and is
-       it needed here?*)
-    (* check_oracle_use pf env top o; *)
 
     let cost_orcl oi o : form option =
       match OI.cost oi o with
@@ -316,7 +313,7 @@ module FunAbsLow = struct
       let cost = List.find_opt (fun (x,_,_) -> x_equal x o_called) xc in
       let cost = match cost with
         | None ->
-          tc_error pf_ "no cost has been supplied for %a"
+          tc_error pf_ "no cost information has been supplied for %a"
             (EcPrinting.pp_funname ppe) o_called
         | Some (_,_,cost) -> cost
       in

@@ -32,10 +32,10 @@ module (MyAdv : Adv) (H0 : H) (H1 : H) = {
 }.
 
 lemma MyAdv_compl (k01 k02 k11 k12 : int)
-    (H0 <: H [o1 : `{N k01}, o2 : `{N k02}])
-    (H1 <: H [o1 : `{N k11}, o2 : `{N k12}]) : 
+    (H0 <: H [o1 : `{k01}, o2 : `{k02}])
+    (H1 <: H [o1 : `{k11}, o2 : `{k12}]) : 
     choare[MyAdv(H0, H1).a] 
-      time [N 3; H0.o1 : 1; H0.o2 : 1; H1.o2 : 1].
+      time [:N 3, H0.o1 : 1, H0.o2 : 1, H1.o2 : 1].
 proof.
   proc; do !(call(_: true)); auto => /=.
 qed.
@@ -54,13 +54,15 @@ module (MyH : H) = {
   }
 }.
 
-lemma MyH_compl1 : choare[MyH.o1] time [N 1] by proc; auto.
-lemma MyH_compl2 : choare[MyH.o2] time [N 2] by proc; auto.
-lemma MyH_compl : choare[MyH.o1] time [N 1] /\ choare[MyH.o2] time [N 2] 
+lemma MyH_compl1 : choare[MyH.o1] time [:N 1] by proc; auto.
+lemma MyH_compl2 : choare[MyH.o2] time [:N 2] by proc; auto.
+lemma MyH_compl : choare[MyH.o1] time [:N 1] /\ choare[MyH.o2] time [:N 2] 
     by split; [apply MyH_compl1 | apply MyH_compl2].
 
-lemma advcompl_inst : choare[MyAdv(MyH, MyH).a] time [N 8].
+lemma advcompl_inst : choare[MyAdv(MyH, MyH).a] time [:N 8].
 proof.
+  (* have A := (MyAdv_compl _ _ _ _  *)
+  (*             MyH MyH_compl1 MyH_compl1 MyH MyH_compl2).  *)
   apply (MyAdv_compl _ _ _ _ 
               MyH MyH_compl1 MyH_compl2
               MyH MyH_compl1 MyH_compl2). 
