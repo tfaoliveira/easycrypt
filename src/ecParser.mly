@@ -2698,7 +2698,7 @@ ci_cost_el:
 | o=loc(fident) x=ident? COLON co=costs(none) {o, x, co}
 
 abs_call_info:
-| TIME LBRACKET xc=rlist0(ci_cost_el, COMMA) RBRACKET { xc }
+| LBRACKET xc=rlist0(ci_cost_el, COMMA) RBRACKET { xc }
 
 call_info:
 | f1=form LONGARROW f2=form          { CI_spec (f1, f2, None) }
@@ -2706,7 +2706,7 @@ call_info:
                                      { CI_spec (f1, f2, Some co) }
 | f=form                             { CI_inv  (f, None) }
 | f=form TIME co=costs(none)         { CI_inv  (f, Some (`Std co)) }
-| f=form SEMICOLON inf=abs_call_info     { let info = `CostAbs inf in
+| f=form COLON inf=abs_call_info     { let info = `CostAbs inf in
                                        CI_inv  (f, Some info) }
 | bad=form COMMA p=form              { CI_upto (bad,p,None) }
 | bad=form COMMA p=form COMMA q=form { CI_upto (bad,p,Some q) }

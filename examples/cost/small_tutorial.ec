@@ -206,13 +206,13 @@ module (MyAdv : Adv) (H0 : H) = {
 lemma MyAdv_compl (H0 <: H) : 
   choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
 proof.
-  by proc; do !(call(_: true; time [])); auto => /=.
+  by proc; do !(call(_: true : [])); auto => /=.
 qed.
 
 lemma MyAdv_compl_bis (k : int) (H0 <: H [o : `{k}]) : 
   choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
 proof.
-  by proc; do !(call(_: true; time [])); auto => /=. 
+  by proc; do !(call(_: true : [])); auto => /=. 
 qed.
 
 (* The same lemma, but in a section. *)
@@ -221,7 +221,7 @@ section.
   
   lemma MyAdv_compl_loc : choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
   proof. 
-    by proc; do !(call(_: true; time [])); auto. 
+    by proc; do !(call(_: true : [])); auto. 
   qed.
 end section.
 
@@ -261,8 +261,8 @@ lemma Inv_compl
     choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : k ].
 proof.
 move => hk; proc.
-call (_: true; time []). 
-move => i Hi /=; proc*; call(_: true; time []); auto => /=.
+call (_: true : []). 
+move => i Hi /=; proc*; call(_: true : []); auto => /=.
 by auto => /=; rewrite big_constz count_predT !size_range /#.
 qed.
 
@@ -290,8 +290,8 @@ lemma Inv_compl_partial
     choare[Inv(Adv0, H0).i] time [: `_, Adv0.a : 1, H0.o : k]. 
 proof.    
 move => hk; proc.
-call (_: true; time [H0.o : [H0.o : 1]]).
-move => i Hi /=; proc*; call(_: true; time []); auto => /=.
+call (_: true : []).
+move => i Hi /=; proc*; call(_: true : []); auto => /=.
 by auto => /=; rewrite big_constz count_predT !size_range /#.
 qed.
 
@@ -300,7 +300,7 @@ lemma test_conseq :
   forall (H0 <: H), choare[MyAdv(H0).a] time [: `_, H0.o : 5].
 proof.
  move => Hyp H0.
- conseq (_: _ ==> _ : time [: N 3, H0.o : 4]).
+ conseq (_: _ ==> _ : [: N 3, H0.o : 4]).
  by apply (Hyp H0).
 qed.
 
