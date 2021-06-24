@@ -165,8 +165,8 @@ theory List_CDH.
        cost [P /\ size s <= n : duniform s] <= cost [P : s] + N cduniform_n.
 
     lemma ex_reduction (cs:int) (A<:Adversary) &m :
-      choare[A.solve : true ==> 0 < size res <= n] time [N cs] =>
-      exists (B <:CDH.Adversary [solve : `{N(cduniform_n + cs)} ] {+A}),
+      choare[A.solve : true ==> 0 < size res <= n] time [:N cs] =>
+      exists (B <:CDH.Adversary [solve : [cduniform_n + cs] ] {+A}),
       Pr[LCDH(A).main() @ &m: res] <= n%r * Pr[CDH.CDH(B).main() @ &m: res]. 
     proof.
       move=> hcA;exists (CDH_from_LCDH(A));split; last first.
