@@ -32,8 +32,8 @@ module (MyAdv : Adv) (H0 : H) (H1 : H) = {
 }.
 
 lemma MyAdv_compl (k01 k02 k11 k12 : int)
-    (H0 <: H [o1 : `{k01}, o2 : `{k02}])
-    (H1 <: H [o1 : `{k11}, o2 : `{k12}]) : 
+    (H0 <: H [o1 : [k01], o2 : [k02]])
+    (H1 <: H [o1 : [k11], o2 : [k12]]) : 
     choare[MyAdv(H0, H1).a] 
       time [:N 3, H0.o1 : 1, H0.o2 : 1, H1.o2 : 1].
 proof.

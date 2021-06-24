@@ -209,7 +209,7 @@ proof.
   by proc; do !(call(_: true : [])); auto => /=.
 qed.
 
-lemma MyAdv_compl_bis (k : int) (H0 <: H [o : `{k}]) : 
+lemma MyAdv_compl_bis (k : int) (H0 <: H [o : [k]]) : 
   choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
 proof.
   by proc; do !(call(_: true : [])); auto => /=. 
@@ -255,7 +255,7 @@ module Inv (Adv0 : Adv) (HI : H) = {
 
 lemma Inv_compl
     (j k : int)
-    (Adv0 <: Adv [a : `{j, #H0.o : k}]) 
+    (Adv0 <: Adv [a : [j, #H0.o : k]]) 
     (H0   <: H) : 
     0 <= k =>
     choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : k ].
@@ -284,7 +284,7 @@ qed.
 (* without self complexity *)
 lemma Inv_compl_partial
     (k : int)
-    (Adv0 <: Adv [a : `{_, #H0.o : k}]) 
+    (Adv0 <: Adv [a : [_, #H0.o : k]]) 
     (H0   <: H) : 
     0 <= k =>
     choare[Inv(Adv0, H0).i] time [: `_, Adv0.a : 1, H0.o : k]. 
@@ -300,7 +300,7 @@ lemma test_conseq :
   forall (H0 <: H), choare[MyAdv(H0).a] time [: `_, H0.o : 5].
 proof.
  move => Hyp H0.
- conseq (_: _ ==> _ : [: N 3, H0.o : 4]).
+ conseq (_: _ ==> _ : time [: N 3, H0.o : 4]).
  by apply (Hyp H0).
 qed.
 
@@ -316,7 +316,7 @@ qed.
 op kab : int.
 
 module type AB (H0 : H) = {
-  proc a () : unit `{ kab, H0.o : 1 }
+  proc a () : unit [ kab, H0.o : 1 ]
 }.
 
 section.

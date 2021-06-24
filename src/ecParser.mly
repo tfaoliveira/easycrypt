@@ -1715,9 +1715,9 @@ compl_el:
 /* | c=form_r(none) { Some c } */
 
 compl_restr:
-| TICKBRACE self=compl_elc RBRACE
+| LBRACKET self=compl_elc RBRACKET
     { PCompl (self,[]) }
-| TICKBRACE self=compl_elc COMMA c=rlist1(compl_el,COMMA) RBRACE
+| LBRACKET self=compl_elc COMMA c=rlist1(compl_el,COMMA) RBRACKET
     { PCompl (self,c) }
 
 (* -------------------------------------------------------------------- *)
