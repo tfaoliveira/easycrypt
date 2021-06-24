@@ -236,9 +236,44 @@ module FunAbsLow = struct
     (inv, inv, sg)
 
   (* ------------------------------------------------------------------ *)
+  (* Arguments:
+     - [ois] is the list of available oracles
+     - [inv] and invariant of the form [λ x1...xn, φ]
+     - [xc] are cost information provided by the user on some of the oracles
+       in [ois], for the [n] first oracle (same order as in [x1...xn]).
+
+     We extend [xc] by adding a default value for all oracles that are
+     juste an abstract module, and modify [inv] accordingly. *)
+  let extend_abs_inv_inf
+      (ois : xpath list)
+      (inv : form)
+      (xc : (xpath * EcFol.cost) list)
+    : EcFol.form * (xpath * EcFol.cost) list
+    =
+    let xc, new_bds =
+      List.fold_left (fun (xc, new_bds) o_called ->
+          if EcPath.m_is_local o_called.x_top &&
+             not (List.exists (fun (x,_) -> x_equal x o_called) xc) then
+            let k = EcIdent.create "k", GTty tint in
+            let self = C_unbounded in
+            let calls =  Mx.singleton o_called (C_bounded (f_lambda [k] f_i1)) in
+            let ocost = cost_r self calls true in
+            let xc = (o_called, ocost) :: xc in
+            xc, k :: new_bds
+          else (xc, new_bds)
+        ) (xc, []) ois
+    in
+    (* the new bindings are added to [inv], to have a uniform treatment *)
+    let inv = f_lambda new_bds inv in
+
+    inv, xc
+
+
   let choareF_abs_spec pf_ env f inv (xc : abs_inv_inf)
     : form * form * cost * form list
     =
+    let xc = List.map (fun (x,_,z) -> x,z) xc in
+
     let (top, _, oi, _) = EcLowPhlGoal.abstract_info env f in
     let ppe = EcPrinting.PPEnv.ofenv env in
 
@@ -254,15 +289,6 @@ module FunAbsLow = struct
 
     (* We create the oracles invariants *)
     let oi_costs = OI.cost_calls oi in
-
-    let bds, _ = decompose_lambda inv in
-    assert (List.length bds = List.length xc);
-    let mks : EcIdent.t Mx.t =
-      List.fold_left2 (fun mks (k,_) (f, _, _) ->
-          Mx.add f k mks
-        ) Mx.empty bds xc
-    in
-
     (* If [f] can call [o] at most zero times, we remove it. *)
     let ois : xpath list =
       let ois = OI.allowed oi in
@@ -273,6 +299,17 @@ module FunAbsLow = struct
           | Some (C_bounded c) -> not (f_equal c f_x0)
         ) ois
     in
+
+    let inv, xc = extend_abs_inv_inf ois inv xc in
+
+    let bds, _ = decompose_lambda inv in
+    assert (List.length bds = List.length xc);
+    let mks : EcIdent.t Mx.t =
+      List.fold_left2 (fun mks (k,_) (f, _) ->
+          Mx.add f k mks
+        ) Mx.empty bds xc
+    in
+
     let kargs_pr = List.map (fun (x,_) -> f_local x tint) bds in
     let pr = f_app_simpl inv kargs_pr tbool in
 
@@ -283,6 +320,7 @@ module FunAbsLow = struct
           tc_error pf_ "no cost information has been supplied for %a"
             (EcPrinting.pp_funname ppe) o_called
       in
+
       let kargs_po : form list =
         List.map (fun (x,_) ->
             let f = f_local x tint in
@@ -293,7 +331,7 @@ module FunAbsLow = struct
 
       let po = f_app_simpl inv kargs_po tbool in
       let call_bounds =
-        List.map2 (fun (o,_,_) (x,_) ->
+        List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
             let cbd = cost_orcl oi o in
@@ -310,13 +348,7 @@ module FunAbsLow = struct
       let call_bounds = f_ands0_simpl call_bounds in
 
       (* We now compute the cost of the call to [o_called]. *)
-      let cost = List.find_opt (fun (x,_,_) -> x_equal x o_called) xc in
-      let cost = match cost with
-        | None ->
-          tc_error pf_ "no cost information has been supplied for %a"
-            (EcPrinting.pp_funname ppe) o_called
-        | Some (_,_,cost) -> cost
-      in
+      let  _, cost = List.find (fun (x,_) -> x_equal x o_called) xc in
 
       let k_cost = EcCHoare.cost_app cost [f_local k_called tint] in
       let form = f_cHoareF pr o_called po k_cost in
@@ -334,7 +366,7 @@ module FunAbsLow = struct
       f_app_simpl inv ks0 tbool in
     let post_inv =
       let call_bounds =
-        List.map2 (fun (o,_,_) (x,_) ->
+        List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
             let cbd = cost_orcl oi o in
@@ -354,7 +386,7 @@ module FunAbsLow = struct
     let orcls_cost = List.map (fun o ->
         let cbd = cost_orcl oi o in
         (* Cost of a call to [o]. *)
-        let _,_,o_cost = List.find (fun (x,_, _) -> x_equal x o) xc in
+        let _,o_cost = List.find (fun (x, _) -> x_equal x o) xc in
 
         (* Upper-bound on the costs of [o]'s calls. *)
         match cbd with
@@ -728,8 +760,7 @@ let t_fun_r inv inv_inf tc =
     let h   = destr_cHoareF (FApi.tc1_goal tc) in
     if   NormMp.is_abstract_fun h.chf_f env
     then t_choareF_abs inv (proj_costabs inv_inf) tc
-    else begin
-      t_choareF_fun_def tc end
+    else t_choareF_fun_def tc
 
   and tbh tc =
     assert (inv_inf = None);
