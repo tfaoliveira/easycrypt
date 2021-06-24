@@ -2296,7 +2296,10 @@ module Fsubst = struct
 
           EcSymbols.Msym.fold (fun f f_info c_self ->
               let xf = EcPath.xpath mp f in
-              let f_called = EcPath.Mx.find xf init_cost.c_calls in (* int *)
+              let f_called = (* int *)
+                try EcPath.Mx.find xf init_cost.c_calls
+                with Not_found -> C_bounded f_i0
+              in
               let f_self = PreOI.cost_self f_info in  (* int *)
               match c_self, f_self, f_called with
               | C_bounded c_self, C_bounded f_self, C_bounded f_called ->

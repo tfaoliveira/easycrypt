@@ -280,7 +280,12 @@ module FunAbsLow = struct
     let pr = f_app_simpl inv kargs_pr tbool in
 
     let ospec (o_called : xpath) : form =
-      let k_called = Mx.find o_called mks in
+      let k_called =
+        try Mx.find o_called mks
+        with Not_found ->
+          tc_error pf_ "no cost information has been supplied for %a"
+            (EcPrinting.pp_funname ppe) o_called
+      in
       let kargs_po : form list =
         List.map (fun (x,_) ->
             let f = f_local x tint in
