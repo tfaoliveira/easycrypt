@@ -2161,45 +2161,30 @@ let trans_restr_mem env (r_mem : pmod_restr_mem) =
 
 (* -------------------------------------------------------------------- *)
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
-let trans_restr_oracle_calls env env_in (params : Sm.t) = function
-    | None ->
-      let do_one mp calls =
-        let me = EcEnv.Mod.by_mpath mp env_in in
-        if me.me_params <> [] then calls
-        else
-          let fs = List.map (fun (Tys_function fsig) ->
-              EcPath.xpath mp fsig.fs_name) me.me_sig_body
-          in
-          fs@calls
-      in
-      Sm.fold do_one params []
-    | Some pfd_uses ->
-      List.map (fun name ->
-          let s_env = if name.inp_in_params then env_in else env in
-          let qname = name.inp_qident in
+let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
+  match pfd_uses with
+  | None ->
+    let do_one mp calls =
+      let me = EcEnv.Mod.by_mpath mp env_in in
+      if me.me_params <> [] then calls
+      else
+        let fs = List.map (fun (Tys_function fsig) ->
+            EcPath.xpath mp fsig.fs_name) me.me_sig_body
+        in
+        fs@calls
+    in
+    Sm.fold do_one params []
+  | Some pfd_uses ->
+    List.map (fun name ->
+        let s_env = if name.inp_in_params then env_in else env in
+        let qname = name.inp_qident in
 
-          let f = fst (lookup_fun s_env qname) in
-          let p = f.EcPath.x_top in
-          if not (Sm.mem p params) then
-            tyerror qname.pl_loc env (FunNotInModParam qname.pl_desc);
-          f)
-        pfd_uses
-
-(* -------------------------------------------------------------------- *)
-(* make an (empty) call cost map, map to be filled after *)
-let mk_empty_cost_calls env (params : Sm.t) : c_bnd Mx.t =
-  Sm.fold (fun param calls ->
-      assert (param.m_args = []); (* check that param is not applied *)
-
-      let param_me = EcEnv.Mod.by_mpath param env in
-      let funs =
-        List.map (fun (Tys_function f) -> f.fs_name) param_me.me_sig_body
-      in
-      List.fold_left (fun calls f ->
-          Mx.add (xpath param f) C_unbounded calls (* C_unbounded by default *)
-        ) calls funs
-    ) params Mx.empty
-
+        let f = fst (lookup_fun s_env qname) in
+        let p = f.EcPath.x_top in
+        if not (Sm.mem p params) then
+          tyerror qname.pl_loc env (FunNotInModParam qname.pl_desc);
+        f)
+      pfd_uses
 
 
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
@@ -2218,7 +2203,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
     EcFol.Fsubst.uni subs tform
   in
 
-  let calls = mk_empty_cost_calls env_in params in
+  let calls = Mx.empty in
 
   let mk_elc : pformula option -> c_bnd = function
     | None -> C_unbounded
