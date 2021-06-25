@@ -991,13 +991,19 @@ let oget_c_bnd (c : c_bnd option) (full : bool) =
   | None   -> if full then C_bounded f_i0 else C_unbounded
   | Some c -> c
 
-let c_bnd_scalar_mult ~(mode:[`Xint | `Int]) (l : form) (c : c_bnd) : c_bnd =
+(* [l] of type [mode_l], [c_bnd] has type [mode_r] *)
+let c_bnd_scalar_mult
+    ~(mode_l:[`Xint | `Int])
+    ~(mode_r:[`Xint | `Int])
+    (l : form) (c : c_bnd) : c_bnd =
   match c with
   | C_bounded c ->
     let c =
-      match mode with
-      | `Xint -> f_xmul_simpl l c
-      | `Int  -> f_int_mul_simpl l c
+      match mode_l, mode_r with
+      | `Xint, `Xint -> f_xmul_simpl         l       c
+      | `Int, `Int   -> f_int_mul_simpl      l       c
+      | `Int, `Xint  -> f_xmul_simpl    (f_N l)      c
+      | `Xint, `Int  -> f_xmul_simpl         l  (f_N c)
     in
     C_bounded c
   | _ -> C_unbounded
@@ -1015,10 +1021,23 @@ let cost_add_map (calls1, full1) (calls2, full2) =
       | _ -> Some C_unbounded
     ) calls1 calls2
 
-let r_cost_add (c1 : c_bnd r_cost) (c2 : c_bnd r_cost) : c_bnd r_cost =
+(* [c1.r_self] has type [mod_l], [c2.r_self] type [mod_r] *)
+let r_cost_add
+    ~(mode_l:[`Xint | `Int])
+    ~(mode_r:[`Xint | `Int])
+    (c1 : c_bnd r_cost)
+    (c2 : c_bnd r_cost) : c_bnd r_cost
+  =
   let r_self = match c1.r_self, c2.r_self with
     | C_bounded s1, C_bounded s2 ->
-      C_bounded (f_int_add_simpl s1 s2) (* int *)
+      let s =
+        match mode_l, mode_r with
+        | `Xint, `Xint -> f_xadd_simpl         s1       s2
+        | `Int, `Int   -> f_int_add_simpl      s1       s2
+        | `Int, `Xint  -> f_xadd_simpl    (f_N s1)      s2
+        | `Xint, `Int  -> f_xadd_simpl         s1  (f_N s2)
+      in
+      C_bounded s
     | _ -> C_unbounded
   in
   let r_abs_calls =
@@ -1044,23 +1063,40 @@ let cost_add (c1 : cost) (c2 : cost) : cost =
 (* -------------------------------------------------------------------- *)
 (* [l] has type [int] *)
 let cost_scalar_mult (l : form) (c : cost) : cost =
-  { c_self  = c_bnd_scalar_mult ~mode:`Xint (f_N l) c.c_self; (* xint *)
-    c_calls = EcPath.Mx.map (c_bnd_scalar_mult ~mode:`Int l) c.c_calls;
+  { c_self  = c_bnd_scalar_mult ~mode_l:`Int ~mode_r:`Xint l c.c_self; (* xint *)
+    c_calls = EcPath.Mx.map (c_bnd_scalar_mult ~mode_l:`Int ~mode_r:`Int l) c.c_calls;
     c_full  = c.c_full; }
 
-(* [l] has type [int] *)
-let r_cost_scalar_mult (l : form) (c : c_bnd r_cost) : c_bnd r_cost =
-  { r_self      = c_bnd_scalar_mult ~mode:`Int (f_N l) c.r_self; (* int *)
-    r_abs_calls = EcPath.Mx.map (c_bnd_scalar_mult ~mode:`Int l) c.r_abs_calls;
-    r_params    = EcPath.Mx.map (c_bnd_scalar_mult ~mode:`Int l) c.r_params;
+(* [l] has type [mod_l], [c.r_self] type [mod_r] *)
+let r_cost_scalar_mult
+    ~(mode_l:[`Xint | `Int])
+    ~(mode_r:[`Xint | `Int])
+    (l : form)
+    (c : c_bnd r_cost) : c_bnd r_cost
+  =
+  { r_self      = c_bnd_scalar_mult ~mode_l ~mode_r l c.r_self;
+    r_abs_calls =
+      EcPath.Mx.map
+        (c_bnd_scalar_mult ~mode_l ~mode_r:`Int l)
+        c.r_abs_calls;
+    r_params    =
+      EcPath.Mx.map
+        (c_bnd_scalar_mult ~mode_l ~mode_r:`Int l)
+        c.r_params;
     r_full      = c.r_full; }
 
-let r_cost_c_bnd_mult (l : c_bnd) (c : c_bnd r_cost) : c_bnd r_cost =
+(* [l] has type [mode_l], [c.r_self] has type [mode_r] *)
+let r_cost_c_bnd_mult
+    ~(mode_l:[`Xint | `Int])
+    ~(mode_r:[`Xint | `Int])
+    (l : c_bnd)
+    (c : c_bnd r_cost) : c_bnd r_cost
+  =
   match l with
-  | C_bounded l -> r_cost_scalar_mult l c
+  | C_bounded l -> r_cost_scalar_mult ~mode_l ~mode_r l c
   | C_unbounded ->
     if c.r_full then
-      { r_self      = C_unbounded; (* int *)
+      { r_self      = C_unbounded;
         r_abs_calls = EcPath.Mx.map (fun _ -> C_unbounded) c.r_abs_calls;
         r_params    = EcPath.Mx.map (fun _ -> C_unbounded) c.r_params;
         r_full      = true; }
@@ -2249,7 +2285,7 @@ module Fsubst = struct
   and subst_oi ~tx (s : f_subst) (oi : c_bnd PreOI.t) =
     let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
 
-    let r_cost = r_cost_subst ~tx s (PreOI.cost oi) in
+    let r_cost = r_cost_subst ~mode:`Int ~tx s (PreOI.cost oi) in
 
     PreOI.mk
       (List.map sx (PreOI.allowed oi))
@@ -2320,7 +2356,12 @@ module Fsubst = struct
   (* complicated, because if a local module is substituted by a concrete module,
      its cost (time the number of times it is called) need to be added to the
      self cost (see instantiation rule).  *)
-  and r_cost_subst ~tx (s : f_subst) (init_cost : c_bnd r_cost) : c_bnd r_cost =
+  and r_cost_subst
+      ~(mode:[`Xint | `Int])
+      ~tx
+      (s : f_subst)
+      (init_cost : c_bnd r_cost) : c_bnd r_cost
+    =
     let r_self = subst_c_bnd ~tx s init_cost.r_self
     (* [concs] are the local modules that have been substituted by concrete
        modules. *)
@@ -2376,14 +2417,15 @@ module Fsubst = struct
               in
 
               (* compute: [r_cost + f_called * f_cost] *)
-              r_cost_add r_cost (r_cost_c_bnd_mult f_called f_cost)
+              r_cost_add ~mode_l:mode ~mode_r:`Int r_cost
+                (r_cost_c_bnd_mult ~mode_l:`Int ~mode_r:`Int f_called f_cost)
             ) m_info r_cost
         ) concs r_cost
     in
     r_cost
 
   and cost_subst ~tx (s : f_subst) (cost : cost) : cost =
-    r_cost_to_cost (r_cost_subst ~tx s (cost_to_r_cost cost))
+    r_cost_to_cost (r_cost_subst ~mode:`Xint ~tx s (cost_to_r_cost cost))
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)

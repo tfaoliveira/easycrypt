@@ -316,7 +316,7 @@ let rec zapp_cost_l calls_l pcalls_l calls =
 
   | _ -> assert false
 
-let check_cost_l env subst co1 co2 =
+let check_cost_l env subst (co1 : cost) (co2 : cost) =
     let calls1 =
       EcPath.Mx.fold (fun f c calls ->
           let f' = NormMp.norm_xfun env f in
@@ -1402,7 +1402,7 @@ let zpop ri side f hd =
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
 
-  | Zhl {f_node = FcHoareF hfc}, chf_pr::chf_po::self_pcalls -> (* FIXME *)
+  | Zhl {f_node = FcHoareF hfc}, chf_pr :: chf_po :: self_pcalls -> (* FIXME *)
     let pcalls_len = Mx.cardinal hfc.chf_co.c_calls in
     let self_pcalls_len = List.length self_pcalls in
     let self_, pcalls =
@@ -1415,12 +1415,13 @@ let zpop ri side f hd =
         | _ -> assert false
     in
 
-    let calls = zapp_cost_l (Mx.bindings hfc.chf_co.c_calls) pcalls Mx.empty
+    let calls =
+      zapp_cost_l (Mx.bindings hfc.chf_co.c_calls) pcalls Mx.empty
     in
     f_cHoareF_r
       { hfc with chf_pr; chf_po; chf_co = cost_r self_ calls hfc.chf_co.c_full }
 
-  | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_pcalls -> (* FIXME *)
+  | Zhl {f_node = FcHoareS hfs}, chs_pr :: chs_po :: self_pcalls -> (* FIXME *)
     let pcalls_len = Mx.cardinal hfs.chs_co.c_calls in
     let self_pcalls_len = List.length self_pcalls in
     let self_, pcalls =
