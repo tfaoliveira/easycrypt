@@ -582,6 +582,17 @@ let ur_inter union inter ur1 ur2 =
     ur_neg = inter ur1.ur_neg ur2.ur_neg; }
 
 (* -------------------------------------------------------------------- *)
+(* [params] and [abs_calls] are mapping from oracles to the number of time
+   that they can be called. Missing entries can be called:
+   - any number of times in if [full] is [false]
+   - zero times if [full] is [true] *)
+type 'a r_cost = {
+  r_self      : 'a;
+  r_params    : 'a Mx.t;
+  r_abs_calls : 'a Mx.t;
+  r_full      : bool;
+}
+
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
   type 'a t
@@ -591,17 +602,18 @@ module PreOI : sig
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t ->          'a
-  val cost      : 'a t -> xpath -> 'a
+  val c_self      : 'a t -> 'a
+  val c_params    : 'a t -> 'a Mx.t
+  val c_abs_calls : 'a t -> 'a Mx.t
+  val c_full      : 'a t -> bool
 
-  val cost_calls : 'a t -> 'a Mx.t
-
-  val costs : 'a t -> 'a * 'a Mx.t
+  (* self, params, abs calls, full *)
+  val cost : 'a t -> 'a r_cost
 
   val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk : xpath list -> bool -> 'a -> 'a Mx.t -> 'a t
+  val mk : xpath list -> bool -> 'a r_cost -> 'a t
 
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end = struct
@@ -610,15 +622,12 @@ end = struct
    * - oi_calls : list of oracles that can be called by [M.f].
    * - oi_in    : true if equality of globals is required to ensure
    * equality of result and globals (in the post).
-   * - oi_costs : self cost, plus a mapping from oracles to the number of time
-   * that they can be called by [M.f]. Missing entries can be called
-   * any number of times.
    *
    * Remark: there is redundancy between oi_calls and oi_costs. *)
   type 'a t = {
     oi_calls : xpath list;
     oi_in    : bool;
-    oi_costs : 'a * 'a Mx.t;
+    oi_costs : 'a r_cost;
   }
 
   let is_in t = t.oi_in
@@ -627,29 +636,24 @@ end = struct
 
   let allowed_s oi = allowed oi |> Sx.of_list
 
-  let cost_self (oi : 'a t) = fst oi.oi_costs
+  let c_self      (oi : 'a t) = oi.oi_costs.r_self
+  let c_params    (oi : 'a t) = oi.oi_costs.r_params
+  let c_abs_calls (oi : 'a t) = oi.oi_costs.r_abs_calls
+  let c_full      (oi : 'a t) = oi.oi_costs.r_full
 
-  (* sanity checks *)
-  let check_xpath (x : xpath) =
-    let m = x.x_top in
-    assert (m_is_local m && m.m_args = [])
+  let cost oi = oi.oi_costs
 
-  let cost (oi : 'a t) (x : xpath) : 'a =
-    check_xpath x;
-
-    let calls = snd oi.oi_costs in
-    Mx.find x calls
-
-  let cost_calls oi = snd oi.oi_costs
-
-  let costs oi = cost_self oi, cost_calls oi
-
-  let mk oi_calls oi_in self call_costs =
-    { oi_calls; oi_in; oi_costs = (self, call_costs) ; }
+  let mk oi_calls oi_in r_cost =
+    { oi_calls; oi_in; oi_costs = r_cost ; }
 
   let filter (f : xpath -> bool) (oi : 'a t) : 'a t =
-    let call_costs = Mx.filter (fun x _ -> f x) (snd oi.oi_costs) in
-    mk (List.filter f oi.oi_calls) oi.oi_in (fst oi.oi_costs) call_costs
+    let call_costs =
+      { oi.oi_costs with
+        r_abs_calls = Mx.filter (fun x _ -> f x) oi.oi_costs.r_abs_calls;
+        r_params    = Mx.filter (fun x _ -> f x) oi.oi_costs.r_params;
+      } in
+    let allowed = List.filter f oi.oi_calls in
+    mk allowed oi.oi_in call_costs
 
   let equal (a_equal : 'a -> 'a -> bool) (oi1 : 'a t) (oi2 : 'a t) : bool =
     let check_calls_eq calls1 calls2 =
@@ -661,29 +665,32 @@ end = struct
       with Not_equal -> false
     in
 
-    let check_costs_eq (self1, calls1) (self2, calls2) =
-      a_equal self1 self2 &&
-      check_calls_eq calls1 calls2
+    let check_r_cost_eq (r1 : 'a r_cost) (r2 : 'a r_cost) : bool =
+      a_equal r1.r_self r2.r_self &&
+      r1.r_full = r2.r_full &&
+      check_calls_eq r1.r_params r2.r_params &&
+      check_calls_eq r1.r_abs_calls r2.r_abs_calls
     in
 
     oi1.oi_in = oi2.oi_in
     && List.all2 EcPath.x_equal oi1.oi_calls oi1.oi_calls
-    && check_costs_eq oi1.oi_costs oi2.oi_costs
+    && check_r_cost_eq oi1.oi_costs oi2.oi_costs
 
   let hash (ahash : 'a -> int) oi : int =
-    let costs_hash =
+    let r_cost_hash (r : 'a r_cost) : int =
       Why3.Hashcons.combine
-        (ahash (fst oi.oi_costs))
+        (ahash r.r_self)
         (Why3.Hashcons.combine_list
            (Why3.Hashcons.combine_pair EcPath.x_hash ahash)
-           0 (Mx.bindings (snd oi.oi_costs)))
+           (if r.r_full then 0 else 1)
+           (Mx.bindings r.r_params @ Mx.bindings r.r_abs_calls))
     in
 
     Why3.Hashcons.combine2
       (if oi.oi_in then 0 else 1)
       (Why3.Hashcons.combine_list EcPath.x_hash 0
          (List.sort EcPath.x_compare oi.oi_calls))
-      costs_hash
+      (r_cost_hash oi.oi_costs)
 end
 
 

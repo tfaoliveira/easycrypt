@@ -14,7 +14,7 @@ open EcCoreFol
 include module type of struct include EcCoreModules end
 
 (* -------------------------------------------------------------------- *)
-(* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
+(* Instantiation of EcCoreModules.PreOI on EcCoreFol.c_bnd *)
 module OI : sig
   type t = c_bnd PreOI.t
 
@@ -23,23 +23,23 @@ module OI : sig
 
   val is_in : t -> bool
 
-  val cost_self : t ->          c_bnd (* int *)
-  val cost      : t -> xpath -> c_bnd (* int *)
-
-  val cost_calls : t -> c_bnd Mx.t
-
-  val costs : t -> c_bnd * c_bnd Mx.t
+  val c_self      : t -> c_bnd
+  val c_params    : t -> c_bnd Mx.t
+  val c_abs_calls : t -> c_bnd Mx.t
+  val c_full      : t -> bool
+  val cost        : t -> c_bnd r_cost
 
   val allowed   : t -> xpath list
   val allowed_s : t -> Sx.t
 
-  val mk :
-    xpath list -> bool -> c_bnd -> c_bnd Mx.t -> t
+  val mk : xpath list -> bool -> c_bnd r_cost -> t
 
   val filter : (xpath -> bool) -> t -> t
 end
 
 type orcl_info = EcCoreFol.orcl_info
+
+val r_cost_default : c_bnd r_cost
 
 (* -------------------------------------------------------------------- *)
 type mod_restr         = EcCoreFol.mod_restr

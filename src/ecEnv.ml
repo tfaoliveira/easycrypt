@@ -2400,7 +2400,7 @@ module NormMp = struct
             Sm.mem ftop mparams in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name (OI.mk calls true C_unbounded Mx.empty) oi
+          Msym.add f.f_name (OI.mk calls true r_cost_default) oi
       in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in

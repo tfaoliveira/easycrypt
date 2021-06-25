@@ -18,7 +18,6 @@ module Mid = EcIdent.Mid
 include EcCoreModules
 
 (* -------------------------------------------------------------------- *)
-(* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
 module OI : sig
   type t = c_bnd PreOI.t
 
@@ -27,34 +26,35 @@ module OI : sig
 
   val is_in : t -> bool
 
-  val cost_self : t ->          c_bnd
-  val cost      : t -> xpath -> c_bnd
-
-  val cost_calls : t -> c_bnd Mx.t
-
-  val costs : t -> c_bnd * c_bnd Mx.t
+  val c_self      : t -> c_bnd
+  val c_params    : t -> c_bnd Mx.t
+  val c_abs_calls : t -> c_bnd Mx.t
+  val c_full      : t -> bool
+  val cost        : t -> c_bnd r_cost
 
   val allowed   : t -> xpath list
   val allowed_s : t -> Sx.t
 
-  val mk :
-    xpath list -> bool -> c_bnd -> c_bnd Mx.t -> t
+  val mk : xpath list -> bool -> c_bnd r_cost -> t
 
   val filter : (xpath -> bool) -> t -> t
 end = struct
   type t = c_bnd PreOI.t
 
-  let is_in        = PreOI.is_in
-  let allowed      = PreOI.allowed
-  let allowed_s    = PreOI.allowed_s
-  let cost_self    = PreOI.cost_self
-  let cost         = PreOI.cost
-  let cost_calls   = PreOI.cost_calls
-  let costs        = PreOI.costs
-  let mk           = PreOI.mk
-  let filter       = PreOI.filter
-  let equal        = PreOI.equal EcCoreFol.c_bnd_equal
-  let hash         = PreOI.hash EcCoreFol.c_bnd_hash
+  let is_in     = PreOI.is_in
+  let allowed   = PreOI.allowed
+  let allowed_s = PreOI.allowed_s
+
+  let c_self      = PreOI.c_self
+  let c_params    = PreOI.c_params
+  let c_abs_calls = PreOI.c_abs_calls
+  let c_full      = PreOI.c_full
+  let cost        = PreOI.cost
+
+  let mk     = PreOI.mk
+  let filter = PreOI.filter
+  let equal  = PreOI.equal EcCoreFol.c_bnd_equal
+  let hash   = PreOI.hash EcCoreFol.c_bnd_hash
 end
 
 type orcl_info = EcCoreFol.orcl_info
@@ -72,6 +72,12 @@ type module_structure  = c_bnd p_module_structure
 type module_item       = c_bnd p_module_item
 type module_comps      = c_bnd p_module_comps
 type module_comps_item = c_bnd p_module_comps_item
+
+let r_cost_default =
+  { r_self      = C_unbounded;
+    r_abs_calls = Mx.empty;
+    r_params    = Mx.empty;
+    r_full      = false; }
 
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
@@ -106,14 +112,17 @@ let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
       let oi = Msym.find f restr.mr_oinfos in
       let filter x = List.mem x ocalls in
       OI.filter filter oi
-    with Not_found -> OI.mk ocalls true C_unbounded Mx.empty
+    with Not_found -> OI.mk ocalls true r_cost_default
   in
   add_oinfo restr f oi
 
 let has_compl_restriction mr =
   Msym.exists (fun _ oi ->
-      let self, calls = PreOI.costs oi in
-      self <> C_unbounded || Mx.exists (fun _ bnd -> bnd <> C_unbounded) calls
+      let c = PreOI.cost oi in
+      c.r_self <> C_unbounded ||
+      Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
+      Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
+      c.r_full
     ) mr.mr_oinfos
 
 (* -------------------------------------------------------------------- *)

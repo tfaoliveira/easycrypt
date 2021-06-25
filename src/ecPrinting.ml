@@ -1767,7 +1767,9 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 (* -------------------------------------------------------------------- *)
-and pp_cost ppe fmt (cost : cost) =
+and _pp_cost ppe fmt
+    ((self, calls, full) : c_bnd * (EcPath.xpath * c_bnd) list * bool)
+  =
   let pp_self fmt = function
     | C_bounded self ->
       Format.fprintf fmt ": %a"
@@ -1786,17 +1788,26 @@ and pp_cost ppe fmt (cost : cost) =
       Format.fprintf fmt "%a : `_"
         (pp_funname ppe) f
 
-  and pp_full fmt = if not cost.c_full then Format.fprintf fmt "_" in
-
-  let calls = EcPath.Mx.bindings cost.c_calls in
-
+  and pp_full fmt = if not full then Format.fprintf fmt "_" in
 
   Format.fprintf fmt "@[<hv 1>[%a%t%a%t%t]@]"
-    pp_self cost.c_self
+    pp_self self
     (fun fmt -> if calls <> [] then Format.fprintf fmt ",@ ")
     (pp_list ",@ " pp_call_el) calls
-    (fun fmt -> if not cost.c_full then Format.fprintf fmt ",@ ")
+    (fun fmt -> if not full then Format.fprintf fmt ",@ ")
     pp_full
+
+and pp_cost ppe fmt (c : cost) =
+  _pp_cost ppe fmt
+    (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
+
+and pp_r_cost ppe fmt (c : c_bnd r_cost) =
+  if has_cost_restr c then
+    let calls =
+      EcPath.Mx.bindings c.r_abs_calls @ EcPath.Mx.bindings c.r_params
+    in
+    _pp_cost ppe fmt (c.r_self, calls, c.r_full)
+  else ()
 
 (* -------------------------------------------------------------------- *)
 
@@ -1806,41 +1817,18 @@ and pp_allowed_orcl ppe fmt orcls =
     Format.fprintf fmt "{@[<hov>%a@]}@ "
       (pp_list ",@ " (pp_funname ppe)) orcls
 
-and has_cost_restr (self, calls) =
-    self <> C_unbounded || EcPath.Mx.exists (fun _ x -> x <> C_unbounded) calls
-
-and pp_costs ppe fmt ((self,calls) : c_bnd * c_bnd EcPath.Mx.t) : unit =
-  if not (has_cost_restr (self, calls)) then
-    Format.fprintf fmt ""
-  else
-    let pp_self fmt = function
-      | C_unbounded -> ()
-      | C_bounded f -> pp_form ppe fmt f
-    in
-    let pp_cost fmt (f,c) = match c with
-      | C_unbounded ->
-        Format.fprintf fmt "@[%a : `_@]"
-          (pp_funname ppe) f
-      | C_bounded c ->
-        Format.fprintf fmt "@[%a : %a@]"
-          (pp_funname ppe) f
-          (pp_form ppe) c
-    in
-
-    let bindings = (EcPath.Mx.bindings calls) in
-    Format.fprintf fmt "`{@[<hv>%a%t%a@]}@ "
-      pp_self self
-      (fun fmt ->
-         Format.fprintf fmt
-           (if self = C_unbounded || bindings = [] then "" else ",@ "))
-      (pp_list ",@ " pp_cost) bindings
+and has_cost_restr (c : c_bnd r_cost) =
+  c.r_self <> C_unbounded ||
+  EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_abs_calls ||
+  EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_params ||
+  c.r_full
 
 and pp_orclinfo_bare ppe fmt oi =
   let orcls = OI.allowed oi
-  and costs = OI.costs oi in
+  and r_cost = OI.cost oi in
   Format.fprintf fmt "%a%a"
     (pp_allowed_orcl ppe) orcls
-    (pp_costs ppe) costs
+    (pp_r_cost ppe) r_cost
 
 and pp_orclinfo ppe fmt (sym, oi) =
   Format.fprintf fmt "@[<hv>%s%a : %a@]"
@@ -1853,8 +1841,8 @@ and pp_orclinfos ppe fmt ois =
   let orcl_infos =
     List.filter_map (fun (sym, oi) ->
         let orcls = OI.allowed oi
-        and costs = OI.costs oi in
-        if not (has_cost_restr costs) && orcls = [] && OI.is_in oi
+        and cost = OI.cost oi in
+        if not (has_cost_restr cost) && orcls = [] && OI.is_in oi
         then None
         else Some (sym, oi)
       ) (Msym.bindings ois)

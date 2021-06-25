@@ -130,6 +130,17 @@ val ur_union :
   'a use_restr -> 'a use_restr -> 'a use_restr
 
 (* -------------------------------------------------------------------- *)
+(* [params] and [abs_calls] are mapping from oracles to the number of time
+   that they can be called. Missing entries can be called:
+   - any number of times in if [full] is [false]
+   - zero times if [full] is [true] *)
+type 'a r_cost = {
+  r_self      : 'a;
+  r_params    : 'a Mx.t;
+  r_abs_calls : 'a Mx.t;
+  r_full      : bool;
+}
+
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
   type 'a t
@@ -139,17 +150,16 @@ module PreOI : sig
 
   val is_in : 'a t -> bool
 
-  val cost_self : 'a t ->          'a
-  val cost      : 'a t -> xpath -> 'a
-
-  val cost_calls : 'a t -> 'a Mx.t
-
-  val costs : 'a t -> 'a * 'a Mx.t
+  val c_self      : 'a t -> 'a
+  val c_params    : 'a t -> 'a Mx.t
+  val c_abs_calls : 'a t -> 'a Mx.t
+  val c_full      : 'a t -> bool
+  val cost        : 'a t -> 'a r_cost
 
   val allowed   : 'a t -> xpath list
   val allowed_s : 'a t -> Sx.t
 
-  val mk : xpath list -> bool -> 'a -> 'a Mx.t -> 'a t
+  val mk : xpath list -> bool -> 'a r_cost -> 'a t
 
   val filter : (xpath -> bool) -> 'a t -> 'a t
 end

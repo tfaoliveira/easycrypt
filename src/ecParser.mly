@@ -1714,11 +1714,20 @@ compl_el:
 /* | UNDERSCORE     { None } */
 /* | c=form_r(none) { Some c } */
 
+%inline compl_restr0:
+| self=compl_elc                                  { self,[] }
+| self=compl_elc COMMA c=rlist1(compl_el,COMMA)   { self,c }
+
+compl_restr1:
+  | c=compl_restr0
+    { let self, calls = c in
+      PCompl (self, calls, true) }
+  | c=compl_restr0 COMMA UNDERSCORE
+    { let self, calls = c in
+      PCompl (self, calls, false) }
+
 compl_restr:
-| LBRACKET self=compl_elc RBRACKET
-    { PCompl (self,[]) }
-| LBRACKET self=compl_elc COMMA c=rlist1(compl_el,COMMA) RBRACKET
-    { PCompl (self,c) }
+| LBRACKET c=compl_restr1 RBRACKET { c }
 
 (* -------------------------------------------------------------------- *)
 (* module restrictions *)
@@ -1740,9 +1749,9 @@ mod_restr_el:
   | i=iboption(STAR) f=lident COLON fr=fun_restr
     { let orcl, cmpl = fr in
       { pmre_in = not i;
-	pmre_name = f;
-	pmre_orcls = orcl;
-	pmre_compl = cmpl; } }
+	      pmre_name = f;
+	      pmre_orcls = orcl;
+	      pmre_compl = cmpl; } }
 
 mod_restr:
   | LBRACE mr=mem_restr RBRACE
