@@ -116,8 +116,8 @@ module S = Hashed_ElGamal(H).
 
 section.
 
-  declare module A: Adversary [choose : `{N cA.`cchoose, #O.o : cA.`ochoose},
-                               guess  : `{N cA.`cguess,  #O.o : cA.`oguess}] {-H}.
+  declare module A: Adversary [choose : [cA.`cchoose, #O.o : cA.`ochoose],
+                               guess  : [cA.`cguess,  #O.o : cA.`oguess]] {-H}.
 
   axiom guess_ll (O <: POracle {-A}) : islossless O.o => islossless A(O).guess.
 
@@ -189,17 +189,20 @@ section.
 
   local lemma cost_ALCDH : 
     choare [ALCDH.solve : true ==> 0 < size res <= cA.`ochoose + cA.`oguess] 
-    time [N (6 + cunifin + (3 + cunifin + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)].
+    time [:N (6 + cunifin + 
+              (3 + cunifin + cget qH + cset qH + cin qH) * 
+              (cA.`oguess + cA.`ochoose)), 
+          A.guess : 1,
+          A.choose : 1].
   proof.
     proc; wp.
-    call (_: size H.qs- cA.`ochoose <= k /\ bounded LRO.m (size H.qs);
-           time
-           [H.o k : [N(3 + cunifin + cget qH + cset qH + cin qH)]]).
+    call (_: size H.qs- cA.`ochoose <= k /\ bounded LRO.m (size H.qs) :
+           [H.o k : [:N(3 + cunifin + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       by rnd; auto => &hr />; rewrite dbits_ll /=; smt (cset_pos bounded_set).
-    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
-           time [H.o k : [N(3 + cunifin + cget qH + cset qH + cin qH)]]).
+    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs) :
+           [H.o k : [:N(3 + cunifin + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       rnd;auto => &hr />; rewrite dbits_ll /=; smt(cset_pos bounded_set cA_pos).
@@ -226,9 +229,12 @@ section.
 
   lemma ex_reduction &m : 
     exists (B<:CDH.Adversary 
-      [solve : `{ N(C1.cduniform_n + 
+      [solve : [C1.cduniform_n + 
                   6 + cunifin + 
-                  (3 + cunifin + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)}]
+                  (3 + cunifin + cget qH + cset qH + cin qH) * 
+                  (cA.`oguess + cA.`ochoose),
+                 A.guess : 1,
+                 A.choose : 1]]
                {+A, +H}),
     Pr[CPA(S,A(LRO)).main() @ &m: res] - 1%r/2%r <= 
     qH%r * Pr[CDH.CDH(B).main() @ &m: res].

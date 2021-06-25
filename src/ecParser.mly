@@ -1691,9 +1691,16 @@ mem_restr:
 (* qident optionally taken in a (implicit) module parameters. *)
 qident_inparam:
 | SHARP q=qident { { inp_in_params = true;
-		     inp_qident    = q; } }
-| q=qident { { inp_in_params = false;
-	       inp_qident    = q; } }
+		                 inp_content    = q; } }
+| q=qident       { { inp_in_params = false;
+	                   inp_content    = q; } }
+
+(* gamepath optionally taken in a (implicit) module parameters. *)
+gamepath_inparam:
+| SHARP m=uident DOT f=lident  { { inp_in_params = true;
+		                               inp_content    = (m,f); } }
+| m=uident DOT f=lident        { { inp_in_params = false;
+	                                 inp_content    = (m,f); } }
 
 (* -------------------------------------------------------------------- *)
 (* Oracle restrictions *)
@@ -1708,7 +1715,7 @@ compl_elc:
 | c=form_r(none) { Some c }
 
 compl_el:
-| o=qident_inparam COLON c=compl_elc { (o, c) }
+| o=gamepath_inparam COLON c=compl_elc { (o, c) }
 
 /* compl_self: */
 /* | UNDERSCORE     { None } */
@@ -1803,7 +1810,7 @@ sig_param:
 signature_item:
 | INCLUDE i=mod_type xs=bracket(minclude_proc)? qs=brace(qident*)?
     { let qs = omap (List.map (fun x -> { inp_in_params = false;
-					  inp_qident    = x;     })) qs in
+					                                inp_content    = x;     })) qs in
       `Include (i, xs, qs) }
 | PROC i=boption(STAR) x=lident pd=param_decl COLON ty=loc(type_exp) fr=fun_restr?
     { let orcl, compl = odfl (None,None) fr in

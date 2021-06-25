@@ -2180,7 +2180,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
   | Some pfd_uses ->
     List.map (fun name ->
         let s_env = if name.inp_in_params then env_in else env in
-        let qname = name.inp_qident in
+        let qname = name.inp_content in
 
         let f = fst (lookup_fun s_env qname) in
         let p = f.EcPath.x_top in
@@ -2219,12 +2219,9 @@ let rec trans_restr_compl env env_in (r_compl : pcompl option) :
     let calls =
       List.fold_left (fun calls (name, form) ->
           let s_env = if name.inp_in_params then env_in else env in
-          let qname = name.inp_qident in
+          let fn = trans_oracle s_env name.inp_content in
 
-          let f = fst (lookup_fun s_env qname)
-                  |> NormMp.norm_xfun env in
-
-          Mx.change (fun _ -> Some (mk_elc form)) f calls
+          Mx.change (fun _ -> Some (mk_elc form)) fn calls
         ) calls restr_elems
     in
 

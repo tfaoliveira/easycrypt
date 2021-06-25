@@ -316,16 +316,16 @@ let rec zapp_cost_l calls_l pcalls_l calls =
 
   | _ -> assert false
 
-let check_cost_l env subst (co1 : cost) (co2 : cost) =
+let check_cost_l subst (co1 : cost) (co2 : cost) =
     let calls1 =
       EcPath.Mx.fold (fun f c calls ->
-          let f' = NormMp.norm_xfun env f in
-          EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
+          (* we do not normalize [f], as it is not a proper [xpath] *)
+          EcPath.Mx.change (fun old -> assert (old = None); Some c) f calls
         ) co1.c_calls EcPath.Mx.empty
     and calls2 =
       EcPath.Mx.fold (fun f c calls ->
           let f' = EcPath.x_substm subst.fs_sty.ts_p subst.fs_mp f in
-          let f' = NormMp.norm_xfun env f' in
+          (* we do not normalize [f'], as it is not a proper [xpath] *)
           EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
         ) co2.c_calls EcPath.Mx.empty in
 
@@ -350,7 +350,7 @@ let check_cost_l env subst (co1 : cost) (co2 : cost) =
 let check_cost test env subst co1 co2 =
   List.iter
     (fun (a1,a2) -> test env subst a1 a2)
-    (check_cost_l env subst co1 co2)
+    (check_cost_l subst co1 co2)
 
 let check_e env s e1 e2 =
   let es = e_subst_init s.fs_freshen s.fs_sty.ts_p
@@ -1538,7 +1538,7 @@ let rec conv ri env f1 f2 stk =
 
   | FcHoareF chf1, FcHoareF chf2
      when EqTest.for_xp env chf1.chf_f chf2.chf_f ->
-     begin match check_cost_l env Fsubst.f_subst_id chf1.chf_co chf2.chf_co with
+     begin match check_cost_l Fsubst.f_subst_id chf1.chf_co chf2.chf_co with
        | fs ->
          let fs1, fs2 = List.split fs in
          conv ri env chf1.chf_pr chf2.chf_pr
@@ -1548,7 +1548,7 @@ let rec conv ri env f1 f2 stk =
 
   | FcHoareS chs1, FcHoareS chs2
      when EqTest.for_stmt env chs1.chs_s chs2.chs_s ->
-     begin match check_cost_l env Fsubst.f_subst_id chs1.chs_co chs2.chs_co with
+     begin match check_cost_l Fsubst.f_subst_id chs1.chs_co chs2.chs_co with
        | fs ->
          let fs1, fs2 = List.split fs in
          conv ri env chs1.chs_pr chs2.chs_pr

@@ -258,14 +258,19 @@ and pmodule_type_restr =
     pmty_mem : pmod_restr option; }
 
 (* -------------------------------------------------------------------- *)
+and 'a g_inparam = { inp_in_params : bool;
+	                   inp_content   : 'a; }
+
 (* qident optionally taken in a (implicit) module parameters. *)
-and qident_inparam = { inp_in_params : bool;
-	                     inp_qident    : pqsymbol; }
+and qident_inparam = pqsymbol g_inparam
+
+(* gamepath optionally taken in a (implicit) module parameters. *)
+and gamepath_inparam = (psymbol * psymbol) g_inparam
 
 and poracles = qident_inparam list
 
 and pcompl = PCompl of pformula option *
-                       (qident_inparam * pformula option) list *
+                       (gamepath_inparam * pformula option) list *
                        bool
 
 and pmod_restr_el = {
