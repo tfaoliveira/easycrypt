@@ -2192,7 +2192,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
 
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
 (* If [r_compl] is None, there are no restrictions *)
-let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
+let rec trans_restr_compl env env_in (r_compl : pcompl option) :
   c_bnd * c_bnd Mx.t * bool
   =
   let trans_closed_form (form : pformula) (ty : EcTypes.ty) : form =
@@ -2223,9 +2223,6 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) :
 
           let f = fst (lookup_fun s_env qname)
                   |> NormMp.norm_xfun env in
-          let p = f.EcPath.x_top in
-          if not (Sm.mem p params) then
-            tyerror qname.pl_loc env (FunNotInModParam qname.pl_desc);
 
           Mx.change (fun _ -> Some (mk_elc form)) f calls
         ) calls restr_elems
@@ -2249,7 +2246,7 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
   =
   let name = unloc r_el.pmre_name in
   let r_self, calls, r_full =
-    trans_restr_compl env env_in params r_el.pmre_compl
+    trans_restr_compl env env_in r_el.pmre_compl
   in
   let r_orcls = trans_restr_oracle_calls env env_in params r_el.pmre_orcls in
 

@@ -210,19 +210,14 @@ abstract theory Complexity.
 op cddh = 3 + cxor + chash + cdbool + cdhkey.
 op cguess = 3 + 2*cgpow + cxor + cdbool + 2 * cdt.
 
-lemma ex_conclusion (kc kg: int) (A <: Adversary[choose : [kc] , guess : [kg]]) &m :
-  0 <= kc => 0 <= kg =>
-  exists (Dddh <: DDH.Adversary [guess : [cguess + kg + kc]])
-         (Des <: AdvES[guess: [cguess + kg + kc]]),
-
-  (* exists (Dddh <: DDH.Adversary [guess : [cddh, A.choose : 1, A.guess : 1]]) *)
-  (*        (Des <: AdvES [guess: [cguess, A.choose : 1, A.guess : 1]]), *)
+lemma ex_conclusion (A <: Adversary) &m :
+  exists (Dddh <: DDH.Adversary [guess : [cddh, A.choose : 1, A.guess : 1]])
+         (Des <: AdvES [guess: [cguess, A.choose : 1, A.guess : 1]]),
 
    `|Pr[CPA(Hashed_ElGamal, A).main() @ &m : res] - 1%r / 2%r| <=
    `|Pr[DDH0(Dddh).main() @ &m : res] - Pr[DDH1(Dddh).main() @ &m : res]| +
    `|Pr[ES0(Des).main() @ &m : res] - Pr[ES1(Des).main() @ &m : res]|.
 proof.
-  move=> ge0_kc ge0_kg.
   exists (DDHAdv(A)); split; last first.
   exists (ESAdv(A)); split; last first.
   apply (conclusion A _ _ &m).
@@ -232,10 +227,6 @@ proof.
     by proc true : [].
   + proc; call (: true: []); rnd; call(:true: []); do 2!rnd; skip => />.
     rewrite dt_ll dbool_ll /=. smt (ge0_cg ge0_cxor ge0_cdbool ge0_cdt).
-  proc; call (:true; time []); wp; rnd; call(:true; time []); rnd; skip => />.
+  proc; call (:true : []); wp; rnd; call(:true : []); rnd; skip => />.
   rewrite dhkey_ll dbool_ll /=. smt (ge0_cxor ge0_cdbool ge0_chash ge0_cdhkey).
 qed.
-
-print ge0_cdt.
-end Complexity.
-

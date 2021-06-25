@@ -281,19 +281,19 @@ module FunAbsLow = struct
     let fv_inv = PV.fv env mhr inv in
     PV.check_depend env fv_inv top;
 
-    let cost_orcl oi o : form option =
-      match OI.cost oi o with
-      | C_bounded cbd -> Some cbd
-      | C_unbounded   -> None
+    let oi_cost = OI.cost oi in
+    let oi_calls =
+      Mx.union (fun _ _ _ -> assert false) oi_cost.r_params oi_cost.r_abs_calls
+    in
+    let cost_orcl o : c_bnd =
+      oget_c_bnd (Mx.find_opt o oi_calls) oi_cost.r_full
     in
 
-    (* We create the oracles invariants *)
-    let oi_costs = OI.cost_calls oi in
     (* If [f] can call [o] at most zero times, we remove it. *)
     let ois : xpath list =
       let ois = OI.allowed oi in
       List.filter (fun o ->
-          match Mx.find_opt o oi_costs with
+          match Mx.find_opt o oi_calls with
           | None -> assert false
           | Some C_unbounded -> true
           | Some (C_bounded c) -> not (f_equal c f_x0)
@@ -301,6 +301,8 @@ module FunAbsLow = struct
     in
 
     let inv, xc = extend_abs_inv_inf ois inv xc in
+
+    (* We create the oracles invariants *)
 
     let bds, _ = decompose_lambda inv in
     assert (List.length bds = List.length xc);
@@ -334,10 +336,10 @@ module FunAbsLow = struct
         List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
-            let cbd = cost_orcl oi o in
+            let cbd = cost_orcl o in
             match cbd with
-            | None -> ge0
-            | Some cbd ->
+            | C_unbounded -> ge0
+            | C_bounded cbd ->
               let max =
                 if EcIdent.id_equal x k_called then f_int_lt f cbd
                 else f_int_le f cbd
@@ -369,10 +371,10 @@ module FunAbsLow = struct
         List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
-            let cbd = cost_orcl oi o in
+            let cbd = cost_orcl o in
             match cbd with
-            | None -> ge0
-            | Some cbd ->
+            | C_unbounded -> ge0
+            | C_bounded cbd ->
               let max = f_int_le f cbd in
               f_anda ge0 max
           ) xc bds
@@ -384,14 +386,14 @@ module FunAbsLow = struct
     let f_cb = C_bounded f_i1 in
     let f_cost = cost_r (C_bounded f_x0) (Mx.singleton fn_orcl f_cb) true in
     let orcls_cost = List.map (fun o ->
-        let cbd = cost_orcl oi o in
+        let cbd = cost_orcl o in
         (* Cost of a call to [o]. *)
         let _,o_cost = List.find (fun (x, _) -> x_equal x o) xc in
 
         (* Upper-bound on the costs of [o]'s calls. *)
         match cbd with
-        | None -> cost_bind (fun _ _ -> C_unbounded) o_cost
-        | Some cbd -> EcCHoare.choare_sum o_cost (f_i0, cbd)
+        | C_unbounded -> cost_bind (fun _ _ -> C_unbounded) o_cost
+        | C_bounded cbd -> EcCHoare.choare_sum o_cost (f_i0, cbd)
       ) ois
     in
     let total_cost : cost =
