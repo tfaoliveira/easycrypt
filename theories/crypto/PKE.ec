@@ -203,38 +203,28 @@ declare module S: Scheme {-CCA}.
 
 declare module A: CCA_ADV {-CCA, -S}.
 
-equiv eq_CCA_CCAl : CCA(S,A).main ~ CCAl(S,A).main : ={glob S, glob A} ==> ={res, glob S, glob A, CCA.sk, CCA.cstar}.
+equiv eq_CCA_CCAl : 
+  CCA(S,A).main ~ CCAl(S,A).main : 
+    ={glob S, glob A} ==> ={res, glob S, glob A, CCA.sk, CCA.cstar}.
 proof. by sim. qed.
 
 end section.
 
 (* Complexity of the adversary *)
 type cost_A = {
-  cchoose   : int;
   qD_choose : int;
-  cguess    : int;
   qD_guess  : int;
-}.
-
-type cost_S = {
-  ckg  : int;
-  cenc : int;
-  cdec : int;
 }.
 
 abstract theory CCA_q.
 
 op cA : cost_A.
 
-axiom ge0_cA : 0 <= cA.`cchoose /\ 0 <= cA.`qD_choose /\ 0 <= cA.`cguess /\ 0 <= cA.`qD_guess.
+axiom ge0_cA : 0 <= 0 <= cA.`qD_choose /\ 0 <= cA.`qD_guess.
 
 op qD = cA.`qD_choose + cA.`qD_guess.
 
 lemma ge0_qD : 0 <= qD by smt (ge0_cA).
-
-op cS : cost_S.
-
-axiom ge0_cS : 0 <= cS.`ckg /\ 0 <= cS.`cenc /\ 0 <= cS.`cdec.
 
 op ceqocipher : int.
 
@@ -278,54 +268,51 @@ module CCAq (S:Scheme, A:CCA_ADV) = {
 
 section.
 
-declare module S: Scheme [kg  : `{N cS.`ckg},
-                          enc : `{N cS.`cenc}, 
-                          dec : `{N cS.`cdec} ]
-                         {-CCA}.
+declare module S: Scheme {-CCA}.
 
 lemma Sdec_ll : islossless S.dec.
 proof.
-have h : choare [S.dec : true ==> true] time [N cS.`cdec].
-+ by proc true : time [].
+have h : choare [S.dec] time [S.dec : 1].
+by proc true : [].
 conseq h.
 qed.
 
 lemma Senc_ll : islossless S.enc.
 proof.
-have h : choare [S.enc : true ==> true] time [N cS.`cenc].
-+ by proc true : time [].
+have h : choare [S.enc] time [S.enc : 1].
++ by proc true : [].
 conseq h.
 qed.
 
-declare module A : CCA_ADV [choose : `{N cA.`cchoose, #O.dec : cA.`qD_choose},
-                            guess  : `{N cA.`cguess, #O.dec : cA.`qD_guess}]
+declare module A : CCA_ADV [choose : [_, #O.dec : cA.`qD_choose],
+                            guess  : [_, #O.dec : cA.`qD_guess]]
                            {-CCA, -S}.
 
 axiom Achoose_ll : forall (O <: CCA_ORC {-A}), islossless O.dec => islossless A(O).choose.
 axiom Aguess_ll : forall (O <: CCA_ORC {-A}), islossless O.dec => islossless A(O).guess.
 
 
-lemma CCAl_cbound : choare [CCAl(S,A).main : true ==> size CCA.log <= qD] time 
-                          [N (5 + cdbool + (3 + ceqocipher) * cA.`qD_guess +  (3 + ceqocipher) * cA.`qD_choose);
-                            S.kg  : 1; S.enc : 1; S.dec : qD;
-                            A.choose : 1; A.guess  : 1].
+lemma CCAl_cbound : 
+  choare [CCAl(S,A).main : true ==> size CCA.log <= qD] time 
+    [:N (5 + cdbool + (3 + ceqocipher) * cA.`qD_guess +  
+        (3 + ceqocipher) * cA.`qD_choose),
+     S.kg : 1, S.enc : 1, S.dec : qD,
+     A.choose : 1, A.guess : 1].
 proof.
   proc.
-  call (: size CCA.log - cA.`qD_choose <= k; 
-           time
-           [CCAl(S,A).O.dec k : [N (3 + ceqocipher); S.dec: 1]]).
+  call (: size CCA.log - cA.`qD_choose <= k: 
+           [CCAl(S,A).O.dec k : [:N (3 + ceqocipher), S.dec: 1]]).
   + move=> zdec hzdec; proc => //.
     if => //.
     + call (:true);auto => &hr /> /#.
-    by auto => &hr />; smt(ge0_cS).
+    by auto => &hr />; smt().
   wp; call (:true); rnd.
-  call (:size CCA.log <= k; 
-           time
-           [CCAl(S,A).O.dec k : [N (3 + ceqocipher); S.dec: 1]]).
+  call (:size CCA.log <= k : 
+           [CCAl(S,A).O.dec k : [:N (3 + ceqocipher), S.dec: 1]]).
   + move=> zdec hzdec; proc.
     if => //.
     + call (:true); auto => &hr /> /#.
-    by auto => &hr />; smt(ge0_cS).
+    by auto => &hr />; smt().
   call(:true); auto => />. rewrite dbool_ll /=; split. smt().
   rewrite !bigi_constz /= smt(ge0_cA). 
 qed.
