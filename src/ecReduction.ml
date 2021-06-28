@@ -304,53 +304,71 @@ let check_bindings test env subst bd1 bd2 =
 
 
 (* build back the list of call costs *)
-let rec zapp_cost_l calls_l pcalls_l calls =
-  match calls_l, pcalls_l with
-  | [], [] -> calls
+let zapp_cost_l
+    (calls : (xpath * [`U | `B]) list)
+    (c_calls : form list) : c_bnd Mx.t
+  =
+  let rec zapp_c calls c_calls (cost : c_bnd Mx.t) =
+      match calls, c_calls with
+      | [], [] -> cost
 
-  | (xp, C_bounded _) :: calls_l, cb :: pcalls_l ->
-    zapp_cost_l calls_l pcalls_l (Mx.add xp (C_bounded cb) calls)
+      | (xp, `B) :: calls, cb :: c_calls ->
+        zapp_c calls c_calls (Mx.add xp (C_bounded cb) cost)
 
-  | (xp, C_unbounded) :: calls_l, pcalls_l ->
-    zapp_cost_l calls_l pcalls_l (Mx.add xp C_unbounded calls)
+      | (xp, `U) :: calls, _ ->
+        zapp_c calls c_calls (Mx.add xp C_unbounded cost)
 
-  | _ -> assert false
+      | _ -> assert false
 
-let check_cost_l subst (co1 : cost) (co2 : cost) =
-    let calls1 =
-      EcPath.Mx.fold (fun f c calls ->
-          (* we do not normalize [f], as it is not a proper [xpath] *)
-          EcPath.Mx.change (fun old -> assert (old = None); Some c) f calls
-        ) co1.c_calls EcPath.Mx.empty
-    and calls2 =
-      EcPath.Mx.fold (fun f c calls ->
-          let f' = EcPath.x_substm subst.fs_sty.ts_p subst.fs_mp f in
-          (* we do not normalize [f'], as it is not a proper [xpath] *)
-          EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
-        ) co2.c_calls EcPath.Mx.empty in
+  in
+  zapp_c calls c_calls Mx.empty
 
-    let do_c_bnd c1 c2 =
-      match c1, c2 with
-      | C_bounded c1, C_bounded c2 -> [c1, c2]
-      | C_unbounded, C_bounded _
-      | C_bounded _, C_unbounded -> raise NotConv
-      | C_unbounded, C_unbounded -> []
-    in
 
-    let acc =
-      EcPath.Mx.fold2_union (fun _ a1 a2 acc ->
-          let a1 = EcFol.oget_c_bnd a1 co1.c_full
-          and a2 = EcFol.oget_c_bnd a2 co2.c_full in
-          do_c_bnd a1 a2 @ acc
-        ) calls1 calls2 [] in
+let check_cost_l
+    subst
+    (co1 : cost)
+    (co2 : cost) : bool * ((xpath * [`U | `B]) list) * (form * form) list
+  =
+  if co1.c_full <> co2.c_full then raise NotConv;
 
-    let check_self = do_c_bnd co1.c_self co2.c_self in
-    check_self @ acc
+  let calls1 =
+    EcPath.Mx.fold (fun f c calls ->
+        (* we do not normalize [f], as it is not a proper [xpath] *)
+        EcPath.Mx.change (fun old -> assert (old = None); Some c) f calls
+      ) co1.c_calls EcPath.Mx.empty
+  and calls2 =
+    EcPath.Mx.fold (fun f c calls ->
+        let f' = EcPath.x_substm subst.fs_sty.ts_p subst.fs_mp f in
+        (* we do not normalize [f'], as it is not a proper [xpath] *)
+        EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
+      ) co2.c_calls EcPath.Mx.empty in
+
+  let do_c_bnd c1 c2 =
+    match c1, c2 with
+    | C_bounded c1, C_bounded c2 -> Some (c1, c2)
+    | C_unbounded, C_bounded _
+    | C_bounded _, C_unbounded -> raise NotConv
+    | C_unbounded, C_unbounded -> None
+  in
+
+  let f_calls, pforms =
+    EcPath.Mx.fold2_union (fun f a1 a2 (f_calls, pforms) ->
+        let a1 = EcFol.oget_c_bnd a1 co1.c_full
+        and a2 = EcFol.oget_c_bnd a2 co2.c_full in
+        match do_c_bnd a1 a2 with
+        | Some (g1,g2) -> (f, `B) :: f_calls, (g1, g2) :: pforms
+        | None         -> (f, `U) :: f_calls, pforms
+      ) calls1 calls2 ([], [])
+  in
+
+  let check_self = otolist (do_c_bnd co1.c_self co2.c_self) in
+  check_self <> [], f_calls, check_self @ pforms
 
 let check_cost test env subst co1 co2 =
+  let _, _, pforms = check_cost_l subst co1 co2 in
   List.iter
     (fun (a1,a2) -> test env subst a1 a2)
-    (check_cost_l subst co1 co2)
+    pforms
 
 let check_e env s e1 e2 =
   let es = e_subst_init s.fs_freshen s.fs_sty.ts_p
@@ -1328,14 +1346,19 @@ let check_memenv env (x1,mt1) (x2,mt2) =
 
 (* -------------------------------------------------------------------- *)
 type head_sub =
-  | Zquant of quantif * bindings (* in reversed order *)
+  | Zquant   of quantif * bindings (* in reversed order *)
   | Zif
-  | Zmatch of EcTypes.ty
-  | Zlet   of lpattern
+  | Zmatch   of EcTypes.ty
+  | Zlet     of lpattern
   | Zapp
   | Ztuple
-  | Zproj  of int
-  | Zhl    of form (* program logic predicates *)
+  | Zproj    of int
+  | Zhl      of form (* program logic predicates *)
+
+  | Zhl_cost of { form     : form;
+                  has_self : bool;
+                  calls    : (xpath * [`U | `B]) list; }
+  (* program logic cost predicate *)
 
 type stk_elem = {
     se_h      : head_sub;
@@ -1363,9 +1386,11 @@ let zapp args1 args2 ty stk =
     zpush Zapp [] (args1 @ se.se_args1) (args2 @ se.se_args2) se.se_ty stk
   | _ -> zpush Zapp [] args1 args2 ty stk
 
-let ztuple args1 args2 ty stk = zpush Ztuple [] args1 args2 ty stk
-let zproj i ty stk = zpush (Zproj i) [] [] [] ty stk
-let zhl f fs1 fs2 stk = zpush (Zhl f) [] fs1 fs2 f.f_ty stk
+let ztuple args1 args2 ty stk = zpush    Ztuple [] args1 args2     ty stk
+let zproj i ty stk            = zpush (Zproj i) []    []    []     ty stk
+let zhl f fs1 fs2 stk         = zpush   (Zhl f) []   fs1   fs2 f.f_ty stk
+let zhl_cost f has_self calls fs1 fs2 stk =
+  zpush (Zhl_cost {form = f; has_self; calls}) [] fs1 fs2 f.f_ty stk
 
 let zpop ri side f hd =
   let args =
@@ -1402,41 +1427,27 @@ let zpop ri side f hd =
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
 
-  | Zhl {f_node = FcHoareF hfc}, chf_pr :: chf_po :: self_pcalls -> (* FIXME *)
-    let pcalls_len = Mx.cardinal hfc.chf_co.c_calls in
-    let self_pcalls_len = List.length self_pcalls in
-    let self_, pcalls =
-      if self_pcalls_len = pcalls_len
-      then C_unbounded, self_pcalls
-      else
-        let _ = assert (self_pcalls_len = pcalls_len + 1) in
-        match self_pcalls with
-        | self :: pcalls -> C_bounded self, pcalls
-        | _ -> assert false
+  | Zhl_cost {form = {f_node = FcHoareF hfc}; has_self; calls},
+    chf_pr :: chf_po :: self_pcalls ->
+    let self, pcalls =
+      match self_pcalls with
+      | self :: pcalls when has_self -> C_bounded self, pcalls
+      | _ -> C_unbounded, self_pcalls
     in
-
-    let calls =
-      zapp_cost_l (Mx.bindings hfc.chf_co.c_calls) pcalls Mx.empty
-    in
+    let calls = zapp_cost_l calls pcalls in
     f_cHoareF_r
-      { hfc with chf_pr; chf_po; chf_co = cost_r self_ calls hfc.chf_co.c_full }
+      { hfc with chf_pr; chf_po; chf_co = cost_r self calls hfc.chf_co.c_full }
 
-  | Zhl {f_node = FcHoareS hfs}, chs_pr :: chs_po :: self_pcalls -> (* FIXME *)
-    let pcalls_len = Mx.cardinal hfs.chs_co.c_calls in
-    let self_pcalls_len = List.length self_pcalls in
-    let self_, pcalls =
-      if self_pcalls_len = pcalls_len
-      then C_unbounded, self_pcalls
-      else
-        let _ = assert (self_pcalls_len = pcalls_len + 1) in
-        match self_pcalls with
-        | self :: pcalls -> C_bounded self, pcalls
-        | _ -> assert false
+  | Zhl_cost {form = {f_node = FcHoareS hfs}; has_self; calls},
+    chs_pr :: chs_po :: self_pcalls ->
+    let self, pcalls =
+      match self_pcalls with
+      | self :: pcalls when has_self -> C_bounded self, pcalls
+      | _ -> C_unbounded, self_pcalls
     in
-
-    let calls = zapp_cost_l (Mx.bindings hfs.chs_co.c_calls) pcalls Mx.empty in
+    let calls = zapp_cost_l calls pcalls in
     f_cHoareS_r
-      { hfs with chs_pr; chs_po; chs_co = cost_r self_ calls hfs.chs_co.c_full }
+      { hfs with chs_pr; chs_po; chs_co = cost_r self calls hfs.chs_co.c_full }
 
   | _, _ -> assert false
 
@@ -1539,20 +1550,28 @@ let rec conv ri env f1 f2 stk =
   | FcHoareF chf1, FcHoareF chf2
      when EqTest.for_xp env chf1.chf_f chf2.chf_f ->
      begin match check_cost_l Fsubst.f_subst_id chf1.chf_co chf2.chf_co with
-       | fs ->
+       | has_self, calls, fs ->
          let fs1, fs2 = List.split fs in
          conv ri env chf1.chf_pr chf2.chf_pr
-           (zhl f1 (chf1.chf_po :: fs1) (chf2.chf_po :: fs2) stk)
+           (zhl_cost
+              f1 has_self calls
+              (chf1.chf_po :: fs1)
+              (chf2.chf_po :: fs2)
+              stk)
        | exception NotConv -> force_head ri env f1 f2 stk
      end
 
   | FcHoareS chs1, FcHoareS chs2
      when EqTest.for_stmt env chs1.chs_s chs2.chs_s ->
      begin match check_cost_l Fsubst.f_subst_id chs1.chs_co chs2.chs_co with
-       | fs ->
+       | has_self, calls, fs ->
          let fs1, fs2 = List.split fs in
          conv ri env chs1.chs_pr chs2.chs_pr
-           (zhl f1 (chs1.chs_po :: fs1) (chs2.chs_po :: fs2) stk)
+           (zhl_cost
+              f1 has_self calls
+              (chs1.chs_po :: fs1)
+              (chs2.chs_po :: fs2)
+              stk)
        | exception NotConv -> force_head ri env f1 f2 stk
      end
 
