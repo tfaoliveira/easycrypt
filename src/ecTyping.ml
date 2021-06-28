@@ -993,6 +993,10 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
            [mp_in_app]. That is, if [o] is a parameter of [mp_in], then
            we use the fresh mident. *)
         let omod, ofun = EcPath.mget_ident o.x_top, o.x_sub in
+        let omod = match List.assoc_opt omod s_params with
+          | Some (omod, _) -> omod
+          | None -> omod
+        in
         let o = EcPath.xpath (EcPath.mident omod) ofun in
 
         Mx.add o obd c_calls
