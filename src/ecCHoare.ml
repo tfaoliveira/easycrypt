@@ -10,6 +10,8 @@ open EcUtils
 open EcTypes
 open EcFol
 open EcEnv
+open EcModules
+open EcPath
 
 (* -------------------------------------------------------------------- *)
 let oget_c_bnd = EcCoreFol.oget_c_bnd
@@ -21,6 +23,17 @@ let xi_of_c_bnd ~(mode:[`Xint | `Int]) (c : c_bnd) : form =
   | C_bounded f -> match mode with
     | `Xint -> f
     | `Int  -> f_N f
+
+(* -------------------------------------------------------------------- *)
+(* cost of an oracle call (param or abstract) *)
+let cost_orcl (o : xpath) (oi : OI.t) : c_bnd =
+  let oi_cost = OI.cost oi in
+  let c : c_bnd option =
+    try Some (EcPath.Mx.find o oi_cost.r_params) with
+    | Not_found ->
+      EcPath.Mx.find_opt o oi_cost.r_abs_calls
+  in
+  oget_c_bnd c oi_cost.r_full
 
 (* -------------------------------------------------------------------- *)
 (* Function for cost                                                    *)
@@ -109,7 +122,7 @@ let cost_add_self (c : cost) (a : form) : cost =
 type cost_backward_res = [
   | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
                                    whenever [c] holds. *)
-  | `XError of EcPath.xpath          (* error with oracle call [x] *)
+  | `XError of EcPath.xpath     (* error with oracle call [x] *)
   | `FullError                  (* full minus not full *)
 ]
 

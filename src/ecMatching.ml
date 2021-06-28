@@ -1128,7 +1128,7 @@ module FPosition = struct
 
     (* with keys *)
     and kdoit : type a.
-      'b -> (a * form) list -> (a * form) list
+      ptnpos -> (a * form) list -> (a * form) list
       =
       fun ps fps ->
         match Mint.is_empty ps with

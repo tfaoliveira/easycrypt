@@ -27,13 +27,7 @@ val subst_pre :
 (* -------------------------------------------------------------------- *)
 type p_upto_info = pformula * pformula * (pformula option)
 
-type abs_inv_inf = (EcPath.xpath * EcParsetree.ptybinding * EcFol.cost) list
-
-val process_p_abs_inv_inf :
-  EcCoreGoal.tcenv1 ->
-  EcEnv.LDecl.hyps ->
-  p_abs_inv_inf ->
-  abs_inv_inf
+type abs_inv_inf = (EcPath.xpath * EcFol.cost) list
 
 val process_inv_pabs_inv_finfo:
   EcCoreGoal.tcenv1 ->

@@ -174,9 +174,13 @@ let t_fun_def_r tc =
 let t_fun_def = FApi.t_low0 "fun-def" t_fun_def_r
 
 (* -------------------------------------------------------------------- *)
-type abs_inv_inf = (xpath * ptybinding * cost) list
+type abs_inv_inf = (xpath * cost) list
 
-let process_p_abs_inv_inf tc hyps (p_abs_inv_inf : p_abs_inv_inf) : abs_inv_inf =
+let process_p_abs_inv_inf
+    (tc : tcenv1)
+    hyps
+    (p_abs_inv_inf : p_abs_inv_inf) : ptybindings * abs_inv_inf
+  =
   let open EcLocation in
   let open EcParsetree in
   let l = ref [] in
@@ -215,9 +219,11 @@ let process_p_abs_inv_inf tc hyps (p_abs_inv_inf : p_abs_inv_inf) : abs_inv_inf 
     let doco (m,f,c) = (m,f,doc c) in
     let co = List.map doco co in
     let c = TTC.pf_process_cost !!tc hyps [tint] (PC_costs((ci,co), cfull)) in
-    f, bd, c in
+    bd, (f, c)
+  in
 
-  List.map doit p_abs_inv_inf
+  let bds_abs_inv_info = List.map doit p_abs_inv_inf in
+  List.split bds_abs_inv_info
 
 type inv_inf =  [
   | `Std     of cost
@@ -247,8 +253,7 @@ module FunAbsLow = struct
   let extend_abs_inv_inf
       (ois : xpath list)
       (inv : form)
-      (xc : (xpath * EcFol.cost) list)
-    : EcFol.form * (xpath * EcFol.cost) list
+      (xc  : abs_inv_inf) : EcFol.form * abs_inv_inf
     =
     let xc, new_bds =
       List.fold_left (fun (xc, new_bds) o_called ->
@@ -268,12 +273,45 @@ module FunAbsLow = struct
 
     inv, xc
 
+  (* Arguments:
+     - [top] is a functor name (functor means with erased module arguments)
+     - [fn] is the procedure of [top] called
+     - [ois] is the list of available oracles
+     - [oi] contains the cost informations on [top.fn]
+     - [xc] are cost information provided by the user on some of the oracles
+       in [ois]
 
-  let choareF_abs_spec pf_ env f inv (xc : abs_inv_inf)
-    : form * form * cost * form list
+     Computes the total cost of the call to [top.fn] according to [xc]. *)
+  let abs_spec_cost
+      (top : mpath)
+      (fn  : EcSymbols.symbol)
+      (ois : xpath list)
+      (oi  : OI.t)
+      (xc  : abs_inv_inf) : cost
     =
-    let xc = List.map (fun (x,_,z) -> x,z) xc in
+    let fn_orcl = EcPath.xpath top fn in
+    let f_cb = C_bounded f_i1 in
+    let f_cost = cost_r (C_bounded f_x0) (Mx.singleton fn_orcl f_cb) true in
+    let orcls_cost = List.map (fun o ->
+        let cbd = EcCHoare.cost_orcl o oi in
+        (* Cost of a call to [o]. *)
+        let _,o_cost = List.find (fun (x, _) -> x_equal x o) xc in
 
+        (* Upper-bound on the costs of [o]'s calls. *)
+        match cbd with
+        | C_unbounded -> cost_bind (fun _ _ -> C_unbounded) o_cost
+        | C_bounded cbd -> EcCHoare.choare_sum o_cost (f_i0, cbd)
+      ) ois
+    in
+    List.fold_left cost_add f_cost orcls_cost
+
+
+  (* Return: pre, post, total cost, sub-goals *)
+  let choareF_abs_spec pf_ env
+      (f : xpath)
+      (inv : form)
+      (xc : abs_inv_inf) : form * form * cost * form list
+    =
     let (top, _, oi, _) = EcLowPhlGoal.abstract_info env f in
     let ppe = EcPrinting.PPEnv.ofenv env in
 
@@ -281,22 +319,13 @@ module FunAbsLow = struct
     let fv_inv = PV.fv env mhr inv in
     PV.check_depend env fv_inv top;
 
-    let oi_cost = OI.cost oi in
-    let oi_calls =
-      Mx.union (fun _ _ _ -> assert false) oi_cost.r_params oi_cost.r_abs_calls
-    in
-    let cost_orcl o : c_bnd =
-      oget_c_bnd (Mx.find_opt o oi_calls) oi_cost.r_full
-    in
-
     (* If [f] can call [o] at most zero times, we remove it. *)
     let ois : xpath list =
       let ois = OI.allowed oi in
       List.filter (fun o ->
-          match Mx.find_opt o oi_calls with
-          | None -> assert false
-          | Some C_unbounded -> true
-          | Some (C_bounded c) -> not (f_equal c f_x0)
+          match EcCHoare.cost_orcl o oi with
+          | C_unbounded -> true
+          | C_bounded c -> not (f_equal c f_x0)
         ) ois
     in
 
@@ -336,7 +365,7 @@ module FunAbsLow = struct
         List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
-            let cbd = cost_orcl o in
+            let cbd = EcCHoare.cost_orcl o oi in
             match cbd with
             | C_unbounded -> ge0
             | C_bounded cbd ->
@@ -365,13 +394,15 @@ module FunAbsLow = struct
               time sum_cost] *)
     let pre_inv =
       let ks0 = List.map (fun _ -> f_i0) bds in
-      f_app_simpl inv ks0 tbool in
+      f_app_simpl inv ks0 tbool
+    in
+
     let post_inv =
       let call_bounds =
         List.map2 (fun (o,_) (x,_) ->
             let f = f_local x tint in
             let ge0 = f_int_le f_i0 f in
-            let cbd = cost_orcl o in
+            let cbd = EcCHoare.cost_orcl o oi in
             match cbd with
             | C_unbounded -> ge0
             | C_bounded cbd ->
@@ -382,23 +413,8 @@ module FunAbsLow = struct
       let call_bounds = f_ands0_simpl call_bounds in
       f_exists bds (f_and call_bounds pr)
     in
-    let fn_orcl = EcPath.xpath top f.x_sub in
-    let f_cb = C_bounded f_i1 in
-    let f_cost = cost_r (C_bounded f_x0) (Mx.singleton fn_orcl f_cb) true in
-    let orcls_cost = List.map (fun o ->
-        let cbd = cost_orcl o in
-        (* Cost of a call to [o]. *)
-        let _,o_cost = List.find (fun (x, _) -> x_equal x o) xc in
 
-        (* Upper-bound on the costs of [o]'s calls. *)
-        match cbd with
-        | C_unbounded -> cost_bind (fun _ _ -> C_unbounded) o_cost
-        | C_bounded cbd -> EcCHoare.choare_sum o_cost (f_i0, cbd)
-      ) ois
-    in
-    let total_cost : cost =
-      List.fold_left cost_add f_cost orcls_cost
-    in
+    let total_cost : cost = abs_spec_cost top f.x_sub ois oi xc in
 
     (pre_inv, post_inv, total_cost, sg)
 
@@ -417,7 +433,11 @@ module FunAbsLow = struct
     (inv, inv, lossless_hyps env top f.x_sub :: sg)
 
   (* ------------------------------------------------------------------ *)
-  let equivF_abs_spec pf env fl fr inv =
+  let equivF_abs_spec pf env
+      (fl  : xpath)
+      (fr  : xpath)
+      (inv : form) : form * form * form list
+    =
     let (topl, _fl, oil, sigl), (topr, _fr, oir, sigr) =
       EcLowPhlGoal.abstract_info2 env fl fr
     in
@@ -823,13 +843,13 @@ let ensure_none tc = function
   | Some _ ->
     tc_error !!tc "this is not a choare judgement"
 
-let process_inv_pabs_inv_finfo tc inv p_abs_inv_inf =
+let process_inv_pabs_inv_finfo tc inv p_abs_inv_inf : form * abs_inv_inf =
   let hyps = FApi.tc1_hyps tc in
   let env' = LDecl.inv_memenv1 hyps in
-  let abs_inv_info = process_p_abs_inv_inf tc env' p_abs_inv_inf in
-  let bds = List.map (fun (_,bd,_) -> bd) abs_inv_info in
+  let bds, abs_inv_info = process_p_abs_inv_inf tc env' p_abs_inv_inf in
   let inv =
-    EcLocation.mk_loc (EcLocation.loc inv) (EcParsetree.PFlambda(bds, inv)) in
+    EcLocation.mk_loc (EcLocation.loc inv) (EcParsetree.PFlambda(bds, inv))
+  in
   let tints = List.map (fun _ -> tint) bds in
   let tinv  = toarrow tints tbool in
   let inv  = TTC.pf_process_form !!tc env' tinv inv in
@@ -848,7 +868,8 @@ let process_fun_abs inv p_abs_inv_inf tc =
       tc_error !!tc "for calls to abstract procedures in choare judgements, \
                      additional information must be provided";
     let inv, abs_inv_info =
-      process_inv_pabs_inv_finfo tc inv (oget p_abs_inv_inf) in
+      process_inv_pabs_inv_finfo tc inv (oget p_abs_inv_inf)
+    in
     t_choareF_abs inv abs_inv_info tc
 
   and t_bdhoare tc =
