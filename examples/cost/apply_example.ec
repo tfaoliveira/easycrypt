@@ -61,8 +61,6 @@ lemma MyH_compl : choare[MyH.o1] time [:N 1] /\ choare[MyH.o2] time [:N 2]
 
 lemma advcompl_inst : choare[MyAdv(MyH, MyH).a] time [:N 8].
 proof.
-  (* have A := (MyAdv_compl _ _ _ _  *)
-  (*             MyH MyH_compl1 MyH_compl1 MyH MyH_compl2).  *)
   apply (MyAdv_compl _ _ _ _ 
               MyH MyH_compl1 MyH_compl2
               MyH MyH_compl1 MyH_compl2). 

@@ -387,9 +387,7 @@ qed.
 end section.
 
 type adv_cost = {
-  cchoose : int; (* cost *)
   ochoose : int; (* number of call to o *)
-  cguess  : int; (* cost *)
   oguess  : int; (* number of call to o *)
 }.
 
@@ -415,39 +413,38 @@ module Ifind(A:Adv) = {
 }.
 
 
-lemma ex_Reduction (cA:adv_cost) (A<:Adv [choose : `{N cA.`cchoose, #ARO.o : cA.`ochoose},
-                                          guess  : `{N cA.`cguess,  #ARO.o : cA.`oguess}] {-Log, -LRO}) &m:
-  (0 <= cA.`cchoose /\ 0 <= cA.`ochoose /\ 0 <= cA.`cguess /\ 0 <= cA.`oguess) =>
+lemma ex_Reduction (cA:adv_cost) 
+    (A<:Adv [choose : [_, #ARO.o : cA.`ochoose],
+             guess  : [_, #ARO.o : cA.`oguess]] {-Log, -LRO}) &m:
+  (0 <= cA.`ochoose /\ 0 <= cA.`oguess) =>
   (forall (O <: POracle{-A}), islossless O.o => islossless A(O).guess) =>
   let qH = cA.`ochoose + cA.`oguess in
   let cB = 
     4 + (4 + cf + ceqrand) * (cA.`ochoose + cA.`oguess) + cdptxt + 
-    (3 + cdptxt + cget qH + cset qH + cin qH) * (cA.`ochoose + cA.`oguess) +
-    cA.`cguess + cA.`cchoose in
-  exists (B <: Inverter [invert : `{N cB} ]),
+    (3 + cdptxt + cget qH + cset qH + cin qH) * (cA.`ochoose + cA.`oguess) in
+  exists (B <: Inverter [invert : [cB, A.guess : 1, A.choose : 1] ]),
     Pr[CPA(BR93(LRO), A(LRO)).main() @ &m : res] - 1%r/2%r <= Pr[OW(B).main() @ &m: res].  
 proof.
   move=> cA_pos A_choose_ll qH.
   exists (Ifind(A)); split. 
   (* Proof of the complexity *)
   + proc.
-    seq 5 : (size Log.qs <= cA.`ochoose + cA.`oguess) time [N((4 + cf + ceqrand) * (cA.`ochoose + cA.`oguess) + 2)] => //.
+    seq 5 : (size Log.qs <= cA.`ochoose + cA.`oguess) time [:N((4 + cf + ceqrand) * (cA.`ochoose + cA.`oguess) + 2)] => //.
     + wp.
-      call (_: size Log.qs- cA.`ochoose <= k /\ bounded LRO.m (size Log.qs);
-           time
-           [Log(LRO).o k : [N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
+      call (_: size Log.qs- cA.`ochoose <= k /\ bounded LRO.m (size Log.qs) :
+           [Log(LRO).o k : [:N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
       + move=> zo hzo; proc; inline *.
         wp := (bounded LRO.m qH).
         rnd; auto => &hr />; rewrite dptxt_ll /=; smt (cset_pos bounded_set).
-      rnd; call (_: size Log.qs = k /\ bounded LRO.m (size Log.qs);
-           time [Log(LRO).o k : [N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
+      rnd; call (_: size Log.qs = k /\ bounded LRO.m (size Log.qs) :
+            [Log(LRO).o k : [:N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
       + move=> zo hzo; proc; inline *.
         wp := (bounded LRO.m qH).
         by rnd;auto => &hr />; rewrite dptxt_ll /=; smt(cset_pos bounded_set).
       inline *; auto => />; split => *.
       + smt (bounded_empty dptxt_ll size_ge0 size_eq0).
       rewrite !bigi_constz /= /#.
-    while (true) (size Log.qs) (cA.`ochoose + cA.`oguess) time [fun _ => N(2 + cf + ceqrand)].
+    while (true) (size Log.qs) (cA.`ochoose + cA.`oguess) time [:fun _ => N(2 + cf + ceqrand)].
     + move => z /=; auto => &hr H /=; smt (size_ge0).
     + move => &hr; smt (size_ge0 size_eq0). 
     + done.
