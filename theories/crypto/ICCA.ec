@@ -59,7 +59,7 @@ module Real : ICCA_Oracle = {
   }
 
   proc enc (m : plaintext) : ciphertext = {
-    var e,c;
+    var e, c;
 
     e <$ dencseed;
     c <- enc(m, pk, e);
@@ -91,7 +91,7 @@ module Ideal : ICCA_Oracle = {
   }
 
   proc enc (m : plaintext) : ciphertext = {
-    var e,c;
+    var e, c;
 
     e <$ dencseed;
     c <- enc(m0, pk, e);
@@ -127,7 +127,7 @@ module Real' : ICCA_Oracle = {
   }
 
   proc enc (m : plaintext) : ciphertext = {
-    var e,c;
+    var e, c;
 
     e <$ dencseed;
     c <- enc(m, pk, e);
@@ -242,8 +242,30 @@ section.
 
 declare module A : Adversary {Real, Real', Ideal, C.Wrap, B, CountCCA, CountICCA}.
 
-axiom A_bound (O <: ICCA_Oracle {CountICCA}) : hoare [CountAdv(A, O).main :
+axiom A_bound (O <: ICCA_Oracle {A, CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
+
+equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
+  C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
+  ={glob A, glob O} /\ B.cs{2} = [] /\ arg{1} = B.pk{2} ==>
+  CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
+proof.
+proc. inline*; sp; auto.
+call (: ={glob O, glob B} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
+        CountCCA.nenc{1} = CountICCA.nenc{2}) => //.
+- by proc; auto.
+- proc; inline *; sp; auto; call (: true); auto => /> /#.
+- proc; inline *; sp; auto.
+  if; auto => />; 2: by smt().
+  sp; call (: true); auto => /> /#.
+qed.
+
+lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A, B}) :
+  hoare [C.CountAdv(B(A), O).main :
+    true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
+proof.
+by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
+qed.
 
 equiv Real_Real' :
   Game(Real, A).main ~ Game(Real', A).main : ={glob A} ==> ={res}.
@@ -317,37 +339,15 @@ call (: ={pk, sk}(Real,Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
 - wp; rnd; skip => /> /#.
 qed.
 
-equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
-  C.CountAdv(B(A), O).main ~ CountAdv(A, B(A, O).O').main :
-  ={glob A, glob O} /\ B.cs{2} = [] /\ arg{1} = B.pk{2} ==>
-  CountCCA.ndec{1} <= CountICCA.ndec{2} /\ CountCCA.nenc{1} = CountICCA.nenc{2}.
-proof.
-proc. inline*; sp; auto.
-call (: ={glob O, glob B} /\ CountCCA.ndec{1} <= CountICCA.ndec{2} /\
-        CountCCA.nenc{1} = CountICCA.nenc{2}) => //.
-- by proc; auto.
-- proc; inline *; sp; auto; call (: true); auto => /> /#.
-- proc; inline *; sp; auto.
-  if; auto => />; 2: by smt().
-  sp; call (: true); auto => /> /#.
-qed.
-
-lemma B_bound (O <: CCA_Oracle{CountCCA, CountICCA, A, B}) :
-  hoare [C.CountAdv(B(A), O).main :
-    true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
-proof.
-by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
-qed.
-
 lemma ICCA_CCALR &m :
-  Pr[Game(Real,A).main() @ &m : res] - Pr[Game(Ideal,A).main() @ &m : res] =
+  Pr[Game(Real, A).main() @ &m : res] - Pr[Game(Ideal, A).main() @ &m : res] =
   Pr[CCA_L(S, B(A)).main() @ &m : res] - Pr[CCA_R(S, B(A)).main() @ &m : res].
 proof.
-have -> : Pr[Game(Real,A).main() @ &m : res] = Pr[Game(Real',A).main() @ &m : res].
+have -> : Pr[Game(Real, A).main() @ &m : res] = Pr[Game(Real', A).main() @ &m : res].
 - byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real_Real'.
-have -> : Pr[Game(Real',A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : res].
+have -> : Pr[Game(Real', A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : res].
 - byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real'_CCA_L.
-have -> : Pr[Game(Ideal,A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
+have -> : Pr[Game(Ideal, A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
 byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Ideal_CCA_R.
 qed.
 
