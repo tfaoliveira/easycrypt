@@ -15,6 +15,7 @@ open EcPV
 
 open EcCoreGoal
 open EcLowPhlGoal
+open EcLowGoal
 
 module Sx  = EcPath.Sx
 module TTC = EcProofTyping
@@ -80,6 +81,41 @@ let t_hoare_while_r inv tc =
   let concl = f_hoareS_r { hs with hs_s = s; hs_po=post} in
 
   FApi.xmutate1 tc `While [b_concl; concl]
+
+(* -------------------------------------------------------------------- *)
+let check_single_stmt tc s =
+  if not (List.is_empty s.s_node) then
+    tc_error !!tc  "only single loop statements are accepted"
+
+let t_ehoare_while_core tc =
+  let hyps = FApi.tc1_hyps tc in
+  let hs = tc1_as_ehoareS tc in
+  let (e, c), s = tc1_last_while tc hs.ehs_s in
+  check_single_stmt tc s;
+  let m = EcMemory.memory hs.ehs_m in
+  let e = form_of_expr m e in
+  if not (EcReduction.is_conv hyps hs.ehs_epr hs.ehs_epo) then
+    tc_error !!tc "ehoare while rule: wrong eform";
+  if not (EcReduction.is_conv hyps hs.ehs_po (f_and hs.ehs_pr (f_not e))) then
+    tc_error !!tc "ehoare while rule: wrong post-condition";
+  (* the body preserves the invariant *)
+  let b_pre  = f_and_simpl hs.ehs_pr e in
+  let b_concl = f_eHoareS hs.ehs_m b_pre hs.ehs_epr c hs.ehs_pr hs.ehs_epr in
+  FApi.xmutate1 tc `While [b_concl]
+
+let t_ehoare_while inv einv tc =
+  let hs = tc1_as_ehoareS tc in
+  let (e,_), _ = tc1_last_while tc hs.ehs_s in
+  let m = EcMemory.memory hs.ehs_m in
+  let e = form_of_expr m e in
+  let tc =
+    FApi.t_rotate `Left 1 (EcPhlApp.t_ehoare_app (0, `ByPos (List.length hs.ehs_s.s_node - 1)) inv einv tc) in
+  FApi.t_sub
+    [(EcPhlConseq.t_ehoareS_conseq inv einv (f_and inv (f_not e)) einv) @+
+       [t_trivial;
+        t_id;
+        t_ehoare_while_core ];
+     t_id] tc
 
 (* -------------------------------------------------------------------- *)
 let t_bdhoare_while_r inv vrnt tc =
@@ -169,8 +205,7 @@ let t_bdhoare_while_rev_geq_r inv vrnt k eps tc =
 
   let (lp_guard_exp, lp_body), rem_s = tc1_last_while tc bhs.bhs_s in
 
-  if not (List.is_empty rem_s.s_node) then
-    tc_error !!tc  "only single loop statements are accepted";
+  check_single_stmt tc rem_s;
 
   let lp_guard = form_of_expr (EcMemory.memory mem) lp_guard_exp in
   let bound    = bhs.bhs_bd in
@@ -340,28 +375,35 @@ let process_while side winfos tc =
   match (FApi.tc1_goal tc).f_node with
   | FhoareS _ -> begin
       match vrnt with
-      | None -> t_hoare_while (TTC.tc1_process_Xhl_formula tc phi) tc
+      | None ->
+        t_hoare_while
+          (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
+          tc
       | _    -> tc_error !!tc "invalid arguments"
     end
+
+  | FeHoareS _ ->
+      let inv, einv = TTC.tc1_process_Xhl_formula_xreal tc (get_double tc phi) in
+      t_ehoare_while inv einv tc
 
   | FbdHoareS _ -> begin
       match vrnt, bds with
       | Some vrnt, None ->
           t_bdhoare_while
-            (TTC.tc1_process_Xhl_formula tc phi)
+            (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
             (TTC.tc1_process_Xhl_form tc tint vrnt)
             tc
 
       | Some vrnt, Some (k, eps) ->
         t_bdhoare_while_rev_geq
-          (TTC.tc1_process_Xhl_formula tc phi)
+          (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
           (TTC.tc1_process_Xhl_form    tc tint vrnt)
           (TTC.tc1_process_Xhl_form    tc tint k)
           (TTC.tc1_process_Xhl_form    tc treal eps)
           tc
 
       | None, None ->
-          t_bdhoare_while_rev (TTC.tc1_process_Xhl_formula tc phi) tc
+          t_bdhoare_while_rev (TTC.tc1_process_Xhl_formula tc (get_single tc phi)) tc
 
       | None, Some _ -> tc_error !!tc "invalid arguments"
   end
@@ -369,12 +411,12 @@ let process_while side winfos tc =
   | FequivS _ -> begin
       match side, vrnt with
       | None, None ->
-          t_equiv_while (TTC.tc1_process_prhl_formula tc phi) tc
+          t_equiv_while (TTC.tc1_process_prhl_formula tc (get_single tc phi)) tc
 
       | Some side, Some vrnt ->
           t_equiv_while_disj side
             (TTC.tc1_process_prhl_form    tc tint vrnt)
-            (TTC.tc1_process_prhl_formula tc phi)
+            (TTC.tc1_process_prhl_formula tc (get_single tc phi))
             tc
 
       | _ -> tc_error !!tc "invalid arguments"
@@ -431,6 +473,7 @@ module ASyncWhile = struct
 
       | Fglob     _
       | FhoareF   _ | FhoareS   _
+      | FeHoareF _  | FeHoareS _
       | FbdHoareF _ | FbdHoareS _
       | FequivF   _ | FequivS   _
       | FeagerF   _ | Fpr       _ -> raise CannotTranslate

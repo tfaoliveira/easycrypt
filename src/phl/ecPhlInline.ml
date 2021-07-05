@@ -181,6 +181,14 @@ let t_inline_hoare_r ~use_tuple sp tc =
   FApi.xmutate1 tc `Inline [concl]
 
 (* -------------------------------------------------------------------- *)
+let t_inline_ehoare_r ~use_tuple sp tc =
+  let hoare      = tc1_as_ehoareS tc in
+  let (me, stmt) = LowInternal.inline ~use_tuple tc hoare.ehs_m sp hoare.ehs_s in
+  let concl      = f_eHoareS_r { hoare with ehs_m = me; ehs_s = stmt; } in
+
+  FApi.xmutate1 tc `Inline [concl]
+
+(* -------------------------------------------------------------------- *)
 let t_inline_bdhoare_r ~use_tuple sp tc =
   let hoare      = tc1_as_bdhoareS tc in
   let (me, stmt) = LowInternal.inline ~use_tuple tc hoare.bhs_m sp hoare.bhs_s in
@@ -205,6 +213,7 @@ let t_inline_equiv_r ~use_tuple side sp tc =
 
 (* -------------------------------------------------------------------- *)
 let t_inline_hoare   ~use_tuple = FApi.t_low1 "hoare-inline"   (t_inline_hoare_r ~use_tuple)
+let t_inline_ehoare  ~use_tuple = FApi.t_low1 "hoare-inline"   (t_inline_ehoare_r ~use_tuple)
 let t_inline_bdhoare ~use_tuple = FApi.t_low1 "bdhoare-inline" (t_inline_bdhoare_r ~use_tuple)
 let t_inline_equiv   ~use_tuple = FApi.t_low2 "equiv-inline"   (t_inline_equiv_r ~use_tuple)
 
@@ -348,6 +357,15 @@ let rec process_inline_all ~use_tuple side fs tc =
       | [] -> t_id tc
       | sp -> FApi.t_seq
                 (t_inline_hoare ~use_tuple sp)
+                (process_inline_all ~use_tuple side fs)
+                tc
+  end
+
+  | FeHoareS hs, None -> begin
+      match HiInternal.pat_all env fs hs.ehs_s with
+      | [] -> t_id tc
+      | sp -> FApi.t_seq
+                (t_inline_ehoare ~use_tuple sp)
                 (process_inline_all ~use_tuple side fs)
                 tc
   end

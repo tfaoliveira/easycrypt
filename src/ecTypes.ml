@@ -132,6 +132,8 @@ let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr [ty]
 let treal      = tconstr EcCoreLib.CI_Real .p_real  []
 let tcpred ty  = tfun ty tbool
 
+let txreal    = tconstr EcCoreLib.CI_Xreal.p_xreal []
+
 let ttuple lt    =
   match lt with
   | []  -> tunit

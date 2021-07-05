@@ -8,7 +8,6 @@
 
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcParsetree
 open EcModules
 open EcFol
 
@@ -53,6 +52,51 @@ module LowInternal = struct
         (lets, EcFol.f_and_simpl phi f)
 
     | _ -> raise No_wp
+
+  let rec ewp_stmt env m (stmt: EcModules.instr list) letspf =
+    match stmt with
+    | [] -> stmt, letspf
+    | i :: stmt' ->
+        try
+          let letspf = ewp_instr env m i letspf in
+          ewp_stmt env m stmt' letspf
+        with No_wp -> (stmt, letspf)
+
+    and ewp_instr env m i letspf =
+      match i.i_node with
+      | Sasgn (lv, e) ->
+        wp_asgn_aux m lv e letspf
+
+      | Srnd(lv, distr) ->
+        let (lets,(p,f)) = letspf in
+        let ty_distr = proj_distr_ty env (EcTypes.e_ty distr) in
+        let x_id = EcIdent.create (symbol_of_lv lv) in
+        let x = f_local x_id ty_distr in
+        let distr = EcFol.form_of_expr m distr in
+        let let1 = lv_subst m lv x in
+        let lets = let1 :: lets in
+        let p = mk_let_of_lv_substs env (lets,p) in
+        let f = mk_let_of_lv_substs env (lets,f) in
+        let p = f_forall [(x_id,GTty ty_distr)] (f_imp (f_in_supp x distr) p) in
+        let f = f_Ep ty_distr distr (f_lambda [(x_id,GTty ty_distr)] f) in
+        ([], (p, f))
+
+      | Sif(e, s1, s2) ->
+        let r1,(lets1,(p1,f1)) = ewp_stmt env m (List.rev s1.s_node) letspf in
+        let r2,(lets2,(p2,f2)) = ewp_stmt env m (List.rev s2.s_node) letspf in
+        if List.is_empty r1 && List.is_empty r2 then begin
+          let p1 = mk_let_of_lv_substs env (lets1,p1) in
+          let f1 = mk_let_of_lv_substs env (lets1,f1) in
+          let p2 = mk_let_of_lv_substs env (lets2,p2) in
+          let f2 = mk_let_of_lv_substs env (lets2,f2) in
+          let e = form_of_expr m e in
+          let p = f_if e p1 p2 in
+          let f = f_if e f1 f2 in
+          ([], (p, f))
+        end else raise No_wp
+
+      | _ -> raise No_wp
+
 end
 
 let wp ?(uselet=true) ?(onesided=false) env m s post =
@@ -61,6 +105,14 @@ let wp ?(uselet=true) ?(onesided=false) env m s post =
   in
   let pre = mk_let_of_lv_substs ~uselet env letsf in
   (List.rev r, pre)
+
+let ewp ?(uselet=true) env m s post epost =
+  let r,(lets,(p,f)) =
+    LowInternal.ewp_stmt env m (List.rev s.s_node) ([],(post, epost))
+  in
+  let pre = mk_let_of_lv_substs ~uselet env (lets,p) in
+  let epre = mk_let_of_lv_substs ~uselet env (lets,f) in
+  (List.rev r, (pre, epre))
 
 (* -------------------------------------------------------------------- *)
 module TacInternal = struct
@@ -78,6 +130,18 @@ module TacInternal = struct
     check_wp_progress tc i hs.hs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
     let concl = f_hoareS_r { hs with hs_s = s; hs_po = post} in
+    FApi.xmutate1 tc `Wp [concl]
+
+  let t_ehoare_wp ?(uselet=true) i tc =
+    let env = FApi.tc1_env tc in
+    let hs = tc1_as_ehoareS tc in
+    let (s_hd, s_wp) = o_split i hs.ehs_s in
+    let m = EcMemory.memory hs.ehs_m in
+    let s_wp = EcModules.stmt s_wp in
+    let (s_wp, (post, epost)) = ewp ~uselet env m s_wp hs.ehs_po hs.ehs_epo in
+    check_wp_progress tc i hs.ehs_s s_wp;
+    let s = EcModules.stmt (s_hd @ s_wp) in
+    let concl = f_eHoareS_r { hs with ehs_s = s; ehs_po = post; ehs_epo = epost} in
     FApi.xmutate1 tc `Wp [concl]
 
   let t_bdhoare_wp ?(uselet=true) i tc =
@@ -115,20 +179,22 @@ end
 let t_wp_r ?(uselet=true) k g =
   let module T = TacInternal in
 
-  let (th, tbh, te) =
+  let (th, teh, tbh, te) =
     match k with
     | None -> (Some (T.t_hoare_wp   ~uselet None),
+               Some (T.t_ehoare_wp  ~uselet None),
                Some (T.t_bdhoare_wp ~uselet None),
                Some (T.t_equiv_wp   ~uselet None))
 
     | Some (Single i) -> (Some (T.t_hoare_wp   ~uselet (Some i)),
+                          Some (T.t_ehoare_wp  ~uselet (Some i)),
                           Some (T.t_bdhoare_wp ~uselet (Some i)),
                           None (* ------------------- *))
 
     | Some (Double (i, j)) ->
-        (None, None, Some (T.t_equiv_wp ~uselet (Some (i, j))))
+        (None, None, None, Some (T.t_equiv_wp ~uselet (Some (i, j))))
 
   in
-    t_hS_or_bhS_or_eS ?th ?tbh ?te g
+    t_hS_or_bhS_or_eS ?th ?teh ?tbh ?te g
 
 let t_wp ?(uselet=true) = FApi.t_low1 "wp" (t_wp_r ~uselet)

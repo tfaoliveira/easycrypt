@@ -69,6 +69,9 @@ and f_node =
   | FbdHoareF of bdHoareF (* $hr / $hr *)
   | FbdHoareS of bdHoareS (* $hr  / $hr   *)
 
+  | FeHoareF of eHoareF (* $hr / $hr *)
+  | FeHoareS of eHoareS
+
   | FequivF of equivF (* $left,$right / $left,$right *)
   | FequivS of equivS (* $left,$right / $left,$right *)
 
@@ -113,6 +116,21 @@ and hoareS = {
   hs_s   : stmt;
   hs_po  : form;
 }
+
+and eHoareF = {
+  ehf_pr  : form;
+  ehf_epr : form;
+  ehf_f   : EcPath.xpath;
+  ehf_po  : form;
+  ehf_epo : form;
+}
+and eHoareS = {
+  ehs_m   : EcMemory.memenv;
+  ehs_pr  : form;
+  ehs_epr : form;
+  ehs_s   : stmt;
+  ehs_po  : form;
+  ehs_epo : form; }
 
 and bdHoareF = {
   bhf_pr  : form;
@@ -195,6 +213,13 @@ val f_hoareS_r : hoareS -> form
 
 val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> EcModules.stmt -> form -> form
+
+(* soft-constructors - expected hoare *)
+val f_eHoareF_r : eHoareF -> form
+val f_eHoareS_r : eHoareS -> form
+
+val f_eHoareF : form -> form -> xpath -> form -> form -> form
+val f_eHoareS : memenv -> form -> form -> EcModules.stmt -> form -> form -> form
 
 (* soft-constructors - bd hoare *)
 val hoarecmp_opp : hoarecmp -> hoarecmp
@@ -298,6 +323,9 @@ module FSmart : sig
   val f_glob     : (form * a_glob   ) -> a_glob    -> form
   val f_hoareF   : (form * hoareF   ) -> hoareF    -> form
   val f_hoareS   : (form * hoareS   ) -> hoareS    -> form
+  val f_eHoareF  : (form * eHoareF  ) -> eHoareF   -> form
+  val f_eHoareS  : (form * eHoareS  ) -> eHoareS   -> form
+
   val f_bdHoareF : (form * bdHoareF ) -> bdHoareF  -> form
   val f_bdHoareS : (form * bdHoareS ) -> bdHoareS  -> form
   val f_equivF   : (form * equivF   ) -> equivF    -> form
@@ -351,6 +379,9 @@ val destr_equivS    : form -> equivS
 val destr_eagerF    : form -> eagerF
 val destr_hoareF    : form -> hoareF
 val destr_hoareS    : form -> hoareS
+val destr_eHoareF   : form -> eHoareF
+val destr_eHoareS   : form -> eHoareS
+
 val destr_bdHoareF  : form -> bdHoareF
 val destr_bdHoareS  : form -> bdHoareS
 val destr_pr        : form -> pr
@@ -383,6 +414,8 @@ val is_equivS    : form -> bool
 val is_eagerF    : form -> bool
 val is_hoareF    : form -> bool
 val is_hoareS    : form -> bool
+val is_eHoareF   : form -> bool
+val is_eHoareS   : form -> bool
 val is_bdHoareF  : form -> bool
 val is_bdHoareS  : form -> bool
 val is_pr        : form -> bool

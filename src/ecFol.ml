@@ -118,6 +118,17 @@ let f_decimal (n, (l, f)) =
   then fct
   else f_real_add (f_real_of_int (f_int n)) fct
 
+(* soft-constructor - xreal *)
+let fop_xreal_le = f_op CI.CI_Xreal.p_xle [] (toarrow [txreal; txreal] tbool)
+let fop_interp_ehoare_form =
+  f_op CI.CI_Xreal.p_interp_form [] (toarrow [tbool; txreal] txreal)
+let fop_Ep ty =
+  f_op CI.CI_Xreal.p_Ep [ty] (toarrow [tdistr ty; toarrow [ty] txreal] txreal)
+
+let f_xreal_le f1 f2 = f_app fop_xreal_le [f1; f2] tbool
+let f_interp_ehoare_form f1 f2 = f_app fop_interp_ehoare_form [f1; f2] txreal
+let f_Ep ty d f = f_app (fop_Ep ty) [d; f] txreal
+
 (* -------------------------------------------------------------------- *)
 let tmap aty bty =
   tconstr CI.CI_Map.p_map [aty; bty]

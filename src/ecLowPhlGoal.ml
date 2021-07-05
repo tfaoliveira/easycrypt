@@ -27,6 +27,7 @@ type hlform = [`Any | `Pred | `Stmt]
 
 type hlkind = [
   | `Hoare  of hlform
+  | `EHoare of hlform
   | `PHoare of hlform
   | `Equiv  of hlform
   | `Eager
@@ -35,12 +36,12 @@ type hlkind = [
 and hlkinds = hlkind list
 
 let hlkinds_Xhl_r (form : hlform) : hlkinds =
-  [`Hoare form; `PHoare form; `Equiv form]
+  [`Hoare form; `EHoare form; `PHoare form; `Equiv form]
 
 let hlkinds_Xhl = hlkinds_Xhl_r `Any
 
 let hlkinds_all : hlkinds =
-  [`Hoare `Any; `PHoare `Any; `Equiv `Any; `Eager]
+  [`Hoare `Any; `EHoare `Any; `PHoare `Any; `Equiv `Any; `Eager]
 
 (* -------------------------------------------------------------------- *)
 let tc_error_noXhl ?(kinds : hlkinds option) pf =
@@ -51,6 +52,7 @@ let tc_error_noXhl ?(kinds : hlkinds option) pf =
     let kind, fm =
       match kind with
       | `Hoare  fm -> ("hoare" , fm)
+      | `EHoare fm -> ("ehoare", fm)
       | `PHoare fm -> ("phoare", fm)
       | `Equiv  fm -> ("equiv" , fm)
       | `Eager     -> ("eager" , `Any)
@@ -150,6 +152,8 @@ let tc1_pos_last_assert tc s = pf_pos_last_assert !!tc s
 (* -------------------------------------------------------------------- *)
 let pf_as_hoareF   pe c = as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
 let pf_as_hoareS   pe c = as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe
+let pf_as_ehoareF  pe c = as_phl (`Hoare  `Pred) (fun () -> destr_eHoareF  c) pe
+let pf_as_ehoareS  pe c = as_phl (`Hoare  `Stmt) (fun () -> destr_eHoareS  c) pe
 let pf_as_bdhoareF pe c = as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
 let pf_as_bdhoareS pe c = as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
 let pf_as_equivF   pe c = as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
@@ -159,6 +163,9 @@ let pf_as_eagerF   pe c = as_phl `Eager          (fun () -> destr_eagerF   c) pe
 (* -------------------------------------------------------------------- *)
 let tc1_as_hoareF   tc = pf_as_hoareF   !!tc (FApi.tc1_goal tc)
 let tc1_as_hoareS   tc = pf_as_hoareS   !!tc (FApi.tc1_goal tc)
+let tc1_as_ehoareF  tc = pf_as_ehoareF  !!tc (FApi.tc1_goal tc)
+let tc1_as_ehoareS  tc = pf_as_ehoareS  !!tc (FApi.tc1_goal tc)
+
 let tc1_as_bdhoareF tc = pf_as_bdhoareF !!tc (FApi.tc1_goal tc)
 let tc1_as_bdhoareS tc = pf_as_bdhoareS !!tc (FApi.tc1_goal tc)
 let tc1_as_equivF   tc = pf_as_equivF   !!tc (FApi.tc1_goal tc)
@@ -170,6 +177,7 @@ let tc1_get_stmt side tc =
   let concl = FApi.tc1_goal tc in
   match side, concl.f_node with
   | None, FhoareS hs -> hs.hs_s
+  | None, FeHoareS hs -> hs.ehs_s
   | None, FbdHoareS hs -> hs.bhs_s
   | Some _ , (FhoareS _ | FbdHoareS _) ->
       tc_error_noXhl ~kinds:[`Hoare `Stmt; `PHoare `Stmt] !!tc
@@ -242,23 +250,27 @@ let o_split ?rev i s =
   with Zpr.InvalidCPos -> raise (InvalidSplit (oget i))
 
 (* -------------------------------------------------------------------- *)
-let t_hS_or_bhS_or_eS ?th ?tbh ?te tc =
+let t_hS_or_bhS_or_eS ?th ?teh ?tbh ?te tc =
   match (FApi.tc1_goal tc).f_node with
   | FhoareS   _ when EcUtils.is_some th  -> (oget th ) tc
+  | FeHoareS  _ when EcUtils.is_some teh -> (oget teh) tc
+
   | FbdHoareS _ when EcUtils.is_some tbh -> (oget tbh) tc
   | FequivS   _ when EcUtils.is_some te  -> (oget te ) tc
 
   | _ ->
     let kinds = List.flatten [
          if EcUtils.is_some th  then [`Hoare  `Stmt] else [];
+         if EcUtils.is_some teh then [`EHoare  `Stmt] else [];
          if EcUtils.is_some tbh then [`PHoare `Stmt] else [];
          if EcUtils.is_some te  then [`Equiv  `Stmt] else []]
 
     in tc_error_noXhl ~kinds !!tc
 
-let t_hF_or_bhF_or_eF ?th ?tbh ?te ?teg tc =
+let t_hF_or_bhF_or_eF ?th ?teh ?tbh ?te ?teg tc =
   match (FApi.tc1_goal tc).f_node with
   | FhoareF   _ when EcUtils.is_some th  -> (oget th ) tc
+  | FeHoareF  _ when EcUtils.is_some teh -> (oget teh) tc
   | FbdHoareF _ when EcUtils.is_some tbh -> (oget tbh) tc
   | FequivF   _ when EcUtils.is_some te  -> (oget te ) tc
   | FeagerF   _ when EcUtils.is_some teg -> (oget teg) tc
@@ -584,3 +596,12 @@ let t_code_transform (side : oside) ?(bdhoare = false) cpos tr tx tc =
       in
 
       FApi.xmutate1 tc (tr (Some side)) (cs @ [concl])
+
+(* -------------------------------------------------------------------- *)
+let get_single tc = function
+  | Single f -> f
+  | Double _ -> tc_error !!tc "a single formula is expected here, can't use \"p | f\""
+
+let get_double tc = function
+  | Single _ -> tc_error !!tc "a double formula is expected here, use \"p | f\""
+  | Double (p, f) -> p, f

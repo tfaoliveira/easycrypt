@@ -58,6 +58,10 @@ val f_real_div : form -> form -> form
 val f_real_abs : form -> form
 val f_decimal  : zint * (int * zint) -> form
 
+(* soft-constructor - xreal *)
+val f_xreal_le : form -> form -> form
+val f_interp_ehoare_form : form -> form -> form
+val f_Ep : EcTypes.ty -> form -> form -> form
 (* soft-constructor - map *)
 val f_map_cst : EcTypes.ty -> form -> form
 val f_map_get : form -> form -> EcTypes.ty -> form

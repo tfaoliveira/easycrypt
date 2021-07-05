@@ -1016,6 +1016,12 @@ module FPosition = struct
               let (hf_pr, hf_po) = as_seq2 (doit p [hf.hf_pr; hf.hf_po]) in
               f_hoareF_r { hf with hf_pr; hf_po; }
 
+          | FeHoareF hf ->
+              let (ehf_pr, ehf_epr, ehf_po, ehf_epo) =
+                as_seq4 (doit p [hf.ehf_pr; hf.ehf_epr; hf.ehf_po; hf.ehf_epo])
+              in
+              f_eHoareF_r { hf with ehf_pr; ehf_epr; ehf_po; ehf_epo; }
+
           | FbdHoareF hf ->
               let sub = doit p [hf.bhf_pr; hf.bhf_po; hf.bhf_bd] in
               let (bhf_pr, bhf_po, bhf_bd) = as_seq3 sub in
@@ -1026,6 +1032,7 @@ module FPosition = struct
               f_equivF_r { ef with ef_pr; ef_po; }
 
           | FhoareS   _ -> raise InvalidPosition
+          | FeHoareS  _ -> raise InvalidPosition
           | FbdHoareS _ -> raise InvalidPosition
           | FequivS   _ -> raise InvalidPosition
           | FeagerF   _ -> raise InvalidPosition

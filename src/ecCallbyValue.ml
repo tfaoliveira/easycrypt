@@ -184,6 +184,7 @@ and norm_lambda (st : state) (f : form) =
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
   | Fglob   _ | Fpvar   _ | Fop       _
   | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
+  | FeHoareF _ | FeHoareS _
   | FequivF _ | FequivS _ | FeagerF   _ | Fpr _
 
     -> f
@@ -486,6 +487,28 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let hs_s  = norm_stmt s hs.hs_s in
     let hs_m  = norm_me s hs.hs_m in
     f_hoareS_r { hs_pr; hs_po; hs_s; hs_m }
+
+  | FeHoareF hf ->
+    assert (is_Aempty args);
+    assert (not (Subst.has_mem s mhr));
+    assert (not (Subst.has_mem s mhr));
+    let ehf_pr  = norm st s hf.ehf_pr  in
+    let ehf_epr = norm st s hf.ehf_epr in
+    let ehf_po  = norm st s hf.ehf_po  in
+    let ehf_epo = norm st s hf.ehf_epo in
+    let ehf_f   = norm_xfun st s hf.ehf_f in
+    f_eHoareF_r { ehf_pr; ehf_epr; ehf_f; ehf_po; ehf_epo }
+
+  | FeHoareS hs ->
+    assert (is_Aempty args);
+    assert (not (Subst.has_mem s (fst hs.ehs_m)));
+    let ehs_pr  = norm st s hs.ehs_pr in
+    let ehs_epr = norm st s hs.ehs_epr in
+    let ehs_po  = norm st s hs.ehs_po in
+    let ehs_epo = norm st s hs.ehs_epo in
+    let ehs_s   = norm_stmt s hs.ehs_s in
+    let ehs_m   = norm_me s hs.ehs_m in
+    f_eHoareS_r { ehs_pr; ehs_epr; ehs_po; ehs_epo; ehs_s; ehs_m }
 
   | FbdHoareF hf ->
     assert (is_Aempty args);

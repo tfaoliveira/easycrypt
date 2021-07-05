@@ -424,6 +424,7 @@
 %token DUMP
 %token EAGER
 %token ECALL
+%token EHOARE
 %token ELIF
 %token ELIM
 %token ELSE
@@ -1185,6 +1186,8 @@ sform_u(P):
 
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 
+| EHOARE LBRACKET hb=ehoare_body(P) RBRACKET { hb }
+
 | EQUIV LBRACKET eb=equiv_body(P) RBRACKET { eb }
 
 | EAGER LBRACKET eb=eager_body(P) RBRACKET { eb }
@@ -1289,6 +1292,11 @@ hoare_bd_cmp :
 hoare_body(P):
   mp=loc(fident) COLON pre=form_r(P) LONGARROW post=form_r(P)
     { PFhoareF (pre, mp, post) }
+
+ehoare_body(P):
+  mp=loc(fident) COLON pre=form_r(P) PIPE epre=form_r(P) LONGARROW
+                       post=form_r(P) PIPE epost=form_r(P)
+    { PFehoareF (pre, epre, mp, post, epost) }
 
 phoare_body(P):
   LBRACKET mp=loc(fident) COLON
@@ -1911,6 +1919,8 @@ axiom:
 
 | l=local  EQUIV x=ident pd=pgtybindings? COLON p=loc( equiv_body(none)) ao=axiom_tc
 | l=local  HOARE x=ident pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
+| l=local  EHOARE x=ident pd=pgtybindings? COLON p=loc( ehoare_body(none)) ao=axiom_tc
+
 | l=local PHOARE x=ident pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
     { mk_axiom ~local:l (x, None, pd, p) ao }
 
@@ -2409,19 +2419,22 @@ cbv:
 | CBV l=qoident+ { `Delta l  :: simplify_red  }
 | CBV DELTA      { `Delta [] :: simplify_red }
 
+eform:
+| p=form             { Single p     }
+| p=form PIPE f=form { Double(p, f) }
+
 conseq:
 | empty                           { None, None }
 | UNDERSCORE LONGARROW UNDERSCORE { None, None }
-| f1=form LONGARROW               { Some f1, None }
-| f1=form LONGARROW UNDERSCORE    { Some f1, None }
-| f2=form                         { None, Some f2 }
-| LONGARROW f2=form               { None, Some f2 }
-| UNDERSCORE LONGARROW f2=form    { None, Some f2 }
-| f1=form LONGARROW f2=form       { Some f1, Some f2 }
-
+| f1=eform LONGARROW              { Some f1, None }
+| f1=eform LONGARROW UNDERSCORE   { Some f1, None }
+| f2=eform                        { None, Some f2 }
+| LONGARROW f2=eform              { None, Some f2 }
+| UNDERSCORE LONGARROW f2=eform   { None, Some f2 }
+| f1=eform LONGARROW f2=eform     { Some f1, Some f2 }
 
 conseq_bd:
-| c=conseq                                   { c, None }
+| c=conseq                                    { c, None }
 | c=conseq   COLON cmp=hoare_bd_cmp? bd=sform { c, Some (cmp, bd) }
 | UNDERSCORE COLON cmp=hoare_bd_cmp? bd=sform { (None, None), Some(cmp, bd) }
 
@@ -2479,14 +2492,14 @@ s_codepos1:
     { Double (n1, n2) }
 
 while_tac_info:
-| inv=sform
+| inv=form_or_double_form
     { { wh_inv = inv; wh_vrnt = None; wh_bds = None; } }
 
 | inv=sform vrnt=sform
-    { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = None; } }
+    { { wh_inv = Single inv; wh_vrnt = Some vrnt; wh_bds = None; } }
 
 | inv=sform vrnt=sform k=sform eps=sform
-    { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (k, eps); } }
+    { { wh_inv = Single inv; wh_vrnt = Some vrnt; wh_bds = Some (k, eps); } }
 
 async_while_tac_info:
 | LBRACKET t1=expr COMMA f1=form RBRACKET
@@ -2735,7 +2748,10 @@ form_or_double_form:
 | f=sform
     { Single f }
 
-| LPAREN UNDERSCORE COLON f1=form LONGARROW f2=form RPAREN
+| LPAREN UNDERSCORE? COLON f1=form LONGARROW f2=form RPAREN
+    { Double (f1, f2) }
+
+| LPAREN  f1=form PIPE f2=form RPAREN
     { Double (f1, f2) }
 
 %inline if_option:

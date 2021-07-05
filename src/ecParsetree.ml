@@ -262,6 +262,7 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFhoareF   of pformula * pgamepath * pformula
+  | PFehoareF  of pformula * pformula * pgamepath * pformula * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
@@ -426,10 +427,6 @@ type codepos1 = int * cp_base
 type codepos  = (codepos1 * int) list * codepos1
 
 (* -------------------------------------------------------------------- *)
-type 'a doption =
-  | Single of 'a
-  | Double of ('a * 'a)
-
 type swap_kind =
   | SKbase      of int * int * int
   | SKmove      of int
@@ -538,7 +535,7 @@ type pcond_info = [
 
 (* -------------------------------------------------------------------- *)
 type while_info = {
-  wh_inv  : pformula;
+  wh_inv  : pformula doption;
   wh_vrnt : pformula option;
   wh_bds  : pformula pair option;
 }
@@ -570,8 +567,8 @@ type fel_info = {
 }
 
 (* -------------------------------------------------------------------- *)
-type deno_ppterm   = (pformula option pair) gppterm
-type conseq_ppterm = ((pformula option pair) * (phoarecmp option * pformula) option) gppterm
+type deno_ppterm   = (pformula doption option pair) gppterm
+type conseq_ppterm = ((pformula doption option pair) * (phoarecmp option * pformula) option) gppterm
 
 (* -------------------------------------------------------------------- *)
 type sim_info = {

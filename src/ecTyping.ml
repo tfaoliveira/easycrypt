@@ -2712,6 +2712,18 @@ let rec trans_form_or_pattern env ?mv ?ps ue pf tt =
           unify_or_fail penv ue pre.pl_loc  ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
           f_hoareF pre' fpath post'
+    | PFehoareF (pre, epre, gp, post, epost) ->
+        let fpath = trans_gamepath env gp in
+        let penv, qenv = EcEnv.Fun.hoareF fpath env in
+        let pre'  = transf penv pre in
+        let epre'  = transf penv epre in
+        let post' = transf qenv post in
+        let epost' = transf qenv epost in
+          unify_or_fail penv ue pre.pl_loc  ~expct:tbool   pre' .f_ty;
+          unify_or_fail penv ue pre.pl_loc  ~expct:txreal epre'.f_ty;
+          unify_or_fail qenv ue post.pl_loc ~expct:tbool   post'.f_ty;
+          unify_or_fail qenv ue post.pl_loc ~expct:txreal epost'.f_ty;
+          f_eHoareF pre' epre' fpath post' epost'
 
     | PFBDhoareF (pre, gp, post, hcmp, bd) ->
         let fpath = trans_gamepath env gp in

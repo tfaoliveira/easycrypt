@@ -56,6 +56,8 @@ val tdistr  : ty -> ty
 val tcpred  : ty -> ty
 val toarrow : ty list -> ty -> ty
 
+val txreal : ty
+
 val tytuple_flat : ty -> ty list
 val tyfun_flat   : ty -> (dom * ty)
 
