@@ -121,7 +121,7 @@ module PRPi'(S:Sample_t) = {
 (* FIXME: cleanup *)
 
 (* FIXME: Duplicate lemmas with RP_RF *)
-lemma nosmt notin_supportIP (P : 'a -> bool) (d : 'a distr):
+lemma notin_supportIP (P : 'a -> bool) (d : 'a distr):
   (exists a, support d a /\ !P a) <=> mu d P < mu d predT.
 proof.
 rewrite (mu_split _ predT P) /predI /predT /predC /=.
@@ -135,7 +135,7 @@ lemma excepted_lossless (m:(D,D) fmap):
   mu (uD \ (rng m)) predT = 1%r.
 proof. 
 move=> /endo_dom_rng [x h]; rewrite dexcepted_ll //.
-+ smt w=uD_uf_fu.
++ smt(uD_uf_fu).
 have [?[<- @/is_full Hsupp]]:= uD_uf_fu.
 apply/notin_supportIP;exists x => />;apply Hsupp.
 qed.
@@ -145,8 +145,9 @@ proof.
 proc; seq  1: (exists x, support uD x /\ !X x)=> //=.
 + by rnd (predT); skip; smt(uD_uf_fu).
 if=> //=.
-+ rnd (predT); skip.
-  progress [-split]; split=> //=; smt.
++ rnd (predT); auto=> /> &hr x x_in_uD x_notin_X r_in_X.
+  apply: dexcepted_ll; first exact: dD_ll.
+  by rewrite -dD_ll -notin_supportIP; exists x.
 by hoare; rnd=> //=; skip=> &hr ->.
 qed.
 
@@ -255,9 +256,8 @@ section Upto.
       by auto=> /#.
     sp; if{1}.
       conseq (_: PRP_indirect_bad.bad{1} /\ ARP.coll{2})=> //=.
-      auto; progress [-split]; split=> //= [|_].
-        by apply/excepted_lossless => /#.
-      by progress; right.
+      auto=> /> &1 &2 x_notin_m _.
+      by rewrite /is_lossless excepted_lossless //; exists x{2}.
     by auto; progress [-split]; rewrite H0 /= => -> /=; rewrite get_setE.
   + move=> &2 bad; conseq (_: true ==> true: =1%r)
                           (_: PRP_indirect_bad.bad ==> PRP_indirect_bad.bad)=> //=.
@@ -265,7 +265,8 @@ section Upto.
     proc; if=> //=; inline *.
     seq  2: (X = rng PRPi.m /\ x \notin PRPi.m) 1%r 1%r 0%r _ => //=.
       by auto; rewrite -/predT; smt(uD_uf_fu).
-      by if=> //=; auto=> /> *; apply/excepted_lossless => /#.
+      if=> //=; auto=> /> &hr x_notin_m _.
+      by rewrite excepted_lossless //; exists x{hr}.
       by hoare; auto.
   + move=> &1.
     proc; if; auto; progress [-split]; rewrite -/predT; split=> //= [|_]; 1:smt(uD_uf_fu).
@@ -280,8 +281,8 @@ section Upto.
       by auto=> /#.
     sp; if{1}.
       conseq (_: PRP_indirect_bad.bad{1} /\ ARP.coll{2})=> //=.
-      auto; progress [-split]; split=> //= [|_].
-        by apply/excepted_lossless => /#.
+      auto=> /> &1 &2 y_notin_m _; rewrite /is_lossless excepted_lossless.
+      by exists y{2}.
       by progress; right.
     by auto; progress [-split]; rewrite H0 => /= ->; rewrite get_setE.
   + move=> &2 bad; conseq (_: true ==> true: =1%r)
@@ -290,12 +291,12 @@ section Upto.
     proc; if=> //=; inline *.
     seq  2: (X = rng PRPi.mi /\ y \notin PRPi.mi) 1%r 1%r 0%r _ => //=.
       by auto; rewrite -/predT; smt(uD_uf_fu).
-      by if=> //=; auto=> /> *; apply/excepted_lossless => /#.
+      by if=> //=; auto=> /> &hr y_notin_m _; rewrite excepted_lossless //; exists y{hr}.
       by hoare; auto.
   + move=> &1.
     proc; if; auto; progress [-split]; rewrite -/predT; split=> //= [|_]; 1:smt(uD_uf_fu).
     by progress [-split]; rewrite H.
-  by inline *; auto; progress => /#.
+  by inline *; auto=> /#.
   qed.
 end section Upto.
 
@@ -412,12 +413,12 @@ section CollisionProbability.
             apply/subset_leq_fcard=> x'; rewrite !inE !mem_frng !rngE=> - /= [x0].
             rewrite get_setE; case: (x0 = x{2})=> [<<- /= ->|_ mx0] //.
             by left; exists x0.
-          by rewrite fcardU fcard1; smt(fcard_ge0).
+          smt(fcardU fcard1 fcard_ge0).
         + apply/(ler_trans (card (frng ARP.mi{2} `|` fset1 x{2}))).
             apply/subset_leq_fcard=> x'; rewrite !inE !mem_frng !rngE=> - /= [x0].
             rewrite get_setE; case: (x0 = yL)=> [<<- //|_ mx0].
             by left; exists x0.
-          by rewrite fcardU fcard1; smt(fcard_ge0).
+          smt(fcardU fcard1 fcard_ge0).
       - smt().
     * proc; sp; if=> //=. rcondt{2} 1; first by auto=> /#.
       inline *; sp; if=> //=; auto.
@@ -426,12 +427,12 @@ section CollisionProbability.
             apply/subset_leq_fcard=> x'; rewrite !inE !mem_frng !rngE=> - /= [x0].
             rewrite get_setE; case: (x0 = x0L)=> [<<- //|_ mx0].
             by left; exists x0.
-          by rewrite fcardU fcard1; smt(fcard_ge0).
+          smt(fcardU fcard1 fcard_ge0).
         + apply/(ler_trans (card (frng ARP.mi{2} `|` fset1 x0L))).
             apply/subset_leq_fcard=> x'; rewrite !inE !mem_frng !rngE=> - /= [x0].
             rewrite get_setE; case: (x0 = x{2})=> [<<- //|_ mx0].
             by left; exists x0.
-          by rewrite fcardU fcard1; smt(fcard_ge0).
+          smt(fcardU fcard1 fcard_ge0).
       - smt().
     by auto=> />; rewrite frng0 fcards0.
   fel 2 FEL.c (fun x, x%r * mu uD (pred1 witness)) q (ARP.coll) 
