@@ -546,7 +546,7 @@ lemma EpsZ ['a] (d: 'a distr) (c:realp) (f: 'a -> xreal) :
   Ep d (fun x => c ** f x) = c ** Ep d f.
 proof. 
   rewrite /( ** ); case: (c = of_real 0%r) => ?; last by apply EpZ.
-  by rewrite EC.
+  by rewrite EpC.
 qed.
 
 lemma EpD ['a] (d : 'a distr) (f1 f2 : 'a -> xreal) : 

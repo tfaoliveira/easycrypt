@@ -247,7 +247,7 @@ abstract theory ComRing.
   proof. by move=> x y z; rewrite mulrC mulrDl !(@mulrC _ x). qed.
 
   lemma nosmt mul0r: left_zero zeror ( * ).
-  proof. move=> x; apply: (@addIr (oner * x)); rewrite -mulrDl !add0r mul1r. qed.
+  proof. by move=> x; apply: (@addIr (oner * x)); rewrite -mulrDl !add0r mul1r. qed.
 
   lemma nosmt mulr0: right_zero zeror ( * ).
   proof. by move=> x; apply: (@addIr (x * oner)); rewrite -mulrDr !add0r mulr1. qed.
