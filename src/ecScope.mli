@@ -243,5 +243,5 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Search : sig
-  val search : scope -> pformula list -> unit
+  val search : scope -> psearch -> unit
 end

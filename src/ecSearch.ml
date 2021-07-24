@@ -14,16 +14,19 @@ open EcTypes
 open EcTyping
 
 module Mid = EcIdent.Mid
-module PT  = EcProofTerm
 
 (* -------------------------------------------------------------------- *)
 type pattern = (ptnmap * EcUnify.unienv) * form
 
 type search = [
+  | `ByName    of string
   | `ByPath    of Sp.t
   | `ByPattern of pattern
   | `ByOr      of search list
 ]
+
+type context =
+  path
 
 (* -------------------------------------------------------------------- *)
 let as_bypath (search : search) =
@@ -33,7 +36,7 @@ let as_bypattern (search : search) =
   match search with `ByPattern ptn -> Some ptn | _ -> None
 
 (* -------------------------------------------------------------------- *)
-let match_ (env : EcEnv.env) (search : search list) f =
+let match_pattern (env : EcEnv.env) (search : search list) path f =
   let module E = struct exception MatchFound end in
 
   let hyps = EcEnv.LDecl.init env [] in
@@ -73,11 +76,22 @@ let match_ (env : EcEnv.env) (search : search list) f =
 
     | `ByOr subs -> List.exists do1 subs
 
+    | `ByName name ->
+       String.exists (EcPath.basename path) name
+
   in List.for_all do1 search
 
 (* -------------------------------------------------------------------- *)
-let search (env : EcEnv.env) (search : search list) =
-  let check _ ax = match_ env search ax.EcDecl.ax_spec
+let match_context (_ : EcEnv.env) (ctxt : context list) (path : path) =
+  let for1 (ctxt1 : EcPath.path) =
+    EcPath.isprefix ctxt1 path
+  in List.for_all for1 ctxt
+
+(* -------------------------------------------------------------------- *)
+let search (env : EcEnv.env) (ctxt : context list) (search : search list) =
+  let check (path : path) (ax : EcDecl.axiom) =
+       match_context env ctxt path
+    && match_pattern env search path ax.ax_spec
   in EcEnv.Ax.all ~check env
 
 (* -------------------------------------------------------------------- *)

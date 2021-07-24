@@ -2375,11 +2375,11 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Search = struct
-  let search (scope : scope) qs =
+  let search (scope : scope) (query : psearch) =
     let paths =
       let do1 fp =
-        match unloc fp with
-        | PFident (q, None) -> begin
+        match fp with
+        | `ByPattern { pl_desc = (PFident (q, None)) } -> begin
             match EcEnv.Op.all q.pl_desc scope.sc_env with
             | [] ->
                 hierror ~loc:q.pl_loc "unknown operator: `%s'"
@@ -2410,18 +2410,27 @@ module Search = struct
               end
         end
 
-        | _ ->
+        | `ByPattern fp ->
           let ps = ref Mid.empty in
           let ue = EcUnify.UniEnv.create None in
           let fp = EcTyping.trans_pattern scope.sc_env ps ue fp in
           `ByPattern ((ps, ue), fp)
-      in List.map do1 qs in
+
+        | `ByName name ->
+          `ByName name
+
+      in List.map do1 query.psch_patterns in
+
+    let context =
+      let do1 path =
+        fst (EcEnv.Theory.lookup (unloc path) scope.sc_env) in
+      List.map do1 (odfl [] query.psch_context) in
 
     let relevant =
       let get_path r = function `ByPath s -> Sp.union r s | _ -> r in
       List.fold_left get_path Sp.empty paths in
 
-    let axioms = EcSearch.search scope.sc_env paths in
+    let axioms = EcSearch.search scope.sc_env context paths in
     let axioms = EcSearch.sort relevant axioms in
 
     let buffer = Buffer.create 0 in

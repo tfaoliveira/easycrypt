@@ -3584,7 +3584,29 @@ user_red_option:
 
 (* -------------------------------------------------------------------- *)
 (* Search pattern                                                       *)
-%inline search: x=sform_h { x }
+%inline search:
+| ptns=search_patterns ctxt=prefix(IN, search_contexts)? {
+    { psch_patterns = ptns; psch_context = ctxt; }
+  }
+
+search_pattern:
+| f=sform_h
+    { `ByPattern f }
+
+| SLASH s=STRING SLASH
+    { `ByName s }
+
+search_patterns:
+| patterns=search_pattern+
+  { patterns }
+
+search_context:
+| p=uqident
+  { p }
+
+%inline search_contexts:
+| context=plist1(search_context, COMMA)
+  { context }
 
 (* -------------------------------------------------------------------- *)
 (* Global entries                                                       *)
@@ -3620,7 +3642,7 @@ global_action:
 | hint             { Ghint        $1 }
 | x=loc(proofend)  { Gsave        x  }
 | PRINT p=print    { Gprint       p  }
-| SEARCH x=search+ { Gsearch      x  }
+| SEARCH x=search  { Gsearch      x  }
 | WHY3 x=STRING    { GdumpWhy3    x  }
 
 | PRAGMA       x=pragma { Gpragma x }

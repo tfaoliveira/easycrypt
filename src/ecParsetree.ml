@@ -1098,6 +1098,20 @@ type threquire =
   psymbol option * (psymbol * psymbol option) list * [`Import|`Export] option
 
 (* -------------------------------------------------------------------- *)
+type psearch = {
+  psch_patterns : psearch_pattern list;
+  psch_context  : psearch_context list option;
+}
+
+and psearch_pattern = [
+  | `ByPattern of pformula
+  | `ByName    of string
+]
+
+and psearch_context =
+  pqsymbol
+
+(* -------------------------------------------------------------------- *)
 type global_action =
   | Gdeclare     of pdeclare
   | Gmodule      of pmodule_def
@@ -1114,7 +1128,7 @@ type global_action =
   | Greduction   of puserred
   | Ghint        of phint
   | Gprint       of pprint
-  | Gsearch      of pformula list
+  | Gsearch      of psearch
   | GthOpen      of (bool * psymbol)
   | GthClose     of (theory_clear * psymbol)
   | GthClear     of theory_clear

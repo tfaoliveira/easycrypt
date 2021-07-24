@@ -16,10 +16,13 @@ open EcTyping
 type pattern = (ptnmap * EcUnify.unienv) * form
 
 type search = [
+  | `ByName    of string
   | `ByPath    of Sp.t
   | `ByPattern of pattern
   | `ByOr      of search list
 ]
 
-val search : EcEnv.env -> search list -> (path * EcDecl.axiom) list
+type context = EcPath.path
+
+val search : EcEnv.env -> context list -> search list -> (path * EcDecl.axiom) list
 val sort : Sp.t -> (path * EcDecl.axiom) list -> (path * EcDecl.axiom) list
