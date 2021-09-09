@@ -140,9 +140,8 @@ and i_reduce bs i =
     else Some (EcModules.i_if (e, c1, c2))
   | Swhile (e, c) ->
     let c = s_reduce bs c in
-    if (List.is_empty c.s_node)
-    then None
-    else Some (EcModules.i_while (e, c))
+    (*TODO: replace with an assert e if c is empty here.*)
+    Some (EcModules.i_while (e, c))
   | Sassert e -> Some (EcModules.i_assert e)
   | Sabstract _ -> None
 
@@ -155,7 +154,7 @@ let write_dependency tc c =
       (List.map (write_dependency_instr tc) c.s_node)
   and write_dependency_instr tc i =
     match i.i_node with
-    (*TODO: will OCaml optimize this on his own by computing (bs_pvs_of_expr e) once?*)
+    (*TODO: will OCaml optimize this on his own by computing (bs_pvs_of_expr e) once? No!*)
     | Sasgn (lv, e) | Srnd (lv, e) -> List.fold_left (fun m pv -> BatMap.add pv (bs_pvs_of_expr e) m) BatMap.empty (pvs_of_lv lv)
     | Scall _ -> tc_error !!tc "write_dependency uncertain when calling function"
     | Sif (e, c1, c2) ->
@@ -186,19 +185,31 @@ let e_incr tc e c =
 let s_incr tc e c =
   let bs = e_incr tc e c in
   s_reduce bs c
+
 (* -------------------------------------------------------------------- *)
+(*TODO: complete*)
+(*
 let t_hoare_change_var_r n tc =
   let env = FApi.tc1_env tc in
+  (*TODO: normalize with norm_pvar all pvars.*)
   let hs = tc1_as_hoareS tc in
   let (e, c), s = tc1_last_while tc hs.hs_s in
-  let m = EcMemory.memory hs.hs_m in
-  (*A fresh variable i is taken.*)
-  let i = pv_glob in
+  let m = hs.hs_m in
+  let m, i = fresh_pv m {v_name = "i"; v_type = tint} in
+  let i = pv_loc (EcMemory.xpath m) i in
   (*The loop does exactly n steps, or does not finish.*)
+  let t_pr = hs.hs_pr in
+  let t_po = hs.hs_po in
   let t_c = s_while (e, s_incr tc e c) in
-  let t_concl = f_hoareS hs.hs_m hs.hs_pr t_c hs.hs_po in
-  FApi.xmutate1 tc `While [t_concl]
+  let t_concl = f_hoareS m t_pr t_c t_po in
+  (*The condition of the loop can be replaced by (i < n).*)
+  let f_pr = hs.hs_pr in
+  let f_po = hs.hs_po in
+  let f_c = s_while (e, c) in
+  let f_concl = f_hoareS m f_pr f_c f_po in
 
+  FApi.xmutate1 tc `While [t_concl; f_concl]
+*)
 (* -------------------------------------------------------------------- *)
 (*
 let eq_one tc z =
@@ -579,13 +590,15 @@ let process_while side winfos tc =
 
   | _ -> tc_error !!tc "expecting a hoare[...]/equiv[...]"
 
-(*
-let process_for inv tc =
+(*TODO*)
+let process_for (*inv*) _ tc =
 
   match (FApi.tc1_goal tc).f_node with
+  (*
   | FhoareS _ -> t_hoare_for (TTC.tc1_process_Xhl_form tc (tfun tint tbool) inv) tc
   | _ -> tc_error !!tc "expecting a hoare goal"
-*)
+  *)
+  | _ -> tc_error !!tc "For not yet implemented"
 
 (* -------------------------------------------------------------------- *)
 module ASyncWhile = struct
