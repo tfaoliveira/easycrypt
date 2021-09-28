@@ -51,6 +51,15 @@ jobs:
         path: report.log
         if-no-files-found: ignore
 
+  package-macos:
+    name: Create MacOS Application
+    needs: [compile,check]
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: TEST
+      run: ls; brew
+
   slack:
     name: Slack
     needs: [compile, check]
