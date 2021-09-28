@@ -4,6 +4,7 @@
 umask 077
 
 # --------------------------------------------------------------------
+ECR=../../../..
 BLD=_build-macos
 PKG=package/easycrypt
 ART=app
@@ -30,18 +31,17 @@ export ECNAME=${ECNAME:-$(date +'%d-%m-%Y')}
 
 opam init -n
 eval `opam config env`
-opam pin add -n easycrypt http://github.com/EasyCrypt/easycrypt.git
-opam update
 
 # --------------------------------------------------------------------
 # Build EasyCrypt
 
 if [ -z "${ECBRANCH}" ]; then
-  git clone --depth=1 https://github.com/EasyCrypt/easycrypt.git
+  git clone --depth=1 "${ECR}" easycrypt
 else
   git clone -b "${ECBRANCH}" --depth=1 https://github.com/EasyCrypt/easycrypt.git
 fi
 
+opam pin add -n easycrypt easycrypt
 opam install --deps-only easycrypt
 make -C easycrypt
 
