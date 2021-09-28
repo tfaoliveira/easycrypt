@@ -65,7 +65,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: macos-package
-        path: scripts/packaging/emacs-based/easycrypt.dmg
+        path: scripts/packaging/emacs-based/_build-macos/easycrypt.dmg
         retention-days: 1
 
   slack:
