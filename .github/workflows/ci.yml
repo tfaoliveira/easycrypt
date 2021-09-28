@@ -53,12 +53,20 @@ jobs:
 
   package-macos:
     name: Create MacOS Application
-    needs: [compile,check]
+    needs: [compile, check]
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
-    - name: TEST
-      run: ls; brew
+    - name: Create package
+      run: |
+        brew install ocaml opam
+        make -C scripts/packaging/emacs-based macos
+    - name: Upload package
+      uses: actions/upload-artifact@v2
+      with:
+        name: macos-package
+        path: scripts/packaging/emacs-based/easycrypt.dmg
+        retention-days: 1
 
   slack:
     name: Slack
