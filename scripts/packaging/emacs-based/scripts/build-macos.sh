@@ -6,7 +6,8 @@ umask 077
 # --------------------------------------------------------------------
 BLD=_build-macos
 PKG=package/easycrypt
-APP=EasyCrypt.app
+ART=app
+APP=${ART}/EasyCrypt.app
 
 if [ -e ${BLD} ]; then
   echo "Delete ${BLD} first." >&2
@@ -22,14 +23,14 @@ set -ex
 # Build OPAM
 
 export OPAMROOT="${PWD}/_opam"
-export OPAMJOBS=2
-export OPAMYES=true
+export OPAMJOBS=4
+export OPAMCONFIRMLEVEL=unsafe-yes
 export OCAMLBUILD_JOBS=${OPAMJOBS}
 export ECNAME=${ECNAME:-$(date +'%d-%m-%Y')}
 
 opam init -n
 eval `opam config env`
-opam repository add easycrypt git://github.com/EasyCrypt/opam.git
+opam pin add -n easycrypt http://github.com/EasyCrypt/easycrypt.git
 opam update
 
 # --------------------------------------------------------------------
@@ -47,7 +48,8 @@ make -C easycrypt
 # --------------------------------------------------------------------
 # Build provers
 
-provers="alt-ergo eprover z3"
+provers="alt-ergo.2.4.1"
+provers_bin="alt-ergo"
 
 opam install ${provers}
 
@@ -68,23 +70,22 @@ mkdir -p ${PKG}/{lib,share}/easycrypt
 mkdir -p ${PKG}/share/
 
 cp easycrypt/ec.native ${PKG}/bin/easycrypt
-cp easycrypt/system/callprover ${PKG}/bin/
 cp -r easycrypt/theories ${PKG}/lib/easycrypt/
 
 # --------------------------------------------------------------------
 mkdir -p ${PKG}/{lib,share}/why3
 
-cp -r _opam/system/lib/why3/plugins ${PKG}/lib/why3/
-cp -r _opam/system/lib/why3/why3-cpulimit ${PKG}/bin/
-cp -r _opam/system/share/why3 ${PKG}/share/
+cp -r _opam/default/lib/why3/plugins ${PKG}/lib/why3/
+cp -r _opam/default/lib/why3/commands ${PKG}/lib/why3/
+cp -r _opam/default/share/why3 ${PKG}/share/
 
 # --------------------------------------------------------------------
-for name in ${provers}; do
-  cp _opam/system/bin/${name} ${PKG}/bin/
+for name in ${provers_bin}; do
+  cp _opam/default/bin/${name} ${PKG}/bin/
 done
 
 # --------------------------------------------------------------------
-for name in easycrypt ${provers}; do
+for name in easycrypt ${provers_bin}; do
   dlls=$(otool -L ${PKG}/bin/${name} \
     | fgrep .dylib | fgrep -v '@executable_path' \
     | egrep 'libgmp|libpcre' | awk '{print $1}')
@@ -98,12 +99,13 @@ for name in easycrypt ${provers}; do
 done
 
 # --------------------------------------------------------------------
-ECV=25.1
+ECV=27.2-2
 
 mkdir emacs && ( set -e; cd emacs; \
-  curl -LO http://emacsformacosx.com/emacs-builds/Emacs-${ECV}-universal.dmg;
-  7z x Emacs-${ECV}-universal.dmg || true;
-  mv Emacs/Emacs.app ../${PKG}/share )
+  curl -LO http://emacsformacosx.com/emacs-builds/Emacs-${ECV}-universal.dmg; \
+  hdiutil attach -readonly -mountpoint ${PWD}/mount Emacs-${ECV}-universal.dmg;
+  trap "hdiutil detach ${PWD}/mount" EXIT;
+  cp -R mount/Emacs.app ../${PKG}/share )
 
 chmod +x package/easycrypt/share/Emacs.app/Contents/MacOS/Emacs*
 
@@ -117,8 +119,6 @@ cp ../config/proofgeneral/emacs.rc ${PKG}/share/easycrypt/pg/
 mv pg/PG ${PKG}/share/easycrypt/pg/ProofGeneral
 
 # --------------------------------------------------------------------
-rm -rf ${APP}
-
 mkdir -p ${APP}/Contents
 mkdir -p ${APP}/Contents/{MacOS,Resources}
 
@@ -180,3 +180,6 @@ if __name__ == '__main__':
 EOF
 
 chmod +x ${APP}/Contents/MacOS/easycrypt
+
+# --------------------------------------------------------------------
+hdiutil -volname 'EasyCrypt' -fs hfs+ -srcfolder ${ART} easycrypt.dmg
