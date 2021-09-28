@@ -182,4 +182,4 @@ EOF
 chmod +x ${APP}/Contents/MacOS/easycrypt
 
 # --------------------------------------------------------------------
-hdiutil -volname 'EasyCrypt' -fs hfs+ -srcfolder ${ART} easycrypt.dmg
+hdiutil create -volname 'EasyCrypt' -fs hfs+ -srcfolder ${ART} easycrypt.dmg

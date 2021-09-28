@@ -60,7 +60,7 @@ jobs:
     - name: Create package
       run: |
         brew install ocaml opam
-        make -C scripts/packaging/emacs-based macos
+        ECBRANCH=${GITHUB_SHA} make -C scripts/packaging/emacs-based macos
     - name: Upload package
       uses: actions/upload-artifact@v2
       with:
