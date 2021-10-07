@@ -52,6 +52,7 @@ type pty_r =
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
+  | PTcost
 and pty = pty_r located
 
 type ptyannot_r =
@@ -199,6 +200,8 @@ and pformula_r =
   | PFeqf     of pformula list
   | PFlsless  of pgamepath
   | PFscope   of pqsymbol * pformula
+
+  | PFcost    of pcost
 
   | PFhoareF   of pformula * pgamepath * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula

@@ -578,6 +578,7 @@
 %token THEN
 %token THEORY
 %token TICKBRACE
+%token TICKLBRACKET
 %token TICKPAREN
 %token TICKPIPE
 %token TICKUNDERSCORE
@@ -1118,7 +1119,7 @@ cost_body(P):
 
 
 costs(P):
-| LBRACKET cbody=cost_body(P) RBRACKET   
+| TICKLBRACKET cbody=cost_body(P) RBRACKET   
     { let c, b = cbody in
       PC_costs (c,b) }
 
@@ -1259,6 +1260,8 @@ sform_u(P):
    { if n.pl_desc = 0 then
        parse_error n.pl_loc (Some "tuple projection start at 1");
      PFproji(f,n.pl_desc - 1) }
+
+| c=costs(P)     { PFcost c }
 
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 
@@ -1443,6 +1446,7 @@ simpl_type_exp:
 | tya=type_args x=qident      { PTapp (x, tya) }
 | GLOB m=loc(mod_qident)      { PTglob m       }
 | LPAREN ty=type_exp RPAREN   { ty             }
+| COST                        { PTcost         }
 
 type_args:
 | ty=loc(simpl_type_exp)                          { [ty] }

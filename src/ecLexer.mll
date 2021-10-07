@@ -386,29 +386,30 @@ rule main = parse
   | "{0,1}" { [RBOOL    ] }
 
   (* punctuation *)
-  | '_'   { [UNDERSCORE] }
-  | "`_"  { [TICKUNDERSCORE] }
-  | "#<"  { [DASHLT    ] }
-  | '('   { [LPAREN    ] }
-  | ')'   { [RPAREN    ] }
-  | '{'   { [LBRACE    ] }
-  | '}'   { [RBRACE    ] }
-  | '['   { [LBRACKET  ] }
-  | ']'   { [RBRACKET  ] }
-  | ','   { [COMMA     ] }
-  | ';'   { [SEMICOLON ] }
-  | '?'   { [QUESTION  ] }
-  | "~"   { [TILD      ] }
-  | "!"   { [NOT       ] }
-  | "@"   { [AT        ] }
-  | "{|"  { [LPBRACE   ] }
-  | "|}"  { [RPBRACE   ] }
-  | "`|"  { [TICKPIPE  ] }
-  | "`{"  { [TICKBRACE ] }
-  | "`("  { [TICKPAREN ] }
-  | "<$"  { [LESAMPLE  ] }
-  | "<@"  { [LEAT      ] }
-  | ":~"  { [COLONTILD ] }
+  | '_'   { [UNDERSCORE     ] }
+  | "`_"  { [TICKUNDERSCORE ] }
+  | "#<"  { [DASHLT         ] }
+  | '('   { [LPAREN         ] }
+  | ')'   { [RPAREN         ] }
+  | '{'   { [LBRACE         ] }
+  | '}'   { [RBRACE         ] }
+  | '['   { [LBRACKET       ] }
+  | ']'   { [RBRACKET       ] }
+  | ','   { [COMMA          ] }
+  | ';'   { [SEMICOLON      ] }
+  | '?'   { [QUESTION       ] }
+  | "~"   { [TILD           ] }
+  | "!"   { [NOT            ] }
+  | "@"   { [AT             ] }
+  | "{|"  { [LPBRACE        ] }
+  | "|}"  { [RPBRACE        ] }
+  | "`["  { [TICKLBRACKET   ] }
+  | "`|"  { [TICKPIPE       ] }
+  | "`{"  { [TICKBRACE      ] }
+  | "`("  { [TICKPAREN      ] }
+  | "<$"  { [LESAMPLE       ] }
+  | "<@"  { [LEAT           ] }
+  | ":~"  { [COLONTILD      ] }
 
   | "/~="  { [SLASHTILDEQ     ] }
   | "//~=" { [SLASHSLASHTILDEQ] }

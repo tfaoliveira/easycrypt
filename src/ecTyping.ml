@@ -1201,9 +1201,12 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
       let tyargs = transtys tp env ue tyargs in
       tconstr p tyargs
     end
+
   | PTglob gp ->
     let m,_ = trans_msymbol env gp in
     tglob m
+
+  | PTcost -> tcost
 
 and transtys tp (env : EcEnv.env) ue tys =
   List.map (transty tp env ue) tys
@@ -2060,6 +2063,7 @@ let top_is_mem_binding pf = match pf with
 
   | PFChoareFT _ -> false
 
+  | PFcost    _
   | PFmatch   _
   | PFcast    _
   | PFint     _
@@ -3030,13 +3034,14 @@ and trans_form_or_pattern
     ue pf tt =
   let state = PFS.create () in
 
-  let rec transf_r opsc incost env f =
-    let transf = transf_r opsc incost in
+  let rec transf_r opsc ~incoe env f =
+    let transf = transf_r opsc ~incoe in
 
-    (* If we are below a cost statement, are typing a memory binder, and
-       have memory predicates, we return an error to avoid shadowing issues
-       when substituting the memory predicates later. *)
-    if incost &&
+    (* If we are below a cost of expression statement, are typing a
+       memory binder, and have memory predicates, we return an error
+       to avoid shadowing issues when substituting the memory
+       predicates later. *)
+    if incoe &&
        top_is_mem_binding f.pl_desc &&
        (schema_mpreds <> None || schema_mpreds <> Some []) then
       tyerror f.pl_loc env SchemaMemBinderBelowCost;
@@ -3307,7 +3312,7 @@ and trans_form_or_pattern
 
     | PFscope (popsc, f) ->
         let opsc = lookup_scope env popsc in
-          transf_r (Some opsc) incost env f
+          transf_r (Some opsc) ~incoe env f
 
     | PFglob gp ->
         let mp = fst (trans_msymbol env gp) in
@@ -3654,37 +3659,22 @@ and trans_form_or_pattern
           unify_or_fail env  ue bd  .pl_loc ~expct:treal bd'  .f_ty;
           f_bdHoareF pre' fpath post' hcmp bd'
 
+    | PFcost c -> f_cost_r (trans_cost opsc ~incoe c)
+
     | PFChoareF _ | PFChoareFT _ ->
       EcCHoare.check_loaded env;
 
-      let trans_elc ty = function
-        | `Unbounded -> C_unbounded
-        | `Bounded c ->
-          let c' = transf env c in
-          unify_or_fail env ue c.pl_loc ~expct:ty c'.f_ty;
-          C_bounded c'
-      in
-
-      let trans_choaref pre post fpath self calls full =
-        let self  = trans_elc txint self in
-        let calls = List.map (fun (m,fn,c) ->
-            let fn = trans_oracle env (m,fn) in
-            let f_c = trans_elc tint c in
-            fn, f_c
-          ) calls
-        in
-        let calls = Mx.of_list calls in
-
-        let cost = cost_r self calls full in
+      let trans_choaref pre post fpath cost =
+        let cost = trans_cost opsc ~incoe cost in
         f_cHoareF pre fpath post cost
       in
 
       begin match f.pl_desc with
-        | PFChoareFT (gp, PC_costs ((self, calls), full)) ->
+        | PFChoareFT (gp, pcost) ->
           let fpath = trans_gamepath env gp in
-          trans_choaref f_true f_true fpath self calls full
+          trans_choaref f_true f_true fpath pcost
 
-        | PFChoareF (pre, gp, post, PC_costs ((self, calls), full)) ->
+        | PFChoareF (pre, gp, post, pcost) ->
           let fpath = trans_gamepath env gp in
           let penv, qenv = EcEnv.Fun.hoareF fpath env in
           let pre'   = transf penv pre in
@@ -3692,7 +3682,7 @@ and trans_form_or_pattern
           unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
 
-          trans_choaref pre' post' fpath self calls full
+          trans_choaref pre' post' fpath pcost
         | _ -> assert false
       end
 
@@ -3732,7 +3722,7 @@ and trans_form_or_pattern
 
       | None, Some schema_mt ->        (* Schema local memtype case *)
         let env =
-          if incost then env    (* already binded *)
+          if incoe then env    (* already binded *)
           else try
               let env = match schema_mpreds with
                 | Some mpreds ->
@@ -3749,7 +3739,7 @@ and trans_form_or_pattern
         let memenv = EcMemory.schema mem in
 
         let fenv = EcEnv.Memory.push_active memenv env in
-        let form' = transf_r opsc true fenv form in
+        let form' = transf_r opsc ~incoe:true fenv form in
         unify_or_fail fenv ue form.pl_loc ~expct:tbool form'.f_ty;
 
         (* `InProc, because we want to look for variables declared in [memenv] *)
@@ -3782,6 +3772,25 @@ and trans_form_or_pattern
         end;
 
         f_coe form' memenv expr'
+
+  and trans_bnd opsc ~incoe ty = function
+    | `Unbounded -> C_unbounded
+    | `Bounded c ->
+      let c' = transf_r opsc ~incoe env c in
+      unify_or_fail env ue c.pl_loc ~expct:ty c'.f_ty;
+      C_bounded c'
+
+  and trans_cost opsc ~incoe (PC_costs ((self, calls), full)) =
+    let self  = trans_bnd opsc ~incoe txint self in
+    let calls = List.map (fun (m,fn,c) ->
+        let fn = trans_oracle env (m,fn) in
+        let f_c = trans_bnd opsc ~incoe tint c in
+        fn, f_c
+      ) calls
+    in
+    let calls = Mx.of_list calls in
+
+    cost_r self calls full
   in
 
   let f = transf_r None false env pf in
