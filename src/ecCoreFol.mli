@@ -163,22 +163,40 @@ and c_bnd =
   | C_bounded of form      (* type int *)
   | C_unbounded
 
-(* Invariant: keys of c_calls are functions of local modules,
-   with no arguments.
+
+(* A cost vector, e.g. in a CHoare.
+   Keys of [c_calls] are functions of local modules, with no arguments.
    Missing entries in [c_calls] are:
-   - unbounded if [c_full] is true;
-   - zero if [c_full] is false. *)
+   - any number of times in if [full] is [false]
+   - zero times if [full] is [true] *)
 and cost = private {
-  c_self  : c_bnd;
-  c_calls : c_bnd EcPath.Mx.t;
+  c_self  : c_bnd;              (* of type `xint` *)
+  c_calls : c_bnd EcPath.Mx.t;  (* of type `int` *)
   c_full  : bool;
 }
 
-and module_type = c_bnd p_module_type
+(* A module procedure `F.f` cost, where `F` can be an non-applied functor.
+   The cost is split between:
+   - intrinsic cost [pc_instr]
+   - the number of calls [pc_params] to the parameters of `F`
 
-type mod_restr = c_bnd p_mod_restr
+   Keys of [pc_params] are oracles (module parameters) with no arguments.
+   Missing entries can be called:
+   - any number of times in if [full] is [false]
+   - zero times if [full] is [true] *)
+and mproc_cost = private {
+  pc_inctr  : form;              (* of type `cost` *)
+  pc_params : form EcPath.Mx.t;  (* of type `xint` *)
+  pc_full   : bool;
+}
 
-type orcl_info = c_bnd p_orcl_info
+(* A module procedure `F` cost, where `F` can be an non-applied functor.
+   All declared procedures of `F` must appear. *)
+and mod_cost = mproc_cost EcSymbols.Msym.t
+
+and module_type = form p_module_type
+
+type mod_restr = form p_mod_restr
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
@@ -526,7 +544,7 @@ type mem_pr = EcMemory.memory * form
 (* -------------------------------------------------------------------- *)
 type f_subst = private {
   fs_freshen : bool; (* true means realloc local *)
-  fs_mp      : (EcPath.mpath * orcl_info option) Mid.t;
+  fs_mp      : (EcPath.mpath * mod_cost option) Mid.t;
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -546,7 +564,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:((EcPath.mpath * orcl_info option) Mid.t)
+    -> ?mods:((EcPath.mpath * mod_cost option) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -560,14 +578,14 @@ module Fsubst : sig
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
   val f_bind_loc_mod : f_subst -> EcIdent.t -> mpath -> f_subst
   val f_bind_mod     :
-    f_subst -> EcIdent.t -> mpath -> orcl_info option -> f_subst
+    f_subst -> EcIdent.t -> mpath -> mod_cost option -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
   val f_subst_mod   :
-    EcIdent.t -> mpath -> form -> orcl_info option -> form
+    EcIdent.t -> mpath -> form -> mod_cost option -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form
@@ -589,7 +607,7 @@ module Fsubst : sig
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
-  val subst_oi       : f_subst -> c_bnd PreOI.t -> c_bnd PreOI.t
+  (* val subst_oi       : f_subst -> c_bnd PreOI.t -> c_bnd PreOI.t *)
   val subst_gty      : f_subst -> gty -> gty
 end
 

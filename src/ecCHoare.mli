@@ -22,8 +22,7 @@ val cost_add_self : cost -> form -> cost
 
 (* -------------------------------------------------------------------- *)
 (* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
-   the equation [c1 = x + c2] over [x].
-*)
+   the equation [c1 = x + c2] over [x]. *)
 type cost_backward_res = [
   | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
                                    whenever [c] holds. *)

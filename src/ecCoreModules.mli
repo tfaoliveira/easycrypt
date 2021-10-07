@@ -130,50 +130,31 @@ val ur_union :
   'a use_restr -> 'a use_restr -> 'a use_restr
 
 (* -------------------------------------------------------------------- *)
-(* [params] and [abs_calls] are mapping from oracles to the number of time
-   that they can be called. Missing entries can be called:
-   - any number of times in if [full] is [false]
-   - zero times if [full] is [true] *)
-type 'a r_cost = {
-  r_self      : 'a;
-  r_params    : 'a Mx.t;
-  r_abs_calls : 'a Mx.t;
-  r_full      : bool;
+(* - [oi_allowed] : list of functor parameters that can be called by [M.f].
+   - [oi_in]      : true if equality of globals is required to ensure
+     equality of result and globals (in the post). *)
+type oi_param = {
+  oi_allowed : xpath list;
+  oi_in      : bool;
 }
 
-(* Oracle information of a procedure [M.f]. *)
-module PreOI : sig
-  type 'a t
+(* map from a functor `M` procedures to the procedure information *)
+type oi_params = oi_param Msym.t
 
-  val hash : ('a -> int) -> 'a t -> int
-  val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+val params_fv : oi_params -> int EcIdent.Mid.t -> int EcIdent.Mid.t
 
-  val is_in : 'a t -> bool
+val is_in : oi_param -> bool
 
-  val c_self      : 'a t -> 'a
-  val c_params    : 'a t -> 'a Mx.t
-  val c_abs_calls : 'a t -> 'a Mx.t
-  val c_full      : 'a t -> bool
-  val cost        : 'a t -> 'a r_cost
-
-  val allowed   : 'a t -> xpath list
-  val allowed_s : 'a t -> Sx.t
-
-  val mk : xpath list -> bool -> 'a r_cost -> 'a t
-
-  val filter : (xpath -> bool) -> 'a t -> 'a t
-end
+val allowed   : oi_param -> xpath list
+val allowed_s : oi_param -> Sx.t
 
 (* -------------------------------------------------------------------- *)
-(* oracle information of a module.
-   Invariant: all declared procedures must appear *)
-type 'a p_orcl_info = 'a PreOI.t Msym.t
-
-(* -------------------------------------------------------------------- *)
+(* ['a] will be instantiated by [EcCoreFol.mod_cost]. *)
 type 'a p_mod_restr = {
-  mr_xpaths : EcPath.Sx.t use_restr;
-  mr_mpaths : EcPath.Sm.t use_restr;
-  mr_oinfos : 'a p_orcl_info ;
+  mr_xpaths  : EcPath.Sx.t use_restr;
+  mr_mpaths  : EcPath.Sm.t use_restr;
+  mr_params  : oi_params;
+  mr_cost    : 'a ;
 }
 
 val p_mr_equal :
@@ -235,7 +216,10 @@ val fd_hash  : function_def -> int
 type 'a p_function_body =
 | FBdef   of function_def
 | FBalias of xpath
-| FBabs   of 'a PreOI.t
+| FBabs   of oi_param * ('a * symbol)
+ (* In [FBabs (oi, (mc, fsymb))], the element [(mc, fsymb)]
+    represents the projection of [mc] over [fsymb].
+    - [mc] is a formula of type `Tmod_cost` *)
 
 type 'a p_function_ = {
   f_name   : symbol;
@@ -264,7 +248,7 @@ type 'a p_module_expr = {
    [List.length mp.mt_params = List.length mp.mt_args]  *)
 and 'a p_module_body =
   | ME_Alias       of int * EcPath.mpath
-  | ME_Structure   of 'a p_module_structure       (* Concrete modules. *)
+  | ME_Structure   of 'a p_module_structure    (* Concrete modules. *)
   | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
 
 and 'a p_module_structure = {

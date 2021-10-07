@@ -59,66 +59,9 @@ let cost_add_self (c : cost) (a : form) : cost =
   let c_self = c_bnd_map (fun x -> f_xadd x a) c.c_self in
   cost_r c_self c.c_calls c.c_full
 
-(* (\* Add an entry for a oracle to [c.c_calls], if necessary. *\)
- * let cost_add_oracle (env : EcEnv.env) (c : cost) (f : EcPath.xpath) : cost =
- *   if EcPath.Mx.mem f c.c_calls
- *   then c
- *   else begin
- *     let m = f.EcPath.x_top in
- *     assert ( m.m_args = [] && EcPath.m_is_local m);
- *
- *     let restr = EcEnv.NormMp.get_restr env m in
- *     let oi = EcSymbols.Msym.find f.EcPath.x_sub restr.mr_oinfos in
- *
- *     let self = match EcCoreModules.PreOI.cost_self oi with
- *       | C_unbounded -> assert false
- *       | C_bounded self -> self in
- *
- *     let cb = call_bound_r self f_i0 in
- *
- *     cost_r c.c_self (EcPath.Mx.add f cb c.c_calls)
- *   end *)
-
-(* let cost_sub_call env c f a =
- *   let c = cost_add_oracle env c f in
- *
- *   let c_calls = EcPath.Mx.change (fun cb ->
- *       let cb = oget cb in
- *       call_bound_r cb.cb_cost (f_int_sub_simpl cb.cb_called a)
- *       |> some
- *     ) f c.c_calls in
- *
- *   cost_r c.c_self c_calls *)
-
-(* let cost_add_call env c f a =
- *   let c = cost_add_oracle env c f in
- *
- *   let c_calls = EcPath.Mx.change (fun cb ->
- *       let cb = oget cb in
- *       call_bound_r cb.cb_cost (f_int_add_simpl cb.cb_called a)
- *       |> some
- *     ) f c.c_calls in
- *
- *   cost_r c.c_self c_calls *)
-
-(* let cost_op env op c1 c2 =
- *   (\* Ensure that [c1] and [c2] have the same support. *\)
- *   let c2 = List.fold_left (cost_add_oracle env) c2 (EcPath.Mx.keys c1.c_calls)
- *   and c1 = List.fold_left (cost_add_oracle env) c1 (EcPath.Mx.keys c2.c_calls) in
- *
- *   EcPath.Mx.union (fun _ cb1 cb2 ->
- *     assert (f_equal cb1.cb_cost cb2.cb_cost);
- *     Some (call_bound_r cb1.cb_cost (op cb1.cb_called cb2.cb_called)))
- *   c1.c_calls c2.c_calls *)
-
-(* let cost_add env c1 c2 =
- *   let c_calls = cost_op env EcFol.f_int_add_simpl c1 c2 in
- *   cost_r (f_xadd c1.c_self c2.c_self) c_calls *)
-
 (* -------------------------------------------------------------------- *)
 (* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
-   the equation [c1 = x + c2] over [x].
-*)
+   the equation [c1 = x + c2] over [x]. *)
 type cost_backward_res = [
   | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
                                    whenever [c] holds. *)
