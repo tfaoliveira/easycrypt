@@ -121,7 +121,7 @@ and cHoareF = {
   chf_pr : form;
   chf_f  : EcPath.xpath;
   chf_po : form;
-  chf_co : cost;
+  chf_co : form; (* type `cost` *)
 }
 
 and cHoareS = {
@@ -129,7 +129,7 @@ and cHoareS = {
   chs_pr : form;
   chs_s  : stmt;
   chs_po : form;
-  chs_co : cost;
+  chs_co : form; (* type `cost` *)
 }
 
 and bdHoareF = {
@@ -377,13 +377,13 @@ let hs_equal hs1 hs2 =
 let chf_equal chf1 chf2 =
      f_equal chf1.chf_pr chf2.chf_pr
   && f_equal chf1.chf_po chf2.chf_po
-  && cost_equal chf1.chf_co chf2.chf_co
+  && f_equal chf1.chf_co chf2.chf_co
   && EcPath.x_equal chf1.chf_f chf2.chf_f
 
 let chs_equal chs1 chs2 =
      f_equal chs1.chs_pr chs2.chs_pr
   && f_equal chs1.chs_po chs2.chs_po
-  && cost_equal chs1.chs_co chs2.chs_co
+  && f_equal chs1.chs_co chs2.chs_co
   && s_equal chs1.chs_s chs2.chs_s
   && EcMemory.me_equal chs1.chs_m chs2.chs_m
 
@@ -467,14 +467,14 @@ let chf_hash chf =
   Why3.Hashcons.combine3
     (f_hash chf.chf_pr)
     (f_hash chf.chf_po)
-    (cost_hash chf.chf_co)
+    (f_hash chf.chf_co)
     (EcPath.x_hash chf.chf_f)
 
 let chs_hash chs =
   Why3.Hashcons.combine3
     (f_hash chs.chs_pr)
     (f_hash chs.chs_po)
-    (cost_hash chs.chs_co)
+    (f_hash chs.chs_co)
     (Why3.Hashcons.combine
        (EcCoreModules.s_hash chs.chs_s)
        (EcMemory.mem_hash chs.chs_m))
@@ -678,12 +678,12 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | FcHoareF chf ->
       let fv = fv_union (f_fv chf.chf_pr)
-          (fv_union (f_fv chf.chf_po) (cost_fv chf.chf_co)) in
+          (fv_union (f_fv chf.chf_po) (f_fv chf.chf_co)) in
       EcPath.x_fv (Mid.remove mhr fv) chf.chf_f
 
     | FcHoareS chs ->
       let fv = fv_union (f_fv chs.chs_pr)
-          (fv_union (f_fv chs.chs_po) (cost_fv chs.chs_co)) in
+          (fv_union (f_fv chs.chs_po) (f_fv chs.chs_co)) in
       fv_union (EcCoreModules.s_fv chs.chs_s) (Mid.remove (fst chs.chs_m) fv)
 
     | FbdHoareF bhf ->
@@ -1129,6 +1129,12 @@ let cost_top : cost =
 let fcost_top : form = f_cost_r cost_top
 
 (* -------------------------------------------------------------------- *)
+let mproc_cost_top : mproc_cost =
+  { pc_intr    = fcost_top;
+    pc_params  = EcPath.Mx.empty;
+    pc_full    = false; }
+
+(* -------------------------------------------------------------------- *)
 (* [l] has type [int] *)
 let cost_scalar_mult (l : form) (c : cost) : cost =
   let c_self =
@@ -1428,14 +1434,14 @@ let f_map gt g fp =
   | FcHoareF chf ->
       let pr' = g chf.chf_pr in
       let po' = g chf.chf_po in
-      let c'  = cost_map (fun _ -> g) chf.chf_co in
+      let c'  = g chf.chf_co in
         FSmart.f_cHoareF (fp, chf)
           { chf with chf_pr = pr'; chf_po = po'; chf_co = c' }
 
   | FcHoareS chs ->
       let pr' = g chs.chs_pr in
       let po' = g chs.chs_po in
-      let c'  = cost_map (fun _ -> g) chs.chs_co in
+      let c'  = g chs.chs_co in
         FSmart.f_cHoareS (fp, chs)
           { chs with chs_pr = pr'; chs_po = po'; chs_co = c' }
 
@@ -1502,8 +1508,8 @@ let f_iter g f =
 
   | FhoareF  hf  -> g hf.hf_pr; g hf.hf_po
   | FhoareS  hs  -> g hs.hs_pr; g hs.hs_po
-  | FcHoareF  chf -> g chf.chf_pr; g chf.chf_po; cost_iter g chf.chf_co
-  | FcHoareS  chs -> g chs.chs_pr; g chs.chs_po; cost_iter g chs.chs_co
+  | FcHoareF  chf -> g chf.chf_pr; g chf.chf_po; g chf.chf_co
+  | FcHoareS  chs -> g chs.chs_pr; g chs.chs_po; g chs.chs_co
   | FbdHoareF bhf -> g bhf.bhf_pr; g bhf.bhf_po; g bhf.bhf_bd
   | FbdHoareS bhs -> g bhs.bhs_pr; g bhs.bhs_po; g bhs.bhs_bd
   | FequivF   ef  -> g ef.ef_pr; g ef.ef_po
@@ -2148,7 +2154,7 @@ module Fsubst = struct
       let pr' = f_subst ~tx s chf.chf_pr in
       let po' = f_subst ~tx s chf.chf_po in
       let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp chf.chf_f in
-      let c'  = cost_subst ~tx s chf.chf_co in
+      let c'  = f_subst ~tx s chf.chf_co in
       FSmart.f_cHoareF (fp, chf)
         { chf_pr = pr'; chf_po = po'; chf_f = mp'; chf_co = c'; }
 
@@ -2160,7 +2166,7 @@ module Fsubst = struct
       let po' = f_subst ~tx s chs.chs_po in
       let st' = EcCoreModules.s_subst es chs.chs_s in
       let me' = EcMemory.me_subst s.fs_mem s.fs_ty chs.chs_m in
-      let c'  = cost_subst ~tx s chs.chs_co in
+      let c'  = f_subst ~tx s chs.chs_co in
       FSmart.f_cHoareS (fp, chs)
         { chs_pr = pr'; chs_po = po'; chs_s = st'; chs_m = me'; chs_co = c'; }
 
@@ -2403,7 +2409,7 @@ module Fsubst = struct
   (* complicated, because if a local module is substituted by a concrete module,
      its cost (time the number of times it is called) need to be added to the
      self cost (see instantiation rule).  *)
-  and cost_subst ~tx (s : f_subst) (init_cost : cost) : cost =
+  and cost_subst ~tx (s : f_subst) (init_cost : cost) : form =
     let c_self = subst_c_bnd ~tx s init_cost.c_self
     (* [concs] are the local modules that have been substituted by concrete
        modules. *)
@@ -2422,7 +2428,7 @@ module Fsubst = struct
           EcIdent.Sid.add m_conc concs, calls
       ) init_cost.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
     in
-    let cost = { c_self; c_calls; c_full = init_cost.c_full } in
+    let cost = f_cost_r { c_self; c_calls; c_full = init_cost.c_full } in
 
     (* for every module [mid] that have been concretized *)
     EcIdent.Sid.fold (fun mid cost ->
@@ -2450,67 +2456,19 @@ module Fsubst = struct
       ) concs cost
 
   and mproc_cost_subst ~tx (s : f_subst) (mpc : mproc_cost) : mproc_cost =
-    let r_self = subst_c_bnd ~tx s init_cost.r_self
-    (* [concs] are the local modules that have been substituted by concrete
-       modules. *)
-    and concs, r_abs_calls = EcPath.Mx.fold (fun x cb (concs,calls) ->
-        let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
-        let cb' = subst_c_bnd ~tx s cb in
-        match x'.x_top.m_top with
-        | `Local _ ->
-          ( concs,
-            EcPath.Mx.change
-              (fun old -> assert (old  = None); Some cb')
-              x' calls )
-
-        | `Concrete _ ->
-          let m_conc = EcPath.mget_ident x.x_top in
-          EcIdent.Sid.add m_conc concs, calls
-      ) init_cost.r_abs_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
-    in
+    let pc_intr = f_subst ~tx s mpc.pc_intr in
     (* if parameters are substituted, we do not need to move their cost
        elsewhere. *)
-    let r_params = EcPath.Mx.fold (fun x cb r_params ->
+    let pc_params = EcPath.Mx.fold (fun x cb r_params ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
         let cb' = subst_c_bnd ~tx s cb in
         EcPath.Mx.change
           (fun old -> assert (old  = None); Some cb')
           x' r_params
-      ) init_cost.r_params EcPath.Mx.empty
+      ) mpc.pc_params EcPath.Mx.empty
     in
 
-    let r_cost = { r_self; r_abs_calls; r_params; r_full = init_cost.r_full } in
-
-    let r_cost =
-      (* for every module [mid] that have been concretized *)
-      EcIdent.Sid.fold (fun mid r_cost ->
-          let _, m_info = EcIdent.Mid.find mid s.fs_mp in
-          let m_info = oget m_info in (* must not be [None] *)
-          let mp = EcPath.mident mid in
-
-          (* for every procedure [f] of [mid] *)
-          EcSymbols.Msym.fold (fun f f_info r_cost ->
-              let xf = EcPath.xpath mp f in
-
-              let f_cost = PreOI.cost f_info in
-              (* the cost of [f] minus the parameters calls, which are
-                 already accounted. *)
-              let f_cost = { f_cost with r_params = EcPath.Mx.empty } in
-
-              (* number of times [f] has been called in [init_cost] *)
-              let f_called = (* int *)
-                oget_c_bnd
-                  (EcPath.Mx.find_opt xf init_cost.r_abs_calls)
-                  init_cost.r_full
-              in
-
-              (* compute: [r_cost + f_called * f_cost] *)
-              r_cost_add ~mode_l:mode ~mode_r:`Int r_cost
-                (r_cost_c_bnd_mult ~mode_l:`Int ~mode_r:`Int f_called f_cost)
-            ) m_info r_cost
-        ) concs r_cost
-    in
-    r_cost
+    { pc_intr; pc_params; pc_full = mpc.pc_full }
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)

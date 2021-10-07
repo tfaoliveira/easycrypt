@@ -636,7 +636,7 @@ let params_hash (p : oi_params) : int =
 
 
 (* -------------------------------------------------------------------- *)
-(* ['a] will be instantiated by [EcCoreFol.mod_cost]. *)
+(* ['a] will be instantiated by [EcCoreFol.form]. *)
 type 'a p_mod_restr = {
   mr_xpaths  : EcPath.Sx.t use_restr;
   mr_mpaths  : EcPath.Sm.t use_restr;

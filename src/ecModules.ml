@@ -18,77 +18,31 @@ module Mid = EcIdent.Mid
 include EcCoreModules
 
 (* -------------------------------------------------------------------- *)
-module OI : sig
-  type t = c_bnd PreOI.t
-
-  val hash  : t -> int
-  val equal : t -> t -> bool
-
-  val is_in : t -> bool
-
-  val c_self      : t -> c_bnd
-  val c_params    : t -> c_bnd Mx.t
-  val c_abs_calls : t -> c_bnd Mx.t
-  val c_full      : t -> bool
-  val cost        : t -> c_bnd r_cost
-
-  val allowed   : t -> xpath list
-  val allowed_s : t -> Sx.t
-
-  val mk : xpath list -> bool -> c_bnd r_cost -> t
-
-  val filter : (xpath -> bool) -> t -> t
-end = struct
-  type t = c_bnd PreOI.t
-
-  let is_in     = PreOI.is_in
-  let allowed   = PreOI.allowed
-  let allowed_s = PreOI.allowed_s
-
-  let c_self      = PreOI.c_self
-  let c_params    = PreOI.c_params
-  let c_abs_calls = PreOI.c_abs_calls
-  let c_full      = PreOI.c_full
-  let cost        = PreOI.cost
-
-  let mk     = PreOI.mk
-  let filter = PreOI.filter
-  let equal  = PreOI.equal EcCoreFol.c_bnd_equal
-  let hash   = PreOI.hash EcCoreFol.c_bnd_hash
-end
-
-type orcl_info = EcCoreFol.orcl_info
-
-(* -------------------------------------------------------------------- *)
 type module_type       = EcCoreFol.module_type
 type mod_restr         = EcCoreFol.mod_restr
-type module_sig        = c_bnd p_module_sig
-type module_smpl_sig   = c_bnd p_module_smpl_sig
-type function_body     = c_bnd p_function_body
-type function_         = c_bnd p_function_
-type module_expr       = c_bnd p_module_expr
-type module_body       = c_bnd p_module_body
-type module_structure  = c_bnd p_module_structure
-type module_item       = c_bnd p_module_item
-type module_comps      = c_bnd p_module_comps
-type module_comps_item = c_bnd p_module_comps_item
-
-let r_cost_default =
-  { r_self      = C_unbounded;
-    r_abs_calls = Mx.empty;
-    r_params    = Mx.empty;
-    r_full      = false; }
+type module_sig        = form p_module_sig
+type module_smpl_sig   = form p_module_smpl_sig
+type function_body     = form p_function_body
+type function_         = form p_function_
+type module_expr       = form p_module_expr
+type module_body       = form p_module_body
+type module_structure  = form p_module_structure
+type module_item       = form p_module_item
+type module_comps      = form p_module_comps
+type module_comps_item = form p_module_comps_item
 
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;
-  mr_oinfos = Msym.empty;
+  mr_params = Msym.empty;
+  mr_cost   = assert false;     (* TODOA: empty cost record *)
 }
 
 let mr_full = {
   mr_xpaths = ur_full EcPath.Sx.empty;
   mr_mpaths = ur_full EcPath.Sm.empty;
-  mr_oinfos = Msym.empty;
+  mr_params = Msym.empty;
+  mr_cost   = assert false;     (* TODOA: empty cost record *)
 }
 
 let mr_add_restr mr (rx : Sx.t use_restr) (rm : Sm.t use_restr) =

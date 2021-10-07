@@ -149,7 +149,7 @@ val allowed   : oi_param -> xpath list
 val allowed_s : oi_param -> Sx.t
 
 (* -------------------------------------------------------------------- *)
-(* ['a] will be instantiated by [EcCoreFol.mod_cost]. *)
+(* ['a] will be instantiated by [EcCoreFol.form]. *)
 type 'a p_mod_restr = {
   mr_xpaths  : EcPath.Sx.t use_restr;
   mr_mpaths  : EcPath.Sm.t use_restr;
