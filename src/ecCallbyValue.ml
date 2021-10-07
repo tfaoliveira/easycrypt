@@ -199,6 +199,7 @@ and norm_lambda (st : state) (f : form) =
 
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
   | Fglob   _ | Fpvar   _ | Fop       _
+  | Fcost _
   | FhoareF _   | FhoareS _
   | FcHoareF _  | FcHoareS _
   | FbdHoareF _ | FbdHoareS _
@@ -472,6 +473,8 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
       | Ftuple args when st.st_ri.iota -> List.nth args i
       | _ -> f_proj (norm_lambda st f1) i f.f_ty in
     app_red st f1 args
+
+  | Fcost c -> f_cost_r (norm_cost st s c)
 
   | FhoareF hf ->
     assert (is_Aempty args);

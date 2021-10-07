@@ -123,6 +123,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
       | Tglob   _ -> false
       | Tvar    _ -> false
       | Tunivar _ -> false
+      | Tcost     -> false
 
       | Ttuple tys      -> List.exists isempty tys
       | Tfun   (t1, t2) -> List.exists isempty [t1; t2]

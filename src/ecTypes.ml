@@ -28,6 +28,7 @@ and ty_node =
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
+  | Tcost                   (* a cost vector *)
 
 type dom = ty list
 
@@ -67,6 +68,7 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
+    | Tcost            -> 42
 
   let fv ty =
     let union ex =
@@ -79,6 +81,7 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
+    | Tcost            -> Mid.empty
 
   let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
 end)
@@ -117,12 +120,16 @@ let rec dump_ty ty =
   | Tfun (t1, t2) ->
       Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
 
+  | Tcost ->
+      Printf.sprintf "cost"
+
 (* -------------------------------------------------------------------- *)
 let tuni uid     = mk_ty (Tunivar uid)
 let tvar id      = mk_ty (Tvar id)
 let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
+let tcost        = mk_ty Tcost
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
@@ -185,7 +192,7 @@ end
 (* -------------------------------------------------------------------- *)
 let ty_map f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> t
+  | Tglob _ | Tunivar _ | Tvar _ | Tcost -> t
 
   | Ttuple lty ->
       TySmart.ttuple (t, lty) (List.Smart.map f lty)
@@ -199,21 +206,21 @@ let ty_map f t =
 
 let ty_fold f s ty =
   match ty.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> s
+  | Tglob _ | Tunivar _ | Tvar _ | Tcost -> s
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
   | Tfun(t1,t2) -> f (f s t1) t2
 
 let ty_sub_exists f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> false
+  | Tglob _ | Tunivar _ | Tvar _ | Tcost -> false
   | Ttuple lty -> List.exists f lty
   | Tconstr (_, lty) -> List.exists f lty
   | Tfun (t1, t2) -> f t1 || f t2
 
 let ty_iter f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> ()
+  | Tglob _ | Tunivar _ | Tvar _ | Tcost -> ()
   | Ttuple lty -> List.iter f lty
   | Tconstr (_, lty) -> List.iter f lty
   | Tfun (t1,t2) -> f t1; f t2
@@ -233,6 +240,7 @@ let symbol_of_ty (ty : ty) =
   | Tvar    _      -> "x"
   | Ttuple  _      -> "x"
   | Tfun    _      -> "f"
+  | Tcost          -> "c"
   | Tconstr (p, _) ->
       let x = EcPath.basename p in
       let rec doit i =
@@ -280,6 +288,7 @@ let rec ty_subst s =
       | Tvar id       -> odfl ty (s.ts_v id)
       | Ttuple lty    -> TySmart.ttuple (ty, lty) (List.Smart.map aux lty)
       | Tfun (t1, t2) -> TySmart.tfun (ty, (t1, t2)) (aux t1, aux t2)
+      | Tcost         -> tcost
 
       | Tconstr(p, lty) -> begin
         match Mp.find_opt p s.ts_def with

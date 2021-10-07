@@ -66,6 +66,7 @@ let rec on_mpath_ty cb (ty : ty) =
   match ty.ty_node with
   | Tunivar _        -> ()
   | Tvar    _        -> ()
+  | Tcost            -> ()
   | Tglob mp         -> cb mp
   | Ttuple tys       -> List.iter (on_mpath_ty cb) tys
   | Tconstr (_, tys) -> List.iter (on_mpath_ty cb) tys
@@ -195,8 +196,10 @@ let rec on_mpath_form cb (f : EcFol.form) =
     | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
     | EcFol.Ftuple    fs           -> List.iter cbrec fs
     | EcFol.Fproj     (f, _)       -> cbrec f
-    | EcFol.Fpvar     (pv, _)      -> on_mpath_pv  cb pv
+    | EcFol.Fpvar     (pv, _)      -> on_mpath_pv   cb pv
+    | EcFol.Fcost     c            -> on_mpath_cost cb c
     | EcFol.Fglob     (mp, _)      -> cb mp
+
     | EcFol.FhoareF   hf           -> on_mpath_hf  cb hf
     | EcFol.FhoareS   hs           -> on_mpath_hs  cb hs
     | EcFol.FcHoareF  chf          -> on_mpath_chf cb chf

@@ -60,6 +60,8 @@ and f_node =
   | Ftuple  of form list
   | Fproj   of form * int
 
+  | Fcost   of cost
+
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
 
@@ -74,7 +76,7 @@ and f_node =
 
   | FeagerF of eagerF
 
-  | Fcoe of coe
+  | Fcoe of coe (* cost of expression *)
 
   | Fpr of pr (* hr *)
 
@@ -112,7 +114,8 @@ and sHoareS = {
   hs_m  : EcMemory.memenv;
   hs_pr : form;
   hs_s  : stmt;
-  hs_po : form; }
+  hs_po : form;
+}
 
 and cHoareF = {
   chf_pr : form;
@@ -126,7 +129,8 @@ and cHoareS = {
   chs_pr : form;
   chs_s  : stmt;
   chs_po : form;
-  chs_co : cost; }
+  chs_co : cost;
+}
 
 and bdHoareF = {
   bhf_pr  : form;
@@ -567,6 +571,8 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fproj(f,i) ->
         Why3.Hashcons.combine (f_hash f) i
 
+    | Fcost c -> cost_hash c
+
     | FhoareF  hf   -> hf_hash hf
     | FhoareS  hs   -> hs_hash hs
     | FcHoareF chf  -> chf_hash chf
@@ -605,6 +611,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fproj(e, _)         -> f_fv e
     | Fif (f1, f2, f3)    -> union f_fv [f1; f2; f3]
     | Fmatch (b, fs, ty)  -> fv_union ty.ty_fv (union f_fv (b :: fs))
+    | Fcost c             -> cost_fv c
 
     | Fquant(_, b, f) ->
       let do1 (id, ty) fv = fv_union (gty_fv ty) (Mid.remove id fv) in
@@ -825,16 +832,6 @@ let f_eqs fs1 fs2 =
   f_ands (List.map2 f_eq fs1 fs2)
 
 (* -------------------------------------------------------------------- *)
-let f_hoareS_r hs = mk_form (FhoareS hs) tbool
-let f_hoareF_r hf = mk_form (FhoareF hf) tbool
-
-let f_hoareS hs_m hs_pr hs_s hs_po =
-  f_hoareS_r { hs_m; hs_pr; hs_s; hs_po; }
-
-let f_hoareF hf_pr hf_f hf_po =
-  f_hoareF_r { hf_pr; hf_f; hf_po; }
-
-(* -------------------------------------------------------------------- *)
 let cost_r (c_self : c_bnd) (c_calls : c_bnd EcPath.Mx.t) c_full : cost =
   (* Invariant: keys of c_calls are functions of local modules,
      with no arguments. *)
@@ -845,6 +842,18 @@ let cost_r (c_self : c_bnd) (c_calls : c_bnd EcPath.Mx.t) c_full : cost =
     ) c_calls);
   let c = { c_self; c_calls; c_full; } in
   c
+
+let f_cost_r c = mk_form (Fcost c) EcTypes.tcost
+
+(* -------------------------------------------------------------------- *)
+let f_hoareS_r hs = mk_form (FhoareS hs) tbool
+let f_hoareF_r hf = mk_form (FhoareF hf) tbool
+
+let f_hoareS hs_m hs_pr hs_s hs_po =
+  f_hoareS_r { hs_m; hs_pr; hs_s; hs_po; }
+
+let f_hoareF hf_pr hf_f hf_po =
+  f_hoareF_r { hf_pr; hf_f; hf_po; }
 
 let f_cHoareS_r chs = mk_form (FcHoareS chs) tbool
 let f_cHoareF_r chf = mk_form (FcHoareF chf) tbool
@@ -1173,6 +1182,9 @@ module FSmart = struct
     then fp
     else f_proj f' i ty'
 
+  let f_cost (fp, fc) fc' =
+    if cost_equal fc fc' then fp else f_cost_r fc'
+
   let f_equivF (fp, ef) ef' =
     if eqf_equal ef ef' then fp else mk_form (FequivF ef') fp.f_ty
 
@@ -1309,6 +1321,8 @@ let f_map gt g fp =
       let ty' = gt fp.f_ty in
         FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
 
+  | Fcost c -> FSmart.f_cost (fp, c) (cost_map (fun _ -> g) c)
+
   | FhoareF hf ->
       let pr' = g hf.hf_pr in
       let po' = g hf.hf_po in
@@ -1394,6 +1408,7 @@ let f_iter g f =
   | Fapp     (e, es)      -> List.iter g (e :: es)
   | Ftuple   es           -> List.iter g es
   | Fproj    (e, _)       -> g e
+  | Fcost    c            -> cost_iter g c
 
   | FhoareF  hf  -> g hf.hf_pr; g hf.hf_po
   | FhoareS  hs  -> g hs.hs_pr; g hs.hs_po
@@ -1406,64 +1421,6 @@ let f_iter g f =
   | FeagerF   eg  -> g eg.eg_pr; g eg.eg_po
   | Fcoe      coe -> g coe.coe_pre;
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
-
-(* -------------------------------------------------------------------- *)
-let form_exists g f =
-  match f.f_node with
-  | Fint     _
-  | Flocal   _
-  | Fpvar    _
-  | Fglob    _
-  | Fop      _ -> false
-
-  | Fquant   (_ , _ , f1) -> g f1
-  | Fif      (f1, f2, f3) -> g f1 || g f2 || g f3
-  | Fmatch   (b, fs, _)   -> List.exists g (b :: fs)
-  | Flet     (_, f1, f2)  -> g f1 || g f2
-  | Fapp     (e, es)      -> List.exists g (e :: es)
-  | Ftuple   es           -> List.exists g es
-  | Fproj    (e, _)       -> g e
-
-  | FhoareF   hf -> g hf.hf_pr   || g hf.hf_po
-  | FhoareS   hs -> g hs.hs_pr   || g hs.hs_po
-  | FcHoareF  chf -> g chf.chf_pr  || g chf.chf_po
-  | FcHoareS  chs -> g chs.chs_pr  || g chs.chs_po
-  | FbdHoareF bhf -> g bhf.bhf_pr  || g bhf.bhf_po
-  | FbdHoareS bhs -> g bhs.bhs_pr  || g bhs.bhs_po
-  | FequivF   ef  -> g ef.ef_pr    || g ef.ef_po
-  | FequivS   es  -> g es.es_pr    || g es.es_po
-  | FeagerF   eg  -> g eg.eg_pr    || g eg.eg_po
-  | Fcoe      coe -> g coe.coe_pre
-  | Fpr       pr  -> g pr.pr_args  || g pr.pr_event
-
-(* -------------------------------------------------------------------- *)
-let form_forall g f =
-  match f.f_node with
-  | Fint     _
-  | Flocal   _
-  | Fpvar    _
-  | Fglob    _
-  | Fop      _ -> true
-
-  | Fquant   (_ , _ , f1) -> g f1
-  | Fif      (f1, f2, f3) -> g f1 && g f2 && g f3
-  | Fmatch   (b, fs, _)   -> List.for_all g (b :: fs)
-  | Flet     (_, f1, f2)  -> g f1 && g f2
-  | Fapp     (e, es)      -> List.for_all g (e :: es)
-  | Ftuple   es           -> List.for_all g es
-  | Fproj    (e, _)       -> g e
-
-  | FhoareF  hf  -> g hf.hf_pr  && g hf.hf_po
-  | FhoareS  hs  -> g hs.hs_pr  && g hs.hs_po
-  | FcHoareF  chf -> g chf.chf_pr && g chf.chf_po
-  | FcHoareS  chs -> g chs.chs_pr && g chs.chs_po
-  | FbdHoareF bhf -> g bhf.bhf_pr && g bhf.bhf_po
-  | FbdHoareS bhs -> g bhs.bhs_pr && g bhs.bhs_po
-  | FequivF   ef  -> g ef.ef_pr   && g ef.ef_po
-  | FequivS   es  -> g es.es_pr   && g es.es_po
-  | FeagerF   eg  -> g eg.eg_pr   && g eg.eg_po
-  | Fcoe      coe -> g coe.coe_pre
-  | Fpr       pr  -> g pr.pr_args && g pr.pr_event
 
 (* -------------------------------------------------------------------- *)
 let f_ops f =
@@ -1828,6 +1785,7 @@ let expr_of_form mh f =
       then e_var pv fp.f_ty
       else raise CannotTranslate
 
+    | Fcost     _
     | Fcoe      _
     | Fglob     _
     | FhoareF   _ | FhoareS   _

@@ -89,6 +89,7 @@ type tenv = {
   (*---*) te_gen        : WTerm.term Hf.t;
   (*---*) te_xpath      : WTerm.lsymbol Hx.t;  (* proc and global var *)
   (*---*) te_absmod     : w3absmod Hid.t;      (* abstract module     *)
+  mutable te_cost       : WTy.ty option;       (* cost *)
 }
 
 let empty_tenv env task (kwty, kw, kwk) =
@@ -104,6 +105,7 @@ let empty_tenv env task (kwty, kw, kwk) =
     te_gen        = Hf.create 0;
     te_xpath      = Hx.create 0;
     te_absmod     = Hid.create 0;
+    te_cost       = None;
   }
 
 (* -------------------------------------------------------------------- *)
@@ -363,13 +365,26 @@ let mk_tglob genv mp =
     Hid.add genv.te_absmod id { w3am_ty = ty };
     ty
 
+let mk_tcost genv =
+  match genv.te_cost with
+  | Some w3_ty -> w3_ty
+  | None ->
+    (* create the type symbol *)
+    let pid = WIdent.id_fresh "cost" in
+    let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+    genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+    let ty = WTy.ty_app ts [] in
+    genv.te_cost <- Some ty;
+    ty
+
 (* -------------------------------------------------------------------- *)
-let rec trans_ty ((genv, lenv) as env) ty =
+let rec trans_ty ((genv, lenv) as env) (ty : EcTypes.ty) : WTy.ty =
   match ty.ty_node with
   | Tglob   mp ->
     trans_tglob env mp
   | Tunivar _ -> assert false
   | Tvar    x -> trans_tv lenv x
+  | Tcost     -> mk_tcost genv
 
   | Ttuple  ts-> wty_tuple genv (trans_tys env ts)
 
@@ -695,10 +710,11 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
 
   | Fpr pr        -> trans_pr env pr
 
-  | Fcoe _
-  | FeagerF _
-  | FhoareF  _  | FhoareS   _
-  | FcHoareF  _ | FcHoareS   _
+  | Fcoe      _
+  | Fcost     _
+  | FeagerF   _
+  | FhoareF   _ | FhoareS   _
+  | FcHoareF  _ | FcHoareS  _
   | FbdHoareF _ | FbdHoareS _
   | FequivF   _ | FequivS   _
     -> trans_gen env fp
@@ -1384,12 +1400,13 @@ module Frequency = struct
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
 
-      | FhoareF _   | FhoareS _
-      | FcHoareF _  | FcHoareS _
+      | FhoareF   _ | FhoareS   _
+      | FcHoareF  _ | FcHoareS  _
       | FbdHoareF _ | FbdHoareS _
-      | FequivF _   | FequivS _
-      | FeagerF _
-      | Fcoe _ -> ()
+      | FequivF   _ | FequivS   _
+      | FeagerF   _
+      | Fcoe      _
+      | Fcost     _ -> ()
 
       | Fpr pr ->
         sf := Sx.add pr.pr_fun !sf;

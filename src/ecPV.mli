@@ -113,7 +113,6 @@ module PV : sig
   val mem_glob : env -> mpath -> t -> bool
 
   val fv      : env -> EcIdent.t -> form -> t
-  val fv_cost : env -> EcIdent.t -> cost -> t
 
   val pp : env -> Format.formatter -> t -> unit
 

@@ -657,6 +657,7 @@ let rec pp_type_r ppe outer fmt ty =
 
   | Tunivar x -> pp_tyunivar ppe fmt x
   | Tvar    x -> pp_tyvar ppe fmt x
+  | Tcost     -> Format.fprintf fmt "cost"
 
   | Ttuple tys ->
       let pp fmt tys =
@@ -1609,6 +1610,8 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       with NoProjArg ->
         pp_proji ppe pp_form_r (fst outer) fmt (e1,i)
     end
+
+  | Fcost c -> pp_cost ppe fmt c
 
   | FhoareF hf ->
       let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.hf_f ppe.PPEnv.ppe_env in

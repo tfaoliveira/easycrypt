@@ -27,6 +27,7 @@ and ty_node =
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
+  | Tcost
 
 module Mty : Map.S with type key = ty
 module Sty : Set.S with module M = Map.MakeBase(Mty)
@@ -46,6 +47,7 @@ val tconstr : EcPath.path -> ty list -> ty
 val tfun    : ty -> ty -> ty
 val tglob   : EcPath.mpath -> ty
 val tpred   : ty -> ty
+val tcost   : ty
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty

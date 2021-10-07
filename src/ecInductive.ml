@@ -100,6 +100,7 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
     | Tglob   _ -> assert false
     | Tunivar _ -> assert false
     | Tvar    _ -> None
+    | Tcost     -> None
 
     | Ttuple tys -> begin
         let xs  = List.map (fun xty -> (fresh_id_of_ty xty, xty)) tys in

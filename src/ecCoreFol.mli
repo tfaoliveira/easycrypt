@@ -58,6 +58,8 @@ and f_node =
   | Ftuple  of form list
   | Fproj   of form * int
 
+  | Fcost   of cost
+
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
 
@@ -217,8 +219,6 @@ val f_node  : form -> f_node
 (* not recursive *)
 val f_map  : (EcTypes.ty -> EcTypes.ty) -> (form -> form) -> form -> form
 val f_iter : (form -> unit) -> form -> unit
-val form_exists: (form -> bool) -> form -> bool
-val form_forall: (form -> bool) -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 (* not recursive *)
@@ -272,6 +272,8 @@ val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
 val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> bool -> cost
+
+val f_cost_r : cost -> form
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -402,11 +404,12 @@ module FSmart : sig
   val f_tuple    : (form * a_tuple  ) -> a_tuple   -> form
   val f_app      : (form * a_app    ) -> a_app     -> form
   val f_proj     : (form * a_proj   ) -> a_proj    -> int -> form
+  val f_cost     : (form * cost     ) -> cost      -> form
   val f_glob     : (form * a_glob   ) -> a_glob    -> form
-  val f_hoareF   : (form * sHoareF  ) -> sHoareF    -> form
-  val f_hoareS   : (form * sHoareS  ) -> sHoareS    -> form
-  val f_cHoareF  : (form * cHoareF  ) -> cHoareF    -> form
-  val f_cHoareS  : (form * cHoareS  ) -> cHoareS    -> form
+  val f_hoareF   : (form * sHoareF  ) -> sHoareF   -> form
+  val f_hoareS   : (form * sHoareS  ) -> sHoareS   -> form
+  val f_cHoareF  : (form * cHoareF  ) -> cHoareF   -> form
+  val f_cHoareS  : (form * cHoareS  ) -> cHoareS   -> form
   val f_bdHoareF : (form * bdHoareF ) -> bdHoareF  -> form
   val f_bdHoareS : (form * bdHoareS ) -> bdHoareS  -> form
   val f_equivF   : (form * equivF   ) -> equivF    -> form

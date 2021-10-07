@@ -1002,6 +1002,48 @@ module FPosition = struct
     in select ?o (test xconv) target
 
   (* ------------------------------------------------------------------ *)
+  type key = [
+    | `Pre
+    | `Post
+    | `Self
+    | `Xpath of EcPath.Mx.key
+  ]
+
+  (* ------------------------------------------------------------------ *)
+  let kforms_of_cost (c : cost) : (key * EcFol.form) list =
+    let calls =
+      EcPath.Mx.bindings c.c_calls
+      |> List.filter_map (fun (f,cb) ->
+          match cb with
+          | C_bounded c -> Some (`Xpath f, c)
+          | C_unbounded -> None)
+    in
+    let self =
+      match c.c_self with
+      | C_bounded c -> [`Self, c]
+      | C_unbounded -> []
+    in
+    self @ calls
+
+  (* keys order is not arbitrary *)
+  let cost_of_kforms (old_c : cost) (kfs : (key * EcFol.form) list) : cost =
+    let c_self, calls =
+      match kfs with
+      | (`Self, self) :: calls -> C_bounded self, calls
+      |                  calls -> C_unbounded,    calls
+    in
+
+    let c_calls : c_bnd EcPath.Mx.t =
+      EcPath.Mx.mapi (fun xp _ ->
+          match List.find_opt (fun (key, _) -> key = `Xpath xp) calls with
+          | Some (_,cb) -> C_bounded cb
+          | None        -> C_unbounded
+        ) old_c.c_calls
+    in
+    cost_r c_self c_calls old_c.c_full
+
+
+  (* ------------------------------------------------------------------ *)
   let map (p : ptnpos) (tx : form -> form) (f : form) =
     let rec doit1 p fp =
       match p with
@@ -1053,6 +1095,11 @@ module FPosition = struct
               let (f1', f2') = as_seq2 (doit p [f1; f2]) in
               FSmart.f_let (fp, (lv, f1, f2)) (lv, f1', f2')
 
+          | Fcost c ->
+            let kfs_cost = kforms_of_cost c in
+            let sub = kdoit p kfs_cost in
+            f_cost_r (cost_of_kforms c sub)
+
           | Fpr pr ->
               let (args', event') = as_seq2 (doit p [pr.pr_args; pr.pr_event]) in
               f_pr pr.pr_mem pr.pr_fun args' event'
@@ -1062,43 +1109,22 @@ module FPosition = struct
               f_hoareF_r { hf with hf_pr; hf_po; }
 
           | FcHoareF chf ->
-            let calls = EcPath.Mx.bindings chf.chf_co.c_calls
-                        |> List.filter_map (fun (f,cb) ->
-                            match cb with
-                            | C_bounded c -> Some (`Xpath f, c)
-                            | C_unbounded -> None)
-            in
-            let self =
-              match chf.chf_co.c_self with
-              | C_bounded c -> [`Self, c]
-              | C_unbounded -> []
-            in
+            let kfs_cost = kforms_of_cost chf.chf_co in
 
             let sub =
-              kdoit p ((`Pre, chf.chf_pr) :: (`Post, chf.chf_po) :: self @ calls)
+              kdoit p ((`Pre, chf.chf_pr) :: (`Post, chf.chf_po) :: kfs_cost)
             in
 
-            let chf_pr, chf_po, c_self, calls =
+            let chf_pr, chf_po, kfs_cost =
                 match sub with
-                  | (_, chf_pr) :: (_, chf_po) :: (`Self, self) :: calls ->
-                    chf_pr, chf_po, C_bounded self, calls
-
-                  | (_, chf_pr) :: (_, chf_po) :: calls ->
-                    chf_pr, chf_po, C_unbounded, calls
+                  | (_, chf_pr) :: (_, chf_po) :: kfs_cost ->
+                    chf_pr, chf_po, kfs_cost
 
                   | _ -> assert false
             in
 
-            let c_calls : c_bnd EcPath.Mx.t =
-              EcPath.Mx.mapi (fun xp _ ->
-                  match List.find_opt (fun (key, _) -> key = `Xpath xp) calls with
-                  | Some (_,cb) -> C_bounded cb
-                  | None        -> C_unbounded
-                ) chf.chf_co.c_calls
-            in
-            let cost = cost_r c_self c_calls chf.chf_co.c_full in
-            f_cHoareF_r { chf with chf_pr; chf_po;
-                                   chf_co = cost; }
+            let chf_co = cost_of_kforms chf.chf_co kfs_cost in
+            f_cHoareF_r { chf with chf_pr; chf_po; chf_co; }
 
           | FbdHoareF hf ->
               let sub = doit p [hf.bhf_pr; hf.bhf_po; hf.bhf_bd] in

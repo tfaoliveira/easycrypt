@@ -318,6 +318,8 @@ module PV = struct
     | Fapp(e, es) -> List.fold_left (aux env m) (aux env m fv e) es
     | Ftuple es   -> List.fold_left (aux env m) fv es
     | Fproj(e,_)  -> aux env m fv e
+    | Fcost c -> cost_fold (fun _ t fv -> aux env m fv t) c fv
+
     | Fcoe _
     | FhoareF _  | FhoareS _
     | FcHoareF _  | FcHoareS _
@@ -325,9 +327,6 @@ module PV = struct
     | FequivF _ | FequivS _ | FeagerF _ | Fpr _ -> assert false
 
   let fv env m f = aux env m empty f
-
-  let fv_cost env m (cost : cost) : t =
-    cost_fold (fun _ t fv -> aux env m fv t) cost empty
 
   let pp env fmt fv =
     let ppe = EcPrinting.PPEnv.ofenv env in
