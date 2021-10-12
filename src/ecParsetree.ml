@@ -835,7 +835,7 @@ type logtactic =
   | Pchange     of pformula
   | Ppose       of (psymbol * ptybinding list * rwocc * pformula)
   | Pgenhave    of pgenhave
-  | Pwlog       of (psymbol list * pformula)
+  | Pwlog       of (psymbol list * bool * pformula)
 
 (* -------------------------------------------------------------------- *)
 and ptactic_core_r =
