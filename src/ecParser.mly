@@ -447,6 +447,7 @@
 %token FUN
 %token FUSION
 %token FWDS
+%token GEN
 %token GLOB
 %token GOAL
 %token HAT
@@ -2692,6 +2693,10 @@ logtactic:
 
 | m=have_or_suff ip=loc(intro_pattern)* COLON p=form BY t=loc(tactics)
    { Pcut (m, ip, p, Some t) }
+
+| GEN HAVE x=loc(ipcore_name) ip=prefix(COMMA, loc(intro_pattern)*)?
+   COLON ids=loc(ipcore_name)* SLASH f=form
+   { Pgenhave (x, ip, ids, f) }
 
 | HAVE ip=loc(intro_pattern)* CEQ fp=pcutdef
    { Pcutdef (ip, fp) }
