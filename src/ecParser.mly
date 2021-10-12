@@ -643,6 +643,7 @@ _lident:
 | DUMP       { "dump"       }
 | EXPECT     { "expect"     }
 | FIRST      { "first"      }
+| GEN        { "gen"        }
 | INTERLEAVE { "interleave" }
 | LAST       { "last"       }
 | LEFT       { "left"       }
