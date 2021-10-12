@@ -2696,7 +2696,7 @@ logtactic:
    { Pcut (m, ip, p, Some t) }
 
 | GEN HAVE x=loc(ipcore_name) ip=prefix(COMMA, loc(intro_pattern)*)?
-   COLON ids=loc(ipcore_name)* SLASH f=form
+   COLON ids=loc(ipcore_name)* SLASH f=form %prec prec_below_IMPL
    { Pgenhave (x, ip, ids, f) }
 
 | HAVE ip=loc(intro_pattern)* CEQ fp=pcutdef
