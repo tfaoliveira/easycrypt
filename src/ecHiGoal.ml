@@ -662,7 +662,10 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       let target = target |> omap (fst |- LDecl.hyp_by_name^~ hyps |- unloc) in
       t_simplify_lg ?target ~delta:false (ttenv, logic) tc
 
-  | RWDelta ((s, r, o), p) -> begin
+  | RWDelta ((s, r, o, px), p) -> begin
+      if Option.is_some px then
+        tc_error !!tc "cannot use pattern selection in delta-rewrite rules";
+
       let do1 tc = process_delta ?target (s, o, p) tc in
 
       match r with
@@ -670,7 +673,7 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       | Some (b, n) -> t_do b n do1 tc
   end
 
-  | RWRw (((s : rwside), r, o), pts) -> begin
+  | RWRw (((s : rwside), r, o, _), pts) -> begin
       let do1 (mode : [`Full | `Light]) ((subs : rwside), pt) tc =
         let hyps   = FApi.tc1_hyps tc in
         let target = target |> omap (fst |- LDecl.hyp_by_name^~ hyps |- unloc) in
