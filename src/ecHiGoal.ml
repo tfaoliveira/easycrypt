@@ -724,29 +724,28 @@ let rec process_rewrite1_r ttenv ?target ri tc =
           | _    , `LtoR -> (s     :> rwside)
           | `RtoL, `RtoL -> (`LtoR :> rwside) in
 
-        let is_baserw p tc =
+        let is_baserw p =
           EcEnv.BaseRw.is_base p.pl_desc (FApi.tc1_env tc) in
 
         match pt with
         | { fp_head = FPNamed (p, None); fp_args = []; }
-              when pt.fp_mode = `Implicit && is_baserw p tc
+              when pt.fp_mode = `Implicit && is_baserw p
         ->
           let env = FApi.tc1_env tc in
           let ls  = snd (EcEnv.BaseRw.lookup p.pl_desc env) in
           let ls  = EcPath.Sp.elements ls in
 
           let do1 lemma tc =
-            let pt = PT.pt_of_uglobal_r ptenv lemma in
-              process_rewrite1_core ~mode ?target (theside, prw, o) pt tc in
-            t_ors (List.map do1 ls) tc
+            let pt = PT.pt_of_uglobal_r (PT.copy ptenv) lemma in
+               process_rewrite1_core ~mode ?target (theside, prw, o) pt tc
+          in t_ors (List.map do1 ls) tc
 
         | { fp_head = FPNamed (p, None); fp_args = []; }
               when pt.fp_mode = `Implicit
         ->
-          let env = FApi.tc1_env tc in
-          let pt  =
-            PT.process_full_pterm ~implicits
-              (PT.ptenv_of_penv hyps !!tc) pt
+          let env    = FApi.tc1_env tc in
+          let ptenv0 = PT.copy ptenv in
+          let pt     = PT.process_full_pterm ~implicits ptenv pt
           in
 
           if    is_ptglobal pt.PT.ptev_pt.pt_head
@@ -755,7 +754,7 @@ let rec process_rewrite1_r ttenv ?target ri tc =
             let ls = EcEnv.Ax.all ~name:(unloc p) env in
 
             let do1 (lemma, _) tc =
-              let pt = PT.pt_of_uglobal_r ptenv lemma in
+              let pt = PT.pt_of_uglobal_r (PT.copy ptenv0) lemma in
                 process_rewrite1_core ~mode ?target (theside, prw, o) pt tc in
               t_ors (List.map do1 ls) tc
           end else
