@@ -18,6 +18,7 @@ module Map = struct
 
     val odup : ('a -> key) -> 'a list -> ('a * 'a) option
     val to_stream : 'a t -> (key * 'a) Stream.t
+    val hash : (key -> int) -> ('a -> int) -> 'a t -> int
   end
 
   module Make(O : OrderedType) : S with type key = O.t = struct
@@ -45,6 +46,13 @@ module Map = struct
               aout
       in
         Stream.from next
+
+    let hash (hk: key -> int) (hel: 'a -> int) (m : 'a t) : int =
+      let bnd_hash (k, e) =
+        Why3.Hashcons.combine
+          (hel e) (hk k)
+      in
+      Why3.Hashcons.combine_list bnd_hash 0 (bindings m)
   end
 
   module MakeBase(M : S) : Why3.Extmap.S
@@ -65,6 +73,7 @@ module Set = struct
     val big_inter : t list -> t
     val map : (elt -> elt) -> t -> t
     val undup : elt list -> elt list
+    val hash : (elt -> int) -> t -> int
   end
 
   module MakeOfMap(M : Why3.Extmap.S) : S with module M = M = struct
@@ -91,6 +100,9 @@ module Set = struct
            else
              doit (add x seen) (x :: acc) s
       in fun (s : elt list) -> doit empty [] s
+
+    let hash (hel: 'a -> int) (m : t) : int =
+      Why3.Hashcons.combine_list hel 0 (elements m)
   end
 
   module Make(Ord : OrderedType) = MakeOfMap(Map.Make(Ord))

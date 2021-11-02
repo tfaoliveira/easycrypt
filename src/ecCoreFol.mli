@@ -8,6 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 open EcUtils
+open EcSymbols
 open EcBigInt
 open EcPath
 open EcMaps
@@ -58,7 +59,13 @@ and f_node =
   | Ftuple  of form list
   | Fproj   of form * int
 
-  | Fcost   of cost
+  | Fcost         of cost
+  | Fmodcost      of mod_cost
+  | Fmodcost_proj of form * symbol * [`Intr | `Param of EcIdent.t * symbol]
+  (* [Fmodcost_proj mod_cost proc p] projects [mod_cost] over
+     procedure [proc] and [p]:
+     - if [p = `Intr], intrinsic cost
+     - if [p = `Param (O, fo)], number of calls to the module parameter [O.fo]. *)
 
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
@@ -186,7 +193,7 @@ and cost = private {
    Missing entries can be called:
    - any number of times in if [full] is [false]
    - zero times if [full] is [true] *)
-and mproc_cost = private {
+and proc_cost = private {
   pc_intr   : form;              (* of type `cost` *)
   pc_params : c_bnd EcPath.Mx.t; (* of type `int` *)
   pc_full   : bool;
@@ -194,7 +201,7 @@ and mproc_cost = private {
 
 (* A module procedure `F` cost, where `F` can be an non-applied functor.
    All declared procedures of `F` must appear. *)
-and mod_cost = mproc_cost EcSymbols.Msym.t
+and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
 
@@ -292,8 +299,11 @@ val f_hoareS : memenv -> form -> stmt -> form -> form
 
 (* soft-constructors - cost hoare *)
 val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> bool -> cost
-
 val f_cost_r : cost -> form
+
+val proc_cost_r : form -> c_bnd EcPath.Mx.t -> bool -> proc_cost
+
+val f_mod_cost_r : mod_cost -> ty -> form
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -407,7 +417,7 @@ val oget_c_bnd : c_bnd option -> bool -> c_bnd
 val cost_add   : cost -> cost -> cost
 
 (* -------------------------------------------------------------------- *)
-val mproc_cost_top : mproc_cost
+val proc_cost_top : proc_cost
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig

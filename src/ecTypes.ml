@@ -22,12 +22,14 @@ type ty = {
 }
 
 and ty_node =
-  | Tglob   of EcPath.mpath (* The tuple of global variable of the module *)
-  | Tunivar of EcUid.uid
-  | Tvar    of EcIdent.t
-  | Ttuple  of ty list
-  | Tconstr of EcPath.path * ty list
-  | Tfun    of ty * ty
+  | Tglob    of EcPath.mpath (* The tuple of global variable of the module *)
+  | Tunivar  of EcUid.uid
+  | Tvar     of EcIdent.t
+  | Ttuple   of ty list
+  | Tconstr  of EcPath.path * ty list
+  | Tfun     of ty * ty
+  | Tmodcost of EcSymbols.Ssym.t * EcSymbols.Ssym.t EcIdent.Mid.t
+  (* procedures * map from oracle parameters to parameters procedures *)
 
 type dom = ty list
 
@@ -57,6 +59,10 @@ module Hsty = Why3.Hashcons.Make (struct
     | Tfun (d1, c1), Tfun (d2, c2)->
         ty_equal d1 d2 && ty_equal c1 c2
 
+    | Tmodcost (procs1, params1), Tmodcost (procs2, params2) ->
+      EcSymbols.Ssym.equal procs1 procs2
+      && Mid.equal EcSymbols.Ssym.equal params1 params2
+
     | _, _ -> false
 
   let hash ty =
@@ -67,18 +73,23 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
+    | Tmodcost (procs, params) ->
+      Why3.Hashcons.combine
+        (EcSymbols.Ssym.hash Hashtbl.hash procs)
+        (EcIdent.Mid.hash EcIdent.tag Hashtbl.hash params)
 
   let fv ty =
     let union ex =
       List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty in
 
     match ty with
-    | Tglob m          -> EcPath.m_fv Mid.empty m
-    | Tunivar _        -> Mid.empty
-    | Tvar    _        -> Mid.empty
-    | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
-    | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
-    | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
+    | Tglob m              -> EcPath.m_fv Mid.empty m
+    | Tunivar _            -> Mid.empty
+    | Tvar    _            -> Mid.empty
+    | Ttuple  tys          -> union (fun a -> a.ty_fv) tys
+    | Tconstr (_, tys)     -> union (fun a -> a.ty_fv) tys
+    | Tfun    (t1, t2)     -> union (fun a -> a.ty_fv) [t1; t2]
+    | Tmodcost (_, params) -> EcIdent.Mid.map (fun _ -> 1) params
 
   let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
 end)
@@ -108,14 +119,28 @@ let rec dump_ty ty =
       EcIdent.tostring id
 
   | Ttuple tys ->
-      Printf.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
+      Format.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
 
   | Tconstr (p, tys) ->
-      Printf.sprintf "%s[%s]" (EcPath.tostring p)
+      Format.sprintf "%s[%s]" (EcPath.tostring p)
         (String.concat ", " (List.map dump_ty tys))
 
   | Tfun (t1, t2) ->
-      Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+      Format.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+
+  | Tmodcost (procs, params) ->
+    let pp_set =
+      EcSymbols.Ssym.print (fun fmt s -> Format.fprintf fmt "%s" s)
+    in
+    Format.asprintf "[%a * %a]"
+      pp_set procs
+      (Format.pp_print_list
+         (fun fmt (id, idparams) ->
+            Format.fprintf fmt "[%s: %a]"
+              (EcIdent.tostring id)
+              pp_set idparams))
+      (EcIdent.Mid.bindings params)
+
 
 (* -------------------------------------------------------------------- *)
 let tuni uid     = mk_ty (Tunivar uid)
@@ -186,7 +211,7 @@ end
 (* -------------------------------------------------------------------- *)
 let ty_map f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> t
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> t
 
   | Ttuple lty ->
       TySmart.ttuple (t, lty) (List.Smart.map f lty)
@@ -200,21 +225,21 @@ let ty_map f t =
 
 let ty_fold f s ty =
   match ty.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> s
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> s
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
   | Tfun(t1,t2) -> f (f s t1) t2
 
 let ty_sub_exists f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> false
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> false
   | Ttuple lty -> List.exists f lty
   | Tconstr (_, lty) -> List.exists f lty
   | Tfun (t1, t2) -> f t1 || f t2
 
 let ty_iter f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> ()
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> ()
   | Ttuple lty -> List.iter f lty
   | Tconstr (_, lty) -> List.iter f lty
   | Tfun (t1,t2) -> f t1; f t2
@@ -244,6 +269,9 @@ let symbol_of_ty (ty : ty) =
              | _ -> doit (i+1)
       in
         doit 0
+
+  | Tmodcost _ -> "c"
+
 
 let fresh_id_of_ty (ty : ty) =
   EcIdent.create (symbol_of_ty ty)
@@ -295,7 +323,9 @@ let rec ty_subst s =
               with Failure _ -> assert false
             in
               ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ s; } body
-      end)
+      end
+
+      | Tmodcost _ -> ty (* FIXME: check this *))
 
 (* -------------------------------------------------------------------- *)
 module Tuni = struct

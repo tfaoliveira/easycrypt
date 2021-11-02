@@ -21,12 +21,14 @@ type ty = private {
 }
 
 and ty_node =
-  | Tglob   of EcPath.mpath (* The tuple of global variable of the module *)
-  | Tunivar of EcUid.uid
-  | Tvar    of EcIdent.t
-  | Ttuple  of ty list
-  | Tconstr of EcPath.path * ty list
-  | Tfun    of ty * ty
+  | Tglob    of EcPath.mpath (* The tuple of global variable of the module *)
+  | Tunivar  of EcUid.uid
+  | Tvar     of EcIdent.t
+  | Ttuple   of ty list
+  | Tconstr  of EcPath.path * ty list
+  | Tfun     of ty * ty
+  | Tmodcost of EcSymbols.Ssym.t * EcSymbols.Ssym.t EcIdent.Mid.t
+  (* procedures * map from oracle parameters to parameters procedures *)
 
 module Mty : Map.S with type key = ty
 module Sty : Set.S with module M = Map.MakeBase(Mty)
@@ -46,7 +48,6 @@ val tconstr : EcPath.path -> ty list -> ty
 val tfun    : ty -> ty -> ty
 val tglob   : EcPath.mpath -> ty
 val tpred   : ty -> ty
-val tcost   : ty
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty
