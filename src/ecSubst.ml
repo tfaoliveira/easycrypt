@@ -31,7 +31,7 @@ exception InconsistentSubst
 
 (* -------------------------------------------------------------------- *)
 type subst = {
-  sb_modules : (EcPath.mpath * EcModules.orcl_info option) Mid.t;
+  sb_modules : (EcPath.mpath * mod_cost option) Mid.t;
   sb_path    : EcPath.path Mp.t;
   sb_tydef   : (EcIdent.t list * ty) Mp.t;
   sb_opdef   : (EcIdent.t list * expr) Mp.t;
@@ -50,9 +50,9 @@ let empty : subst = {
 let is_empty s =
   Mp.is_empty s.sb_path && Mid.is_empty s.sb_modules
 
-let add_module s (x : EcIdent.t) (m : EcPath.mpath) (oinfo : orcl_info option) =
+let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : mod_cost option) =
   let merger = function
-    | None   -> Some (m, oinfo)
+    | None   -> Some (m, mcost)
     | Some _ -> raise (SubstNameClash (`Ident x))
   in
     { s with sb_modules = Mid.change merger x s.sb_modules }
@@ -129,10 +129,13 @@ let subst_fun_uses (s : _subst) (u : uses) =
   EcModules.mk_uses calls reads writes
 
 (* -------------------------------------------------------------------- *)
-let subst_oracle_info (s:_subst) =
+let subst_param (s : _subst) : oi_param -> oi_param =
   let s = f_subst_of_subst s in
-  fun oi -> Fsubst.subst_oi s oi
+  fun oi -> Fsubst.subst_param s oi
 
+let subst_params (s : _subst) : oi_params -> oi_params =
+  let s = f_subst_of_subst s in
+  fun oi -> Fsubst.subst_params s oi
 
 (* -------------------------------------------------------------------- *)
 let subst_funsig (s : _subst) (funsig : funsig) =
@@ -146,16 +149,21 @@ let subst_funsig (s : _subst) (funsig : funsig) =
     fs_ret    = fs_ret; }
 
 (* -------------------------------------------------------------------- *)
-let subst_mod_restr (s : _subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (EcPath.x_subst s.s_fmp x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (s.s_fmp x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
-  let ois = EcSymbols.Msym.map (fun oi ->
-      subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
+let subst_mod_restr (s : _subst) (mr : mod_restr) : mod_restr =
+  let rx =
+    ur_app (fun set -> EcPath.Sx.fold (fun x r ->
+        EcPath.Sx.add (EcPath.x_subst s.s_fmp x) r
+      ) set EcPath.Sx.empty) mr.mr_xpaths
+  in
+  let r =
+    ur_app (fun set -> EcPath.Sm.fold (fun x r ->
+        EcPath.Sm.add (s.s_fmp x) r
+      ) set EcPath.Sm.empty) mr.mr_mpaths
+  in
+  let mr_params = subst_params s mr.mr_params in
+  let mr_cost = subst_form s mr.mr_cost in
+
+  { mr_xpaths = rx; mr_mpaths = r; mr_params; mr_cost; }
 
 (* -------------------------------------------------------------------- *)
 let rec subst_modsig_body_item (s : _subst) (item : module_sig_body_item) =
@@ -226,7 +234,10 @@ let subst_function (s : _subst) (f : function_) =
     match f.f_def with
     | FBdef def -> FBdef (subst_function_def s def)
     | FBalias f -> FBalias (EcPath.x_subst s.s_fmp f)
-    | FBabs oi  -> FBabs (subst_oracle_info s oi) in
+    | FBabs (params, (mod_cost, symb)) ->
+      FBabs (subst_param s params, (subst_form s mod_cost, symb))
+  in
+
   { f_name = f.f_name;
     f_sig  = sig';
     f_def  = def' }

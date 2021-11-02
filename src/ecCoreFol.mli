@@ -612,6 +612,8 @@ module Fsubst : sig
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
+  val subst_param    : f_subst -> oi_param -> oi_param
+  val subst_params   : f_subst -> oi_params -> oi_params
   (* val subst_oi       : f_subst -> c_bnd PreOI.t -> c_bnd PreOI.t *)
   val subst_gty      : f_subst -> gty -> gty
 end

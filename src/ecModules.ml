@@ -45,39 +45,38 @@ let mr_full = {
   mr_cost   = assert false;     (* TODOA: empty cost record *)
 }
 
-let mr_add_restr mr (rx : Sx.t use_restr) (rm : Sm.t use_restr) =
-  { mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
-    mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm;
-    mr_oinfos = mr.mr_oinfos; }
+let mr_add_restr
+    (mr : mod_restr)
+    (rx : Sx.t use_restr)
+    (rm : Sm.t use_restr) : mod_restr
+  =
+  { mr with
+    mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
+    mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm; }
 
-let change_oinfo restr f oi =
-  { restr with mr_oinfos = Msym.add f oi restr.mr_oinfos }
+(* let change_oinfo restr f oi =
+ *   { restr with mr_oinfos = Msym.add f oi restr.mr_oinfos }
+ *
+ * let add_oinfo restr f oi = change_oinfo restr f oi *)
 
-let add_oinfo restr f oi = change_oinfo restr f oi
+(* let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
+ *   let oi =
+ *     try
+ *       let oi = Msym.find f restr.mr_oinfos in
+ *       let filter x = List.mem x ocalls in
+ *       OI.filter filter oi
+ *     with Not_found -> OI.mk ocalls true r_cost_default
+ *   in
+ *   add_oinfo restr f oi *)
 
-let oicalls_filter restr f filter =
-  match Msym.find f restr.mr_oinfos with
-  | oi -> change_oinfo restr f (OI.filter filter oi)
-  | exception Not_found -> restr
-
-let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
-  let oi =
-    try
-      let oi = Msym.find f restr.mr_oinfos in
-      let filter x = List.mem x ocalls in
-      OI.filter filter oi
-    with Not_found -> OI.mk ocalls true r_cost_default
-  in
-  add_oinfo restr f oi
-
-let has_compl_restriction mr =
-  Msym.exists (fun _ oi ->
-      let c = PreOI.cost oi in
-      c.r_self <> C_unbounded ||
-      Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
-      Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
-      c.r_full
-    ) mr.mr_oinfos
+(* let has_compl_restriction (mr : mod_restr) : bool =
+ *   Msym.exists (fun _ oi ->
+ *       let c = PreOI.cost oi in
+ *       c.r_self <> C_unbounded ||
+ *       Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
+ *       Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
+ *       c.r_full
+ *     ) mr.mr_oinfos *)
 
 (* -------------------------------------------------------------------- *)
 let mty_hash  = EcCoreFol.mty_hash

@@ -101,20 +101,27 @@ and ctheory_override =
 | CTHO_Type   of EcTypes.ty
 
 (* -------------------------------------------------------------------- *)
-let module_comps_of_module_sig_comps (comps : module_sig_body) restr =
+let module_comps_of_module_sig_comps
+    (comps : module_sig_body)
+    (restr : mod_restr) : module_comps
+  =
   let onitem = function
     | Tys_function funsig ->
-      let oi = Msym.find funsig.fs_name restr.mr_oinfos in
+      let param = Msym.find funsig.fs_name restr.mr_params in
         MI_Function {
           f_name = funsig.fs_name;
           f_sig  = funsig;
-          f_def  = FBabs oi;
+          f_def  = FBabs (param, (restr.mr_cost, funsig.fs_name));
         }
   in
     List.map onitem comps
 
 (* -------------------------------------------------------------------- *)
-let module_expr_of_module_sig name mp tymod =
+let module_expr_of_module_sig
+    (name : EcIdent.t)
+    (mp : module_type)
+    (tymod : module_sig) : module_expr
+  =
   (* Abstract modules must be fully applied. *)
   assert (List.length mp.mt_params = List.length mp.mt_args);
 

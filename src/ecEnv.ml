@@ -2242,8 +2242,12 @@ module NormMp = struct
   let add_glob_except rm id us =
     if Sid.mem id rm then us else add_glob id us
 
-  let gen_fun_use env fdone rm =
-    let rec fun_use us f =
+  let gen_fun_use
+      (env : env)
+      (fdone : Sx.t ref)
+      (rm : Sid.t) : use -> xpath -> use
+    =
+    let rec fun_use (us : use) (f : xpath) : use =
       let f = norm_xfun env f in
       if Mx.mem f !fdone then us
       else
@@ -2256,13 +2260,10 @@ module NormMp = struct
           let us = Sx.fold (add_var env) vars us in
           List.fold_left fun_use us f_uses.us_calls
 
-        | FBabs oi ->
-            let id =
-              match f.x_top.m_top with
-              | `Local id -> id
-              | _ -> assert false in
+        | FBabs (param, _) ->
+            let id = mget_ident f.x_top in
             let us = add_glob_except rm id us in
-            List.fold_left fun_use us (OI.allowed oi)
+            List.fold_left fun_use us (allowed param)
 
         | FBalias _ -> assert false in
     fun_use
@@ -2346,7 +2347,7 @@ module NormMp = struct
                         get_restr_use = Mm.add mp res en.get_restr_use };
       res
 
-  let get_restr_me env me mp =
+  let get_restr_me (env : env) (me : module_expr) (mp : mpath) : mod_restr =
     match me.me_body with
     | EcModules.ME_Decl mt ->
       (* As an invariant, we have that [mt] is fully applied. *)

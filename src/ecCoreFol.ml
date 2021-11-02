@@ -1162,7 +1162,7 @@ let cost_c_bnd_mult
         c_full  = true; }
     else cost_top
 
-(* [l] has type [int] *)
+(* [l] of type [int], [c] of type [Tcost] *)
 let fcost_scalar_mult (l : form) (c : form) : form = assert false
 (* TODO: use function declared in `theories/` *)
 

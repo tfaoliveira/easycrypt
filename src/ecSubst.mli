@@ -30,7 +30,7 @@ val empty      : subst
 val is_empty   : subst -> bool
 
 (* -------------------------------------------------------------------- *)
-val add_module : subst -> EcIdent.t -> mpath -> orcl_info option -> subst
+val add_module : subst -> EcIdent.t -> mpath -> mod_cost option -> subst
 val add_path   : subst -> src:path -> dst:path -> subst
 val add_tydef  : subst -> path -> (EcIdent.t list * ty) -> subst
 val add_opdef  : subst -> path -> (EcIdent.t list * expr) -> subst
