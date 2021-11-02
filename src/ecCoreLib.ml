@@ -93,6 +93,22 @@ module CI_Int = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module CI_cost = struct
+  let i_Cost = "CoreCost"
+  let p_Cost = EcPath.pqname p_top i_Cost
+  let p_cost = _Pervasive "cost"
+
+  let _Cost    = fun x -> EcPath.pqname p_Cost x
+
+  let p_cost_zero  = _Cost "zero"
+  let p_cost_opp   = _Cost "opp"
+  let p_cost_add   = _Cost "add"
+  let p_cost_scale = _Cost "scale"
+  let p_cost_le    = _Cost "le"
+  let p_cost_lt    = _Cost "lt"
+end
+
+(* -------------------------------------------------------------------- *)
 module CI_xint = struct
   let i_Xint  = "Xint"
   let p_Xint  = EcPath.pqname p_top i_Xint

@@ -94,6 +94,20 @@ module CI_Int : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module CI_cost : sig
+  val i_Cost : string
+  val p_Cost : path
+  val p_cost : path
+
+  val p_cost_zero  : path
+  val p_cost_opp   : path
+  val p_cost_add   : path
+  val p_cost_scale : path
+  val p_cost_le    : path
+  val p_cost_lt    : path
+end
+
+(* -------------------------------------------------------------------- *)
 module CI_xint : sig
   val p_Xint      : path
   val p_xint      : path

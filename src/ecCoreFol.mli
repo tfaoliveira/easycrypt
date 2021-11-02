@@ -381,6 +381,12 @@ val f_int_pow   : form -> form -> form
 val f_int_edivz : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
+val f_cost_zero  : form
+val f_cost_opp   : form -> form
+val f_cost_add   : form -> form -> form
+val f_cost_scale : form -> form -> form
+
+(* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
 val f_is_int : form -> form
 

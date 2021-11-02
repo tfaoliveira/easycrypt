@@ -993,6 +993,7 @@ let f_op_is_int = f_op EcCoreLib.CI_xint.p_is_int [] (toarrow [txint] tbool)
 let f_is_inf f  = f_app f_op_is_inf [f] tbool
 let f_is_int f  = f_app f_op_is_int [f] tbool
 
+(* -------------------------------------------------------------------- *)
 let f_Inf         = f_app f_op_inf  []       txint
 let f_N     f     = f_app f_op_N    [f]      txint
 let f_xopp  f     = f_app f_op_xopp [f]      txint
@@ -1016,6 +1017,17 @@ let f_xmul_simpl f1 f2 =
 
 let f_xmuli_simpl f1 f2 =
   f_xmul_simpl (f_N f1) f2
+
+(* -------------------------------------------------------------------- *)
+let fop_cost_zero  = f_op EcCoreLib.CI_cost.p_cost_zero  []                         tcost
+let fop_cost_opp   = f_op EcCoreLib.CI_cost.p_cost_opp   [] (toarrow [tcost] tcost)
+let fop_cost_add   = f_op EcCoreLib.CI_cost.p_cost_add   [] (toarrow [tcost; tcost] tcost)
+let fop_cost_scale = f_op EcCoreLib.CI_cost.p_cost_scale [] (toarrow [tint; tcost] tcost)
+
+let f_cost_zero        = f_app fop_cost_zero  []       tcost
+let f_cost_opp   f     = f_app fop_cost_opp   [f]      tcost
+let f_cost_add   f1 f2 = f_app fop_cost_add   [f1; f2] tcost
+let f_cost_scale f1 f2 = f_app fop_cost_scale [f1; f2] tcost
 
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =
@@ -1116,10 +1128,6 @@ let cost_add (c1 : cost) (c2 : cost) : cost =
   in
   { c_self; c_calls; c_full = c1.c_full && c2.c_full}
 
-(* [c1] and [c2] have type [Tcost] *)
-let fcost_add (c1 : form) (c2 : form) : form = assert false
-(* TODO: use function declared in `theories/` *)
-
 (* -------------------------------------------------------------------- *)
 let cost_top : cost =
   { c_self  = C_unbounded;
@@ -1162,14 +1170,10 @@ let cost_c_bnd_mult
         c_full  = true; }
     else cost_top
 
-(* [l] of type [int], [c] of type [Tcost] *)
-let fcost_scalar_mult (l : form) (c : form) : form = assert false
-(* TODO: use function declared in `theories/` *)
-
 (* [l] has type [int] *)
 let fcost_c_bnd_mult (l : c_bnd) (c : form) : form =
   match l with
-  | C_bounded l -> fcost_scalar_mult l c
+  | C_bounded l -> f_cost_scale l c
   | C_unbounded -> fcost_top
 
 (* [l] has type [mod_l], [c.r_self] type [mod_r] *)
@@ -2451,7 +2455,7 @@ module Fsubst = struct
             in
 
             (* compute: [cost + f_called * f_cost] *)
-            fcost_add cost (fcost_c_bnd_mult f_called f_cost)
+            f_cost_add cost (fcost_c_bnd_mult f_called f_cost)
           ) m_info cost
       ) concs cost
 
