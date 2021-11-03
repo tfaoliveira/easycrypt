@@ -32,6 +32,9 @@ type quantif =
 
 type hoarecmp = FHle | FHeq | FHge
 
+(* projection of a module cost *)
+type cost_proj = Intr | Param of EcIdent.t * symbol
+
 type gty =
   | GTty    of EcTypes.ty
   | GTmodty of module_type
@@ -63,7 +66,7 @@ and f_node =
 
   | Fcost         of cost
   | Fmodcost      of mod_cost
-  | Fmodcost_proj of form * symbol * [`Intr | `Param of EcIdent.t * symbol]
+  | Fmodcost_proj of form * symbol * cost_proj
   (* [Fmodcost_proj mod_cost proc p] projects [mod_cost] over
      procedure [proc] and [p]:
      - if [p = `Intr], intrinsic cost
@@ -219,19 +222,21 @@ let qt_equal : quantif -> quantif -> bool = (==)
 let qt_hash  : quantif -> int = Hashtbl.hash
 
 (*-------------------------------------------------------------------- *)
-type cost_proj = [`Intr | `Param of EcIdent.t * symbol]
+let cost_proj_ty = function
+  | Intr    -> tcost
+  | Param _ -> tint
 
 let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
   match p1, p2 with
-  | `Intr, `Intr -> true
-  | `Param (id1, s1), `Param (id2, s2) ->
+  | Intr, Intr -> true
+  | Param (id1, s1), Param (id2, s2) ->
     EcIdent.tag id1 = EcIdent.tag id2 && s1 = s2
   | _ -> false
 
 let cost_proj_hash (p : cost_proj) : int =
   match p with
-  | `Intr -> 0
-  | `Param (id, s) -> Why3.Hashcons.combine (EcIdent.tag id) (Hashtbl.hash s)
+  | Intr -> 0
+  | Param (id, s) -> Why3.Hashcons.combine (EcIdent.tag id) (Hashtbl.hash s)
 
 (*-------------------------------------------------------------------- *)
 let f_equal : form -> form -> bool = (==)
@@ -725,8 +730,8 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | Fmodcost_proj (f, _, proj) ->
       let fv_proj = match proj with
-        | `Intr -> Mid.empty
-        | `Param (id, _) -> Mid.singleton id 1
+        | Intr          -> Mid.empty
+        | Param (id, _) -> Mid.singleton id 1
       in
       fv_union (f_fv f) fv_proj
 
@@ -975,6 +980,10 @@ let proc_cost_r
 
 let f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
   mk_form (Fmodcost mc) ty
+
+let f_mod_cost_proj_r (mc : form) (f : symbol) (p : cost_proj) : form =
+  let ty = cost_proj_ty p in
+  mk_form (Fmodcost_proj (mc, f, p)) ty
 
 (* -------------------------------------------------------------------- *)
 let f_hoareS_r hs = mk_form (FhoareS hs) tbool
@@ -1372,6 +1381,11 @@ module FSmart = struct
   let f_mod_cost (fmc, mc, ty) (mc', ty') =
     if mod_cost_equal mc mc' && ty == ty' then fmc else f_mod_cost_r mc' ty'
 
+  let f_mod_cost_proj (fp, c, f, p) (c', f', p') =
+    if f_equal c c' && f = f' && cost_proj_equal p p'
+    then fp
+    else f_mod_cost_proj_r c' f' p'
+
   let f_equivF (fp, ef) ef' =
     if eqf_equal ef ef' then fp else mk_form (FequivF ef') fp.f_ty
 
@@ -1528,7 +1542,12 @@ let f_map gt g fp =
 
   | Fcost c -> FSmart.f_cost (fp, c) (cost_map (fun _ -> g) c)
 
-  | Fmodcost mc -> FSmart.f_mod_cost (fp, mc) (mod_cost_map g mc)
+  | Fmodcost mc ->
+    let ty' = gt fp.f_ty in
+    FSmart.f_mod_cost (fp, mc, fp.f_ty) (mod_cost_map g mc, ty')
+
+  | Fmodcost_proj (c,f,p) ->
+    FSmart.f_mod_cost_proj (fp, c, f, p) (g c, f, p)
 
   | FhoareF hf ->
       let pr' = g hf.hf_pr in
@@ -1615,7 +1634,10 @@ let f_iter g f =
   | Fapp     (e, es)      -> List.iter g (e :: es)
   | Ftuple   es           -> List.iter g es
   | Fproj    (e, _)       -> g e
-  | Fcost    c            -> cost_iter g c
+
+  | Fcost         c        -> cost_iter g c
+  | Fmodcost      mc       -> mod_cost_iter g mc
+  | Fmodcost_proj (mc,_,_) -> g mc
 
   | FhoareF  hf  -> g hf.hf_pr; g hf.hf_po
   | FhoareS  hs  -> g hs.hs_pr; g hs.hs_po
@@ -1992,14 +2014,16 @@ let expr_of_form mh f =
       then e_var pv fp.f_ty
       else raise CannotTranslate
 
-    | Fcost     _
-    | Fcoe      _
-    | Fglob     _
-    | FhoareF   _ | FhoareS   _
-    | FcHoareF  _ | FcHoareS  _
-    | FbdHoareF _ | FbdHoareS _
-    | FequivF   _ | FequivS   _
-    | FeagerF   _ | Fpr       _ -> raise CannotTranslate
+    | Fcost         _
+    | Fmodcost      _
+    | Fmodcost_proj _
+    | Fcoe          _
+    | Fglob         _
+    | FhoareF       _ | FhoareS   _
+    | FcHoareF      _ | FcHoareS  _
+    | FbdHoareF     _ | FbdHoareS _
+    | FequivF       _ | FequivS   _
+    | FeagerF       _ | Fpr       _ -> raise CannotTranslate
 
   and auxbd ((x, bd) : binding) =
     match bd with

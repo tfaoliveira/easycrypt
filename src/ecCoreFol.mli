@@ -30,6 +30,9 @@ type quantif =
 
 type hoarecmp = FHle | FHeq | FHge
 
+(* projection of a module cost *)
+type cost_proj = Intr | Param of EcIdent.t * symbol
+
 type gty =
   | GTty    of EcTypes.ty
   | GTmodty of module_type
@@ -61,7 +64,7 @@ and f_node =
 
   | Fcost         of cost
   | Fmodcost      of mod_cost
-  | Fmodcost_proj of form * symbol * [`Intr | `Param of EcIdent.t * symbol]
+  | Fmodcost_proj of form * symbol * cost_proj
   (* [Fmodcost_proj mod_cost proc p] projects [mod_cost] over
      procedure [proc] and [p]:
      - if [p = `Intr], intrinsic cost
@@ -304,6 +307,8 @@ val f_cost_r : cost -> form
 val proc_cost_r : form -> c_bnd EcPath.Mx.t -> bool -> proc_cost
 
 val f_mod_cost_r : mod_cost -> ty -> form
+
+val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
