@@ -31,7 +31,7 @@ exception InconsistentSubst
 
 (* -------------------------------------------------------------------- *)
 type subst = {
-  sb_modules : (EcPath.mpath * mod_cost option) Mid.t;
+  sb_modules : (EcPath.mpath * form option) Mid.t;
   sb_path    : EcPath.path Mp.t;
   sb_tydef   : (EcIdent.t list * ty) Mp.t;
   sb_opdef   : (EcIdent.t list * expr) Mp.t;
@@ -50,7 +50,7 @@ let empty : subst = {
 let is_empty s =
   Mp.is_empty s.sb_path && Mid.is_empty s.sb_modules
 
-let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : mod_cost option) =
+let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : form option) =
   let merger = function
     | None   -> Some (m, mcost)
     | Some _ -> raise (SubstNameClash (`Ident x))

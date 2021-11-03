@@ -173,37 +173,27 @@ and coe = {
   coe_e   : expr;
 }
 
-and c_bnd =
-  | C_bounded of form
-  | C_unbounded
-
-(* A cost vector, e.g. in a CHoare.
+(* A cost record, used in both CHoares and in procedure cost restrictions.
    Keys of [c_calls] are functions of local modules, with no arguments.
    Missing entries in [c_calls] are:
    - any number of times in if [full] is [false]
    - zero times if [full] is [true] *)
-and cost = {
-  c_self  : c_bnd;              (* of type `xint` *)
-  c_calls : c_bnd EcPath.Mx.t;  (* of type `int` *)
+and crecord = {
+  c_self  : form;              (* type [txint] for [cost],
+                                  type [tcost] for [proc_cost] *)
+  c_calls : form EcPath.Mx.t;  (* type [xint] *)
   c_full  : bool;
 }
 
+and cost = crecord
+
 (* A module procedure `F.f` cost, where `F` can be an non-applied functor.
    The cost is split between:
-   - intrinsic cost [pc_intr]
-   - the number of calls [pc_params] to the parameters of `F`
+   - intrinsic cost [c_self], of type [tcost]
+   - the number of calls [c_calls] to the parameters of `F` *)
+and proc_cost = crecord
 
-   Keys of [pc_params] are oracles (module parameters) with no arguments.
-   Missing entries can be called:
-   - any number of times in if [full] is [false]
-   - zero times if [full] is [true] *)
-and proc_cost = {
-  pc_intr   : form;              (* of type `cost` *)
-  pc_params : c_bnd EcPath.Mx.t; (* of type `int` *)
-  pc_full   : bool;
-}
-
-(* A module procedure `F` cost, where `F` can be an non-applied functor.
+(* A module `F` cost, where `F` can be an non-applied functor.
    All declared procedures of `F` must appear. *)
 and mod_cost = proc_cost EcSymbols.Msym.t
 
@@ -246,17 +236,6 @@ let f_fv f = f.f_fv
 let f_ty f = f.f_ty
 
 (*-------------------------------------------------------------------- *)
-let c_bnd_equal a b =
-  match a, b with
-  | C_bounded a, C_bounded b -> f_equal a b
-  | C_unbounded, C_unbounded -> true
-  | _ -> false
-
-let c_bnd_hash = function
-  | C_bounded a -> Why3.Hashcons.combine 0 (f_hash a)
-  | C_unbounded -> 42
-
-
 (* let equal (a_equal : 'a -> 'a -> bool) (oi1 : 'a t) (oi2 : 'a t) : bool =
  *   let check_calls_eq calls1 calls2 =
  *     let exception Not_equal in
@@ -317,10 +296,6 @@ let gty_hash = function
   | GTty ty -> EcTypes.ty_hash ty
   | GTmodty p  ->  mty_hash p
   | GTmem _ -> 1
-
-let c_bnd_fv fv = function
-  | C_unbounded -> fv
-  | C_bounded f -> fv_union fv (f_fv f)
 
 let mr_fv (mr : mod_restr) =
   let fv =
@@ -386,18 +361,15 @@ module Mf = MSHf.M
 module Sf = MSHf.S
 module Hf = MSHf.H
 
-let cost_equal (c1 : cost) (c2 : cost) : bool =
-     c_bnd_equal c1.c_self c2.c_self
-  && EcPath.Mx.equal c_bnd_equal c1.c_calls c2.c_calls
+let crecord_equal (c1 : crecord) (c2 : crecord) : bool =
+     f_equal c1.c_self c2.c_self
+  && EcPath.Mx.equal f_equal c1.c_calls c2.c_calls
   && c1.c_full = c2.c_full
 
-let proc_cost_equal (pc1 : proc_cost) (pc2 : proc_cost) : bool =
-     f_equal pc1.pc_intr pc2.pc_intr
-  && EcPath.Mx.equal c_bnd_equal pc1.pc_params pc2.pc_params
-  && pc1.pc_full = pc2.pc_full
+let cost_equal : cost -> cost -> bool = crecord_equal
 
 let mod_cost_equal (mc1 : mod_cost) (mc2 : mod_cost) : bool =
-  Msym.equal proc_cost_equal mc1 mc2
+  Msym.equal crecord_equal mc1 mc2
 
 let hf_equal hf1 hf2 =
      f_equal hf1.hf_pr hf2.hf_pr
@@ -488,19 +460,15 @@ let coe_hash coe =
     (EcTypes.e_hash coe.coe_e)
     (EcMemory.mem_hash coe.coe_mem)
 
-let cost_hash (cost : cost) : int =
+let crecord_hash (r : crecord) : int =
   Why3.Hashcons.combine
-    (c_bnd_hash cost.c_self)
+    (f_hash r.c_self)
     (Why3.Hashcons.combine
-       (EcPath.Mx.hash EcPath.x_hash c_bnd_hash cost.c_calls)
-       (if cost.c_full then 0 else 1))
+       (EcPath.Mx.hash EcPath.x_hash f_hash r.c_calls)
+       (if r.c_full then 0 else 1))
 
-let proc_cost_hash (pc : proc_cost) : int =
-  Why3.Hashcons.combine
-    (f_hash pc.pc_intr)
-    (Why3.Hashcons.combine
-       (EcPath.Mx.hash EcPath.x_hash c_bnd_hash pc.pc_params)
-       (if pc.pc_full then 0 else 1))
+let cost_hash      : cost      -> int = crecord_hash
+let proc_cost_hash : proc_cost -> int = crecord_hash
 
 let mod_cost_hash (mcost : mod_cost) : int =
   Msym.hash Hashtbl.hash proc_cost_hash mcost
@@ -689,19 +657,15 @@ module Hsform = Why3.Hashcons.Make (struct
 
   let fv_mlr = Sid.add mleft (Sid.singleton mright)
 
-  let cost_fv (cost : cost) =
-    let self_fv = c_bnd_fv Mid.empty cost.c_self in
+  let crecord_fv (r : crecord) =
+    let self_fv = f_fv r.c_self in
     EcPath.Mx.fold (fun f c fv ->
-        let c_fv = c_bnd_fv fv c in
-        EcPath.x_fv c_fv f
-      ) cost.c_calls self_fv
+        let fv = fv_union fv (f_fv c) in
+        EcPath.x_fv fv f
+      ) r.c_calls self_fv
 
-  let proc_cost_fv (pc : proc_cost) =
-    let self_fv = f_fv pc.pc_intr in
-    EcPath.Mx.fold (fun f c fv ->
-        let c_fv = c_bnd_fv fv c in
-        EcPath.x_fv c_fv f
-      ) pc.pc_params self_fv
+  let cost_fv      : cost      -> int Mid.t = crecord_fv
+  let proc_cost_fv : proc_cost -> int Mid.t = crecord_fv
 
   let mod_cost_fv (mc : mod_cost) =
     Msym.fold (fun _ pc fv ->
@@ -954,8 +918,8 @@ let f_eqs fs1 fs2 =
   f_ands (List.map2 f_eq fs1 fs2)
 
 (* -------------------------------------------------------------------- *)
-  (* Check that keys of [mx] are functions of local modules,
-     with no arguments. *)
+(* Check that keys of [mx] are functions of local modules,
+   with no arguments. *)
 let check_mx_local (mx : 'a EcPath.Mx.t) : bool =
   EcPath.Mx.for_all (fun x _ ->
       match x.x_top.m_top with
@@ -963,24 +927,22 @@ let check_mx_local (mx : 'a EcPath.Mx.t) : bool =
       | _ -> false
     ) mx
 
-let cost_r (c_self : c_bnd) (c_calls : c_bnd EcPath.Mx.t) c_full : cost =
+let crecord_r (c_self : form) (c_calls : form EcPath.Mx.t) c_full : crecord =
   assert (check_mx_local c_calls);
   { c_self; c_calls; c_full; }
+
+(* -------------------------------------------------------------------- *)
+let cost_r : form -> form EcPath.Mx.t -> bool -> cost = crecord_r
 
 let f_cost_r (c : cost) : form = mk_form (Fcost c) EcTypes.tcost
 
 (* -------------------------------------------------------------------- *)
-let proc_cost_r
-    (pc_intr   : form)
-    (pc_params : c_bnd EcPath.Mx.t)
-    (pc_full   : bool) : proc_cost
-  =
-  assert (check_mx_local pc_params);
-  { pc_intr; pc_params; pc_full; }
+let proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost = crecord_r
 
 let f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
   mk_form (Fmodcost mc) ty
 
+(* -------------------------------------------------------------------- *)
 let f_mod_cost_proj_r (mc : form) (f : symbol) (p : cost_proj) : form =
   let ty = cost_proj_ty p in
   mk_form (Fmodcost_proj (mc, f, p)) ty
@@ -1072,16 +1034,16 @@ let f_i1  = f_int BI.one
 let f_im1 = f_int_opp f_i1
 
 (* -------------------------------------------------------------------- *)
-let f_op_xopp   = f_op EcCoreLib.CI_xint.p_xopp  [] (toarrow [txint        ] txint)
-let f_op_xadd   = f_op EcCoreLib.CI_xint.p_xadd  [] (toarrow [txint; txint ] txint)
-let f_op_xmul   = f_op EcCoreLib.CI_xint.p_xmul  [] (toarrow [txint; txint ] txint)
-let f_op_xle    = f_op EcCoreLib.CI_xint.p_xle   [] (toarrow [txint; txint ] tbool)
-let f_op_xmax   = f_op EcCoreLib.CI_xint.p_xmax  [] (toarrow [txint;  txint] txint)
+let f_op_xopp   = f_op EcCoreLib.CI_Xint.p_xopp  [] (toarrow [txint        ] txint)
+let f_op_xadd   = f_op EcCoreLib.CI_Xint.p_xadd  [] (toarrow [txint; txint ] txint)
+let f_op_xmul   = f_op EcCoreLib.CI_Xint.p_xmul  [] (toarrow [txint; txint ] txint)
+let f_op_xle    = f_op EcCoreLib.CI_Xint.p_xle   [] (toarrow [txint; txint ] tbool)
+let f_op_xmax   = f_op EcCoreLib.CI_Xint.p_xmax  [] (toarrow [txint;  txint] txint)
 
-let f_op_inf    = f_op EcCoreLib.CI_xint.p_inf    [] txint
-let f_op_N      = f_op EcCoreLib.CI_xint.p_N      [] (toarrow [tint ] txint)
-let f_op_is_inf = f_op EcCoreLib.CI_xint.p_is_inf [] (toarrow [txint] tbool)
-let f_op_is_int = f_op EcCoreLib.CI_xint.p_is_int [] (toarrow [txint] tbool)
+let f_op_inf    = f_op EcCoreLib.CI_Xint.p_inf    [] txint
+let f_op_N      = f_op EcCoreLib.CI_Xint.p_N      [] (toarrow [tint ] txint)
+let f_op_is_inf = f_op EcCoreLib.CI_Xint.p_is_inf [] (toarrow [txint] tbool)
+let f_op_is_int = f_op EcCoreLib.CI_Xint.p_is_int [] (toarrow [txint] tbool)
 
 let f_is_inf f  = f_app f_op_is_inf [f] tbool
 let f_is_int f  = f_app f_op_is_int [f] tbool
@@ -1112,15 +1074,21 @@ let f_xmuli_simpl f1 f2 =
   f_xmul_simpl (f_N f1) f2
 
 (* -------------------------------------------------------------------- *)
-let fop_cost_zero  = f_op EcCoreLib.CI_cost.p_cost_zero  []                         tcost
-let fop_cost_opp   = f_op EcCoreLib.CI_cost.p_cost_opp   [] (toarrow [tcost] tcost)
-let fop_cost_add   = f_op EcCoreLib.CI_cost.p_cost_add   [] (toarrow [tcost; tcost] tcost)
-let fop_cost_scale = f_op EcCoreLib.CI_cost.p_cost_scale [] (toarrow [tint; tcost] tcost)
+module CI_Cost = EcCoreLib.CI_Cost
 
-let f_cost_zero        = f_app fop_cost_zero  []       tcost
-let f_cost_opp   f     = f_app fop_cost_opp   [f]      tcost
-let f_cost_add   f1 f2 = f_app fop_cost_add   [f1; f2] tcost
-let f_cost_scale f1 f2 = f_app fop_cost_scale [f1; f2] tcost
+let fop_cost_zero   = f_op CI_Cost.p_cost_zero   []                         tcost
+let fop_cost_inf    = f_op CI_Cost.p_cost_inf    []                         tcost
+let fop_cost_opp    = f_op CI_Cost.p_cost_opp    [] (toarrow [tcost]        tcost)
+let fop_cost_add    = f_op CI_Cost.p_cost_add    [] (toarrow [tcost; tcost] tcost)
+let fop_cost_scale  = f_op CI_Cost.p_cost_scale  [] (toarrow [tint;  tcost] tcost)
+let fop_cost_xscale = f_op CI_Cost.p_cost_xscale [] (toarrow [txint; tcost] tcost)
+
+let f_cost_zero         = f_app fop_cost_zero   []       tcost
+let f_cost_inf          = f_app fop_cost_inf    []       tcost
+let f_cost_opp    f     = f_app fop_cost_opp    [f]      tcost
+let f_cost_add    f1 f2 = f_app fop_cost_add    [f1; f2] tcost
+let f_cost_scale  f1 f2 = f_app fop_cost_scale  [f1; f2] tcost
+let f_cost_xscale f1 f2 = f_app fop_cost_xscale [f1; f2] tcost
 
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =
@@ -1133,41 +1101,19 @@ let f_int_mul_simpl f1 f2 =
   else f_int_mul f1 f2
 
 (* -------------------------------------------------------------------- *)
-(* let r_cost_to_cost (c : c_bnd r_cost) : cost =
- *   assert (EcPath.Mx.is_empty c.r_params);
- *   { c_self  = c.r_self;
- *     c_calls = c.r_abs_calls;
- *     c_full  = c.r_full; } *)
-
-(* let cost_to_r_cost (c : cost) : c_bnd r_cost =
- *   { r_self      = c.c_self;
- *     r_abs_calls = c.c_calls;
- *     r_params    = EcPath.Mx.empty;
- *     r_full      = c.c_full; } *)
-
-(* -------------------------------------------------------------------- *)
 (* Get the value of a [c_bnd] according to [full] *)
-let oget_c_bnd (c : c_bnd option) (full : bool) =
+let oget_c_bnd (c : form option) (full : bool) =
   match c with
-  | None   -> if full then C_bounded f_i0 else C_unbounded
+  | None   -> if full then f_x0 else f_Inf
   | Some c -> c
 
-(* [l] of type [mode_l], [c_bnd] has type [mode_r] *)
-let c_bnd_scalar_mult
+(* [l] of type [mode_l], [c_bnd] has type [txint] *)
+let x_scalar_mult
     ~(mode_l:[`Xint | `Int])
-    ~(mode_r:[`Xint | `Int])
-    (l : form) (c : c_bnd) : c_bnd =
-  match c with
-  | C_bounded c ->
-    let c =
-      match mode_l, mode_r with
-      | `Xint, `Xint -> f_xmul_simpl         l       c
-      | `Int, `Int   -> f_int_mul_simpl      l       c
-      | `Int, `Xint  -> f_xmul_simpl    (f_N l)      c
-      | `Xint, `Int  -> f_xmul_simpl         l  (f_N c)
-    in
-    C_bounded c
-  | _ -> C_unbounded
+    (l : form) (c : form) : form =
+  match mode_l with
+  | `Xint -> f_xmul_simpl l       c
+  | `Int  -> f_xmul_simpl (f_N l) c
 
 (* -------------------------------------------------------------------- *)
 (* auxilliary function used in [cost] and [r_cost] addition *)
@@ -1175,47 +1121,18 @@ let cost_add_map (calls1, full1) (calls2, full2) =
   EcPath.Mx.merge (fun _ call1 call2 ->
       let call1 = oget_c_bnd call1 full1
       and call2 = oget_c_bnd call2 full2 in
-      match call1, call2 with
-      | C_bounded call1, C_bounded call2 ->
-        let bnd = C_bounded (f_int_add_simpl call1 call2) in
-        Some bnd
-      | _ -> Some C_unbounded
+      Some (f_xadd_simpl call1 call2 )
     ) calls1 calls2
 
-(* [c1.r_self] has type [mod_l], [c2.r_self] type [mod_r] *)
-(* let r_cost_add
- *     ~(mode_l:[`Xint | `Int])
- *     ~(mode_r:[`Xint | `Int])
- *     (c1 : c_bnd r_cost)
- *     (c2 : c_bnd r_cost) : c_bnd r_cost
- *   =
- *   let r_self = match c1.r_self, c2.r_self with
- *     | C_bounded s1, C_bounded s2 ->
- *       let s =
- *         match mode_l, mode_r with
- *         | `Xint, `Xint -> f_xadd_simpl         s1       s2
- *         | `Int, `Int   -> f_int_add_simpl      s1       s2
- *         | `Int, `Xint  -> f_xadd_simpl    (f_N s1)      s2
- *         | `Xint, `Int  -> f_xadd_simpl         s1  (f_N s2)
- *       in
- *       C_bounded s
- *     | _ -> C_unbounded
- *   in
- *   let r_abs_calls =
- *     cost_add_map (c1.r_abs_calls, c1.r_full) (c2.r_abs_calls, c2.r_full)
- *   in
- *   let r_params =
- *     cost_add_map (c1.r_params, c1.r_full) (c2.r_params, c2.r_full)
- *   in
- *   { r_self; r_abs_calls; r_params; r_full = c1.r_full && c2.r_full} *)
-
-
 let cost_add (c1 : cost) (c2 : cost) : cost =
-  let c_self = match c1.c_self, c2.c_self with
-    | C_bounded s1, C_bounded s2 ->
-      C_bounded (f_xadd_simpl s1 s2) (* xint *)
-    | _ -> C_unbounded
+  let c_self = f_xadd_simpl c1.c_self c2.c_self in (* xint *)
+  let c_calls =
+    cost_add_map (c1.c_calls, c1.c_full) (c2.c_calls, c2.c_full)
   in
+  { c_self; c_calls; c_full = c1.c_full && c2.c_full}
+
+let proc_cost_add (c1 : proc_cost) (c2 : proc_cost) : proc_cost =
+  let c_self = f_cost_add c1.c_self c2.c_self in (* cost *)
   let c_calls =
     cost_add_map (c1.c_calls, c1.c_full) (c2.c_calls, c2.c_full)
   in
@@ -1223,7 +1140,7 @@ let cost_add (c1 : cost) (c2 : cost) : cost =
 
 (* -------------------------------------------------------------------- *)
 let cost_top : cost =
-  { c_self  = C_unbounded;
+  { c_self  = f_Inf;
     c_calls = EcPath.Mx.empty;
     c_full  = false; }
 
@@ -1231,82 +1148,39 @@ let fcost_top : form = f_cost_r cost_top
 
 (* -------------------------------------------------------------------- *)
 let proc_cost_top : proc_cost =
-  { pc_intr    = fcost_top;
-    pc_params  = EcPath.Mx.empty;
-    pc_full    = false; }
+  { c_self   = fcost_top;
+    c_calls  = EcPath.Mx.empty;
+    c_full   = false; }
 
 (* -------------------------------------------------------------------- *)
 (* [l] has type [int] *)
 let cost_scalar_mult (l : form) (c : cost) : cost =
-  let c_self =
-    c_bnd_scalar_mult ~mode_l:`Int ~mode_r:`Xint l c.c_self (* xint *)
-  in
-  let c_calls =
-    EcPath.Mx.map (c_bnd_scalar_mult ~mode_l:`Int ~mode_r:`Int l) c.c_calls
-  in
+  let c_self = x_scalar_mult ~mode_l:`Int l c.c_self in
+  let c_calls = EcPath.Mx.map (x_scalar_mult ~mode_l:`Int l) c.c_calls in
   { c_self; c_calls; c_full = c.c_full; }
 
-(* [l] has type [int] *)
-(* (* [l] has type [mode_l], [c.r_self] has type [mode_r] *) *)
-let cost_c_bnd_mult
-    (* ~(mode_l:[`Xint | `Int])
-     * ~(mode_c:[`Xint | `Int]) *)
-    (l : c_bnd)
-    (c : cost) : cost
-  =
-  match l with
-  | C_bounded l -> cost_scalar_mult l c
-  | C_unbounded ->
-    if c.c_full then
-      { c_self  = C_unbounded;
-        c_calls = EcPath.Mx.map (fun _ -> C_unbounded) c.c_calls;
-        c_full  = true; }
-    else cost_top
-
-(* [l] has type [int] *)
-let fcost_c_bnd_mult (l : c_bnd) (c : form) : form =
-  match l with
-  | C_bounded l -> f_cost_scale l c
-  | C_unbounded -> fcost_top
-
-(* [l] has type [mod_l], [c.r_self] type [mod_r] *)
-(* let r_cost_scalar_mult
- *     ~(mode_l:[`Xint | `Int])
- *     ~(mode_r:[`Xint | `Int])
- *     (l : form)
- *     (c : c_bnd r_cost) : c_bnd r_cost
- *   =
- *   { r_self      = c_bnd_scalar_mult ~mode_l ~mode_r l c.r_self;
- *     r_abs_calls =
- *       EcPath.Mx.map
- *         (c_bnd_scalar_mult ~mode_l ~mode_r:`Int l)
- *         c.r_abs_calls;
- *     r_params    =
- *       EcPath.Mx.map
- *         (c_bnd_scalar_mult ~mode_l ~mode_r:`Int l)
- *         c.r_params;
- *     r_full      = c.r_full; } *)
-
-(* [l] has type [mode_l], [c.r_self] has type [mode_r] *)
-(* let r_cost_c_bnd_mult
- *     ~(mode_l:[`Xint | `Int])
- *     ~(mode_r:[`Xint | `Int])
+(* (\* [l] has type [int] *\)
+ * (\* (\* [l] has type [mode_l], [c.r_self] has type [mode_r] *\) *\)
+ * let cost_c_bnd_mult
+ *     (\* ~(mode_l:[`Xint | `Int])
+ *      * ~(mode_c:[`Xint | `Int]) *\)
  *     (l : c_bnd)
- *     (c : c_bnd r_cost) : c_bnd r_cost
+ *     (c : cost) : cost
  *   =
  *   match l with
- *   | C_bounded l -> r_cost_scalar_mult ~mode_l ~mode_r l c
+ *   | C_bounded l -> cost_scalar_mult l c
  *   | C_unbounded ->
- *     if c.r_full then
- *       { r_self      = C_unbounded;
- *         r_abs_calls = EcPath.Mx.map (fun _ -> C_unbounded) c.r_abs_calls;
- *         r_params    = EcPath.Mx.map (fun _ -> C_unbounded) c.r_params;
- *         r_full      = true; }
- *     else
- *       { r_self      = C_unbounded;
- *         r_abs_calls = EcPath.Mx.empty;
- *         r_params    = EcPath.Mx.empty;
- *         r_full      = false; } *)
+ *     if c.c_full then
+ *       { c_self  = C_unbounded;
+ *         c_calls = EcPath.Mx.map (fun _ -> C_unbounded) c.c_calls;
+ *         c_full  = true; }
+ *     else cost_top
+ *
+ * (\* [l] has type [int] *\)
+ * let fcost_c_bnd_mult (l : c_bnd) (c : form) : form =
+ *   match l with
+ *   | C_bounded l -> f_cost_scale l c
+ *   | C_unbounded -> fcost_top *)
 
 (* -------------------------------------------------------------------- *)
 module FSmart = struct
@@ -1421,65 +1295,38 @@ module FSmart = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let c_bnd_map (g : form -> form) (bnd : c_bnd): c_bnd =
-  match bnd with
-  | C_bounded f -> C_bounded (g f)
-  | C_unbounded -> C_unbounded
+let crecord_map (g : form -> form) (cost : crecord): crecord =
+  let calls = EcPath.Mx.map g cost.c_calls in
+  cost_r (g cost.c_self) calls cost.c_full
 
-let cost_map (g : [`Xint | `Int] -> form -> form) (cost : cost): cost =
-  let calls = EcPath.Mx.map (c_bnd_map (g `Int)) cost.c_calls in
-
-  cost_r (c_bnd_map (g `Xint) cost.c_self) calls cost.c_full
-
-let proc_cost_map (g : form -> form) (pc : proc_cost): proc_cost =
-  let params = EcPath.Mx.map (c_bnd_map g) pc.pc_params in
-
-  proc_cost_r (g pc.pc_intr) params pc.pc_full
+let cost_map      : (form -> form) -> cost      -> cost      = crecord_map
+let proc_cost_map : (form -> form) -> proc_cost -> proc_cost = crecord_map
 
 let mod_cost_map (g : form -> form) (mc : mod_cost): mod_cost =
   Msym.map (proc_cost_map g) mc
 
 (* -------------------------------------------------------------------- *)
-let c_bnd_bind (g : form -> c_bnd) (bnd : c_bnd): c_bnd =
-  match bnd with
-  | C_bounded f -> g f
-  | C_unbounded -> C_unbounded
+let crecord_iter (g : form -> unit) (cost : crecord) : unit =
+  g cost.c_self;
+  EcPath.Mx.iter (fun _ -> g) cost.c_calls
 
-let cost_bind (g : [`Xint | `Int] -> form -> c_bnd) (cost : cost): cost =
-  let calls = EcPath.Mx.map (c_bnd_bind (g `Int)) cost.c_calls in
-
-  cost_r (c_bnd_bind (g `Xint) cost.c_self) calls cost.c_full
-
-(* -------------------------------------------------------------------- *)
-let c_bnd_iter (g : form -> unit) (bnd : c_bnd): unit =
-  match bnd with
-  | C_bounded f -> g f
-  | C_unbounded -> ()
-
-let cost_iter (g : form -> unit) (cost : cost) : unit =
-  c_bnd_iter g cost.c_self;
-  EcPath.Mx.iter (fun _ -> c_bnd_iter g) cost.c_calls
-
-let proc_cost_iter (g : form -> unit) (pc : proc_cost): unit =
-  g pc.pc_intr;
-  EcPath.Mx.iter (fun _ -> c_bnd_iter g) pc.pc_params
+let cost_iter      : (form -> unit) -> cost      -> unit = crecord_iter
+let proc_cost_iter : (form -> unit) -> proc_cost -> unit = crecord_iter
 
 let mod_cost_iter (g : form -> unit) (mc : mod_cost): unit =
   Msym.iter (fun _ -> proc_cost_iter g) mc
 
 (* -------------------------------------------------------------------- *)
-let c_bnd_fold (g : form -> 'a -> 'a) (bnd : c_bnd) (init : 'a) : 'a =
-  match bnd with
-  | C_bounded f -> g f init
-  | C_unbounded -> init
-
-let cost_fold
-    (g : [`Xint | `Int] -> form -> 'a -> 'a)
-    (cost : cost)
+let crecord_fold
+    (g : form -> 'a -> 'a)
+    (cost : crecord)
     (init : 'a) : 'a
   =
-  c_bnd_fold (g `Xint) cost.c_self init |>
-  EcPath.Mx.fold (fun _ -> c_bnd_fold (g `Int)) cost.c_calls
+  g cost.c_self init |>
+  EcPath.Mx.fold (fun _ -> g) cost.c_calls
+
+let cost_fold      : (form -> 'a -> 'a) -> cost      -> 'a -> 'a = crecord_fold
+let proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a = crecord_fold
 
 (* -------------------------------------------------------------------- *)
 let f_map gt g fp =
@@ -1540,7 +1387,7 @@ let f_map gt g fp =
       let ty' = gt fp.f_ty in
         FSmart.f_proj (fp, (f, fp.f_ty)) (f', ty') i
 
-  | Fcost c -> FSmart.f_cost (fp, c) (cost_map (fun _ -> g) c)
+  | Fcost c -> FSmart.f_cost (fp, c) (cost_map g c)
 
   | Fmodcost mc ->
     let ty' = gt fp.f_ty in
@@ -2039,7 +1886,10 @@ type mem_pr = EcMemory.memory * form
 (* -------------------------------------------------------------------- *)
 type f_subst = {
   fs_freshen : bool; (* true means freshen locals *)
-  fs_mp      : (EcPath.mpath * mod_cost option) Mid.t;
+
+  fs_mp      : (EcPath.mpath * form option) Mid.t;
+  (* the formulas must be of type [tmodcost _] *)
+
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -2048,8 +1898,9 @@ type f_subst = {
   fs_pddef   : (EcIdent.t list * form) Mp.t;
   fs_esloc   : expr Mid.t;
   fs_memtype : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
+
+  fs_mempred : mem_pr Mid.t;
+  (* For predicates over memories, only substituted in Fcoe *)
 }
 
 (* -------------------------------------------------------------------- *)
@@ -2104,12 +1955,13 @@ module Fsubst = struct
     let merger _ = Some m2 in
     { s with fs_mem = Mid.change merger m1 s.fs_mem }
 
+  (* [oinfo] are cost informations used to correctly substiture formulas of
+     type [tcost].  *)
   let f_bind_mod
-      (s : f_subst)
-      (x : EcIdent.t)
-      (mp : EcPath.mpath)
-      (oinfo : mod_cost option)
-    : f_subst
+      (s     : f_subst)
+      (x     : EcIdent.t)
+      (mp    : EcPath.mpath)
+      (oinfo : form option) : f_subst
     =
     let merger o = assert (o = None); Some (mp, oinfo) in
     let smp = Mid.change merger x s.fs_mp in
@@ -2467,10 +2319,6 @@ module Fsubst = struct
     let sag = { f_subst_id with fs_loc = sag } in
     f_app (f_subst ~tx sag f) args fty
 
-  and subst_c_bnd ~(tx : form -> form -> form) (s : f_subst) = function
-    | C_unbounded -> C_unbounded
-    | C_bounded f -> C_bounded (f_subst ~tx s f)
-
   (* no [~tx] *)
   and subst_param (s : f_subst) (oi : oi_param) : oi_param =
     let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
@@ -2545,12 +2393,12 @@ module Fsubst = struct
      its cost (time the number of times it is called) need to be added to the
      self cost (see instantiation rule).  *)
   and cost_subst ~tx (s : f_subst) (init_cost : cost) : form =
-    let c_self = subst_c_bnd ~tx s init_cost.c_self
+    let c_self = f_subst ~tx s init_cost.c_self
     (* [concs] are the local modules that have been substituted by concrete
        modules. *)
     and concs, c_calls = EcPath.Mx.fold (fun x cb (concs,calls) ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
-        let cb' = subst_c_bnd ~tx s cb in
+        let cb' = f_subst ~tx s cb in
         match x'.x_top.m_top with
         | `Local _ ->
           ( concs,
@@ -2567,43 +2415,48 @@ module Fsubst = struct
 
     (* for every module [mid] that have been concretized *)
     EcIdent.Sid.fold (fun mid cost ->
-        let _, m_info = EcIdent.Mid.find mid s.fs_mp in
-        let m_info : mod_cost = oget m_info in (* must not be [None] *)
+        let _, minfo = EcIdent.Mid.find mid s.fs_mp in
+        let minfo : form = oget minfo in (* must not be [None] *)
         let mp = EcPath.mident mid in
+        let mprocs = match minfo.f_ty.ty_node with
+          | Tmodcost (mprocs, _) -> mprocs
+          | _ -> assert false   (* must be reduced *)
+        in
 
         (* for every procedure [f] of [mid] *)
-        EcSymbols.Msym.fold (fun f (f_info : proc_cost) cost ->
+        EcSymbols.Ssym.fold (fun (f : symbol) cost ->
             let xf = EcPath.xpath mp f in
 
-            (* the *intrinsic* cost of [f]. *)
-            let f_cost : form = f_info.pc_intr in (* of type `cost` *)
+            (* the *intrinsic* cost of [f], of type [cost] *)
+            let f_cost : form = f_mod_cost_proj_r minfo f Intr in
 
             (* times the number of times [f] has been called in [init_cost] *)
-            let f_called : c_bnd = (* of type `int` *)
+            let f_called : form = (* of type `xint` *)
               oget_c_bnd
                 (EcPath.Mx.find_opt xf init_cost.c_calls)
                 init_cost.c_full
             in
 
             (* compute: [cost + f_called * f_cost] *)
-            f_cost_add cost (fcost_c_bnd_mult f_called f_cost)
-          ) m_info cost
+            f_cost_add cost (f_cost_xscale f_called f_cost)
+          ) mprocs cost
       ) concs cost
 
+  (* substitution in a [proc_cost] is simpler. *)
   and proc_cost_subst ~tx (s : f_subst) (mpc : proc_cost) : proc_cost =
-    let pc_intr = f_subst ~tx s mpc.pc_intr in
+    let c_self = f_subst ~tx s mpc.c_self in
     (* if parameters are substituted, we do not need to move their cost
        elsewhere. *)
-    let pc_params = EcPath.Mx.fold (fun x cb r_params ->
+    let c_calls = EcPath.Mx.fold (fun x cb r_params ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
-        let cb' = subst_c_bnd ~tx s cb in
+        let cb' = f_subst ~tx s cb in
         EcPath.Mx.change
           (fun old -> assert (old  = None); Some cb')
           x' r_params
-      ) mpc.pc_params EcPath.Mx.empty
+      ) mpc.c_calls EcPath.Mx.empty
     in
 
-    { pc_intr; pc_params; pc_full = mpc.pc_full }
+    { c_self; c_calls; c_full = mpc.c_full; }
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)

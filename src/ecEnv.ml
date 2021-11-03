@@ -2357,8 +2357,7 @@ module NormMp = struct
       let keep =
         List.fold_left (fun k (x,_) ->
             EcPath.Sm.add (EcPath.mident x) k) EcPath.Sm.empty me.me_params in
-      let keep_info f =
-        EcPath.Sm.mem (f.EcPath.x_top) keep in
+      let keep_info f = EcPath.Sm.mem f.EcPath.x_top keep in
       let do1 oi = OI.filter keep_info oi in
 
       { mt.mt_restr with

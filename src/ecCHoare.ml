@@ -123,8 +123,8 @@ let cost_app (c : cost) (args : form list) : cost =
 
 (* -------------------------------------------------------------------- *)
 let loaded (env : env) : bool =
-  is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_xint.p_Xint env) &&
-  is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_xint.p_choaretac env)
+  is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_Xint.p_Xint env) &&
+  is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_Xint.p_choaretac env)
 
 exception LoadChoareFirst
 
@@ -153,7 +153,7 @@ let range =
 let f_predT = f_op EcCoreLib.CI_Pred.p_predT [tint] (tpred tint)
 
 let f_op_xbig =
-  f_op EcCoreLib.CI_xint.p_big [tint]
+  f_op EcCoreLib.CI_Xint.p_big [tint]
     (toarrow [tpred tint; tfun tint txint; tlist tint] txint)
 
 let f_op_big =

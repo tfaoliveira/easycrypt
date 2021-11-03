@@ -625,14 +625,14 @@ let params_hash (p : oi_params) : int =
     (Why3.Hashcons.combine_pair Hashtbl.hash param_hash)
     0 l
 
-(* let filter (f : xpath -> bool) (oi : 'a t) : 'a t =
- *   let call_costs =
- *     { oi.oi_costs with
- *       r_abs_calls = Mx.filter (fun x _ -> f x) oi.oi_costs.r_abs_calls;
- *       r_params    = Mx.filter (fun x _ -> f x) oi.oi_costs.r_params;
- *     } in
- *   let allowed = List.filter f oi.oi_calls in
- *   mk allowed oi.oi_in call_costs *)
+let filter (f : xpath -> bool) (oi : 'a t) : 'a t =
+  let call_costs =
+    { oi.oi_costs with
+      r_abs_calls = Mx.filter (fun x _ -> f x) oi.oi_costs.r_abs_calls;
+      r_params    = Mx.filter (fun x _ -> f x) oi.oi_costs.r_params;
+    } in
+  let allowed = List.filter f oi.oi_calls in
+  mk allowed oi.oi_in call_costs
 
 
 (* -------------------------------------------------------------------- *)
@@ -778,11 +778,11 @@ type 'a p_module_expr = {
 (* Invariant:
    In an abstract module [ME_Decl mt], [mt] must not be a functor, i.e. it must
    be fully applied. Therefore, we must have:
-   [List.length mp.mt_params = List.length mp.mt_args]  *)
+   [List.length mt.mt_params = List.length mt.mt_args]  *)
 and 'a p_module_body =
-  | ME_Alias       of int * EcPath.mpath
-  | ME_Structure   of 'a p_module_structure       (* Concrete modules. *)
-  | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
+  | ME_Alias     of int * EcPath.mpath
+  | ME_Structure of 'a p_module_structure    (* Concrete modules. *)
+  | ME_Decl      of 'a p_module_type         (* Abstract modules. *)
 
 and 'a p_module_structure = {
   ms_body      : 'a p_module_item list;

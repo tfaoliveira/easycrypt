@@ -93,29 +93,35 @@ module CI_Int = struct
 end
 
 (* -------------------------------------------------------------------- *)
-module CI_cost = struct
+module CI_Cost = struct
   let i_Cost = "CoreCost"
   let p_Cost = EcPath.pqname p_top i_Cost
   let p_cost = _Pervasive "cost"
 
   let _Cost    = fun x -> EcPath.pqname p_Cost x
 
-  let p_cost_zero  = _Cost "zero"
-  let p_cost_opp   = _Cost "opp"
-  let p_cost_add   = _Cost "add"
-  let p_cost_scale = _Cost "scale"
-  let p_cost_le    = _Cost "le"
-  let p_cost_lt    = _Cost "lt"
+  let p_cost_zero   = _Cost "zero"
+  let p_cost_inf    = _Cost "inf"
+  let p_cost_opp    = _Cost "opp"
+  let p_cost_add    = _Cost "add"
+  let p_cost_scale  = _Cost "scale"
+  let p_cost_xscale = _Cost "xscale"
+  let p_cost_le     = _Cost "le"
+  let p_cost_lt     = _Cost "lt"
 end
 
 (* -------------------------------------------------------------------- *)
-module CI_xint = struct
+module CI_Xint = struct
+  let i_CoreXint  = "CoreXint"
+  let p_CoreXint  = EcPath.pqname p_top i_CoreXint
+  let _CoreXint   = fun x -> EcPath.pqname p_CoreXint x
+
   let i_Xint  = "Xint"
   let p_Xint  = EcPath.pqname p_top i_Xint
   let _Xint   = fun x -> EcPath.pqname p_Xint x
   let mk_Xint = _Xint
 
-  let p_xint   = mk_Xint "xint"
+  let p_xint   = _CoreXint "xint"
   let p_N      = mk_Xint "N"
   let p_inf    = mk_Xint "Inf"
   let p_xopp   = mk_Xint "xopp"

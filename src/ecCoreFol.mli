@@ -171,38 +171,28 @@ and pr = {
   pr_event : form;
 }
 
-and c_bnd =
-  | C_bounded of form      (* type int *)
-  | C_unbounded
 
-
-(* A cost vector, e.g. in a CHoare.
+(* A cost record, used in both CHoares and in procedure cost restrictions.
    Keys of [c_calls] are functions of local modules, with no arguments.
    Missing entries in [c_calls] are:
    - any number of times in if [full] is [false]
    - zero times if [full] is [true] *)
-and cost = private {
-  c_self  : c_bnd;              (* of type `xint` *)
-  c_calls : c_bnd EcPath.Mx.t;  (* of type `int` *)
+and crecord = private {
+  c_self  : form;              (* type [txint] for [cost],
+                                  type [tcost] for [proc_cost] *)
+  c_calls : form EcPath.Mx.t;  (* type [xint] *)
   c_full  : bool;
 }
 
+and cost = private crecord
+
 (* A module procedure `F.f` cost, where `F` can be an non-applied functor.
    The cost is split between:
-   - intrinsic cost [pc_intr]
-   - the number of calls [pc_params] to the parameters of `F`
+   - intrinsic cost [c_self], of type [tcost]
+   - the number of calls [c_calls] to the parameters of `F` *)
+and proc_cost = private crecord
 
-   Keys of [pc_params] are oracles (module parameters) with no arguments.
-   Missing entries can be called:
-   - any number of times in if [full] is [false]
-   - zero times if [full] is [true] *)
-and proc_cost = private {
-  pc_intr   : form;              (* of type `cost` *)
-  pc_params : c_bnd EcPath.Mx.t; (* of type `int` *)
-  pc_full   : bool;
-}
-
-(* A module procedure `F` cost, where `F` can be an non-applied functor.
+(* A module `F` cost, where `F` can be an non-applied functor.
    All declared procedures of `F` must appear. *)
 and mod_cost = proc_cost EcSymbols.Msym.t
 
@@ -222,9 +212,6 @@ val gty_fv    : gty -> int Mid.t
 (* -------------------------------------------------------------------- *)
 val mty_equal : module_type -> module_type -> bool
 val mty_hash  : module_type -> int
-
-val c_bnd_hash  : c_bnd -> int
-val c_bnd_equal : c_bnd -> c_bnd -> bool
 
 val mr_equal : mod_restr -> mod_restr -> bool
 val mr_hash  : mod_restr -> int
@@ -252,17 +239,13 @@ val f_iter : (form -> unit) -> form -> unit
 
 (* -------------------------------------------------------------------- *)
 (* not recursive *)
-val c_bnd_iter : (form -> unit) -> c_bnd -> unit
-val cost_iter  : (form -> unit) -> cost -> unit
+val cost_iter : (form -> unit)     -> cost       -> unit
+val cost_map  : (form -> form)     -> cost       -> cost
+val cost_fold : (form -> 'a -> 'a) -> cost -> 'a -> 'a
 
-val c_bnd_map : (form -> form) -> c_bnd -> c_bnd
-val cost_map  : ([`Xint | `Int] -> form -> form) -> cost -> cost
-
-val c_bnd_bind : (form -> c_bnd) -> c_bnd -> c_bnd
-val cost_bind  : ([`Xint | `Int] -> form -> c_bnd) -> cost -> cost
-
-val c_bnd_fold : (form -> 'a -> 'a) -> c_bnd -> 'a -> 'a
-val cost_fold  : ([`Xint | `Int] -> form -> 'a -> 'a) -> cost -> 'a -> 'a
+val proc_cost_iter : (form -> unit)     -> proc_cost       -> unit
+val proc_cost_map  : (form -> form)     -> proc_cost       -> proc_cost
+val proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
@@ -293,22 +276,22 @@ val f_lambda : bindings -> form -> form
 
 val f_forall_mems : (EcIdent.t * memtype) list -> form -> form
 
+(* soft-constructors - cost hoare *)
+val cost_r   : form -> form EcPath.Mx.t -> bool -> cost
+val f_cost_r : cost -> form
+
+val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
+
+val f_mod_cost_r : mod_cost -> ty -> form
+
+val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
+
 (* soft-constructors - hoare *)
 val f_hoareF_r : sHoareF -> form
 val f_hoareS_r : sHoareS -> form
 
 val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
-
-(* soft-constructors - cost hoare *)
-val cost_r : c_bnd -> c_bnd EcPath.Mx.t -> bool -> cost
-val f_cost_r : cost -> form
-
-val proc_cost_r : form -> c_bnd EcPath.Mx.t -> bool -> proc_cost
-
-val f_mod_cost_r : mod_cost -> ty -> form
-
-val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
 
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
@@ -396,10 +379,12 @@ val f_int_pow   : form -> form -> form
 val f_int_edivz : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
-val f_cost_zero  : form
-val f_cost_opp   : form -> form
-val f_cost_add   : form -> form -> form
-val f_cost_scale : form -> form -> form
+val f_cost_zero   : form
+val f_cost_inf    : form
+val f_cost_opp    : form -> form
+val f_cost_add    : form -> form -> form
+val f_cost_scale  : form -> form -> form
+val f_cost_xscale : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
@@ -418,7 +403,7 @@ val f_x0 : form
 val f_x1 : form
 
 (* -------------------------------------------------------------------- *)
-val oget_c_bnd : c_bnd option -> bool -> c_bnd
+val oget_c_bnd : form option -> bool -> form
 val cost_add   : cost -> cost -> cost
 
 (* -------------------------------------------------------------------- *)
@@ -569,8 +554,11 @@ type mem_pr = EcMemory.memory * form
 
 (* -------------------------------------------------------------------- *)
 type f_subst = private {
-  fs_freshen : bool; (* true means realloc local *)
-  fs_mp      : (EcPath.mpath * mod_cost option) Mid.t;
+  fs_freshen : bool; (* true means freshen locals *)
+
+  fs_mp      : (EcPath.mpath * form option) Mid.t;
+  (* the formulas must be of type [tmodcost _] *)
+
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -579,8 +567,9 @@ type f_subst = private {
   fs_pddef   : (EcIdent.t list * form) Mp.t;
   fs_esloc   : expr Mid.t;
   fs_memtype : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
+
+  fs_mempred : mem_pr Mid.t;
+  (* For predicates over memories, only substituted in Fcoe *)
 }
 
 (* -------------------------------------------------------------------- *)
@@ -590,7 +579,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:((EcPath.mpath * mod_cost option) Mid.t)
+    -> ?mods:((EcPath.mpath * form option) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -603,15 +592,13 @@ module Fsubst : sig
   val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
   val f_bind_loc_mod : f_subst -> EcIdent.t -> mpath -> f_subst
-  val f_bind_mod     :
-    f_subst -> EcIdent.t -> mpath -> mod_cost option -> f_subst
+  val f_bind_mod     : f_subst -> EcIdent.t -> mpath -> form option -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-  val f_subst_mod   :
-    EcIdent.t -> mpath -> form -> mod_cost option -> form
+  val f_subst_mod   : EcIdent.t -> mpath -> form -> form option -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form
