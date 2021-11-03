@@ -2348,35 +2348,36 @@ module NormMp = struct
       res
 
   let get_restr_me (env : env) (me : module_expr) (mp : mpath) : mod_restr =
+    let mparams =
+      List.fold_left (fun mparams (id,_) ->
+          Sm.add (EcPath.mident id) mparams
+        ) Sm.empty me.me_params
+    in
+
     match me.me_body with
     | EcModules.ME_Decl mt ->
       (* As an invariant, we have that [mt] is fully applied. *)
       assert (List.length mt.mt_params = List.length mt.mt_args);
 
       (* We need to clear the oracle restriction using [me] params *)
-      let keep =
-        List.fold_left (fun k (x,_) ->
-            EcPath.Sm.add (EcPath.mident x) k) EcPath.Sm.empty me.me_params in
-      let keep_info f = EcPath.Sm.mem f.EcPath.x_top keep in
-      let do1 oi = OI.filter keep_info oi in
+      let keep_info f = EcPath.Sm.mem f.EcPath.x_top mparams in
+      let do1 oi = filter_param keep_info oi in
 
       { mt.mt_restr with
-        mr_oinfos = Msym.map do1 mt.mt_restr.mr_oinfos }
+        mr_params = Msym.map do1 mt.mt_restr.mr_params;
+        mr_cost   = mt.mt_restr.mr_cost; }
+    (* TODO A: I am not sure we are computing the correct cost here *)
 
     | _ ->
       (* We compute the oracle call information. *)
-      let mparams =
-        List.fold_left (fun mparams (id,_) ->
-            Sm.add (EcPath.mident id) mparams) Sm.empty me.me_params in
-
       let env = List.fold_left (fun env (x,mt) ->
           Mod.bind_local x mt env
         ) env me.me_params in
 
-      let comp_oi (oi : orcl_info) it = match it with
+      let comp_oi (oi : oi_params) it = match it with
         | MI_Module  _ | MI_Variable _ -> oi
         | MI_Function f ->
-          let rec f_call c f =
+          let rec f_call (c : Sx.t) (f : xpath) : Sx.t =
             let f = norm_xfun env f in
             if EcPath.Sx.mem f c then c
             else
@@ -2385,22 +2386,26 @@ module NormMp = struct
               match fun_.f_def with
               | FBalias _ -> assert false
               | FBdef def -> List.fold_left f_call c def.f_uses.us_calls
-              | FBabs oi  ->
-                List.fold_left f_call c (OI.allowed oi) in
+              | FBabs (params, _) ->
+                List.fold_left f_call c (allowed params)
+          in
 
           let all_calls =
             match f.f_def with
             | FBalias f -> f_call EcPath.Sx.empty f
             | FBdef def ->
               List.fold_left f_call EcPath.Sx.empty def.f_uses.us_calls
-            | FBabs oi ->
-              List.fold_left f_call EcPath.Sx.empty (OI.allowed oi) in
+            | FBabs (params, _) ->
+              List.fold_left f_call EcPath.Sx.empty (allowed params)
+          in
+
           let filter f =
             let ftop = EcPath.m_functor f.EcPath.x_top in
-            Sm.mem ftop mparams in
+            Sm.mem ftop mparams
+          in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name (OI.mk calls true r_cost_default) oi
+          Msym.add f.f_name { oi_in = true; oi_allowed = calls; } oi
       in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in
@@ -2416,29 +2421,29 @@ module NormMp = struct
           Sm.add (EcPath.mident m) sm
         ) use.us_gl Sm.empty in
       let ur_mpaths = { ur_pos = Some sm;
-                      ur_neg = Sm.empty; } in
+                        ur_neg = Sm.empty; } in
 
+      let procs = Msym.map (fun _ -> ()) oi in
       { mr_xpaths = ur_xpaths;
         mr_mpaths = ur_mpaths;
-        mr_oinfos = oi; }
+        mr_params = oi;
+        mr_cost   = mod_cost_top_r procs me.me_params; }
 
   let get_restr env mp =
     let mp = norm_mpath env mp in
     let me = Mod.by_mpath mp env in
     get_restr_me env me mp
 
-  let equal_restr (f_equiv : form -> form -> bool) env r1 r2 =
-    let c_bnd_equiv a b =
-      match a, b with
-      | C_bounded a, C_bounded b -> f_equiv a b
-      | C_unbounded, C_unbounded -> true
-      | _ -> false
-    in
-
+  let equal_restr
+      (f_equiv : form -> form -> bool)
+      (env     : env)
+      (r1      : mod_restr)
+      (r2      : mod_restr) : bool
+    =
     let us1,us2 = restr_use env r1, restr_use env r2 in
     ur_equal use_equal us1 us2
-    && Msym.equal (PreOI.equal c_bnd_equiv) r1.mr_oinfos r2.mr_oinfos
-
+    && params_equal r1.mr_params r2.mr_params
+    && f_equiv r1.mr_cost r2.mr_cost
 
   let sig_of_mp env mp =
     let mp = norm_mpath env mp in
@@ -2525,19 +2530,13 @@ module NormMp = struct
 
         | FcHoareF chf ->
           let pre' = aux chf.chf_pr and p' = norm_xfun env chf.chf_f
-          and post' = aux chf.chf_po in
-          let c_self' = c_bnd_map aux chf.chf_co.c_self in
-          let c_calls' = Mx.fold (fun f c calls ->
-              let f' = f        (* not normalized. *)
-              and c' = c_bnd_map aux c in
-              Mx.change (fun old -> assert (old = None); Some c') f' calls
-            ) chf.chf_co.c_calls Mx.empty in
+          and post' = aux chf.chf_po
+          and cost' = aux chf.chf_co in
+
           if chf.chf_pr == pre' && chf.chf_f == p' &&
-             chf.chf_po == post' && chf.chf_co.c_self == c_self' &&
-             Mx.equal (fun a b -> a == b) chf.chf_co.c_calls c_calls'
-          then f else
-            let calls' = cost_r c_self' c_calls' chf.chf_co.c_full in
-            f_cHoareF pre' p' post' calls'
+             chf.chf_po == post' && chf.chf_co == cost'
+          then f
+          else f_cHoareF pre' p' post' cost'
 
         (* TODO: missing cases: FbdHoareF and every F*HoareS *)
 
@@ -2696,12 +2695,19 @@ module ModTy = struct
 
     let keep =
       List.fold_left (fun k (x,_) ->
-        EcPath.Sm.add (EcPath.mident x) k) EcPath.Sm.empty params in
-    let keep_info f =
-      EcPath.Sm.mem (f.EcPath.x_top) keep in
-    let do1 oi = OI.filter keep_info oi in
-    let restr = { mt.mt_restr with
-                  mr_oinfos = Msym.map do1 mt.mt_restr.mr_oinfos } in
+          EcPath.Sm.add (EcPath.mident x) k
+        ) EcPath.Sm.empty params
+    in
+    let keep_info f = EcPath.Sm.mem (f.EcPath.x_top) keep in
+
+    let do1 oi = filter_param keep_info oi in
+    let restr = {
+      mt.mt_restr with
+      mr_params = Msym.map do1 mt.mt_restr.mr_params;
+      mr_cost   = mt.mt_restr.mr_cost;
+      (* TODO A: I am not sure we are computing the correct cost here
+      indeed, we probably need to substitute the arguments by mr_params in mr_cost *)
+    } in
 
     { mis_params = params;
       mis_body   = items;

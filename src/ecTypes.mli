@@ -41,13 +41,14 @@ val dump_ty : ty -> string
 val ty_equal : ty -> ty -> bool
 val ty_hash  : ty -> int
 
-val tuni    : EcUid.uid -> ty
-val tvar    : EcIdent.t -> ty
-val ttuple  : ty list -> ty
-val tconstr : EcPath.path -> ty list -> ty
-val tfun    : ty -> ty -> ty
-val tglob   : EcPath.mpath -> ty
-val tpred   : ty -> ty
+val tuni     : EcUid.uid -> ty
+val tvar     : EcIdent.t -> ty
+val ttuple   : ty list -> ty
+val tconstr  : EcPath.path -> ty list -> ty
+val tfun     : ty -> ty -> ty
+val tglob    : EcPath.mpath -> ty
+val tpred    : ty -> ty
+val tmodcost : Ssym.t -> Ssym.t Mid.t -> ty
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty

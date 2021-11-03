@@ -118,8 +118,8 @@ let module_comps_of_module_sig_comps
 
 (* -------------------------------------------------------------------- *)
 let module_expr_of_module_sig
-    (name : EcIdent.t)
-    (mp : module_type)
+    (name  : EcIdent.t)
+    (mp    : module_type)
     (tymod : module_sig) : module_expr
   =
   (* Abstract modules must be fully applied. *)

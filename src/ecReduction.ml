@@ -305,29 +305,25 @@ let check_bindings test env subst bd1 bd2 =
 
 (* build back the list of call costs *)
 let zapp_cost_l
-    (calls : (xpath * [`U | `B]) list)
-    (c_calls : form list) : c_bnd Mx.t
+    (calls : xpath list)
+    (c_calls : form list) : form Mx.t
   =
-  let rec zapp_c calls c_calls (cost : c_bnd Mx.t) =
+  let rec zapp_c calls c_calls (cost : form Mx.t) =
       match calls, c_calls with
       | [], [] -> cost
 
-      | (xp, `B) :: calls, cb :: c_calls ->
-        zapp_c calls c_calls (Mx.add xp (C_bounded cb) cost)
-
-      | (xp, `U) :: calls, _ ->
-        zapp_c calls c_calls (Mx.add xp C_unbounded cost)
+      | xp :: calls, cb :: c_calls ->
+        zapp_c calls c_calls (Mx.add xp cb cost)
 
       | _ -> assert false
-
   in
   zapp_c calls c_calls Mx.empty
 
 
-let check_cost_l
+let check_crecord_l
     subst
     (co1 : cost)
-    (co2 : cost) : bool * ((xpath * [`U | `B]) list) * (form * form) list
+    (co2 : cost) : xpath list * (form * form) list
   =
   if co1.c_full <> co2.c_full then raise NotConv;
 
@@ -343,32 +339,30 @@ let check_cost_l
         EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
       ) co2.c_calls EcPath.Mx.empty in
 
-  let do_c_bnd c1 c2 =
-    match c1, c2 with
-    | C_bounded c1, C_bounded c2 -> Some (c1, c2)
-    | C_unbounded, C_bounded _
-    | C_bounded _, C_unbounded -> raise NotConv
-    | C_unbounded, C_unbounded -> None
-  in
-
   let f_calls, pforms =
     EcPath.Mx.fold2_union (fun f a1 a2 (f_calls, pforms) ->
         let a1 = EcFol.oget_c_bnd a1 co1.c_full
         and a2 = EcFol.oget_c_bnd a2 co2.c_full in
-        match do_c_bnd a1 a2 with
-        | Some (g1,g2) -> (f, `B) :: f_calls, (g1, g2) :: pforms
-        | None         -> (f, `U) :: f_calls, pforms
+        f :: f_calls, (a1, a2) :: pforms
       ) calls1 calls2 ([], [])
   in
 
-  let check_self = otolist (do_c_bnd co1.c_self co2.c_self) in
-  check_self <> [], f_calls, check_self @ pforms
+  let check_self = co1.c_self, co2.c_self in
+  f_calls, check_self :: pforms
 
-let check_cost test env subst co1 co2 =
-  let _, _, pforms = check_cost_l subst co1 co2 in
+let check_crecord test env subst co1 co2 =
+  let  _, pforms = check_crecord_l subst co1 co2 in
   List.iter
     (fun (a1,a2) -> test env subst a1 a2)
     pforms
+
+let check_mod_cost test env subst mc1 mc2 =
+  let _ : proc_cost EcSymbols.Msym.t =
+    EcSymbols.Msym.merge (fun _ p1 p2 ->
+        let p1, p2 = oget p1, oget p2 in
+        check_crecord test env subst p1 p2; None
+      ) mc1 mc2
+  in ()
 
 let check_e env s e1 e2 =
   let es = e_subst_init s.fs_freshen s.fs_sty.ts_p
@@ -494,14 +488,25 @@ let is_alpha_eq hyps f1 f2 =
       check_xp env subst chf1.chf_f chf2.chf_f;
       aux env subst chf1.chf_pr chf2.chf_pr;
       aux env subst chf1.chf_po chf2.chf_po;
-      check_cost aux env subst chf1.chf_co chf2.chf_co
+      aux env subst chf1.chf_co chf2.chf_co
 
     | FcHoareS chs1, FcHoareS chs2 ->
       check_s env subst chs1.chs_s chs2.chs_s;
       (* FIXME should check the memenv *)
       aux env subst chs1.chs_pr chs2.chs_pr;
       aux env subst chs1.chs_po chs2.chs_po;
-      check_cost aux env subst chs1.chs_co chs2.chs_co
+      aux env subst chs1.chs_co chs2.chs_co
+
+    | Fcost c1, Fcost c2 ->
+      check_crecord aux env subst c1 c2
+
+    | Fmodcost mc1, Fmodcost mc2 ->
+      check_mod_cost aux env subst mc1 mc2
+
+    | Fmodcost_proj (c1,f1,p1), Fmodcost_proj (c2,f2,p2) ->
+      aux env subst c1 c2;
+      ensure (f1 = f2);
+      ensure (cost_proj_equal p1 p2)
 
     | FequivF ef1, FequivF ef2 ->
       check_xp env subst ef1.ef_fl ef2.ef_fl;
@@ -1337,6 +1342,25 @@ let simplify ri hyps f =
   let ri, env = init_redinfo ri hyps in
   simplify ri env f
 
+
+(* ----------------------------------------------------------------- *)
+(* Simplify xints                                                    *)
+
+let simplify_xint
+    (hyps : LDecl.hyps)
+    (x    : form)
+  : [`Int of form | `Inf | `Unknown]
+  =
+  let xn = simplify full_red hyps x in
+  match destr_app xn with
+  | { f_node = Fop (p, _) }, [f]
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> `Int f
+
+  | { f_node = Fop (p, _) }, []
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_inf -> `Inf
+
+  | _                                             -> `Unknown
+
 (* ----------------------------------------------------------------- *)
 (* Checking convertibility                                           *)
 
@@ -1355,10 +1379,16 @@ type head_sub =
   | Zproj    of int
   | Zhl      of form (* program logic predicates *)
 
-  | Zhl_cost of { form     : form;
-                  has_self : bool;
-                  calls    : (xpath * [`U | `B]) list; }
-  (* program logic cost predicate *)
+  | Zhl_crecord of { full  : bool;
+                     calls : xpath list; }
+  (* program logic cost record *)
+
+  | Zhl_modcost of { typ   : EcTypes.ty;
+                     procs : (EcSymbols.symbol * xpath list) list; }
+  (* module cost *)
+
+  | Zhl_mod_cost_proj of { proc: EcSymbols.symbol;
+                           proj : cost_proj; }
 
 type stk_elem = {
     se_h      : head_sub;
@@ -1389,8 +1419,15 @@ let zapp args1 args2 ty stk =
 let ztuple args1 args2 ty stk = zpush    Ztuple [] args1 args2     ty stk
 let zproj i ty stk            = zpush (Zproj i) []    []    []     ty stk
 let zhl f fs1 fs2 stk         = zpush   (Zhl f) []   fs1   fs2 f.f_ty stk
-let zhl_cost f has_self calls fs1 fs2 stk =
-  zpush (Zhl_cost {form = f; has_self; calls}) [] fs1 fs2 f.f_ty stk
+
+let zhl_crecord full calls fs1 fs2 ty stk : stk_elem list =
+  zpush (Zhl_crecord {full; calls}) [] fs1 fs2 ty stk
+
+let zhl_mod_cost_proj proc proj ty stk : stk_elem list =
+  zpush (Zhl_mod_cost_proj {proc; proj}) [] [] [] ty stk
+
+let zhl_mod_cost procs fs1 fs2 ty stk : stk_elem list =
+  zpush (Zhl_modcost { typ = ty; procs; }) [] fs1 fs2 ty stk
 
 let zpop ri side f hd =
   let args =
@@ -1416,6 +1453,10 @@ let zpop ri side f hd =
     f_bdHoareF_r {hf with bhf_pr = pr; bhf_po = po; bhf_bd = bd}
   | Zhl {f_node = FbdHoareS hs}, [pr;po;bd] ->
     f_bdHoareS_r {hs with bhs_pr = pr; bhs_po = po; bhs_bd = bd}
+  | Zhl {f_node = FcHoareF chf}, [pr;po;c] ->
+    f_cHoareF_r {chf with chf_pr = pr; chf_po = po; chf_co = c}
+  | Zhl {f_node = FcHoareS chs}, [pr;po;c] ->
+    f_cHoareS_r {chs with chs_pr = pr; chs_po = po; chs_co = c}
   | Zhl {f_node = FequivF hf}, [pr;po] ->
     f_equivF_r {hf with ef_pr = pr; ef_po = po }
   | Zhl {f_node = FequivS hs}, [pr;po] ->
@@ -1427,32 +1468,21 @@ let zpop ri side f hd =
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
 
-  | Zhl_cost {form = {f_node = FcHoareF hfc}; has_self; calls},
-    chf_pr :: chf_po :: self_pcalls ->
-    let self, pcalls =
-      match self_pcalls with
-      | self :: pcalls when has_self -> C_bounded self, pcalls
-      | _ -> C_unbounded, self_pcalls
-    in
+  | Zhl_crecord {full; calls},
+    self :: pcalls ->
     let calls = zapp_cost_l calls pcalls in
-    f_cHoareF_r
-      { hfc with chf_pr; chf_po; chf_co = cost_r self calls hfc.chf_co.c_full }
+    f_cost_r (cost_r self calls full)
 
-  | Zhl_cost {form = {f_node = FcHoareS hfs}; has_self; calls},
-    chs_pr :: chs_po :: self_pcalls ->
-    let self, pcalls =
-      match self_pcalls with
-      | self :: pcalls when has_self -> C_bounded self, pcalls
-      | _ -> C_unbounded, self_pcalls
-    in
-    let calls = zapp_cost_l calls pcalls in
-    f_cHoareS_r
-      { hfs with chs_pr; chs_po; chs_co = cost_r self calls hfs.chs_co.c_full }
+  | Zhl_modcost x, _ ->
+    assert false                (* TODO A: *)
+
+  | Zhl_mod_cost_proj {proc; proj;}, [c] ->
+    f_mod_cost_proj_r c proc proj
 
   | _, _ -> assert false
 
 (* -------------------------------------------------------------------- *)
-let rec conv ri env f1 f2 stk =
+let rec conv ri env f1 f2 stk : bool =
   if f_equal f1 f2 then conv_next ri env f1 stk else
   match f1.f_node, f2.f_node with
   | Fquant (q1, bd1, f1'), Fquant(q2,bd2,f2') ->
@@ -1549,31 +1579,48 @@ let rec conv ri env f1 f2 stk =
 
   | FcHoareF chf1, FcHoareF chf2
      when EqTest.for_xp env chf1.chf_f chf2.chf_f ->
-     begin match check_cost_l Fsubst.f_subst_id chf1.chf_co chf2.chf_co with
-       | has_self, calls, fs ->
-         let fs1, fs2 = List.split fs in
-         conv ri env chf1.chf_pr chf2.chf_pr
-           (zhl_cost
-              f1 has_self calls
-              (chf1.chf_po :: fs1)
-              (chf2.chf_po :: fs2)
-              stk)
-       | exception NotConv -> force_head ri env f1 f2 stk
-     end
+    conv ri env chf1.chf_pr chf2.chf_pr
+      (zhl f1 [chf1.chf_po;chf1.chf_co] [chf2.chf_po;chf2.chf_co] stk)
 
   | FcHoareS chs1, FcHoareS chs2
      when EqTest.for_stmt env chs1.chs_s chs2.chs_s ->
-     begin match check_cost_l Fsubst.f_subst_id chs1.chs_co chs2.chs_co with
-       | has_self, calls, fs ->
-         let fs1, fs2 = List.split fs in
-         conv ri env chs1.chs_pr chs2.chs_pr
-           (zhl_cost
-              f1 has_self calls
-              (chs1.chs_po :: fs1)
-              (chs2.chs_po :: fs2)
-              stk)
-       | exception NotConv -> force_head ri env f1 f2 stk
-     end
+    conv ri env chs1.chs_pr chs2.chs_pr
+      (zhl f1 [chs1.chs_po;chs1.chs_co] [chs2.chs_po;chs2.chs_co] stk)
+
+  | Fcost c1, Fcost c2 ->
+    begin match check_crecord_l Fsubst.f_subst_id c1 c2 with
+      | calls, (self1, self2) :: fs ->
+        let fs1, fs2 = List.split fs in
+        conv ri env self1 self2
+          (zhl_crecord c1.c_full calls fs1 fs2 f1.f_ty stk)
+      | exception NotConv -> force_head ri env f1 f2 stk
+      | _ -> assert false
+    end
+
+  | Fmodcost mc1, Fmodcost mc2 ->
+    let mc =
+      EcSymbols.Msym.merge (fun _ p1 p2 ->
+          let p1, p2 = oget p1, oget p2 in (* invariant: cannot be None *)
+          Some (p1, p2)
+        ) mc1 mc2
+    in
+    let procs, cprocs = EcSymbols.Msym.fold (fun f (p1,p2) procs ->
+        procs
+      ) mc []
+    in
+    begin
+      match cprocs with
+      | [] -> conv_next ri env f1 stk
+      | (g1, g2) :: fs ->
+        let fs1, fs2 = List.split fs in
+        conv ri env g1 g2 (zhl_mod_cost procs fs1 fs2 f1.f_ty stk)
+    end
+
+  | Fmodcost_proj (c1,proc1,proj1),
+    Fmodcost_proj (c2,proc2,proj2)
+    when proc1 = proc2 && cost_proj_equal proj1 proj2 ->
+    conv ri env c1 c2
+      (zhl_mod_cost_proj proc1 proj1 f1.f_ty stk)
 
   | FequivF ef1, FequivF ef2
       when EqTest.for_xp env ef1.ef_fl ef2.ef_fl

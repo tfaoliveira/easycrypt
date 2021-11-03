@@ -33,6 +33,8 @@ type hoarecmp = FHle | FHeq | FHge
 (* projection of a module cost *)
 type cost_proj = Intr | Param of EcIdent.t * symbol
 
+val cost_proj_equal : cost_proj -> cost_proj -> bool
+
 type gty =
   | GTty    of EcTypes.ty
   | GTmodty of module_type
@@ -184,13 +186,13 @@ and crecord = private {
   c_full  : bool;
 }
 
-and cost = private crecord
+and cost = crecord
 
 (* A module procedure `F.f` cost, where `F` can be an non-applied functor.
    The cost is split between:
    - intrinsic cost [c_self], of type [tcost]
    - the number of calls [c_calls] to the parameters of `F` *)
-and proc_cost = private crecord
+and proc_cost = crecord
 
 (* A module `F` cost, where `F` can be an non-applied functor.
    All declared procedures of `F` must appear. *)
@@ -408,6 +410,10 @@ val cost_add   : cost -> cost -> cost
 
 (* -------------------------------------------------------------------- *)
 val proc_cost_top : proc_cost
+
+val mod_cost_top : Ssym.t -> mod_cost
+
+val mod_cost_top_r : Ssym.t -> (EcIdent.t * module_type) list -> form
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig

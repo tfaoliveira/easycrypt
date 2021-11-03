@@ -1,17 +1,14 @@
 open EcFol
-open EcModules
 open EcPath
+open EcSymbols
 
 (* -------------------------------------------------------------------- *)
 val check_loaded : EcEnv.env -> unit
 
 (* -------------------------------------------------------------------- *)
-val oget_c_bnd : c_bnd option -> bool -> c_bnd
+val oget_c_bnd : form option -> bool -> form
 
-(* [xint] from a [c_bnd] of type [mode] *)
-val xi_of_c_bnd : mode:[`Xint | `Int] -> c_bnd -> form
-
-val cost_orcl : xpath -> OI.t -> c_bnd
+val cost_orcl : symbol -> xpath -> form -> form
 
 (* -------------------------------------------------------------------- *)
 (* [cost_sub_self c a]: [a] must be of type [xint] *)
@@ -26,7 +23,6 @@ val cost_add_self : cost -> form -> cost
 type cost_backward_res = [
   | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
                                    whenever [c] holds. *)
-  | `XError of EcPath.xpath     (* error with oracle call [x] *)
   | `FullError                  (* full minus not full *)
 ]
 

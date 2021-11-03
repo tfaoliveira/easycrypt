@@ -148,8 +148,12 @@ val is_in : oi_param -> bool
 val allowed   : oi_param -> xpath list
 val allowed_s : oi_param -> Sx.t
 
+val params_equal : oi_params -> oi_params -> bool
+
+val filter_param : (xpath -> bool) -> oi_param -> oi_param
+
 (* -------------------------------------------------------------------- *)
-(* ['a] will be instantiated by [EcCoreFol.form]. *)
+(* ['a] will be instantiated by [EcCoreFol.]. *)
 type 'a p_mod_restr = {
   mr_xpaths  : EcPath.Sx.t use_restr;
   mr_mpaths  : EcPath.Sm.t use_restr;

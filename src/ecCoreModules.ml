@@ -625,23 +625,17 @@ let params_hash (p : oi_params) : int =
     (Why3.Hashcons.combine_pair Hashtbl.hash param_hash)
     0 l
 
-let filter (f : xpath -> bool) (oi : 'a t) : 'a t =
-  let call_costs =
-    { oi.oi_costs with
-      r_abs_calls = Mx.filter (fun x _ -> f x) oi.oi_costs.r_abs_calls;
-      r_params    = Mx.filter (fun x _ -> f x) oi.oi_costs.r_params;
-    } in
-  let allowed = List.filter f oi.oi_calls in
-  mk allowed oi.oi_in call_costs
-
+let filter_param (f : xpath -> bool) (oi : oi_param) : oi_param =
+  { oi_in      = oi.oi_in;
+    oi_allowed = List.filter f oi.oi_allowed; }
 
 (* -------------------------------------------------------------------- *)
 (* ['a] will be instantiated by [EcCoreFol.form]. *)
 type 'a p_mod_restr = {
-  mr_xpaths  : EcPath.Sx.t use_restr;
-  mr_mpaths  : EcPath.Sm.t use_restr;
-  mr_params  : oi_params;
-  mr_cost    : 'a ;
+  mr_xpaths : EcPath.Sx.t use_restr;
+  mr_mpaths : EcPath.Sm.t use_restr;
+  mr_params : oi_params;
+  mr_cost   : 'a ;
 }
 
 let p_mr_equal

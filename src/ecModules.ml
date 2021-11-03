@@ -35,14 +35,14 @@ let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;
   mr_params = Msym.empty;
-  mr_cost   = assert false;     (* TODOA: empty cost record *)
+  mr_cost   = assert false;     (* TODO A: empty cost record *)
 }
 
 let mr_full = {
   mr_xpaths = ur_full EcPath.Sx.empty;
   mr_mpaths = ur_full EcPath.Sm.empty;
   mr_params = Msym.empty;
-  mr_cost   = assert false;     (* TODOA: empty cost record *)
+  mr_cost   = assert false;     (* TODO A: empty cost record *)
 }
 
 let mr_add_restr

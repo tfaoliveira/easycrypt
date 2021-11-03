@@ -1153,6 +1153,26 @@ let proc_cost_top : proc_cost =
     c_full   = false; }
 
 (* -------------------------------------------------------------------- *)
+let mod_cost_top (procs : Ssym.t) : mod_cost =
+  Ssym.fold (fun f mc ->
+      Msym.add f proc_cost_top mc
+    ) procs Msym.empty
+
+let mod_cost_top_r
+    (procs  : Ssym.t)
+    (params : (EcIdent.t * module_type) list) : form
+  =
+  let ty =
+    let mparams = List.fold_left (fun mparams (id, _) ->
+        let idprocs = assert false in (* TODO A: *)
+        Mid.add id idprocs mparams
+      ) Mid.empty params
+    in
+    tmodcost procs mparams
+  in
+  f_mod_cost_r (mod_cost_top procs) ty
+
+(* -------------------------------------------------------------------- *)
 (* [l] has type [int] *)
 let cost_scalar_mult (l : form) (c : cost) : cost =
   let c_self = x_scalar_mult ~mode_l:`Int l c.c_self in
@@ -2443,6 +2463,7 @@ module Fsubst = struct
       ) concs cost
 
   (* substitution in a [proc_cost] is simpler. *)
+  (* TODO A: is this true ? check that this makes sense. *)
   and proc_cost_subst ~tx (s : f_subst) (mpc : proc_cost) : proc_cost =
     let c_self = f_subst ~tx s mpc.c_self in
     (* if parameters are substituted, we do not need to move their cost
