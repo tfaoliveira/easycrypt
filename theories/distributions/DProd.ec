@@ -151,3 +151,46 @@ exact SampleDLet.
 qed.
 
 end DLetSampling.
+
+
+(* ==================================================================== *)
+abstract theory DMapSampling.
+type t,u.
+
+module S = {
+  proc sample(d : t distr, f : t -> u) : u= {
+    var x;
+
+    x <$ d;
+    return f x;
+  }
+
+  proc sample2(d : t distr, f : t -> u) : u= {
+    var y;
+
+    y <$ dmap d f;
+    return y;
+  }
+}.
+
+clone DLetSampling as D with
+  type t <- t,
+  type u <- u.
+
+  
+equiv sample_sample2 : S.sample ~ S.sample2 : ={d,f} ==> ={res}.
+proof.
+transitivity D.SampleDep.sample 
+             (d{1} = dt{2} /\ du{2} = (dunit \o f{1}) ==> ={res}) 
+             (d{2} = dt{1} /\ du{1} = (dunit \o f{2}) ==> ={res}) => //.
+- move => &m1 &m2 [H1 H2]. exists (d{m1},dunit \o f{m1}) => //=. smt().
+- proc; auto. rnd{2}; rnd; skip => /> &m1 &m2 x ?. 
+  split => [|_ y]; 1: exact dunit_ll. smt(supp_dunit).
+transitivity D.SampleDLet.sample (={dt,du} ==> ={res}) 
+  (d{2} = dt{1} /\ du{1} = (dunit \o f{2}) ==> ={res}) => //.
+- move => &m1 &m2 [H1 H2]. exists (dt{m1},du{m1}) => //=. 
+- exact: D.SampleDepDLet.
+- by proc; auto.
+qed.
+
+end DMapSampling.
