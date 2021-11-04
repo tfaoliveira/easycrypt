@@ -655,9 +655,9 @@ let rec pp_type_r ppe outer fmt ty =
   match ty.ty_node with
   | Tglob m -> Format.fprintf fmt "(glob %a)" (pp_topmod ppe) m
 
-  | Tunivar x -> pp_tyunivar ppe fmt x
-  | Tvar    x -> pp_tyvar ppe fmt x
-  | Tcost     -> Format.fprintf fmt "cost"
+  | Tunivar x  -> pp_tyunivar ppe fmt x
+  | Tvar    x  -> pp_tyvar ppe fmt x
+  | Tmodcost _ ->             assert false            (* TODO A: *)
 
   | Ttuple tys ->
       let pp fmt tys =
@@ -1664,6 +1664,13 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_form ppepr) eg.eg_pr
         (pp_form ppepo) eg.eg_po
 
+
+  | Fmodcost mc1 ->
+    assert false            (* TODO A: *)
+
+  | Fmodcost_proj _ ->
+    assert false            (* TODO A: *)
+
   | FcHoareF chf ->
     let mepr, mepo = EcEnv.Fun.hoareF_memenv chf.chf_f ppe.PPEnv.ppe_env in
     let ppepr = PPEnv.create_and_push_mem ppe ~active:true mepr in
@@ -1671,14 +1678,14 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
     if f_equal chf.chf_pr f_true && f_equal chf.chf_po f_true then
       Format.fprintf fmt "@[<hov 2>choare[@[<hov 2>%a@]]@ time %a@]"
         (pp_funname ppe) chf.chf_f
-        (pp_cost ppe) chf.chf_co
+        (pp_form ppe) chf.chf_co
     else
       Format.fprintf fmt "@[<hov 2>choare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]]\
                           @ time %a@]"
         (pp_funname ppe) chf.chf_f
         (pp_form ppepr) chf.chf_pr
         (pp_form ppepo) chf.chf_po
-        (pp_cost ppe) chf.chf_co
+        (pp_form ppe) chf.chf_co
 
   | FcHoareS chs ->
       let ppe = PPEnv.push_mem ppe ~active:true chs.chs_m in
@@ -1687,7 +1694,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_stmt_for_form ppe) chs.chs_s
         (pp_form ppe) chs.chs_pr
         (pp_form ppe) chs.chs_po
-        (pp_cost ppe) chs.chs_co
+        (pp_form ppe) chs.chs_co
 
   | FbdHoareF hf ->
       let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.bhf_f ppe.PPEnv.ppe_env in
@@ -1771,25 +1778,22 @@ and pp_tuple_expr ppe fmt e =
 
 (* -------------------------------------------------------------------- *)
 and _pp_cost ppe fmt
-    ((self, calls, full) : c_bnd * (EcPath.xpath * c_bnd) list * bool)
+    ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
   =
-  let pp_self fmt = function
-    | C_bounded self ->
-      Format.fprintf fmt ": %a"
-        (pp_form ppe) self
-    | C_unbounded ->
-      Format.fprintf fmt ": `_"
+  let pp_self fmt self =
+    Format.fprintf fmt ": %a"
+      (pp_form ppe) self
+
+  (* Format.fprintf fmt "%a : `_"
+   *   (pp_funname ppe) f *)
 
   and pp_call_el fmt (f,c) =
-    match c with
-    | C_bounded c ->
-      Format.fprintf fmt "%a : %a"
-        (pp_funname ppe) f
-        (pp_form ppe) c
+    Format.fprintf fmt "%a : %a"
+      (pp_funname ppe) f
+      (pp_form ppe) c
 
-    | C_unbounded ->
-      Format.fprintf fmt "%a : `_"
-        (pp_funname ppe) f
+  (* Format.fprintf fmt "%a : `_"
+   *   (pp_funname ppe) f *)
 
   and pp_full fmt = if not full then Format.fprintf fmt "_" in
 
@@ -1804,57 +1808,51 @@ and pp_cost ppe fmt (c : cost) =
   _pp_cost ppe fmt
     (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
 
-and pp_r_cost ppe fmt (c : c_bnd r_cost) =
-  if has_cost_restr c then
-    let calls =
-      EcPath.Mx.bindings c.r_abs_calls @ EcPath.Mx.bindings c.r_params
-    in
-    _pp_cost ppe fmt (c.r_self, calls, c.r_full)
-  else ()
-
 (* -------------------------------------------------------------------- *)
 
-and pp_allowed_orcl ppe fmt orcls =
-  if orcls = [] then Format.fprintf fmt ""
-  else
-    Format.fprintf fmt "{@[<hov>%a@]}@ "
-      (pp_list ",@ " (pp_funname ppe)) orcls
-
-and has_cost_restr (c : c_bnd r_cost) =
-  c.r_self <> C_unbounded ||
-  EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_abs_calls ||
-  EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_params ||
-  c.r_full
+(* and pp_allowed_orcl ppe fmt orcls =
+ *   if orcls = [] then Format.fprintf fmt ""
+ *   else
+ *     Format.fprintf fmt "{@[<hov>%a@]}@ "
+ *       (pp_list ",@ " (pp_funname ppe)) orcls
+ *
+ * and has_cost_restr (c : c_bnd r_cost) =
+ *   c.r_self <> C_unbounded ||
+ *   EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_abs_calls ||
+ *   EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_params ||
+ *   c.r_full *)
 
 and pp_orclinfo_bare ppe fmt oi =
-  let orcls = OI.allowed oi
-  and r_cost = OI.cost oi in
-  Format.fprintf fmt "%a%a"
-    (pp_allowed_orcl ppe) orcls
-    (pp_r_cost ppe) r_cost
+  assert false            (* TODO A: *)
+  (* let orcls = OI.allowed oi
+   * and r_cost = OI.cost oi in
+   * Format.fprintf fmt "%a%a"
+   *   (pp_allowed_orcl ppe) orcls
+   *   (pp_r_cost ppe) r_cost *)
 
-and pp_orclinfo ppe fmt (sym, oi) =
-  Format.fprintf fmt "@[<hv>%s%a : %a@]"
-    (if OI.is_in oi then "" else " *")
-    pp_symbol sym
-    (pp_orclinfo_bare ppe) oi
+(* and pp_orclinfo ppe fmt (sym, oi) =
+ *   Format.fprintf fmt "@[<hv>%s%a : %a@]"
+ *     (if OI.is_in oi then "" else " *")
+ *     pp_symbol sym
+ *     (pp_orclinfo_bare ppe) oi *)
 
 and pp_orclinfos ppe fmt ois =
-  (* if there are no oracle restrictions, we do not print anything *)
-  let orcl_infos =
-    List.filter_map (fun (sym, oi) ->
-        let orcls = OI.allowed oi
-        and cost = OI.cost oi in
-        if not (has_cost_restr cost) && orcls = [] && OI.is_in oi
-        then None
-        else Some (sym, oi)
-      ) (Msym.bindings ois)
-  in
-  if orcl_infos = [] then
-    Format.fprintf fmt ""
-  else
-  Format.fprintf fmt "[@[<hv>%a@]]"
-    (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos
+      assert false            (* TODO A: *)
+  (* (\* if there are no oracle restrictions, we do not print anything *\)
+   * let orcl_infos =
+   *   List.filter_map (fun (sym, oi) ->
+   *       let orcls = OI.allowed oi
+   *       and cost = OI.cost oi in
+   *       if not (has_cost_restr cost) && orcls = [] && OI.is_in oi
+   *       then None
+   *       else Some (sym, oi)
+   *     ) (Msym.bindings ois)
+   * in
+   * if orcl_infos = [] then
+   *   Format.fprintf fmt ""
+   * else
+   * Format.fprintf fmt "[@[<hv>%a@]]"
+   *   (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos *)
 
 (* -------------------------------------------------------------------- *)
 and pp_mem_restr ppe fmt mr =
@@ -1900,9 +1898,10 @@ and pp_mem_restr ppe fmt mr =
 (* -------------------------------------------------------------------- *)
 (* Use in an hv box. *)
 and pp_restr ppe fmt mr =
-  Format.fprintf fmt "%a%a"
-    (pp_mem_restr ppe) mr
-    (pp_orclinfos ppe) mr.mr_oinfos
+  assert false            (* TODO A: *)
+  (* Format.fprintf fmt "%a%a"
+   *   (pp_mem_restr ppe) mr
+   *   (pp_orclinfos ppe) mr.mr_oinfos *)
 
 (* -------------------------------------------------------------------- *)
 and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
@@ -2729,10 +2728,10 @@ let pp_choareF (ppe : PPEnv.t) ?prpo fmt chf =
   let ppepr = PPEnv.create_and_push_mem ppe ~active:true mepr in
   let ppepo = PPEnv.create_and_push_mem ppe ~active:true mepo in
 
-  Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) chf.chf_pr;
-  Format.fprintf fmt "    %a@\n%!" (pp_funname ppe) chf.chf_f;
-  Format.fprintf fmt "    time %a@\n%!" (pp_cost ppe) chf.chf_co;
-  Format.fprintf fmt "@\n%a%!" (pp_post ppepo ?prpo) chf.chf_po
+  Format.fprintf fmt "%a@\n%!"          (pp_pre ppepr ?prpo)  chf.chf_pr;
+  Format.fprintf fmt "    %a@\n%!"      (pp_funname ppe)      chf.chf_f;
+  Format.fprintf fmt "    time %a@\n%!" (pp_form ppe)         chf.chf_co;
+  Format.fprintf fmt "@\n%a%!"          (pp_post ppepo ?prpo) chf.chf_po
 
 (* -------------------------------------------------------------------- *)
 let pp_choareS (ppe : PPEnv.t) ?prpo fmt chs =
@@ -2743,13 +2742,13 @@ let pp_choareS (ppe : PPEnv.t) ?prpo fmt chs =
 
   Format.fprintf fmt "Context : %a@\n%!"
      (pp_memtype ppe) (snd chs.chs_m);
-  Format.fprintf fmt "Time : %a@\n%!" (pp_cost ppe) chs.chs_co;
+  Format.fprintf fmt "Time : %a@\n%!" (pp_form ppe)        chs.chs_co;
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_pre ppef ?prpo) chs.chs_pr;
+  Format.fprintf fmt "%a%!"           (pp_pre ppef ?prpo)  chs.chs_pr;
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a" (pp_node `Left) ppnode;
+  Format.fprintf fmt "%a"             (pp_node `Left)      ppnode;
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) chs.chs_po
+  Format.fprintf fmt "%a%!"           (pp_post ppef ?prpo) chs.chs_po
 
 (* -------------------------------------------------------------------- *)
 let string_of_hrcmp = function
@@ -3047,20 +3046,21 @@ let pp_sigitem moi_opt ppe fmt (Tys_function fs) =
          pp_orclinfo_bare ppe fmt oi)
 
 let pp_modsig ?(long=false) ppe fmt (p,ms) =
-  let (ppe,pp) = pp_mod_params ppe ms.mis_params in
-
-  let pp_long fmt p =
-    if long then
-      let qs = EcPath.toqsymbol p in
-      if fst qs <> [] then
-        Format.fprintf fmt "(* %a *)@ " EcSymbols.pp_qsymbol qs in
-
-  Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t @,%a@;<0 -2>@] = \
-                      {@,  @[<v>%a@]@,}@]"
-    pp_long p
-    (EcPath.basename p) pp
-    (pp_mem_restr ppe) ms.mis_restr
-    (pp_list "@,@," (pp_sigitem (Some ms.mis_restr.mr_oinfos) ppe)) ms.mis_body
+  assert false            (* TODO A: *)
+  (* let (ppe,pp) = pp_mod_params ppe ms.mis_params in
+   *
+   * let pp_long fmt p =
+   *   if long then
+   *     let qs = EcPath.toqsymbol p in
+   *     if fst qs <> [] then
+   *       Format.fprintf fmt "(\* %a *\)@ " EcSymbols.pp_qsymbol qs in
+   *
+   * Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t @,%a@;<0 -2>@] = \
+   *                     {@,  @[<v>%a@]@,}@]"
+   *   pp_long p
+   *   (EcPath.basename p) pp
+   *   (pp_mem_restr ppe) ms.mis_restr
+   *   (pp_list "@,@," (pp_sigitem (Some ms.mis_restr.mr_oinfos) ppe)) ms.mis_body *)
 
 (* Printing of a module signature with no restrictions. *)
 let pp_modsig_smpl ppe fmt (p,ms) =

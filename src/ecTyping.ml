@@ -493,8 +493,11 @@ let check_item_compatible
     ~(proof_obl:bool)
     (env : EcEnv.env)
     (mode : [`Eq | `Sub])
-    ((fin,oin) : EcModules.funsig * EcModules.OI.t)
-    ((fout,oout)  : EcModules.funsig * EcModules.OI.t) : unit
+    ((fin, oin) : EcModules.funsig * EcModules.oi_param)
+    (cin : form)                (* type [Tmodcost _] *)
+    ((fout,oout) : EcModules.funsig * EcModules.oi_param)
+    (cout : form)               (* type [Tmodcost _] *)
+  : unit
   =
   assert (fin.fs_name = fout.fs_name);
 
@@ -515,7 +518,8 @@ let check_item_compatible
   let norm_allowed oi =
     List.fold_left (fun s f ->
         EcPath.Sx.add (EcEnv.NormMp.norm_xfun env f) s)
-      EcPath.Sx.empty (OI.allowed oi) in
+      EcPath.Sx.empty (EcModules.allowed oi)
+  in
 
   let icalls = norm_allowed oin in
   let ocalls = norm_allowed oout in
@@ -528,72 +532,64 @@ let check_item_compatible
       if not (Sx.equal icalls ocalls) then
         check_item_err (MF_restr(env, `Eq(ocalls, icalls))) in
 
-  let norm_c_bnd = c_bnd_map (EcEnv.NormMp.norm_form env) in
-
-  let norm_r_cost (c : c_bnd r_cost) =
-    { r_self      = norm_c_bnd c.r_self;
-      r_abs_calls = Mx.map norm_c_bnd c.r_abs_calls;
-      r_params    = Mx.map norm_c_bnd c.r_params;
-      r_full      = c.r_full; }
-  in
-
   (* We check complexity compatibility. *)
-  let icosts = norm_r_cost (OI.cost oin)
-  and ocosts = norm_r_cost (OI.cost oout) in
+  let icosts = EcEnv.NormMp.norm_form env cin
+  and ocosts = EcEnv.NormMp.norm_form env cout in
 
   let hyps = EcEnv.LDecl.init env [] in
 
-  let check_elc : c_bnd -> c_bnd -> bool =
-    match mode with
-    | `Sub -> fun ic oc ->
-        begin match ic, oc with
-          | C_unbounded, C_unbounded
-          | C_bounded _, C_unbounded -> true
+  (* TODO A: *) assert false
+  (* let check_elc : c_bnd -> c_bnd -> bool =
+   *   match mode with
+   *   | `Sub -> fun ic oc ->
+   *       begin match ic, oc with
+   *         | C_unbounded, C_unbounded
+   *         | C_bounded _, C_unbounded -> true
+   *
+   *         | C_unbounded, C_bounded _ -> false
+   *
+   *         | C_bounded ic, C_bounded oc ->
+   *           EcReduction.is_conv hyps ic oc
+   *       end
+   *   | `Eq -> fun ic oc ->
+   *     begin match ic, oc with
+   *       | C_unbounded, C_unbounded -> true
+   *
+   *       | C_bounded _, C_unbounded
+   *       | C_unbounded, C_bounded _ -> false
+   *
+   *       | C_bounded ic, C_bounded oc ->
+   *         EcReduction.is_conv hyps ic oc
+   *     end
+   * in *)
 
-          | C_unbounded, C_bounded _ -> false
-
-          | C_bounded ic, C_bounded oc ->
-            EcReduction.is_conv hyps ic oc
-        end
-    | `Eq -> fun ic oc ->
-      begin match ic, oc with
-        | C_unbounded, C_unbounded -> true
-
-        | C_bounded _, C_unbounded
-        | C_unbounded, C_bounded _ -> false
-
-        | C_bounded ic, C_bounded oc ->
-          EcReduction.is_conv hyps ic oc
-      end
-  in
-
-  if proof_obl then ()
-  else
-    let iself = icosts.r_self
-    and oself = ocosts.r_self in
-    let self_sub = if check_elc iself oself then None else Some (iself, oself) in
-
-    let icalls =
-      Mx.union (fun _ _ _ -> assert false) icosts.r_params icosts.r_abs_calls
-    in
-    let ocalls =
-      Mx.union (fun _ _ _ -> assert false) ocosts.r_params ocosts.r_abs_calls
-    in
-    let diff =
-      Mx.fold2_union (fun f ic oc acc ->
-          let ic = odfl C_unbounded ic in
-          let oc = odfl C_unbounded oc in
-          if check_elc ic oc then acc
-          else Mx.add f (ic, oc) acc
-        ) icalls ocalls Mx.empty
-    in
-
-    if not (Mx.is_empty diff) || self_sub <> None then
-      let err = match mode with
-        | `Eq  -> `Eq (self_sub, diff)
-        | `Sub -> `Sub(self_sub, diff)
-      in
-      check_item_err (MF_compl(env, err))
+  (* if proof_obl then ()
+   * else
+   *   let iself = icosts.r_self
+   *   and oself = ocosts.r_self in
+   *   let self_sub = if check_elc iself oself then None else Some (iself, oself) in
+   *
+   *   let icalls =
+   *     Mx.union (fun _ _ _ -> assert false) icosts.r_params icosts.r_abs_calls
+   *   in
+   *   let ocalls =
+   *     Mx.union (fun _ _ _ -> assert false) ocosts.r_params ocosts.r_abs_calls
+   *   in
+   *   let diff =
+   *     Mx.fold2_union (fun f ic oc acc ->
+   *         let ic = odfl C_unbounded ic in
+   *         let oc = odfl C_unbounded oc in
+   *         if check_elc ic oc then acc
+   *         else Mx.add f (ic, oc) acc
+   *       ) icalls ocalls Mx.empty
+   *   in
+   *
+   *   if not (Mx.is_empty diff) || self_sub <> None then
+   *     let err = match mode with
+   *       | `Eq  -> `Eq (self_sub, diff)
+   *       | `Sub -> `Sub(self_sub, diff)
+   *     in
+   *     check_item_err (MF_compl(env, err)) *)
 
 
 (* -------------------------------------------------------------------- *)
@@ -887,9 +883,13 @@ let rec check_sig_cnv
     match i_item with
     | None -> tymod_cnv_failure (E_TyModCnv_MissingComp o_name)
     | Some (Tys_function fin) ->
-      let oin  = EcSymbols.Msym.find fin.fs_name sin.mis_restr.mr_oinfos
-      and oout = EcSymbols.Msym.find fout.fs_name rout.mr_oinfos in
-      check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout)
+      let oin  = EcSymbols.Msym.find fin.fs_name sin.mis_restr.mr_params
+      and oout = EcSymbols.Msym.find fout.fs_name rout.mr_params in
+
+      let cin  = sin.mis_restr.mr_cost
+      and cout = rout.mr_cost in
+
+      check_item_compatible ~proof_obl env mode (fin,oin) cin (fout,oout) cout
   in
   List.iter check_for_item bout;
 
@@ -911,7 +911,7 @@ let rec check_sig_cnv
 and check_modtype_cnv
   ?(mode = `Eq) env (tyin:module_type) (tyout:module_type)
 =
-  let sin = EcEnv.ModTy.sig_of_mt env tyin in
+  let sin  = EcEnv.ModTy.sig_of_mt env tyin  in
   let sout = EcEnv.ModTy.sig_of_mt env tyout in
   check_sig_cnv
     ~proof_obl:false mode env (EcPath.basename tyin.mt_name) sin sout
@@ -2090,33 +2090,44 @@ let top_is_mem_binding pf = match pf with
 (* -------------------------------------------------------------------- *)
 (* We unify both restriction, by replacing fields in [mr] by the fields in
    [mr'] that have been provided in [pmr]. This is a bit messy. *)
-let replace_if_provided env mr mr' pmr = match pmr with
+let replace_if_provided
+    (env : EcEnv.env)
+    (mr  : mod_restr)
+    (mr' : mod_restr option)
+    (pmr : pmod_restr option) : mod_restr
+  =
+  match mr' with
   | None -> mr
-  | Some pmr ->
-    let mr' = oget mr' in     (* If [pmr] is not [None], then so is [mr']. *)
-    let mr_xpaths, mr_mpaths =
-      if pmr.pmr_mem = []
-      then mr.mr_xpaths, mr.mr_mpaths
-      else mr'.mr_xpaths, mr'.mr_mpaths
-    and mr_oinfos =
-      Msym.fold2_union (fun s oi oi' mr_oinfos -> match oi,oi' with
-          | None, None -> assert false
-          | None, Some _ ->
-            (* This is the case where we provided a restriction for a function
-               that does not appear in the signature. *)
-            let el = List.find (fun el ->
-                unloc el.pmre_name = s
-              ) pmr.pmr_procs in
-            let loc = loc (el.pmre_name) in
-            tyerror loc env (FunNotInSignature s)
+  | Some mr' -> mr'
+(* TODO A: do we want to restore this functionnality ? *)
 
-          | Some a, None
-          | Some _, Some a -> Msym.add s a mr_oinfos
-        ) mr.mr_oinfos mr'.mr_oinfos Msym.empty in
-
-    {  mr_xpaths = mr_xpaths;
-       mr_mpaths = mr_mpaths;
-       mr_oinfos = mr_oinfos; }
+  (* match pmr with
+   * | None -> mr
+   * | Some pmr ->
+   *   let mr' = oget mr' in     (\* If [pmr] is not [None], then so is [mr']. *\)
+   *   let mr_xpaths, mr_mpaths =
+   *     if pmr.pmr_mem = []
+   *     then mr.mr_xpaths, mr.mr_mpaths
+   *     else mr'.mr_xpaths, mr'.mr_mpaths
+   *   and mr_oinfos =
+   *     Msym.fold2_union (fun s oi oi' mr_oinfos -> match oi,oi' with
+   *         | None, None -> assert false
+   *         | None, Some _ ->
+   *           (\* This is the case where we provided a restriction for a function
+   *              that does not appear in the signature. *\)
+   *           let el = List.find (fun el ->
+   *               unloc el.pmre_name = s
+   *             ) pmr.pmr_procs in
+   *           let loc = loc (el.pmre_name) in
+   *           tyerror loc env (FunNotInSignature s)
+   *
+   *         | Some a, None
+   *         | Some _, Some a -> Msym.add s a mr_oinfos
+   *       ) mr.mr_oinfos mr'.mr_oinfos Msym.empty in
+   *
+   *   {  mr_xpaths = mr_xpaths;
+   *      mr_mpaths = mr_mpaths;
+   *      mr_oinfos = mr_oinfos; } *)
 
 (* -------------------------------------------------------------------- *)
 let trans_restr_mem env (r_mem : pmod_restr_mem) =
@@ -2200,8 +2211,10 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
 
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
 (* If [r_compl] is None, there are no restrictions *)
-let rec trans_restr_compl env env_in (r_compl : pcompl option) :
-  c_bnd * c_bnd Mx.t * bool
+let rec trans_restr_compl
+    (env     : EcEnv.env)
+    (env_in  : EcEnv.env)
+    (r_compl : pcompl option) : form * form Mx.t * bool
   =
   let trans_closed_form (form : pformula) (ty : EcTypes.ty) : form =
     let ue = EcUnify.UniEnv.create None in
@@ -2247,7 +2260,7 @@ let rec trans_restr_compl env env_in (r_compl : pcompl option) :
  * Here, the parameter of the functor [S] are not binded in [env], but must be
  * binded in [env_in]. *)
 and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
-  bool * EcSymbols.symbol * c_bnd r_cost * xpath list
+  bool * EcSymbols.symbol * proc_cost * xpath list
   =
   let name = unloc r_el.pmre_name in
   let r_self, calls, r_full =

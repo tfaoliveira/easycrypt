@@ -69,14 +69,15 @@ let mr_add_restr
  *   in
  *   add_oinfo restr f oi *)
 
-(* let has_compl_restriction (mr : mod_restr) : bool =
- *   Msym.exists (fun _ oi ->
- *       let c = PreOI.cost oi in
- *       c.r_self <> C_unbounded ||
- *       Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
- *       Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
- *       c.r_full
- *     ) mr.mr_oinfos *)
+let has_compl_restriction (mr : mod_restr) : bool =
+      assert false            (* TODO A: *)
+  (* Msym.exists (fun _ oi ->
+   *     let c = PreOI.cost oi in
+   *     c.r_self <> C_unbounded ||
+   *     Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
+   *     Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
+   *     c.r_full
+   *   ) mr.mr_oinfos *)
 
 (* -------------------------------------------------------------------- *)
 let mty_hash  = EcCoreFol.mty_hash

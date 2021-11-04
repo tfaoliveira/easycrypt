@@ -39,7 +39,7 @@ val mr_add_restr :
 (* val add_oinfo : mod_restr -> string -> oi_params -> cost -> mod_restr *)
 (* val change_oicalls : mod_restr -> string -> xpath list -> mod_restr *)
 
-(* val has_compl_restriction : mod_restr -> bool *)
+val has_compl_restriction : mod_restr -> bool
 
 (* -------------------------------------------------------------------- *)
 val mty_equal : module_type -> module_type -> bool

@@ -1605,8 +1605,8 @@ let rec conv ri env f1 f2 stk : bool =
         ) mc1 mc2
     in
     let procs, cprocs = EcSymbols.Msym.fold (fun f (p1,p2) procs ->
-        procs
-      ) mc []
+        assert false            (* TODO A: finish*)
+      ) mc ([], [])
     in
     begin
       match cprocs with
