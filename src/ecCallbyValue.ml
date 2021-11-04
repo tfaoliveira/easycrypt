@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcIdent
+open EcSymbols
 open EcTypes
 open EcEnv
 open EcFol
@@ -171,12 +172,12 @@ let rec norm st s f =
  norm_lambda st f
 
 and norm_cost st s (c : cost) : cost =
-  let self'  = c_bnd_map (norm st s) c.c_self
+  let self'  = norm st s c.c_self
   and calls' =
     EcPath.Mx.fold (fun f cb calls ->
         (* We do not normalize the xpath, as it is not a valid xpath. *)
         let f' = Subst.subst_xpath s f
-        and cb' = c_bnd_map (norm st s) cb in
+        and cb' = norm st s cb in
         EcPath.Mx.change (fun old -> assert (old = None); Some cb') f' calls
       ) c.c_calls EcPath.Mx.empty
   in
@@ -205,7 +206,7 @@ and norm_lambda (st : state) (f : form) =
   | FbdHoareF _ | FbdHoareS _
   | FequivF _   | FequivS _
   | FeagerF   _ | Fpr _ | Fcoe _
-
+  | Fmodcost _ | Fmodcost_proj _
     -> f
 
 (* -------------------------------------------------------------------- *)
@@ -476,6 +477,25 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
 
   | Fcost c -> f_cost_r (norm_cost st s c)
 
+  | Fmodcost mc ->
+    f_mod_cost_r (Msym.map (norm_cost st s) mc)
+
+  | Fmodcost_proj (f,fname,p) ->
+    let f = norm st s f in
+    begin
+      match f.f_node with
+      | Fmodcost mc ->
+        let pcost = Msym.find fname mc in (* cannot fail *)
+        let cost = match p with
+          | Intr -> pcost.c_self
+          | Param (o, ofn) ->
+            let fxp = EcPath.xpath (EcPath.mident o) ofn in
+            oget_c_bnd (EcPath.Mx.find_opt fxp pcost.c_calls) pcost.c_full
+        in
+        cost
+      | _ -> f_mod_cost_proj_r f fname p
+    end
+
   | FhoareF hf ->
     assert (is_Aempty args);
     assert (not (Subst.has_mem s mhr));
@@ -499,7 +519,7 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chf_pr = norm st s chf.chf_pr in
     let chf_po = norm st s chf.chf_po in
     let chf_f  = norm_xfun st s chf.chf_f in
-    let chf_c  = norm_cost st s chf.chf_co in
+    let chf_c  = norm st s chf.chf_co in
     f_cHoareF_r { chf_pr; chf_f; chf_po; chf_co = chf_c; }
 
   | FcHoareS chs ->
@@ -509,7 +529,7 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chs_po = norm st s chs.chs_po in
     let chs_s  = norm_stmt s chs.chs_s in
     let chs_m  = norm_me s chs.chs_m in
-    let chs_c  = norm_cost st s chs.chs_co in
+    let chs_c  = norm st s chs.chs_co in
     f_cHoareS_r { chs_pr; chs_po; chs_s; chs_m; chs_co = chs_c; }
 
   | FbdHoareF hf ->

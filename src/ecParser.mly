@@ -2710,8 +2710,8 @@ conseq_xt:
 | UNDERSCORE COLON cmp=hoare_bd_cmp? bd=sform
                                                { (None, None),
 						 Some (CQI_bd (cmp, bd)) }
-| c=conseq   COLON TIME co=costs(none)         { c, Some (CQI_c co) }
-| UNDERSCORE COLON TIME co=costs(none)         { (None, None), Some (CQI_c co) }
+| c=conseq   COLON TIME co=sform         { c, Some (CQI_c co) }
+| UNDERSCORE COLON TIME co=sform         { (None, None), Some (CQI_c co) }
 
 
 ci_cost_el:

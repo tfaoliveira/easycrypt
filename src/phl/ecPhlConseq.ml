@@ -18,7 +18,6 @@ open EcPV
 open EcCoreGoal
 open EcLowGoal
 open EcLowPhlGoal
-open EcCHoare
 
 module PT  = EcProofTerm
 module TTC = EcProofTyping
@@ -28,23 +27,21 @@ let conseq_cond pre post spre spost : form * form =
   f_imp pre spre, f_imp spost post
 
 (* proof obligation showing that [scost] is smaller than [cost] *)
-let conseq_cost (cost : cost) (scost : cost) : form =
-  let self_le =
-    f_xle
-      (xi_of_c_bnd ~mode:`Xint scost.c_self)
-      (xi_of_c_bnd ~mode:`Xint  cost.c_self)
-  in
-  let calls_le =
-    EcPath.Mx.fold2_union (fun _ c1 c2 forms ->
-        let c1 = oget_c_bnd c1 cost.c_full
-        and c2 = oget_c_bnd c2 scost.c_full in
-        let le =
-          f_xle (xi_of_c_bnd ~mode:`Int c2) (xi_of_c_bnd ~mode:`Int c1)
-        in
-        le :: forms
-      ) cost.c_calls scost.c_calls []
-  in
-  f_ands (self_le :: (List.rev calls_le))
+let conseq_cost (cost : form) (scost : form) : form =
+  f_cost_le scost cost
+  (* TODO A: clean-up*)
+  (* let self_le = f_xle scost.c_self cost.c_self in
+   * let calls_le =
+   *   EcPath.Mx.fold2_union (fun _ c1 c2 forms ->
+   *       let c1 = oget_c_bnd c1 cost.c_full
+   *       and c2 = oget_c_bnd c2 scost.c_full in
+   *       let le =
+   *         f_xle (xi_of_c_bnd ~mode:`Int c2) (xi_of_c_bnd ~mode:`Int c1)
+   *       in
+   *       le :: forms
+   *     ) cost.c_calls scost.c_calls []
+   * in
+   * f_ands (self_le :: (List.rev calls_le)) *)
 
 let bd_goal_r fcmp fbd cmp bd =
   match fcmp, cmp with
@@ -1213,11 +1210,11 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
 (* -------------------------------------------------------------------- *)
 type processed_conseq_info =
   | PCI_bd of hoarecmp option * form
-  | PCI_c  of cost
+  | PCI_c  of form
 
 let process_info pe hyps = function
   | CQI_bd (cmp, bd) -> PCI_bd (cmp, TTC.pf_process_form pe hyps treal bd)
-  | CQI_c c -> PCI_c (TTC.pf_process_cost pe hyps [] c)
+  | CQI_c         c  -> PCI_c  (     TTC.pf_process_form pe hyps tcost c )
 
 let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) tc =
   let hyps, concl = FApi.tc1_flat tc in

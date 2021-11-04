@@ -365,17 +365,24 @@ let mk_tglob genv mp =
     Hid.add genv.te_absmod id { w3am_ty = ty };
     ty
 
-let mk_tcost genv =
-  match genv.te_cost with
-  | Some w3_ty -> w3_ty
-  | None ->
-    (* create the type symbol *)
-    let pid = WIdent.id_fresh "cost" in
-    let ts = WTy.create_tysymbol pid [] WTy.NoDef in
-    genv.te_task <- WTask.add_ty_decl genv.te_task ts;
-    let ty = WTy.ty_app ts [] in
-    genv.te_cost <- Some ty;
-    ty
+let mk_tmodcost procs oracles genv =
+  (* TODO A: reuse SMT types as much as possible *)
+  let pid = WIdent.id_fresh "cost" in
+  let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+  genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+  let ty = WTy.ty_app ts [] in
+  genv.te_cost <- Some ty;
+  ty
+  (* match genv.te_cost with
+   * | Some w3_ty -> w3_ty
+   * | None ->
+   *   (\* create the type symbol *\)
+   *   let pid = WIdent.id_fresh "cost" in
+   *   let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+   *   genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+   *   let ty = WTy.ty_app ts [] in
+   *   genv.te_cost <- Some ty;
+   *   ty *)
 
 (* -------------------------------------------------------------------- *)
 let rec trans_ty ((genv, lenv) as env) (ty : EcTypes.ty) : WTy.ty =
@@ -384,7 +391,7 @@ let rec trans_ty ((genv, lenv) as env) (ty : EcTypes.ty) : WTy.ty =
     trans_tglob env mp
   | Tunivar _ -> assert false
   | Tvar    x -> trans_tv lenv x
-  | Tcost     -> mk_tcost genv
+  | Tmodcost { procs; oracles; } -> mk_tmodcost procs oracles genv
 
   | Ttuple  ts-> wty_tuple genv (trans_tys env ts)
 
@@ -711,7 +718,8 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
   | Fpr pr        -> trans_pr env pr
 
   | Fcoe      _
-  | Fcost     _
+  | Fcost     _ | Fmodcost  _
+  | Fmodcost_proj _
   | FeagerF   _
   | FhoareF   _ | FhoareS   _
   | FcHoareF  _ | FcHoareS  _
@@ -1400,6 +1408,7 @@ module Frequency = struct
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
 
+      | Fmodcost  _ | Fmodcost_proj _
       | FhoareF   _ | FhoareS   _
       | FcHoareF  _ | FcHoareS  _
       | FbdHoareF _ | FbdHoareS _

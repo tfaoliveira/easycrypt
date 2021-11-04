@@ -60,14 +60,14 @@ let mr_add_restr
  * let add_oinfo restr f oi = change_oinfo restr f oi *)
 
 (* let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
- *   let oi =
+ *   let oi_params =
  *     try
- *       let oi = Msym.find f restr.mr_oinfos in
+ *       let oi_param = Msym.find f restr.mr_params in
  *       let filter x = List.mem x ocalls in
- *       OI.filter filter oi
+ *       filter_param oi_param
  *     with Not_found -> OI.mk ocalls true r_cost_default
  *   in
- *   add_oinfo restr f oi *)
+ *   { restr with mr_params = oi_params; } *)
 
 let has_compl_restriction (mr : mod_restr) : bool =
       assert false            (* TODO A: *)

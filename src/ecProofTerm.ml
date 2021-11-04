@@ -809,7 +809,7 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
             let obl = EcTyping.check_modtype env mp mt emt in
             EcPV.check_module_in env mp emt;
 
-            let orcl_info = emt.mt_restr.mr_oinfos in
+            let orcl_info = emt.mt_restr.mr_cost in
             let f = Fsubst.f_subst_mod x mp f (Some orcl_info) in
             let f = match obl with
               | `Ok ->  f

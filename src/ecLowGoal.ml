@@ -185,7 +185,7 @@ module LowApply = struct
                 else f_and (f_ands obl) f
             in
 
-            let orcl_info = emt.mt_restr.mr_oinfos in
+            let orcl_info = emt.mt_restr.mr_cost in
             (Fsubst.f_bind_mod sbt x mp (Some orcl_info), f)
           with _ -> raise InvalidProofTerm
         end

@@ -11,6 +11,7 @@ open EcUtils
 open EcIdent
 open EcPath
 open EcUid
+open EcSymbols
 
 module BI = EcBigInt
 
@@ -28,8 +29,10 @@ and ty_node =
   | Ttuple   of ty list
   | Tconstr  of EcPath.path * ty list
   | Tfun     of ty * ty
-  | Tmodcost of EcSymbols.Ssym.t * EcSymbols.Ssym.t EcIdent.Mid.t
-  (* procedures * map from oracle parameters to parameters procedures *)
+  | Tmodcost of {
+      procs   : bool Msym.t;  (* procedures (boolean: is the proc cost open) *)
+      oracles : Ssym.t Mid.t; (* oracles to their procedures *)
+    }
 
 type dom = ty list
 
@@ -59,8 +62,9 @@ module Hsty = Why3.Hashcons.Make (struct
     | Tfun (d1, c1), Tfun (d2, c2)->
         ty_equal d1 d2 && ty_equal c1 c2
 
-    | Tmodcost (procs1, params1), Tmodcost (procs2, params2) ->
-      EcSymbols.Ssym.equal procs1 procs2
+    | Tmodcost { procs = procs1; oracles = params1; },
+      Tmodcost { procs = procs2; oracles = params2; } ->
+      EcSymbols.Msym.equal (=) procs1 procs2
       && Mid.equal EcSymbols.Ssym.equal params1 params2
 
     | _, _ -> false
@@ -73,10 +77,10 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
-    | Tmodcost (procs, params) ->
+    | Tmodcost { procs; oracles; } ->
       Why3.Hashcons.combine
-        (EcSymbols.Ssym.hash Hashtbl.hash procs)
-        (EcIdent.Mid.hash EcIdent.tag Hashtbl.hash params)
+        (EcSymbols.Msym.hash Hashtbl.hash Hashtbl.hash procs)
+        (EcIdent.Mid.hash EcIdent.tag Hashtbl.hash oracles)
 
   let fv ty =
     let union ex =
@@ -89,7 +93,7 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tys          -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys)     -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2)     -> union (fun a -> a.ty_fv) [t1; t2]
-    | Tmodcost (_, params) -> EcIdent.Mid.map (fun _ -> 1) params
+    | Tmodcost { oracles } -> EcIdent.Mid.map (fun _ -> 1) oracles
 
   let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
 end)
@@ -128,18 +132,27 @@ let rec dump_ty ty =
   | Tfun (t1, t2) ->
       Format.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
 
-  | Tmodcost (procs, params) ->
+  | Tmodcost { procs; oracles; } ->
+    (* let pp_range_vars fmt rvs =
+     *   let pp_rv fmt (s,u) =
+     *     Format.fprintf fmt "%s : #%d" s u
+     *   in
+     *   Format.pp_print_list pp_rv fmt (Msym.bindings rvs)
+     * in *)
     let pp_set =
-      EcSymbols.Ssym.print (fun fmt s -> Format.fprintf fmt "%s" s)
+      Ssym.print (fun fmt s -> Format.fprintf fmt "%s" s)
     in
-    Format.asprintf "[%a * %a]"
-      pp_set procs
+    Format.asprintf "@[<hv>[@[%a@];@ @[%a@];]@]"
+      (Format.pp_print_list
+         (fun fmt (s, b) ->
+            Format.fprintf fmt "%s %a" s Format.pp_print_bool b))
+      (Msym.bindings procs)
       (Format.pp_print_list
          (fun fmt (id, idparams) ->
             Format.fprintf fmt "[%s: %a]"
               (EcIdent.tostring id)
               pp_set idparams))
-      (EcIdent.Mid.bindings params)
+      (Mid.bindings oracles)
 
 
 (* -------------------------------------------------------------------- *)
@@ -148,7 +161,9 @@ let tvar id      = mk_ty (Tvar id)
 let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
-let tmodcost p c  = mk_ty (Tmodcost (p,c))
+
+let tmodcost procs oracles =
+  mk_ty (Tmodcost { procs; oracles; })
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []

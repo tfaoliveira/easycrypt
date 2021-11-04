@@ -677,7 +677,7 @@ type fel_info = {
 type deno_ppterm   = (pformula option pair) gppterm
 type conseq_info =
   | CQI_bd of phoarecmp option * pformula
-  | CQI_c  of pcost
+  | CQI_c  of pformula
 
 type conseq_ppterm = ((pformula option pair) * (conseq_info) option) gppterm
 

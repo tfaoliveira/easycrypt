@@ -193,8 +193,7 @@ and cost = crecord
    - the number of calls [c_calls] to the parameters of `F` *)
 and proc_cost = crecord
 
-(* A module `F` cost, where `F` can be an non-applied functor.
-   All declared procedures of `F` must appear. *)
+(* A module or cost. *)
 and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
@@ -939,7 +938,32 @@ let f_cost_r (c : cost) : form = mk_form (Fcost c) EcTypes.tcost
 (* -------------------------------------------------------------------- *)
 let proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost = crecord_r
 
-let f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
+(* direct constructeur, taking the type in arguments *)
+let _f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
+  mk_form (Fmodcost mc) ty
+
+(* computes a module cost record types *)
+let mod_cost_ty (mc : mod_cost) : EcTypes.ty =
+  let procs, oracles =
+    Msym.fold (fun f proc_cost (procs, oracles) ->
+        let oracles =
+          EcPath.Mx.fold (fun id _ oracles ->
+              let idtop, idsub = EcPath.mget_ident id.x_top, id.x_sub in
+              EcIdent.Mid.change (function
+                  | None   -> Some (Ssym.singleton idsub)
+                  | Some s -> Some (Ssym.add idsub s)
+                ) idtop oracles
+            ) proc_cost.c_calls oracles
+        in
+        let procs = Msym.add f proc_cost.c_full procs in
+        procs, oracles
+      ) mc (Msym.empty, Mid.empty)
+  in
+  EcTypes.tmodcost procs oracles
+
+(* module cost record constructeur, computing the type for the record *)
+let f_mod_cost_r (mc : mod_cost) : form =
+  let ty = mod_cost_ty mc in
   mk_form (Fmodcost mc) ty
 
 (* -------------------------------------------------------------------- *)
@@ -1082,6 +1106,8 @@ let fop_cost_opp    = f_op CI_Cost.p_cost_opp    [] (toarrow [tcost]        tcos
 let fop_cost_add    = f_op CI_Cost.p_cost_add    [] (toarrow [tcost; tcost] tcost)
 let fop_cost_scale  = f_op CI_Cost.p_cost_scale  [] (toarrow [tint;  tcost] tcost)
 let fop_cost_xscale = f_op CI_Cost.p_cost_xscale [] (toarrow [txint; tcost] tcost)
+let fop_cost_le     = f_op CI_Cost.p_cost_le     [] (toarrow [tcost; tcost] tbool)
+let fop_cost_lt     = f_op CI_Cost.p_cost_lt     [] (toarrow [tcost; tcost] tbool)
 
 let f_cost_zero         = f_app fop_cost_zero   []       tcost
 let f_cost_inf          = f_app fop_cost_inf    []       tcost
@@ -1089,6 +1115,8 @@ let f_cost_opp    f     = f_app fop_cost_opp    [f]      tcost
 let f_cost_add    f1 f2 = f_app fop_cost_add    [f1; f2] tcost
 let f_cost_scale  f1 f2 = f_app fop_cost_scale  [f1; f2] tcost
 let f_cost_xscale f1 f2 = f_app fop_cost_xscale [f1; f2] tcost
+let f_cost_le     f1 f2 = f_app fop_cost_le     [f1; f2] tbool
+let f_cost_lt     f1 f2 = f_app fop_cost_lt     [f1; f2] tbool
 
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =
@@ -1158,19 +1186,8 @@ let mod_cost_top (procs : Ssym.t) : mod_cost =
       Msym.add f proc_cost_top mc
     ) procs Msym.empty
 
-let mod_cost_top_r
-    (procs  : Ssym.t)
-    (params : (EcIdent.t * module_type) list) : form
-  =
-  let ty =
-    let mparams = List.fold_left (fun mparams (id, _) ->
-        let idprocs = assert false in (* TODO A: *)
-        Mid.add id idprocs mparams
-      ) Mid.empty params
-    in
-    tmodcost procs mparams
-  in
-  f_mod_cost_r (mod_cost_top procs) ty
+let mod_cost_top_r (procs  : Ssym.t) : form =
+  f_mod_cost_r (mod_cost_top procs)
 
 (* -------------------------------------------------------------------- *)
 (* [l] has type [int] *)
@@ -1273,7 +1290,7 @@ module FSmart = struct
     if cost_equal fc fc' then fp else f_cost_r fc'
 
   let f_mod_cost (fmc, mc, ty) (mc', ty') =
-    if mod_cost_equal mc mc' && ty == ty' then fmc else f_mod_cost_r mc' ty'
+    if mod_cost_equal mc mc' && ty == ty' then fmc else _f_mod_cost_r mc' ty'
 
   let f_mod_cost_proj (fp, c, f, p) (c', f', p') =
     if f_equal c c' && f = f' && cost_proj_equal p p'
@@ -2439,12 +2456,12 @@ module Fsubst = struct
         let minfo : form = oget minfo in (* must not be [None] *)
         let mp = EcPath.mident mid in
         let mprocs = match minfo.f_ty.ty_node with
-          | Tmodcost (mprocs, _) -> mprocs
-          | _ -> assert false   (* must be reduced *)
+          | Tmodcost { procs } -> procs
+          | _ -> assert false   (* cannot happen, type must be reduced *)
         in
 
         (* for every procedure [f] of [mid] *)
-        EcSymbols.Ssym.fold (fun (f : symbol) cost ->
+        EcSymbols.Msym.fold (fun (f : symbol) _ cost ->
             let xf = EcPath.xpath mp f in
 
             (* the *intrinsic* cost of [f], of type [cost] *)

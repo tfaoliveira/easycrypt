@@ -27,8 +27,10 @@ and ty_node =
   | Ttuple   of ty list
   | Tconstr  of EcPath.path * ty list
   | Tfun     of ty * ty
-  | Tmodcost of EcSymbols.Ssym.t * EcSymbols.Ssym.t EcIdent.Mid.t
-  (* procedures * map from oracle parameters to parameters procedures *)
+  | Tmodcost of {
+      procs   : bool Msym.t;  (* procedures (boolean: is the proc cost open) *)
+      oracles : Ssym.t Mid.t; (* oracles to their procedures *)
+    }
 
 module Mty : Map.S with type key = ty
 module Sty : Set.S with module M = Map.MakeBase(Mty)
@@ -48,7 +50,7 @@ val tconstr  : EcPath.path -> ty list -> ty
 val tfun     : ty -> ty -> ty
 val tglob    : EcPath.mpath -> ty
 val tpred    : ty -> ty
-val tmodcost : Ssym.t -> Ssym.t Mid.t -> ty
+val tmodcost : bool Msym.t -> Ssym.t Mid.t -> ty
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty

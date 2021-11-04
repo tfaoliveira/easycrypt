@@ -105,7 +105,7 @@ let t_choareF_fun_def_r tc =
   let post = PVM.subst1 env pv_res m fres chf.chf_po in
   let spre = subst_pre env fsig m PVM.empty in
   let pre = PVM.subst env spre chf.chf_pr in
-  let c   = PVM.subst_cost env spre chf.chf_co in
+  let c   = PVM.subst env spre chf.chf_co in
   let cond, c = match fdef.f_ret with
     | None -> None, c
     | Some ret ->

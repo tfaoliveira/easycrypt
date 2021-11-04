@@ -508,7 +508,7 @@ let abstract_info env f1 =
 
   let oi  =
     match def.f_def with
-    | FBabs oi -> oi
+    | FBabs (oi, _) -> oi
     | _ ->
       let ppe = EcPrinting.PPEnv.ofenv env in
         if EcPath.x_equal f1 f then
@@ -584,7 +584,7 @@ let t_code_transform
           let concl = f_hoareS_r { hoare with hs_m = me; hs_s = stmt; } in
           FApi.xmutate1 tc (tr None) (cs @ [concl])
 
-      | FcHoareS _chs, Some _c -> assert false (* TODO *)
+      | FcHoareS _chs, Some _c -> assert false (* TODO A: *)
         (* let pr, po = chs.chs_pr, chs.chs_po in
          * let (me, stmt, cs) =
          *   tx (pf, hyps) cpos (pr, po) (chs.chs_m, chs.chs_s) in

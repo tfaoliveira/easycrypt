@@ -284,7 +284,7 @@ val f_cost_r : cost -> form
 
 val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
 
-val f_mod_cost_r : mod_cost -> ty -> form
+val f_mod_cost_r : mod_cost -> form
 
 val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
 
@@ -387,6 +387,8 @@ val f_cost_opp    : form -> form
 val f_cost_add    : form -> form -> form
 val f_cost_scale  : form -> form -> form
 val f_cost_xscale : form -> form -> form
+val f_cost_le     : form -> form -> form
+val f_cost_lt     : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
@@ -411,9 +413,8 @@ val cost_add   : cost -> cost -> cost
 (* -------------------------------------------------------------------- *)
 val proc_cost_top : proc_cost
 
-val mod_cost_top : Ssym.t -> mod_cost
-
-val mod_cost_top_r : Ssym.t -> (EcIdent.t * module_type) list -> form
+val mod_cost_top   : Ssym.t -> mod_cost
+val mod_cost_top_r : Ssym.t -> form
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig

@@ -13,6 +13,8 @@ open EcEnv
 open EcPath
 open EcSymbols
 
+(* TODO A: cleanup file *)
+
 (* -------------------------------------------------------------------- *)
 let oget_c_bnd = EcCoreFol.oget_c_bnd
 
@@ -30,8 +32,10 @@ let f_subcond (f1 : form) (f2 : form) : form =
 let f_xsub (f1 : form) (f2 : form) : form * form =
   f_subcond f1 f2, f_xadd f1 (f_xopp f2)
 
-(* [a] of type [xint] *)
-let cost_sub_self (c : cost) (a : form) : form * cost =
+(* type csub_res = { cond : form; res : form; } *)
+
+(* [c] of type [tcost], [a] of type [xint] *)
+let cost_sub_self (c : cost) (a : form) : form * cost=
   let cond, c_self = f_xsub c.c_self a in
   cond, cost_r c_self c.c_calls c.c_full
 

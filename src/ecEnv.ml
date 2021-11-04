@@ -2427,7 +2427,7 @@ module NormMp = struct
       { mr_xpaths = ur_xpaths;
         mr_mpaths = ur_mpaths;
         mr_params = oi;
-        mr_cost   = mod_cost_top_r procs me.me_params; }
+        mr_cost   = mod_cost_top_r procs; }
 
   let get_restr env mp =
     let mp = norm_mpath env mp in
