@@ -35,6 +35,17 @@ type hoarecmp = FHle | FHeq | FHge
 (* projection of a module cost *)
 type cost_proj = Intr | Param of EcIdent.t * symbol
 
+type cost_proj2 =
+  | Conc
+  | Abs   of EcIdent.t * symbol   (*  abstract module, procedure *)
+
+  | Intr  of symbol               (* procedure *)
+  | Param of {
+      proc    : symbol;           (* procedure *)
+      param_m : symbol;           (* parameter module *)
+      param_p : symbol;           (* parameter procedure *)
+    }
+
 type gty =
   | GTty    of EcTypes.ty
   | GTmodty of module_type
@@ -211,7 +222,7 @@ let qt_equal : quantif -> quantif -> bool = (==)
 let qt_hash  : quantif -> int = Hashtbl.hash
 
 (*-------------------------------------------------------------------- *)
-let cost_proj_ty = function
+let cost_proj_ty : cost_proj -> ty = function
   | Intr    -> tcost
   | Param _ -> tint
 
@@ -942,7 +953,8 @@ let proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost = crecord_r
 let _f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
   mk_form (Fmodcost mc) ty
 
-(* computes a module cost record types *)
+(* Computes a module cost record types.
+   Does not check that the module cost record corresponds to an existing module. *)
 let mod_cost_ty (mc : mod_cost) : EcTypes.ty =
   let procs, oracles =
     Msym.fold (fun f proc_cost (procs, oracles) ->
@@ -970,6 +982,10 @@ let f_mod_cost_r (mc : mod_cost) : form =
 let f_mod_cost_proj_r (mc : form) (f : symbol) (p : cost_proj) : form =
   let ty = cost_proj_ty p in
   mk_form (Fmodcost_proj (mc, f, p)) ty
+
+(* -------------------------------------------------------------------- *)
+let f_cost_proj_r (mc : form) (p : cost_proj2) : form =
+  assert false                  (* TODO A: *)
 
 (* -------------------------------------------------------------------- *)
 let f_hoareS_r hs = mk_form (FhoareS hs) tbool
@@ -1062,6 +1078,7 @@ let f_op_xopp   = f_op EcCoreLib.CI_Xint.p_xopp  [] (toarrow [txint        ] txi
 let f_op_xadd   = f_op EcCoreLib.CI_Xint.p_xadd  [] (toarrow [txint; txint ] txint)
 let f_op_xmul   = f_op EcCoreLib.CI_Xint.p_xmul  [] (toarrow [txint; txint ] txint)
 let f_op_xle    = f_op EcCoreLib.CI_Xint.p_xle   [] (toarrow [txint; txint ] tbool)
+let f_op_xlt    = f_op EcCoreLib.CI_Xint.p_xlt   [] (toarrow [txint; txint ] tbool)
 let f_op_xmax   = f_op EcCoreLib.CI_Xint.p_xmax  [] (toarrow [txint;  txint] txint)
 
 let f_op_inf    = f_op EcCoreLib.CI_Xint.p_inf    [] txint
@@ -1080,6 +1097,7 @@ let f_xadd  f1 f2 = f_app f_op_xadd [f1; f2] txint
 let f_xmul  f1 f2 = f_app f_op_xmul [f1; f2] txint
 let f_xmuli fi f  = f_xmul (f_N fi) f
 let f_xle   f1 f2 = f_app f_op_xle  [f1; f2] tbool
+let f_xlt   f1 f2 = f_app f_op_xlt  [f1; f2] tbool
 let f_xmax  f1 f2 = f_app f_op_xmax [f1; f2] txint
 
 let f_x0 = f_N f_i0

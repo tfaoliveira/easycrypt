@@ -33,6 +33,17 @@ type hoarecmp = FHle | FHeq | FHge
 (* projection of a module cost *)
 type cost_proj = Intr | Param of EcIdent.t * symbol
 
+type cost_proj2 =
+  | Conc
+  | Abs   of EcIdent.t * symbol   (*  abstract module, procedure *)
+
+  | Intr  of symbol               (* procedure *)
+  | Param of {
+      proc    : symbol;           (* procedure *)
+      param_m : symbol;           (* parameter module *)
+      param_p : symbol;           (* parameter procedure *)
+    }
+
 val cost_proj_equal : cost_proj -> cost_proj -> bool
 
 type gty =
@@ -287,6 +298,7 @@ val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
 val f_mod_cost_r : mod_cost -> form
 
 val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
+val f_cost_proj_r : form -> cost_proj2 -> form
 
 (* soft-constructors - hoare *)
 val f_hoareF_r : sHoareF -> form
@@ -401,6 +413,7 @@ val f_xadd  : form -> form -> form
 val f_xmul  : form -> form -> form
 val f_xmuli : form -> form -> form
 val f_xle   : form -> form -> form
+val f_xlt   : form -> form -> form
 val f_xmax  : form -> form -> form
 
 val f_x0 : form

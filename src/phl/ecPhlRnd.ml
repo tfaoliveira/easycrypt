@@ -62,10 +62,11 @@ module Core = struct
       | PNoRndParams -> f_true
       | PSingleRndParam p -> p
       | _ -> assert false in
-    let cond, cost =
+    let EcCHoare.{ cond; res = cost;} =
       EcCHoare.cost_sub_self
         chs.chs_co
-        (EcCHoare.cost_of_expr cost_pre chs.chs_m distr_e) in
+        (EcCHoare.cost_of_expr cost_pre chs.chs_m distr_e)
+    in
     let concl = f_cHoareS_r { chs with chs_s = s;
                                        chs_po = f_and_simpl cost_pre post;
                                        chs_co = cost} in

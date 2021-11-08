@@ -501,14 +501,26 @@ let generalize_mod env m modi f =
   res
 
 (* -------------------------------------------------------------------- *)
-let abstract_info env f1 =
+
+type abstract_info = {
+  top       : EcPath.mpath;
+  f         : EcPath.xpath;
+  oi_param  : oi_param;
+  cost_info : form;
+  (* of type [Tmodsig t], where [t] contains an entry for [f.x_sub]  *)
+
+  fsig      : funsig;
+}
+
+
+let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let f   = EcEnv.NormMp.norm_xfun env f1 in
   let top = EcPath.m_functor f.EcPath.x_top in
   let def = EcEnv.Fun.by_xpath f env in
 
-  let oi  =
+  let oi_param, cost_info =
     match def.f_def with
-    | FBabs (oi, _) -> oi
+    | FBabs (oi_param, (f_cost,_)) -> oi_param, f_cost
     | _ ->
       let ppe = EcPrinting.PPEnv.ofenv env in
         if EcPath.x_equal f1 f then
@@ -521,26 +533,30 @@ let abstract_info env f1 =
             (EcPrinting.pp_funname ppe) f1
             (EcPrinting.pp_funname ppe) f
   in
-    (top, f, oi, def.f_sig)
+  { top; f; oi_param; cost_info; fsig = def.f_sig }
 
 (* -------------------------------------------------------------------- *)
-let abstract_info2 env fl' fr' =
-  let (topl, fl, oil, sigl) = abstract_info env fl' in
-  let (topr, fr, oir, sigr) = abstract_info env fr' in
-  let fl1 = EcPath.xpath topl fl.EcPath.x_sub in
-  let fr1 = EcPath.xpath topr fr.EcPath.x_sub in
-    if not (EcPath.x_equal fl1 fr1) then begin
-      let ppe = EcPrinting.PPEnv.ofenv env in
-        EcCoreGoal.tacuerror
-          "function %a reduces to %a and %a reduces to %a, %a and %a should be equal"
-          (EcPrinting.pp_funname ppe) fl'
-          (EcPrinting.pp_funname ppe) fl1
-          (EcPrinting.pp_funname ppe) fr'
-          (EcPrinting.pp_funname ppe) fr1
-          (EcPrinting.pp_funname ppe) fl1
-          (EcPrinting.pp_funname ppe) fr1
-    end;
-    ((topl, fl, oil, sigl), (topr, fr, oir, sigr))
+let abstract_info2
+    (env : EcEnv.env)
+    (fl' : EcPath.xpath)
+    (fr' : EcPath.xpath) : abstract_info * abstract_info
+  =
+  let il = abstract_info env fl' in
+  let ir = abstract_info env fr' in
+  let fl1 = EcPath.xpath il.top il.f.EcPath.x_sub in
+  let fr1 = EcPath.xpath ir.top ir.f.EcPath.x_sub in
+  if not (EcPath.x_equal fl1 fr1) then begin
+    let ppe = EcPrinting.PPEnv.ofenv env in
+    EcCoreGoal.tacuerror
+      "function %a reduces to %a and %a reduces to %a, %a and %a should be equal"
+      (EcPrinting.pp_funname ppe) fl'
+      (EcPrinting.pp_funname ppe) fl1
+      (EcPrinting.pp_funname ppe) fr'
+      (EcPrinting.pp_funname ppe) fr1
+      (EcPrinting.pp_funname ppe) fl1
+      (EcPrinting.pp_funname ppe) fr1
+  end;
+  il, ir
 
 (* -------------------------------------------------------------------- *)
 type code_txenv = proofenv * LDecl.hyps

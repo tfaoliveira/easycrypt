@@ -162,8 +162,7 @@ let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
 
-let tmodcost procs oracles =
-  mk_ty (Tmodcost { procs; oracles; })
+let tmodcost procs oracles = mk_ty (Tmodcost { procs; oracles; })
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []

@@ -1344,24 +1344,6 @@ let simplify ri hyps f =
 
 
 (* ----------------------------------------------------------------- *)
-(* Simplify xints                                                    *)
-
-let simplify_xint
-    (hyps : LDecl.hyps)
-    (x    : form)
-  : [`Int of form | `Inf | `Unknown]
-  =
-  let xn = simplify full_red hyps x in
-  match destr_app xn with
-  | { f_node = Fop (p, _) }, [f]
-    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> `Int f
-
-  | { f_node = Fop (p, _) }, []
-    when EcPath.p_equal p EcCoreLib.CI_Xint.p_inf -> `Inf
-
-  | _                                             -> `Unknown
-
-(* ----------------------------------------------------------------- *)
 (* Checking convertibility                                           *)
 
 let check_memenv env (x1,mt1) (x2,mt2) =
@@ -1762,6 +1744,25 @@ let h_red ri hyps f =
 let h_red_opt ri hyps f =
   try Some (h_red ri hyps f)
   with NotReducible -> None
+
+
+(* ----------------------------------------------------------------- *)
+(* Simplify xints                                                    *)
+
+let simplify_xint
+    (hyps : LDecl.hyps)
+    (x    : form)
+  : [`Int of form | `Inf | `Unknown]
+  =
+  let xn = simplify full_red hyps x in
+  match destr_app xn with
+  | { f_node = Fop (p, _) }, [f]
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> `Int f
+
+  | { f_node = Fop (p, _) }, []
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_inf -> `Inf
+
+  | _                                             -> `Unknown
 
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]

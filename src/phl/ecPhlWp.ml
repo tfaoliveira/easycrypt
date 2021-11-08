@@ -133,7 +133,9 @@ module TacInternal = struct
       wp ~uselet ~onesided:true ?c_pre env chs.chs_m s_wp chs.chs_po in
     check_wp_progress tc i chs.chs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
-    let cond, cost = EcCHoare.cost_sub_self chs.chs_co cost_wp in
+    let EcCHoare.{ cond; res = cost } =
+      EcCHoare.cost_sub_self chs.chs_co cost_wp
+    in
     let concl = f_cHoareS_r { chs with chs_s = s;
                                        chs_po = post;
                                        chs_co = cost } in

@@ -119,6 +119,7 @@ module CI_Xint : sig
   val p_xadd      : path
   val p_xmul      : path
   val p_xle       : path
+  val p_xlt       : path
   val p_xmax      : path
   val p_is_int    : path
   val p_is_inf    : path

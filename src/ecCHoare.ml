@@ -32,17 +32,20 @@ let f_subcond (f1 : form) (f2 : form) : form =
 let f_xsub (f1 : form) (f2 : form) : form * form =
   f_subcond f1 f2, f_xadd f1 (f_xopp f2)
 
-(* type csub_res = { cond : form; res : form; } *)
+(* -------------------------------------------------------------------- *)
+type csub_res = { cond : form; res : form; }
+
+(* [c] of type [tcost], [sub] of type [xint].
+   Return: cond, res *)
+let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
+  let cond = f_subcond (f_cost_proj_r c Conc) sub in
+  let sub_c = f_cost_r (cost_r sub Mx.empty true) in
+  { cond; res = f_cost_add c (f_cost_opp sub_c); }
 
 (* [c] of type [tcost], [a] of type [xint] *)
-let cost_sub_self (c : cost) (a : form) : form * cost=
-  let cond, c_self = f_xsub c.c_self a in
-  cond, cost_r c_self c.c_calls c.c_full
-
-(* [a] of type [xint] *)
-let cost_add_self (c : cost) (a : form) : cost =
-  let c_self = f_xadd c.c_self a in
-  cost_r c_self c.c_calls c.c_full
+let cost_add_self ~(c : form) ~(a : form) : form =
+  let a_c = f_cost_r (cost_r a Mx.empty true) in
+  f_cost_add c a_c
 
 (* -------------------------------------------------------------------- *)
 (* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
@@ -148,6 +151,11 @@ let f_big f m n =
 
 let choare_sum (cost : cost) (m, n) : cost =
   cost_map (fun f -> f_xbig f m n) cost
+
+(* [cost] of type [tcost], [m] and [n] of type [txint]. *)
+let choare_xsum (cost : form) (m, n) : form =
+  assert false (* TODO A: *)
+
 
 (* -------------------------------------------------------------------- *)
 let rec free_expr (e : EcTypes.expr) : bool =

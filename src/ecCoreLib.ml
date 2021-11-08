@@ -133,6 +133,7 @@ module CI_Xint = struct
   let p_choaretac = EcPath.pqname p_top "CHoareTactic"
 
   let p_xle     = EcPath.pqname p_choaretac "xle"
+  let p_xlt     = EcPath.pqname p_choaretac "xlt"
   let p_xmax    = EcPath.pqname p_choaretac "xmax"
   let p_bigxint = EcPath.pqname p_choaretac "Bigxint"
   let p_big     = EcPath.pqname p_bigxint "big"

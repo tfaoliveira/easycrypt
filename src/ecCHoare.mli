@@ -11,11 +11,14 @@ val oget_c_bnd : form option -> bool -> form
 val cost_orcl : symbol -> xpath -> form -> form
 
 (* -------------------------------------------------------------------- *)
-(* [cost_sub_self c a]: [a] must be of type [xint] *)
-val cost_sub_self : cost -> form -> form * cost
+type csub_res = { cond : form; res : form; }
 
-(* [cost_add_self c a]: [a] must be of type [xint] *)
-val cost_add_self : cost -> form -> cost
+(* [c] of type [tcost], [sub] of type [xint].
+   Return: cond, res *)
+val cost_sub_self : c:form -> sub:form -> csub_res
+
+(* [c] of type [tcost], [a] of type [xint] *)
+val cost_add_self : c:form -> a:form -> form
 
 (* -------------------------------------------------------------------- *)
 (* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
@@ -34,6 +37,10 @@ val cost_sub : cost -> cost -> cost_backward_res
 val cost_app : cost -> form list -> cost
 
 val choare_sum : cost -> (form * form) -> cost
+
+(* [choare_xsum cost (m,n)]:
+   [cost] of type [tcost], [m] and [n] of type [txint]. *)
+val choare_xsum : form -> (form * form) -> form
 
 (* -------------------------------------------------------------------- *)
 val free_expr : EcTypes.expr -> bool

@@ -37,14 +37,8 @@ module LowInternal = struct
     if not (List.is_empty chs.chs_s.s_node) then
       tc_error !!tc "instruction list is not empty";
 
-    let cost_cond =
-      cost_fold (fun ty x acc ->
-          match ty with
-          | `Xint -> f_xle f_x0 x :: acc
-          | `Int  -> f_int_le_simpl f_i0 x :: acc
-        ) chs.chs_co []
-    in
-    let post = f_and chs.chs_po (f_ands0_simpl cost_cond) in
+    let cost_cond = f_cost_le f_cost_zero chs.chs_co in
+    let post  = f_and chs.chs_po cost_cond in
     let concl = f_imp chs.chs_pr post in
     let concl = f_forall_mems [chs.chs_m] concl in
 
