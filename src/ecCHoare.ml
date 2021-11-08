@@ -152,7 +152,8 @@ let f_big f m n =
 let choare_sum (cost : cost) (m, n) : cost =
   cost_map (fun f -> f_xbig f m n) cost
 
-(* [cost] of type [tcost], [m] and [n] of type [txint]. *)
+(* [choare_xsum cost (m,n)]:
+   [cost] of type [tcost], [m] of type [tint], [n] of type [txint]. *)
 let choare_xsum (cost : form) (m, n) : form =
   assert false (* TODO A: *)
 
