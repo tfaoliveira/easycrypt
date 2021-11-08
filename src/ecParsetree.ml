@@ -540,12 +540,18 @@ type pipattern =
 
 and pspattern = unit
 
-type poracles_cost = (pgamepath * psymbol option * pcost) list
+type poracle_cost = {
+  p_oracle : pgamepath;
+  p_finite : bool;
 
-(* For cost judgement with abstract calls.
-   ci_oracles : list of pairs of oracles and their costs.
-   ci_vrnts   : list of pairs of oracles and their increasing quantity. *)
-type p_abs_inv_inf = poracles_cost
+  p_param  : psymbol option;
+  (* if not finite, must be [None] *)
+  p_cost   : pcost;
+  (* if [finite], of type [tint -> tcost]. Otherwise, of type [tcost]. *)
+}
+
+(* User information for cost judgement with abstract calls. *)
+type p_abs_inv_inf = poracle_cost list
 
 type p_call_inv_info = [`Std of pcost | `CostAbs of p_abs_inv_inf ]
 

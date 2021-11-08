@@ -176,24 +176,27 @@ let t_fun_def = FApi.t_low0 "fun-def" t_fun_def_r
 (* -------------------------------------------------------------------- *)
 (* invariant information provided by the user, used to apply the rule *)
 type abs_inv_el = {
-  oracle : xpath; (* oracle *)
-  cost   : cost;  (* cost of an oracle call *)
+  oracle : xpath; (* Oracle *)
   finite : bool;  (* number of calls to the oracle is finite *)
+  cost   : cost;
+  (* Cost of an oracle call.
+     If [finite], of type [tint -> tcost].
+     Otherwise, of type [tcost]. *)
 }
 
 (* (abs)tract call rull (inv)ariant (inf)ormation *)
 type abs_inv_inf = abs_inv_el list
 
 let process_p_abs_inv_inf
-    (tc : tcenv1)
-    (hyps : LDecl.hyps)
+    (tc            : tcenv1)
+    (hyps          : LDecl.hyps)
     (p_abs_inv_inf : p_abs_inv_inf) : ptybindings * abs_inv_inf
   =
   let open EcLocation in
   let open EcParsetree in
   let l = ref [] in
-  let check_uniq (_,x,_) =
-    match x with
+  let check_uniq (x : poracle_cost) =
+    match x.p_param with
     | None -> ()
     | Some y ->
       let s = EcLocation.unloc y in
@@ -205,29 +208,38 @@ let process_p_abs_inv_inf
 
   let env = LDecl.toenv hyps in
 
-  let doit (f, x, (PC_costs((ci,co),cfull))) =
-    let lo =
-      match x with
-      | Some y -> loc y
-      | None   -> loc f in
-    let x =
-      match x with
-      | Some _ -> mk_loc lo x
-      | None   -> mk_loc lo (Some (mk_loc lo "k")) in
+  let doit ({ p_cost = PC_costs((ci,co),cfull) } as el) =
+    let f = EcTyping.trans_gamepath env el.p_oracle in
 
-    let f = EcTyping.trans_gamepath env f in
-    let bd = [x], mk_loc lo PTunivar in
-    let doc = function
-      | `Unbounded -> `Unbounded
-      | `Bounded c ->
-        let loc = loc c in
-        `Bounded (mk_loc loc (PFlambda([bd], c)))
-    in
-    let ci = doc ci in
-    let doco (m,f,c) = (m,f,doc c) in
-    let co = List.map doco co in
-    let c = TTC.pf_process_cost !!tc hyps [tint] (PC_costs((ci,co), cfull)) in
-    bd, (f, c)
+    (* if the cost information are for an oracle that can be called an infinite
+       number of times, there is no binded cost parameter. *)
+    if not el.p_finite then
+      let c = TTC.pf_process_cost !!tc hyps [] (PC_costs((ci,co), cfull)) in
+      None, { oracle = f; finite = el.p_finite; cost = c; }
+    else
+      (* otherwise, this is more complicated:
+         there is a binded cost parameter, and the cost is a lambda from
+         [tint] to [tcost]. *)
+      let x = el.p_param in
+      let lo = match x with
+        | Some y -> loc y
+        | None   -> loc el.p_oracle in
+      let x = match x with
+        | Some _ -> mk_loc lo x
+        | None   -> mk_loc lo (Some (mk_loc lo "k")) in
+
+      let bd = [x], mk_loc lo PTunivar in
+      let doc = function
+        | `Unbounded -> `Unbounded
+        | `Bounded c ->
+          let loc = loc c in
+          `Bounded (mk_loc loc (PFlambda([bd], c)))
+      in
+      let ci = doc ci in
+      let doco (m,f,c) = (m,f,doc c) in
+      let co = List.map doco co in
+      let c = TTC.pf_process_cost !!tc hyps [tint] (PC_costs((ci,co), cfull)) in
+      Some bd, { oracle = f; finite = el.p_finite; cost = c; }
   in
 
   let bds_abs_inv_info = List.map doit p_abs_inv_inf in
@@ -313,7 +325,6 @@ module FunAbsLow = struct
     let f_cost = f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true) in
 
     let orcls_cost = List.map (fun o ->
-        (* TODO A: do we need to change the case depending on [finite] ? *)
         (* [finite]: is the number of calls to [o] finite.
            [o_cost]: cost of a call to [o]. *)
         let { finite; cost = o_cost } =
@@ -321,8 +332,11 @@ module FunAbsLow = struct
         in
 
         (* Upper-bound on the costs of [o]'s calls. *)
-        let cbd = EcCHoare.cost_orcl fn o cost_info in
-        EcCHoare.choare_xsum (f_cost_r o_cost) (f_i0, cbd)
+        if finite then
+          let cbd = EcCHoare.cost_orcl fn o cost_info in
+          EcCHoare.choare_xsum (f_cost_r o_cost) (f_i0, cbd)
+        else f_cost_xscale f_Inf (f_cost_r o_cost)
+        (* TODO A: use a variant of [xscale] s.t. [Inf * 0 = 0] *)
       ) ois
     in
     List.fold_left f_cost_add f_cost orcls_cost
@@ -379,12 +393,17 @@ module FunAbsLow = struct
 
     (* build the subgoal for the i-th oracle *)
     let ospec (o_called : xpath) : form =
-      (* TODO A: error message no longer possible like this. *)
-      let k_called =
-        try Mx.find o_called mks
+      let { cost = o_cost; finite = o_finite } =
+        try List.find (fun x -> x_equal x.oracle o_called) xc
         with Not_found ->
           tc_error pf "no cost information has been supplied for %a"
             (EcPrinting.pp_funname ppe) o_called
+      in
+
+      let k_called =
+        try Mx.find o_called mks
+        with Not_found -> assert (not o_finite); EcIdent.create "dummy"
+        (* fresh dummy ident, so that all tests below fail  *)
       in
 
       (* instantisation of [bds] for the post-condition. Type [tint].
@@ -413,11 +432,17 @@ module FunAbsLow = struct
       in
       let call_bounds = f_ands0_simpl call_bounds in
 
-      (* We now compute the cost of the call to [o_called]. *)
-      let { cost } = List.find (fun x -> x_equal x.oracle o_called) xc in
-
-      let k_cost = EcCHoare.cost_app cost [f_local k_called tint] in
-      let form = f_cHoareF pr o_called po (f_cost_r k_cost) in
+      (* We now compute the cost of the [k]-th call to [o_called].
+         - if [o] can be called a finite number of times, the cost is
+         parametrized by the number of the i-th call.
+         - otherwise, the cost information to prove is a constant
+         upper-bound. *)
+      let k_o_cost =
+        if o_finite then
+          EcCHoare.cost_app o_cost [f_local k_called tint]
+        else o_cost
+      in
+      let form = f_cHoareF pr o_called po (f_cost_r k_o_cost) in
       f_forall_simpl bds (f_imp_simpl call_bounds form)
     in
 
@@ -434,13 +459,13 @@ module FunAbsLow = struct
 
     let post_inv =
       let call_bounds =
-        List.map2 (fun (o,_) (x,_) ->
-            let xf  = f_N (f_local x tint) in
-            let ge0 = f_int_le f_x0 xf in
-            let cbd = EcCHoare.cost_orcl f.x_sub o cost_info in
-            let max = f_xle xf cbd in
+        List.map2 (fun xc_el (x,_) ->
+            let xf  = f_local x tint in
+            let ge0 = f_int_le f_i0 xf in
+            let cbd = EcCHoare.cost_orcl f.x_sub xc_el.oracle cost_info in
+            let max = f_xle (f_N xf) cbd in
             f_anda ge0 max
-          ) xc bds
+          ) xc_fin bds
       in
       let call_bounds = f_ands0_simpl call_bounds in
       f_exists bds (f_and call_bounds pr)

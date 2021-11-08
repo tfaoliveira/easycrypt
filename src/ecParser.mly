@@ -2715,7 +2715,17 @@ conseq_xt:
 
 
 ci_cost_el:
-| o=loc(fident) x=ident? COLON co=costs(none) {o, x, co}
+| o=loc(fident) x=ident COLON co=costs(none) 
+    { {p_oracle = o; p_finite = true; p_param = Some x; p_cost = co;} }
+/* finite, with call counter parameter */
+
+| o=loc(fident) UNDERSCORE COLON co=costs(none) 
+    { {p_oracle = o; p_finite = true; p_param = None; p_cost = co;} }
+/* finite, no call counter parameter */
+
+| o=loc(fident) COLON co=costs(none) 
+    { {p_oracle = o; p_finite = false; p_param = None; p_cost = co;} }
+/* not finite (hence no call counter parameter) */
 
 abs_call_info:
 | LBRACKET xc=rlist0(ci_cost_el, COMMA) RBRACKET { xc }

@@ -41,10 +41,8 @@ val choare_sum : cost -> (form * form) -> cost
 (* [choare_xsum cost (m,n)]:
    [cost] of type [tcost], [m] of type [tint], [n] of type [txint].
 
-   If [n = f_N n_fin], then this is a sum of integers:
-      [choare_xsum cost (m,n) = choare_sum cost (m,n_fin)].
-   Otherwise, this is a multiplication by [f_Inf]:
-      [choare_xsum cost (m,n) = f_Inf * cost]. *)
+   [n] must be finite, i.e. [n = f_N n_fin]. Then this is a sum of integers:
+      [choare_xsum cost (m,n) = choare_sum cost (m,n_fin)]. *)
 val choare_xsum : form -> (form * form) -> form
 
 (* -------------------------------------------------------------------- *)

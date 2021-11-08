@@ -153,7 +153,10 @@ let choare_sum (cost : cost) (m, n) : cost =
   cost_map (fun f -> f_xbig f m n) cost
 
 (* [choare_xsum cost (m,n)]:
-   [cost] of type [tcost], [m] of type [tint], [n] of type [txint]. *)
+   [cost] of type [tcost], [m] of type [tint], [n] of type [txint].
+
+   [n] must be finite, i.e. [n = f_N n_fin]. Then this is a sum of integers:
+      [choare_xsum cost (m,n) = choare_sum cost (m,n_fin)]. *)
 let choare_xsum (cost : form) (m, n) : form =
   assert false (* TODO A: *)
 
