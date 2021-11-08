@@ -2715,15 +2715,15 @@ conseq_xt:
 
 
 ci_cost_el:
-| o=loc(fident) x=ident COLON co=costs(none) 
+| o=loc(fident) x=ident COLON co=form
     { {p_oracle = o; p_finite = true; p_param = Some x; p_cost = co;} }
 /* finite, with call counter parameter */
 
-| o=loc(fident) UNDERSCORE COLON co=costs(none) 
+| o=loc(fident) UNDERSCORE COLON co=form
     { {p_oracle = o; p_finite = true; p_param = None; p_cost = co;} }
 /* finite, no call counter parameter */
 
-| o=loc(fident) COLON co=costs(none) 
+| o=loc(fident) COLON co=form
     { {p_oracle = o; p_finite = false; p_param = None; p_cost = co;} }
 /* not finite (hence no call counter parameter) */
 

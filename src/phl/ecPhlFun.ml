@@ -178,13 +178,13 @@ let t_fun_def = FApi.t_low0 "fun-def" t_fun_def_r
 type abs_inv_el = {
   oracle : xpath; (* Oracle *)
   finite : bool;  (* number of calls to the oracle is finite *)
-  cost   : cost;
+  cost   : form;
   (* Cost of an oracle call.
      If [finite], of type [tint -> tcost].
      Otherwise, of type [tcost]. *)
 }
 
-(* (abs)tract call rull (inv)ariant (inf)ormation *)
+(* abstract call rull invariant information *)
 type abs_inv_inf = abs_inv_el list
 
 let process_p_abs_inv_inf
@@ -208,13 +208,13 @@ let process_p_abs_inv_inf
 
   let env = LDecl.toenv hyps in
 
-  let doit ({ p_cost = PC_costs((ci,co),cfull) } as el) =
+  let doit el =
     let f = EcTyping.trans_gamepath env el.p_oracle in
 
     (* if the cost information are for an oracle that can be called an infinite
        number of times, there is no binded cost parameter. *)
     if not el.p_finite then
-      let c = TTC.pf_process_cost !!tc hyps [] (PC_costs((ci,co), cfull)) in
+      let c = TTC.pf_process_form !!tc hyps tcost el.p_cost in
       None, { oracle = f; finite = el.p_finite; cost = c; }
     else
       (* otherwise, this is more complicated:
@@ -229,22 +229,16 @@ let process_p_abs_inv_inf
         | None   -> mk_loc lo (Some (mk_loc lo "k")) in
 
       let bd = [x], mk_loc lo PTunivar in
-      let doc = function
-        | `Unbounded -> `Unbounded
-        | `Bounded c ->
-          let loc = loc c in
-          `Bounded (mk_loc loc (PFlambda([bd], c)))
-      in
-      let ci = doc ci in
-      let doco (m,f,c) = (m,f,doc c) in
-      let co = List.map doco co in
-      let c = TTC.pf_process_cost !!tc hyps [tint] (PC_costs((ci,co), cfull)) in
+      let p_cost = mk_loc (loc el.p_cost) (PFlambda([bd], el.p_cost)) in
+      let c = TTC.pf_process_form !!tc hyps (tfun tint tcost) p_cost in
       Some bd, { oracle = f; finite = el.p_finite; cost = c; }
   in
 
   let bds_abs_inv_info = List.map doit p_abs_inv_inf in
-  assert false (* TODO A: *)
-  (* List.split bds_abs_inv_info *)
+
+  (* split bindings from user info, and clear empty bindings. *)
+  let bds, abs_inv_info = List.split bds_abs_inv_info in
+  List.filter_map (fun x -> x) bds, abs_inv_info
 
 type inv_inf =  [
   | `Std     of cost
@@ -291,7 +285,7 @@ module FunAbsLow = struct
             let k = EcIdent.create "k", GTty tint in
 
             let calls =  Mx.singleton oracle (f_lambda [k] f_x1) in
-            let cost = cost_r f_Inf calls true in
+            let cost = f_cost_r (cost_r f_Inf calls true) in
             let xc = { oracle; cost; finite = true; } :: xc in
 
             xc, k :: new_bds
@@ -334,8 +328,8 @@ module FunAbsLow = struct
         (* Upper-bound on the costs of [o]'s calls. *)
         if finite then
           let cbd = EcCHoare.cost_orcl fn o cost_info in
-          EcCHoare.choare_xsum (f_cost_r o_cost) (f_i0, cbd)
-        else f_cost_xscale f_Inf (f_cost_r o_cost)
+          EcCHoare.choare_xsum o_cost (f_i0, cbd)
+        else f_cost_xscale f_Inf o_cost
         (* TODO A: use a variant of [xscale] s.t. [Inf * 0 = 0] *)
       ) ois
     in
@@ -439,10 +433,10 @@ module FunAbsLow = struct
          upper-bound. *)
       let k_o_cost =
         if o_finite then
-          EcCHoare.cost_app o_cost [f_local k_called tint]
+          f_app_simpl o_cost [f_local k_called tint] tcost
         else o_cost
       in
-      let form = f_cHoareF pr o_called po (f_cost_r k_o_cost) in
+      let form = f_cHoareF pr o_called po k_o_cost in
       f_forall_simpl bds (f_imp_simpl call_bounds form)
     in
 

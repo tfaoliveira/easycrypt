@@ -27,7 +27,18 @@ val subst_pre :
 (* -------------------------------------------------------------------- *)
 type p_upto_info = pformula * pformula * (pformula option)
 
-type abs_inv_inf = (EcPath.xpath * EcFol.cost) list
+(* invariant information provided by the user, used to apply the rule *)
+type abs_inv_el = {
+  oracle : xpath; (* Oracle *)
+  finite : bool;  (* number of calls to the oracle is finite *)
+  cost   : form;
+  (* Cost of an oracle call.
+     If [finite], of type [tint -> tcost].
+     Otherwise, of type [tcost]. *)
+}
+
+(* abstract call rull invariant information *)
+type abs_inv_inf = abs_inv_el list
 
 val process_inv_pabs_inv_finfo:
   EcCoreGoal.tcenv1 ->

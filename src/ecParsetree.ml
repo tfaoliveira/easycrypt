@@ -546,7 +546,7 @@ type poracle_cost = {
 
   p_param  : psymbol option;
   (* if not finite, must be [None] *)
-  p_cost   : pcost;
+  p_cost   : pformula;
   (* if [finite], of type [tint -> tcost]. Otherwise, of type [tcost]. *)
 }
 
