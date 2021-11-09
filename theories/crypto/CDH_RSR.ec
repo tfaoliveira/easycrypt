@@ -1,4 +1,4 @@
-require import AllCore List Distr DBool DInterval DList SmtMap.
+require import AllCore List Distr DBool DInterval DList SDist SmtMap.
 require import FinType FSet NominalGroup PROM SplitRO2.
 
 import Distr.MRat.
@@ -18,61 +18,6 @@ proof. by rewrite uniq_card_oflist ?range_uniq size_range. qed.
 
 lemma mem_rangeset m n i : i \in rangeset m n <=> m <= i && i < n.
 proof. by rewrite mem_oflist mem_range. qed.
-
-(* Statistical distance - merge with SDist.ec *)
-
-op sdist : 'a distr -> 'a distr -> real.
-
-theory D.
-type in_t, out_t.
-op d1, d2 : out_t distr.
-
-clone FullRO as D1 with
-  type in_t    <- in_t,
-  type out_t   <- out_t,
-  op dout      <- fun _ => d1,
-  type d_in_t  <- unit,
-  type d_out_t <- bool.
-
-clone FullRO as D2 with
-  type in_t    <- in_t,
-  type out_t   <- out_t,
-  op dout      <- fun _ => d2,
-  type d_in_t  <- unit,
-  type d_out_t <- bool.
-
-module Wrap (O : D1.RO) : D1.RO = {
-  var dom : in_t fset
-
-  proc init() = {
-    dom <- fset0 ;
-    O.init();
-  }
-
-  proc get(x) = {
-    var r;
-
-    dom <- dom `|` fset1 x;
-    r <@ O.get(x);
-    return r;
-  }
-
-  proc set = O.set
-  proc rem = O.rem
-  proc sample = O.sample
-}.
-
-module type Distinguisher (O : D1.RO) = {
-  proc distinguish (_ : unit) : bool {O.get}
-}.
-
-axiom sdist_orcl (D <: Distinguisher) &m k :
-  (forall (O <: D1.RO{Wrap, D}),
-     hoare [D1.MainD(D, Wrap(O)).distinguish : true ==> card Wrap.dom <= k]) =>
-  `| Pr[D1.MainD(D, D1.RO).distinguish() @ &m : res] -
-     Pr[D1.MainD(D, D2.RO).distinguish() @ &m : res] | <=
-  k%r * sdist d1 d2.
-end D.
 
 clone import NominalGroup.NominalGroup as N.
 
@@ -720,11 +665,25 @@ qed.
 
 (** Expressing the games G, G' and G'' as distinguishers for statistical distance *)
 
-local clone import D as D_Z_EU with
-  type in_t   <- int,
-  type out_t  <- Z,
-  op d1       <- dZ,
-  op d2       <- duniform (elems EU).
+require import SDist.
+
+local clone SDist.Dist as D with
+  type a <- Z
+  proof*.
+
+local clone D.ROM as D1 with
+  type in_t    <- int,
+  op d1        <- dZ,
+  op d2        <- duniform (elems EU),
+  op N         <- na
+proof * by smt(dZ_ll dEU_ll na_ge0).
+
+local clone D.ROM as D2 with
+  type in_t    <- int,
+  op d1        <- dZ,
+  op d2        <- duniform (elems EU),
+  op N         <- nb
+proof * by smt(dZ_ll dEU_ll nb_ge0).
 
 local module DisA (O : FROZ.RO) = {
   module CG = Count(G(O, OBZ))
@@ -767,20 +726,22 @@ suff: `| Pr[Game(G(OAZ,  OBZ), A).main() @ &m : G.bad] -
       nb%r * sdist dZ (duniform (elems EU)) by smt().
 split.
 - have -> : Pr[Game(G(OAZ,  OBZ), A).main() @ &m : G.bad] =
-            Pr[D1.MainD(DisA, D1.RO).distinguish() @ &m : res].
+            Pr[D1.R1.MainD(DisA, D1.R1.RO).distinguish() @ &m : res].
   + byequiv => //; proc; inline *; auto.
-    call (: ={m}(OAZ, D1.RO) /\ ={OBZ.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
+    call (: ={m}(OAZ, D1.R1.RO) /\ ={OBZ.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
     by auto.
   have -> : Pr[Game(G(OAEU, OBZ), A).main() @ &m : G.bad] =
-            Pr[D1.MainD(DisA, D2.RO).distinguish() @ &m : res].
+            Pr[D1.R1.MainD(DisA, D1.R2.RO).distinguish() @ &m : res].
   + byequiv => //; proc; inline *; auto.
-    call (: ={m}(OAEU, D2.RO) /\ ={OBZ.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
+    call (: ={m}(OAEU, D1.R2.RO) /\ ={OBZ.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
     by auto.
-  apply (sdist_orcl DisA &m na) => O; proc; inline *; auto.
-  conseq (:_ ==> Wrap.dom \subset rangeset 0 na) => [_ _ I Isub|].
+  apply (D1.sdist_ROM DisA _ &m _) => // O. 
+    by move => get_ll; islossless; apply (A_ll (Count(G(O, RBZ.RO)))); islossless.
+  proc; inline *; auto.
+  conseq (:_ ==> D1.Wrap.dom \subset rangeset 0 na) => [_ _ I Isub|].
   + apply (StdOrder.IntOrder.ler_trans (card (rangeset 0 na)));
     [exact subset_leq_fcard | by rewrite card_rangeset /=; smt(na_ge0)].
-  call (: Wrap.dom \subset rangeset 0 na) => //.
+  call (: D1.Wrap.dom \subset rangeset 0 na) => //.
   + proc; inline *; sp; if; 2: (by auto); wp; call (: true); auto.
     smt(in_fsetU in_fset1 mem_rangeset).
   + proc; inline *; sp; if; by auto.
@@ -789,22 +750,24 @@ split.
   + proc; inline *; sp; if; by auto.
   + proc; inline *; sp; if; 2: (by auto); wp; rnd; wp.
     call (: true); auto; smt(in_fsetU in_fset1 mem_rangeset).
-  + by inline *; wp; call (: true); auto; smt(in_fset0).
+  + by inline *; auto; smt(in_fset0).
 - have -> : Pr[Game(G(OAEU, OBZ), A).main() @ &m : G.bad] =
-            Pr[D1.MainD(DisB, D1.RO).distinguish() @ &m : res].
+            Pr[D2.R1.MainD(DisB, D2.R1.RO).distinguish() @ &m : res].
   + byequiv => //; proc; inline *; auto.
-    call (: ={m}(OBZ, D1.RO) /\ ={OAEU.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
+    call (: ={m}(OBZ, D2.R1.RO) /\ ={OAEU.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
     by auto.
   have -> : Pr[Game(G(OAEU, OBEU), A).main() @ &m : G.bad] =
-            Pr[D1.MainD(DisB, D2.RO).distinguish() @ &m : res].
+            Pr[D2.R1.MainD(DisB, D2.R2.RO).distinguish() @ &m : res].
   + byequiv => //; proc; inline *; auto.
-    call (: ={m}(OBEU, D2.RO) /\ ={OAEU.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
+    call (: ={m}(OBEU, D2.R2.RO) /\ ={OAEU.m, G2.ca, G2.cb, G.bad}); 1..5: by sim.
     by auto.
-  apply (sdist_orcl DisB &m nb) => O; proc; inline *; auto.
-  conseq (:_ ==> Wrap.dom \subset rangeset 0 nb) => [_ _ I Isub|].
+  apply (D2.sdist_ROM DisB _ &m _) => // O. 
+    by move => get_ll; islossless; apply (A_ll (Count(G(OAEU,O)))); islossless.
+  proc; inline*; auto.
+  conseq (:_ ==> D2.Wrap.dom \subset rangeset 0 nb) => [_ _ I Isub|].
   + apply (StdOrder.IntOrder.ler_trans (card (rangeset 0 nb)));
     [exact subset_leq_fcard | by rewrite card_rangeset /=; smt(nb_ge0)].
-  call (: Wrap.dom \subset rangeset 0 nb) => //.
+  call (: D2.Wrap.dom \subset rangeset 0 nb) => //.
   + proc; inline *; sp; if; by auto.
   + proc; inline *; sp; if; 2: (by auto); wp; call (: true); auto.
     smt(in_fsetU in_fset1 mem_rangeset).
@@ -813,7 +776,7 @@ split.
     smt(in_fsetU in_fset1 mem_rangeset).
   + proc; inline *; sp; if; 2: (by auto); wp.
     call (: true); auto; smt(in_fsetU in_fset1 mem_rangeset).
-  + by inline *; wp; call (: true); auto; smt(in_fset0).
+  + by inline *; auto; smt(in_fset0).
 qed.
 
 local module Gk (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
