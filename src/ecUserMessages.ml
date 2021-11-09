@@ -44,19 +44,13 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_cost ppe fmt (c : EcFol.c_bnd) =
-      match c with
-      | C_bounded c -> EcPrinting.pp_form ppe fmt c
-      | C_unbounded -> Format.fprintf fmt "`_" (* "+∞" *)
-    in
-
-    let pp_self ppe mode fmt ((iself,oself) : EcFol.c_bnd * EcFol.c_bnd) =
+    let pp_self ppe mode fmt ((iself,oself) : EcFol.form * EcFol.form) =
       Format.fprintf fmt
         "@[<v>self cost:@;  @[%a@]@; cannot be shown \
          to be %s:@;  @[%a@]@]"
-        (pp_cost ppe) iself
+        (EcPrinting.pp_form ppe) iself
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oself
+        (EcPrinting.pp_form ppe) oself
     in
 
     let pp_diff ppe mode fmt (f,(ic,oc)) =
@@ -64,9 +58,9 @@ end = struct
         "@[<v>the maximal number of calls to %a:@;  @[%a@]@; cannot be shown \
          to be %s:@;  @[%a@]@]"
         (EcPrinting.pp_funname ppe) f
-        (pp_cost ppe) ic
+        (EcPrinting.pp_form ppe) ic
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oc
+        (EcPrinting.pp_form ppe) oc
     in
 
     match error with

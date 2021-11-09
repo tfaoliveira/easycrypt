@@ -64,9 +64,9 @@ let rec is_mp_abstract mp (lc : locals) =
 
 let rec on_mpath_ty cb (ty : ty) =
   match ty.ty_node with
-  | Tunivar _        -> ()
-  | Tvar    _        -> ()
-  | Tcost            -> ()
+  | Tunivar  _       -> ()
+  | Tvar     _       -> ()
+  | Tmodcost _       -> ()
   | Tglob mp         -> cb mp
   | Ttuple tys       -> List.iter (on_mpath_ty cb) tys
   | Tconstr (_, tys) -> List.iter (on_mpath_ty cb) tys
@@ -154,21 +154,22 @@ let on_mpath_memtype cb mt =
 let on_mpath_memenv cb (m : EcMemory.memenv) =
   on_mpath_memtype cb (snd m)
 
-let on_mpath_restr cb restr =
+let rec on_mpath_restr cb restr =
   Sx.iter (fun x -> cb x.x_top) restr.mr_xpaths.ur_neg;
   oiter (Sx.iter (fun x -> cb x.x_top)) restr.mr_xpaths.ur_pos;
   Sm.iter cb restr.mr_mpaths.ur_neg;
   oiter (Sm.iter cb) restr.mr_mpaths.ur_pos;
   Msym.iter (fun _ oi ->
-      List.iter (fun x -> cb x.x_top) (OI.allowed oi)
-    ) restr.mr_oinfos
+      List.iter (fun x -> cb x.x_top) (allowed oi)
+    ) restr.mr_params;
+  on_mpath_form cb restr.mr_cost
 
-let rec on_mpath_modty cb mty =
+and on_mpath_modty cb mty =
   List.iter (fun (_, mty) -> on_mpath_modty cb mty) mty.mt_params;
   List.iter cb mty.mt_args;
   on_mpath_restr cb mty.mt_restr
 
-let on_mpath_gbinding cb b =
+and on_mpath_gbinding cb b =
   match b with
   | EcFol.GTty ty ->
       on_mpath_ty cb ty
@@ -178,10 +179,10 @@ let on_mpath_gbinding cb b =
   | EcFol.GTmem mt ->
     on_mpath_memtype cb mt
 
-let on_mpath_gbindings cb b =
+and on_mpath_gbindings cb b =
   List.iter (fun (_, b) -> on_mpath_gbinding cb b) b
 
-let rec on_mpath_form cb (f : EcFol.form) =
+and on_mpath_form cb (f : EcFol.form) =
   let cbrec = on_mpath_form cb in
 
   let rec fornode () =
@@ -198,7 +199,10 @@ let rec on_mpath_form cb (f : EcFol.form) =
     | EcFol.Fproj     (f, _)       -> cbrec f
     | EcFol.Fpvar     (pv, _)      -> on_mpath_pv   cb pv
     | EcFol.Fcost     c            -> on_mpath_cost cb c
+    | EcFol.Fmodcost  mc           -> on_mpath_modcost cb mc
     | EcFol.Fglob     (mp, _)      -> cb mp
+
+    | EcFol.Fmodcost_proj (f,_,p)  -> cbrec f; on_mpath_modcost_proj cb p
 
     | EcFol.FhoareF   hf           -> on_mpath_hf  cb hf
     | EcFol.FhoareS   hs           -> on_mpath_hs  cb hs
@@ -248,13 +252,13 @@ let rec on_mpath_form cb (f : EcFol.form) =
   and on_mpath_chf cb chf =
     on_mpath_form cb chf.EcFol.chf_pr;
     on_mpath_form cb chf.EcFol.chf_po;
-    on_mpath_cost cb chf.EcFol.chf_co;
+    on_mpath_form cb chf.EcFol.chf_co;
     cb chf.EcFol.chf_f.x_top
 
   and on_mpath_chs cb chs =
     on_mpath_form cb chs.EcFol.chs_pr;
     on_mpath_form cb chs.EcFol.chs_po;
-    on_mpath_cost cb chs.EcFol.chs_co;
+    on_mpath_form cb chs.EcFol.chs_co;
     on_mpath_stmt cb chs.EcFol.chs_s;
     on_mpath_memenv cb chs.EcFol.chs_m
 
@@ -281,11 +285,21 @@ let rec on_mpath_form cb (f : EcFol.form) =
     List.iter (on_mpath_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
 
   and on_mpath_cost cb cost =
-    EcFol.c_bnd_iter (on_mpath_form cb) cost.EcFol.c_self;
+    on_mpath_form cb cost.EcFol.c_self;
     Mx.iter (fun f c ->
         cb f.x_top;
-        EcFol.c_bnd_iter (on_mpath_form cb) c;
+        on_mpath_form cb c;
       ) cost.EcFol.c_calls
+
+  and on_mpath_modcost cb mc =
+    Msym.iter (fun _ c ->
+        on_mpath_cost cb c;
+      ) mc
+
+  and on_mpath_modcost_proj cb : EcFol.cost_proj -> unit = function
+    | Intr -> ()
+    | Param _ -> ()
+    (* TODO A: for Abs, need to apply cb on the ident. *)
   in
 
     on_mpath_ty cb f.EcFol.f_ty; fornode ()
@@ -320,9 +334,9 @@ and on_mpath_fun_sig cb fsig =
 
 and on_mpath_fun_body cb fbody =
   match fbody with
-  | FBalias xp -> cb xp.x_top
-  | FBdef fdef -> on_mpath_fun_def cb fdef
-  | FBabs oi   -> on_mpath_fun_oi  cb oi
+  | FBalias xp       -> cb xp.x_top
+  | FBdef fdef       -> on_mpath_fun_def cb fdef
+  | FBabs (oi,(f,_)) -> on_mpath_fun_oi  cb oi; on_mpath_form cb f
 
 and on_mpath_fun_def cb fdef =
   List.iter (fun v -> on_mpath_ty cb v.v_type) fdef.f_locals;
@@ -336,7 +350,7 @@ and on_mpath_uses cb uses =
   Sx.iter   (fun x -> cb x.x_top) uses.us_writes
 
 and on_mpath_fun_oi cb oi =
-  List.iter (fun x -> cb x.x_top) (OI.allowed oi)
+  List.iter (fun x -> cb x.x_top) (allowed oi)
 
 (* -------------------------------------------------------------------- *)
 
