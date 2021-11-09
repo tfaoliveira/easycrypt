@@ -46,10 +46,9 @@ val process_inv_pabs_inv_finfo:
   p_abs_inv_inf ->
   form * abs_inv_inf
 
-type inv_inf =  [
-  | `Std     of cost
-  | `CostAbs of abs_inv_inf
-]
+type inv_inf =
+  | Std     of form
+  | CostAbs of abs_inv_inf
 
 val process_fun_def       : FApi.backward
 val process_fun_abs       : pformula -> p_abs_inv_inf option -> FApi.backward
@@ -65,7 +64,7 @@ module FunAbsLow : sig
 
   val choareF_abs_spec :
        proofenv -> EcEnv.env -> xpath -> form -> abs_inv_inf
-    -> form * form * cost * form list
+    -> form * form * form * form list
 
   val bdhoareF_abs_spec :
        proofenv -> EcEnv.env -> xpath -> form

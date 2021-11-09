@@ -240,10 +240,9 @@ let process_p_abs_inv_inf
   let bds, abs_inv_info = List.split bds_abs_inv_info in
   List.filter_map (fun x -> x) bds, abs_inv_info
 
-type inv_inf =  [
-  | `Std     of cost
-  | `CostAbs of abs_inv_inf
-]
+type inv_inf =
+  | Std     of form
+  | CostAbs of abs_inv_inf
 
 (* -------------------------------------------------------------------- *)
 module FunAbsLow = struct
@@ -386,7 +385,7 @@ module FunAbsLow = struct
     let pr = f_app_simpl inv kargs_pr tbool in
 
     (* build the subgoal for the i-th oracle *)
-    let ospec (o_called : xpath) : form =
+    let ospec (o_called : xpath) : form * form =
       let { cost = o_cost; finite = o_finite } =
         try List.find (fun x -> x_equal x.oracle o_called) xc
         with Not_found ->
@@ -399,6 +398,9 @@ module FunAbsLow = struct
         with Not_found -> assert (not o_finite); EcIdent.create "dummy"
         (* fresh dummy ident, so that all tests below fail  *)
       in
+
+      (* if [o_finite], create a subgoal checking that [o_cost] is finite. *)
+      let subg = if o_finite then f_is_int o_cost else f_true in
 
       (* instantisation of [bds] for the post-condition. Type [tint].
          Identical to [kargs_pr], except for the called oracle [k_called],
@@ -437,11 +439,11 @@ module FunAbsLow = struct
         else o_cost
       in
       let form = f_cHoareF pr o_called po k_o_cost in
-      f_forall_simpl bds (f_imp_simpl call_bounds form)
+      subg, f_forall_simpl bds (f_imp_simpl call_bounds form)
     in
 
     (* We have the conditions for the oracles. *)
-    let sg : form list = List.map ospec ois in
+    let sg_finite, sg_orcls = List.split (List.map ospec ois) in
 
     (* Finally, we compute the conclusion. *)
     (* choare [{ inv 0 } f {exists ks, 0 <= ks <= cbd /\ inv ks }]
@@ -467,7 +469,7 @@ module FunAbsLow = struct
 
     let total_cost = abs_spec_cost top f.x_sub ois cost_info xc in
 
-    (pre_inv, post_inv, total_cost, sg)
+    (pre_inv, post_inv, total_cost, sg_finite @ sg_orcls)
 
 
   (* ------------------------------------------------------------------ *)
@@ -813,13 +815,9 @@ let t_fun_to_code_r tc =
 let t_fun_to_code = FApi.t_low0 "fun-to-code" t_fun_to_code_r
 
 (* -------------------------------------------------------------------- *)
-let proj_std a = match a with
-  | `Std b -> b
-  | _ -> assert false
-
 let proj_costabs a = match a with
   | None -> ([])
-  | Some (`CostAbs b) -> b
+  | Some (CostAbs b) -> b
   | _ -> assert false
 
 let t_fun_r inv inv_inf tc =

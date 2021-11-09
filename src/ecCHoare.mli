@@ -13,10 +13,15 @@ val cost_orcl : symbol -> xpath -> form -> form
 (* -------------------------------------------------------------------- *)
 type csub_res = { cond : form; res : form; }
 
-(* [c] of type [tcost], [sub] of type [xint].
-   Return: cond, res *)
+(* Backward reasoning on cost.
+   Looks for a solution [x] of [c = x + sub]. *)
+val cost_sub : c:form -> sub:form -> csub_res
+
+(* Same as [cost_sub], but only for the concrete cost.
+   [c] of type [tcost], [sub] of type [xint]. *)
 val cost_sub_self : c:form -> sub:form -> csub_res
 
+(* -------------------------------------------------------------------- *)
 (* [c] of type [tcost], [a] of type [xint] *)
 val cost_add_self : c:form -> a:form -> form
 
@@ -28,10 +33,6 @@ type cost_backward_res = [
                                    whenever [c] holds. *)
   | `FullError                  (* full minus not full *)
 ]
-
-(* Backward reasoning on cost.
-   [cost_sub c1 c2] looks for a solution [x] of [c1 = x + c2]. *)
-val cost_sub : cost -> cost -> cost_backward_res
 
 (* -------------------------------------------------------------------- *)
 val cost_app : cost -> form list -> cost

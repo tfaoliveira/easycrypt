@@ -12,6 +12,7 @@ open EcTypes
 open EcFol
 open EcModules
 open EcPV
+open EcCHoare
 
 open EcCoreGoal
 open EcLowPhlGoal
@@ -90,7 +91,7 @@ let t_hoare_while_r inv tc =
    - [qdec] the strictly decreasing quantity at each iteration.
    - [n] is the maximum number of iterations.
    - [lam_cost] is the cost of one iteration (of the form [λ k. cost(k)]) *)
-let t_choare_while_r inv qdec n (lam_cost : cost) tc =
+let t_choare_while_r inv qdec n (lam_cost : form) tc =
   let env = FApi.tc1_env tc in
 
   let chs = tc1_as_choareS tc in
@@ -105,7 +106,7 @@ let t_choare_while_r inv qdec n (lam_cost : cost) tc =
   let k_lt_qinc = f_int_lt qdec k in
   let c_pre  = f_and_simpl (f_and_simpl inv e) qinc_eq_k in
   let c_post = f_and_simpl inv k_lt_qinc in
-  let c_cost = EcCHoare.cost_app lam_cost [k] in
+  let c_cost = f_app_simpl lam_cost [k] tcost in
   let c_concl = f_cHoareS_r { chs with chs_pr = c_pre;
                                        chs_s  = c;
                                        chs_po = c_post;
@@ -124,11 +125,10 @@ let t_choare_while_r inv qdec n (lam_cost : cost) tc =
       (f_int_add_simpl n f_i1)
       (EcCHoare.cost_of_expr inv chs.chs_m expr_e) in
 
-  let body_cost = EcCHoare.choare_sum lam_cost (f_i0, n) in
-  let cond, cost =
-    EcPhlCall.tc1_cost_sub tc
-      chs.chs_co
-      (EcCHoare.cost_add_self body_cost e_cost_self)
+  (* TODO A: add a choare rule for loops that may not always terminates. *)
+  let body_cost = EcCHoare.choare_xsum lam_cost (f_i0, f_N n) in
+  let { cond; res = cost} =
+    cost_sub chs.chs_co (EcCHoare.cost_add_self body_cost e_cost_self)
   in
 
   (* The wp of the while. *)
@@ -412,10 +412,10 @@ let process_while side winfos tc =
       match vrnt, bds with
       | Some vrnt, Some (`Cost (n, cost)) ->
         t_choare_while
-          (TTC.tc1_process_Xhl_formula tc         phi)
-          (TTC.tc1_process_Xhl_form    tc tint    vrnt)
-          (TTC.tc1_process_Xhl_form    tc tint    n)
-          (TTC.tc1_process_cost        tc [tint]  cost)
+          (TTC.tc1_process_Xhl_formula tc       phi)
+          (TTC.tc1_process_Xhl_form    tc tint  vrnt)
+          (TTC.tc1_process_Xhl_form    tc tint  n)
+          (TTC.tc1_process_form        tc (tfun tint tcost) cost)
           tc
 
       | _    -> tc_error !!tc "@[<v 2>invalid arguments, you must supply :@;\
@@ -511,14 +511,16 @@ module ASyncWhile = struct
 
            in e_local idx fp.f_ty
 
-      | Fcost     _
-      | Fcoe      _
-      | Fglob     _
-      | FhoareF   _ | FhoareS   _
-      | FcHoareF  _ | FcHoareS  _
-      | FbdHoareF _ | FbdHoareS _
-      | FequivF   _ | FequivS   _
-      | FeagerF   _ | Fpr       _ -> raise CannotTranslate
+      | Fmodcost_proj _
+      | Fmodcost      _
+      | Fcost         _
+      | Fcoe          _
+      | Fglob         _
+      | FhoareF       _ | FhoareS   _
+      | FcHoareF      _ | FcHoareS  _
+      | FbdHoareF     _ | FbdHoareS _
+      | FequivF       _ | FequivS   _
+      | FeagerF       _ | Fpr       _ -> raise CannotTranslate
 
     and auxkd (kd : quantif) : equantif =
       match kd with

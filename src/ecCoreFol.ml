@@ -1118,23 +1118,25 @@ let f_xmuli_simpl f1 f2 =
 (* -------------------------------------------------------------------- *)
 module CI_Cost = EcCoreLib.CI_Cost
 
-let fop_cost_zero   = f_op CI_Cost.p_cost_zero   []                         tcost
-let fop_cost_inf    = f_op CI_Cost.p_cost_inf    []                         tcost
-let fop_cost_opp    = f_op CI_Cost.p_cost_opp    [] (toarrow [tcost]        tcost)
-let fop_cost_add    = f_op CI_Cost.p_cost_add    [] (toarrow [tcost; tcost] tcost)
-let fop_cost_scale  = f_op CI_Cost.p_cost_scale  [] (toarrow [tint;  tcost] tcost)
-let fop_cost_xscale = f_op CI_Cost.p_cost_xscale [] (toarrow [txint; tcost] tcost)
-let fop_cost_le     = f_op CI_Cost.p_cost_le     [] (toarrow [tcost; tcost] tbool)
-let fop_cost_lt     = f_op CI_Cost.p_cost_lt     [] (toarrow [tcost; tcost] tbool)
+let fop_cost_zero    = f_op CI_Cost.p_cost_zero    []                         tcost
+let fop_cost_inf     = f_op CI_Cost.p_cost_inf     []                         tcost
+let fop_cost_opp     = f_op CI_Cost.p_cost_opp     [] (toarrow [tcost]        tcost)
+let fop_cost_add     = f_op CI_Cost.p_cost_add     [] (toarrow [tcost; tcost] tcost)
+let fop_cost_scale   = f_op CI_Cost.p_cost_scale   [] (toarrow [tint;  tcost] tcost)
+let fop_cost_xscale  = f_op CI_Cost.p_cost_xscale  [] (toarrow [txint; tcost] tcost)
+let fop_cost_le      = f_op CI_Cost.p_cost_le      [] (toarrow [tcost; tcost] tbool)
+let fop_cost_lt      = f_op CI_Cost.p_cost_lt      [] (toarrow [tcost; tcost] tbool)
+let fop_cost_subcond = f_op CI_Cost.p_cost_subcond [] (toarrow [tcost; tcost] tbool)
 
-let f_cost_zero         = f_app fop_cost_zero   []       tcost
-let f_cost_inf          = f_app fop_cost_inf    []       tcost
-let f_cost_opp    f     = f_app fop_cost_opp    [f]      tcost
-let f_cost_add    f1 f2 = f_app fop_cost_add    [f1; f2] tcost
-let f_cost_scale  f1 f2 = f_app fop_cost_scale  [f1; f2] tcost
-let f_cost_xscale f1 f2 = f_app fop_cost_xscale [f1; f2] tcost
-let f_cost_le     f1 f2 = f_app fop_cost_le     [f1; f2] tbool
-let f_cost_lt     f1 f2 = f_app fop_cost_lt     [f1; f2] tbool
+let f_cost_zero          = f_app fop_cost_zero    []       tcost
+let f_cost_inf           = f_app fop_cost_inf     []       tcost
+let f_cost_opp     f     = f_app fop_cost_opp     [f]      tcost
+let f_cost_add     f1 f2 = f_app fop_cost_add     [f1; f2] tcost
+let f_cost_scale   f1 f2 = f_app fop_cost_scale   [f1; f2] tcost
+let f_cost_xscale  f1 f2 = f_app fop_cost_xscale  [f1; f2] tcost
+let f_cost_le      f1 f2 = f_app fop_cost_le      [f1; f2] tbool
+let f_cost_lt      f1 f2 = f_app fop_cost_lt      [f1; f2] tbool
+let f_cost_subcond f1 f2 = f_app fop_cost_subcond [f1; f2] tbool
 
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =

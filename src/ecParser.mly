@@ -2732,11 +2732,11 @@ abs_call_info:
 
 call_info:
 | f1=form LONGARROW f2=form          { CI_spec (f1, f2, None) }
-| f1=form LONGARROW f2=form TIME co=costs(none)
+| f1=form LONGARROW f2=form TIME co=form
                                      { CI_spec (f1, f2, Some co) }
 | f=form                             { CI_inv  (f, None) }
-| f=form TIME co=costs(none)         { CI_inv  (f, Some (`Std co)) }
-| f=form COLON inf=abs_call_info     { let info = `CostAbs inf in
+| f=form TIME co=form                { CI_inv  (f, Some (P_Std co)) }
+| f=form COLON inf=abs_call_info     { let info = P_CostAbs inf in
                                        CI_inv  (f, Some info) }
 | bad=form COMMA p=form              { CI_upto (bad,p,None) }
 | bad=form COMMA p=form COMMA q=form { CI_upto (bad,p,Some q) }
@@ -2798,7 +2798,7 @@ while_tac_info:
 | inv=sform vrnt=sform k=sform eps=sform
     { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (`Bd (k, eps)); } }
 
-| inv=sform vrnt=sform k=sform TIME co=costs(none)
+| inv=sform vrnt=sform k=sform TIME co=sform
     { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (`Cost (k, co)); } }
 
 async_while_tac_info:
@@ -2889,7 +2889,7 @@ app_bd_info:
 | f=sform
     { PAppSingle f }
 
-| TIME co=costs(none)
+| TIME co=sform
     { PAppCost co }
 
 | f=prod_form g=prod_form s=sform?

@@ -14,6 +14,7 @@ open EcModules
 open EcFol
 open EcEnv
 open EcPV
+open EcCHoare
 
 open EcCoreGoal
 open EcLowGoal
@@ -21,24 +22,6 @@ open EcLowPhlGoal
 
 module PT  = EcProofTerm
 module TTC = EcProofTyping
-
-(* -------------------------------------------------------------------- *)
-(* As [cost_sub], but raises error messages if the equation cannot be solved. *)
-let tc1_cost_sub (tc : tcenv1) (c1 : cost) (c2 : cost) : form * cost =
-  match EcCHoare.cost_sub c1 c2 with
-  | `Ok (cond1, cost) -> cond1, cost
-  | `XError x ->
-    tc_error_lazy !!tc
-      (fun fmt ->
-         let env = FApi.tc1_env tc in
-         let ppe = EcPrinting.PPEnv.ofenv env in
-         Format.fprintf fmt
-           "invalid cost information: %a is finite in the \
-            conclusion, but is arbitrary in the provided cost"
-           (EcPrinting.pp_funname ppe) x)
-  | `FullError ->
-    tc_error !!tc "invalid cost information: the conclusion is full, but \
-                   the provided cost is not "
 
 (* -------------------------------------------------------------------- *)
 let wp_asgn_call env m lv res post =
@@ -135,8 +118,8 @@ let t_choare_call fpre fpost fcost tc =
       f_xadd cost (EcCHoare.cost_of_expr_any chs.chs_m e)
     ) f_x0 args
   in
-  let cond1, cost = tc1_cost_sub tc chs.chs_co fcost in
-  let cond2, cost = EcCHoare.cost_sub_self cost args_cost in
+  let { cond = cond1; res = cost } = cost_sub chs.chs_co fcost in
+  let { cond = cond2; res = cost } = EcCHoare.cost_sub_self cost args_cost in
   let concl = f_cHoareS_r { chs with chs_s = s;
                                      chs_po = post;
                                      chs_co = cost } in
@@ -339,10 +322,12 @@ let t_call side ax tc =
 let mk_inv_spec (_pf : proofenv) env inv fl fr =
   match NormMp.is_abstract_fun fl env with
   | true ->
-    let (topl, _, oil, sigl),
-      (topr, _, _  , sigr) = EcLowPhlGoal.abstract_info2 env fl fr in
+    let { top = topl; fsig = sigl; oi_param = oil; },
+        { top = topr; fsig = sigr } =
+      EcLowPhlGoal.abstract_info2 env fl fr
+    in
     let eqglob = f_eqglob topl mleft topr mright in
-    let lpre = if OI.is_in oil then [eqglob;inv] else [inv] in
+    let lpre = if is_in oil then [eqglob;inv] else [inv] in
     let eq_params =
       f_eqparams
         sigl.fs_arg sigl.fs_anames mleft
@@ -384,7 +369,7 @@ let process_call side info tc =
           let (_,f,_),_ = tc1_last_call tc chs.chs_s in
           let penv, qenv = LDecl.hoareF f hyps in
 
-          let cost  = TTC.tc1_process_cost tc [] cost in
+          let cost  = TTC.tc1_process_form tc tcost cost in
 
           (penv, qenv, fun pre post -> f_cHoareF pre f post cost)
 
@@ -421,7 +406,9 @@ let process_call side info tc =
 
       | _ -> tc_error !!tc "the conclusion is not a hoare or an equiv" in
 
-  let process_inv tc side =
+  let process_inv tc side :
+    LDecl.hyps * (EcFol.form -> EcPhlFun.inv_inf option -> EcFol.form)
+    =
     if not (is_none side) then
       tc_error !!tc "cannot specify side for call with invariants";
 
@@ -443,9 +430,9 @@ let process_call side info tc =
       let (_,f,_) = fst (tc1_last_call tc chs.chs_s) in
       let penv = LDecl.inv_memenv1 hyps in
       (penv, fun inv inv_info ->
-          let inv_info = odfl (`CostAbs []) inv_info in
+          let inv_info = odfl (EcPhlFun.CostAbs []) inv_info in
           match inv_info with
-          | `Std c ->
+          | EcPhlFun.Std c ->
             let env = FApi.tc1_env tc in
             if NormMp.is_abstract_fun f env then
               tc_error !!tc "the procedure %a is abstract: costs information \
@@ -455,13 +442,14 @@ let process_call side info tc =
 
             f_cHoareF inv f inv c
 
-          | `CostAbs inv_inf ->
+          | EcPhlFun.CostAbs inv_inf ->
             let env = FApi.tc1_env tc in
             if not @@ NormMp.is_abstract_fun f env then
               tc_error !!tc "the procedure %a is not abstract: only a cost must \
                              be supplied."
                 (EcPrinting.pp_funname (EcPrinting.PPEnv.ofenv env)) f;
 
+            (* TODO A: why are we throwing away the sub-goals ?*)
             let pre, post, cost, _ =
               EcPhlFun.FunAbsLow.choareF_abs_spec !!tc env f inv inv_inf in
             f_cHoareF pre f post cost)
@@ -493,11 +481,13 @@ let process_call side info tc =
         let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
         let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
         let bad,invP,invQ = EcPhlFun.process_fun_upto_info info tc in
-        let (topl,fl,oil,sigl),
-            (topr,fr,_  ,sigr) = EcLowPhlGoal.abstract_info2 env fl fr in
+        let { top = topl; fsig = sigl; oi_param = oil; },
+            { top = topr; fsig = sigr } =
+          EcLowPhlGoal.abstract_info2 env fl fr
+        in
         let bad2 = Fsubst.f_subst_mem mhr mright bad in
         let eqglob = f_eqglob topl mleft topr mright in
-        let lpre = if OI.is_in oil then [eqglob;invP] else [invP] in
+        let lpre = if is_in oil then [eqglob;invP] else [invP] in
         let eq_params =
           f_eqparams
             sigl.fs_arg sigl.fs_anames mleft
@@ -511,17 +501,21 @@ let process_call side info tc =
 
   let subtactic = ref t_id in
 
-  let process_inv_inf tc hyps inv inv_inf = match inv_inf with
+  let process_inv_inf tc hyps inv inv_inf : form * EcPhlFun.inv_inf option =
+    match inv_inf with
     | None ->
       let inv = TTC.pf_process_form !!tc hyps tbool inv in
       inv, None
-    | Some (`Std c) ->
+
+    | Some (P_Std c) ->
       let inv = TTC.pf_process_form !!tc hyps tbool inv in
-      inv, Some (`Std (TTC.pf_process_cost !!tc hyps [] c))
-    | Some (`CostAbs aii) ->
+      inv, Some (Std (TTC.pf_process_form !!tc hyps tcost c))
+
+    | Some (P_CostAbs aii) ->
       let inv, abs_inv_inf =
         EcPhlFun.process_inv_pabs_inv_finfo tc inv aii in
-      inv, Some (`CostAbs abs_inv_inf) in
+      inv, Some (CostAbs abs_inv_inf)
+  in
 
   let process_cut tc info =
     match info with

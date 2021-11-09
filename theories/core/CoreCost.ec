@@ -14,3 +14,6 @@ op opp : cost -> cost.
 
 op lt : cost -> cost -> bool.
 op le = fun x y => lt x y \/ x = y.
+
+(* sufficient condition to do backward reasoning over costs. *)
+op subcond = fun x y => (x - y) + y = zero

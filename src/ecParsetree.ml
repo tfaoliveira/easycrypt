@@ -553,17 +553,17 @@ type poracle_cost = {
 (* User information for cost judgement with abstract calls. *)
 type p_abs_inv_inf = poracle_cost list
 
-type p_call_inv_info = [`Std of pcost | `CostAbs of p_abs_inv_inf ]
+type p_call_inv_info = P_Std of pformula | P_CostAbs of p_abs_inv_inf
 
 type call_info =
-  | CI_spec of (pformula * pformula * pcost option)
+  | CI_spec of (pformula * pformula * pformula option)
   | CI_inv of pformula * p_call_inv_info option
   | CI_upto of (pformula * pformula * pformula option)
 
 type p_app_xt_info =
   | PAppNone
   | PAppSingle of pformula
-  | PAppCost   of pcost
+  | PAppCost   of pformula
   | PAppMult   of (pformula option) tuple5
 
 type ('a, 'b, 'c) rnd_tac_info =
@@ -650,7 +650,7 @@ type pcond_info = [
 type while_info = {
   wh_inv  : pformula;
   wh_vrnt : pformula option;
-  wh_bds  : [`Bd of pformula pair | `Cost of pformula * pcost ] option;
+  wh_bds  : [`Bd of pformula pair | `Cost of pformula * pformula ] option;
 }
 
 (* -------------------------------------------------------------------- *)

@@ -24,24 +24,29 @@ let cost_orcl (proc : symbol) (o : xpath) (mc : form) : form =
   f_mod_cost_proj_r mc proc (Param (mo, mf))
 
 (* -------------------------------------------------------------------- *)
-(* Function for cost                                                    *)
+type csub_res = { cond : form; res : form; }
 
-let f_subcond (f1 : form) (f2 : form) : form =
+(* Backward reasoning on cost.
+   [cost_sub c1 c2] looks for a solution [x] of [c1 = x + c2]. *)
+let cost_sub ~(c : form) ~(sub : form) : csub_res =
+  { cond = f_cost_subcond c sub; res = f_cost_add c (f_cost_opp sub); }
+
+(* [f1], [f2] of type [txint].
+   Condition under which [(f1 - f2) + f2 = f1] *)
+let f_xsubcond (f1 : form) (f2 : form) : form =
   f_or (f_is_inf f1) (f_is_int f2)
 
 let f_xsub (f1 : form) (f2 : form) : form * form =
-  f_subcond f1 f2, f_xadd f1 (f_xopp f2)
+  f_xsubcond f1 f2, f_xadd f1 (f_xopp f2)
 
-(* -------------------------------------------------------------------- *)
-type csub_res = { cond : form; res : form; }
-
-(* [c] of type [tcost], [sub] of type [xint].
-   Return: cond, res *)
+(* Same as [cost_sub], but only for the concrete cost.
+   [c] of type [tcost], [sub] of type [xint]. *)
 let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
-  let cond = f_subcond (f_cost_proj_r c Conc) sub in
+  let cond = f_xsubcond (f_cost_proj_r c Conc) sub in
   let sub_c = f_cost_r (cost_r sub Mx.empty true) in
   { cond; res = f_cost_add c (f_cost_opp sub_c); }
 
+(* -------------------------------------------------------------------- *)
 (* [c] of type [tcost], [a] of type [xint] *)
 let cost_add_self ~(c : form) ~(a : form) : form =
   let a_c = f_cost_r (cost_r a Mx.empty true) in
@@ -58,7 +63,7 @@ type cost_backward_res = [
 
 (* Backward reasoning on cost.
    [cost_sub c1 c2] looks for a solution [x] of [c1 = x + c2]. *)
-let cost_sub (c1 : cost) (c2 : cost) : cost_backward_res =
+let cost_vec_sub (c1 : cost) (c2 : cost) : cost_backward_res =
   let exception Failed of [`FullError ] in
   try
     let cond, c_self = f_xsub c1.c_self c2.c_self in

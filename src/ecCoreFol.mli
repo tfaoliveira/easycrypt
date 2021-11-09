@@ -393,14 +393,15 @@ val f_int_pow   : form -> form -> form
 val f_int_edivz : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
-val f_cost_zero   : form
-val f_cost_inf    : form
-val f_cost_opp    : form -> form
-val f_cost_add    : form -> form -> form
-val f_cost_scale  : form -> form -> form
-val f_cost_xscale : form -> form -> form
-val f_cost_le     : form -> form -> form
-val f_cost_lt     : form -> form -> form
+val f_cost_zero    : form
+val f_cost_inf     : form
+val f_cost_opp     : form -> form
+val f_cost_add     : form -> form -> form
+val f_cost_scale   : form -> form -> form
+val f_cost_xscale  : form -> form -> form
+val f_cost_le      : form -> form -> form
+val f_cost_lt      : form -> form -> form
+val f_cost_subcond : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form

@@ -269,8 +269,8 @@ and f_eqobs_in fl fr sim eqO =
   let sim, eqi =
     try
       match defl.f_def, defr.f_def with
-      | FBabs oil, FBabs oir ->
-        let (topl,_,_,_), (topr,_,_,_) =
+      | FBabs (oil, _), FBabs (oir, _) ->
+        let { top = topl }, { top = topr } =
           try EcLowPhlGoal.abstract_info2 env fl fr
           with TcError _ -> raise EqObsInError in
 
@@ -282,7 +282,7 @@ and f_eqobs_in fl fr sim eqO =
             let sim, eqi =
               List.fold_left2
                 (fun (sim,eqo) o_l o_r -> f_eqobs_in o_l o_r sim eqo)
-                (sim,eqo) (OI.allowed oil) (OI.allowed oir) in
+                (sim,eqo) (allowed oil) (allowed oir) in
             if Mpv2.subset eqi eqo then sim, eqo
             else aux (Mpv2.union eqi eqo) in
           aux eqo in
@@ -295,7 +295,7 @@ and f_eqobs_in fl fr sim eqO =
             PV.check_depend env fvr topr
           with TcError _ -> raise EqObsInError
         end;
-        let eqi = if OI.is_in oil then Mpv2.add_glob env top top eqi else eqi in
+        let eqi = if is_in oil then Mpv2.add_glob env top top eqi else eqi in
         sim, eqi
 
       | FBdef funl, FBdef funr ->

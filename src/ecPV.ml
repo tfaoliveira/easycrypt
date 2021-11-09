@@ -316,10 +316,15 @@ module PV = struct
     | Fapp(e, es) -> List.fold_left (aux env m) (aux env m fv e) es
     | Ftuple es   -> List.fold_left (aux env m) fv es
     | Fproj(e,_)  -> aux env m fv e
+
     | Fcost c -> cost_fold (fun t fv -> aux env m fv t) c fv
 
-    | Fmodcost mc -> assert false (* TODO A: *)
-    | Fmodcost_proj (_, _, _) -> assert false (* TODO A: *)
+    | Fmodcost mc ->
+      EcSymbols.Msym.fold (fun _ t fv ->
+          proc_cost_fold (fun t fv -> aux env m fv t) t fv
+        ) mc fv
+
+    | Fmodcost_proj (f, _, _) -> aux env m fv f
 
     | Fcoe      _
     | FhoareF   _ | FhoareS   _

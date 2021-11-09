@@ -13,6 +13,7 @@ open EcParsetree
 open EcTypes
 open EcModules
 open EcFol
+open EcCHoare
 
 open EcCoreGoal
 open EcLowGoal
@@ -34,7 +35,7 @@ let t_hoare_app = FApi.t_low2 "hoare-app" t_hoare_app_r
 let t_choare_app_r i phi cost tc =
   let chs = tc1_as_choareS tc in
   let s1, s2 = s_split i chs.chs_s in
-  let cond, cost1 = EcPhlCall.tc1_cost_sub tc chs.chs_co cost in
+  let {cond; res = cost1} = cost_sub chs.chs_co cost in
 
   let a = f_cHoareS_r { chs with chs_s  = stmt s1;
                                  chs_po = phi;
@@ -150,7 +151,7 @@ let t_equiv_app_onesided side i pre post tc =
 let process_phl_c_info app_c_info tc =
   match app_c_info with
 
-  | PAppCost c   -> TTC.tc1_process_cost tc [] c
+  | PAppCost c   -> TTC.tc1_process_form tc tcost c
 
   | PAppSingle _ ->
     tc_error !!tc "seq choare: a cost must be supplied, not a bound"
