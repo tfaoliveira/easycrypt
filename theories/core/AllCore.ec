@@ -8,7 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 require (*--*) Ring.
-require export Core Int Real Xint.
+require export Core Int Real Xint CoreCost.
 (*---*) export Ring.IntID.
 
 (* -------------------------------------------------------------------- *)
