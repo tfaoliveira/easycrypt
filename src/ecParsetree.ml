@@ -210,8 +210,8 @@ and pformula_r =
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
   | PFBDhoareF of pformula * pgamepath * pformula * phoarecmp * pformula
-  | PFChoareF  of pformula * pgamepath * pformula * pcost
-  | PFChoareFT of pgamepath * pcost
+  | PFChoareF  of pformula * pgamepath * pformula * pformula
+  | PFChoareFT of pgamepath * pformula
   | PFCoe      of osymbol * pmemtype option * pformula * pexpr * pty option
   | PFWP       of pgamepath * pexpr list * pformula
 

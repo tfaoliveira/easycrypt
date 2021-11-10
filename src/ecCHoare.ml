@@ -92,20 +92,6 @@ let cost_vec_sub (c1 : cost) (c2 : cost) : cost_backward_res =
 
 
 (* -------------------------------------------------------------------- *)
-(* let cost_map f_xmap f_map c =
- *   EcPath.Mx.fold (fun f cb res ->
- *       let c_calls =
- *         EcPath.Mx.add f
- *           (call_bound_r (cb.cb_cost) (f_map cb.cb_called))
- *           res.c_calls in
- *       cost_r res.c_self c_calls
- *     ) c.c_calls
- *     (cost_r (f_xmap c.c_self) EcPath.Mx.empty) *)
-
-let cost_app (c : cost) (args : form list) : cost =
-  cost_map (fun c -> f_app_simpl c args txint) c
-
-(* -------------------------------------------------------------------- *)
 let loaded (env : env) : bool =
   is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_Xint.p_Xint env) &&
   is_some (EcEnv.Theory.by_path_opt EcCoreLib.CI_Xint.p_choaretac env)

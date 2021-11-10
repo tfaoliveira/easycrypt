@@ -386,6 +386,7 @@ val f_int_opp   : form -> form
 val f_int_mul   : form -> form -> form
 val f_int_pow   : form -> form -> form
 val f_int_edivz : form -> form -> form
+val f_int_max   : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_cost_zero    : form

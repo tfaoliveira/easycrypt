@@ -44,20 +44,14 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_self ppe mode fmt ((iself,oself) : EcFol.form * EcFol.form) =
+    let pp_diff_cost ppe fmt info =
+      let mode, ic, oc = match info with
+        | `Eq  (ic,oc) -> `Eq, ic, oc
+        | `Sub (ic,oc) -> `Sub, ic, oc
+      in
       Format.fprintf fmt
-        "@[<v>self cost:@;  @[%a@]@; cannot be shown \
+        "@[<v>@[%a@]@; cannot be shown \
          to be %s:@;  @[%a@]@]"
-        (EcPrinting.pp_form ppe) iself
-        (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (EcPrinting.pp_form ppe) oself
-    in
-
-    let pp_diff ppe mode fmt (f,(ic,oc)) =
-      Format.fprintf fmt
-        "@[<v>the maximal number of calls to %a:@;  @[%a@]@; cannot be shown \
-         to be %s:@;  @[%a@]@]"
-        (EcPrinting.pp_funname ppe) f
         (EcPrinting.pp_form ppe) ic
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
         (EcPrinting.pp_form ppe) oc
@@ -94,37 +88,10 @@ end = struct
             (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements notallowed)
 
-    | MF_compl (env, `Sub (self,diffs)) ->
+    | MF_compl (env, info) ->
       let ppe = EcPrinting.PPEnv.ofenv env in
-      let pp_self_sep fmt = function
-        | None -> ()
-        | Some self ->
-          if Mx.is_empty diffs then
-            pp_self ppe `Sub fmt self
-          else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Sub) self
-      in
-
-      Format.fprintf fmt "@[<v>%a%a@]"
-        pp_self_sep self
-        (EcPrinting.pp_list "@;" (pp_diff ppe `Sub))
-        (Mx.bindings diffs)
-
-    | MF_compl (env, `Eq (self,diffs)) ->
-      let ppe = EcPrinting.PPEnv.ofenv env in
-      let pp_self_sep fmt = function
-        | None -> ()
-        | Some self ->
-          if Mx.is_empty diffs then
-            pp_self ppe `Sub fmt self
-          else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Eq) self
-      in
-
-      Format.fprintf fmt "@[<v>%a%a@]"
-        pp_self_sep self
-        (EcPrinting.pp_list "@;" (pp_diff ppe `Eq))
-        (Mx.bindings diffs)
+      Format.fprintf fmt "@[<v>%a@]"
+        (pp_diff_cost ppe) info
 
   let pp_restr_err_aux env fmt error =
     let msg x = Format.fprintf fmt x in

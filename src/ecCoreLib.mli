@@ -91,6 +91,7 @@ module CI_Int : sig
   val p_int_lt    : path
   val p_int_pow   : path
   val p_int_edivz : path
+  val p_int_max   : path
 end
 
 (* -------------------------------------------------------------------- *)

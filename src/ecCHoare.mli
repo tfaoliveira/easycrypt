@@ -35,8 +35,6 @@ type cost_backward_res = [
 ]
 
 (* -------------------------------------------------------------------- *)
-val cost_app : cost -> form list -> cost
-
 val choare_sum : cost -> (form * form) -> cost
 
 (* [choare_xsum cost (m,n)]:

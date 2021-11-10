@@ -1020,16 +1020,18 @@ let fop_int_opp   = f_op EcCoreLib.CI_Int.p_int_opp [] (toarrow [tint]       tin
 let fop_int_add   = f_op EcCoreLib.CI_Int.p_int_add [] (toarrow [tint; tint] tint)
 let fop_int_mul   = f_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint; tint] tint)
 let fop_int_pow   = f_op EcCoreLib.CI_Int.p_int_pow [] (toarrow [tint; tint] tint)
+let fop_int_max   = f_op EcCoreLib.CI_Int.p_int_max [] (toarrow [tint; tint] tint)
 
 let fop_int_edivz =
   f_op EcCoreLib.CI_Int.p_int_edivz []
        (toarrow [tint; tint] (ttuple [tint; tint]))
 
-let f_int_opp   f     = f_app fop_int_opp [f]      tint
-let f_int_add   f1 f2 = f_app fop_int_add [f1; f2] tint
-let f_int_mul   f1 f2 = f_app fop_int_mul [f1; f2] tint
-let f_int_pow   f1 f2 = f_app fop_int_pow [f1; f2] tint
+let f_int_opp   f     = f_app fop_int_opp   [f]      tint
+let f_int_add   f1 f2 = f_app fop_int_add   [f1; f2] tint
+let f_int_mul   f1 f2 = f_app fop_int_mul   [f1; f2] tint
+let f_int_pow   f1 f2 = f_app fop_int_pow   [f1; f2] tint
 let f_int_edivz f1 f2 = f_app fop_int_edivz [f1; f2] tint
+let f_int_max   f1 f2 = f_app fop_int_max   [f1; f2] tint
 
 let f_int_sub f1 f2 =
   f_int_add f1 (f_int_opp f2)

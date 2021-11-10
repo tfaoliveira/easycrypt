@@ -16,8 +16,8 @@ op xadd (x y : xint) =
 
 op xmul (x : xint) (y : xint) =
   with x = N x, y = N y => N (x * y)
-  with x = N _, y = Inf => Inf
-  with x = Inf, y = N _ => Inf
+  with x = N x, y = Inf => if x = 0 then N 0 else Inf
+  with x = Inf, y = N 0 => if x = 0 then N 0 else Inf
   with x = Inf, y = Inf => Inf.
 
 abbrev ([-])  = xopp.

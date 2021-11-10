@@ -27,21 +27,7 @@ let conseq_cond pre post spre spost : form * form =
   f_imp pre spre, f_imp spost post
 
 (* proof obligation showing that [scost] is smaller than [cost] *)
-let conseq_cost (cost : form) (scost : form) : form =
-  f_cost_le scost cost
-  (* TODO A: clean-up*)
-  (* let self_le = f_xle scost.c_self cost.c_self in
-   * let calls_le =
-   *   EcPath.Mx.fold2_union (fun _ c1 c2 forms ->
-   *       let c1 = oget_c_bnd c1 cost.c_full
-   *       and c2 = oget_c_bnd c2 scost.c_full in
-   *       let le =
-   *         f_xle (xi_of_c_bnd ~mode:`Int c2) (xi_of_c_bnd ~mode:`Int c1)
-   *       in
-   *       le :: forms
-   *     ) cost.c_calls scost.c_calls []
-   * in
-   * f_ands (self_le :: (List.rev calls_le)) *)
+let conseq_cost (cost : form) (scost : form) : form = f_cost_le scost cost
 
 let bd_goal_r fcmp fbd cmp bd =
   match fcmp, cmp with

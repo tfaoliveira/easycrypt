@@ -290,6 +290,15 @@ let f_int_add_simpl =
           (List.Exceptionless.find_map (fun f -> f ()) simpls)
 
 (* -------------------------------------------------------------------- *)
+let f_int_max_simpl f1 f2 =
+    let i1 = try Some (destr_int f1) with DestrError _ -> None in
+    let i2 = try Some (destr_int f2) with DestrError _ -> None in
+
+    match i1, i2 with
+    | Some i1, Some i2 -> f_int (EcBigInt.max i1 i2)
+    | _ -> f_int_max f1 f2
+
+(* -------------------------------------------------------------------- *)
 let f_int_sub_simpl f1 f2 =
   f_int_add_simpl f1 (f_int_opp_simpl f2)
 
@@ -667,6 +676,24 @@ let rec f_iff_simpl f1 f2 =
         -> f_iff_simpl f1 f2
     | _ -> f_iff f1 f2
 
+(* Lift a binary comparison over [txint] to cost record. *)
+let cost_mk_cmp
+    (fullcmp : bool -> bool -> bool)
+    (xcmp    : form -> form -> form)
+    (c1      : cost)
+    (c2      : cost) : form
+  =
+  let full = if fullcmp c1.c_full c2.c_full then f_true else f_false in
+  let self = xcmp c1.c_self c2.c_self in
+  let calls =
+    EcPath.Mx.fold2_union (fun _ x1 x2 forms ->
+        let x1 = oget_c_bnd x1 c1.c_full
+        and x2 = oget_c_bnd x2 c2.c_full in
+        xcmp x1 x2 :: forms
+      ) c1.c_calls c2.c_calls []
+  in
+  f_ands0_simpl (full :: self :: (List.rev calls))
+
 let rec f_eq_simpl f1 f2 =
   if f_equal f1 f2 then f_true
   else match f1.f_node, f2.f_node with
@@ -694,6 +721,29 @@ let rec f_eq_simpl f1 f2 =
   | Ftuple fs1, Ftuple fs2 when List.length fs1 = List.length fs2 ->
       f_andas_simpl (List.map2 f_eq_simpl fs1 fs2) f_true
 
+  | Fcost c1, Fcost c2 ->
+    cost_mk_cmp (=) f_eq_simpl c1 c2
+
+  | Fmodcost mc1, Fmodcost mc2 ->
+    let similar =
+      let exception Fail in
+      try
+        Msym.fold2_union (fun _ pc1 pc2 () ->
+            match pc1, pc2 with
+            | Some _, Some _ -> ()
+            | _ -> raise Fail
+          ) mc1 mc2 ();
+        true
+        with Fail -> false
+    in
+    if similar then
+      Msym.fold2_union (fun _ pc1 pc2 cond ->
+          let pc1, pc2 = oget pc1, oget pc2 in
+          f_and_simpl (cost_mk_cmp (=) f_eq_simpl pc1 pc2) cond
+        ) mc1 mc2 f_true
+    else f_eq f1 f2
+
+
   | _ -> f_eq f1 f2
 
 (* -------------------------------------------------------------------- *)
@@ -712,9 +762,17 @@ type op_kind = [
   | `Real_lt
   | `Int_add
   | `Int_mul
+  | `Int_max
   | `Int_pow
   | `Int_opp
   | `Int_edivz
+
+  | `Cost_add
+  | `Cost_opp
+  | `Cost_scale
+  | `Cost_le
+  | `Cost_lt
+
   | `Real_add
   | `Real_opp
   | `Real_mul
@@ -741,8 +799,15 @@ let operators =
      CI.CI_Int .p_int_add , `Int_add  ;
      CI.CI_Int .p_int_opp , `Int_opp  ;
      CI.CI_Int .p_int_mul , `Int_mul  ;
+     CI.CI_Int .p_int_max , `Int_max  ;
      CI.CI_Int .p_int_pow , `Int_pow  ;
      CI.CI_Int .p_int_edivz , `Int_edivz  ;
+
+     CI.CI_Cost.p_cost_le    , `Cost_le   ;
+     CI.CI_Cost.p_cost_lt    , `Cost_lt   ;
+     CI.CI_Cost.p_cost_add   , `Cost_add  ;
+     CI.CI_Cost.p_cost_opp   , `Cost_opp  ;
+     CI.CI_Cost.p_cost_scale , `Cost_scale;
 
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
@@ -892,6 +957,14 @@ let real_of_form f =
       else None
   | _ -> None
 
+(* [x] of type [txint]. *)
+let decompose_N x =
+  match destr_app x with
+  | { f_node = Fop (p, _) }, [f]
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> Some f
+  | _ -> None
+
+
 (* -------------------------------------------------------------------- *)
 let f_int_le_simpl f1 f2 =
   if f_equal f1 f2 then f_true else
@@ -920,6 +993,100 @@ let f_real_lt_simpl f1 f2 =
   match opair real_of_form f1 f2 with
   | Some (x1, x2) -> f_bool (BI.compare x1 x2 < 0)
   | _ -> f_real_lt f1 f2
+
+(* -------------------------------------------------------------------- *)
+let f_xle_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_int_le_simpl c1 c2
+  | _                -> f_xle c1 c2
+
+let f_xlt_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_int_lt_simpl c1 c2
+  | _                -> f_xlt c1 c2
+
+let f_xadd_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_add_simpl c1 c2)
+  | _                -> f_xadd c1 c2
+
+let f_xmul_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_mul_simpl c1 c2)
+  | _                -> f_xmul c1 c2
+
+let f_xmax_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_max_simpl c1 c2)
+  | _                -> f_xmax c1 c2
+
+let f_xopp_simpl (c : form) : form =
+  match decompose_N c with
+  | Some c -> f_N (f_int_opp_simpl c)
+  | _      -> f_xopp c
+
+let f_is_inf_simpl (c : form) : form =
+  if is_inf c then f_true else f_is_inf c
+
+let f_is_int_simpl (c : form) : form =
+  if is_inf c then f_false else f_is_int c
+
+(* -------------------------------------------------------------------- *)
+(* lift a unary function to [tcost] *)
+let f_cost_map xf costf (c : form) : form =
+  if not (is_cost c) then costf c
+  else
+    let c = destr_cost c in
+    let self = xf c.c_self in
+    let calls = EcPath.Mx.map (fun x -> xf x) c.c_calls in
+    f_cost_r (cost_r self calls c.c_full)
+
+let f_cost_opp_simpl =
+  f_cost_map
+    (fun x -> f_xopp_simpl x)
+    (fun c -> f_cost_opp c)
+
+let f_cost_scale_simpl (f : form) (c : form) =
+  f_cost_map
+    (fun x -> f_xmul_simpl (f_N f) x)
+    (fun c -> f_cost_scale f c)
+    c
+
+let f_cost_xscale_simpl (f : form) (c : form) =
+  f_cost_map
+    (fun x -> f_xmul_simpl f x)
+    (fun c -> f_cost_scale f c)
+    c
+
+(* lift a binary operator over [txint] to [tcost] *)
+let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
+  if not (is_cost c1 && is_cost c2) then
+    costop c1 c2
+  else
+    let c1, c2 = destr_cost c1, destr_cost c2 in
+
+    let self = xop c1.c_self c2.c_self in
+    let calls =
+      EcPath.Mx.merge (fun _ x1 x2 ->
+          let x1 = oget_c_bnd x1 c1.c_full
+          and x2 = oget_c_bnd x2 c2.c_full in
+          Some (xop x1 x2)
+        ) c1.c_calls c2.c_calls
+    in
+    f_cost_r (cost_r self calls (c1.c_full && c2.c_full))
+
+let f_cost_add_simpl = f_cost_mk_bin_simpl f_xadd_simpl f_cost_add
+
+(* lift a binary comparison over [txint] to [tcost] *)
+let f_cost_mk_cmp fullcmp xcmp costcmp (c1 : form) (c2 : form) : form =
+  if not (is_cost c1 && is_cost c2) then
+    costcmp c1 c2
+  else
+    let c1, c2 = destr_cost c1, destr_cost c2 in
+    cost_mk_cmp fullcmp xcmp c1 c2
+
+let f_cost_le_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xle_simpl f_cost_le
+let f_cost_lt_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cost_lt
 
 (* -------------------------------------------------------------------- *)
 let f_cost_proj_simpl (f : form) (p : cost_proj) : form =

@@ -900,7 +900,15 @@ let reduce_logic ri env hyps f p args =
     | Some (`Int_add  ), [f1;f2] -> f_int_add_simpl f1 f2
     | Some (`Int_opp  ), [f]     -> f_int_opp_simpl f
     | Some (`Int_mul  ), [f1;f2] -> f_int_mul_simpl f1 f2
+    | Some (`Int_max  ), [f1;f2] -> f_int_max_simpl f1 f2
     | Some (`Int_edivz), [f1;f2] -> f_int_edivz_simpl f1 f2
+
+    | Some (`Cost_le   ), [f1;f2] -> f_cost_le_simpl f1 f2
+    | Some (`Cost_lt   ), [f1;f2] -> f_cost_lt_simpl f1 f2
+    | Some (`Cost_add  ), [f1;f2] -> f_cost_add_simpl f1 f2
+    | Some (`Cost_opp  ), [f]     -> f_cost_opp_simpl f
+    | Some (`Cost_scale), [f1;f2] -> f_cost_scale_simpl f1 f2
+
     | Some (`Real_add ), [f1;f2] -> f_real_add_simpl f1 f2
     | Some (`Real_opp ), [f]     -> f_real_opp_simpl f
     | Some (`Real_mul ), [f1;f2] -> f_real_mul_simpl f1 f2

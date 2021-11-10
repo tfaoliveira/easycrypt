@@ -30,6 +30,7 @@ module type TheInterface = sig
   val neg  : zint -> zint
   val sub  : zint -> zint -> zint
   val mul  : zint -> zint -> zint
+  val max  : zint -> zint -> zint
   val div  : zint -> zint -> zint
   val ediv : zint -> zint -> zint * zint
   val erem : zint -> zint -> zint

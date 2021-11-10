@@ -48,8 +48,7 @@ type mismatch_funsig =
 | MF_targs     of ty * ty                               (* expected, got *)
 | MF_tres      of ty * ty                               (* expected, got *)
 | MF_restr     of EcEnv.env * Sx.t mismatch_sets
-| MF_compl     of EcEnv.env *
-                  ((form * form) option * (form * form) Mx.t) suboreq
+| MF_compl     of EcEnv.env * (form * form) suboreq
 
 type restr_failure = Sx.t * Sm.t
 
@@ -537,59 +536,14 @@ let check_item_compatible
   and ocosts = EcEnv.NormMp.norm_form env cout in
 
   let hyps = EcEnv.LDecl.init env [] in
-
-  (* TODO A: *) assert false
-  (* let check_elc : c_bnd -> c_bnd -> bool =
-   *   match mode with
-   *   | `Sub -> fun ic oc ->
-   *       begin match ic, oc with
-   *         | C_unbounded, C_unbounded
-   *         | C_bounded _, C_unbounded -> true
-   *
-   *         | C_unbounded, C_bounded _ -> false
-   *
-   *         | C_bounded ic, C_bounded oc ->
-   *           EcReduction.is_conv hyps ic oc
-   *       end
-   *   | `Eq -> fun ic oc ->
-   *     begin match ic, oc with
-   *       | C_unbounded, C_unbounded -> true
-   *
-   *       | C_bounded _, C_unbounded
-   *       | C_unbounded, C_bounded _ -> false
-   *
-   *       | C_bounded ic, C_bounded oc ->
-   *         EcReduction.is_conv hyps ic oc
-   *     end
-   * in *)
-
-  (* if proof_obl then ()
-   * else
-   *   let iself = icosts.r_self
-   *   and oself = ocosts.r_self in
-   *   let self_sub = if check_elc iself oself then None else Some (iself, oself) in
-   *
-   *   let icalls =
-   *     Mx.union (fun _ _ _ -> assert false) icosts.r_params icosts.r_abs_calls
-   *   in
-   *   let ocalls =
-   *     Mx.union (fun _ _ _ -> assert false) ocosts.r_params ocosts.r_abs_calls
-   *   in
-   *   let diff =
-   *     Mx.fold2_union (fun f ic oc acc ->
-   *         let ic = odfl C_unbounded ic in
-   *         let oc = odfl C_unbounded oc in
-   *         if check_elc ic oc then acc
-   *         else Mx.add f (ic, oc) acc
-   *       ) icalls ocalls Mx.empty
-   *   in
-   *
-   *   if not (Mx.is_empty diff) || self_sub <> None then
-   *     let err = match mode with
-   *       | `Eq  -> `Eq (self_sub, diff)
-   *       | `Sub -> `Sub(self_sub, diff)
-   *     in
-   *     check_item_err (MF_compl(env, err)) *)
+  if proof_obl then ()
+  else
+    if EcReduction.is_conv hyps icosts ocosts then
+      let err = match mode with
+        | `Eq  -> `Eq (icosts, ocosts)
+        | `Sub -> `Sub(icosts, ocosts)
+      in
+      check_item_err (MF_compl(env, err))
 
 
 (* -------------------------------------------------------------------- *)
@@ -2105,10 +2059,10 @@ let top_is_mem_binding pf = match pf with
 (* We unify both restriction, by replacing fields in [mr] by the fields in
    [mr'] that have been provided in [pmr]. This is a bit messy. *)
 let replace_if_provided
-    (env : EcEnv.env)
+    (_env : EcEnv.env)
     (mr  : mod_restr)
     (mr' : mod_restr option)
-    (pmr : pmod_restr option) : mod_restr
+    (_pmr : pmod_restr option) : mod_restr
   =
   match mr' with
   | None -> mr
@@ -3737,8 +3691,7 @@ and trans_form_or_pattern
       begin match f.pl_desc with
         | PFChoareFT (gp, pcost) ->
           let fpath = trans_gamepath env gp in
-          assert false   (* TODO A: fix parsetree and parser *)
-          (* trans_choaref f_true f_true fpath pcost *)
+          trans_choaref f_true f_true fpath pcost
 
         | PFChoareF (pre, gp, post, pcost) ->
           let fpath = trans_gamepath env gp in
@@ -3748,8 +3701,8 @@ and trans_form_or_pattern
           unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
 
-          assert false   (* TODO A: fix parsetree and parser *)
-          (* trans_choaref pre' post' fpath pcost *)
+          trans_choaref pre' post' fpath pcost
+
         | _ -> assert false
       end
 

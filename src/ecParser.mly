@@ -1396,11 +1396,11 @@ choare_body(P):
     pre=form_r(P) LONGARROW post=form_r(P)
   RBRACKET
   TIME
-  c=costs(P)
+  c=sform_r(P)
   { PFChoareF (pre, mp, post, c) }
 | LBRACKET mp=loc(fident) RBRACKET
   TIME
-  c=costs(P)
+  c=sform_r(P)
   { PFChoareFT (mp, c) }
 
 coe_ty:
