@@ -467,6 +467,12 @@ module FSmart : sig
   val f_eagerF   : (form * eagerF   ) -> eagerF    -> form
   val f_coe      : (form * coe      ) -> coe       -> form
   val f_pr       : (form * pr       ) -> pr        -> form
+
+  val f_mod_cost : (form * mod_cost * ty) -> (mod_cost * ty) -> form
+  val f_mod_cost_proj :
+    (form * form * EcSymbols.symbol * cost_proj) ->
+    (form * EcSymbols.symbol * cost_proj) ->
+    form
 end
 
 (* -------------------------------------------------------------------- *)
