@@ -424,14 +424,12 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       | Flocal x, _ -> begin
           match EV.get x !ev.evm_form with
           | None ->
-            (* TODO: bug? why not failure ()?*)
               raise MatchFailure
 
           | Some `Unset ->
               let ssbj = Fsubst.f_subst subst subject in
               let ssbj = Fsubst.f_subst (MEV.assubst ue !ev) ssbj in
               if not (Mid.set_disjoint mxs ssbj.f_fv) then
-                (* TODO: bug? why not failure ()?*)
                 raise MatchFailure;
               begin
                 try  EcUnify.unify env ue ptn.f_ty subject.f_ty
@@ -607,8 +605,9 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             doit_crecord env (subst, mxs) pr1 pr2
           ) mc1 mc2 ()
 
-      | Fmodcost_proj _, Fmodcost_proj _ ->
-        assert false            (* TODO A: *)
+      | Fcost_proj (f1,p1), Fcost_proj (f2,p2) ->
+        if not (cost_proj_equal p1 p2) then failure ();
+        doit env (subst, mxs) f1 f2
 
       | FequivF hf1, FequivF hf2 -> begin
           if not (EcReduction.EqTest.for_xp env hf1.ef_fl hf2.ef_fl) then
@@ -920,8 +919,7 @@ module FPosition = struct
             in
             doit pos (`WithCtxt (ctxt, forms))
 
-          | Fmodcost_proj _ ->
-            assert false            (* TODO A: *)
+          | Fcost_proj (f,_) -> doit pos (`WithCtxt (ctxt, [f]))
 
           | Fcoe coe ->
             let subctxt = Sid.add (fst coe.coe_mem) ctxt in
@@ -1135,8 +1133,9 @@ module FPosition = struct
               let (hf_pr, hf_po) = as_seq2 (doit p [hf.hf_pr; hf.hf_po]) in
               f_hoareF_r { hf with hf_pr; hf_po; }
 
-          | Fmodcost_proj _ ->
-            assert false            (* TODO A: *)
+          | Fcost_proj (f, proj) ->
+            let f' = as_seq1 (doit p [f]) in
+            FSmart.f_cost_proj (fp, f, proj) (f', proj)
 
           | FcHoareF chf ->
             let sub = doit p [chf.chf_pr; chf.chf_po; chf.chf_co] in

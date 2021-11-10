@@ -19,6 +19,9 @@ module Map = struct
     val odup : ('a -> key) -> 'a list -> ('a * 'a) option
     val to_stream : 'a t -> (key * 'a) Stream.t
     val hash : (key -> int) -> ('a -> int) -> 'a t -> int
+
+    val find_fun     : (key -> 'a -> bool) -> 'a t -> 'a
+    val find_fun_opt : (key -> 'a -> bool) -> 'a t -> 'a option
   end
 
   module Make(O : OrderedType) : S with type key = O.t = struct
@@ -46,6 +49,20 @@ module Map = struct
               aout
       in
         Stream.from next
+
+    let find_fun (type a) (f : key -> a -> bool) (m : a t) : a =
+      let exception Found of a in
+      try
+        iter (fun k b -> if f k b then raise (Found b)) m;
+        raise Not_found
+      with Found b -> b
+
+    let find_fun_opt (type a) (f : key -> a -> bool) (m : a t) : a option =
+      let exception Found of a in
+      try
+        iter (fun k b -> if f k b then raise (Found b)) m;
+        None
+      with Found b -> Some b
 
     let hash (hk: key -> int) (hel: 'a -> int) (m : 'a t) : int =
       let bnd_hash (k, e) =

@@ -511,7 +511,7 @@ module ASyncWhile = struct
 
            in e_local idx fp.f_ty
 
-      | Fmodcost_proj _
+      | Fcost_proj    _
       | Fmodcost      _
       | Fcost         _
       | Fcoe          _

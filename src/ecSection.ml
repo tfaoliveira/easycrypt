@@ -202,7 +202,7 @@ and on_mpath_form cb (f : EcFol.form) =
     | EcFol.Fmodcost  mc           -> on_mpath_modcost cb mc
     | EcFol.Fglob     (mp, _)      -> cb mp
 
-    | EcFol.Fmodcost_proj (f,_,p)  -> cbrec f; on_mpath_modcost_proj cb p
+    | EcFol.Fcost_proj (f,p)       -> cbrec f; on_mpath_cost_proj cb p
 
     | EcFol.FhoareF   hf           -> on_mpath_hf  cb hf
     | EcFol.FhoareS   hs           -> on_mpath_hs  cb hs
@@ -296,10 +296,9 @@ and on_mpath_form cb (f : EcFol.form) =
         on_mpath_cost cb c;
       ) mc
 
-  and on_mpath_modcost_proj cb : EcFol.cost_proj -> unit = function
-    | Intr -> ()
-    | Param _ -> ()
-    (* TODO A: for Abs, need to apply cb on the ident. *)
+  and on_mpath_cost_proj cb : EcFol.cost_proj -> unit = function
+    | Conc | Intr _ | Param _ -> ()
+    | Abs (id, _) -> cb (EcPath.mident id)
   in
 
     on_mpath_ty cb f.EcFol.f_ty; fornode ()

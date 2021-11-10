@@ -30,12 +30,10 @@ type quantif =
 
 type hoarecmp = FHle | FHeq | FHge
 
-(* projection of a module cost *)
-type cost_proj = Intr | Param of EcIdent.t * symbol
-
-type cost_proj2 =
+(* projection of a cost record or module cost record *)
+type cost_proj =
   | Conc
-  | Abs   of EcIdent.t * symbol   (*  abstract module, procedure *)
+  | Abs   of EcIdent.t * symbol   (* abstract module, procedure *)
 
   | Intr  of symbol               (* procedure *)
   | Param of {
@@ -75,13 +73,11 @@ and f_node =
   | Ftuple  of form list
   | Fproj   of form * int
 
-  | Fcost         of cost
-  | Fmodcost      of mod_cost
-  | Fmodcost_proj of form * symbol * cost_proj
-  (* [Fmodcost_proj mod_cost proc p] projects [mod_cost] over
-     procedure [proc] and [p]:
-     - if [p = `Intr], intrinsic cost
-     - if [p = `Param (O, fo)], number of calls to the module parameter [O.fo]. *)
+  | Fcost      of cost
+  | Fmodcost   of mod_cost
+  | Fcost_proj of form * cost_proj
+  (* [Fmodcost_proj mod_cost p] projects [mod_cost] over
+     procedure [proc] and [p]. *)
 
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
@@ -297,8 +293,7 @@ val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
 
 val f_mod_cost_r : mod_cost -> form
 
-val f_mod_cost_proj_r : form -> symbol -> cost_proj -> form
-val f_cost_proj_r : form -> cost_proj2 -> form
+val f_cost_proj_r : form -> cost_proj -> form
 
 (* soft-constructors - hoare *)
 val f_hoareF_r : sHoareF -> form
@@ -468,11 +463,8 @@ module FSmart : sig
   val f_coe      : (form * coe      ) -> coe       -> form
   val f_pr       : (form * pr       ) -> pr        -> form
 
-  val f_mod_cost : (form * mod_cost * ty) -> (mod_cost * ty) -> form
-  val f_mod_cost_proj :
-    (form * form * EcSymbols.symbol * cost_proj) ->
-    (form * EcSymbols.symbol * cost_proj) ->
-    form
+  val f_mod_cost  : (form * mod_cost * ty   ) -> (mod_cost * ty   ) -> form
+  val f_cost_proj : (form * form * cost_proj) -> (form * cost_proj) -> form
 end
 
 (* -------------------------------------------------------------------- *)

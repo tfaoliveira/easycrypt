@@ -980,16 +980,20 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
     let xfn = EcPath.xpath mp_in_app fn in
 
     (* Cost of [fn] in [mt]. *)
-    let get_cost = f_mod_cost_proj_r cost fn in
+    let get_cost = f_cost_proj_r cost in
 
-    let c_self = get_cost Intr in (* type [tcost] *)
+    let c_self = get_cost (Intr fn) in (* type [tcost] *)
 
     (* for every module parameter [o] *)
     let c_calls : form Mx.t = List.fold_left (fun c_calls (_, (o, _, o_msig)) ->
         (* for every procedure [o_f] of [o] *)
         List.fold_left (fun c_calls (Tys_function o_f) ->
             let ofx = EcPath.xpath (EcPath.mident o) o_f.fs_name in
-            let id_proc_cost = get_cost (Param (o, o_f.fs_name)) in
+            let id_proc_cost =
+              get_cost (Param {proc = fn;
+                               param_m = EcIdent.name o;
+                               param_p = o_f.fs_name})
+            in
             Mx.add ofx id_proc_cost c_calls
           ) c_calls o_msig.mis_body
       ) Mx.empty s_params

@@ -206,7 +206,7 @@ and norm_lambda (st : state) (f : form) =
   | FbdHoareF _ | FbdHoareS _
   | FequivF _   | FequivS _
   | FeagerF   _ | Fpr _ | Fcoe _
-  | Fmodcost _ | Fmodcost_proj _
+  | Fmodcost _  | Fcost_proj _
     -> f
 
 (* -------------------------------------------------------------------- *)
@@ -480,20 +480,33 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
   | Fmodcost mc ->
     f_mod_cost_r (Msym.map (norm_cost st s) mc)
 
-  | Fmodcost_proj (f,fname,p) ->
+  | Fcost_proj (f,p) ->
     let f = norm st s f in
     begin
-      match f.f_node with
-      | Fmodcost mc ->
+      match f.f_node, p with
+      | Fcost c, Conc -> c.c_self
+
+      | Fcost c, Abs (id,f) ->
+        let xp = EcPath.xpath (EcPath.mident id) f in
+        let c_idf = EcPath.Mx.find_opt xp c.c_calls in
+        oget_c_bnd c_idf c.c_full
+
+      | Fmodcost mc, Intr fname ->
         let pcost = Msym.find fname mc in (* cannot fail *)
-        let cost = match p with
-          | Intr -> pcost.c_self
-          | Param (o, ofn) ->
-            let fxp = EcPath.xpath (EcPath.mident o) ofn in
-            oget_c_bnd (EcPath.Mx.find_opt fxp pcost.c_calls) pcost.c_full
+        pcost.c_self
+
+      | Fmodcost mc, Param {proc = fname; param_m; param_p } ->
+        let pcost = Msym.find fname mc in (* cannot fail *)
+
+        let c = EcPath.Mx.find_fun_opt (fun xp _ ->
+            EcIdent.name (EcPath.mget_ident xp.x_top) = param_m &&
+            xp.x_sub = param_p
+          ) pcost.c_calls
         in
-        cost
-      | _ -> f_mod_cost_proj_r f fname p
+
+        oget_c_bnd c pcost.c_full
+
+      | _ -> f_cost_proj_r f p
     end
 
   | FhoareF hf ->

@@ -324,7 +324,7 @@ module PV = struct
           proc_cost_fold (fun t fv -> aux env m fv t) t fv
         ) mc fv
 
-    | Fmodcost_proj (f, _, _) -> aux env m fv f
+    | Fcost_proj (f, _) -> aux env m fv f
 
     | Fcoe      _
     | FhoareF   _ | FhoareS   _

@@ -503,9 +503,8 @@ let is_alpha_eq hyps f1 f2 =
     | Fmodcost mc1, Fmodcost mc2 ->
       check_mod_cost aux env subst mc1 mc2
 
-    | Fmodcost_proj (c1,f1,p1), Fmodcost_proj (c2,f2,p2) ->
+    | Fcost_proj (c1,p1), Fcost_proj (c2,p2) ->
       aux env subst c1 c2;
-      ensure (f1 = f2);
       ensure (cost_proj_equal p1 p2)
 
     | FequivF ef1, FequivF ef2 ->
@@ -1369,8 +1368,8 @@ type head_sub =
                      procs : (EcSymbols.symbol * xpath list) list; }
   (* module cost *)
 
-  | Zhl_mod_cost_proj of { proc: EcSymbols.symbol;
-                           proj : cost_proj; }
+  (* | Zhl_mod_cost_proj of { proc: EcSymbols.symbol;
+   *                          proj : cost_proj; } *)
 
 type stk_elem = {
     se_h      : head_sub;
@@ -1405,8 +1404,8 @@ let zhl f fs1 fs2 stk         = zpush   (Zhl f) []   fs1   fs2 f.f_ty stk
 let zhl_crecord full calls fs1 fs2 ty stk : stk_elem list =
   zpush (Zhl_crecord {full; calls}) [] fs1 fs2 ty stk
 
-let zhl_mod_cost_proj proc proj ty stk : stk_elem list =
-  zpush (Zhl_mod_cost_proj {proc; proj}) [] [] [] ty stk
+(* let zhl_mod_cost_proj proc proj ty stk : stk_elem list =
+ *   zpush (Zhl_mod_cost_proj {proc; proj}) [] [] [] ty stk *)
 
 let zhl_mod_cost procs fs1 fs2 ty stk : stk_elem list =
   zpush (Zhl_modcost { typ = ty; procs; }) [] fs1 fs2 ty stk
@@ -1458,8 +1457,7 @@ let zpop ri side f hd =
   | Zhl_modcost x, _ ->
     assert false                (* TODO A: *)
 
-  | Zhl_mod_cost_proj {proc; proj;}, [c] ->
-    f_mod_cost_proj_r c proc proj
+  (* | Zhl_cost_proj {proc; proj;}, [c] -> *) (* TODO A: *)
 
   | _, _ -> assert false
 
@@ -1598,11 +1596,12 @@ let rec conv ri env f1 f2 stk : bool =
         conv ri env g1 g2 (zhl_mod_cost procs fs1 fs2 f1.f_ty stk)
     end
 
-  | Fmodcost_proj (c1,proc1,proj1),
-    Fmodcost_proj (c2,proc2,proj2)
-    when proc1 = proc2 && cost_proj_equal proj1 proj2 ->
-    conv ri env c1 c2
-      (zhl_mod_cost_proj proc1 proj1 f1.f_ty stk)
+  | Fcost_proj (c1,proj1),
+    Fcost_proj (c2,proj2)
+    when cost_proj_equal proj1 proj2 ->
+    assert false                (* TODO A: *)
+    (* conv ri env c1 c2
+     *   (zhl_mod_cost_proj proc1 proj1 f1.f_ty stk) *)
 
   | FequivF ef1, FequivF ef2
       when EqTest.for_xp env ef1.ef_fl ef2.ef_fl

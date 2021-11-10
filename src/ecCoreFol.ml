@@ -32,12 +32,10 @@ type quantif =
 
 type hoarecmp = FHle | FHeq | FHge
 
-(* projection of a module cost *)
-type cost_proj = Intr | Param of EcIdent.t * symbol
-
-type cost_proj2 =
+(* projection of a cost record or module cost record *)
+type cost_proj =
   | Conc
-  | Abs   of EcIdent.t * symbol   (*  abstract module, procedure *)
+  | Abs   of EcIdent.t * symbol   (* abstract module, procedure *)
 
   | Intr  of symbol               (* procedure *)
   | Param of {
@@ -75,14 +73,11 @@ and f_node =
   | Ftuple  of form list
   | Fproj   of form * int
 
-  | Fcost         of cost
-  | Fmodcost      of mod_cost
-  | Fmodcost_proj of form * symbol * cost_proj
-  (* [Fmodcost_proj mod_cost proc p] projects [mod_cost] over
-     procedure [proc] and [p]:
-     - if [p = `Intr], intrinsic cost
-     - if [p = `Param (O, fo)], number of calls to the module parameter [O.fo]. *)
-
+  | Fcost      of cost
+  | Fmodcost   of mod_cost
+  | Fcost_proj of form * cost_proj
+  (* [Fmodcost_proj mod_cost p] projects [mod_cost] over
+     procedure [proc] and [p]. *)
 
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
@@ -223,20 +218,35 @@ let qt_hash  : quantif -> int = Hashtbl.hash
 
 (*-------------------------------------------------------------------- *)
 let cost_proj_ty : cost_proj -> ty = function
-  | Intr    -> tcost
-  | Param _ -> tint
+  | Conc    -> txint
+  | Abs   _ -> txint
+  | Intr  _ -> tcost
+  | Param _ -> txint
 
 let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
   match p1, p2 with
-  | Intr, Intr -> true
-  | Param (id1, s1), Param (id2, s2) ->
+  | Conc, Conc -> true
+
+  | Abs (id1, s1), Abs (id2, s2) ->
     EcIdent.tag id1 = EcIdent.tag id2 && s1 = s2
+
+  | Intr s1, Intr s2 -> s1 = s2
+
+  | Param p1, Param p2 ->
+    p1.param_p = p2.param_p &&
+    p1.param_m = p2.param_m &&
+    p1.proc    = p2.proc
+
   | _ -> false
 
 let cost_proj_hash (p : cost_proj) : int =
   match p with
-  | Intr -> 0
-  | Param (id, s) -> Why3.Hashcons.combine (EcIdent.tag id) (Hashtbl.hash s)
+  | Conc        -> 0
+  | Abs (id, s) -> Why3.Hashcons.combine2 1 (EcIdent.tag id) (Hashtbl.hash s)
+  | Intr s      -> Why3.Hashcons.combine  2 (Hashtbl.hash s)
+
+  | Param { param_p; param_m; proc } ->
+    Why3.Hashcons.combine_list Hashtbl.hash 3 [param_p; param_m; proc]
 
 (*-------------------------------------------------------------------- *)
 let f_equal : form -> form -> bool = (==)
@@ -244,38 +254,6 @@ let f_compare f1 f2 = f2.f_tag - f1.f_tag
 let f_hash f = f.f_tag
 let f_fv f = f.f_fv
 let f_ty f = f.f_ty
-
-(*-------------------------------------------------------------------- *)
-(* let equal (a_equal : 'a -> 'a -> bool) (oi1 : 'a t) (oi2 : 'a t) : bool =
- *   let check_calls_eq calls1 calls2 =
- *     let exception Not_equal in
- *     try Mx.fold2_union (fun _ a b () -> match a, b with
- *         | Some a, Some b -> if a_equal a b then () else raise Not_equal
- *         | _ -> raise Not_equal
- *       ) calls1 calls2 (); true
- *     with Not_equal -> false
- *   in
- *
- *   let check_r_cost_eq (r1 : 'a r_cost) (r2 : 'a r_cost) : bool =
- *     a_equal r1.r_self r2.r_self &&
- *     r1.r_full = r2.r_full &&
- *     check_calls_eq r1.r_params r2.r_params &&
- *     check_calls_eq r1.r_abs_calls r2.r_abs_calls
- *   in
- *
- *   check_r_cost_eq oi1.oi_costs oi2.oi_costs
- *
- * let hash (ahash : 'a -> int) oi : int =
- *   let r_cost_hash (r : 'a r_cost) : int =
- *     Why3.Hashcons.combine
- *       (ahash r.r_self)
- *       (Why3.Hashcons.combine_list
- *          (Why3.Hashcons.combine_pair EcPath.x_hash ahash)
- *          (if r.r_full then 0 else 1)
- *          (Mx.bindings r.r_params @ Mx.bindings r.r_abs_calls))
- *   in
- *
- *   r_cost_hash oi.oi_costs *)
 
 (*-------------------------------------------------------------------- *)
 let mty_equal : module_type -> module_type -> bool =
@@ -597,9 +575,9 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fcost       c1  , Fcost       c2   -> cost_equal c1 c2
     | Fmodcost    mc1 , Fmodcost    mc2  -> mod_cost_equal mc1 mc2
 
-    | Fmodcost_proj (c1,proc1,proj1),
-      Fmodcost_proj (c2,proc2,proj2) ->
-      f_equal c1 c2 && proc1 = proc2 && cost_proj_equal proj1 proj2
+    | Fcost_proj (c1,proj1),
+      Fcost_proj (c2,proj2) ->
+      f_equal c1 c2 && cost_proj_equal proj1 proj2
 
     | _, _ -> false
 
@@ -647,11 +625,8 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fcost c     -> cost_hash      c
     | Fmodcost mc -> mod_cost_hash mc
 
-    | Fmodcost_proj (f, proc, proj) ->
-        Why3.Hashcons.combine2
-        (f_hash f)
-        (Hashtbl.hash proc)
-        (cost_proj_hash proj)
+    | Fcost_proj (f, proj) ->
+      Why3.Hashcons.combine (f_hash f) (cost_proj_hash proj)
 
     | FhoareF  hf   -> hf_hash hf
     | FhoareS  hs   -> hs_hash hs
@@ -702,10 +677,10 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fcost c             -> cost_fv c
     | Fmodcost mc         -> mod_cost_fv mc
 
-    | Fmodcost_proj (f, _, proj) ->
+    | Fcost_proj (f, proj) ->
       let fv_proj = match proj with
-        | Intr          -> Mid.empty
-        | Param (id, _) -> Mid.singleton id 1
+        | Param _ | Conc | Intr _ -> Mid.empty
+        | Abs (id, _)             -> Mid.singleton id 1
       in
       fv_union (f_fv f) fv_proj
 
@@ -979,13 +954,9 @@ let f_mod_cost_r (mc : mod_cost) : form =
   mk_form (Fmodcost mc) ty
 
 (* -------------------------------------------------------------------- *)
-let f_mod_cost_proj_r (mc : form) (f : symbol) (p : cost_proj) : form =
+let f_cost_proj_r (mc : form) (p : cost_proj) : form =
   let ty = cost_proj_ty p in
-  mk_form (Fmodcost_proj (mc, f, p)) ty
-
-(* -------------------------------------------------------------------- *)
-let f_cost_proj_r (mc : form) (p : cost_proj2) : form =
-  assert false                  (* TODO A: *)
+  mk_form (Fcost_proj (mc, p)) ty
 
 (* -------------------------------------------------------------------- *)
 let f_hoareS_r hs = mk_form (FhoareS hs) tbool
@@ -1312,10 +1283,10 @@ module FSmart = struct
   let f_mod_cost (fmc, mc, ty) (mc', ty') =
     if mod_cost_equal mc mc' && ty == ty' then fmc else _f_mod_cost_r mc' ty'
 
-  let f_mod_cost_proj (fp, c, f, p) (c', f', p') =
-    if f_equal c c' && f = f' && cost_proj_equal p p'
+  let f_cost_proj (fp, c, p) (c', p') =
+    if f_equal c c' && cost_proj_equal p p'
     then fp
-    else f_mod_cost_proj_r c' f' p'
+    else f_cost_proj_r c' p'
 
   let f_equivF (fp, ef) ef' =
     if eqf_equal ef ef' then fp else mk_form (FequivF ef') fp.f_ty
@@ -1450,8 +1421,8 @@ let f_map gt g fp =
     let ty' = gt fp.f_ty in
     FSmart.f_mod_cost (fp, mc, fp.f_ty) (mod_cost_map g mc, ty')
 
-  | Fmodcost_proj (c,f,p) ->
-    FSmart.f_mod_cost_proj (fp, c, f, p) (g c, f, p)
+  | Fcost_proj (c,p) ->
+    FSmart.f_cost_proj (fp, c, p) (g c, p)
 
   | FhoareF hf ->
       let pr' = g hf.hf_pr in
@@ -1539,9 +1510,9 @@ let f_iter g f =
   | Ftuple   es           -> List.iter g es
   | Fproj    (e, _)       -> g e
 
-  | Fcost         c        -> cost_iter g c
-  | Fmodcost      mc       -> mod_cost_iter g mc
-  | Fmodcost_proj (mc,_,_) -> g mc
+  | Fcost      c     -> cost_iter g c
+  | Fmodcost   mc    -> mod_cost_iter g mc
+  | Fcost_proj (f,_) -> g f
 
   | FhoareF  hf  -> g hf.hf_pr; g hf.hf_po
   | FhoareS  hs  -> g hs.hs_pr; g hs.hs_po
@@ -1920,7 +1891,7 @@ let expr_of_form mh f =
 
     | Fcost         _
     | Fmodcost      _
-    | Fmodcost_proj _
+    | Fcost_proj    _
     | Fcoe          _
     | Fglob         _
     | FhoareF       _ | FhoareS   _
@@ -2485,7 +2456,7 @@ module Fsubst = struct
             let xf = EcPath.xpath mp f in
 
             (* the *intrinsic* cost of [f], of type [cost] *)
-            let f_cost : form = f_mod_cost_proj_r minfo f Intr in
+            let f_cost : form = f_cost_proj_r minfo (Intr f) in
 
             (* times the number of times [f] has been called in [init_cost] *)
             let f_called : form = (* of type `xint` *)

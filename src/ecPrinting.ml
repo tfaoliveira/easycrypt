@@ -1668,7 +1668,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
   | Fmodcost mc1 ->
     assert false            (* TODO A: *)
 
-  | Fmodcost_proj _ ->
+  | Fcost_proj _ ->
     assert false            (* TODO A: *)
 
   | FcHoareF chf ->

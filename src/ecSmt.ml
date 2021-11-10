@@ -717,14 +717,14 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
 
   | Fpr pr        -> trans_pr env pr
 
-  | Fcoe      _
-  | Fcost     _ | Fmodcost  _
-  | Fmodcost_proj _
-  | FeagerF   _
-  | FhoareF   _ | FhoareS   _
-  | FcHoareF  _ | FcHoareS  _
-  | FbdHoareF _ | FbdHoareS _
-  | FequivF   _ | FequivS   _
+  | Fcoe       _
+  | Fcost      _ | Fmodcost  _
+  | Fcost_proj _
+  | FeagerF    _
+  | FhoareF    _ | FhoareS   _
+  | FcHoareF   _ | FcHoareS  _
+  | FbdHoareF  _ | FbdHoareS _
+  | FequivF    _ | FequivS   _
     -> trans_gen env fp
 
 and trans_form_b env f = Cast.force_bool (trans_form env f)
@@ -1408,11 +1408,11 @@ module Frequency = struct
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
 
-      | Fmodcost  _ | Fmodcost_proj _
-      | FhoareF   _ | FhoareS   _
-      | FcHoareF  _ | FcHoareS  _
-      | FbdHoareF _ | FbdHoareS _
-      | FequivF   _ | FequivS   _
+      | Fmodcost  _ | Fcost_proj _
+      | FhoareF   _ | FhoareS    _
+      | FcHoareF  _ | FcHoareS   _
+      | FbdHoareF _ | FbdHoareS  _
+      | FequivF   _ | FequivS    _
       | FeagerF   _
       | Fcoe      _
       | Fcost     _ -> ()

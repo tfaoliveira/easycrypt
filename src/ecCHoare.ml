@@ -21,7 +21,7 @@ let oget_c_bnd = EcCoreFol.oget_c_bnd
 (* -------------------------------------------------------------------- *)
 let cost_orcl (proc : symbol) (o : xpath) (mc : form) : form =
   let mo, mf = mget_ident o.x_top, o.x_sub in
-  f_mod_cost_proj_r mc proc (Param (mo, mf))
+  f_cost_proj_r mc (Param {proc; param_m = EcIdent.name mo; param_p = mf})
 
 (* -------------------------------------------------------------------- *)
 type csub_res = { cond : form; res : form; }
