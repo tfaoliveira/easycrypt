@@ -30,8 +30,8 @@ and ty_node =
   | Tconstr  of EcPath.path * ty list
   | Tfun     of ty * ty
   | Tmodcost of {
-      procs   : bool Msym.t;  (* procedures (boolean: is the proc cost open) *)
-      oracles : Ssym.t Mid.t; (* oracles to their procedures *)
+      procs   : bool Msym.t;   (* procedures (boolean: is the proc cost open) *)
+      oracles : Ssym.t Msym.t; (* oracles to their procedures *)
     }
 
 type dom = ty list
@@ -64,8 +64,8 @@ module Hsty = Why3.Hashcons.Make (struct
 
     | Tmodcost { procs = procs1; oracles = params1; },
       Tmodcost { procs = procs2; oracles = params2; } ->
-      EcSymbols.Msym.equal (=) procs1 procs2
-      && Mid.equal EcSymbols.Ssym.equal params1 params2
+      Msym.equal (=) procs1 procs2
+      && Msym.equal Ssym.equal params1 params2
 
     | _, _ -> false
 
@@ -79,21 +79,21 @@ module Hsty = Why3.Hashcons.Make (struct
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
     | Tmodcost { procs; oracles; } ->
       Why3.Hashcons.combine
-        (EcSymbols.Msym.hash Hashtbl.hash Hashtbl.hash procs)
-        (EcIdent.Mid.hash EcIdent.tag Hashtbl.hash oracles)
+        (Msym.hash Hashtbl.hash Hashtbl.hash procs)
+        (Msym.hash Hashtbl.hash Hashtbl.hash oracles)
 
   let fv ty =
     let union ex =
       List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty in
 
     match ty with
-    | Tglob m              -> EcPath.m_fv Mid.empty m
-    | Tunivar _            -> Mid.empty
-    | Tvar    _            -> Mid.empty
-    | Ttuple  tys          -> union (fun a -> a.ty_fv) tys
-    | Tconstr (_, tys)     -> union (fun a -> a.ty_fv) tys
-    | Tfun    (t1, t2)     -> union (fun a -> a.ty_fv) [t1; t2]
-    | Tmodcost { oracles } -> EcIdent.Mid.map (fun _ -> 1) oracles
+    | Tglob m          -> EcPath.m_fv Mid.empty m
+    | Tunivar _        -> Mid.empty
+    | Tvar    _        -> Mid.empty
+    | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
+    | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
+    | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
+    | Tmodcost _       -> Mid.empty
 
   let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
 end)
@@ -150,9 +150,9 @@ let rec dump_ty ty =
       (Format.pp_print_list
          (fun fmt (id, idparams) ->
             Format.fprintf fmt "[%s: %a]"
-              (EcIdent.tostring id)
+              id
               pp_set idparams))
-      (Mid.bindings oracles)
+      (Msym.bindings oracles)
 
 
 (* -------------------------------------------------------------------- *)

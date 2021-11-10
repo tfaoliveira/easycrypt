@@ -105,7 +105,7 @@
         piota  = true; peta   = true;
         plogic = true; pdelta = None;
         pmodpath = true; puser = true;
-	pcost = false; }
+	      pcost = false; }
     else
       let doarg acc = function
         | `Delta l ->
@@ -119,8 +119,8 @@
         | `Eta     -> { acc with peta     = true }
         | `Logic   -> { acc with plogic   = true }
         | `ModPath -> { acc with pmodpath = true }
+        | `Cost    -> { acc with pcost    = true }
         | `User    -> { acc with puser    = true }
-	| `Cost    -> { acc with pcost    = true }
       in
         List.fold_left doarg
           { pbeta  = false; pzeta  = false;
@@ -1095,7 +1095,7 @@ sc_ptybindings_decl:
 %inline none: IMPOSSIBLE { assert false }
 
 cost_elc(P):
-| TICKUNDERSCORE  { `Unbounded }
+| DOTDOT          { `Unbounded }
 | c=form_r(P)     { `Bounded c }
 
 cost_self(P):
@@ -1113,9 +1113,9 @@ orcl_time(P):
 | c=cost_calls(P,COMMA)                        { `Unbounded,c }
 
 cost_body(P):
-| UNDERSCORE                                 { (`Unbounded, []), false }
-| c=cost_body_non_empty(P) COMMA UNDERSCORE  { c, false } 
-| c=cost_body_non_empty(P)                   { c, true } 
+| DOTDOT                                 { (`Unbounded, []), false }
+| c=cost_body_non_empty(P) COMMA DOTDOT  { c, false } 
+| c=cost_body_non_empty(P)               { c, true } 
 
 
 costs(P):
@@ -1439,6 +1439,13 @@ pgtybindings:
 (* -------------------------------------------------------------------- *)
 (* Type expressions                                                     *)
 
+pty_oracle_el:
+| m=uident DOT f=lident { m, f }
+
+pty_proc_el:
+| f=lident        { f, `Closed }
+| f=lident DOTDOT { f, `Open }
+
 simpl_type_exp:
 | UNDERSCORE                  { PTunivar       }
 | x=qident                    { PTnamed x      }
@@ -1446,7 +1453,13 @@ simpl_type_exp:
 | tya=type_args x=qident      { PTapp (x, tya) }
 | GLOB m=loc(mod_qident)      { PTglob m       }
 | LPAREN ty=type_exp RPAREN   { ty             }
+
+/* special rule, because COST is a reserved key-word */
 | COST                        { PTcost         }
+
+| TICKLBRACKET procs=rlist0(pty_proc_el, COMMA) SHARP 
+               oracles=rlist0(pty_oracle_el, empty) RBRACKET 
+                              { PTmodcost (procs,oracles) }
 
 type_args:
 | ty=loc(simpl_type_exp)                          { [ty] }
@@ -1861,6 +1874,10 @@ rec_field_def:
 typedecl:
 | TYPE td=rlist1(tyd_name, COMMA)
     { List.map (mk_tydecl^~ (PTYD_Abstract [])) td }
+
+/* special rule, because COST is a reserved key-word */
+| TYPE l=loc(COST)
+    { [mk_tydecl ([], mk_loc l.pl_loc ("cost")) (PTYD_Abstract [])] }
 
 | TYPE td=tyd_name LTCOLON tcs=rlist1(qident, COMMA)
     { [mk_tydecl td (PTYD_Abstract tcs)] }
@@ -2681,7 +2698,7 @@ simplify_arg:
 | ETA              { `Eta }
 | LOGIC            { `Logic }
 | MODPATH          { `ModPath }
-| COST             { `ModPath }
+| COST             { `Cost }
 
 simplify:
 | l=simplify_arg+     { l }

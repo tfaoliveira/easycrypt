@@ -1,4 +1,4 @@
-require import CoreXint Int.
+require export CoreXint Int.
 
 (* -------------------------------------------------------------------- *)
 abbrev ('0) = N 0.

@@ -440,6 +440,25 @@ let pp_tyname ppe fmt p =
   Format.fprintf fmt "%a" EcSymbols.pp_qsymbol (PPEnv.ty_symb ppe p)
 
 (* -------------------------------------------------------------------- *)
+let pp_tymodcost fmt procs oracles =
+  let pp_proc_el fmt (p,bopen) =
+    Format.fprintf fmt "%s%s" p (if bopen then ".." else "")
+  in
+  let pp_oracles fmt orcl =
+    Format.fprintf fmt "%a"
+      (pp_list " " (fun fmt (o, o_f) -> Format.fprintf fmt "%s.%s" o o_f))
+      orcl
+  in
+  let oracles =
+    List.concat_map (fun (o, fs) ->
+        List.map (fun x -> o, x) (Ssym.elements fs)
+      ) (Msym.bindings oracles)
+  in
+  Format.fprintf fmt "`[%a # %a]"
+    (pp_list ",@ " pp_proc_el) (Msym.bindings procs)
+    pp_oracles oracles
+
+(* -------------------------------------------------------------------- *)
 let pp_tcname ppe fmt p =
   Format.fprintf fmt "%a" EcSymbols.pp_qsymbol (PPEnv.tc_symb ppe p)
 
@@ -657,7 +676,8 @@ let rec pp_type_r ppe outer fmt ty =
 
   | Tunivar x  -> pp_tyunivar ppe fmt x
   | Tvar    x  -> pp_tyvar ppe fmt x
-  | Tmodcost _ ->             assert false            (* TODO A: *)
+
+  | Tmodcost mc -> pp_tymodcost fmt mc.procs mc.oracles
 
   | Ttuple tys ->
       let pp fmt tys =
@@ -1219,6 +1239,13 @@ let string_of_hcmp = function
   | FHeq -> "="
   | FHge -> ">="
 
+let pp_cost_proj fmt (p : cost_proj) =
+  match p with
+  | Conc       -> Format.fprintf fmt "conc"
+  | Abs (id,f) -> Format.fprintf fmt "%a.%s" EcIdent.pp_ident id f
+  | Intr  f    -> Format.fprintf fmt "%s.self" f
+  | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
+
 (* -------------------------------------------------------------------- *)
 let string_of_cpos1 ((off, cp) : EcParsetree.codepos1) =
   let s =
@@ -1611,7 +1638,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         pp_proji ppe pp_form_r (fst outer) fmt (e1,i)
     end
 
-  | Fcost c -> pp_cost ppe fmt c
+  | Fcost c -> pp_crecord ppe fmt c
 
   | FhoareF hf ->
       let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.hf_f ppe.PPEnv.ppe_env in
@@ -1664,12 +1691,10 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_form ppepr) eg.eg_pr
         (pp_form ppepo) eg.eg_po
 
+  | Fmodcost mc -> pp_modcost ppe fmt mc
 
-  | Fmodcost mc1 ->
-    assert false            (* TODO A: *)
-
-  | Fcost_proj _ ->
-    assert false            (* TODO A: *)
+  | Fcost_proj (f,p) ->
+    Format.fprintf fmt "%a#%a" (pp_form ppe) f pp_cost_proj p
 
   | FcHoareF chf ->
     let mepr, mepo = EcEnv.Fun.hoareF_memenv chf.chf_f ppe.PPEnv.ppe_env in
@@ -1777,7 +1802,7 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 (* -------------------------------------------------------------------- *)
-and _pp_cost ppe fmt
+and _pp_crecord ppe fmt
     ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
   =
   let pp_self fmt self =
@@ -1795,64 +1820,85 @@ and _pp_cost ppe fmt
   (* Format.fprintf fmt "%a : `_"
    *   (pp_funname ppe) f *)
 
-  and pp_full fmt = if not full then Format.fprintf fmt "_" in
+  and pp_full fmt = if not full then Format.fprintf fmt ".." in
 
-  Format.fprintf fmt "@[<hv 1>[%a%t%a%t%t]@]"
+  Format.fprintf fmt "@[<hv 1>`[%a%t%a%t%t]@]"
     pp_self self
     (fun fmt -> if calls <> [] then Format.fprintf fmt ",@ ")
     (pp_list ",@ " pp_call_el) calls
     (fun fmt -> if not full then Format.fprintf fmt ",@ ")
     pp_full
 
-and pp_cost ppe fmt (c : cost) =
-  _pp_cost ppe fmt
+and pp_crecord ppe fmt (c : crecord) =
+  _pp_crecord ppe fmt
     (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
+
+and pp_cost ppe fmt c = pp_crecord ppe fmt c
+
+and pp_modcost ppe fmt (mc : mod_cost) =
+  let pp_elt fmt (f, proc_cost) =
+    Format.fprintf fmt "@[%s : %a@]"
+      f (pp_crecord ppe) proc_cost
+  in
+
+  let elts = Msym.bindings mc in
+  Format.fprintf fmt "@[<hv 1>`[%a]@]"
+    (pp_list ",@ " pp_elt) elts
 
 (* -------------------------------------------------------------------- *)
 
-(* and pp_allowed_orcl ppe fmt orcls =
- *   if orcls = [] then Format.fprintf fmt ""
- *   else
- *     Format.fprintf fmt "{@[<hov>%a@]}@ "
- *       (pp_list ",@ " (pp_funname ppe)) orcls
- *
- * and has_cost_restr (c : c_bnd r_cost) =
- *   c.r_self <> C_unbounded ||
- *   EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_abs_calls ||
- *   EcPath.Mx.exists (fun _ x -> x <> C_unbounded) c.r_params ||
- *   c.r_full *)
+and pp_allowed_orcl ppe fmt orcls =
+  if orcls = [] then Format.fprintf fmt ""
+  else
+    Format.fprintf fmt "{@[<hov>%a@]}@ "
+      (pp_list ",@ " (pp_funname ppe)) orcls
 
-and pp_orclinfo_bare ppe fmt oi =
-  assert false            (* TODO A: *)
-  (* let orcls = OI.allowed oi
-   * and r_cost = OI.cost oi in
-   * Format.fprintf fmt "%a%a"
-   *   (pp_allowed_orcl ppe) orcls
-   *   (pp_r_cost ppe) r_cost *)
+and pp_orclinfo_bare ppe fmt (oi,o_cost) =
+  let pp_ocost fmt = function
+    | `Crecord c      -> pp_crecord ppe fmt c
+    | `Proj (mc, sym) -> Format.fprintf fmt "%a#%s" (pp_form ppe) mc sym
+  in
 
-(* and pp_orclinfo ppe fmt (sym, oi) =
- *   Format.fprintf fmt "@[<hv>%s%a : %a@]"
- *     (if OI.is_in oi then "" else " *")
- *     pp_symbol sym
- *     (pp_orclinfo_bare ppe) oi *)
+  let orcls = allowed oi in
+  Format.fprintf fmt "%a%a"
+    (pp_allowed_orcl ppe) orcls
+    pp_ocost o_cost
 
-and pp_orclinfos ppe fmt ois =
-      assert false            (* TODO A: *)
-  (* (\* if there are no oracle restrictions, we do not print anything *\)
-   * let orcl_infos =
-   *   List.filter_map (fun (sym, oi) ->
-   *       let orcls = OI.allowed oi
-   *       and cost = OI.cost oi in
-   *       if not (has_cost_restr cost) && orcls = [] && OI.is_in oi
-   *       then None
-   *       else Some (sym, oi)
-   *     ) (Msym.bindings ois)
-   * in
-   * if orcl_infos = [] then
-   *   Format.fprintf fmt ""
-   * else
-   * Format.fprintf fmt "[@[<hv>%a@]]"
-   *   (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos *)
+and pp_orclinfo ppe fmt (sym, oi, o_cost) =
+  Format.fprintf fmt "@[<hv>%s%a : %a@]"
+    (if is_in oi then "" else " *")
+    pp_symbol sym
+    (pp_orclinfo_bare ppe) (oi, o_cost)
+
+ (* Try to decompose [mc].[proc] as a cost record.
+    Leave a pending projection if it can't. *)
+and modcost_info
+    (proc : symbol)
+    (mc   : form) : [`Crecord of crecord | `Proj of form * symbol]
+  =
+  if is_modcost mc then
+    let modcost = destr_modcost mc in
+    `Crecord (Msym.find proc modcost)
+  else `Proj (mc, proc)
+
+and pp_orclinfos ppe fmt (ois, cost) =
+  (* if there are no oracle restrictions, we do not print anything *)
+  let orcl_infos =
+    List.filter_map (fun (sym, oi) ->
+        let orcls = allowed oi in
+        if (f_modcost_proc_has_restr cost sym) = `Known false &&
+           orcls = [] && is_in oi
+        then None
+        else
+          let o_cost = modcost_info sym cost in
+          Some (sym, oi, o_cost)
+      ) (Msym.bindings ois)
+  in
+  if orcl_infos = [] then
+    Format.fprintf fmt ""
+  else
+  Format.fprintf fmt "[@[<hv>%a@]]"
+    (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos
 
 (* -------------------------------------------------------------------- *)
 and pp_mem_restr ppe fmt mr =
@@ -1898,10 +1944,9 @@ and pp_mem_restr ppe fmt mr =
 (* -------------------------------------------------------------------- *)
 (* Use in an hv box. *)
 and pp_restr ppe fmt mr =
-  assert false            (* TODO A: *)
-  (* Format.fprintf fmt "%a%a"
-   *   (pp_mem_restr ppe) mr
-   *   (pp_orclinfos ppe) mr.mr_oinfos *)
+  Format.fprintf fmt "%a%a"
+    (pp_mem_restr ppe) mr
+    (pp_orclinfos ppe) (mr.mr_params, mr.mr_cost)
 
 (* -------------------------------------------------------------------- *)
 and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
@@ -3035,32 +3080,34 @@ let pp_funsig ppe fmt fs =
       (pp_list ", " (pp_pvdecl ppe)) params
       (pp_type ppe) fs.fs_ret
 
-let pp_sigitem moi_opt ppe fmt (Tys_function fs) =
+let pp_sigitem restrinfo_opt ppe fmt (Tys_function fs) =
   Format.fprintf fmt "@[<hov 2>%a@ %t@]"
     (pp_funsig ppe) fs
-    (fun fmt -> match moi_opt with
+    (fun fmt -> match restrinfo_opt with
        | None ->
          Format.fprintf fmt ""
-       | Some moi ->
-         let oi = Msym.find fs.fs_name moi in
-         pp_orclinfo_bare ppe fmt oi)
+       | Some (oi_params, modcost) ->
+         let param = Msym.find fs.fs_name oi_params in
+         let o_cost = modcost_info fs.fs_name modcost in
+         pp_orclinfo_bare ppe fmt (param, o_cost))
 
 let pp_modsig ?(long=false) ppe fmt (p,ms) =
-  assert false            (* TODO A: *)
-  (* let (ppe,pp) = pp_mod_params ppe ms.mis_params in
-   *
-   * let pp_long fmt p =
-   *   if long then
-   *     let qs = EcPath.toqsymbol p in
-   *     if fst qs <> [] then
-   *       Format.fprintf fmt "(\* %a *\)@ " EcSymbols.pp_qsymbol qs in
-   *
-   * Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t @,%a@;<0 -2>@] = \
-   *                     {@,  @[<v>%a@]@,}@]"
-   *   pp_long p
-   *   (EcPath.basename p) pp
-   *   (pp_mem_restr ppe) ms.mis_restr
-   *   (pp_list "@,@," (pp_sigitem (Some ms.mis_restr.mr_oinfos) ppe)) ms.mis_body *)
+  let (ppe,pp) = pp_mod_params ppe ms.mis_params in
+
+  let pp_long fmt p =
+    if long then
+      let qs = EcPath.toqsymbol p in
+      if fst qs <> [] then
+        Format.fprintf fmt "(* %a *)@ " EcSymbols.pp_qsymbol qs
+  in
+  Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t @,%a@;<0 -2>@] = \
+                      {@,  @[<v>%a@]@,}@]"
+    pp_long p
+    (EcPath.basename p) pp
+    (pp_mem_restr ppe) ms.mis_restr
+    (pp_list "@,@,"
+       (pp_sigitem (Some (ms.mis_restr.mr_params, ms.mis_restr.mr_cost)) ppe)
+    ) ms.mis_body
 
 (* Printing of a module signature with no restrictions. *)
 let pp_modsig_smpl ppe fmt (p,ms) =

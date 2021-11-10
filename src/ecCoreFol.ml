@@ -936,15 +936,15 @@ let mod_cost_ty (mc : mod_cost) : EcTypes.ty =
         let oracles =
           EcPath.Mx.fold (fun id _ oracles ->
               let idtop, idsub = EcPath.mget_ident id.x_top, id.x_sub in
-              EcIdent.Mid.change (function
+              Msym.change (function
                   | None   -> Some (Ssym.singleton idsub)
                   | Some s -> Some (Ssym.add idsub s)
-                ) idtop oracles
+                ) (EcIdent.name idtop) oracles
             ) proc_cost.c_calls oracles
         in
         let procs = Msym.add f proc_cost.c_full procs in
         procs, oracles
-      ) mc (Msym.empty, Mid.empty)
+      ) mc (Msym.empty, Msym.empty)
   in
   EcTypes.tmodcost procs oracles
 
@@ -1636,6 +1636,16 @@ let destr_coe f =
   | Fcoe coe -> coe
   | _ -> destr_error "coe"
 
+let destr_cost f =
+  match f.f_node with
+  | Fcost c -> c
+  | _ -> destr_error "cost"
+
+let destr_modcost f =
+  match f.f_node with
+  | Fmodcost mc -> mc
+  | _ -> destr_error "modcost"
+
 let destr_pr f =
   match f.f_node with
   | Fpr pr -> pr
@@ -1760,6 +1770,7 @@ let is_from_destr dt f =
 
 let is_true      f = f_equal f f_true
 let is_false     f = f_equal f f_false
+let is_inf       f = f_equal f f_Inf
 let is_tuple     f = is_from_destr destr_tuple     f
 let is_op        f = is_from_destr destr_op        f
 let is_local     f = is_from_destr destr_local     f
@@ -1785,6 +1796,8 @@ let is_cHoareF   f = is_from_destr destr_cHoareF   f
 let is_bdHoareS  f = is_from_destr destr_bdHoareS  f
 let is_bdHoareF  f = is_from_destr destr_bdHoareF  f
 let is_coe       f = is_from_destr destr_coe       f
+let is_cost      f = is_from_destr destr_cost      f
+let is_modcost   f = is_from_destr destr_modcost   f
 let is_pr        f = is_from_destr destr_pr        f
 let is_eq_or_iff f = (is_eq f) || (is_iff f)
 

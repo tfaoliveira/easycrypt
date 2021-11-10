@@ -517,6 +517,8 @@ val destr_cHoareS   : form -> cHoareS
 val destr_bdHoareF  : form -> bdHoareF
 val destr_bdHoareS  : form -> bdHoareS
 val destr_coe       : form -> coe
+val destr_cost      : form -> cost
+val destr_modcost   : form -> mod_cost
 val destr_pr        : form -> pr
 val destr_programS  : [`Left | `Right] option -> form -> memenv * stmt
 val destr_int       : form -> zint
@@ -527,6 +529,7 @@ val destr_pvar      : form -> EcTypes.prog_var * memory
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool
 val is_false     : form -> bool
+val is_inf       : form -> bool
 val is_tuple     : form -> bool
 val is_not       : form -> bool
 val is_and       : form -> bool
@@ -552,6 +555,8 @@ val is_cHoareS   : form -> bool
 val is_bdHoareF  : form -> bool
 val is_bdHoareS  : form -> bool
 val is_coe       : form -> bool
+val is_cost      : form -> bool
+val is_modcost   : form -> bool
 val is_pr        : form -> bool
 val is_eq_or_iff : form -> bool
 

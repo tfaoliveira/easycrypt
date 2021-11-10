@@ -53,6 +53,8 @@ type pty_r =
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
   | PTcost
+  | PTmodcost of (psymbol * [`Closed | `Open]) list * (psymbol * psymbol) list
+
 and pty = pty_r located
 
 type ptyannot_r =

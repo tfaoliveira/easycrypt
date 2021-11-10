@@ -8,6 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 open EcCoreFol
+open EcSymbols
 
 (* -------------------------------------------------------------------- *)
 include module type of struct include EcCoreModules end
@@ -39,7 +40,12 @@ val mr_add_restr :
 (* val add_oinfo : mod_restr -> string -> oi_params -> cost -> mod_restr *)
 (* val change_oicalls : mod_restr -> string -> xpath list -> mod_restr *)
 
-val has_compl_restriction : mod_restr -> bool
+val cost_has_restr      : cost     -> bool
+val modcost_has_restr   : mod_cost -> bool
+
+val f_cost_has_restr         : form ->           [`Known of bool | `Unknown]
+val f_modcost_has_restr      : form ->           [`Known of bool | `Unknown]
+val f_modcost_proc_has_restr : form -> symbol -> [`Known of bool | `Unknown]
 
 (* -------------------------------------------------------------------- *)
 val mty_equal : module_type -> module_type -> bool

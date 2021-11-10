@@ -35,14 +35,14 @@ let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;
   mr_params = Msym.empty;
-  mr_cost   = assert false;     (* TODO A: empty cost record *)
+  mr_cost   = f_cost_zero;
 }
 
 let mr_full = {
   mr_xpaths = ur_full EcPath.Sx.empty;
   mr_mpaths = ur_full EcPath.Sm.empty;
   mr_params = Msym.empty;
-  mr_cost   = assert false;     (* TODO A: empty cost record *)
+  mr_cost   = f_cost_zero;
 }
 
 let mr_add_restr
@@ -69,15 +69,33 @@ let mr_add_restr
  *   in
  *   { restr with mr_params = oi_params; } *)
 
-let has_compl_restriction (mr : mod_restr) : bool =
-      assert false            (* TODO A: *)
-  (* Msym.exists (fun _ oi ->
-   *     let c = PreOI.cost oi in
-   *     c.r_self <> C_unbounded ||
-   *     Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_params ||
-   *     Mx.exists (fun _ bnd -> bnd <> C_unbounded) c.r_abs_calls ||
-   *     c.r_full
-   *   ) mr.mr_oinfos *)
+(* -------------------------------------------------------------------- *)
+let cost_has_restr (c : cost) : bool =
+  not (is_inf c.c_self) ||
+  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  c.c_full
+
+let f_cost_has_restr (c : form) =
+  if is_modcost c then
+    let c = destr_cost c in
+    `Known (cost_has_restr c)
+  else `Unknown
+
+let modcost_has_restr (mc : mod_cost) : bool =
+  Msym.exists (fun _ proc_c -> cost_has_restr proc_c) mc
+
+let f_modcost_has_restr (mc : form) =
+  if is_modcost mc then
+    let mc = destr_modcost mc in
+    `Known (modcost_has_restr mc)
+  else `Unknown
+
+let f_modcost_proc_has_restr (mc : form) proc =
+  if is_modcost mc then
+    let mc = destr_modcost mc in
+    let p = Msym.find proc mc in
+    `Known (cost_has_restr p)
+  else `Unknown
 
 (* -------------------------------------------------------------------- *)
 let mty_hash  = EcCoreFol.mty_hash

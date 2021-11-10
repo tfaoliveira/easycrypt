@@ -123,8 +123,8 @@ module CI_Xint = struct
   let mk_Xint = _Xint
 
   let p_xint   = _CoreXint "xint"
-  let p_N      = mk_Xint "N"
-  let p_inf    = mk_Xint "Inf"
+  let p_N      = _CoreXint "N"
+  let p_inf    = _CoreXint "Inf"
   let p_xopp   = mk_Xint "xopp"
   let p_xadd   = mk_Xint "xadd"
   let p_xmul   = mk_Xint "xmul"

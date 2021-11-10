@@ -128,6 +128,8 @@ val f_real_mul_simpl : form -> form -> form
 val f_real_div_simpl : form -> form -> form
 val f_real_inv_simpl : form -> form
 
+val f_cost_proj_simpl : form -> cost_proj -> form
+
 (* -------------------------------------------------------------------- *)
 val destr_exists_prenex : form -> bindings * form
 val destr_ands : deep:bool -> form -> form list

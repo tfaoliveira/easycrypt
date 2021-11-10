@@ -1028,7 +1028,8 @@ let check_modtype env (mp : mpath) (mt : module_sig) (i : module_type) :
   in
 
   try check_sig_mt_cnv ~proof_obl:false env sym mt i; `Ok with
-  | TymodCnvFailure _ when EcModules.has_compl_restriction i.mt_restr ->
+  | TymodCnvFailure _
+    when EcModules.f_modcost_has_restr i.mt_restr.mr_cost <> `Known false ->
     check_sig_mt_cnv ~proof_obl:true env sym mt i;
     let obl = restr_proof_obligation env mp i in
     `ProofObligation obl
@@ -1205,6 +1206,21 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
     tglob m
 
   | PTcost -> tcost
+
+  | PTmodcost (p_procs, p_oracles) ->
+    let procs = List.fold_left (fun procs (f, mode) ->
+        Msym.add (unloc f) (mode = `Open) procs
+      ) Msym.empty p_procs
+    in
+    let oracles =
+      List.fold_left (fun oracles (o, o_f) ->
+          Msym.change (function
+              | None   -> Some (Ssym.singleton (unloc o_f))
+              | Some s -> Some (Ssym.add (unloc o_f) s)
+            ) (unloc o) oracles
+        ) Msym.empty p_oracles
+    in
+    tmodcost procs oracles
 
 and transtys tp (env : EcEnv.env) ue tys =
   List.map (transty tp env ue) tys

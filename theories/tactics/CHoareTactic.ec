@@ -66,10 +66,10 @@ op xle (x y : xint) =
   with x = Inf, y = N y => false
   with x = Inf, y = Inf => true.
 
-op lt = fun x y => le x y /\ not (x = y).
+op xlt = fun x y => xle x y /\ !(x = y).
 
 abbrev (<=) = xle.
-abbrev (<) = xlt.
+abbrev (<)  = xlt.
 
 lemma lexx : reflexive (<=).
 proof. by case. qed.

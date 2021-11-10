@@ -9,6 +9,7 @@
 (* -------------------------------------------------------------------- *)
 open EcIdent
 open EcUtils
+open EcSymbols
 open EcTypes
 open EcMemory
 open EcBigInt.Notations
@@ -919,6 +920,33 @@ let f_real_lt_simpl f1 f2 =
   match opair real_of_form f1 f2 with
   | Some (x1, x2) -> f_bool (BI.compare x1 x2 < 0)
   | _ -> f_real_lt f1 f2
+
+(* -------------------------------------------------------------------- *)
+let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
+  match f.f_node, p with
+  | Fcost c, Conc -> c.c_self
+
+  | Fcost c, Abs (id,f) ->
+    let xp = EcPath.xpath (EcPath.mident id) f in
+    let c_idf = EcPath.Mx.find_opt xp c.c_calls in
+    oget_c_bnd c_idf c.c_full
+
+  | Fmodcost mc, Intr fname ->
+    let pcost = Msym.find fname mc in (* cannot fail *)
+    pcost.c_self
+
+  | Fmodcost mc, Param {proc = fname; param_m; param_p } ->
+    let pcost = Msym.find fname mc in (* cannot fail *)
+
+    let c = EcPath.Mx.find_fun_opt (fun xp _ ->
+        EcIdent.name (EcPath.mget_ident xp.x_top) = param_m &&
+        xp.x_sub = param_p
+      ) pcost.c_calls
+    in
+
+    oget_c_bnd c pcost.c_full
+
+  | _ -> f_cost_proj_r f p
 
 (* -------------------------------------------------------------------- *)
 (* destr_exists_prenex destructs recursively existentials in a formula
