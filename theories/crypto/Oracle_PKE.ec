@@ -8,6 +8,7 @@
 
 require import AllCore List Distr DBool DInterval.
 require (*--*) LorR Hybrid.
+(*-- *) import StdOrder.RealOrder.
 
 type ('a, 'b) sum = [Left of 'a | Right of 'b].
 
@@ -23,29 +24,19 @@ op right ['a 'b] (s : ('a,'b) sum) =
   with s = Right x => x
   with s = Left _ => witness.
 
-theory CCA.
-
 type pkey, skey, plaintext, ciphertext.
-
-op Ndec : int.
-op Nenc : { int | 0 < Nenc } as Nenc_gt0.
-
-(* can we use hybrid without cloning or not reexport it *)
-(*
-clone import Hybrid as Hyb with
-  type input <- plaintext * plaintext,
-  type output <- ciphertext,
-  type inleaks = (unit, ciphertext) sum,
-  type outleaks = (pkey, plaintext option) sum,
-  type outputA <- bool,
-  op q <- Nenc.
-*)
 
 module type Scheme = {
   proc kg () : pkey * skey
   proc enc (pk : pkey, m : plaintext)  : ciphertext
   proc dec (sk : skey, c : ciphertext) : plaintext option
 }.
+
+(* The IND-CCA2 security notion *)
+abstract theory IND_CCA2.
+
+op Ndec : int.
+op Nenc : { int | 0 < Nenc } as Nenc_gt0.
 
 module type CCA_Oracle = {
   proc l_or_r (m0 m1 : plaintext) : ciphertext
@@ -60,6 +51,8 @@ module type CCA_Oracle_i = {
 module type Adversary (O : CCA_Oracle) = {
   proc main (pk : pkey) : bool
 }.
+
+(* Generic "left or right" oracles and default implementations *)
 
 module type LR = {
   proc init () : unit
@@ -94,9 +87,8 @@ module R : LR = {
   }
 }.
 
-(* Oracles for CCA games *)
-
-module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
+(* Oracles for CCA games - paramerized by LR *)
+module CCA_Oracle (S : Scheme, LR : LR) : CCA_Oracle_i = {
   var sk : skey
   var pk : pkey
   var cs : ciphertext list
@@ -127,6 +119,7 @@ module Wrap (S : Scheme, LR : LR) : CCA_Oracle_i = {
   }
 }.
 
+(* Counting wrapper for CCA_Oracle *)
 module CountCCA (O : CCA_Oracle) = {
   var ndec, nenc : int
 
@@ -152,6 +145,7 @@ module CountCCA (O : CCA_Oracle) = {
   }
 }.
 
+(* Counting wrapper for Adversaries *)
 module CountAdv (A : Adversary) (O : CCA_Oracle) = {
   proc main(pk) = {
     var b;
@@ -162,29 +156,24 @@ module CountAdv (A : Adversary) (O : CCA_Oracle) = {
   }
 }.
 
-(** Plan:
-    1. Create Wraper for Adversaries that does (only) the counting
-    2. Remove counting from Wrap
-    3. CCA games call wrapped/restricted adversaries
-    4. express A_bound using counting wrapper
-    5. A' used restricted adversary (and so satisfies call restrictions) *)
-
+(* Guessing variant of the IND-CCA2 Game *)
 module CCA (S : Scheme, A : Adversary) = {
   proc main () : bool = {
     var b';
 
-    Wrap(S, LorR).init();
-    b' <@ CountAdv(A,Wrap(S, LorR)).main(Wrap.pk);
+    CCA_Oracle(S, LorR).init();
+    b' <@ CountAdv(A,CCA_Oracle(S, LorR)).main(CCA_Oracle.pk);
     return LorR.b = b';
   }
 }.
 
+(* Left - Righ variant of the IND-CCA2 Game *)
 module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
   proc main() : bool = {
     var b';
 
-    Wrap(S,LR).init();
-    b' <@ CountAdv(A,Wrap(S, LR)).main(Wrap.pk);
+    CCA_Oracle(S,LR).init();
+    b' <@ CountAdv(A,CCA_Oracle(S, LR)).main(CCA_Oracle.pk);
 
     return b';
   }
@@ -193,6 +182,7 @@ module CCA_ (S : Scheme, A : Adversary, LR : LR) = {
 module CCA_L (S : Scheme, A : Adversary) = CCA_(S, A, L).
 module CCA_R (S : Scheme, A : Adversary) = CCA_(S, A, R).
 
+(* "Hybrid" aversary, making at most one call to [l_or_r] *)
 module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
   var i, iS : int
   var pk : pkey
@@ -202,11 +192,9 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
     proc l_or_r (m0 m1 : plaintext) = {
       var c;
 
-      if (iS < i) c <- S.enc(pk, m0);
-      else {
-        if (i = iS) c <- O.l_or_r(m0, m1);
-        else c <- S.enc(pk, m1);
-      }
+      if   (iS < i) c <- S.enc(pk, m0);
+      elif (i = iS) c <- O.l_or_r(m0, m1);
+      else          c <- S.enc(pk, m1);
       i <- i + 1;
       cs <- c :: cs;
       return c;
@@ -235,8 +223,8 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
 
 section.
 
-declare module S <: Scheme {Wrap, LorR, B, CountCCA, CountAdv}.
-declare module A <: Adversary {Wrap, S, LorR, B, CountCCA, CountAdv}.
+declare module S <: Scheme {CCA_Oracle, LorR, B, CountCCA, CountAdv}.
+declare module A <: Adversary {CCA_Oracle, S, LorR, B, CountCCA, CountAdv}.
 
 declare axiom A_ll (O <: CCA_Oracle {A}) :
   islossless O.l_or_r => islossless O.dec => islossless A(O).main.
@@ -244,15 +232,6 @@ declare axiom A_ll (O <: CCA_Oracle {A}) :
 declare axiom kg_ll : islossless S.kg.
 declare axiom enc_ll : islossless S.enc.
 declare axiom dec_ll : islossless S.dec.
-
-local clone Hybrid as Hyb with
-  type input <- plaintext * plaintext,
-  type output <- ciphertext,
-  type inleaks = (unit, ciphertext) sum,
-  type outleaks = (pkey, plaintext option) sum,
-  type outputA <- bool,
-  op q <- Nenc
-  proof* by smt(Nenc_gt0).
 
 declare axiom A_bound (O <: CCA_Oracle {A, CountCCA}) :
   hoare[ CountAdv(A, O).main : true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
@@ -273,24 +252,24 @@ lemma CCA_LR &m :
   `| Pr[ CCA(S, A).main() @ &m : res] - 1.0/2.0 | =
   1%r / 2%r * `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |.
 proof.
-  rewrite (Top.LorR.pr_AdvLR_AdvRndLR (CCA_L(S, A)) (CCA_R(S, A)) &m).
-    byphoare => //.
-    islossless; last by apply: kg_ll.
-    apply: (A_ll(CountCCA(Wrap(S, R)))); first by islossless; apply: enc_ll.
-    islossless; apply: dec_ll.
-  suff <- : Pr[CCA(S, A).main() @ &m : res] =
-            Pr[Top.LorR.RandomLR(CCA_L(S, A),CCA_R(S, A)).main() @ &m : res] by smt().
-  byequiv=> //. proc; inline *.
-  seq 1 1 : (={glob A,glob S} /\ LorR.b{1} = b{2}); first by rnd.
-  if{2}; wp.
-  - call (: ={glob S, glob Wrap} /\ LorR.b{1}).
-    + by proc; inline *; sp; auto; call (: true); auto => />.
-    + by sim / (LorR.b{1}) : (={res,glob S, glob Wrap}).
-    + by wp; call (: true); auto => />.
-  - call (: ={glob S, glob Wrap} /\ !LorR.b{1}).
-    + by proc; inline *; sp; auto; call (: true); auto => />.
-    + by sim / (!LorR.b{1}) : (={res,glob S, glob Wrap}).
-    + by wp; call (: true); auto => />.
+rewrite (Top.LorR.pr_AdvLR_AdvRndLR (CCA_L(S, A)) (CCA_R(S, A)) &m).
+- byphoare => //.
+  islossless; last by apply: kg_ll.
+  apply: (A_ll(CountCCA(CCA_Oracle(S, R)))); first by islossless; apply: enc_ll.
+  islossless; apply: dec_ll.
+suff <- : Pr[CCA(S, A).main() @ &m : res] =
+          Pr[Top.LorR.RandomLR(CCA_L(S, A),CCA_R(S, A)).main() @ &m : res] by smt().
+byequiv=> //. proc; inline *.
+seq 1 1 : (={glob A,glob S} /\ LorR.b{1} = b{2}); first by rnd.
+if{2}; wp. 
+- call (: ={glob S, glob CCA_Oracle} /\ LorR.b{1}).
+  + by proc; inline *; sp; auto; call (: true); auto => />.
+  + by sim / (LorR.b{1}) : (={res,glob S, glob CCA_Oracle}).
+  + by wp; call (: true); auto => />.
+- call (: ={glob S, glob CCA_Oracle} /\ !LorR.b{1}).
+  + by proc; inline *; sp; auto; call (: true); auto => />.
+  + by sim / (!LorR.b{1}) : (={res,glob S, glob CCA_Oracle}).
+  + by wp; call (: true); auto => />.
 qed.
 
 local module LRB (O : CCA_Oracle) : CCA_Oracle = {
@@ -299,11 +278,9 @@ local module LRB (O : CCA_Oracle) : CCA_Oracle = {
   proc l_or_r (m0 m1 : plaintext) = {
     var c;
 
-    if (iS < i) c <- S.enc(pk, m0);
-    else {
-      if (i = iS) c <- O.l_or_r(m0, m1);
-      else c <- S.enc(pk, m1);
-    }
+    if   (iS < i) c <- S.enc(pk, m0);
+    elif (i = iS) c <- O.l_or_r(m0, m1);
+    else          c <- S.enc(pk, m1);
     i <- i + 1;
     cs <- c :: cs;
     return c;
@@ -350,6 +327,15 @@ proc; inline *; swap 5 -2; sp; auto.
     sp; auto; call (: true); skip => /> /#.
 qed.
 
+local clone Hybrid as Hyb with
+  type input <- plaintext * plaintext,
+  type output <- ciphertext,
+  type inleaks = (unit, ciphertext) sum,
+  type outleaks = (pkey, plaintext option) sum,
+  type outputA <- bool,
+  op q <- Nenc
+  proof* by smt(Nenc_gt0).
+
 local module Ob : Hyb.Orclb = {
   var sk : skey
   var pk : pkey
@@ -395,19 +381,13 @@ local module Ob : Hyb.Orclb = {
 }.
 
 local lemma Obl_ll : islossless Ob.leaks.
-proof.
-  islossless; [exact kg_ll|exact dec_ll].
-qed.
+proof. islossless; [exact kg_ll|exact dec_ll]. qed.
 
 local lemma orclL_ll : islossless Ob.orclL.
-proof.
-  islossless; exact enc_ll.
-qed.
+proof. islossless; exact enc_ll. qed.
 
 local lemma orclR_ll : islossless Ob.orclR.
-proof.
-  islossless; exact enc_ll.
-qed.
+proof. islossless; exact enc_ll. qed.
 
 (* : AdvOrclb *)
 local module A' (Ob : Hyb.Orclb) (O : Hyb.Orcl) = {
@@ -444,25 +424,25 @@ qed.
 local lemma CCA_Ln &m :
    Pr[ CCA_L(S, A).main() @ &m : res ] = Pr[ Hyb.Ln(Ob, A').main() @ &m : res ].
 proof.
-  byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
-  call (: ={glob S} /\ ={sk, pk, cs}(Wrap,Ob)).
-  + proc; auto; inline *; auto.
-    by call (: true); auto => />.
-  + proc; auto; inline *. sp; rcondf{2} 1 => //; sp.
-    by if; 1: smt(); auto; call (: true).
-  + by auto; call(: true).
+byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
+call (: ={glob S} /\ ={sk, pk, cs}(CCA_Oracle,Ob)).
++ proc; auto; inline *; auto.
+  by call (: true); auto => />.
++ proc; auto; inline *. sp; rcondf{2} 1 => //; sp.
+  by if; 1: smt(); auto; call (: true).
++ by auto; call(: true).
 qed.
 
 local lemma CCA_Rn &m :
    Pr[ CCA_R(S, A).main() @ &m : res ] = Pr[ Hyb.Rn(Ob, A').main() @ &m : res].
 proof.
-  byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
-  call (: ={glob S} /\ ={sk,pk,cs}(Wrap,Ob)).
-  + proc; auto; inline *; auto.
-    by call (: true); auto => />.
-  + proc; auto; inline *. sp; rcondf{2} 1 => //; sp.
-    by if; 1: smt(); auto; call (: true).
-  + by auto; call(: true).
+byequiv => //; proc. inline *; sp; wp; rcondt{2} 1 => //.
+call (: ={glob S} /\ ={sk,pk,cs}(CCA_Oracle,Ob)).
++ proc; auto; inline *; auto.
+  by call (: true); auto => />.
++ proc; auto; inline *. sp; rcondf{2} 1 => //; sp.
+  by if; 1: smt(); auto; call (: true).
++ by auto; call(: true).
 qed.
 
 local lemma A'_call (O <: Hyb.Orcl{Hyb.Count, A'}) :
@@ -481,11 +461,8 @@ suff P : hoare[ CountAdv(A, A'(Ob, Hyb.OrclCount(O)).O').main :
   + by inline *; auto.
 qed.
 
-import StdOrder.RealOrder.
-
 lemma CCA_1n &m :
-    `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] |
-    <=
+    `| Pr[ CCA_L(S, A).main() @ &m : res ] - Pr[ CCA_R(S, A).main() @ &m : res ] | <=
     Nenc%r * `| Pr[ CCA_L(S,B(S, A)).main() @ &m : res ] - Pr[ CCA_R(S,B(S, A)).main() @ &m : res ] |.
 proof.
 rewrite -ler_pdivr_mull; 1: smt(Nenc_gt0).
@@ -499,9 +476,9 @@ have <- : Pr[CCA_(S, B(S, A), L).main() @ &m : res] = Pr[Hyb.HybGame(A', Ob, Hyb
   byequiv => //; proc; inline *; auto.
   swap{2} 1 5; swap{1} 6 2; sp.
   rcondt{2} 1; 1: by move => &m'; skip => />.
-  call (: ={glob S} /\ ={pk, sk}(Wrap, Ob) /\
+  call (: ={glob S} /\ ={pk, sk}(CCA_Oracle, Ob) /\
             B.i{1} = Hyb.HybOrcl.l{2} /\ B.iS{1} = Hyb.HybOrcl.l0{2} /\ ={cs, pk}(B, Ob) /\
-            (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
+            (forall c, c \in CCA_Oracle.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *; sp; if; 1: by move => />.
     + by auto; call (: true); auto => /> /#.
     + if; 1: by move => />.
@@ -517,9 +494,9 @@ have <- : Pr[CCA_(S, B(S, A), R).main() @ &m : res] = Pr[Hyb.HybGame(A', Ob, Hyb
   byequiv => //; proc; inline *; auto.
   swap{2} 1 5; swap{1} 6 2; sp.
   rcondt{2} 1; 1: by move => &m'; skip => />.
-  call (: ={glob S} /\ ={pk,sk}(Wrap,Ob) /\
+  call (: ={glob S} /\ ={pk,sk}(CCA_Oracle,Ob) /\
             B.i{1} = Hyb.HybOrcl.l{2} /\ B.iS{1} = Hyb.HybOrcl.l0{2} /\ ={cs,pk}(B,Ob) /\
-            (forall c, c \in Wrap.cs{1} => c \in B.cs{1})).
+            (forall c, c \in CCA_Oracle.cs{1} => c \in B.cs{1})).
   - proc; auto; inline *; sp; if; 1: by move => />.
     + by auto; call (: true); auto => /> /#.
     + if; 1: by move => />.
@@ -536,4 +513,4 @@ qed.
 
 end section.
 
-end CCA.
+end IND_CCA2.

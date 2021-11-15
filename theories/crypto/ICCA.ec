@@ -1,9 +1,16 @@
 require import AllCore List Distr DBool DInterval.
-require import Oracle_PKE.
+require (*--*) Oracle_PKE.
 
 import Distr.MRat.
 
-(* Real/Ideal variant of IND-CCA2 *)
+(* This file provides games for the Real/Ideal variant of
+IND-CCA2. The Real game provides the adversary with access to an
+encryption oracle, in the Ideal game the encryption oracle always
+encrypts the same (fixed) message. 
+
+Unlike Oracle_PKE, we do not work with an abstract [Scheme]
+module. Instead, we require distributions [dkeyseed, dencseed] and
+operators that allow implementing a [Scheme] module *) 
 
 theory ICCA.
 
@@ -24,14 +31,18 @@ op m0 : plaintext.
 axiom encK (k : keyseed) (m : plaintext) (e : encseed) :
   dec (enc(m, pkgen k, e), skgen k) = Some m.
 
-clone import CCA as C with
+clone import Oracle_PKE as PKE with
   type pkey <- pkey,
   type skey <- skey,
   type plaintext <- plaintext,
-  type ciphertext <- ciphertext,
+  type ciphertext <- ciphertext
+  proof*.
+
+clone import IND_CCA2 as C with
   op Ndec <- Ndec,
   op Nenc <- Nenc,
-  axiom Nenc_gt0 <- Nenc_gt0.
+  axiom Nenc_gt0 <- Nenc_gt0
+  proof*.
 
 module type ICCA_Oracle = {
   proc pk () : pkey
@@ -44,6 +55,7 @@ module type ICCA_i = {
   proc init() : unit
 }.
 
+(* "Real" oracle, enc encrypts the given message *)
 module Real : ICCA_Oracle = {
   var pk : pkey
   var sk : skey
@@ -74,6 +86,11 @@ module Real : ICCA_Oracle = {
     return m;
   }
 }.
+
+(* Ideal orcale, discards m and always encrypts m0 
+
+In the case of a ciphertext collision (e.g. a collision in dencseed),
+the last given message is returned *)
 
 module Ideal : ICCA_Oracle = {
   import var Real
@@ -112,108 +129,12 @@ module Ideal : ICCA_Oracle = {
   }
 }.
 
+(* Same as above, but in the case of a ciphertext collision, the
+message returned by decryption is chosen randomly. *) 
+
 module IdealS : ICCA_Oracle = {
   import var Real
-  var cs : (ciphertext * plaintext) list
-
-  proc init() : unit = {
-    var ks;
-
-    ks <$ dkeyseed;
-    pk <- pkgen ks;
-    sk <- skgen ks;
-    cs <- [];
-  }
-
-  proc pk () = {
-    return pk;
-  }
-
-  proc enc (m : plaintext) : ciphertext = {
-    var e, c;
-
-    e <$ dencseed;
-    c <- enc(m0, pk, e);
-    cs <- (c, m) :: cs;
-    return c;
-  }
-
-  proc dec (c : ciphertext) : plaintext option = {
-    var fcs, m, p;
-
-    fcs <- List.filter (fun p => fst p = c) cs;
-    if (fcs <> []) {
-      p <$ drat fcs;
-      m <- Some (snd p);
-    } else {
-      m <- dec(c, sk);
-    }
-    return m;
-  }
-}.
-
-module Real' : ICCA_Oracle = {
-  import var Real
-  import var Ideal
-
-  proc init() : unit = {
-    var ks;
-
-    ks <$ dkeyseed;
-    pk <- pkgen ks;
-    sk <- skgen ks;
-    cs <- [];
-  }
-
-  proc pk () = {
-    return pk;
-  }
-
-  proc enc (m : plaintext) : ciphertext = {
-    var e, c;
-
-    e <$ dencseed;
-    c <- enc(m, pk, e);
-    cs <- (c, m) :: cs;
-    return c;
-  }
-
-  proc dec (c : ciphertext) : plaintext option = {
-    var m;
-
-    m <- assoc cs c;
-    if (m = None) {
-      m <- dec(c, sk);
-    }
-    return m;
-  }
-}.
-
-module RealS' : ICCA_Oracle = {
-  import var Real
-  import var IdealS
-
-  proc init() : unit = {
-    var ks;
-
-    ks <$ dkeyseed;
-    pk <- pkgen ks;
-    sk <- skgen ks;
-    cs <- [];
-  }
-
-  proc pk () = {
-    return pk;
-  }
-
-  proc enc (m : plaintext) : ciphertext = {
-    var e, c;
-
-    e <$ dencseed;
-    c <- enc(m, pk, e);
-    cs <- (c, m) :: cs;
-    return c;
-  }
+  include var Ideal [-dec]
 
   proc dec (c : ciphertext) : plaintext option = {
     var fcs, m, p;
@@ -283,6 +204,7 @@ module CountAdv (A : Adversary) (O : ICCA_Oracle) = {
   }
 }.
 
+(* Adversary for the bound |Real - Ideal| < |CCA_L - CCA_R| *)
 module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
   var pk : pkey
@@ -322,6 +244,7 @@ module B (A : Adversary) (O : CCA_Oracle) = {
   }
 }.
 
+(* Adversary for the bound |Real - IdealS| < |CCA_L - CCA_R| *)
 module BS (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
   var pk : pkey
@@ -366,8 +289,8 @@ module BS (A : Adversary) (O : CCA_Oracle) = {
 
 section.
 
-declare module A <: Adversary {Real, Real', Ideal, IdealS,
-                              C.Wrap, B, BS, CountCCA, CountICCA}.
+declare module A <: Adversary {Real, Ideal, IdealS,
+                              C.CCA_Oracle, B, BS, CountCCA, CountICCA}.
 
 module S : Scheme = {
   proc kg () : pkey * skey = {
@@ -420,7 +343,40 @@ proof.
 by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
 qed.
 
-equiv Real_Real' :
+local module Real' : ICCA_Oracle = {
+  import var Real
+  include var Ideal [-enc]
+
+  proc enc (m : plaintext) : ciphertext = {
+    var e, c;
+
+    e <$ dencseed;
+    c <- enc(m, pk, e);
+    cs <- (c, m) :: cs;
+    return c;
+  }
+}.
+
+local module RealS' : ICCA_Oracle = {
+  import var Real
+  import var Ideal
+  include Real' [-dec]
+
+  proc dec (c : ciphertext) : plaintext option = {
+    var fcs, m, p;
+
+    fcs <- List.filter (fun p => fst p = c) cs;
+    if (fcs <> []) {
+      p <$ drat fcs;
+      m <- Some (snd p);
+    } else {
+      m <- dec(c, sk);
+    }
+    return m;
+  }
+}.
+
+local equiv Real_Real' :
   Game(Real, A).main ~ Game(Real', A).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *.
@@ -436,14 +392,14 @@ call (: ={glob Real} /\
 - by wp; rnd; skip => /> /#.
 qed.
 
-equiv Real'_CCA_L :
+local equiv Real'_CCA_L :
   Game(Real', A).main ~ CCA_L(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk, sk}(Real, Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+call (: ={pk, sk}(Real, CCA_Oracle) /\ unzip1 Ideal.cs{1} = CCA_Oracle.cs{2} /\
         (forall c m,assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m){1} /\
-        (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\
-        Ideal.cs{1} = B.cs{2} /\ B.pk{2} = Wrap.pk{2}).
+        (exists ks, (CCA_Oracle.pk, CCA_Oracle.sk){2} = (pkgen ks, skgen ks)) /\
+        Ideal.cs{1} = B.cs{2} /\ B.pk{2} = CCA_Oracle.pk{2}).
 - by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
   by rewrite assoc_cons; case : (c = enc (m{m2}, pkgen ks, e)) => />; smt(encK).
@@ -456,11 +412,11 @@ equiv Ideal_CCA_R :
   Game(Ideal, A).main ~ CCA_R(S, B(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk, sk}(Real, Wrap) /\ unzip1 Ideal.cs{1} = Wrap.cs{2} /\
+call (: ={pk, sk}(Real, CCA_Oracle) /\ unzip1 Ideal.cs{1} = CCA_Oracle.cs{2} /\
         (forall c m,
            assoc Ideal.cs c = Some m => dec(c, Real.sk) = Some m0){1} /\
-        (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\
-        Ideal.cs{1} = B.cs{2} /\ B.pk{2} = Wrap.pk{2}).
+        (exists ks, (CCA_Oracle.pk, CCA_Oracle.sk){2} = (pkgen ks, skgen ks)) /\
+        Ideal.cs{1} = B.cs{2} /\ B.pk{2} = CCA_Oracle.pk{2}).
 - by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks ? ? e _ c m'.
   by rewrite assoc_cons; case : (c = enc (m0, pkgen ks, e)) => />; smt(encK).
@@ -473,25 +429,23 @@ lemma ICCA_CCALR &m :
   Pr[Game(Real, A).main() @ &m : res] - Pr[Game(Ideal, A).main() @ &m : res] =
   Pr[CCA_L(S, B(A)).main() @ &m : res] - Pr[CCA_R(S, B(A)).main() @ &m : res].
 proof.
-have -> : Pr[Game(Real, A).main() @ &m : res] =
-          Pr[Game(Real', A).main() @ &m : res].
-- byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real_Real'.
-have -> : Pr[Game(Real', A).main() @ &m : res] =
-          Pr[CCA_L(S, B(A)).main() @ &m : res].
-- byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Real'_CCA_L.
-have -> : Pr[Game(Ideal, A).main() @ &m : res] =
-          Pr[CCA_R(S, B(A)).main() @ &m : res]; 2: by smt().
-byequiv => //; conseq (: ={glob A} ==> ={res}) => //; exact Ideal_CCA_R.
+have -> : Pr[Game(Real, A).main() @ &m : res] = Pr[Game(Real', A).main() @ &m : res].
+  by byequiv => //; conseq Real_Real'.
+have -> : Pr[Game(Real', A).main() @ &m : res] = Pr[CCA_L(S, B(A)).main() @ &m : res].
+  by byequiv => //; conseq  Real'_CCA_L.
+have -> : Pr[Game(Ideal, A).main() @ &m : res] = Pr[CCA_R(S, B(A)).main() @ &m : res]. 
+  by byequiv => //; conseq Ideal_CCA_R.
+smt().
 qed.
 
-equiv Real_RealS' :
+local equiv Real_RealS' :
   Game(Real, A).main ~ Game(RealS', A).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *.
 call (: ={glob Real} /\
         (exists ks, (Real.pk, Real.sk){2} = (pkgen ks, skgen ks)) /\
         (forall c p,
-           p \in drat (List.filter (fun p => fst p = c) IdealS.cs) =>
+           p \in drat (List.filter (fun p => fst p = c) Ideal.cs) =>
            dec(c, Real.sk) = Some (snd p)){2}).
 - by proc; auto.
 - proc; wp; rnd; auto => /> &m2 ks csP e ? c ?.
@@ -505,15 +459,15 @@ call (: ={glob Real} /\
 - by wp; rnd; skip => />; smt(supp_drat).
 qed.
 
-equiv RealS'_CCA_L :
+local equiv RealS'_CCA_L :
   Game(RealS', A).main ~ CCA_L(S, BS(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk, sk}(Real, Wrap) /\ unzip1 IdealS.cs{1} = Wrap.cs{2} /\
-        (forall c m, (c, m) \in List.filter (fun p => fst p = c) IdealS.cs =>
+call (: ={pk, sk}(Real, CCA_Oracle) /\ unzip1 Ideal.cs{1} = CCA_Oracle.cs{2} /\
+        (forall c m, (c, m) \in List.filter (fun p => fst p = c) Ideal.cs =>
                        dec(c, Real.sk) = Some m){1} /\
-        (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\
-        IdealS.cs{1} = BS.cs{2} /\ BS.pk{2} = Wrap.pk{2}).
+        (exists ks, (CCA_Oracle.pk, CCA_Oracle.sk){2} = (pkgen ks, skgen ks)) /\
+        Ideal.cs{1} = BS.cs{2} /\ BS.pk{2} = CCA_Oracle.pk{2}).
 - by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks skP ? e _ c ?.
   case: (enc (m{m2}, pkgen ks, e) = c).
@@ -529,12 +483,12 @@ equiv IdealS_CCA_R :
   Game(IdealS, A).main ~ CCA_R(S, BS(A)).main : ={glob A} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: ={pk, sk}(Real, Wrap) /\ unzip1 IdealS.cs{1} = Wrap.cs{2} /\
+call (: ={pk, sk}(Real, CCA_Oracle) /\ unzip1 Ideal.cs{1} = CCA_Oracle.cs{2} /\
         (forall c m, (c, m) \in List.filter (fun p => fst p = c)
-                                                   IdealS.cs =>
+                                                   Ideal.cs =>
                        dec(c, Real.sk) = Some m0){1} /\
-        (exists ks, (Wrap.pk, Wrap.sk){2} = (pkgen ks, skgen ks)) /\
-        IdealS.cs{1} = BS.cs{2} /\ BS.pk{2} = Wrap.pk{2}).
+        (exists ks, (CCA_Oracle.pk, CCA_Oracle.sk){2} = (pkgen ks, skgen ks)) /\
+        Ideal.cs{1} = BS.cs{2} /\ BS.pk{2} = CCA_Oracle.pk{2}).
 - by proc; inline *; auto => />.
 - proc; inline *; auto => /> &m1 &m2 Hcs ks skP ? e _ c m'.
   case: (enc (m0, pkgen ks, e) = c); 1: smt(encK).
