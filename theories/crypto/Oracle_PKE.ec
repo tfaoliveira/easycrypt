@@ -235,15 +235,15 @@ module B (S : Scheme, A : Adversary, O : CCA_Oracle) = {
 
 section.
 
-declare module S : Scheme {Wrap, LorR, B, CountCCA, CountAdv}.
-declare module A : Adversary {Wrap, S, LorR, B, CountCCA, CountAdv}.
+declare module S <: Scheme {Wrap, LorR, B, CountCCA, CountAdv}.
+declare module A <: Adversary {Wrap, S, LorR, B, CountCCA, CountAdv}.
 
-axiom A_ll (O <: CCA_Oracle {A}) :
+declare axiom A_ll (O <: CCA_Oracle {A}) :
   islossless O.l_or_r => islossless O.dec => islossless A(O).main.
 
-axiom kg_ll : islossless S.kg.
-axiom enc_ll : islossless S.enc.
-axiom dec_ll : islossless S.dec.
+declare axiom kg_ll : islossless S.kg.
+declare axiom enc_ll : islossless S.enc.
+declare axiom dec_ll : islossless S.dec.
 
 local clone Hybrid as Hyb with
   type input <- plaintext * plaintext,
@@ -251,9 +251,10 @@ local clone Hybrid as Hyb with
   type inleaks = (unit, ciphertext) sum,
   type outleaks = (pkey, plaintext option) sum,
   type outputA <- bool,
-  op q <- Nenc.
+  op q <- Nenc
+  proof* by smt(Nenc_gt0).
 
-axiom A_bound (O <: CCA_Oracle {A, CountCCA}) :
+declare axiom A_bound (O <: CCA_Oracle {A, CountCCA}) :
   hoare[ CountAdv(A, O).main : true ==> CountCCA.ndec <= Ndec /\ CountCCA.nenc <= Nenc].
 
 lemma A_bound' (O <: CCA_Oracle {A, CountCCA}) :

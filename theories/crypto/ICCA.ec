@@ -366,7 +366,7 @@ module BS (A : Adversary) (O : CCA_Oracle) = {
 
 section.
 
-declare module A : Adversary {Real, Real', Ideal, IdealS,
+declare module A <: Adversary {Real, Real', Ideal, IdealS,
                               C.Wrap, B, BS, CountCCA, CountICCA}.
 
 module S : Scheme = {
@@ -395,7 +395,7 @@ module S : Scheme = {
   }
 }.
 
-axiom A_bound (O <: ICCA_Oracle {A, CountICCA}) : hoare [CountAdv(A, O).main :
+declare axiom A_bound (O <: ICCA_Oracle {A, CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
