@@ -97,6 +97,7 @@ type modtyp_error =
 type modsig_error =
 | MTS_DupProcName of symbol
 | MTS_DupArgName  of symbol * symbol
+| MTS_NotAnOracle of EcPath.xpath list
 
 type funapp_error =
 | FAE_WrongArgCount
@@ -2280,7 +2281,13 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
 
   (* check that [calls] only talks about oracle calls *)
   if not (EcPath.Mx.for_all (fun f _ -> Sm.mem f.x_top params) c_calls) then
-    assert false;               (* TODO A: proper error message *)
+   begin
+     let orcls_err =
+       EcPath.Mx.filter (fun f _ -> not (Sm.mem f.x_top params)) c_calls
+     in
+     tyerror (loc r_el.pmre_name) env
+       (InvalidModSig (MTS_NotAnOracle (EcPath.Mx.keys orcls_err)))
+   end;
 
   let c_cost = cost_r c_self c_calls c_full in
 

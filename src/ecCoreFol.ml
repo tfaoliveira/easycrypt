@@ -1191,29 +1191,6 @@ let cost_scalar_mult (l : form) (c : cost) : cost =
   let c_calls = EcPath.Mx.map (x_scalar_mult ~mode_l:`Int l) c.c_calls in
   { c_self; c_calls; c_full = c.c_full; }
 
-(* (\* [l] has type [int] *\)
- * (\* (\* [l] has type [mode_l], [c.r_self] has type [mode_r] *\) *\)
- * let cost_c_bnd_mult
- *     (\* ~(mode_l:[`Xint | `Int])
- *      * ~(mode_c:[`Xint | `Int]) *\)
- *     (l : c_bnd)
- *     (c : cost) : cost
- *   =
- *   match l with
- *   | C_bounded l -> cost_scalar_mult l c
- *   | C_unbounded ->
- *     if c.c_full then
- *       { c_self  = C_unbounded;
- *         c_calls = EcPath.Mx.map (fun _ -> C_unbounded) c.c_calls;
- *         c_full  = true; }
- *     else cost_top
- *
- * (\* [l] has type [int] *\)
- * let fcost_c_bnd_mult (l : c_bnd) (c : form) : form =
- *   match l with
- *   | C_bounded l -> f_cost_scale l c
- *   | C_unbounded -> fcost_top *)
-
 (* -------------------------------------------------------------------- *)
 module FSmart = struct
   type a_local = EcIdent.t * ty

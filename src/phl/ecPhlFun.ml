@@ -329,7 +329,6 @@ module FunAbsLow = struct
           let cbd = EcCHoare.cost_orcl fn o cost_info in
           EcCHoare.choare_xsum o_cost (f_i0, cbd)
         else f_cost_xscale f_Inf o_cost
-        (* TODO A: use a variant of [xscale] s.t. [Inf * 0 = 0] *)
       ) ois
     in
     List.fold_left f_cost_add f_cost orcls_cost

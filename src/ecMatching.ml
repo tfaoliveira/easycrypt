@@ -925,8 +925,6 @@ module FPosition = struct
             let subctxt = Sid.add (fst coe.coe_mem) ctxt in
             doit pos (`WithSubCtxt [subctxt, coe.coe_pre])
 
-          (* TODO: A: From what I undertand, there is an error there:
-             it should be  (subctxt, hs.bhf_bd) *)
           | FbdHoareF hs ->
               let subctxt = Sid.add EcFol.mhr ctxt in
               doit pos (`WithSubCtxt ([(subctxt, hs.bhf_pr);
