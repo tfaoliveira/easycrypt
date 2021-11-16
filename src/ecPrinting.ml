@@ -440,7 +440,7 @@ let pp_tyname ppe fmt p =
   Format.fprintf fmt "%a" EcSymbols.pp_qsymbol (PPEnv.ty_symb ppe p)
 
 (* -------------------------------------------------------------------- *)
-let pp_tymodcost fmt procs oracles =
+let pp_tymodcost =
   let pp_proc_el fmt (p,bopen) =
     Format.fprintf fmt "%s%s" p (if bopen then ".." else "")
   in
@@ -449,14 +449,20 @@ let pp_tymodcost fmt procs oracles =
       (pp_list " " (fun fmt (o, o_f) -> Format.fprintf fmt "%s.%s" o o_f))
       orcl
   in
-  let oracles =
-    List.concat_map (fun (o, fs) ->
-        List.map (fun x -> o, x) (Ssym.elements fs)
-      ) (Msym.bindings oracles)
-  in
-  Format.fprintf fmt "`[%a # %a]"
-    (pp_list ",@ " pp_proc_el) (Msym.bindings procs)
-    pp_oracles oracles
+  fun fmt procs oracles name ->
+    match name with
+    | Some name ->              (* short name *)
+      Format.fprintf fmt "#%s" (EcPath.basename name)
+
+    | None ->                   (* no short name *)
+      let oracles =
+        List.concat_map (fun (o, fs) ->
+            List.map (fun x -> o, x) (Ssym.elements fs)
+          ) (Msym.bindings oracles)
+      in
+      Format.fprintf fmt "`[%a # %a]"
+        (pp_list ",@ " pp_proc_el) (Msym.bindings procs)
+        pp_oracles oracles
 
 (* -------------------------------------------------------------------- *)
 let pp_tcname ppe fmt p =
@@ -677,7 +683,7 @@ let rec pp_type_r ppe outer fmt ty =
   | Tunivar x  -> pp_tyunivar ppe fmt x
   | Tvar    x  -> pp_tyvar ppe fmt x
 
-  | Tmodcost mc -> pp_tymodcost fmt mc.procs mc.oracles
+  | Tmodcost mc -> pp_tymodcost fmt mc.procs mc.oracles mc.name
 
   | Ttuple tys ->
       let pp fmt tys =

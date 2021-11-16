@@ -28,8 +28,9 @@ and ty_node =
   | Tconstr  of EcPath.path * ty list
   | Tfun     of ty * ty
   | Tmodcost of {
-      procs   : bool Msym.t;   (* procedures (boolean: is the proc cost open) *)
-      oracles : Ssym.t Msym.t; (* oracles to their procedures *)
+      procs   : bool Msym.t;        (* procedures (bool: is the proc cost open) *)
+      oracles : Ssym.t Msym.t;      (* oracles to their procedures *)
+      name    : EcPath.path option; (* optional name, for printing *)
     }
 
 module Mty : Map.S with type key = ty
@@ -50,7 +51,7 @@ val tconstr  : EcPath.path -> ty list -> ty
 val tfun     : ty -> ty -> ty
 val tglob    : EcPath.mpath -> ty
 val tpred    : ty -> ty
-val tmodcost : bool Msym.t -> Ssym.t Msym.t -> ty
+val tmodcost : ?name:EcPath.path -> bool Msym.t -> Ssym.t Msym.t -> ty
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty

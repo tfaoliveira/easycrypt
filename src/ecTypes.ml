@@ -30,8 +30,9 @@ and ty_node =
   | Tconstr  of EcPath.path * ty list
   | Tfun     of ty * ty
   | Tmodcost of {
-      procs   : bool Msym.t;   (* procedures (boolean: is the proc cost open) *)
-      oracles : Ssym.t Msym.t; (* oracles to their procedures *)
+      procs   : bool Msym.t;        (* procedures (bool: is the proc cost open) *)
+      oracles : Ssym.t Msym.t;      (* oracles to their procedures *)
+      name    : EcPath.path option; (* optional name, for printing *)
     }
 
 type dom = ty list
@@ -62,10 +63,11 @@ module Hsty = Why3.Hashcons.Make (struct
     | Tfun (d1, c1), Tfun (d2, c2)->
         ty_equal d1 d2 && ty_equal c1 c2
 
-    | Tmodcost { procs = procs1; oracles = params1; },
-      Tmodcost { procs = procs2; oracles = params2; } ->
+    | Tmodcost { procs = procs1; oracles = params1; name = name1; },
+      Tmodcost { procs = procs2; oracles = params2; name = name2; } ->
       Msym.equal (=) procs1 procs2
       && Msym.equal Ssym.equal params1 params2
+      && opt_equal EcPath.p_equal name1 name2
 
     | _, _ -> false
 
@@ -77,10 +79,11 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
-    | Tmodcost { procs; oracles; } ->
-      Why3.Hashcons.combine
+    | Tmodcost { procs; oracles; name; } ->
+      Why3.Hashcons.combine2
         (Msym.hash Hashtbl.hash Hashtbl.hash procs)
         (Msym.hash Hashtbl.hash Hashtbl.hash oracles)
+        (Why3.Hashcons.combine_option EcPath.p_hash name)
 
   let fv ty =
     let union ex =
@@ -132,17 +135,14 @@ let rec dump_ty ty =
   | Tfun (t1, t2) ->
       Format.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
 
-  | Tmodcost { procs; oracles; } ->
-    (* let pp_range_vars fmt rvs =
-     *   let pp_rv fmt (s,u) =
-     *     Format.fprintf fmt "%s : #%d" s u
-     *   in
-     *   Format.pp_print_list pp_rv fmt (Msym.bindings rvs)
-     * in *)
+  | Tmodcost { procs; oracles; name; } ->
     let pp_set =
       Ssym.print (fun fmt s -> Format.fprintf fmt "%s" s)
     in
-    Format.asprintf "@[<hv>[@[%a@];@ @[%a@];]@]"
+    Format.asprintf "@[<hv>%s@[%a@];@ @[%a@];]@]"
+      (match name with
+       | None -> ""
+       | Some name -> EcPath.tostring name ^ " : ")
       (Format.pp_print_list
          (fun fmt (s, b) ->
             Format.fprintf fmt "%s %a" s Format.pp_print_bool b))
@@ -162,7 +162,7 @@ let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
 
-let tmodcost procs oracles = mk_ty (Tmodcost { procs; oracles; })
+let tmodcost ?name procs oracles = mk_ty (Tmodcost { procs; oracles; name; })
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
@@ -340,7 +340,8 @@ let rec ty_subst s =
               ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ s; } body
       end
 
-      | Tmodcost _ -> ty)
+      | Tmodcost { procs; oracles; name } ->
+        tmodcost ?name:(omap s.ts_p name) procs oracles)
 
 (* -------------------------------------------------------------------- *)
 module Tuni = struct

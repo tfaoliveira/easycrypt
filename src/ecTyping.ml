@@ -1222,8 +1222,8 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
           Msym.add (EcIdent.name oid) oprocs oracles
         ) Msym.empty msig.mis_params
     in
-    let _name = mty.mt_name in
-    tmodcost procs oracles
+    let name = mty.mt_name in
+    tmodcost ~name procs oracles
 
 
 and transtys tp (env : EcEnv.env) ue tys =
