@@ -33,3 +33,13 @@ op is_int (x:xint) =
 op is_inf (x:xint) = 
   with x = N _ => false
   with x = Inf => true.
+
+op xoget (x : xint) =
+  with x = N i => i
+  with x = Inf => 0.
+
+(* -------------------------------------------------------------------- *)
+lemma xmulz_l (c : xint) : '0 * c = '0 by case c.
+lemma xmulz_r (c : xint) : c * '0 = '0 by case c.
+
+hint rewrite xmulz : xmulz_l xmulz_r.

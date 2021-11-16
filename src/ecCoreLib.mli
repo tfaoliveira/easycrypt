@@ -125,9 +125,12 @@ module CI_Xint : sig
   val p_xmax      : path
   val p_is_int    : path
   val p_is_inf    : path
+  val p_xoget     : path
   val p_choaretac : path
-  val p_bigxint   : path
-  val p_big       : path
+  val p_Bigxint   : path
+  val p_Bigcost   : path
+  val p_bigx      : path
+  val p_bigcost   : path
 end
 
 (* -------------------------------------------------------------------- *)

@@ -38,7 +38,16 @@ lemma mulx1 : right_id '1 xmul.
 proof. by case. qed.
 
 lemma mulxA : associative xmul.
-proof. by case=> [x|] [y|] [z|] => //=; rewrite mulrA. qed.
+proof. 
+  case=> [x|] [y|] [z|] //=;
+  try case (y = 0); 
+  try case (x = 0);
+  try case (z = 0) => //=.
+  by rewrite ?mulrA.
+  by move => *; rewrite mulf_neq0.
+  by move => _ ->.
+  by move => *; rewrite mulf_neq0.
+qed.
 
 lemma mulxC : commutative xmul.
 proof. by case=> [x|] [y|] => //=; rewrite mulrC. qed.
@@ -51,11 +60,11 @@ proof. by case: x. qed.
 lemma xaddxInf (x:xint) : x + Inf = Inf.
 proof. by case: x. qed.
 
-lemma xmulInfx (x:xint) : Inf * x = Inf.
-proof. by case: x. qed.
+lemma xmulInfx (x:xint) : x <> N 0 => Inf * x = Inf.
+proof. by case: x => i //= ->. qed.
 
-lemma xmulxInf (x:xint) : x * Inf = Inf.
-proof. by case: x. qed.
+lemma xmulxInf (x:xint) : x <> N 0 => x * Inf = Inf.
+proof. by case: x => i //= ->. qed.
 
 hint simplify xaddInfx, xaddxInf, xmulInfx, xmulxInf.
 
@@ -116,42 +125,57 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 theory Bigxint.
-clone include Bigop
-  with type t <- xint,
-         op Support.idm <- ('0),
-         op Support.(+) <- xadd
-  proof *.
-
-realize Support.Axioms.addmA by exact/addxA.
-realize Support.Axioms.addmC by exact/addxC.
-realize Support.Axioms.add0m by exact/add0x.
-
-lemma nosmt big_morph_N (P : 'a -> bool) (f : 'a -> int) s:
-  big P (fun i => N (f i)) s = N (BIA.big P (fun i => f i) s).
-proof.
-elim: s => [|x s ih] //=.
-by rewrite !(big_cons, BIA.big_cons) ih /=; case: (P x).
-qed.
-
-lemma nosmt big_const_Nx (P : 'a -> bool) x s:
-  big P (fun _ => N x) s = (count P s) ** N x.
-proof. by rewrite big_morph_N /= big_constz mulrC. qed.
-
-lemma nosmt big_constx (P : 'a -> bool) x s: x <> Inf =>
-  big P (fun _ => x) s = (count P s) ** x.
-proof. by case: x => //= x; apply: big_const_Nx. qed.
-
-lemma big_constNz x (s: 'a list) :
-  big predT (fun _ => N x) s = N (size s * x).
-proof. by rewrite big_const_Nx count_predT. qed.
-
-lemma bigi_constz x (n m:int) : 
-   n <= m =>
-   bigi predT (fun _ => N x) n m = N ((m - n) * x).
-proof. by move=> hnm;rewrite big_constNz size_range /#. qed.
-
+  clone include Bigop
+    with type t <- xint,
+           op Support.idm <- ('0),
+           op Support.(+) <- xadd
+    proof *.
+  
+  realize Support.Axioms.addmA by exact/addxA.
+  realize Support.Axioms.addmC by exact/addxC.
+  realize Support.Axioms.add0m by exact/add0x.
+  
+  lemma nosmt big_morph_N (P : 'a -> bool) (f : 'a -> int) s:
+    big P (fun i => N (f i)) s = N (BIA.big P (fun i => f i) s).
+  proof.
+  elim: s => [|x s ih] //=.
+  by rewrite !(big_cons, BIA.big_cons) ih /=; case: (P x).
+  qed.
+  
+  lemma nosmt big_const_Nx (P : 'a -> bool) x s:
+    big P (fun _ => N x) s = (count P s) ** N x.
+  proof. by rewrite big_morph_N /= big_constz mulrC. qed.
+  
+  lemma nosmt big_constx (P : 'a -> bool) x s: x <> Inf =>
+    big P (fun _ => x) s = (count P s) ** x.
+  proof. by case: x => //= x; apply: big_const_Nx. qed.
+  
+  lemma big_constNz x (s: 'a list) :
+    big predT (fun _ => N x) s = N (size s * x).
+  proof. by rewrite big_const_Nx count_predT. qed.
+  
+  lemma bigi_constz x (n m:int) : 
+     n <= m =>
+     bigi predT (fun _ => N x) n m = N ((m - n) * x).
+  proof. by move=> hnm;rewrite big_constNz size_range /#. qed.
+  
 end Bigxint.
 export Bigxint.
+
+(* -------------------------------------------------------------------- *)
+theory Bigcost.
+  clone include Bigop
+    with type t <- cost,
+           op Support.idm <- CoreCost.zero,
+           op Support.(+) <- CoreCost.(+)
+    proof *.
+  
+  realize Support.Axioms.addmA by exact/addcostA.
+  realize Support.Axioms.addmC by exact/addcostC.
+  realize Support.Axioms.add0m by exact/add0cost.
+    
+end Bigcost.
+export Bigcost.
 
 (* ------------------------------------------------------------------------------ *)
 lemma is_int_xopp (x:xint) : is_int x => is_int (-x).

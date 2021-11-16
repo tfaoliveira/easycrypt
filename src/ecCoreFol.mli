@@ -412,6 +412,7 @@ val f_xmuli : form -> form -> form
 val f_xle   : form -> form -> form
 val f_xlt   : form -> form -> form
 val f_xmax  : form -> form -> form
+val f_xoget : form -> form
 
 val f_x0 : form
 val f_x1 : form

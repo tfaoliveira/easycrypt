@@ -109,7 +109,7 @@ let pp_exn fmt exn =
 let _ = EcPException.register pp_exn
 
 (* -------------------------------------------------------------------- *)
-let q_List    = [EcCoreLib.i_top; "List"]
+let q_List = [EcCoreLib.i_top; "List"]
 
 let tlist =
   let tlist = EcPath.fromqsymbol (q_List, "list") in
@@ -122,8 +122,13 @@ let range =
 
 let f_predT = f_op EcCoreLib.CI_Pred.p_predT [tint] (tpred tint)
 
-let f_op_xbig =
-  f_op EcCoreLib.CI_Xint.p_big [tint]
+(* -------------------------------------------------------------------- *)
+let f_op_bigcost =
+  f_op EcCoreLib.CI_Xint.p_bigcost [tint]
+    (toarrow [tpred tint; tfun tint tcost; tlist tint] tcost)
+
+let f_op_bigx =
+  f_op EcCoreLib.CI_Xint.p_bigx [tint]
     (toarrow [tpred tint; tfun tint txint; tlist tint] txint)
 
 let f_op_big =
@@ -134,22 +139,19 @@ let f_op_big =
   f_op p_big [tint]
     (toarrow [tpred tint; tfun tint tint; tlist tint] tint)
 
-let f_xbig f m n =
-  f_app f_op_xbig [f_predT; f; range m n] txint
-
-let f_big f m n =
-  f_app f_op_big [f_predT; f; range m n] tint
+let f_bigcost f m n = f_app f_op_bigcost [f_predT; f; range m n] tcost
+let f_bigx    f m n = f_app f_op_bigx    [f_predT; f; range m n] txint
+let f_big     f m n = f_app f_op_big     [f_predT; f; range m n] tint
 
 let choare_sum (cost : cost) (m, n) : cost =
-  cost_map (fun f -> f_xbig f m n) cost
+  cost_map (fun f -> f_bigx f m n) cost
 
 (* [choare_xsum cost (m,n)]:
-   [cost] of type [tcost], [m] of type [tint], [n] of type [txint].
+   [cost] of type [tint -> tcost], [m] of type [tint], [n] of type [txint].
 
-   [n] must be finite, i.e. [n = f_N n_fin]. Then this is a sum of integers:
-      [choare_xsum cost (m,n) = choare_sum cost (m,n_fin)]. *)
+   [n] must be finite, i.e. [n = f_N n_fin].  *)
 let choare_xsum (cost : form) (m, n) : form =
-  assert false (* TODO A: *)
+  f_bigcost cost m (f_xoget n)
 
 
 (* -------------------------------------------------------------------- *)

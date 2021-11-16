@@ -1053,6 +1053,7 @@ let f_op_xmul   = f_op EcCoreLib.CI_Xint.p_xmul  [] (toarrow [txint; txint ] txi
 let f_op_xle    = f_op EcCoreLib.CI_Xint.p_xle   [] (toarrow [txint; txint ] tbool)
 let f_op_xlt    = f_op EcCoreLib.CI_Xint.p_xlt   [] (toarrow [txint; txint ] tbool)
 let f_op_xmax   = f_op EcCoreLib.CI_Xint.p_xmax  [] (toarrow [txint;  txint] txint)
+let f_op_xoget  = f_op EcCoreLib.CI_Xint.p_xoget [] (toarrow [txint]          tint)
 
 let f_op_inf    = f_op EcCoreLib.CI_Xint.p_inf    [] txint
 let f_op_N      = f_op EcCoreLib.CI_Xint.p_N      [] (toarrow [tint ] txint)
@@ -1072,6 +1073,7 @@ let f_xmuli fi f  = f_xmul (f_N fi) f
 let f_xle   f1 f2 = f_app f_op_xle  [f1; f2] tbool
 let f_xlt   f1 f2 = f_app f_op_xlt  [f1; f2] tbool
 let f_xmax  f1 f2 = f_app f_op_xmax [f1; f2] txint
+let f_xoget f     = f_app f_op_xoget [f]      tint
 
 let f_x0 = f_N f_i0
 let f_x1 = f_N f_i1
