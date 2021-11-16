@@ -52,8 +52,14 @@ type pty_r =
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
+
   | PTcost
-  | PTmodcost of (psymbol * [`Closed | `Open]) list * (psymbol * psymbol) list
+
+  | PTmodcost   of (psymbol * [`Closed | `Open]) list * (psymbol * psymbol) list
+  (* concrete module cost record type *)
+
+  | PTmodcost_q of pqsymbol
+  (* module cost record from a pqsymbol *)
 
 and pty = pty_r located
 

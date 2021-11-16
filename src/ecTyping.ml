@@ -1105,6 +1105,30 @@ let trans_msymbol env msymb =
   let ((m,_),mt) = trans_msymbol env msymb in
   (m,mt)
 
+
+(* -------------------------------------------------------------------- *)
+let lookup_module_type (env : EcEnv.env) (name : pqsymbol) =
+  match EcEnv.ModTy.lookup_opt (unloc name) env with
+  | None   -> tyerror name.pl_loc env (UnknownTyModName (unloc name))
+  | Some x -> x
+
+let lookup_fun env name =
+  try
+    EcEnv.Fun.lookup name.pl_desc env
+  with EcEnv.LookupFailure _ ->
+    tyerror name.pl_loc env (UnknownFunName name.pl_desc)
+
+(* -------------------------------------------------------------------- *)
+let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
+  let (p, sig_) = lookup_module_type env modty in
+  let modty = {                         (* eta-normal form *)
+    mt_params = sig_.mis_params;
+    mt_name   = p;
+    mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
+    mt_restr  = sig_.mis_restr;
+  } in
+    (modty, sig_)
+
 (* -------------------------------------------------------------------- *)
 let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
   match ty.pl_desc with
@@ -1175,6 +1199,32 @@ let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
         ) Msym.empty p_oracles
     in
     tmodcost procs oracles
+
+  | PTmodcost_q gp ->
+    let mty, msig = transmodtype env gp in
+    (* procedure of [gp] *)
+    let procs =
+      List.fold_left (fun procs (Tys_function fs) ->
+          Msym.add fs.fs_name false procs
+        ) Msym.empty msig.mis_body
+    in
+    (* all oracle's procedures of [gp] *)
+    let oracles =
+      (* for each oracle [oid] of [gp] *)
+      List.fold_left (fun oracles (oid, oty) ->
+          let osig = EcEnv.ModTy.sig_of_mt env oty in
+          let oprocs =
+            (* we add all procedures of [oid] to [oracles] *)
+            List.fold_left (fun oprocs (Tys_function fs) ->
+                Ssym.add fs.fs_name oprocs
+              ) Ssym.empty osig.mis_body
+          in
+          Msym.add (EcIdent.name oid) oprocs oracles
+        ) Msym.empty msig.mis_params
+    in
+    let _name = mty.mt_name in
+    tmodcost procs oracles
+
 
 and transtys tp (env : EcEnv.env) ue tys =
   List.map (transty tp env ue) tys
@@ -1778,28 +1828,6 @@ let transexpcast_opt (env : EcEnv.env) mode ue oty e =
   | Some t -> transexpcast env mode ue t e
 
 (* -------------------------------------------------------------------- *)
-let lookup_module_type (env : EcEnv.env) (name : pqsymbol) =
-  match EcEnv.ModTy.lookup_opt (unloc name) env with
-  | None   -> tyerror name.pl_loc env (UnknownTyModName (unloc name))
-  | Some x -> x
-
-let lookup_fun env name =
-  try
-    EcEnv.Fun.lookup name.pl_desc env
-  with EcEnv.LookupFailure _ ->
-    tyerror name.pl_loc env (UnknownFunName name.pl_desc)
-
-(* -------------------------------------------------------------------- *)
-let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
-  let (p, sig_) = lookup_module_type env modty in
-  let modty = {                         (* eta-normal form *)
-    mt_params = sig_.mis_params;
-    mt_name   = p;
-    mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
-    mt_restr  = sig_.mis_restr;
-  } in
-    (modty, sig_)
-
 let transcall transexp env ue loc fsig args =
   let targ = fsig.fs_arg in
 

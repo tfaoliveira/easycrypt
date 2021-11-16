@@ -340,7 +340,7 @@ let rec ty_subst s =
               ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ s; } body
       end
 
-      | Tmodcost _ -> ty (* FIXME: check this *))
+      | Tmodcost _ -> ty)
 
 (* -------------------------------------------------------------------- *)
 module Tuni = struct

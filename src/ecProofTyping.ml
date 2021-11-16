@@ -42,27 +42,6 @@ let process_form ?mv hyps pf ty =
 let process_formula ?mv hyps pf =
   process_form hyps ?mv pf tbool
 
-let process_cost ?mv hyps p_cost tys : cost =
-  let EcParsetree.PC_costs ((self, calls), full) = p_cost in
-  let process_elc ty = function
-    | `Unbounded -> f_Inf
-    | `Bounded c ->
-      process_form_opt ?mv hyps c (Some (toarrow tys ty))
-  in
-
-  let env = LDecl.toenv hyps in
-  let self = process_elc txint self in
-  let calls = List.map (fun (m,f,c) ->
-      let f = EcTyping.trans_oracle env (m,f) in
-      let f_c = process_elc txint c in
-      f, f_c
-    ) calls
-  in
-
-  let calls = EcPath.Mx.of_list calls in
-
-  cost_r self calls full
-
 let process_exp hyps mode oty e =
   let env = LDecl.toenv hyps in
   let ue  = unienv_of_hyps hyps in
@@ -82,9 +61,6 @@ let pf_process_form_opt pe ?mv hyps oty pf =
 let pf_process_form pe ?mv hyps ty pf =
   Exn.recast_pe pe hyps (fun () -> process_form ?mv hyps pf ty)
 
-let pf_process_cost pe ?mv hyps tys pcost =
-  Exn.recast_pe pe hyps (fun () -> process_cost ?mv hyps pcost tys)
-
 let pf_process_formula pe ?mv hyps pf =
   Exn.recast_pe pe hyps (fun () -> process_formula ?mv hyps pf)
 
@@ -100,9 +76,6 @@ let tc1_process_form_opt ?mv tc oty pf =
 
 let tc1_process_form ?mv tc ty pf =
   Exn.recast_tc1 tc (fun hyps -> process_form ?mv hyps pf ty)
-
-let tc1_process_cost ?mv tc tys pcost =
-  Exn.recast_tc1 tc (fun hyps -> process_cost ?mv hyps pcost tys)
 
 let tc1_process_formula ?mv tc pf =
   Exn.recast_tc1 tc (fun hyps -> process_formula ?mv hyps pf)

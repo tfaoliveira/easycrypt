@@ -1460,6 +1460,7 @@ simpl_type_exp:
 | TICKLBRACKET procs=rlist0(pty_proc_el, COMMA) SHARP 
                oracles=rlist0(pty_oracle_el, empty) RBRACKET 
                               { PTmodcost (procs,oracles) }
+| SHARP x=uqident             { PTmodcost_q x }
 
 type_args:
 | ty=loc(simpl_type_exp)                          { [ty] }
@@ -1471,7 +1472,7 @@ type_exp:
 | ty1=loc(type_exp) RARROW ty2=loc(type_exp) { PTfun(ty1,ty2) }
 
 (* -------------------------------------------------------------------- *)
-(* Parameter declarations                                              *)
+(* Parameter declarations                                               *)
 
 typed_vars:
 | xs=ident+ COLON ty=loc(type_exp)
