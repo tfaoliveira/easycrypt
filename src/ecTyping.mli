@@ -87,6 +87,7 @@ type modtyp_error =
 type modsig_error =
 | MTS_DupProcName of symbol
 | MTS_DupArgName  of symbol * symbol
+| MTS_NotAnOracle of EcPath.xpath list
 
 type funapp_error =
 | FAE_WrongArgCount
