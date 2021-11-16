@@ -130,23 +130,23 @@ val f_real_div_simpl : form -> form -> form
 val f_real_inv_simpl : form -> form
 
 (* -------------------------------------------------------------------- *)
-val f_cost_opp_simpl     : form -> form
-val f_cost_add_simpl     : form -> form -> form
-val f_cost_scale_simpl   : form -> form -> form
-val f_cost_xscale_simpl  : form -> form -> form
-val f_cost_le_simpl      : form -> form -> form
-val f_cost_lt_simpl      : form -> form -> form
+val f_cost_opp_simpl    : form -> form
+val f_cost_add_simpl    : form -> form -> form
+val f_cost_scale_simpl  : form -> form -> form
+val f_cost_xscale_simpl : form -> form -> form
+val f_cost_le_simpl     : form -> form -> form
+val f_cost_lt_simpl     : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf_simpl : form -> form
 val f_is_int_simpl : form -> form
 
-val f_xopp_simpl  : form -> form
-val f_xadd_simpl  : form -> form -> form
-val f_xmul_simpl  : form -> form -> form
-val f_xle_simpl   : form -> form -> form
-val f_xlt_simpl   : form -> form -> form
-val f_xmax_simpl  : form -> form -> form
+val f_xopp_simpl : form -> form
+val f_xadd_simpl : form -> form -> form
+val f_xmul_simpl : form -> form -> form
+val f_xle_simpl  : form -> form -> form
+val f_xlt_simpl  : form -> form -> form
+val f_xmax_simpl : form -> form -> form
 
 val f_cost_proj_simpl : form -> cost_proj -> form
 

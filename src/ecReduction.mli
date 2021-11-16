@@ -108,11 +108,6 @@ val simplify : reduction_info -> LDecl.hyps -> form -> form
 val is_conv    : ?ri:reduction_info -> LDecl.hyps -> form -> form -> bool
 val check_conv : ?ri:reduction_info -> LDecl.hyps -> form -> form -> unit
 
-(* ----------------------------------------------------------------- *)
-(* Simplify xints                                                    *)
-
-val simplify_xint : EcEnv.LDecl.hyps -> form -> [`Int of form | `Inf | `Unknown]
-
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]
 

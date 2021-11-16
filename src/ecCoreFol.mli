@@ -527,6 +527,8 @@ val destr_int       : form -> zint
 val destr_glob      : form -> EcPath.mpath     * memory
 val destr_pvar      : form -> EcTypes.prog_var * memory
 
+val destr_xint : form -> [`Int of form | `Inf | `Unknown]
+
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool
 val is_false     : form -> bool

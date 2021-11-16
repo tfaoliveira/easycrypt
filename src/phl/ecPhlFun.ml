@@ -357,7 +357,8 @@ module FunAbsLow = struct
       let ois = allowed oi_param in
       List.filter (fun o ->
           let c = EcCHoare.cost_orcl f.x_sub o cost_info in
-          match EcReduction.simplify_xint hyps c with
+          let c = EcReduction.simplify EcReduction.full_red hyps c in
+          match destr_xint c with
           | `Inf | `Unknown -> true
           | `Int c -> not (EcReduction.xconv `Conv hyps c f_x0)
         ) ois

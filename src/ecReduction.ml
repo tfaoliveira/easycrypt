@@ -986,6 +986,35 @@ let reduce_cost ri env coe =
 
     | _ -> raise nohead
 
+(* remove useless entries in the cost record *)
+let _reduce_crecord (c : crecord) =
+  let has_red, c_calls =
+    Mx.mapi_filter_fold (fun _ f has_red ->
+        match destr_xint f with
+        | `Inf when not c.c_full ->
+          true, None
+        | `Int fi when c.c_full && f_equal fi f_x0 ->
+          true, None
+        | _ -> has_red, Some f
+      ) c.c_calls false
+  in
+  has_red, cost_r c.c_self c_calls c.c_full
+
+let reduce_crecord (c : crecord) =
+  let has_red, c = _reduce_crecord c in
+  if not has_red then raise nohead;
+  c
+
+let reduce_modcost (mc : mod_cost) =
+  let has_red, mc =
+    EcSymbols.Msym.mapi_fold (fun _ pc has_red ->
+        let has_red', pc = _reduce_crecord pc in
+        has_red || has_red', pc
+      ) mc false
+  in
+  if not has_red then raise nohead;
+  mc
+
 
 
 (* -------------------------------------------------------------------- *)
@@ -1163,6 +1192,13 @@ let reduce_head simplify ri env hyps f =
     try reduce_cost ri env coe with
       | NotRed _ -> reduce_user_gen simplify ri env hyps f
     end
+
+  | Fcost     c when ri.cost -> f_cost_r (reduce_crecord c)
+  | Fmodcost mc when ri.cost -> f_mod_cost_r (reduce_modcost mc)
+
+  | Fcost_proj (c,p) when ri.cost ->
+    let f' = f_cost_proj_simpl c p in
+    if f_equal f f' then raise nohead else f'
 
   | _ -> raise nohead
 
@@ -1751,25 +1787,6 @@ let h_red ri hyps f =
 let h_red_opt ri hyps f =
   try Some (h_red ri hyps f)
   with NotReducible -> None
-
-
-(* ----------------------------------------------------------------- *)
-(* Simplify xints                                                    *)
-
-let simplify_xint
-    (hyps : LDecl.hyps)
-    (x    : form)
-  : [`Int of form | `Inf | `Unknown]
-  =
-  let xn = simplify full_red hyps x in
-  match destr_app xn with
-  | { f_node = Fop (p, _) }, [f]
-    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> `Int f
-
-  | { f_node = Fop (p, _) }, []
-    when EcPath.p_equal p EcCoreLib.CI_Xint.p_inf -> `Inf
-
-  | _                                             -> `Unknown
 
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]

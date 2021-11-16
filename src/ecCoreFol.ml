@@ -1766,6 +1766,17 @@ let destr_nots form =
     | Some form -> aux (not b) form
   in aux true form
 
+
+let destr_xint (x : form) : [`Int of form | `Inf | `Unknown] =
+  match destr_app x with
+  | { f_node = Fop (p, _) }, [f]
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> `Int f
+
+  | { f_node = Fop (p, _) }, []
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_inf -> `Inf
+
+  | _                                             -> `Unknown
+
 (* -------------------------------------------------------------------- *)
 let is_from_destr dt f =
   try ignore (dt f); true with DestrError _ -> false
