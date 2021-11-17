@@ -153,12 +153,13 @@ val params_equal : oi_params -> oi_params -> bool
 val filter_param : (xpath -> bool) -> oi_param -> oi_param
 
 (* -------------------------------------------------------------------- *)
-(* ['a] will be instantiated by [EcCoreFol.]. *)
+(* ['a] will be instantiated by [EcCoreFol.form] *)
+
 type 'a p_mod_restr = {
-  mr_xpaths  : EcPath.Sx.t use_restr;
-  mr_mpaths  : EcPath.Sm.t use_restr;
-  mr_params  : oi_params;
-  mr_cost    : 'a ;
+  mr_xpaths : EcPath.Sx.t use_restr;
+  mr_mpaths : EcPath.Sm.t use_restr;
+  mr_params : oi_params;
+  mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
 
 val p_mr_equal :

@@ -538,13 +538,12 @@ let check_item_compatible
 
   let hyps = EcEnv.LDecl.init env [] in
   if proof_obl then ()
-  else
-    if EcReduction.is_conv hyps icosts ocosts then
-      let err = match mode with
-        | `Eq  -> `Eq (icosts, ocosts)
-        | `Sub -> `Sub(icosts, ocosts)
-      in
-      check_item_err (MF_compl(env, err))
+  else if not (EcReduction.is_conv hyps icosts ocosts) then
+    let err = match mode with
+      | `Eq  -> `Eq (icosts, ocosts)
+      | `Sub -> `Sub(icosts, ocosts)
+    in
+    check_item_err (MF_compl(env, err))
 
 
 (* -------------------------------------------------------------------- *)
@@ -2085,46 +2084,67 @@ let top_is_mem_binding pf = match pf with
 
 
 (* -------------------------------------------------------------------- *)
+let proc_cost_is_unbounded (c : crecord) : bool =
+  f_equal c.c_self f_cost_inf &&
+  Mx.for_all (fun _ c -> f_equal c f_Inf) c.c_calls
+
+let modcost_is_unbounded (mc : form) : bool =
+  match mc.f_node with
+  | Fmodcost mc -> Msym.for_all (fun _ -> proc_cost_is_unbounded) mc
+  | _ -> false
+
 (* We unify both restriction, by replacing fields in [mr] by the fields in
    [mr'] that have been provided in [pmr]. This is a bit messy. *)
 let replace_if_provided
-    (_env : EcEnv.env)
+    (env : EcEnv.env)
     (mr  : mod_restr)
     (mr' : mod_restr option)
-    (_pmr : pmod_restr option) : mod_restr
+    (pmr : pmod_restr option) : mod_restr
   =
-  match mr' with
+  match pmr with
   | None -> mr
-  | Some mr' -> mr'
-(* TODO A: do we want to restore this functionnality ? *)
+  | Some pmr ->
+    let mr' = oget mr' in     (* If [pmr] is not [None], then so is [mr']. *)
 
-  (* match pmr with
-   * | None -> mr
-   * | Some pmr ->
-   *   let mr' = oget mr' in     (\* If [pmr] is not [None], then so is [mr']. *\)
-   *   let mr_xpaths, mr_mpaths =
-   *     if pmr.pmr_mem = []
-   *     then mr.mr_xpaths, mr.mr_mpaths
-   *     else mr'.mr_xpaths, mr'.mr_mpaths
-   *   and mr_oinfos =
-   *     Msym.fold2_union (fun s oi oi' mr_oinfos -> match oi,oi' with
-   *         | None, None -> assert false
-   *         | None, Some _ ->
-   *           (\* This is the case where we provided a restriction for a function
-   *              that does not appear in the signature. *\)
-   *           let el = List.find (fun el ->
-   *               unloc el.pmre_name = s
-   *             ) pmr.pmr_procs in
-   *           let loc = loc (el.pmre_name) in
-   *           tyerror loc env (FunNotInSignature s)
-   *
-   *         | Some a, None
-   *         | Some _, Some a -> Msym.add s a mr_oinfos
-   *       ) mr.mr_oinfos mr'.mr_oinfos Msym.empty in
-   *
-   *   {  mr_xpaths = mr_xpaths;
-   *      mr_mpaths = mr_mpaths;
-   *      mr_oinfos = mr_oinfos; } *)
+    let mr_xpaths, mr_mpaths =
+      if pmr.pmr_mem = []
+      then mr.mr_xpaths, mr.mr_mpaths
+      else mr'.mr_xpaths, mr'.mr_mpaths in
+
+    let mr_params =
+      Msym.fold2_union (fun s oi oi' mr_params -> match oi,oi' with
+          | None, None -> assert false
+          | None, Some _ ->
+            (* This is the case where we provided a restriction for a function
+               that does not appear in the signature. *)
+            let el = List.find (fun el ->
+                unloc el.pmre_name = s
+              ) pmr.pmr_procs in
+            let loc = loc (el.pmre_name) in
+            tyerror loc env (FunNotInSignature s)
+
+          | Some a, None
+          | Some _, Some a -> Msym.add s a mr_params
+        ) mr.mr_params mr'.mr_params Msym.empty
+    in
+    let mr_cost =
+      (* if [mr'] does not contain any cost restriction, keep the
+         old cost restrictions. *)
+      if modcost_is_unbounded mr'.mr_cost then mr.mr_cost
+      else
+        begin
+          (* otherwise, we check that [mr] did not already contain any cost
+             restrictions, and then use [mr'.mr_cost]. *)
+          if not (modcost_is_unbounded mr.mr_cost) then
+            assert false;            (* TODO A: error message *)
+
+          mr'.mr_cost
+        end
+    in
+    { mr_xpaths;
+      mr_mpaths;
+      mr_params;
+      mr_cost; }
 
 (* -------------------------------------------------------------------- *)
 let trans_restr_mem env (r_mem : pmod_restr_mem) =

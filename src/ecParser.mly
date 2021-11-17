@@ -1781,16 +1781,19 @@ mod_restr_el:
 mod_restr:
   | LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
-	pmr_procs = [] } }
+	      pmr_procs = [] } }
+
   | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
     { { pmr_mem = [];
-	pmr_procs = l } }
+	      pmr_procs = l } }
+
   | LBRACE mr=mem_restr RBRACE LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
     { { pmr_mem = mr;
-	pmr_procs = l } }
+	      pmr_procs = l } }
+
   | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
-	pmr_procs = l } }
+	      pmr_procs = l } }
 
 
 (* -------------------------------------------------------------------- *)

@@ -101,12 +101,26 @@ and ctheory_override =
 | CTHO_Type   of EcTypes.ty
 
 (* -------------------------------------------------------------------- *)
+(* REM *)
+let rec pp_list sep pp fmt xs =
+  let pp_list = pp_list sep pp in
+    match xs with
+    | []      -> ()
+    | [x]     -> Format.fprintf fmt "%a" pp x
+    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
+
 let module_comps_of_module_sig_comps
     (comps : module_sig_body)
     (restr : mod_restr) : module_comps
   =
   let onitem = function
     | Tys_function funsig ->
+      (* REM *)
+      Format.eprintf "f: %s@.k: %a@."
+        funsig.fs_name
+        (pp_list " " (fun fmt s -> Format.fprintf fmt "%s" s))
+        (Msym.keys restr.mr_params);
+
       let param = Msym.find funsig.fs_name restr.mr_params in
         MI_Function {
           f_name = funsig.fs_name;

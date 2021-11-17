@@ -50,8 +50,8 @@ end = struct
         | `Sub (ic,oc) -> `Sub, ic, oc
       in
       Format.fprintf fmt
-        "@[<v>@[%a@]@; cannot be shown \
-         to be %s:@;  @[%a@]@]"
+        "@[<v>   @[%a@]@; cannot be shown \
+         to be %s:@;   @[%a@]@]"
         (EcPrinting.pp_form ppe) ic
         (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
         (EcPrinting.pp_form ppe) oc
@@ -90,8 +90,7 @@ end = struct
 
     | MF_compl (env, info) ->
       let ppe = EcPrinting.PPEnv.ofenv env in
-      Format.fprintf fmt "@[<v>%a@]"
-        (pp_diff_cost ppe) info
+      pp_diff_cost ppe fmt info
 
   let pp_restr_err_aux env fmt error =
     let msg x = Format.fprintf fmt x in
@@ -185,7 +184,7 @@ end = struct
         x (pp_restr_err_aux env) restr_err
 
     | E_TyModCnv_MismatchFunSig (x,err) ->
-      msg "@[<hov 2>procedure `%s' is not compatible:@ %a@]"
+      msg "procedure `%s' is not compatible:@ %a"
         x (pp_mismatch_funsig env) err
 
     | E_TyModCnv_SubTypeArg(x,t1,t2,err) ->

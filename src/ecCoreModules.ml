@@ -630,12 +630,13 @@ let filter_param (f : xpath -> bool) (oi : oi_param) : oi_param =
     oi_allowed = List.filter f oi.oi_allowed; }
 
 (* -------------------------------------------------------------------- *)
-(* ['a] will be instantiated by [EcCoreFol.form]. *)
+(* ['a] will be instantiated by [EcCoreFol.form] *)
+
 type 'a p_mod_restr = {
   mr_xpaths : EcPath.Sx.t use_restr;
   mr_mpaths : EcPath.Sm.t use_restr;
   mr_params : oi_params;
-  mr_cost   : 'a ;
+  mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
 
 let p_mr_equal
