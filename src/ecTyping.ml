@@ -543,6 +543,10 @@ let check_item_compatible
       | `Eq  -> `Eq (icosts, ocosts)
       | `Sub -> `Sub(icosts, ocosts)
     in
+    (* TODO A: [cin] and [cout] are the full module cost, not just the cost
+       of procedure [fin.fs_name]. The error message must be changed.
+       Furthermore, we should move the cost checking elsewhere, to avoid doing
+       it several times. *)
     check_item_err (MF_compl(env, err))
 
 
@@ -2086,7 +2090,8 @@ let top_is_mem_binding pf = match pf with
 (* -------------------------------------------------------------------- *)
 let proc_cost_is_unbounded (c : crecord) : bool =
   f_equal c.c_self f_cost_inf &&
-  Mx.for_all (fun _ c -> f_equal c f_Inf) c.c_calls
+  Mx.for_all (fun _ c -> f_equal c f_Inf) c.c_calls &&
+  not c.c_full
 
 let modcost_is_unbounded (mc : form) : bool =
   match mc.f_node with
@@ -2262,7 +2267,7 @@ let rec trans_restr_compl
   in
 
   match r_compl with
-  | None -> f_cost_inf, calls, true
+  | None -> f_cost_inf, calls, false
   | Some (PCompl (self, restr_elems, full)) ->
     let calls =
       List.fold_left (fun calls (name, form) ->

@@ -4,6 +4,11 @@ require import CoreXint.
 op zero : cost.
 op inf  : cost.
 
+axiom zero_def : zero = `[: N 0].
+axiom inf_def  : inf = `[: .., ..]. 
+
+hint simplify zero_def, inf_def.
+
 op scale : int -> cost -> cost.
 op xscale (x : xint) (c : cost) =
   with x = N x => scale x c
