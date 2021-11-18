@@ -12,7 +12,8 @@ Unlike Oracle_PKE, we do not work with an abstract [Scheme]
 module. Instead, we require distributions [dkeyseed, dencseed] and
 operators that allow implementing a [Scheme] module *) 
 
-theory ICCA.
+(* FIXME: We use an inner theory to avoid the name-clash with the Real theory. *)
+theory CCA.
 
 type pkey, skey, plaintext, ciphertext, encseed, keyseed.
 
@@ -44,19 +45,19 @@ clone import IND_CCA2 as C with
   axiom Nenc_gt0 <- Nenc_gt0
   proof*.
 
-module type ICCA_Oracle = {
+module type Oracle = {
   proc pk () : pkey
   proc enc (_ : plaintext) : ciphertext
   proc dec (_ : ciphertext)  : plaintext option
 }.
 
-module type ICCA_i = {
-  include ICCA_Oracle
+module type Oracle_i = {
+  include Oracle
   proc init() : unit
 }.
 
 (* "Real" oracle, enc encrypts the given message *)
-module Real : ICCA_Oracle = {
+module Real : Oracle = {
   var pk : pkey
   var sk : skey
 
@@ -92,7 +93,7 @@ module Real : ICCA_Oracle = {
 In the case of a ciphertext collision (e.g. a collision in dencseed),
 the last given message is returned *)
 
-module Ideal : ICCA_Oracle = {
+module Ideal : Oracle = {
   import var Real
   var cs : (ciphertext * plaintext) list
 
@@ -132,7 +133,7 @@ module Ideal : ICCA_Oracle = {
 (* Same as above, but in the case of a ciphertext collision, the
 message returned by decryption is chosen randomly. *) 
 
-module IdealS : ICCA_Oracle = {
+module IdealS : Oracle = {
   import var Real
   include var Ideal [-dec]
 
@@ -150,11 +151,11 @@ module IdealS : ICCA_Oracle = {
   }
 }.
 
-module type Adversary (G : ICCA_Oracle) = {
+module type Adversary (G : Oracle) = {
   proc main () : bool
 }.
 
-module Game (O : ICCA_i, A : Adversary) = {
+module Game (O : Oracle_i, A : Adversary) = {
 
   proc main() = {
     var r;
@@ -167,7 +168,7 @@ module Game (O : ICCA_i, A : Adversary) = {
 
 (*-------------------------------*)
 
-module CountICCA (O : ICCA_Oracle) = {
+module CountICCA (O : Oracle) = {
   var ndec, nenc : int
 
   proc init () : unit = {
@@ -194,7 +195,7 @@ module CountICCA (O : ICCA_Oracle) = {
   }
 }.
 
-module CountAdv (A : Adversary) (O : ICCA_Oracle) = {
+module CountAdv (A : Adversary) (O : Oracle) = {
   proc main() = {
     var b;
 
@@ -209,7 +210,7 @@ module B (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
   var pk : pkey
 
-  module O' : ICCA_Oracle = {
+  module O' : Oracle = {
 
     proc init (p : pkey) = { pk <- p; }
 
@@ -249,7 +250,7 @@ module BS (A : Adversary) (O : CCA_Oracle) = {
   var cs : (ciphertext * plaintext) list
   var pk : pkey
 
-  module O' : ICCA_Oracle = {
+  module O' : Oracle = {
 
     proc init (p : pkey) = { pk <- p; }
 
@@ -318,7 +319,7 @@ module S : Scheme = {
   }
 }.
 
-declare axiom A_bound (O <: ICCA_Oracle {A, CountICCA}) : hoare [CountAdv(A, O).main :
+declare axiom A_bound (O <: Oracle {A, CountICCA}) : hoare [CountAdv(A, O).main :
                true ==> CountICCA.ndec <= Ndec /\ CountICCA.nenc <= Nenc].
 
 equiv AB_bound (O <: CCA_Oracle{CountICCA, CountCCA, A, B}) :
@@ -343,7 +344,7 @@ proof.
 by conseq (AB_bound (<: O)) (A_bound (<: B(A, O).O')) => // /#.
 qed.
 
-local module Real' : ICCA_Oracle = {
+local module Real' : Oracle = {
   import var Real
   include var Ideal [-enc]
 
@@ -357,7 +358,7 @@ local module Real' : ICCA_Oracle = {
   }
 }.
 
-local module RealS' : ICCA_Oracle = {
+local module RealS' : Oracle = {
   import var Real
   import var Ideal
   include Real' [-dec]
@@ -515,4 +516,4 @@ qed.
 
 end section.
 
-end ICCA.
+end CCA.
