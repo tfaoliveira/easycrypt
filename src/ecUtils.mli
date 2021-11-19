@@ -254,6 +254,7 @@ module List : sig
   val opick   : ('a -> 'b option) -> 'a list -> 'b option
   val oindex  : ('a -> bool) -> 'a list -> int option
   val orindex : ('a -> bool) -> 'a list -> int option
+  val oconsd  : 'a list -> ('a * 'a list) option
 
   (* Functions working on 2 lists in parallel *)
   module Parallel : sig

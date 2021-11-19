@@ -8,6 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 open EcUtils
+open EcSymbols
 open EcIdent
 open EcPath
 open EcTypes
@@ -308,17 +309,9 @@ let zapp_cost_l
     (calls : xpath list)
     (c_calls : form list) : form Mx.t
   =
-  let rec zapp_c calls c_calls (cost : form Mx.t) =
-      match calls, c_calls with
-      | [], [] -> cost
-
-      | xp :: calls, cb :: c_calls ->
-        zapp_c calls c_calls (Mx.add xp cb cost)
-
-      | _ -> assert false
-  in
-  zapp_c calls c_calls Mx.empty
-
+  let zapp_c (cost : form Mx.t) xb cb =
+    Mx.add xb cb cost
+  in List.fold_left2 zapp_c Mx.empty calls c_calls
 
 let check_crecord_l
     subst
@@ -1404,16 +1397,13 @@ type head_sub =
   | Zproj    of int
   | Zhl      of form (* program logic predicates *)
 
-  | Zhl_crecord of { full  : bool;
-                     calls : xpath list; }
-  (* program logic cost record *)
+    (* program logic cost record *)
+  | Zcrecord of { full : bool; calls : xpath list; }
 
-  | Zhl_modcost of { typ   : EcTypes.ty;
-                     procs : (EcSymbols.symbol * xpath list) list; }
-  (* module cost *)
+    (* module cost *)
+  | Zmodcost of (EcSymbols.symbol * bool * xpath list) list
 
-  (* | Zhl_mod_cost_proj of { proc: EcSymbols.symbol;
-   *                          proj : cost_proj; } *)
+  | Zmod_cost_proj of cost_proj
 
 type stk_elem = {
     se_h      : head_sub;
@@ -1445,14 +1435,14 @@ let ztuple args1 args2 ty stk = zpush    Ztuple [] args1 args2     ty stk
 let zproj i ty stk            = zpush (Zproj i) []    []    []     ty stk
 let zhl f fs1 fs2 stk         = zpush   (Zhl f) []   fs1   fs2 f.f_ty stk
 
-let zhl_crecord full calls fs1 fs2 ty stk : stk_elem list =
-  zpush (Zhl_crecord {full; calls}) [] fs1 fs2 ty stk
+let zcrecord full calls fs1 fs2 ty stk : stk_elem list =
+  zpush (Zcrecord { full; calls; }) [] fs1 fs2 ty stk
 
-(* let zhl_mod_cost_proj proc proj ty stk : stk_elem list =
- *   zpush (Zhl_mod_cost_proj {proc; proj}) [] [] [] ty stk *)
+let zmod_cost_proj proj ty stk : stk_elem list =
+  zpush (Zmod_cost_proj proj) [] [] [] ty stk
 
-let zhl_mod_cost procs fs1 fs2 ty stk : stk_elem list =
-  zpush (Zhl_modcost { typ = ty; procs; }) [] fs1 fs2 ty stk
+let zmod_cost procs fs1 fs2 ty stk : stk_elem list =
+  zpush (Zmodcost procs) [] fs1 fs2 ty stk
 
 let zpop ri side f hd =
   let args =
@@ -1493,13 +1483,19 @@ let zpop ri side f hd =
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
 
-  | Zhl_crecord {full; calls},
-    self :: pcalls ->
+  | Zcrecord {full; calls}, self :: pcalls ->
     let calls = zapp_cost_l calls pcalls in
     f_cost_r (cost_r self calls full)
 
-  | Zhl_modcost x, _ ->
-    assert false                (* TODO A: *)
+  | Zmodcost crecs, fs -> begin
+      let state, fs =
+        List.fold_left (fun (state, fs) (name, full, calls) ->
+          let self, fs = oget (List.oconsd fs) in
+          let calls = zapp_cost_l calls fs in
+          (Msym.add name (cost_r self calls full) state, fs)
+        ) (Msym.empty, fs) crecs in
+      assert (List.is_empty fs); f_mod_cost_r state
+    end
 
   (* | Zhl_cost_proj {proc; proj;}, [c] -> *) (* TODO A: *)
 
@@ -1611,41 +1607,41 @@ let rec conv ri env f1 f2 stk : bool =
     conv ri env chs1.chs_pr chs2.chs_pr
       (zhl f1 [chs1.chs_po;chs1.chs_co] [chs2.chs_po;chs2.chs_co] stk)
 
-  | Fcost c1, Fcost c2 ->
-    begin match check_crecord_l Fsubst.f_subst_id c1 c2 with
+  | Fcost c1, Fcost c2 -> begin
+      match check_crecord_l Fsubst.f_subst_id c1 c2 with
       | calls, (self1, self2) :: fs ->
         let fs1, fs2 = List.split fs in
         conv ri env self1 self2
-          (zhl_crecord c1.c_full calls fs1 fs2 f1.f_ty stk)
-      | exception NotConv -> force_head ri env f1 f2 stk
+          (zcrecord c1.c_full calls fs1 fs2 f1.f_ty stk)
       | _ -> assert false
     end
 
-  | Fmodcost mc1, Fmodcost mc2 ->
-    let mc =
-      EcSymbols.Msym.merge (fun _ p1 p2 ->
-          let p1, p2 = oget p1, oget p2 in (* invariant: cannot be None *)
-          Some (p1, p2)
-        ) mc1 mc2
-    in
-    let procs, cprocs = EcSymbols.Msym.fold (fun f (p1,p2) procs ->
-        assert false            (* TODO A: finish*)
+  | Fmodcost mc1, Fmodcost mc2 -> begin
+    let procs, fs =
+      let mc =
+        Msym.merge (fun _ p1 p2 ->
+          match p1, p2 with
+          | Some p1, Some p2 -> Some (p1, p2)
+          | _, _ -> raise NotConv
+        ) mc1 mc2 in
+
+      Msym.fold (fun f (p1, p2) (procs, fs) ->
+        let procs1, fs1 = check_crecord_l Fsubst.f_subst_id p1 p2 in
+        (f, p1.c_full, procs1) :: procs, fs1 @ fs
       ) mc ([], [])
     in
-    begin
-      match cprocs with
-      | [] -> conv_next ri env f1 stk
-      | (g1, g2) :: fs ->
-        let fs1, fs2 = List.split fs in
-        conv ri env g1 g2 (zhl_mod_cost procs fs1 fs2 f1.f_ty stk)
-    end
 
-  | Fcost_proj (c1,proj1),
-    Fcost_proj (c2,proj2)
-    when cost_proj_equal proj1 proj2 ->
-    assert false                (* TODO A: *)
-    (* conv ri env c1 c2
-     *   (zhl_mod_cost_proj proc1 proj1 f1.f_ty stk) *)
+    match fs with
+    | [] -> conv_next ri env f1 stk
+    | (g1, g2) :: fs ->
+      let fs1, fs2 = List.split fs in
+      conv ri env g1 g2 (zmod_cost procs fs1 fs2 f1.f_ty stk)
+  end
+
+  | Fcost_proj (c1, proj1), Fcost_proj (c2, proj2)
+      when cost_proj_equal proj1 proj2
+    ->
+      conv ri env c1 c2 (zmod_cost_proj proj1 f1.f_ty stk)
 
   | FequivF ef1, FequivF ef2
       when EqTest.for_xp env ef1.ef_fl ef2.ef_fl

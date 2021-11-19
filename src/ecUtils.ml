@@ -390,6 +390,8 @@ module List = struct
 
   let ocons o xs = match o with None -> xs | Some x -> x :: xs
 
+  let oconsd = function x :: xs -> Some (x, xs) | _ -> None
+
   (* ------------------------------------------------------------------ *)
   let oindex (f : 'a -> bool) (xs : 'a list) : int option =
     Exceptionless.findi (fun _ -> f) xs |> omap fst
