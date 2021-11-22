@@ -18,6 +18,7 @@
   (ocaml-inifiles (>= 1.2))
   (pcre (>= 7))
   (why3 (and (>= 1.4.0) (< 1.5)))
+  yaml
   yojson
   (zarith (>= 1.10))
 ))

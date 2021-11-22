@@ -17,6 +17,7 @@ else
       menhir
       menhirLib
       merlin
+      yaml
       yojson
       zarith
     ]);
