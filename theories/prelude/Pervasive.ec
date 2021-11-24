@@ -44,3 +44,9 @@ op witness : 'a.                (* All types are inhabited in EC *)
 
 (* -------------------------------------------------------------------- *)
 type cost.
+
+op inf  : cost.
+
+axiom inf_def : inf = `[: .., ..]. 
+
+hint simplify inf_def.

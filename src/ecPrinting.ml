@@ -1839,12 +1839,13 @@ and pp_crecord ppe fmt (c : crecord) =
   _pp_crecord ppe fmt
     (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
 
-and pp_cost ppe fmt c = pp_crecord ppe fmt c
+and pp_cost      ppe fmt c = pp_crecord ppe fmt c
+and pp_proc_cost ppe fmt c = pp_crecord ppe fmt c
 
 and pp_modcost ppe fmt (mc : mod_cost) =
   let pp_elt fmt (f, proc_cost) =
     Format.fprintf fmt "@[%s : %a@]"
-      f (pp_crecord ppe) proc_cost
+      f (pp_proc_cost ppe) proc_cost
   in
 
   let elts = Msym.bindings mc in
