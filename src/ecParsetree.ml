@@ -210,6 +210,7 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFcost    of pcost
+  | PFmodcost of pmodcost
 
   | PFhoareF   of pformula * pgamepath * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
@@ -258,6 +259,8 @@ and pcost_call  = psymbol * psymbol * p_elc
 and pcost_calls = pcost_call list
 
 and pcost  = PC_costs of (p_elc * pcost_calls) * bool
+
+and pmodcost  = (psymbol * pcost) list
 
 (* if [pmty_mem] is [None], there are no user-supplied restriction, which is
    different from the user supplying an empty restriction.

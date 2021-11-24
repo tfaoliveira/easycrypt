@@ -304,14 +304,22 @@ let check_bindings test env subst bd1 bd2 =
     List.fold_left2 (check_binding test) (env,subst) bd1 bd2
 
 
-(* build back the list of call costs *)
+(* eats [List.length calls] elements from [c_calls] to build back the list
+   of call costs.
+   Also return all elements of [c_calls] that have not been used. *)
 let zapp_cost_l
     (calls : xpath list)
-    (c_calls : form list) : form Mx.t
+    (c_calls : form list) : form Mx.t * form list
   =
-  let zapp_c (cost : form Mx.t) xb cb =
-    Mx.add xb cb cost
-  in List.fold_left2 zapp_c Mx.empty calls c_calls
+  let rec aux calls c_calls cost =
+    match calls, c_calls with
+    | [], _ -> cost, c_calls
+    | _, [] -> assert false
+
+    | xb :: calls, cb :: c_calls ->
+      aux calls c_calls (Mx.add xb cb cost)
+  in
+  aux calls c_calls Mx.empty
 
 let check_crecord_l
     subst
@@ -1484,17 +1492,20 @@ let zpop ri side f hd =
     f_coe_r {hcoe with coe_pre = pre}
 
   | Zcrecord {full; calls}, self :: pcalls ->
-    let calls = zapp_cost_l calls pcalls in
+    let calls, pcalls = zapp_cost_l calls pcalls in
+    assert (pcalls = []);
     f_cost_r (cost_r self calls full)
 
   | Zmodcost crecs, fs -> begin
       let state, fs =
         List.fold_left (fun (state, fs) (name, full, calls) ->
-          let self, fs = oget (List.oconsd fs) in
-          let calls = zapp_cost_l calls fs in
-          (Msym.add name (cost_r self calls full) state, fs)
-        ) (Msym.empty, fs) crecs in
-      assert (List.is_empty fs); f_mod_cost_r state
+            let self, fs = oget (List.oconsd fs) in
+            let calls, fs = zapp_cost_l calls fs in
+            (Msym.add name (cost_r self calls full) state, fs)
+          ) (Msym.empty, fs) crecs
+      in
+      assert (List.is_empty fs);
+      f_mod_cost_r state
     end
 
   (* | Zhl_cost_proj {proc; proj;}, [c] -> *) (* TODO A: *)
@@ -1799,7 +1810,7 @@ let is_conv_cproc
   =
   let ri, env = init_redinfo ri hyps in
   if conv ri env f1 f2 [] then true
-  else
+  else begin
     let f1, f2 = whnf ri env f1, whnf ri env f2 in
     match f1.f_node, f2.f_node with
     | Fmodcost m1, Fmodcost m2 ->
@@ -1807,6 +1818,7 @@ let is_conv_cproc
       let ty_dum = tcost in         (* dummy type *)
       conv_crecord ri env a1 a2 ty_dum []
     | _ -> false
+  end
 
 (* -------------------------------------------------------------------- *)
 let h_red ri hyps f =

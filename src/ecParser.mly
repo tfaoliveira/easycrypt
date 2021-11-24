@@ -581,7 +581,6 @@
 %token TICKLBRACKET
 %token TICKPAREN
 %token TICKPIPE
-%token TICKUNDERSCORE
 %token TILD
 %token TIME
 %token TIMEOUT
@@ -1123,6 +1122,12 @@ costs(P):
     { let c, b = cbody in
       PC_costs (c,b) }
 
+modcosts_el(P):
+| f=lident COLON c=costs(P) { f,c }
+
+modcosts(P):
+| TICKLBRACKET l=rlist1(modcosts_el(P),COMMA) RBRACKET { l }
+
 qident_or_res_or_glob:
 | x=qident
     { GVvar x }
@@ -1262,6 +1267,8 @@ sform_u(P):
      PFproji(f,n.pl_desc - 1) }
 
 | c=costs(P)     { PFcost c }
+
+| mc=modcosts(P) { PFmodcost mc }
 
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 

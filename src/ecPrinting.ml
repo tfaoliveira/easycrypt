@@ -441,8 +441,8 @@ let pp_tyname ppe fmt p =
 
 (* -------------------------------------------------------------------- *)
 let pp_tymodcost =
-  let pp_proc_el fmt (p,bopen) =
-    Format.fprintf fmt "%s%s" p (if bopen then ".." else "")
+  let pp_proc_el fmt (p,full) =
+    Format.fprintf fmt "%s%s" p (if not full then ".." else "")
   in
   let pp_oracles fmt orcl =
     Format.fprintf fmt "%a"

@@ -538,17 +538,26 @@ let check_item_compatible
 
   let hyps = EcEnv.LDecl.init env [] in
   if proof_obl then ()
-  else if not (EcReduction.is_conv_cproc hyps ~proc:fin.fs_name icosts ocosts) then
-    let err = match mode with
-      | `Eq  -> `Eq (icosts, ocosts)
-      | `Sub -> `Sub(icosts, ocosts)
-    in
-    (* TODO A: [cin] and [cout] are the full module cost, not just the cost
-       of procedure [fin.fs_name]. The error message must be changed.
-       Furthermore, we should move the cost checking elsewhere, to avoid doing
-       it several times. *)
-    check_item_err (MF_compl(env, err))
+  else
+    begin
+      (* TODO A: it should not be necessary to normalize w.r.t. cbv
+         before checking convertion there. *)
+      let ri = EcReduction.full_red in
+      let icosts = EcCallbyValue.norm_cbv ri hyps icosts
+      and ocosts = EcCallbyValue.norm_cbv ri hyps ocosts in
 
+      (* TODO A: have a different behavior for [`Eq] and [`Sub] *)
+      if not (EcReduction.is_conv_cproc hyps ~proc:fin.fs_name icosts ocosts) then
+        let err = match mode with
+          | `Eq  -> `Eq (icosts, ocosts)
+          | `Sub -> `Sub(icosts, ocosts)
+        in
+        (* TODO A: [cin] and [cout] are the full module cost, not just the cost
+           of procedure [fin.fs_name]. The error message must be changed.
+           Furthermore, we should move the cost checking elsewhere, to avoid doing
+           it several times. *)
+        check_item_err (MF_compl(env, err))
+    end
 
 (* -------------------------------------------------------------------- *)
 exception RestrErr of mismatch_restr
@@ -2063,6 +2072,7 @@ let top_is_mem_binding pf = match pf with
 
   | PFChoareFT _ -> false
 
+  | PFmodcost _
   | PFcost    _
   | PFmatch   _
   | PFcast    _
@@ -3737,7 +3747,9 @@ and trans_form_or_pattern
           unify_or_fail env  ue bd  .pl_loc ~expct:treal bd'  .f_ty;
           f_bdHoareF pre' fpath post' hcmp bd'
 
-    | PFcost c -> f_cost_r (trans_cost opsc ~incoe c)
+    | PFcost c -> f_cost_r (trans_cost ~self_ty:txint opsc ~incoe c)
+
+    | PFmodcost mc -> f_mod_cost_r (trans_modcost opsc ~incoe mc)
 
     | PFChoareF _ | PFChoareFT _ ->
       EcCHoare.check_loaded env;
@@ -3854,14 +3866,18 @@ and trans_form_or_pattern
         f_coe form' memenv expr'
 
   and trans_bnd opsc ~incoe ty = function
-    | `Unbounded -> f_Inf
+    | `Unbounded ->
+      if      ty_equal ty tcost then f_cost_inf
+      else if ty_equal ty txint then f_Inf
+      else assert false
+
     | `Bounded c ->
       let c' = transf_r opsc ~incoe env c in
       unify_or_fail env ue c.pl_loc ~expct:ty c'.f_ty;
       c'
 
-  and trans_cost opsc ~incoe (PC_costs ((self, calls), full)) =
-    let self  = trans_bnd opsc ~incoe txint self in
+  and trans_cost ~self_ty opsc ~incoe (PC_costs ((self, calls), full)) : cost =
+    let self  = trans_bnd opsc ~incoe self_ty self in
     let calls = List.map (fun (m,fn,c) ->
         let fn = trans_oracle env (m,fn) in
         let f_c = trans_bnd opsc ~incoe txint c in
@@ -3871,6 +3887,13 @@ and trans_form_or_pattern
     let calls = Mx.of_list calls in
 
     cost_r self calls full
+
+  and trans_modcost opsc ~incoe (pmc : pmodcost) : mod_cost =
+    let mc = List.map (fun (f,pc) ->
+        unloc f, trans_cost ~self_ty:tcost opsc ~incoe pc
+      ) pmc
+    in
+    Msym.of_list mc
   in
 
   let f = transf_r None false env pf in
