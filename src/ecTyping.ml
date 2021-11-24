@@ -538,7 +538,7 @@ let check_item_compatible
 
   let hyps = EcEnv.LDecl.init env [] in
   if proof_obl then ()
-  else if not (EcReduction.is_conv hyps icosts ocosts) then
+  else if not (EcReduction.is_conv_cproc hyps ~proc:fin.fs_name icosts ocosts) then
     let err = match mode with
       | `Eq  -> `Eq (icosts, ocosts)
       | `Sub -> `Sub(icosts, ocosts)

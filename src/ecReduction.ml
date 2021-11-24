@@ -343,13 +343,13 @@ let check_crecord_l
   let check_self = co1.c_self, co2.c_self in
   f_calls, check_self :: pforms
 
-let check_crecord test env subst co1 co2 =
+let check_crecord test env subst co1 co2 : unit =
   let  _, pforms = check_crecord_l subst co1 co2 in
   List.iter
     (fun (a1,a2) -> test env subst a1 a2)
     pforms
 
-let check_mod_cost test env subst mc1 mc2 =
+let check_mod_cost test env subst mc1 mc2 : unit =
   let _ : proc_cost EcSymbols.Msym.t =
     EcSymbols.Msym.merge (fun _ p1 p2 ->
         let p1, p2 = oget p1, oget p2 in
@@ -1191,7 +1191,7 @@ let reduce_head simplify ri env hyps f =
 
   | Fcost_proj (c,p) when ri.cost ->
     let f' = f_cost_proj_simpl c p in
-    if f_equal f f' then raise nohead else f'
+    if f_equal f f' then raise needsubterm else f'
 
   | _ -> raise nohead
 
@@ -1607,36 +1607,11 @@ let rec conv ri env f1 f2 stk : bool =
     conv ri env chs1.chs_pr chs2.chs_pr
       (zhl f1 [chs1.chs_po;chs1.chs_co] [chs2.chs_po;chs2.chs_co] stk)
 
-  | Fcost c1, Fcost c2 -> begin
-      match check_crecord_l Fsubst.f_subst_id c1 c2 with
-      | calls, (self1, self2) :: fs ->
-        let fs1, fs2 = List.split fs in
-        conv ri env self1 self2
-          (zcrecord c1.c_full calls fs1 fs2 f1.f_ty stk)
-      | _ -> assert false
-    end
+  | Fcost c1, Fcost c2 ->
+    conv_crecord ri env c1 c2 f1.f_ty stk
 
-  | Fmodcost mc1, Fmodcost mc2 -> begin
-    let procs, fs =
-      let mc =
-        Msym.merge (fun _ p1 p2 ->
-          match p1, p2 with
-          | Some p1, Some p2 -> Some (p1, p2)
-          | _, _ -> raise NotConv
-        ) mc1 mc2 in
-
-      Msym.fold (fun f (p1, p2) (procs, fs) ->
-        let procs1, fs1 = check_crecord_l Fsubst.f_subst_id p1 p2 in
-        (f, p1.c_full, procs1) :: procs, fs1 @ fs
-      ) mc ([], [])
-    in
-
-    match fs with
-    | [] -> conv_next ri env f1 stk
-    | (g1, g2) :: fs ->
-      let fs1, fs2 = List.split fs in
-      conv ri env g1 g2 (zmod_cost procs fs1 fs2 f1.f_ty stk)
-  end
+  | Fmodcost mc1, Fmodcost mc2 ->
+    conv_mod_cost ri env mc1 mc2 f1 stk
 
   | Fcost_proj (c1, proj1), Fcost_proj (c2, proj2)
       when cost_proj_equal proj1 proj2
@@ -1697,6 +1672,44 @@ and check_bindings_conv ri env q bd1 bd2 f1 f2 =
     | _, _ -> es, bd, bd1, bd2 in
   let (env, subst), bd, bd1, bd2 = aux (env, Fsubst.f_subst_id) [] bd1 bd2 in
   env, bd, f_quant q bd1 f1, Fsubst.f_subst subst (f_quant q bd2 f2)
+
+(* Note: can be called with a dummy type [ty], when checking
+   convertion of module procedure cost record. *)
+and conv_crecord ri env c1 c2 ty stk : bool =
+  match check_crecord_l Fsubst.f_subst_id c1 c2 with
+  | calls, (self1, self2) :: fs ->
+    let fs1, fs2 = List.split fs in
+    conv ri env self1 self2
+      (zcrecord c1.c_full calls fs1 fs2 ty stk)
+  | _ -> assert false
+
+  | exception NotConv -> false
+
+and _conv_mod_cost ri env mc1 mc2 f1 stk : bool =
+  let procs, fs =
+    let mc =
+      Msym.merge (fun _ p1 p2 ->
+          match p1, p2 with
+          | Some p1, Some p2 -> Some (p1, p2)
+          | _, _ -> raise NotConv
+        ) mc1 mc2 in
+
+    Msym.fold (fun f (p1, p2) (procs, fs) ->
+        let procs1, fs1 = check_crecord_l Fsubst.f_subst_id p1 p2 in
+        (f, p1.c_full, procs1) :: procs, fs1 @ fs
+      ) mc ([], [])
+  in
+
+  match fs with
+  | [] -> conv_next ri env f1 stk
+  | (g1, g2) :: fs ->
+    let fs1, fs2 = List.split fs in
+    conv ri env g1 g2 (zmod_cost procs fs1 fs2 f1.f_ty stk)
+
+(* warp [_conv_mod_cost] in a [try find] catching [NotConv] exceptions *)
+and conv_mod_cost ri env mc1 mc2 f1 stk : bool =
+  try _conv_mod_cost ri env mc1 mc2 f1 stk
+  with NotConv -> false
 
 (* -------------------------------------------------------------------- *)
 and conv_next ri env f stk =
@@ -1772,6 +1785,28 @@ let is_conv ?(ri = full_red) hyps f1 f2 =
 let check_conv ?ri hyps f1 f2 =
   if is_conv ?ri hyps f1 f2 then ()
   else raise (IncompatibleForm ((LDecl.toenv hyps), (f1, f2)))
+
+(* -------------------------------------------------------------------- *)
+(* Check whether two module procedure cost record are convertiable.
+   Because [mod_cost] are not formulas per se, this is done in an
+   ad-hoc fashion. *)
+let is_conv_cproc
+    ?(ri   = full_red)
+    ~(proc : symbol)
+    (hyps  : LDecl.hyps)
+    (f1    : form)
+    (f2    : form) : bool
+  =
+  let ri, env = init_redinfo ri hyps in
+  if conv ri env f1 f2 [] then true
+  else
+    let f1, f2 = whnf ri env f1, whnf ri env f2 in
+    match f1.f_node, f2.f_node with
+    | Fmodcost m1, Fmodcost m2 ->
+      let a1, a2 = Msym.find proc m1, Msym.find proc m2 in
+      let ty_dum = tcost in         (* dummy type *)
+      conv_crecord ri env a1 a2 ty_dum []
+    | _ -> false
 
 (* -------------------------------------------------------------------- *)
 let h_red ri hyps f =
@@ -1989,94 +2024,3 @@ module User = struct
         rl_prio  = prio; }
 
 end
-
-(*   let compile ~opts ~prio (env : EcEnv.env) mode (p : EcPath.path) =
- *     let simp =
- *       if opts.EcTheory.ur_delta then
- *         let hyps = EcEnv.LDecl.init env [] in
- *         fun f -> odfl f (h_red_opt delta hyps f)
- *       else fun f -> f in
- *
- *     let ax = EcEnv.Ax.by_path p env in
- *     let bds, rl = EcFol.decompose_forall (simp ax.EcDecl.ax_spec) in
- *
- *     let bds =
- *       let filter = function
- *         | (x, GTty ty) -> (x, ty)
- *         | _ -> raise (InvalidUserRule RuleDependsOnMemOrModule)
- *       in List.map filter bds in
- *
- *     let lhs, rhs, conds =
- *       try
- *         let rec doit conds f =
- *           match sform_of_form (simp f) with
- *           | SFimp (f1, f2) -> doit (f1 :: conds) f2
- *           | SFeq  (f1, f2) -> (f1, f2, List.rev conds)
- *           | _ -> raise (InvalidUserRule NotAnEq)
- *         in doit [] rl
- *
- *       with InvalidUserRule NotAnEq
- *              when opts.EcTheory.ur_eqtrue &&
- *                   ty_equal tbool (EcEnv.ty_hnorm rl.f_ty env)
- *            -> (rl, f_true, List.rev [])
- *
- *     in
- *
- *     let rule =
- *       let rec rule (f : form) : EcTheory.rule_pattern =
- *         match EcFol.destr_app f with
- *         | { f_node = Fop (p, tys) }, args ->
- *             R.Rule (`Op (p, tys), List.map rule args)
- *         | { f_node = Ftuple args }, [] ->
- *             R.Rule (`Tuple, List.map rule args)
- *         | { f_node = Fint i }, [] ->
- *             R.Int i
- *         | { f_node = Flocal x }, [] ->
- *             R.Var x
- *         | _ -> raise (InvalidUserRule NotFirstOrder)
- *       in rule lhs in
- *
- *     let lvars, ltyvars =
- *       let rec doit (lvars, ltyvars) = function
- *         | R.Var x ->
- *             (Sid.add x lvars, ltyvars)
- *
- *         | R.Int _ ->
- *             (lvars, ltyvars)
- *
- *         | R.Rule (op, args) ->
- *             let ltyvars =
- *               match op with
- *               | `Op (_, tys) ->
- *                 List.fold_left (
- *                     let rec doit ltyvars = function
- *                       | { ty_node = Tvar a } -> Sid.add a ltyvars
- *                       | _ as ty -> ty_fold doit ltyvars ty in doit)
- *                   ltyvars tys
- *               | `Tuple -> ltyvars in
- *             List.fold_left doit (lvars, ltyvars) args
- *
- *       in doit (Sid.empty, Sid.empty) rule in
- *
- *     let mvars   =
- *       Sid.diff (Sid.of_list (List.map fst bds)) lvars in
- *     let mtyvars =
- *       Sid.diff (Sid.of_list (List.map fst ax.EcDecl.ax_tparams)) ltyvars in
- *
- *     if not (Sid.is_empty mvars) then
- *       raise (InvalidUserRule (MissingVarInLhs (Sid.choose mvars)));
- *     if not (Sid.is_empty mtyvars) then
- *       raise (InvalidUserRule (MissingTyVarInLhs (Sid.choose mtyvars)));
- *
- *     begin match rule with
- *     | R.Var _ -> raise (InvalidUserRule (HeadedByVar));
- *     | _       -> () end;
- *
- *     R.{ rl_tyd  = ax.EcDecl.ax_tparams;
- *         rl_vars = bds;
- *         rl_cond = conds;
- *         rl_ptn  = rule;
- *         rl_tg   = rhs;
- *         rl_prio = prio; }
- *
- * end *)

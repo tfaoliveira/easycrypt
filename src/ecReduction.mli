@@ -13,6 +13,7 @@ open EcTypes
 open EcFol
 open EcModules
 open EcEnv
+open EcSymbols
 
 (* -------------------------------------------------------------------- *)
 exception IncompatibleType of env * (ty * ty)
@@ -107,6 +108,10 @@ val simplify : reduction_info -> LDecl.hyps -> form -> form
 
 val is_conv    : ?ri:reduction_info -> LDecl.hyps -> form -> form -> bool
 val check_conv : ?ri:reduction_info -> LDecl.hyps -> form -> form -> unit
+
+(* -------------------------------------------------------------------- *)
+val is_conv_cproc :
+  ?ri:reduction_info -> proc:symbol -> LDecl.hyps -> form -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]
