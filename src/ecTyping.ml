@@ -45,10 +45,10 @@ type 'a mismatch_sets = [`Eq of 'a * 'a | `Sub of 'a ]
 type 'a suboreq       = [`Eq of 'a | `Sub of 'a ]
 
 type mismatch_funsig =
-| MF_targs     of ty * ty                               (* expected, got *)
-| MF_tres      of ty * ty                               (* expected, got *)
-| MF_restr     of EcEnv.env * Sx.t mismatch_sets
-| MF_compl     of EcEnv.env * (form * form) suboreq
+| MF_targs of ty * ty                               (* expected, got *)
+| MF_tres  of ty * ty                               (* expected, got *)
+| MF_restr of EcEnv.env * Sx.t mismatch_sets
+| MF_compl of EcEnv.env * symbol * (form * form) suboreq
 
 type restr_failure = Sx.t * Sm.t
 
@@ -546,17 +546,14 @@ let check_item_compatible
       let icosts = EcCallbyValue.norm_cbv ri hyps icosts
       and ocosts = EcCallbyValue.norm_cbv ri hyps ocosts in
 
+      let proc = fin.fs_name in
       (* TODO A: have a different behavior for [`Eq] and [`Sub] *)
-      if not (EcReduction.is_conv_cproc hyps ~proc:fin.fs_name icosts ocosts) then
+      if not (EcReduction.is_conv_cproc hyps ~proc icosts ocosts) then
         let err = match mode with
           | `Eq  -> `Eq (icosts, ocosts)
           | `Sub -> `Sub(icosts, ocosts)
         in
-        (* TODO A: [cin] and [cout] are the full module cost, not just the cost
-           of procedure [fin.fs_name]. The error message must be changed.
-           Furthermore, we should move the cost checking elsewhere, to avoid doing
-           it several times. *)
-        check_item_err (MF_compl(env, err))
+        check_item_err (MF_compl(env, proc, err))
     end
 
 (* -------------------------------------------------------------------- *)

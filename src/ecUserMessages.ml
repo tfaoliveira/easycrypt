@@ -44,17 +44,38 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_diff_cost ppe fmt info =
+    let pp_diff_cost ppe fmt proc info =
       let mode, ic, oc = match info with
         | `Eq  (ic,oc) -> `Eq, ic, oc
         | `Sub (ic,oc) -> `Sub, ic, oc
       in
-      Format.fprintf fmt
-        "@[<v>   @[%a@]@; cannot be shown \
-         to be %s:@;   @[%a@]@]"
-        (EcPrinting.pp_form ppe) ic
-        (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (EcPrinting.pp_form ppe) oc
+      (* tries to project [ic] and [oc] over [proc].
+         if the projection failes, we print the full module cost *)
+      match ic.EcFol.f_node, oc.EcFol.f_node with
+      | Fmodcost imc, Fmodcost omc ->
+        let ipc, opc = Msym.find proc imc, Msym.find proc omc in
+        Format.fprintf fmt
+          "@[<v>   \
+           @[%a@]@; \
+           cannot be shown to be %s:\
+           @;   \
+           @[%a@]@]"
+          (EcPrinting.pp_proc_cost ppe) ipc
+          (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
+          (EcPrinting.pp_proc_cost ppe) opc
+
+      | _ ->
+        Format.fprintf fmt
+          "@[<v>   \
+           @[%a.%s@]@; \
+           cannot be shown to be %s:\
+           @;   \
+           @[%a.%s@]@]"
+          (EcPrinting.pp_form ppe) ic
+          proc
+          (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
+          (EcPrinting.pp_form ppe) oc
+          proc
     in
 
     match error with
@@ -88,9 +109,9 @@ end = struct
             (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements notallowed)
 
-    | MF_compl (env, info) ->
+    | MF_compl (env, proc, info) ->
       let ppe = EcPrinting.PPEnv.ofenv env in
-      pp_diff_cost ppe fmt info
+      pp_diff_cost ppe fmt proc info
 
   let pp_restr_err_aux env fmt error =
     let msg x = Format.fprintf fmt x in
