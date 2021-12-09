@@ -108,7 +108,7 @@ clone MkRO as ROF.
 
 section PROOFS.
 
-declare module D: RO_DistinguisherT {RO, RO_DOMt, ROT.RO, ROF.RO}.
+declare module D <: RO_DistinguisherT {RO, RO_DOMt, ROT.RO, ROF.RO}.
 
 equiv RO_split :
   MainDT(D, RO).distinguish ~ MainDT(D, RO_DOMt(ROT.RO, ROF.RO)).distinguish :

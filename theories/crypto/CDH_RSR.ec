@@ -594,10 +594,10 @@ proof. by smt(dEU_ll dmap_ll). qed.
 
 section.
 
-declare module A : Adversary {G1, G2, G, S, Count,
+declare module A <: Adversary {G1, G2, G, S, Count,
                               OAEU, OBEU, OEU, O0EU, O1EU, O1G}.
 
-axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
+declare axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.oA =>
   islossless O.oB =>
   islossless O.oa =>
@@ -605,7 +605,7 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.ddh =>
   islossless A(O).guess.
 
-axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
+declare axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
   hoare [A(Count(O)).guess :
          Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
          Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
@@ -665,18 +665,20 @@ qed.
 
 (** Expressing the games G, G' and G'' as distinguishers for statistical distance *)
 
-require import SDist.
+(* require import SDist. *)
 
 local clone SDist.Dist as D with
   type a <- Z
   proof*.
+
+
 
 local clone D.ROM as D1 with
   type in_t    <- int,
   op d1        <- dZ,
   op d2        <- duniform (elems EU),
   op N         <- na
-proof * by smt(dZ_ll dEU_ll na_ge0).
+proof* by smt(dZ_ll dEU_ll na_ge0).
 
 local clone D.ROM as D2 with
   type in_t    <- int,
@@ -917,11 +919,11 @@ local module Gk_bad (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
   }
 }.
 
-op cs_all_false (bs : bool list) (is : int list) =
-  (forall i, i \in is => ! nth false bs i).
+op cs_all_false (bs : bool list) (il : int list) =
+  (forall i, i \in il => ! nth false bs i).
 
-op is_ok (bs : bool list) (is : int list) (i : int) =
-  cs_all_false bs is /\ nth false bs i.
+op is_ok (bs : bool list) (il : int list) (i : int) =
+  cs_all_false bs il /\ nth false bs i.
 
 op nstop (ia ib : bool list) (ca cb : int list) =
   cs_all_false ia ca /\ cs_all_false ib cb.
@@ -1018,12 +1020,12 @@ seq 14 : G.bad p (1%r / q_ddh%r * c) _ 0%r
   + rnd; skip => &m' /> *; rewrite (mu_eq _ _ (pred1 Gk_bad.k_bad{m'})) //.
     by rewrite dinter1E; smt (supp_dinter).
   + rewrite /c => {c p}; pose p := (fun b => b = false).
-    pose IP := fun (cs : int list) (is : bool list) (n : int) =>
+    pose IP := fun (cs : int list) (il : bool list) (n : int) =>
                  forall (i : int), i \in oflist cs `&` oflist (range 0 n) =>
-                                     p (nth false is i).
-    pose JP := fun (c : int) (is : bool list) (n : int) =>
+                                     p (nth false il i).
+    pose JP := fun (c : int) (il : bool list) (n : int) =>
                  forall (j : int), j \in fset1 c `&` oflist (range 0 n) =>
-                                   ! p (nth false is j).
+                                   ! p (nth false il j).
     have ? := pa_bound; have ? := pb_bound; have ? := na_ge0; have ? := nb_ge0.
     seq 1 : (is_ok Gk.ia G2.ca Gk.i_k)
             ((1%r - pa) ^ q_oa * pa) ((1%r - pb) ^ q_ob * pb) _ 0%r
@@ -1067,7 +1069,7 @@ module type O = {
 
 module type O_i = {
   include O
-  proc init (n : int, is : bool list, x : Z) : unit
+  proc init (n : int, il : bool list, x : Z) : unit
 }.
 
 module O_i_O (O : O_i) : O = {
@@ -1080,7 +1082,7 @@ module O_i_O (O : O_i) : O = {
 module type DistinguisherO_i (O : O) = {
   proc init   (x y : Z) : unit      {}
   proc get_n  ()        : int       {}
-  proc get_is ()        : bool list {}
+  proc get_il ()        : bool list {}
   proc get_x  ()        : Z         {}
   proc main   ()        : bool
 }.
@@ -1093,13 +1095,13 @@ module MainDO (D : DistinguisherO_i) (O : O_i) = {
   module D' = D(O)
 
   proc init (x' y' : Z) = {
-    var is, n, x;
+    var il, n, x;
 
     D'.init(x', y');
-    is <@ D'.get_is();
+    il <@ D'.get_il();
     n  <@ D'.get_n();
     x  <@ D'.get_x();
-    O.init(n, is, x);
+    O.init(n, il, x);
   }
 
   proc main (x y : Z) = {
@@ -1116,12 +1118,12 @@ local module Ok (O : FROEU.RO) : O_i = {
   var cs  : int list
   var bad : bool
   var ik  : int
-  var is  : bool list
+  var il  : bool list
   var x   : Z
 
-  proc init (n' : int, is' : bool list, x' : Z) = {
+  proc init (n' : int, il' : bool list, x' : Z) = {
     n   <- n';
-    is  <- is';
+    il  <- il';
     x   <- x';
     cs  <- [];
     bad <- false;
@@ -1176,14 +1178,14 @@ local module Ok (O : FROEU.RO) : O_i = {
 local module Okt (O : FROEUt.ROt) : O_i = {
   import var G2 Gk Ok
 
-  proc init (n' : int, is' : bool list, x' : Z) = {
+  proc init (n' : int, il' : bool list, x' : Z) = {
     n   <- n';
-    is  <- is';
+    il  <- il';
     x   <- x';
     cs  <- [];
     bad <- false;
     ik  <- -1;
-    O.init(nth false is);
+    O.init(nth false il);
   }
 
   proc get_cs () = {
@@ -1225,9 +1227,9 @@ local module Okt (O : FROEUt.ROt) : O_i = {
 local module Ok2 (O0 : FROEU.RO, O1 : FROEU.RO) : O_i = {
   import var Ok
 
-  proc init (n' : int, is' : bool list, x' : Z) = {
+  proc init (n' : int, il' : bool list, x' : Z) = {
     n   <- n';
-    is  <- is';
+    il  <- il';
     x   <- x';
     cs  <- [];
     bad <- false;
@@ -1256,7 +1258,7 @@ local module Ok2 (O0 : FROEU.RO, O1 : FROEU.RO) : O_i = {
     if (0 <= i < n) {
       if (i <> ik) {
         cs <- i :: cs;
-        if (nth false is i) a <@ O1.get(i);
+        if (nth false il i) a <@ O1.get(i);
         else                a <@ O0.get(i);
       }
     }
@@ -1268,7 +1270,7 @@ local module Ok2 (O0 : FROEU.RO, O1 : FROEU.RO) : O_i = {
 
     a <- e;
     if (0 <= i < n) {
-      if (nth false is i) a <@ O1.get(i);
+      if (nth false il i) a <@ O1.get(i);
       else                a <@ O0.get(i);
     }
     return exp g a;
@@ -1283,10 +1285,10 @@ op splitO (m m0 m1 : (int, Z) fmap) (t : int -> bool) =
 local equiv Ok_Ok2 &m (D <: DistinguisherO_i {OEU, O0EU, O1EU, Ok}) :
   MainDO(D, Ok(OEU)).main ~ MainDO(D, Ok2(O0EU, O1EU)).main :
   ={arg, glob D} ==>
-  ={glob D} /\ ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2}).
+  ={glob D} /\ ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2}).
 proof.
 proc *; inline *; wp.
-call (: ={glob Ok} /\ splitO OEU.m{1} O0EU.m{2} O1EU.m{2} (nth false Ok.is){2}).
+call (: ={glob Ok} /\ splitO OEU.m{1} O0EU.m{2} O1EU.m{2} (nth false Ok.il){2}).
 - by proc; auto.
 - by proc; auto.
 - proc; inline *; sp; if; [ | if; [ | sp; if{2} | ] | ]; auto.
@@ -1302,9 +1304,9 @@ qed.
 local module Ok2X (O0 : FROEU.RO, O1 : FROG.RO) : O_i = {
   import var Ok
 
-  proc init (n' : int, is' : bool list, x' : Z) = {
+  proc init (n' : int, il' : bool list, x' : Z) = {
     n   <- n';
-    is  <- is';
+    il  <- il';
     x   <- x';
     cs  <- [];
     bad <- false;
@@ -1331,7 +1333,7 @@ local module Ok2X (O0 : FROEU.RO, O1 : FROG.RO) : O_i = {
 
     a <- e;
     if (0 <= i < n) {
-      if (! nth false is i) {
+      if (! nth false il i) {
         cs <- i :: cs;
         a <@ O0.get(i);
       }
@@ -1345,7 +1347,7 @@ local module Ok2X (O0 : FROEU.RO, O1 : FROG.RO) : O_i = {
     a <- e;
     ga <- exp g a;
     if (0 <= i < n) {
-      if (nth false is i) { ga <@ O1.get(i); }
+      if (nth false il i) { ga <@ O1.get(i); }
       else                { a  <@ O0.get(i); ga <- exp g a; }
     }
     return ga;
@@ -1361,12 +1363,12 @@ local lemma Ok2_Ok2X &m (D <: DistinguisherO_i {O0EU, O1EU, O1G, Ok}) :
      islossless D(O).main) =>
   equiv[MainDO(D, Ok2(O0EU, O1EU)).main ~ MainDO(D, Ok2X(O0EU, O1G)).main :
         ={arg, glob D} ==>
-        (is_ok Ok.is Ok.cs Ok.ik){1} => (is_ok Ok.is Ok.cs Ok.ik){2} /\
+        (is_ok Ok.il Ok.cs Ok.ik){1} => (is_ok Ok.il Ok.cs Ok.ik){2} /\
                                         ={glob D}].
 proof.
 move => D_ll; proc *; inline *; wp; symmetry.
-call (: ! (cs_all_false Ok.is Ok.cs) \/
-        (Ok.bad /\ ! nth false Ok.is Ok.ik),
+call (: ! (cs_all_false Ok.il Ok.cs) \/
+        (Ok.bad /\ ! nth false Ok.il Ok.ik),
 
         ={glob Ok, O0EU.m} /\ O1G.m{1} = map (fun _ => exp g) O1EU.m{2} /\
         (forall r, r \in O1EU.m => oget (O1EU.m.[r]) \in EU){2} /\
@@ -1384,8 +1386,8 @@ call (: ! (cs_all_false Ok.is Ok.cs) \/
   by if; [sp; if; [sp; if | ] | ]; auto; smt(dEU_ll).
 - proc; inline *; sp; if; [ | if | ]; 1, 2, 4, 5: by auto.
   seq 2 2 : (={x} /\ r{1} = exp g r{2} /\ r{2} \in EU /\
-             ((cs_all_false Ok.is Ok.cs) \/
-             (0 <= Ok.ik < Ok.n /\ ! nth false Ok.is Ok.ik)){2} /\
+             ((cs_all_false Ok.il Ok.cs) \/
+             (0 <= Ok.ik < Ok.n /\ ! nth false Ok.il Ok.ik)){2} /\
              ={glob Ok, O0EU.m} /\ O1G.m{1} = map (fun _ => exp g) O1EU.m{2} /\
              (forall r, r \in O1EU.m => oget (O1EU.m.[r]) \in EU){2} /\
              (Ok.bad <=> 0 <= Ok.ik < Ok.n){2});
@@ -1409,7 +1411,7 @@ local module Ok2x (O0 : FROEU.RO, O1 : FROEU.RO) : O_i = {
 
     a <- e;
     if (0 <= i < n) {
-      if (! nth false is i) {
+      if (! nth false il i) {
         cs <- i :: cs;
         a <@ O0.get(i);
       }
@@ -1422,7 +1424,7 @@ local module Ok2x (O0 : FROEU.RO, O1 : FROEU.RO) : O_i = {
 
     a <- e;
     if (0 <= i < n) {
-      if (nth false is i) { a <@ O1.get(i); a <- x * a; }
+      if (nth false il i) { a <@ O1.get(i); a <- x * a; }
       else                  a <@ O0.get(i);
     }
     return exp g a;
@@ -1446,7 +1448,7 @@ local lemma Ok2X_Ok2x &m x y (D <: DistinguisherO_i {O0EU, O1EU, O1G, Ok}) :
   equiv[MainDO(D, Ok2X(O0EU, O1G)).main ~ MainDO(D, Ok2x(O0EU, O1EU)).main :
         ={arg, glob D} /\ arg{1} = (x, y) ==>
         ={glob D} /\
-        ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2})].
+        ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2})].
 proof.
 move => x_EU y_EU initP; proc *.
 inline MainDO(D, Ok2X(O0EU, O1G)).main MainDO(D, Ok2x(O0EU, O1EU)).main; wp.
@@ -1494,7 +1496,7 @@ local module Okx (O : FROEU.RO) : O_i = {
 
     a <- e;
     if (0 <= i < n) {
-      if (! nth false is i) {
+      if (! nth false il i) {
         cs <- i :: cs;
         a <@ O.get(i);
       }
@@ -1505,9 +1507,9 @@ local module Okx (O : FROEU.RO) : O_i = {
   proc oG (i : int) = {
     var a;
 
-    a  <- if (nth false is i) then inv x * e else e;
+    a  <- if (nth false il i) then inv x * e else e;
     if (0 <= i < n) a <@ O.get(i);
-    return (exp g (if (nth false is i) then x * a else a));
+    return (exp g (if (nth false il i) then x * a else a));
   }
 }.
 
@@ -1519,12 +1521,12 @@ local lemma Ok2x_Okx &m x y (D <: DistinguisherO_i {OEU, O0EU, O1EU, Ok}) :
   equiv[MainDO(D, Ok2x(O0EU, O1EU)).main ~ MainDO(D, Okx(OEU)).main :
         ={arg, glob D} /\ arg{1} = (x, y) ==>
         ={glob D} /\
-        ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2})].
+        ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2})].
 proof.
 move => x_EU y_EU initP; proc *.
 inline MainDO(D, Ok2x(O0EU, O1EU)).main MainDO(D, Okx(OEU)).main; wp.
 call (: Ok.x{1} \in EU /\ ={glob Ok} /\
-        splitO OEU.m{2} O0EU.m{1} O1EU.m{1} (nth false Ok.is){1}).
+        splitO OEU.m{2} O0EU.m{1} O1EU.m{1} (nth false Ok.il){1}).
 - by proc; auto.
 - by proc; auto.
 - proc; inline *; sp; if; [ | if | ]; 1, 2, 4, 5: by auto.
@@ -1534,7 +1536,7 @@ call (: Ok.x{1} \in EU /\ ={glob Ok} /\
   by smt(get_setE mem_set mergeE set_union_map_l).
 - conseq (: ={arg, glob D} ==>
             ={glob D, glob Ok} /\
-            splitO OEU.m{2} O0EU.m{1} O1EU.m{1} (nth false Ok.is){1})
+            splitO OEU.m{2} O0EU.m{1} O1EU.m{1} (nth false Ok.il){1})
          (: arg = (x, y) ==> Ok.x \in EU) (: _ ==> _);
   [by auto | by call initP; auto | by auto | inline *].
   wp; call (: true); call (: true); call (: true); call (: true).
@@ -1552,7 +1554,7 @@ local lemma Ok_Okx &m x y (D <: DistinguisherO_i {OEU, O0EU, O1EU, O1G, Ok}) :
          fst arg \in EU /\ snd arg \in EU ==> Ok.x \in EU] =>
   equiv [MainDO(D, Ok(OEU)).main ~ MainDO(D, Okx(OEU)).main :
         ={arg, glob D} /\ arg{1} = (x, y) ==>
-        (is_ok Ok.is Ok.cs Ok.ik){1} => (is_ok Ok.is Ok.cs Ok.ik){2} /\
+        (is_ok Ok.il Ok.cs Ok.ik){1} => (is_ok Ok.il Ok.cs Ok.ik){2} /\
                                         ={glob D}].
 proof.
 move => x_EU y_EU D_ll initP.
@@ -1560,31 +1562,31 @@ transitivity MainDO(D, Ok2(O0EU, O1EU)).main
 
              (={arg, glob D} ==>
               ={glob D} /\
-              ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2}))
+              ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2}))
 
              (={arg, glob D} /\ arg{1} = (x, y) ==>
-              (is_ok Ok.is Ok.cs Ok.ik){1} => (is_ok Ok.is Ok.cs Ok.ik){2} /\
+              (is_ok Ok.il Ok.cs Ok.ik){1} => (is_ok Ok.il Ok.cs Ok.ik){2} /\
                                               ={glob D});
   1, 2: smt(); 1: by exact (Ok_Ok2 &m D).
 transitivity MainDO(D, Ok2X(O0EU, O1G)).main
 
              (={arg, glob D} ==>
-              (is_ok Ok.is Ok.cs Ok.ik){1} => (is_ok Ok.is Ok.cs Ok.ik){2} /\
+              (is_ok Ok.il Ok.cs Ok.ik){1} => (is_ok Ok.il Ok.cs Ok.ik){2} /\
                                               ={glob D})
 
              (={arg, glob D} /\ arg{1} = (x, y) ==>
               ={glob D} /\
-              ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2}));
+              ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2}));
   1, 2: smt(); 1: by exact (Ok2_Ok2X &m D D_ll).
 transitivity MainDO(D, Ok2x(O0EU, O1EU)).main
 
              (={arg, glob D} /\ arg{1} = (x, y) ==>
               ={glob D} /\
-              ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2}))
+              ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2}))
 
              (={arg, glob D} /\ arg{1} = (x, y) ==>
               ={glob D} /\
-              ((is_ok Ok.is Ok.cs Ok.ik){1} <=> (is_ok Ok.is Ok.cs Ok.ik){2}));
+              ((is_ok Ok.il Ok.cs Ok.ik){1} <=> (is_ok Ok.il Ok.cs Ok.ik){2}));
   1, 2: smt(); 1: by exact (Ok2X_Ok2x &m x y D x_EU y_EU initP).
 by exact (Ok2x_Okx &m x y D x_EU y_EU initP).
 qed.
@@ -1611,7 +1613,7 @@ local module GkD (OA : O, OB : FROEU.RO) = {
     return na;
   }
 
-  proc get_is () = {
+  proc get_il () = {
     return ia;
   }
 
@@ -1682,7 +1684,7 @@ local module Dk (OA : O) = {
   }
 
   proc get_n = O.get_n
-  proc get_is = O.get_is
+  proc get_il = O.get_il
   proc get_x = O.get_x
 
   proc main () = {
@@ -1786,11 +1788,11 @@ move => x_EU y_EU.
 have -> :   Pr[Game(Gk(OAEU, OBEU), A).main() @ &m :
                G.bad /\ is_ok Gk.ia G2.ca Gk.i_k /\ is_ok Gk.ib G2.cb Gk.j_k] =
             Pr[MainDO(Dk, Ok(OEU)).main(x, y) @ &m :
-               G.bad /\ is_ok Ok.is Ok.cs Ok.ik /\ is_ok Gk.ib G2.cb Gk.j_k].
+               G.bad /\ is_ok Ok.il Ok.cs Ok.ik /\ is_ok Gk.ib G2.cb Gk.j_k].
 - byequiv => //; proc; inline *; wp.
   call (: ={OBEU.m, G2.cb, G.bad} /\ ={m}(OAEU, OEU) /\
           ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
-          G2.ca{1} = Ok.cs{2} /\ Gk.i_k{1} = Ok.ik{2} /\ Gk.ia{1} = Ok.is{2} /\
+          G2.ca{1} = Ok.cs{2} /\ Gk.i_k{1} = Ok.ik{2} /\ Gk.ia{1} = Ok.il{2} /\
           (G.bad = Ok.bad /\ Ok.n = na){2});
     1, 2, 4: (by proc; inline *; sp; if; try if; auto); 3: by auto.
   + by proc; inline *; sp; if; [ | if | ]; auto; smt().
@@ -1800,7 +1802,7 @@ have -> :   Pr[Game(Gk(OAEU, OBEU), A).main() @ &m :
     seq 3 4 : (={OBEU.m, G2.cb, G.bad, t} /\ ={m}(OAEU, OEU) /\
                ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
                G2.ca{1} = Ok.cs{2} /\ Gk.i_k{1} = Ok.ik{2} /\
-               Gk.ia{1} = Ok.is{2} /\
+               Gk.ia{1} = Ok.il{2} /\
                (G.bad = Ok.bad /\ Ok.n = na){2} /\
                i0{1} = i1{2} /\ j0{1} = j1{2} /\ r0{1} = r1{2} /\
                G2.ca{1} = ca{2} /\ 0 <= i0{1} < na);
@@ -1808,7 +1810,7 @@ have -> :   Pr[Game(Gk(OAEU, OBEU), A).main() @ &m :
     wp; call (: ={OBEU.m}); auto.
     by inline *; sp; rcondt{2} 1; auto; smt(expM).
 apply (ler_trans (Pr[MainDO(Dk, Okx(OEU)).main(x, y) @ &m :
-                     G.bad /\ is_ok Ok.is Ok.cs Ok.ik /\
+                     G.bad /\ is_ok Ok.il Ok.cs Ok.ik /\
                               is_ok Gk.ib G2.cb Gk.j_k])).
 byequiv (: ={arg, glob Dk} /\ arg{1} = (x, y) ==> _) => //.
 conseq (Ok_Okx &m x y Dk x_EU y_EU Dk_ll Dk_initP); smt().
@@ -1817,7 +1819,7 @@ proc; inline *; wp.
 call (: ={OBEU.m, G2.cb, G.bad} /\ ={m}(OEU, OAEU) /\
         ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
         Ok.cs{1} = G2.ca{2} /\ Ok.ik{1} = Gk.i_k{2} /\
-        Ok.is{1} = Gk.ia{2} /\ Ok.x{1} = Gkx.x{2} /\
+        Ok.il{1} = Gk.ia{2} /\ Ok.x{1} = Gkx.x{2} /\
         (G.bad = Ok.bad /\ Ok.n = na){1});
   1..4: (by proc; inline *; sp; if; try if; auto); 2: by auto.
 - proc; inline Gkx(OAEU, OBEU).ddh Count(GkD(O_i_O(Okx(OEU)), OBEU)).ddh.
@@ -1826,7 +1828,7 @@ call (: ={OBEU.m, G2.cb, G.bad} /\ ={m}(OEU, OAEU) /\
   seq 4 3 : (={OBEU.m, G2.cb, G.bad, t} /\ ={m}(OEU, OAEU) /\
              ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
              Ok.cs{1} = G2.ca{2} /\ Ok.ik{1} = Gk.i_k{2} /\
-             Ok.is{1} = Gk.ia{2} /\ Ok.x{1} = Gkx.x{2} /\
+             Ok.il{1} = Gk.ia{2} /\ Ok.x{1} = Gkx.x{2} /\
              (G.bad = Ok.bad /\ Ok.n = na){1} /\
              i1{1} = i0{2} /\ j1{1} = j0{2} /\ r1{1} = r0{2} /\
              ca{1} = G2.ca{2} /\ 0 <= i1{1} < na); 2: by inline *; auto => />.
@@ -1856,7 +1858,7 @@ local module GkxD (OA : FROEU.RO, OB : O) = {
     return nb;
   }
 
-  proc get_is () = {
+  proc get_il () = {
     return ib;
   }
 
@@ -1927,7 +1929,7 @@ local module Dkx (OB : O) = {
   }
 
   proc get_n = O.get_n
-  proc get_is = O.get_is
+  proc get_il = O.get_il
   proc get_x = O.get_x
 
   proc main () = {
@@ -2027,11 +2029,11 @@ move => x_EU y_EU.
 have -> :   Pr[Game_xy(Gkx(OAEU, OBEU), A).main(x, y) @ &m :
                G.bad /\ is_ok Gk.ia G2.ca Gk.i_k /\ is_ok Gk.ib G2.cb Gk.j_k] =
             Pr[MainDO(Dkx, Ok(OEU)).main(x, y) @ &m :
-               G.bad /\ is_ok Gk.ia G2.ca Gk.i_k /\ is_ok Ok.is Ok.cs Ok.ik].
+               G.bad /\ is_ok Gk.ia G2.ca Gk.i_k /\ is_ok Ok.il Ok.cs Ok.ik].
 - byequiv => //; proc; inline *; wp.
   call (: ={OAEU.m, G2.ca, G.bad} /\ ={m}(OBEU, OEU) /\
           ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(Gkx, GkxD) /\
-          G2.cb{1} = Ok.cs{2} /\ Gk.j_k{1} = Ok.ik{2} /\ Gk.ib{1} = Ok.is{2} /\
+          G2.cb{1} = Ok.cs{2} /\ Gk.j_k{1} = Ok.ik{2} /\ Gk.ib{1} = Ok.il{2} /\
           (G.bad = Ok.bad /\ Ok.n = nb){2});
     2..4: (by proc; inline *; sp; if; try if; auto); 3: by auto.
   + by proc; inline *; sp; if; auto; smt().
@@ -2041,7 +2043,7 @@ have -> :   Pr[Game_xy(Gkx(OAEU, OBEU), A).main(x, y) @ &m :
     seq 3 4 : (={OAEU.m, G2.ca, G.bad, t} /\ ={m}(OBEU, OEU) /\
                ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(Gkx, GkxD) /\
                G2.cb{1} = Ok.cs{2} /\ Gk.j_k{1} = Ok.ik{2} /\
-               Gk.ib{1} = Ok.is{2} /\
+               Gk.ib{1} = Ok.il{2} /\
                (G.bad = Ok.bad /\ Ok.n = nb){2} /\
                i0{1} = i1{2} /\ j0{1} = j1{2} /\ r0{1} = r1{2} /\
                G2.cb{1} = cb{2} /\ 0 <= j0{1} < nb);
@@ -2050,7 +2052,7 @@ have -> :   Pr[Game_xy(Gkx(OAEU, OBEU), A).main(x, y) @ &m :
     by inline *; sp; rcondt{2} 1; auto; smt(expM mulC).
 apply (ler_trans (Pr[MainDO(Dkx, Okx(OEU)).main(x, y) @ &m :
                      G.bad /\ is_ok Gk.ia G2.ca Gk.i_k /\
-                              is_ok Ok.is Ok.cs Ok.ik])).
+                              is_ok Ok.il Ok.cs Ok.ik])).
 byequiv (: ={arg, glob Dkx} /\ arg{1} = (x, y) ==> _) => //.
 conseq (Ok_Okx &m x y Dkx x_EU y_EU Dkx_ll Dkx_initP); smt().
 byequiv (: ={glob A, x, y} /\ fst arg{1} = x /\ snd arg{1} = y ==> _) => //.
@@ -2058,7 +2060,7 @@ proc; inline *; wp.
 call (: ={OAEU.m, G2.ca, G.bad} /\ ={m}(OEU, OBEU) /\
         ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(GkxD, Gkx) /\
         Ok.cs{1} = G2.cb{2} /\ Ok.ik{1} = Gk.j_k{2} /\
-        Ok.is{1} = Gk.ib{2} /\ Ok.x{1} = Gkx.y{2} /\
+        Ok.il{1} = Gk.ib{2} /\ Ok.x{1} = Gkx.y{2} /\
         (G.bad = Ok.bad /\ Ok.n = nb){1});
   1..4: (by proc; inline *; sp; if; try if; auto); 2: by auto.
 - proc; inline Gkxy(OAEU, OBEU).ddh Count(GkxD(OAEU, O_i_O(Okx(OEU)))).ddh.
@@ -2067,7 +2069,7 @@ call (: ={OAEU.m, G2.ca, G.bad} /\ ={m}(OEU, OBEU) /\
   seq 4 3 : (={OAEU.m, G2.ca, G.bad, t} /\ ={m}(OEU, OBEU) /\
              ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(GkxD, Gkx) /\
              Ok.cs{1} = G2.cb{2} /\ Ok.ik{1} = Gk.j_k{2} /\
-             Ok.is{1} = Gk.ib{2} /\ Ok.x{1} = Gkx.y{2} /\
+             Ok.il{1} = Gk.ib{2} /\ Ok.x{1} = Gkx.y{2} /\
              (G.bad = Ok.bad /\ Ok.n = nb){1} /\
              i1{1} = i0{2} /\ j1{1} = j0{2} /\ r1{1} = r0{2} /\
              cb{1} = G2.cb{2} /\ 0 <= j1{1} < nb); 2: by inline *; auto => />.
@@ -2269,10 +2271,10 @@ qed.
 
 section.
 
-declare module A : Adversary {G1, G2, G, S, Count,
+declare module A <: Adversary {G1, G2, G, S, Count,
                               OAEU, OBEU, OEU, O0EU, O1EU, O1G}.
 
-axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
+declare axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.oA =>
   islossless O.oB =>
   islossless O.oa =>
@@ -2280,7 +2282,7 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.ddh =>
   islossless A(O).guess.
 
-axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
+declare axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
   hoare [A(Count(O)).guess :
          Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
          Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
