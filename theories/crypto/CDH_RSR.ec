@@ -1060,6 +1060,22 @@ seq 14 : G.bad p (1%r / q_ddh%r * c) _ 0%r
       apply ler_wiexpn2l; smt(fcard_ge0 fcard_oflist subsetIl subset_leq_fcard).
 qed.
 
+(* We want to express Gk(OAEU,OBEU) as a distinguisher applied to
+Ok(OAEU) and, and then change the implementation of Ok to Okx, where
+we rerandomize with respect to some value x (Ok_Okx). We then expesss
+the resulting game as a distinguisher for Ok(OBEU) and use Ok_Okx
+again to rerandomize OBEU with respect to some value y.  Thus, we have
+the following chain of game equivalences :
+
+  Gk(OAEU,OBEU) 
+~ MainDO(Dk, Ok(OAEU))
+~ MainDO(Dk, Okx(OAEU)) *Ok_Okx 
+~ Gkx(OA,OB)
+~ MainDO(Dkx, Ok(OBEU))   
+~ MainDO(Dkx, Okx(OBEU)) *Ok_Okx 
+~ Gkxy(OAEU,OBEU) 
+*)
+
 module type O = {
   proc get_cs  ()        : int list
   proc set_bad (i : int) : unit
@@ -1070,13 +1086,6 @@ module type O = {
 module type O_i = {
   include O
   proc init (n : int, il : bool list, x : Z) : unit
-}.
-
-module O_i_O (O : O_i) : O = {
-  proc get_cs  = O.get_cs
-  proc set_bad = O.set_bad
-  proc oZ      = O.oZ
-  proc oG      = O.oG
 }.
 
 module type DistinguisherO_i (O : O) = {
@@ -1108,10 +1117,11 @@ module MainDO (D : DistinguisherO_i) (O : O_i) = {
     var r;
 
     init(x, y);
-    r  <@ D(O_i_O(O)).main();
+    r  <@ D(O).main();
     return r;
   }
 }.
+
 
 local module Ok (O : FROEU.RO) : O_i = {
   var n   : int
@@ -1796,8 +1806,8 @@ have -> :   Pr[Game(Gk(OAEU, OBEU), A).main() @ &m :
           (G.bad = Ok.bad /\ Ok.n = na){2});
     1, 2, 4: (by proc; inline *; sp; if; try if; auto); 3: by auto.
   + by proc; inline *; sp; if; [ | if | ]; auto; smt().
-  + proc; inline Gk(OAEU, OBEU).ddh Count(GkD(O_i_O(Ok(OEU)), OBEU)).ddh.
-    inline GkD(O_i_O(Ok(OEU)), OBEU).ddh O_i_O(Ok(OEU)).get_cs.
+  + proc; inline Gk(OAEU, OBEU).ddh Count(GkD(Ok(OEU), OBEU)).ddh.
+    inline GkD(Ok(OEU), OBEU).ddh Ok(OEU).get_cs.
     sp; if; 1, 3: by auto.
     seq 3 4 : (={OBEU.m, G2.cb, G.bad, t} /\ ={m}(OAEU, OEU) /\
                ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
@@ -1822,8 +1832,8 @@ call (: ={OBEU.m, G2.cb, G.bad} /\ ={m}(OEU, OAEU) /\
         Ok.il{1} = Gk.ia{2} /\ Ok.x{1} = Gkx.x{2} /\
         (G.bad = Ok.bad /\ Ok.n = na){1});
   1..4: (by proc; inline *; sp; if; try if; auto); 2: by auto.
-- proc; inline Gkx(OAEU, OBEU).ddh Count(GkD(O_i_O(Okx(OEU)), OBEU)).ddh.
-  inline GkD(O_i_O(Okx(OEU)), OBEU).ddh O_i_O(Ok(OEU)).get_cs.
+- proc; inline Gkx(OAEU, OBEU).ddh Count(GkD(Okx(OEU), OBEU)).ddh.
+  inline GkD(Okx(OEU), OBEU).ddh Ok(OEU).get_cs.
   sp; if; 1, 3: by auto.
   seq 4 3 : (={OBEU.m, G2.cb, G.bad, t} /\ ={m}(OEU, OAEU) /\
              ={cddh, j_k, k, ia, ib}(Gk, Gk) /\
@@ -2037,8 +2047,8 @@ have -> :   Pr[Game_xy(Gkx(OAEU, OBEU), A).main(x, y) @ &m :
           (G.bad = Ok.bad /\ Ok.n = nb){2});
     2..4: (by proc; inline *; sp; if; try if; auto); 3: by auto.
   + by proc; inline *; sp; if; auto; smt().
-  + proc; inline Gkx(OAEU, OBEU).ddh Count(GkxD(OAEU, O_i_O(Ok(OEU)))).ddh.
-    inline GkxD(OAEU, O_i_O(Ok(OEU))).ddh O_i_O(Ok(OEU)).get_cs.
+  + proc; inline Gkx(OAEU, OBEU).ddh Count(GkxD(OAEU, Ok(OEU))).ddh.
+    inline GkxD(OAEU, Ok(OEU)).ddh Ok(OEU).get_cs.
     sp; if; 1, 3: by auto.
     seq 3 4 : (={OAEU.m, G2.ca, G.bad, t} /\ ={m}(OBEU, OEU) /\
                ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(Gkx, GkxD) /\
@@ -2063,8 +2073,8 @@ call (: ={OAEU.m, G2.ca, G.bad} /\ ={m}(OEU, OBEU) /\
         Ok.il{1} = Gk.ib{2} /\ Ok.x{1} = Gkx.y{2} /\
         (G.bad = Ok.bad /\ Ok.n = nb){1});
   1..4: (by proc; inline *; sp; if; try if; auto); 2: by auto.
-- proc; inline Gkxy(OAEU, OBEU).ddh Count(GkxD(OAEU, O_i_O(Okx(OEU)))).ddh.
-  inline GkxD(OAEU, O_i_O(Okx(OEU))).ddh O_i_O(Ok(OEU)).get_cs.
+- proc; inline Gkxy(OAEU, OBEU).ddh Count(GkxD(OAEU, Okx(OEU))).ddh.
+  inline GkxD(OAEU, Okx(OEU)).ddh Ok(OEU).get_cs.
   sp; if; 1, 3: by auto.
   seq 4 3 : (={OAEU.m, G2.ca, G.bad, t} /\ ={m}(OEU, OBEU) /\
              ={cddh, i_k, k, ia, ib}(Gk, Gk) /\ ={x}(GkxD, Gkx) /\
