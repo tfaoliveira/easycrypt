@@ -501,9 +501,9 @@ clone import Ring.ComRing as PolyComRing with
   type t      <= poly ,
     op zeror  <= poly0,
     op oner   <= poly1,
-    op ( + )  <= polyD,
-    op [ - ]  <= polyN,
-    op ( * )  <= polyM
+    op ( + )   = polyD,
+    op [ - ]   = polyN,
+    op ( * )   = polyM
 
   proof addrA     by apply ZPoly.addrA
   proof addrC     by apply ZPoly.addrC
