@@ -182,6 +182,7 @@ type op_kind = [
   | `Cost_add
   | `Cost_opp
   | `Cost_scale
+  | `Cost_xscale
   | `Cost_le
   | `Cost_lt
 

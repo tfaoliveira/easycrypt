@@ -770,6 +770,7 @@ type op_kind = [
   | `Cost_add
   | `Cost_opp
   | `Cost_scale
+  | `Cost_xscale
   | `Cost_le
   | `Cost_lt
 
@@ -803,11 +804,12 @@ let operators =
      CI.CI_Int .p_int_pow , `Int_pow  ;
      CI.CI_Int .p_int_edivz , `Int_edivz  ;
 
-     CI.CI_Cost.p_cost_le    , `Cost_le   ;
-     CI.CI_Cost.p_cost_lt    , `Cost_lt   ;
-     CI.CI_Cost.p_cost_add   , `Cost_add  ;
-     CI.CI_Cost.p_cost_opp   , `Cost_opp  ;
-     CI.CI_Cost.p_cost_scale , `Cost_scale;
+     CI.CI_Cost.p_cost_le    , `Cost_le    ;
+     CI.CI_Cost.p_cost_lt    , `Cost_lt    ;
+     CI.CI_Cost.p_cost_add   , `Cost_add   ;
+     CI.CI_Cost.p_cost_opp   , `Cost_opp   ;
+     CI.CI_Cost.p_cost_scale , `Cost_scale ;
+     CI.CI_Cost.p_cost_xscale, `Cost_xscale;
 
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
@@ -1033,7 +1035,12 @@ let f_is_int_simpl (c : form) : form =
 
 (* -------------------------------------------------------------------- *)
 (* lift a unary function to [tcost] *)
-let f_cost_map xf costf (c : form) : form =
+let f_cost_map
+    (xf    : form -> form)
+    (costf : form -> form)
+    (c     : form)
+  : form
+  =
   if not (is_cost c) then costf c
   else
     let c = destr_cost c in
@@ -1047,16 +1054,23 @@ let f_cost_opp_simpl =
     (fun c -> f_cost_opp c)
 
 let f_cost_scale_simpl (f : form) (c : form) =
-  f_cost_map
-    (fun x -> f_xmul_simpl (f_N f) x)
-    (fun c -> f_cost_scale f c)
-    c
+  if      f_equal f f_i0 then f_cost_zero
+  else if f_equal f f_i1 then c
+  else
+    f_cost_map
+      (fun x -> f_xmul_simpl (f_N f) x)
+      (fun c -> f_cost_scale f c)
+      c
 
 let f_cost_xscale_simpl (f : form) (c : form) =
-  f_cost_map
-    (fun x -> f_xmul_simpl f x)
-    (fun c -> f_cost_scale f c)
-    c
+  if      f_equal f f_x0  then f_cost_zero
+  else if f_equal f f_x1  then c
+  else if f_equal f f_Inf then f_cost_inf
+  else
+    f_cost_map
+      (fun x -> f_xmul_simpl f x)
+      (fun c -> f_cost_xscale f c)
+      c
 
 (* lift a binary operator over [txint] to [tcost] *)
 let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =

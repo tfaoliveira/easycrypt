@@ -29,8 +29,12 @@ abbrev ( ** ) = xscale.
 op subcond = fun x y => (x - y) + y = x.
 
 (* -------------------------------------------------------------------- *)
-axiom add0cost : left_id zero add.
+axiom scale0cost (x : cost): 0 * x = zero.
+axiom scale1cost : left_id   1 scale.
 
+hint simplify [reduce] scale0cost, scale1cost.
+
+axiom add0cost : left_id zero add.
 axiom addcost0 : right_id zero add.
 
 hint simplify [reduce] add0cost, addcost0.
