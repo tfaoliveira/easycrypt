@@ -26,7 +26,7 @@ abbrev ( ** ) = xscale.
 
 (* -------------------------------------------------------------------- *)
 (* sufficient condition to do backward reasoning over costs. *)
-op subcond = fun x y => (x - y) + y = zero.
+op subcond = fun x y => (x - y) + y = x.
 
 (* -------------------------------------------------------------------- *)
 axiom add0cost : left_id zero add.

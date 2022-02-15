@@ -3744,15 +3744,15 @@ and trans_form_or_pattern
           unify_or_fail env  ue bd  .pl_loc ~expct:treal bd'  .f_ty;
           f_bdHoareF pre' fpath post' hcmp bd'
 
-    | PFcost c -> f_cost_r (trans_cost ~self_ty:txint opsc ~incoe c)
+    | PFcost c -> f_cost_r (trans_cost ~self_ty:txint opsc ~incoe env c)
 
-    | PFmodcost mc -> f_mod_cost_r (trans_modcost opsc ~incoe mc)
+    | PFmodcost mc -> f_mod_cost_r (trans_modcost opsc ~incoe env mc)
 
     | PFChoareF _ | PFChoareFT _ ->
       EcCHoare.check_loaded env;
 
       let trans_choaref pre post fpath p_cost =
-        let cost = transf_r opsc ~incoe env p_cost in
+        let cost = transf env p_cost in
         unify_or_fail env ue p_cost.pl_loc ~expct:tcost cost.f_ty;
         f_cHoareF pre fpath post cost
       in
@@ -3862,7 +3862,7 @@ and trans_form_or_pattern
 
         f_coe form' memenv expr'
 
-  and trans_bnd opsc ~incoe ty = function
+  and trans_bnd opsc ~incoe env ty = function
     | `Unbounded ->
       if      ty_equal ty tcost then f_cost_inf
       else if ty_equal ty txint then f_Inf
@@ -3873,11 +3873,18 @@ and trans_form_or_pattern
       unify_or_fail env ue c.pl_loc ~expct:ty c'.f_ty;
       c'
 
-  and trans_cost ~self_ty opsc ~incoe (PC_costs ((self, calls), full)) : cost =
-    let self  = trans_bnd opsc ~incoe self_ty self in
+  and trans_cost
+      ~(self_ty : EcTypes.ty)
+      (opsc     : EcPath.path option)
+      ~(incoe   : bool)
+      (env      : EcEnv.env)
+      (PC_costs ((self, calls), full))
+    : cost
+    =
+    let self  = trans_bnd opsc ~incoe env self_ty self in
     let calls = List.map (fun (m,fn,c) ->
         let fn = trans_oracle env (m,fn) in
-        let f_c = trans_bnd opsc ~incoe txint c in
+        let f_c = trans_bnd opsc ~incoe env txint c in
         fn, f_c
       ) calls
     in
@@ -3885,9 +3892,9 @@ and trans_form_or_pattern
 
     cost_r self calls full
 
-  and trans_modcost opsc ~incoe (pmc : pmodcost) : mod_cost =
+  and trans_modcost opsc ~incoe env (pmc : pmodcost) : mod_cost =
     let mc = List.map (fun (f,pc) ->
-        unloc f, trans_cost ~self_ty:tcost opsc ~incoe pc
+        unloc f, trans_cost ~self_ty:tcost opsc ~incoe env pc
       ) pmc
     in
     Msym.of_list mc
