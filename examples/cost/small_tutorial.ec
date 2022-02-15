@@ -91,13 +91,13 @@ module B = {
 }.
 
 (* Assignements are free, only the variable evaluation has a cost. *)
-lemma foo : choare[B.g : true ==> true] time [:N 3].
+lemma foo : choare[B.g : true ==> true] time `[:N 3].
 proof. by proc; auto. qed.
 
 (* Procedure calls are also free. *)
-lemma foo3 : choare[B.f : true ==> true] time [:N 4].
+lemma foo3 : choare[B.f : true ==> true] time `[:N 4].
 proof.
-  by proc; call foo; auto.
+  by proc; call foo; auto. 
 qed.
 
 module C = { 
@@ -120,7 +120,7 @@ hint simplify cost_lt.
 
 (* For if statements, the cost is the maximum of both branches, plus the cost of
    evaluating the if expression. *)
-lemma foo4 : choare[C.f] time [:N 3].
+lemma foo4 : choare[C.f] time `[:N 3].
 proof.
 proc; auto.
 qed.
@@ -136,35 +136,40 @@ module D = {
   }
 }.
 
-lemma foo5 : forall (a : int) (b : int), 
-0 <= a <= b =>
-choare[D.f : x = a /\ y = b /\ x < y ==> true] time [:N (2 * (b - a) + 1)].
+lemma foo5 (a : int) (b : int) :
+  0 <= a <= b =>
+  choare[D.f : x = a /\ y = b /\ x < y ==> true] 
+    time `[:N (2 * (b - a) + 1)].
 proof.
-move => a b [Ha Hb].
-proc => /=.
-(* The [while] tactic takes the following parameters:
-   - invariant, 
-   - deacreasing quantity qdec
-   - number of loop iterations
-   - cost of one loop body, when (qdec = k), given using a lambda. *)
-while (x <= y /\ y = b) (b - x) (b - a) time [:fun _ => N 1].
-
-(* prove that the loop body preserves the invariant, and cost what was stated. *)
-move => z; auto => * /=; by smt ().
-
-(* prove that the if the invariant holds, and if the decreasing quantity is less 
-   or equal to zero, then we exit the loop. *)
-move => &hr; by smt ().
-
-(* prove that either the wanted upper-bound is infinite, or the final cost is 
-  not infinite. *)
-right; auto.
-
-(* prove that the invariant implies the post, that the decreasing quantity
-   is initially smaller than the number of loop iterations, and that the cost
-   of all iterations is smaller than the final cost. *)
-skip => * => /=; split; 1: by smt().
-by rewrite big_constNz /= !size_range /= /#.
+  move => [Ha Hb].
+  proc => /=.
+  (* The [while] tactic takes the following parameters:
+     - invariant, 
+     - deacreasing quantity qdec
+     - number of loop iterations
+     - cost of one loop body, when (qdec = k), given using a lambda. *)
+  while (x <= y /\ y = b) (b - x) (b - a) time (fun _ => `[:N 1]).
+  
+  (* prove that the loop body preserves the invariant, and cost what
+  was stated. *)
+  move => z; auto => * /=; by smt ().
+  
+  (* prove that the if the invariant holds, and if the decreasing
+     quantity is less or equal to zero, then we exit the loop. *)
+  move => &hr; by smt ().
+  
+  (* prove that either the wanted upper-bound is infinite, or the
+    final cost is not infinite. *)
+  move => /=.
+  print bigi_constz.
+  right; auto.
+  
+  (* prove that the invariant implies the post, that the decreasing
+     quantity is initially smaller than the number of loop iterations,
+     and that the cost of all iterations is smaller than the final
+     cost. *)
+  skip => * => /=; split; 1: by smt().
+  by rewrite big_constNz /= !size_range /= /#.
 qed.
 
 (* Match example *)

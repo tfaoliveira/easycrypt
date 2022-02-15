@@ -1,4 +1,4 @@
-require import CoreXint.
+require import CoreXint Int.
 
 (* -------------------------------------------------------------------- *)
 op zero : cost.
@@ -34,6 +34,10 @@ axiom scale1cost : left_id   1 scale.
 
 hint simplify [reduce] scale0cost, scale1cost.
 
+axiom scale_distr (i j : int) (x : cost) : 
+  (i + j) * x = i * x + j * x.
+
+(* -------------------------------------------------------------------- *)
 axiom add0cost : left_id zero add.
 axiom addcost0 : right_id zero add.
 
