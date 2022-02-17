@@ -173,25 +173,21 @@ theory Bigcost.
   realize Support.Axioms.addmC by exact/addcostC.
   realize Support.Axioms.add0m by exact/add0cost.
   
-  lemma nosmt big_const_Nx (P : 'a -> bool) x s:
+  lemma nosmt big_const_C (P : 'a -> bool) (x : cost)s:
     big P (fun _ => x) s = (count P s) * x.
   proof. 
     elim: s => [|y s ih] /=; 1: by rewrite /big.
     by rewrite big_cons ih; case: (P y); [1: rewrite scale_distr].
   qed.
+    
+  lemma big_constC (x : cost) (s: 'a list) :
+    big predT (fun _ => x) s = size s * x.
+  proof. by rewrite big_const_C count_predT. qed.
   
-  (* lemma nosmt big_constx (P : 'a -> bool) x s: x <> Inf => *)
-  (*   big P (fun _ => x) s = (count P s) ** x. *)
-  (* proof. by case: x => //= x; apply: big_const_Nx. qed. *)
-  
-  (* lemma big_constNz x (s: 'a list) : *)
-  (*   big predT (fun _ => N x) s = N (size s * x). *)
-  (* proof. by rewrite big_const_Nx count_predT. qed. *)
-  
-  (* lemma bigi_constz x (n m:int) :  *)
-  (*    n <= m => *)
-  (*    bigi predT (fun _ => N x) n m = N ((m - n) * x). *)
-  (* proof. by move=> hnm;rewrite big_constNz size_range /#. qed.   *)
+  lemma bigi_constC (x : cost) (n m:int) :
+     n <= m =>
+     bigi predT (fun _ => x) n m = (m - n) * x.
+  proof. by move=> hnm;rewrite big_constC size_range /#. qed.
     
 end Bigcost.
 export Bigcost.

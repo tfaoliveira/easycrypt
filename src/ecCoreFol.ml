@@ -2299,6 +2299,10 @@ module Fsubst = struct
 
       FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; }
 
+    | Fcost c -> cost_subst ~tx s c
+
+    | Fmodcost mc -> f_mod_cost_r (Msym.map (proc_cost_subst ~tx s) mc)
+
     | _ ->
       f_map s.fs_ty (f_subst ~tx s) fp)
 
@@ -2483,6 +2487,9 @@ module Fsubst = struct
        elsewhere. *)
     let c_calls = EcPath.Mx.fold (fun x cb r_params ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
+
+        assert(EcPath.m_is_local x'.x_top);
+
         let cb' = f_subst ~tx s cb in
         EcPath.Mx.change
           (fun old -> assert (old  = None); Some cb')

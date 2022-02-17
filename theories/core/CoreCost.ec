@@ -30,7 +30,7 @@ op subcond = fun x y => (x - y) + y = x.
 
 (* -------------------------------------------------------------------- *)
 axiom scale0cost (x : cost): 0 * x = zero.
-axiom scale1cost : left_id   1 scale.
+axiom scale1cost : left_id 1 scale.
 
 hint simplify [reduce] scale0cost, scale1cost.
 

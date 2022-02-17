@@ -152,24 +152,22 @@ proof.
   
   (* prove that the loop body preserves the invariant, and cost what
   was stated. *)
-  move => z; auto => * /=; by smt ().
+  by auto; smt ().
   
   (* prove that the if the invariant holds, and if the decreasing
      quantity is less or equal to zero, then we exit the loop. *)
-  move => &hr; by smt ().
+  smt ().
   
   (* prove that either the wanted upper-bound is infinite, or the
     final cost is not infinite. *)
-  move => /=.
-  print bigi_constz.
-  right; auto.
+  by rewrite bigi_constC /subcond /#.
   
   (* prove that the invariant implies the post, that the decreasing
      quantity is initially smaller than the number of loop iterations,
      and that the cost of all iterations is smaller than the final
      cost. *)
-  skip => * => /=; split; 1: by smt().
-  by rewrite big_constNz /= !size_range /= /#.
+  skip => * /=; split; 1: by smt().
+  by rewrite big_constC !size_range /#.
 qed.
 
 (* Match example *)
@@ -184,11 +182,11 @@ module ExMatch = {
   }
 }.
 
-lemma test_match : choare[ExMatch.gethead] time [:N 4].
+lemma test_match : choare[ExMatch.gethead] time `[:N 4].
 proof.
-proc; match (::) 0 => //=.
-+ by skip=> /#.
-+ by auto.
+  proc; match (::) 0 => //=.
+   by skip=> /#.
+   by auto.
 qed.
 
 (*********************)
@@ -209,13 +207,13 @@ module (MyAdv : Adv) (H0 : H) = {
 }.
 
 lemma MyAdv_compl (H0 <: H) : 
-  choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
+  choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
 proof.
-  by proc; do !(call(_: true : [])); auto => /=.
+  by proc; do !(call(_: true)); auto. 
 qed.
 
-lemma MyAdv_compl_bis (k : int) (H0 <: H [o : [k]]) : 
-  choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
+lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k, ..]]) : 
+  choare[MyAdv(H0).a] time `[:N 3, H0.o : 2].
 proof.
   by proc; do !(call(_: true : [])); auto => /=. 
 qed.
