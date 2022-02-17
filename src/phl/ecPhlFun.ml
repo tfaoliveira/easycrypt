@@ -283,8 +283,8 @@ module FunAbsLow = struct
              not (List.exists (fun x -> x_equal x.oracle oracle) xc) then
             let k = EcIdent.create "k", GTty tint in
 
-            let calls =  Mx.singleton oracle (f_lambda [k] f_x1) in
-            let cost = f_cost_r (cost_r f_Inf calls true) in
+            let calls =  Mx.singleton oracle f_x1 in
+            let cost = f_lambda [k] (f_cost_r (cost_r f_x0 calls true)) in
             let xc = { oracle; cost; finite = true; } :: xc in
 
             xc, k :: new_bds
@@ -399,8 +399,24 @@ module FunAbsLow = struct
         (* fresh dummy ident, so that all tests below fail  *)
       in
 
-      (* if [o_finite], create a subgoal checking that [o_cost] is finite. *)
-      let subg = if o_finite then f_is_int o_cost else f_true in
+      (* We now compute the cost of the [k]-th call to [o_called].
+         - if [o] can be called a finite number of times, the cost is
+         parametrized by the number of the i-th call.
+         - otherwise, the cost information to prove is a constant
+         upper-bound. *)
+      let k_o_cost =
+        if o_finite then
+          f_app_simpl o_cost [f_local k_called tint] tcost
+        else o_cost
+      in
+
+      (* if [o_finite], create a subgoal checking that [k_o_cost] is finite. *)
+      let subg =
+        if o_finite then
+          f_forall_simpl [k_called, GTty tint] (f_is_int k_o_cost)
+        else
+          f_true
+      in
 
       (* instantisation of [bds] for the post-condition. Type [tint].
          Identical to [kargs_pr], except for the called oracle [k_called],
@@ -428,16 +444,6 @@ module FunAbsLow = struct
       in
       let call_bounds = f_ands0_simpl call_bounds in
 
-      (* We now compute the cost of the [k]-th call to [o_called].
-         - if [o] can be called a finite number of times, the cost is
-         parametrized by the number of the i-th call.
-         - otherwise, the cost information to prove is a constant
-         upper-bound. *)
-      let k_o_cost =
-        if o_finite then
-          f_app_simpl o_cost [f_local k_called tint] tcost
-        else o_cost
-      in
       let form = f_cHoareF pr o_called po k_o_cost in
       subg, f_forall_simpl bds (f_imp_simpl call_bounds form)
     in

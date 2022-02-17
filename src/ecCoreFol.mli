@@ -391,6 +391,7 @@ val f_int_max   : form -> form -> form
 (* -------------------------------------------------------------------- *)
 val f_cost_zero    : form
 val f_cost_inf     : form
+val f_cost_inf0    : form
 val f_cost_opp     : form -> form
 val f_cost_add     : form -> form -> form
 val f_cost_scale   : form -> form -> form

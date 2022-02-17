@@ -111,7 +111,11 @@ val check_conv : ?ri:reduction_info -> LDecl.hyps -> form -> form -> unit
 
 (* -------------------------------------------------------------------- *)
 val is_conv_cproc :
-  ?ri:reduction_info -> proc:symbol -> LDecl.hyps -> form -> form -> bool
+  ?ri:reduction_info ->
+  mode:[`Eq | `Sub] ->
+  proc:symbol ->
+  LDecl.hyps ->
+  form -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 type xconv = [`Eq | `AlphaEq | `Conv]

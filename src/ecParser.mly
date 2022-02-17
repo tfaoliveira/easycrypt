@@ -1736,15 +1736,11 @@ oracle_restr:
 (* Complexity restrictions *)
 
 compl_elc:
-| UNDERSCORE     { None }
+| DOTDOT         { None }
 | c=form_r(none) { Some c }
 
 compl_el:
 | o=gamepath_inparam COLON c=compl_elc { (o, c) }
-
-/* compl_self: */
-/* | UNDERSCORE     { None } */
-/* | c=form_r(none) { Some c } */
 
 %inline compl_restr0:
 | self=compl_elc                                  { self,[] }
@@ -1754,7 +1750,7 @@ compl_restr1:
   | c=compl_restr0
     { let self, calls = c in
       PCompl (self, calls, true) }
-  | c=compl_restr0 COMMA UNDERSCORE
+  | c=compl_restr0 COMMA DOTDOT
     { let self, calls = c in
       PCompl (self, calls, false) }
 

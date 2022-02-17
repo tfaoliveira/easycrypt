@@ -1113,6 +1113,9 @@ let f_cost_le      f1 f2 = f_app fop_cost_le      [f1; f2] tbool
 let f_cost_lt      f1 f2 = f_app fop_cost_lt      [f1; f2] tbool
 let f_cost_subcond f1 f2 = f_app fop_cost_subcond [f1; f2] tbool
 
+(*  [f_cost_inf] definition *)
+let f_cost_inf0 = f_cost_r (cost_r f_Inf EcPath.Mx.empty false)
+
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =
   if f_equal f1 f_i0 then f2 else

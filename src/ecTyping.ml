@@ -547,8 +547,7 @@ let check_item_compatible
       and ocosts = EcCallbyValue.norm_cbv ri hyps ocosts in
 
       let proc = fin.fs_name in
-      (* TODO A: have a different behavior for [`Eq] and [`Sub] *)
-      if not (EcReduction.is_conv_cproc hyps ~proc icosts ocosts) then
+      if not (EcReduction.is_conv_cproc hyps ~proc ~mode icosts ocosts) then
         let err = match mode with
           | `Eq  -> `Eq (icosts, ocosts)
           | `Sub -> `Sub(icosts, ocosts)

@@ -1329,6 +1329,10 @@ and reduce_head_sub ri env f =
       let coe_pre = as_seq1 (reduce_head_args ri env [coe.coe_pre]) in
       f_coe_r { coe with coe_pre }
 
+    | Fcost_proj (c,p) ->
+      let c = as_seq1 (reduce_head_args ri env [c]) in
+      f_cost_proj_r c p
+
     | _ -> assert false
 
   in RedTbl.set_sub ri.redtbl f f'; f'
@@ -1804,6 +1808,7 @@ let check_conv ?ri hyps f1 f2 =
    ad-hoc fashion. *)
 let is_conv_cproc
     ?(ri   = full_red)
+    ~(mode:[`Eq | `Sub])
     ~(proc : symbol)
     (hyps  : LDecl.hyps)
     (f1    : form)
@@ -1811,15 +1816,36 @@ let is_conv_cproc
   =
   let ri, env = init_redinfo ri hyps in
   if conv ri env f1 f2 [] then true
-  else begin
-    let f1, f2 = whnf ri env f1, whnf ri env f2 in
-    match f1.f_node, f2.f_node with
-    | Fmodcost m1, Fmodcost m2 ->
-      let a1, a2 = Msym.find proc m1, Msym.find proc m2 in
-      let ty_dum = tcost in         (* dummy type *)
-      conv_crecord ri env a1 a2 ty_dum []
-    | _ -> false
-  end
+  else
+    let exception Failed in
+    try
+      let f1, f2 = whnf ri env f1, whnf ri env f2 in
+      match f1.f_node, f2.f_node with
+      | Fmodcost m1, Fmodcost m2 ->
+        let a1, a2 = Msym.find proc m1, Msym.find proc m2 in
+
+        if not a1.c_full && a2.c_full then raise Failed;
+
+        EcPath.Mx.fold2_union (fun _ c1 c2 () ->
+            let c1 = EcFol.oget_c_bnd c1 a1.c_full
+            and c2 = EcFol.oget_c_bnd c2 a2.c_full in
+            let f = match mode with
+              | `Eq  -> EcFol.f_eq  c1 c2
+              | `Sub -> EcFol.f_xle c2 c2
+            in
+            if not (conv ri env f f_true []) then raise Failed
+          ) a1.c_calls a2.c_calls ();
+
+        let self1, self2 = a1.c_self, a2.c_self in
+        let self_eq = match mode with
+          | `Eq  -> EcFol.f_eq  self1 self2
+          | `Sub -> EcFol.f_cost_le self1 self2
+        in
+        if not (conv ri env self_eq f_true []) then raise Failed;
+        true
+
+      | _ -> false
+    with Failed -> false
 
 (* -------------------------------------------------------------------- *)
 let h_red ri hyps f =

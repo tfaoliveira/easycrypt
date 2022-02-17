@@ -212,19 +212,19 @@ proof.
   by proc; do !(call(_: true)); auto. 
 qed.
 
-lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k, ..]]) : 
-  choare[MyAdv(H0).a] time `[:N 3, H0.o : 2].
+lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k]]) : 
+  choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
 proof.
-  by proc; do !(call(_: true : [])); auto => /=. 
+  by proc; do !(call(_: true)); auto => /=. 
 qed.
 
 (* The same lemma, but in a section. *)
 section.
   declare module H0 : H.
   
-  lemma MyAdv_compl_loc : choare[MyAdv(H0).a] time [:N 3, H0.o : 2].
+  lemma MyAdv_compl_loc : choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
   proof. 
-    by proc; do !(call(_: true : [])); auto. 
+    by proc; do !(call(_: true)); auto. 
   qed.
 end section.
 
@@ -235,11 +235,12 @@ module (MyH : H) = {
   }
 }.
 
-lemma MyH_compl : choare[MyH.o] time [:N 1] by proc; auto.
+lemma MyH_compl : choare[MyH.o] time `[:N 1] by proc; auto.
 
-lemma advcompl_inst_bis : choare[MyAdv(MyH).a] time [:N 5].
-proof.
- apply (MyAdv_compl_bis _ MyH MyH_compl). 
+lemma advcompl_inst_bis : choare[MyAdv(MyH).a] time `[:N 5].
+proof. 
+  apply (MyAdv_compl_bis `[: N 1] MyH).
+  exact MyH_compl.
 qed.
 
 module Inv (Adv0 : Adv) (HI : H) = {
@@ -252,23 +253,31 @@ module Inv (Adv0 : Adv) (HI : H) = {
   }
 }.
 
+(* TODO A: *)
 (* Allow both formulations below: *)
 (*     (Adv0 <: Adv [a : `{j, #H0.o : 0}])  *)
 (*     (Adv0(H1) <: Adv [a : `{j, H1.o : 0}])  *)
 
 lemma Inv_compl
-    (j k : int)
-    (Adv0 <: Adv [a : [j, #H0.o : k]]) 
+    (c : cost) (k : int)
+    (Adv0 <: Adv [a : [c, #H0.o : N k]]) 
     (H0   <: H) : 
     0 <= k =>
-    choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : k ].
+    choare[Inv(Adv0, H0).i] time `[:N 1, Adv0.a : N 1, H0.o : N k ].
 proof.
-move => hk; proc.
-call (_: true : []). 
-move => i Hi /=; proc*; call(_: true : []); auto => /=.
-by auto => /=; rewrite big_constz count_predT !size_range /#.
+  move => hk; proc.
+  call (_: true : []). 
+
+  (* TODO A: type error there, terms mis-created *)
+  by auto.
+
+  by move => i Hi /=; proc*; call(_: true).
+
+  by move => /=; rewrite bigi_constC. 
+  by auto => /=; rewrite bigi_constC. 
 qed.
 
+(* TODO A: *)
 (* Alternative future syntax *)
 (* lemma Inv_compl *)
 (*     (Adv0 <: Adv[#])  *)

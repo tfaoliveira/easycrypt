@@ -1099,7 +1099,11 @@ let f_cost_mk_cmp fullcmp xcmp costcmp (c1 : form) (c2 : form) : form =
     let c1, c2 = destr_cost c1, destr_cost c2 in
     cost_mk_cmp fullcmp xcmp c1 c2
 
-let f_cost_le_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xle_simpl f_cost_le
+let f_cost_le_simpl f f' =
+  if f_equal f' f_cost_inf || f_equal f' f_cost_inf0 then f_true
+  else
+    f_cost_mk_cmp (fun b b' -> b' || b = b') f_xle_simpl f_cost_le f f'
+
 let f_cost_lt_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cost_lt
 
 (* -------------------------------------------------------------------- *)
