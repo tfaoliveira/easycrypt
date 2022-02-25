@@ -40,6 +40,7 @@ module PPEnv = struct
     ppe_inuse   : Ssym.t;
     ppe_univar  : (symbol Mint.t * Ssym.t) ref;
     ppe_fb      : Sp.t;
+    ppe_inmod   : EcPath.mpath_top option;
     ppe_width   : int;
   }
 
@@ -53,6 +54,7 @@ module PPEnv = struct
       ppe_inuse  = Ssym.empty;
       ppe_univar = ref (Mint.empty, Ssym.empty);
       ppe_fb     = Sp.empty;
+      ppe_inmod  = None;
       ppe_width  = max 20 width; }
 
   let enter_by_memid ppe id =
@@ -98,6 +100,9 @@ module PPEnv = struct
       || (EcEnv.Var.lookup_local_opt        name  env <> None)
       || (EcEnv.Var.lookup_progvar_opt ([], name) env <> None)
       || (in_memories name)
+
+  let in_module ppe mpath =
+    { ppe with ppe_inmod = Some mpath; }
 
   let add_local_r ?gen ?(force = false) ppe =
     fun id ->
@@ -245,7 +250,7 @@ module PPEnv = struct
       p_shorten exists p
 
   let rec mod_symb (ppe : t) mp : EcSymbols.msymbol =
-    let (nm, x, p2) =
+    let (nmx, p2) =
       match mp.P.m_top with
       | `Local x ->
           let name =
@@ -257,35 +262,51 @@ module PPEnv = struct
                   | Some (p, _, _) when EcPath.mt_equal mp.P.m_top p.P.m_top -> name
                   | _ -> EcIdent.tostring x
           in
-            ([], name, None)
+            (Some ([], name), [])
 
-      | `Concrete (p1, p2) ->
-          let exists sm =
-            match EcEnv.Mod.sp_lookup_opt sm ppe.ppe_env with
-            | None -> false
-            | Some (mp1, _, _) -> P.mt_equal mp1.P.m_top (`Concrete (p1, None))
-          in
+      | `Concrete (p1, p2) -> begin
+          match ppe.ppe_inmod with
+          | Some (`Concrete (q1, q2)) when P.p_equal p1 q1 ->
+             let p2 = ofold ((^~) P.pappend) EcCoreLib.p_top p2 in
+             let q2 = ofold ((^~) P.pappend) EcCoreLib.p_top q2 in
 
-          let rec shorten prefix (nm, x) =
-            match exists (nm, x) with
-            | true  -> (nm, x)
-            | false -> begin
-                match prefix with
-                | [] -> (nm, x)
-                | n :: prefix -> shorten prefix (n :: nm, x)
-            end
-          in
+             if P.isprefix p2 q2 then
+               (None, [])
+             else
+               (None, List.tl (P.tolist p2))
 
-          let (nm, x) = P.toqsymbol p1 in
-          let (nm, x) = shorten (List.rev nm) ([], x) in
-            (nm, x, p2)
+          | _ ->
+            let exists sm =
+              match EcEnv.Mod.sp_lookup_opt sm ppe.ppe_env with
+              | None -> false
+              | Some (mp1, _, _) -> P.mt_equal mp1.P.m_top (`Concrete (p1, None))
+            in
+
+            let rec shorten prefix (nm, x) =
+              match exists (nm, x) with
+              | true  -> (nm, x)
+              | false -> begin
+                  match prefix with
+                  | [] -> (nm, x)
+                  | n :: prefix -> shorten prefix (n :: nm, x)
+              end
+            in
+
+            let (nm, x) = P.toqsymbol p1 in
+            let (nm, x) = shorten (List.rev nm) ([], x) in
+
+            (Some (nm, x), odfl [] (omap P.tolist p2))
+        end
     in
     let msymb =
-        (List.map (fun x -> (x, [])) nm)
-      @ [(x, List.map (mod_symb ppe) mp.P.m_args)]
-      @ (List.map (fun x -> (x, [])) (odfl [] (p2 |> omap P.tolist)))
-    in
-      msymb
+      match nmx with
+      | None ->
+         []
+      | Some (nm, x) ->
+         (List.map (fun x -> (x, [])) nm)
+         @ [(x, List.map (mod_symb ppe) mp.P.m_args)] in
+
+    msymb @ (List.map (fun x -> (x, [])) p2)
 
   let modtype_symb (ppe : t) mty : EcSymbols.msymbol =
     let exists sm =
@@ -450,8 +471,13 @@ let pp_thname ppe fmt p =
 
 (* -------------------------------------------------------------------- *)
 let pp_funname (ppe : PPEnv.t) fmt p =
-  Format.fprintf fmt "%a.%a"
-    (pp_topmod ppe) p.P.x_top pp_path p.P.x_sub
+  match PPEnv.mod_symb ppe p.P.x_top with
+  | [] ->
+     Format.fprintf fmt "%a" pp_path p.P.x_sub
+
+  | top ->
+     Format.fprintf fmt "%a.%a"
+       EcSymbols.pp_msymbol top pp_path p.P.x_sub
 
 (* -------------------------------------------------------------------- *)
 let msymbol_of_pv (ppe : PPEnv.t) pv =
@@ -2899,7 +2925,7 @@ let rec pp_modexp ppe fmt (p, me) =
     | _              -> me.me_sig.mis_params in
   let (ppe, pp) = pp_mod_params ppe params in
   Format.fprintf fmt "@[<v>module %s%t = %a@]"
-    me.me_name pp (pp_modbody ppe) (p, me.me_body)
+    me.me_name pp (pp_modbody (PPEnv.in_module ppe p.P.m_top)) (p, me.me_body)
 
 and pp_modbody ppe fmt (p, body) =
   match body with
@@ -2951,8 +2977,13 @@ and pp_moditem ppe fmt (p, i) =
           Format.fprintf fmt "?ABSTRACT?"
     in
 
-    Format.fprintf fmt "@[<v>%a = %a@]"
-      (pp_funsig ppe) (true, f.f_sig)
+    Format.fprintf fmt "@[<v>%t = %a@]"
+      (fun fmt ->
+        match f.f_def with
+        | FBalias _ ->
+           Format.fprintf fmt "proc %s" f.f_name
+        | _ ->
+           Format.fprintf fmt "%a" (pp_funsig ppe) (true, f.f_sig))
       (pp_fundef ppe) f.f_def
 
 let pp_modexp ppe fmt (mp, me) =
