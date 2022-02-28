@@ -2058,7 +2058,9 @@ let i_call_lv loc env lv f args =
 (* -------------------------------------------------------------------- *)
 let top_is_mem_binding pf = match pf with
   | PFforall (bds,_)  | PFexists (bds,_) ->
-    List.exists (fun (_,bd) -> bd = PGTY_Mem) bds
+    List.exists (fun (_,bd) ->
+        match bd with PGTY_Mem _ -> true | _ -> false
+      ) bds
 
   | PFWP       _
   | PFhoareF   _
@@ -2764,11 +2766,16 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
     (env, body, result, List.rev !prelude, List.flatten (List.rev !locals))
 
 (* -------------------------------------------------------------------- *)
-and fundef_add_symbol env memenv xtys =  (* for locals dup check *)
-  try EcMemory.bindall (List.map fst xtys) memenv
+
+(* for locals dup check *)
+and fundef_add_symbol_mt env (memtype : memtype) xtys : memtype =
+  try EcMemory.bindall_mt (List.map fst xtys) memtype
   with EcMemory.DuplicatedMemoryBinding s ->
     let (_, loc) = List.find (fun (v,_l) -> s = v.v_name) xtys in
     tyerror loc env (DuplicatedLocal s)
+
+and fundef_add_symbol env (memenv : memenv) xtys : memenv =
+  (fst memenv, fundef_add_symbol_mt env (snd memenv) xtys)
 
 and fundef_check_type subst_uni env os (ty, loc) =
   let ty = subst_uni ty in
@@ -3007,11 +3014,15 @@ and trans_gbinding env ue decl =
 
         in List.map_fold add1 env xs
 
-      | PGTY_Mem ->
+      | PGTY_Mem pmt ->
+        let mt = match pmt with
+          | None     -> EcMemory.abstract_mt
+          | Some pmt -> trans_memtype env ue pmt
+        in
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in
-          let env = EcEnv.Memory.push (EcMemory.abstract x) env in
-          (env, (x, GTmem abstract_mt))
+          let env = EcEnv.Memory.push (x, mt) env in
+          (env, (x, GTmem mt))
 
         in List.map_fold add1 env xs
 
@@ -3752,7 +3763,7 @@ and trans_form_or_pattern
         f_coe form' memenv expr'
 
       | Some mt, _ ->           (* Concrete local memtype case *)
-        let memenv = trans_memtype env ue mem mt in
+        let memenv = mem, trans_memtype env ue mt in
 
         let fenv = EcEnv.Memory.push_active memenv env in
         let form' = transf fenv form in
@@ -3776,14 +3787,14 @@ and trans_form_or_pattern
   f
 
 (* Type-check a memtype. *)
-and trans_memtype env ue mem pmemtype =
-  let mt = EcMemory.empty_local ~witharg:false mem in
+and trans_memtype env ue (pmemtype : pmemtype) : memtype =
+  let mt = EcMemory.empty_local_mt ~witharg:false in
 
-  let add_decl memenv (vars, pty) =
+  let add_decl (memtype : memtype) (vars, pty) : memtype =
     let ty = transty tp_tydecl env ue pty in
 
-    let xs     = snd (unloc vars) in
-    let mode   = fst (unloc vars) in
+    let xs   = snd (unloc vars) in
+    let mode = fst (unloc vars) in
 
     let xsvars = List.map (fun _ -> UE.fresh ue) xs in
     let () = match mode with
@@ -3796,7 +3807,11 @@ and trans_memtype env ue mem pmemtype =
     let xs = List.map2 (fun x ty ->
         {v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
 
-    fundef_add_symbol env memenv xs in
+    let mt = fundef_add_symbol_mt env memtype xs in
+    (* REM *)
+    Format.eprintf "dump: %s@." (EcMemory.dump_memtype mt);
+    mt
+  in
 
   List.fold_left add_decl mt pmemtype
 

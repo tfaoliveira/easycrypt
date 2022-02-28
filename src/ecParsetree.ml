@@ -227,7 +227,7 @@ and pgscbindings = pgscbinding list
 and pgty =
 | PGTY_Type  of pty
 | PGTY_ModTy of pmodule_type_restr
-| PGTY_Mem
+| PGTY_Mem   of pmemtype option
 
 and pffilter =
 | PFRange      of bool * pfrange list

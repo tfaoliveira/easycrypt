@@ -1416,7 +1416,11 @@ pgtybinding1:
     { [[mk_loc (loc x) (Some x)], PGTY_ModTy mi] }
 
 | pn=mident
-    { [[mk_loc (loc pn) (Some pn)], PGTY_Mem] }
+    { [[mk_loc (loc pn) (Some pn)], PGTY_Mem None] }
+
+| LPAREN pn=mident COLON mt=memtype RPAREN
+    { [[mk_loc (loc pn) (Some pn)], PGTY_Mem (Some mt)] }
+
 
 pgtybindings:
 | x=pgtybinding1+ { List.flatten x }

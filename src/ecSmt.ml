@@ -118,6 +118,7 @@ let empty_lenv : lenv =
 
 let get_memtype lenv m =
   try Mid.find m lenv.le_mt with Not_found -> assert false
+
 (* -------------------------------------------------------------------- *)
 let str_p p =
   WIdent.id_fresh (String.map (function '.' -> '_' | c -> c) p)
@@ -126,6 +127,16 @@ let preid    id = WIdent.id_fresh (EcIdent.name id)
 let preid_p  p  = str_p (EcPath.tostring p)
 let preid_mp mp = str_p (EcPath.m_tostring mp)
 let preid_xp xp = str_p (EcPath.x_tostring xp)
+
+
+(* -------------------------------------------------------------------- *)
+let dump_tasks (tasks : WTask.task) (filename : string) =
+  let stream = open_out filename in
+    EcUtils.try_finally
+      (fun () -> Format.fprintf
+        (Format.formatter_of_out_channel stream)
+        "%a@." Why3.Pretty.print_task tasks)
+      (fun () -> close_out stream)
 
 (* -------------------------------------------------------------------- *)
 module Cast = struct
@@ -182,7 +193,7 @@ module Cast = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let load_wtheory genv th =
+let load_wtheory (genv : tenv) (th : WTheory.theory) : unit =
   genv.te_task <- WTask.use_export genv.te_task th
 
 (* -------------------------------------------------------------------- *)
@@ -1576,20 +1587,13 @@ let create_global_task () =
   let task  = WTask.use_export task thmap in
   task
 
-(* -------------------------------------------------------------------- *)
 let dump_why3 (env : EcEnv.env) (filename : string) =
   let known = Lazy.force core_theories in
   let tenv  = empty_tenv env (create_global_task ()) known in
   let ()    = add_core_bindings tenv in
 
   List.iter (trans_axiom tenv) (EcEnv.Ax.all env);
-
-  let stream = open_out filename in
-    EcUtils.try_finally
-      (fun () -> Format.fprintf
-        (Format.formatter_of_out_channel stream)
-        "%a@." Why3.Pretty.print_task tenv.te_task)
-      (fun () -> close_out stream)
+  dump_tasks tenv.te_task filename
 
 (* -------------------------------------------------------------------- *)
 let cnt = Counter.create ()

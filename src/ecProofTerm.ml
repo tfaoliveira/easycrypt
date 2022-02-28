@@ -559,9 +559,9 @@ let process_sc_instantiation pe inst =
   check_length "expression" e_params pexprs;
 
   (* We type, in order, the memtype, memory predicates and expressions *)
-  let memenv =
-    EcTyping.trans_memtype env pe.pte_ue EcCoreFol.mhr inst.ptcds_mt in
-  let memtype = snd memenv in
+  let memtype = EcTyping.trans_memtype env pe.pte_ue inst.ptcds_mt in
+  let memenv = EcCoreFol.mhr, memtype in
+
   (* The environment for expression arguments typing. *)
   let e_env = EcEnv.Memory.push_active memenv env in
 

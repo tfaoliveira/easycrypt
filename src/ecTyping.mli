@@ -250,7 +250,7 @@ val trans_pattern  : env -> ptnmap -> EcUnify.unienv -> pformula -> EcFol.form
 
 (* -------------------------------------------------------------------- *)
 val trans_memtype :
-  env -> EcUnify.unienv -> EcIdent.t -> pmemtype -> EcMemory.memenv
+  env -> EcUnify.unienv -> pmemtype -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val trans_restr_for_modty :
