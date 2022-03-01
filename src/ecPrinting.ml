@@ -1918,11 +1918,11 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
       let tenv1 =
         PPEnv.create_and_push_mems tenv1 (List.map (fun x -> (x,m)) xs) in
       let pp fmt =
-        if EcMemory.for_printing m = None then
+        (* if EcMemory.for_printing m = None then *)
           Format.fprintf fmt "%a" (pp_list pp_sep (pp_local tenv1)) xs
-        else
-          Format.fprintf fmt "(%a: %a)" (pp_list pp_sep (pp_local tenv1)) xs
-            (pp_memtype ppe) m
+        (* else
+         *   Format.fprintf fmt "(%a: %a)" (pp_list pp_sep (pp_local tenv1)) xs
+         *     (pp_memtype ppe) m *)
       in
         (tenv1, pp)
 
