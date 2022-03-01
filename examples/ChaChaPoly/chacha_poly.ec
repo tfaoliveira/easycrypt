@@ -1676,13 +1676,15 @@ section PROOFS.
       + move=> &2 _; islossless.
         while true (size p).
         + move=> z; wp; conseq (_: true) => />; 2: by islossless.
+          move => &hr; elim (p{hr}) => //.
           smt (size_drop size_eq0 gt0_block_size).
         by auto; smt (size_ge0 size_eq0).         
       + move=> _; proc; inline *; sp; if => //.
         swap 13 9; wp; conseq (_: true) => />; 1: smt(); islossless.
         while true (size p2).
         + move=> z; wp; conseq (_: true) => //=; 2: by islossless.
-          move=> &h.
+          move => &hr; elim (p2{hr}) => //. 
+          clear &hr.
           smt (size_drop size_eq0 gt0_block_size).
         by auto; smt (size_ge0 size_eq0 dpoly_out_ll). 
       + by proc; inline *; sp 1 1; if; auto => /> *; smt(get_setE mem_set).
@@ -2463,9 +2465,10 @@ section PROOFS.
     - by conseq(:_==> true)=> />; while(true); auto.
     rcondf{2} 5; 1: auto=> />.
     - by conseq(:_==> true)=> />; while(true); auto.
-    wp -7 -7=> />; 1: smt(get_setE).
+    wp -7 -7=> />.
+    progress; smt (get_setE).
     conseq(:_==> ={c1, t, RO.m, Mem.log, t, c1}); 2:(sim=> /#).
-    smt(get_setE leq_make_lbad1 make_lbad1_size_cons3 size_ge0).
+    progress; smt(get_setE leq_make_lbad1 make_lbad1_size_cons3 size_ge0).
   inline*; sp.
   rcondt{1} 5; 1: auto=> />.
   - conseq(:_==> true)=> />; 1: smt(size_map size_filter count_size).
