@@ -14,6 +14,11 @@ rename
   "dunifin" as "dbits".
 import DWord.
 
+op cdbits : { int | 0 <= cdbits } as ge0_cdbits.
+
+schema cost_cdbits `{P} : cost [P: dbits] = N cdbits.
+hint simplify cost_cdbits.
+
 (* Upper bound on complexity of the adversary *)
 type adv_cost = {
   cchoose : int; (* cost *)
@@ -188,17 +193,17 @@ section.
 
   local lemma cost_ALCDH : 
     choare [ALCDH.solve : true ==> 0 < size res <= cA.`ochoose + cA.`oguess] 
-    time [N (6 + cunifin + (3 + cunifin + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)].
+    time [N (6 + cdbits + (3 + cdbits + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)].
   proof.
     proc; wp.
     call (_: size H.qs- cA.`ochoose <= k /\ bounded LRO.m (size H.qs);
            time
-           [H.o k : [N(3 + cunifin + cget qH + cset qH + cin qH)]]).
+           [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       by rnd; auto => &hr />; rewrite dbits_ll /=; smt (cset_pos bounded_set).
     wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
-           time [H.o k : [N(3 + cunifin + cget qH + cset qH + cin qH)]]).
+           time [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       rnd;auto => &hr />; rewrite dbits_ll /=; smt(cset_pos bounded_set cA_pos).
@@ -226,8 +231,8 @@ section.
   lemma ex_reduction &m : 
     exists (B<:CDH.Adversary 
       [solve : `{ N(C1.cduniform_n + 
-                  6 + cunifin + 
-                  (3 + cunifin + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)}]
+                  6 + cdbits + 
+                  (3 + cdbits + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)}]
                {+A, +H}),
     Pr[CPA(S,A(LRO)).main() @ &m: res] - 1%r/2%r <= 
     qH%r * Pr[CDH.CDH(B).main() @ &m: res].

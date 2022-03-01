@@ -6,8 +6,7 @@
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
 
-require import AllCore List Distr DBool LorR CHoareTactic.
-(*---*) import StdBigop.Bigint BIA.
+require import AllCore List Distr DBool LorR.
 
 type pkey.
 type skey.
@@ -104,6 +103,9 @@ end section.
 ** Also, oracle annotations could be used to provide different oracles during
 ** the choose and guess stages of the experiment.
 *)
+const qD : int.
+
+axiom qD_pos : 0 < qD.
 
 module type CCA_ORC = {
   proc dec(c:ciphertext) : plaintext option
@@ -115,15 +117,18 @@ module type CCA_ADV (O:CCA_ORC) = {
 }.
 
 module CCA (S:Scheme, A:CCA_ADV) = {
-  var log   : ciphertext list
+  var log : ciphertext list
   var cstar : ciphertext option
-  var sk    : skey
+  var sk : skey
 
   module O = {
     proc dec(c:ciphertext) : plaintext option = {
       var m : plaintext option;
 
-      if (Some c <> cstar) m <@ S.dec(sk, c);
+      if (size log < qD && (Some c <> cstar)) {
+        log <- c :: log;
+        m   <@ S.dec(sk, c);
+      }
       else m <- None;
       return m;
     }
@@ -137,6 +142,7 @@ module CCA (S:Scheme, A:CCA_ADV) = {
     var c : ciphertext;
     var b, b' : bool;
 
+    log      <- [];
     cstar    <- None;
     (pk, sk) <@ S.kg();
     (m0, m1) <@ A.choose(pk);
@@ -161,217 +167,3 @@ module Correctness (S:Scheme) = {
     return (m' = Some m);
   }
 }.
-
-module CCAl (S:Scheme, A:CCA_ADV) = {
-
-  module O = {
-    proc dec(c:ciphertext) : plaintext option = {
-      var m : plaintext option;
-
-      if (Some c <> CCA.cstar) {
-        CCA.log <- c :: CCA.log;
-        m   <@ S.dec(CCA.sk, c);
-      }
-      else m <- None;
-      return m;
-    }
-  }
-
-  module A = A(O)
-
-  proc main() : bool = {
-    var pk : pkey;
-    var m0, m1 : plaintext;
-    var c : ciphertext;
-    var b, b' : bool;
-
-    CCA.log      <- [];
-    CCA.cstar    <- None;
-    (pk, CCA.sk) <@ S.kg();
-    (m0, m1) <@ A.choose(pk);
-    b        <$ {0,1};
-    c        <@ S.enc(pk, b ? m1 : m0);
-    CCA.cstar    <- Some c;
-    b'       <@ A.guess(c);
-    return (b' = b);
-  }
-}.
-
-section.
-
-declare module S<: Scheme {-CCA}.
-
-declare module A<: CCA_ADV {-CCA, -S}.
-
-equiv eq_CCA_CCAl : CCA(S,A).main ~ CCAl(S,A).main : ={glob S, glob A} ==> ={res, glob S, glob A, CCA.sk, CCA.cstar}.
-proof. by sim. qed.
-
-end section.
-
-(* Complexity of the adversary *)
-type cost_A = {
-  cchoose   : int;
-  qD_choose : int;
-  cguess    : int;
-  qD_guess  : int;
-}.
-
-type cost_S = {
-  ckg  : int;
-  cenc : int;
-  cdec : int;
-}.
-
-abstract theory CCA_q.
-
-op cA : cost_A.
-
-axiom ge0_cA : 0 <= cA.`cchoose /\ 0 <= cA.`qD_choose /\ 0 <= cA.`cguess /\ 0 <= cA.`qD_guess.
-
-op qD = cA.`qD_choose + cA.`qD_guess.
-
-lemma ge0_qD : 0 <= qD by smt (ge0_cA).
-
-op cS : cost_S.
-
-axiom ge0_cS : 0 <= cS.`ckg /\ 0 <= cS.`cenc /\ 0 <= cS.`cdec.
-
-op ceqocipher : int.
-
-schema cost_eqcipher `{P} {c1 c2 : ciphertext option} : cost [P : c1 = c2] = cost[P:c1] + cost[P:c2] + N ceqocipher .
-hint simplify cost_eqcipher.
-
-module CCAq (S:Scheme, A:CCA_ADV) = {
- 
-  module O = {
-    proc dec(c:ciphertext) : plaintext option = {
-      var m : plaintext option;
-
-      if (size CCA.log < qD && (Some c <> CCA.cstar)) {
-        CCA.log <- c :: CCA.log;
-        m   <@ S.dec(CCA.sk, c);
-      }
-      else m <- None;
-      return m;
-    }
-  }
-
-  module A = A(O)
-
-  proc main() : bool = {
-    var pk : pkey;
-    var m0, m1 : plaintext;
-    var c : ciphertext;
-    var b, b' : bool;
-
-    CCA.log      <- [];
-    CCA.cstar    <- None;
-    (pk, CCA.sk) <@ S.kg();
-    (m0, m1) <@ A.choose(pk);
-    b        <$ {0,1};
-    c        <@ S.enc(pk, b ? m1 : m0);
-    CCA.cstar    <- Some c;
-    b'       <@ A.guess(c);
-    return (b' = b);
-  }
-}.
-
-section.
-
-declare module S<: Scheme [kg  : `{N cS.`ckg},
-                           enc : `{N cS.`cenc}, 
-                           dec : `{N cS.`cdec} ]
-                         {-CCA}.
-
-lemma Sdec_ll : islossless S.dec.
-proof.
-have h : choare [S.dec : true ==> true] time [N cS.`cdec].
-+ by proc true : time [].
-conseq h.
-qed.
-
-lemma Senc_ll : islossless S.enc.
-proof.
-have h : choare [S.enc : true ==> true] time [N cS.`cenc].
-+ by proc true : time [].
-conseq h.
-qed.
-
-declare module A <: CCA_ADV [choose : `{N cA.`cchoose, #O.dec : cA.`qD_choose},
-                            guess  : `{N cA.`cguess, #O.dec : cA.`qD_guess}]
-                           {-CCA, -S}.
-
-axiom Achoose_ll : forall (O <: CCA_ORC {-A}), islossless O.dec => islossless A(O).choose.
-axiom Aguess_ll : forall (O <: CCA_ORC {-A}), islossless O.dec => islossless A(O).guess.
-
-
-lemma CCAl_cbound : choare [CCAl(S,A).main : true ==> size CCA.log <= qD] time 
-                          [N (5 + cdbool + (3 + ceqocipher) * cA.`qD_guess +  (3 + ceqocipher) * cA.`qD_choose);
-                            S.kg  : 1; S.enc : 1; S.dec : qD;
-                            A.choose : 1; A.guess  : 1].
-proof.
-  proc.
-  call (: size CCA.log - cA.`qD_choose <= k; 
-           time
-           [CCAl(S,A).O.dec k : [N (3 + ceqocipher); S.dec: 1]]).
-  + move=> zdec hzdec; proc => //.
-    if => //.
-    + call (:true);auto => &hr /> /#.
-    by auto => &hr />; smt(ge0_cS).
-  wp; call (:true); rnd.
-  call (:size CCA.log <= k; 
-           time
-           [CCAl(S,A).O.dec k : [N (3 + ceqocipher); S.dec: 1]]).
-  + move=> zdec hzdec; proc.
-    if => //.
-    + call (:true); auto => &hr /> /#.
-    by auto => &hr />; smt(ge0_cS).
-  call(:true); auto => />. rewrite dbool_ll /=; split. smt().
-  rewrite !bigi_constz /=; smt(ge0_cA). 
-qed.
-
-lemma CCAl_bound : hoare [CCAl(S,A).main : true ==> size CCA.log <= qD].
-proof. conseq CCAl_cbound. qed.
-
-equiv CCAq_CCAl : CCAq(S,A).main ~ CCAl(S,A).main : ={glob A, glob S} ==> ={res, glob S, glob A, glob CCA}.
-proof.
-  conseq (_: ={glob A, glob S} ==> size CCA.log{2} <= qD => ={res, glob S, glob A, glob CCA}) 
-    _ (CCAl_bound) => //.
-  proc.  
-  seq 5 5 : (={b} /\ (size CCA.log{2} <= qD => ={pk, m0, m1, glob S, glob A, glob CCA})).
-  rnd; call (: qD < size CCA.log, ={glob S, glob CCA}) => //=.
-  + by apply Achoose_ll.  
-  + proc; if{2}; last by rcondf{1} ^if; auto.
-    if{1}; 1: by call (:true); auto.
-    by call{2} Sdec_ll; auto => /> /#.
-  + by move=> _ _; islossless; apply Sdec_ll.
-  + proc; if; auto.
-    by call Sdec_ll; auto => /#.
-  call (:true); auto => />; smt().
-
-  call (: qD < size CCA.log, ={glob S, glob CCA}) => //=.
-  + by apply Aguess_ll.  
-  + proc; if{2}; last by rcondf{1} ^if; auto.
-    if{1}; 1: by call (:true); auto.
-    by call{2} Sdec_ll; auto => /> /#.
-  + by move=> _ _; islossless; apply Sdec_ll.
-  + proc; if; auto.
-    by call Sdec_ll; auto => /#.
-  
-  wp; case: (size CCA.log{2} <= qD).
-  + by call (:true); auto => /> /#.
-  by call{1} Senc_ll; call{2} Senc_ll; skip => /> /#.
-qed.
-
-equiv CCA_CCAq : CCA(S,A).main ~ CCAq(S,A).main : ={glob A, glob S} ==> ={res, glob S, glob A, CCA.sk, CCA.cstar}.
-proof.
-  transitivity CCAl(S,A).main
-     (={glob A, glob S} ==> ={res, glob S, glob A, CCA.sk, CCA.cstar})
-     (={glob A, glob S} ==> ={res, glob S, glob A, glob CCA})=> //; 1: smt().
-  + by sim.
-  by symmetry; conseq CCAq_CCAl.
-qed.
-
-end section.
-
-end CCA_q.
