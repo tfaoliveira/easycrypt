@@ -161,6 +161,7 @@ type ax_schema = {
   axs_tparams : ty_params;
   axs_pparams : pr_params; (* variables for predicate *)
   axs_params  : sc_params; (* variables representing expression *)
+  axs_loca    : locality;
   axs_spec    : EcCoreFol.form;
 }
 

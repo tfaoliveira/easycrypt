@@ -486,6 +486,7 @@ let subst_schema (s : _subst) (ax : ax_schema) =
   { axs_tparams = params;
     axs_pparams = ax.axs_pparams;
     axs_params  = List.map (snd_map s.s_ty) ax.axs_params;
+    axs_loca    = ax.axs_loca;
     axs_spec    = spec; }
 
 (* -------------------------------------------------------------------- *)

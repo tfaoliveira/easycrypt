@@ -163,6 +163,7 @@ type ax_schema = {
   axs_tparams : ty_params;
   axs_pparams : pr_params;
   axs_params  : sc_params;
+  axs_loca    : locality;
   axs_spec    : EcCoreFol.form;
 }
 

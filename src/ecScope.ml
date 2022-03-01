@@ -813,7 +813,7 @@ module Ax = struct
   (* ------------------------------------------------------------------ *)
   let bind_schema
     ?(import = EcTheory.import0) (scope : scope) ((x, sc) : _ * ax_schema)
-  =
+    =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_schema (x, sc)) in
     { scope with sc_env = EcSection.add_item item scope.sc_env }
@@ -955,9 +955,10 @@ module Ax = struct
       let sc = { axs_tparams = tparams;
                  axs_pparams = odfl [] pparams;
                  axs_params  = odfl [] scparams;
-                 axs_spec    = concl; } in
+                 axs_spec    = concl;
+                 axs_loca    = ax.pa_locality; }
+      in
 
-      (* TODO: A: check this. *)
       Some (unloc ax.pa_name),
       bind_schema scope (unloc ax.pa_name, sc)
 

@@ -59,6 +59,7 @@ val pp_form    : PPEnv.t -> form pp
 val pp_type    : PPEnv.t -> ty pp
 val pp_tyname  : PPEnv.t -> path pp
 val pp_axname  : PPEnv.t -> path pp
+val pp_scname  : PPEnv.t -> path pp
 val pp_tcname  : PPEnv.t -> path pp
 val pp_thname  : PPEnv.t -> path pp
 
