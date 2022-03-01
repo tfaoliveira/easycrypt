@@ -2466,9 +2466,10 @@ section PROOFS.
     rcondf{2} 5; 1: auto=> />.
     - by conseq(:_==> true)=> />; while(true); auto.
     wp -7 -7=> />.
-    progress; smt (get_setE).
+    move => />; smt (get_setE).
     conseq(:_==> ={c1, t, RO.m, Mem.log, t, c1}); 2:(sim=> /#).
-    progress; smt(get_setE leq_make_lbad1 make_lbad1_size_cons3 size_ge0).
+    move => />.
+    smt(get_setE leq_make_lbad1 make_lbad1_size_cons3 size_ge0).
   inline*; sp.
   rcondt{1} 5; 1: auto=> />.
   - conseq(:_==> true)=> />; 1: smt(size_map size_filter count_size).
