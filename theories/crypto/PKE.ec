@@ -20,20 +20,6 @@ module type Scheme = {
   proc dec(sk:skey, c:ciphertext) : plaintext option
 }.
 
-module Correctness (S:Scheme) = {
-  proc main(m:plaintext) : bool = {
-    var pk : pkey;
-    var sk : skey;
-    var c  : ciphertext;
-    var m' : plaintext option;
-
-    (pk, sk) <@ S.kg();
-    c        <@ S.enc(pk, m);
-    m'       <@ S.dec(sk, c);
-    return (m' = Some m);
-  }
-}.
-
 module type Adversary = {
   proc choose(pk:pkey)     : plaintext * plaintext
   proc guess(c:ciphertext) : bool
@@ -162,6 +148,20 @@ module CCA (S:Scheme, A:CCA_ADV) = {
   }
 }.
 
+module Correctness (S:Scheme) = {
+  proc main(m:plaintext) : bool = {
+    var pk : pkey;
+    var sk : skey;
+    var c  : ciphertext;
+    var m' : plaintext option;
+
+    (pk, sk) <@ S.kg();
+    c        <@ S.enc(pk, m);
+    m'       <@ S.dec(sk, c);
+    return (m' = Some m);
+  }
+}.
+
 module CCAl (S:Scheme, A:CCA_ADV) = {
 
   module O = {
@@ -279,8 +279,8 @@ module CCAq (S:Scheme, A:CCA_ADV) = {
 section.
 
 declare module S<: Scheme [kg  : `{N cS.`ckg},
-                          enc : `{N cS.`cenc}, 
-                          dec : `{N cS.`cdec} ]
+                           enc : `{N cS.`cenc}, 
+                           dec : `{N cS.`cdec} ]
                          {-CCA}.
 
 lemma Sdec_ll : islossless S.dec.
