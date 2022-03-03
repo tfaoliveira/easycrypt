@@ -1917,7 +1917,23 @@ call (_: invotp OTP.Initiator.p{1}
                        fresh1 * (pld OTP.Initiator.p{1}) * (inv (g ^ F.zero))) 
                     (fun (fresh2 : group) => 
                        fresh2 * (inv (pld OTP.Initiator.p{1})) * (g ^ F.zero)).
-            by wp;skip;smt(alg_lem1 sup_lem1 sup_lem2 alg_lem2 enc_lem).
+
+            (* MERGE-COST: old proof *)
+            (* by wp;skip;smt(alg_lem1 sup_lem1 sup_lem2 alg_lem2 enc_lem). *)
+
+            (* MERGE-COST: new proof *)
+            wp;skip. 
+            move => />. 
+            progress.
+            smt(alg_lem1 alg_lem2 enc_lem). 
+            by apply sup_lem1.
+            by apply sup_lem2.
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            (* MERGE-COST: end *)
+
           by wp;skip;rewrite /invotp;smt().
         seq 0 3 : (#pre /\ (oget (getl (oget lfa{2}))) <> Ch_Init); 
           first by wp;skip;smt().
@@ -2075,8 +2091,8 @@ exists (C_OTP.Sid(S1)); split.
     + match Left 1; [auto; smt() | done |].
       by call (:true); auto => /> /#. 
     match Right 1;[auto; smt() | done |].
-    call (:true; time [(C_OTP.Sid(S1, FB).FBPi.step : [N 1; FB.step : 1]), 
-                       (C_OTP.Sid(S1, FB).FBPi.backdoor : [N 4; FB.backdoor : 1])]).
+    call (:true; time [C_OTP.Sid(S1, FB).FBPi.step : [N 1; FB.step : 1], 
+                       C_OTP.Sid(S1, FB).FBPi.backdoor : [N 4; FB.backdoor : 1]]).
     + by move=> *; proc; call(:true); auto.
     + by move=> *; proc; call(:true); auto.
     auto => />.
@@ -2086,8 +2102,8 @@ exists (C_OTP.Sid(S1)); split.
   + match Left 1; [auto; smt() | done |].
     by wp; call (:true); auto => />. 
   match Right 1;[auto; smt() | done |].
-  wp;call (:true; time [(C_OTP.Sid(S1, FB).FBPi.step : [N 1; FB.step : 1]), 
-                        (C_OTP.Sid(S1, FB).FBPi.backdoor : [N 4; FB.backdoor : 1])]).
+  wp;call (:true; time [C_OTP.Sid(S1, FB).FBPi.step : [N 1; FB.step : 1], 
+                        C_OTP.Sid(S1, FB).FBPi.backdoor : [N 4; FB.backdoor : 1]]).
   + by move=> *; proc; call(:true); auto.
   + by move=> *; proc; call(:true); auto.
   auto => />.
@@ -2124,10 +2140,10 @@ have -> : Pr[RPi.REAL.UC_emul(Z, RPi.CompS(I_OTP, C_OTP.Sid(S1))).main() @ &m : 
 apply (hS1 (C_OTP.CompZR(Z, OTP))). 
 move=> kb ks ko ki I0 * {S h S1 hS1}.
 proc.
-call (:true; time [ (CompR_I(OTP, I0).inputs  : [N 9; I0.inputs : 1]), 
-                    (CompR_I(OTP, I0).outputs : [N (22 + cgdiv); I0.outputs : 2]), 
-                    (CompR_I(OTP, I0).step    : [N (19 + cgmul); I0.inputs : 1; I0.outputs : 1; I0.step : 1]), 
-                    (CompR_I(OTP, I0).backdoor : [N 5; I0.backdoor : 1])]) => /= *.
+call (:true; time [ CompR_I(OTP, I0).inputs  : [N 9; I0.inputs : 1], 
+                    CompR_I(OTP, I0).outputs : [N (22 + cgdiv); I0.outputs : 2], 
+                    CompR_I(OTP, I0).step    : [N (19 + cgmul); I0.inputs : 1; I0.outputs : 1; I0.step : 1], 
+                    CompR_I(OTP, I0).backdoor : [N 5; I0.backdoor : 1]]) => /= *.
 + proc; inline *;if => //.
   + sp => //; if => //; auto; last by smt().
     by call (:true); auto => />.
@@ -2153,8 +2169,8 @@ call (:true; time [ (CompR_I(OTP, I0).inputs  : [N 9; I0.inputs : 1]),
   match Right 1; [auto; smt() | done |].
   by wp; call (:true); auto.  
 inline *; auto => />.
-rewrite !bigi_constz 1..4:[smt(cz_pos)] /=.
-rewrite !StdBigop.Bigint.bigi_constz; smt (cz_pos).
+rewrite !bigi_constz; 1..4:smt(cz_pos). 
+rewrite /= !StdBigop.Bigint.bigi_constz; smt (cz_pos).
 qed.
 
 import DHKE.
