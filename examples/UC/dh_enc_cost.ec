@@ -1064,18 +1064,9 @@ wp; call (_:
   + by move => m1 p; inline *;wp;skip; smt(). 
   (* We step F2Auth *)
 
-  why3 "logdh".
-
-    move => m2 p;inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp.
-
-  case (FKE.st{2}.`kst) => />. smt (). clear &1 &2. smt ().
-  why3 "logdh2".
-  
- /#.
-
-  (* Benjamin has Z3 4.8.12 *)
-  (* case (FKE.st{2}.`kst) => />.  *)
-  (* smt (). clear &1 &2. smt (). smt (). smt ().smt ().smt (). *)
+    move => m2 p;inline *; auto => /> &1 &2.
+    rewrite /staterel /leak oget_some /unblock /kstp.
+    by case (FKE.st{2}.`kst) => /> /#. 
 
 (* BACKDOOR *)
 + proc.
@@ -1083,7 +1074,9 @@ wp; call (_:
   (* Backdoor Rho *)
   + by move => *; inline *;auto => /#.   
   (* Backdoor F2Auth *)
-  by move=> m2 p; inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp /rcv /#.
+  move=> m2 p; inline *; auto => /> &1 &2.
+  rewrite /staterel /leak oget_some /unblock /kstp /rcv. 
+  by case (FKE.st{2}.`kst) => /> /#. 
 
 (* WRAP-UP CALL *)
 by auto => /#.
@@ -1175,10 +1168,10 @@ proof.
   apply (adv_ddh_max cddh (UC_emul_DDH(Z, CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth))))).
   proc; inline *.
   call (:true; time [
-     (CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).inputs : [N 29]),
-     (CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).outputs : [N 2]),
-     (CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).step : [N 23]),
-     (CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).backdoor : [N 5]) ]) => /= *.
+     CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).inputs : [N 29],
+     CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).outputs : [N 2],
+     CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).step : [N 23],
+     CompRFEager(DHKE_Eager, HybFChan.F2Auth.PARA.PPara(HybFChan.F2Auth.FAuthLR.FAuth, HybFChan.F2Auth.FAuthRL.FAuth)).backdoor : [N 5] ]) => /= *.
   + by proc; inline *; auto => />.
   + by proc; inline *; auto => />.
   + by proc; inline *; auto => /> /#.
@@ -1596,7 +1589,7 @@ module (OTPLazy : RHO) (KEAuth: Pi.REAL.IO) = {
    }
 }.
 
-declare module Z : REAL.ENV {-FKE, -FSC, -FChan.FAuth.FAuth, -OTP_SIM, 
+declare module Z <: REAL.ENV {-FKE, -FSC, -FChan.FAuth.FAuth, -OTP_SIM, 
                              -OTP, -DHKE.FKE.FKEAuth.FChan.FAuth.FAuth, -OTPLazy}.
 
 (* To prove that our change of sampling in OTP is sound we use a generic
@@ -1671,7 +1664,9 @@ proof.
             (DHKE.FKE.FKEAuth.FChan.FAuth.FAuth.st{2} <> Ch_Init => 
                    FKE.st{2}.`key = oget RO.m{2}.[()])
              ); conseq />.
-    + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_start /kstp /= /#.
+    + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_start /kstp /=. 
+      progress; smt (). 
+
     + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_output /kstp /= /#.    
     + proc; match; 1,2 : smt().
       + move=> m1 m2.      
@@ -1821,6 +1816,14 @@ proof.
 rewrite /enc; rewrite log_bij !(Ring.rw_algebra, inv_def); ring. 
 qed.
 
+
+lemma aux ['a] (b : bool) (u v : 'a) :
+  b => (if b then u else v) = u
+by case b. 
+lemma aux2 ['a] (b : bool) (u v : 'a) :
+  !b => (if b then u else v) = v
+by case b.
+
 lemma OTPAdv2 &m :
       Pr[ REAL.UC_emul(Z,CompRF(OTPLazy,DHKE.FKE.FKEAuth.FKEAuth)).main() @ &m : res] =
          Pr[ REAL.UC_emul(Z,CompS(FSC, OTP_SIM)).main() @ &m : res].
@@ -1843,7 +1846,29 @@ call (_: invotp OTP.Initiator.p{1}
 
 (* OUTPUTS *)
 + proc;inline *.
-  by wp; skip => /> &1 &2; rewrite /rcv /= /party_output /invotp /kstp /=; smt (correctness). 
+  wp; skip => /> &1 &2; rewrite /rcv /= /party_output /invotp /kstp /=.
+
+  (* MERGE-COST: old proof *)
+  (* smt (correctness). *)
+
+  (* MERGE-COST: new proof *)
+  progress; 1,3: smt ().
+  move :H; case (FSC.st{2}); case (FKE.st{1}.`kst) => />.
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).  
+  smt (correctness).
+  move :H0 H1.
+  case (OTP.Initiator.p{1}); case (p{2}) => />. 
+  rewrite /leakpkg /pld /rcv /snd /=. 
+  smt(correctness).
+  (* MERGE-COST: end *)
+
 
 (* Step *)
 + proc;inline *.
