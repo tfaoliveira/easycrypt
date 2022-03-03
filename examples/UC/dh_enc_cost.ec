@@ -1063,7 +1063,19 @@ wp; call (_:
   (* We step Rho *)
   + by move => m1 p; inline *;wp;skip; smt(). 
   (* We step F2Auth *)
-  by move => m2 p;inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp /#.
+
+  why3 "logdh".
+
+    move => m2 p;inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp.
+
+  case (FKE.st{2}.`kst) => />. smt (). clear &1 &2. smt ().
+  why3 "logdh2".
+  
+ /#.
+
+  (* Benjamin has Z3 4.8.12 *)
+  (* case (FKE.st{2}.`kst) => />.  *)
+  (* smt (). clear &1 &2. smt (). smt (). smt ().smt ().smt (). *)
 
 (* BACKDOOR *)
 + proc.
