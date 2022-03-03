@@ -563,6 +563,7 @@ let locality (env : EcEnv.env) (who : cbarg) =
 type to_clear =
   { lc_theory    : Sp.t;
     lc_axioms    : Sp.t;
+    lc_schemas   : Sp.t;
     lc_baserw    : Sp.t;
   }
 
@@ -581,6 +582,7 @@ and bind =
 let empty_locals =
   { lc_theory    = Sp.empty;
     lc_axioms    = Sp.empty;
+    lc_schemas   = Sp.empty;
     lc_baserw    = Sp.empty;
   }
 
@@ -588,9 +590,11 @@ let add_clear to_gen who =
   let tg_clear = to_gen.tg_clear in
   let tg_clear =
     match who with
-    | `Th         p -> {tg_clear with lc_theory = Sp.add p tg_clear.lc_theory }
-    | `Ax         p -> {tg_clear with lc_axioms = Sp.add p tg_clear.lc_axioms }
-    | `Baserw     p -> {tg_clear with lc_baserw = Sp.add p tg_clear.lc_baserw } in
+    | `Th         p -> {tg_clear with lc_theory  = Sp.add p tg_clear.lc_theory  }
+    | `Ax         p -> {tg_clear with lc_axioms  = Sp.add p tg_clear.lc_axioms  }
+    | `Sc         p -> {tg_clear with lc_schemas = Sp.add p tg_clear.lc_schemas }
+    | `Baserw     p -> {tg_clear with lc_baserw  = Sp.add p tg_clear.lc_baserw  }
+  in
   { to_gen with tg_clear }
 
 let add_bind binds bd = binds @ [Binding bd]
@@ -601,6 +605,7 @@ let to_clear to_gen who =
   match who with
   | `Th p -> Sp.mem p to_gen.tg_clear.lc_theory
   | `Ax p -> Sp.mem p to_gen.tg_clear.lc_axioms
+  | `Sc p -> Sp.mem p to_gen.tg_clear.lc_schemas
   | `Baserw p -> Sp.mem p to_gen.tg_clear.lc_baserw
 
 let to_keep to_gen who = not (to_clear to_gen who)
@@ -991,36 +996,40 @@ let generalize_axiom to_gen prefix (name, ax) =
     to_gen, Some (Th_axiom (name, {ax with ax_tparams; ax_spec}))
   | `Declare ->
     assert (is_axiom ax.ax_kind);
+    assert (ax.ax_tparams = []);
     let to_gen = add_clear to_gen (`Ax path) in
     let to_gen =
       { to_gen with tg_binds = add_imp to_gen.tg_binds ax.ax_spec } in
     to_gen, None
 
 (* FIXME: copy of [generalize_axiom], but for schema. Remove duplicated code *)
-let generalize_schema _to_gen _prefix (_name, _sc) =
-  (* FIXME: merge-cost *)
-  assert false
-  (* let ax = EcSubst.subst_schema to_gen.tg_subst sc in
-   * let path = pqname prefix name in
-   * match sc.axs_loca with
-   * | `Local -> assert false
-   *
-   * | `Global ->
-   *   let axs_spec =
-   *     generalize_extra_forall ~imply:false to_gen.tg_binds ax.axs_spec
-   *   in
-   *   let extra_t =
-   *     (* FIXME: merge-cost what about [axs_params] ? *)
-   *     generalize_extra_ty to_gen (fv_and_tvar_f axs_spec)
-   *   in
-   *   let axs_tparams = extra_t @ ax.axs_tparams in
-   *   to_gen, Some (Th_schema (name, {sc with axs_tparams; axs_spec}))
-   *
-   * | `Declare ->
-   *   let to_gen = add_clear to_gen (`Sc path) in
-   *   let to_gen =
-   *     { to_gen with tg_binds = add_imp to_gen.tg_binds ax.axs_spec } in
-   *   to_gen, None *)
+let generalize_schema to_gen prefix (name, sc) =
+  let ax = EcSubst.subst_schema to_gen.tg_subst sc in
+  let path = pqname prefix name in
+  match sc.axs_loca with
+  | `Local -> assert false
+
+  | `Global ->
+    let axs_spec =
+      generalize_extra_forall ~imply:false to_gen.tg_binds ax.axs_spec
+    in
+    let extra_t =
+      let fv =
+        List.fold_left (fun fv (_, ty) ->
+            EcIdent.fv_union fv (tvar_fv ty)
+          ) Mid.empty sc.axs_params
+      in
+      generalize_extra_ty to_gen (EcIdent.fv_union fv (fv_and_tvar_f axs_spec))
+    in
+    let axs_tparams = extra_t @ ax.axs_tparams in
+    to_gen, Some (Th_schema (name, {sc with axs_tparams; axs_spec}))
+
+  | `Declare ->
+    assert (sc.axs_pparams = [] && sc.axs_tparams = [] && sc.axs_params = []);
+    let to_gen = add_clear to_gen (`Sc path) in
+    let to_gen =
+      { to_gen with tg_binds = add_imp to_gen.tg_binds sc.axs_spec } in
+    to_gen, None
 
 let generalize_modtype to_gen (name, ms) =
   match ms.tms_loca with
@@ -1418,6 +1427,8 @@ let check_sc (scenv : scenv) (prefix : path) (name : symbol) (axs : ax_schema) =
   | `Declare ->
     check_section scenv from;
     check_polymorph scenv from axs.axs_tparams;
+    check "cannot have predicate parameters" scenv from (axs.axs_pparams = []);
+    check "cannot have expression parameters" scenv from (axs.axs_params = []);
     doit axs
 
   | `Global ->
@@ -1425,7 +1436,7 @@ let check_sc (scenv : scenv) (prefix : path) (name : symbol) (axs : ax_schema) =
       begin
         (* FIXME section: is it the correct way to do a warning *)
         EcEnv.notify ~immediate:true scenv.sc_env `Warning
-          "global axiom %a in section" (pp_axname scenv) path;
+          "global schema %a in section" (pp_axname scenv) path;
         doit axs
       end
 
