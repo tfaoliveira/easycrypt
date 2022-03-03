@@ -91,7 +91,9 @@ clone import ROM as RO with
   type d_in_t  <- unit,
   type d_out_t <- bool,
   op   dout _  <- dbits.
+
 import Lazy.
+
 clone import ROM_BadCall as ROC with
   op qH <- qH.
 
@@ -172,7 +174,7 @@ section.
   local lemma Pr_G0_res &m : 
      Pr[G0.main() @ &m: res] <= 1%r/2%r.
   proof.
-    byphoare => //; proc.
+    byphoare => //; proc. 
     rnd (pred1 b'); conseq (_:true) => //.
     by move=> /> *; rewrite DBool.dbool1E.
   qed.
@@ -201,7 +203,16 @@ section.
            [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
-      by rnd; auto => &hr />; rewrite dbits_ll /=; smt (cset_pos bounded_set).
+      rnd; auto => &hr />; rewrite dbits_ll /=.
+      progress; 1,2,4,6,7,8,9: smt (cset_pos bounded_set).
+      * have -> : (qH = qH - 1 + 1) by smt ().
+        apply bounded_set. 
+        smt (cset_pos bounded_set).
+
+      * rewrite addzC.
+        apply bounded_set. 
+        smt (cset_pos bounded_set).
+
     wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
            time [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
