@@ -478,6 +478,13 @@ proof. by move=> gt0_m gt0_d; rewrite !modzE !divNz //; ring. qed.
 lemma nosmt divzK d m : d %| m => m %/ d * d = m.
 proof. by move/dvdz_eq. qed.
 
+(* -------------------------------------------------------------------- *)
+lemma divMr p q m : m %| q => (p * q) %/ m = p * (q %/ m).
+proof.
+case: (m = 0) => [-> /dvd0z ->|nz_m]; first by rewrite !div0z.
+by case/dvdzP=> [k ->]; rewrite mulrA !mulzK.
+qed.
+
 lemma nosmt lez_floor m d : d <> 0 => m %/ d * d <= m.
 proof. by rewrite -subr_ge0 -modzE; apply/modz_ge0. qed.
 
@@ -568,6 +575,13 @@ qed.
 
 lemma nosmt divzDr m n d : d %| n => (m + n) %/ d = (m %/ d) + (n %/ d).
 proof. by move=> dv_n; rewrite addrC divzDl // addrC. qed.
+
+lemma nosmt expz_div (x n m : int) :
+  0 <= m <= n => 0 < x => x^n %/ x^m = x^(n-m).
+proof.
+move=> [ge0_m le_mn] gt0_x; rewrite -{1}(subrK n m).
+by rewrite exprD_nneg 1:subr_ge0 // mulzK // expf_eq0 (@gtr_eqF x).
+qed.
 
 (* ==================================================================== *)
 op gcd_spec a b = fun z =>
@@ -853,3 +867,13 @@ qed.
 lemma nosmt modz_pow2_div n p i: 0 <= i => 0 <= p <= n =>
   (i %% 2^n) %/ 2^p = (i %/ 2^p) %% 2^(n-p).
 proof. admitted.
+
+(* -------------------------------------------------------------------- *)
+require import Real.
+
+lemma fromint_div (x y : int) : y %| x => (x %/ y)%r = x%r / y%r.
+proof.
+case: (y = 0) => [->|nz_y] /=; first by rewrite divz0.
+case/dvdzP => [q ->]; rewrite mulzK //.
+by rewrite fromintM RField.mulrK // eq_fromint.
+qed.
