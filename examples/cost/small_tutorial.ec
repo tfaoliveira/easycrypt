@@ -3,6 +3,20 @@ import Bigint.
 
 module V = { var v : int }.
 
+(* TODO: COST: a few tests  *)
+module type U = { proc o () : unit }.
+
+lemma test0 (H <: U): N 3 <= Inf by done.
+
+lemma test1 (H <: U):
+`[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf] by done.
+
+lemma test2 (x, y : xint) (H <: U):
+`[: x, H.o : y] <= `[: Inf, H.o : Inf, ..] by done.
+
+lemma test (H <: U):
+`[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf, ..] by done.
+
 (*********************)
 (* Expression's cost *)
 (*********************)
@@ -274,6 +288,22 @@ proof.
   by auto; rewrite bigi_constC. 
 qed.
 
+(* alternative proof, inlining intrinsic cost *)
+lemma Inv_compl'
+    (c : cost) (k : int)
+    (Adv0 <: Adv [a : [c, #H0.o : N k]]) 
+    (H0   <: H) : 
+    0 <= k =>
+    choare[Inv(Adv0, H0).i] time (`[:N 1, H0.o : N k ] + c).
+proof.
+  move => ?. 
+  have C := (Inv_compl c k Adv0 H0 _); 1:done.
+
+  conseq C.
+  move => ? /=.
+  admit. (* TODO: how to finish the proof ? *)
+qed.
+
 (* TODO A: *)
 (* Alternative future syntax *)
 (* lemma Inv_compl *)
@@ -283,49 +313,65 @@ qed.
 (*     choare[Inv(Adv0, H0).i] time [:N 1, Adv0.a : 1, H0.o : #Adv0.a[H0.o] ]. *)
 
 lemma Inv_compl_inst (H1 <: H) :
-  choare[Inv(MyAdv, H1).i] time [:N 4, H1.o : 2 ].
-proof.
-  by apply (Inv_compl _ _ MyAdv MyAdv_compl H1 _).
+  choare[Inv(MyAdv, H1).i] time `[:N 4, H1.o : N 2 ].
+proof. 
+  (* TODO: can we improve the matching, so that we do not have to
+     provide all arguments? *)
+  (* apply (Inv_compl `[: N 3] _ MyAdv _ H1). *)
+  apply (Inv_compl `[: N 3] 2 MyAdv _ H1) => //=.
+  by apply MyAdv_compl.
 qed.
 
 
 (**************************************************)
 (* without self complexity *)
 lemma Inv_compl_partial
+    (c : cost)
     (k : int)
-    (Adv0 <: Adv [a : [_, #H0.o : k]]) 
+    (Adv0 <: Adv [a : [c, #H0.o : N k]]) 
     (H0   <: H) : 
     0 <= k =>
-    choare[Inv(Adv0, H0).i] time [: `_, Adv0.a : 1, H0.o : k]. 
+    choare[Inv(Adv0, H0).i] time `[: .., Adv0.a : N 1, H0.o : N k]. 
 proof.    
 move => hk; proc.
-call (_: true : []).
-move => i Hi /=; proc*; call(_: true : []); auto => /=.
-by auto => /=; rewrite big_constz count_predT !size_range /#.
+call (_: true).
++ by move => i Hi /=; proc*; call(_: true : []); auto => /=.
++ by rewrite bigi_constC.
++ by auto; rewrite bigi_constC. 
 qed.
 
-lemma test_conseq :
-  (forall (H0 <: H), choare[MyAdv(H0).a] time [: N 3, H0.o : 4]) =>
-  forall (H0 <: H), choare[MyAdv(H0).a] time [: `_, H0.o : 5].
+(* using `conseq` to conclude *)
+lemma conseq_example :
+  (forall (H0 <: H), choare[MyAdv(H0).a] time `[: N 3, H0.o : N 4]) =>
+  forall (H0 <: H), choare[MyAdv(H0).a] time `[: .., H0.o : N 5].
 proof.
  move => Hyp H0.
- conseq (_: _ ==> _ : time [: N 3, H0.o : 4]).
+ conseq (_: _ ==> _ : time `[: N 3, H0.o : N 4]).
  by apply (Hyp H0).
 qed.
 
-lemma Inv_compl_partial_inst (H1 <: H) :
-  choare[Inv(MyAdv, H1).i] time [:`_, H1.o : 2 ].
+(* more succint `conseq` syntax, providing directly the lemma *)
+lemma conseq_example2 :
+  (forall (H0 <: H), choare[MyAdv(H0).a] time `[: N 3, H0.o : N 4]) =>
+  forall (H0 <: H), choare[MyAdv(H0).a] time `[: .., H0.o : N 5].
 proof.
-  apply (Inv_compl_partial _ MyAdv _ H1) => //.
-  move => H0.
-  by conseq (MyAdv_compl H0). 
+ move => Hyp H0.
+ by conseq (Hyp H0).
+qed.
+
+
+lemma Inv_compl_partial_inst (H1 <: H) :
+  choare[Inv(MyAdv, H1).i] time `[:.., H1.o : N 2 ].
+proof. print Inv_compl_partial. 
+  apply (Inv_compl_partial `[: ..] 2 MyAdv _ H1);
+  [1: by move => H0; conseq (MyAdv_compl H0) | 2: done].
 qed.
 
 (**************************************************)
-op kab : int.
+op kab : cost.
 
 module type AB (H0 : H) = {
-  proc a () : unit [ kab, H0.o : 1 ]
+  proc a () : unit [kab, H0.o : N 1 ]
 }.
 
 section.
