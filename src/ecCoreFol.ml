@@ -642,7 +642,7 @@ module Hsform = Why3.Hashcons.Make (struct
 
   let fv_mlr = Sid.add mleft (Sid.singleton mright)
 
-  let crecord_fv (r : crecord) =
+  let crecord_fv (r : crecord) : int Mid.t =
     let self_fv = f_fv r.c_self in
     EcPath.Mx.fold (fun f c fv ->
         let fv = fv_union fv (f_fv c) in
@@ -652,12 +652,12 @@ module Hsform = Why3.Hashcons.Make (struct
   let cost_fv      : cost      -> int Mid.t = crecord_fv
   let proc_cost_fv : proc_cost -> int Mid.t = crecord_fv
 
-  let mod_cost_fv (mc : mod_cost) =
+  let mod_cost_fv (mc : mod_cost) : int Mid.t =
     Msym.fold (fun _ pc fv ->
         fv_union fv (proc_cost_fv pc)
       ) mc Mid.empty
 
-  let fv_node f =
+  let fv_node f : int Mid.t =
     let union ex nodes =
       List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty nodes
     in

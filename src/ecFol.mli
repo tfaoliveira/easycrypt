@@ -93,7 +93,6 @@ val f_lets_simpl : (EcTypes.lpattern * form) list -> form -> form
 
 val f_forall_simpl : bindings -> form -> form
 val f_exists_simpl : bindings -> form -> form
-val f_quant_simpl  : quantif -> bindings -> form -> form
 val f_app_simpl    : form -> form list -> EcTypes.ty -> form
 
 val f_not_simpl   : form -> form

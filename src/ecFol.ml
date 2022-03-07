@@ -574,16 +574,19 @@ and can_betared f =
   | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) -> true
   | _ -> false
 
-let f_forall_simpl b f =
-  let b = List.filter (fun (id,_) -> Mid.mem id (f_fv f)) b in
-  f_forall b f
+let rec f_forall_simpl bs f =
+  match bs with
+  | [] -> f
+  | (b, ty) :: bs ->
+    let f = f_forall_simpl bs f in
+    if Mid.mem b (f_fv f) then f_forall [b, ty] f else f
 
-let f_exists_simpl b f =
-  let b = List.filter (fun (id,_) -> Mid.mem id (f_fv f)) b in
-  f_exists b f
-
-let f_quant_simpl q b f =
-  if q = Lforall then f_forall_simpl b f else f_exists b f
+let rec f_exists_simpl bs f =
+  match bs with
+  | [] -> f
+  | (b, ty) :: bs ->
+    let f = f_exists_simpl bs f in
+    if Mid.mem b (f_fv f) then f_exists [b, ty] f else f
 
 let f_not_simpl f =
   if is_not f then destr_not f
