@@ -56,9 +56,10 @@ lemma MyH_compl2 : choare[MyH.o2] time `[:N 2] by proc; auto.
 lemma MyH_compl : choare[MyH.o1] time `[:N 1] /\ choare[MyH.o2] time `[:N 2] 
     by split; [apply MyH_compl1 | apply MyH_compl2].
 
-lemma advcompl_inst : choare[MyAdv(MyH, MyH).a] time `[:N 8].
-proof.
-  have H0 := MyAdv_compl.
+lemma advcompl_inst:  choare[MyAdv(MyH, MyH).a] time `[:N 8].
+proof. 
+  (* TODO: bunch of partial applications. Keep them as sanity checks? *)
+  have H0 := MyAdv_compl. 
   have H1 := (MyAdv_compl `[:N 1]).
   have H2 := (MyAdv_compl `[:N 1] `[:N 2] `[:N 1] `[:N 2]).
   have H3 := (MyAdv_compl `[:N 1] `[:N 2] `[:N 1] `[:N 2] MyH _ _);
@@ -66,8 +67,11 @@ proof.
   have U := H3 MyH _ _; 
   [1: by apply MyH_compl1 | 2: by apply MyH_compl2].
 
-  have H4 := (MyAdv_compl `[:N 1] `[:N 2] `[:N 1] `[:N 2] MyH _ _ MyH).
+  clear H0 H1 H2 H3 U.
 
-  (* OLD *)
-  (* apply (MyAdv_compl `[:N 1] `[:N 1] `[:N 1] `[:N 1] MyH _ _ MyH).  *)
+  apply (MyAdv_compl `[:N 1] `[:N 2] `[:N 1] `[:N 2] MyH _ _ MyH);
+  [1: by apply MyH_compl1 | 
+   2: by apply MyH_compl2 | 
+   3: by apply MyH_compl1 | 
+   4: by apply MyH_compl2 ].
 qed.

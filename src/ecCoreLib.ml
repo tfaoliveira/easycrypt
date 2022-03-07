@@ -100,7 +100,6 @@ module CI_Cost = struct
 
   let _Cost    = fun x -> EcPath.pqname p_Cost x
 
-  let p_cost_zero    = _Cost "zero"
   let p_cost_inf     = _Pervasive "inf"
   let p_cost_opp     = _Cost "opp"
   let p_cost_add     = _Cost "add"

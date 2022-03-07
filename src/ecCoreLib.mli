@@ -100,7 +100,6 @@ module CI_Cost : sig
   val p_Cost : path
   val p_cost : path
 
-  val p_cost_zero    : path
   val p_cost_inf     : path
   val p_cost_opp     : path
   val p_cost_add     : path
