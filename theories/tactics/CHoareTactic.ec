@@ -96,6 +96,7 @@ proof. by case=> [x|] [y|] [z|] //=; apply: ler_trans. qed.
 
 lemma lex_inf (x : xint) : x <= Inf.
 proof. by case: x. qed.
+hint simplify lex_inf.
 
 lemma lex_add2r (x1 x2 y : xint) :
   x1 <= x2 => x1 + y <= x2 + y.
