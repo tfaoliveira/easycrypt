@@ -1513,7 +1513,7 @@ let zpop ri side f hd =
       f_mod_cost_r state
     end
 
-  (* | Zhl_cost_proj {proc; proj;}, [c] -> *) (* TODO A: *)
+  | Zmod_cost_proj proj, [c] -> f_cost_proj_r c proj
 
   | _, _ -> assert false
 

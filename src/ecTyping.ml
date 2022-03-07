@@ -540,12 +540,6 @@ let check_item_compatible
   if proof_obl then ()
   else
     begin
-      (* TODO A: it should not be necessary to normalize w.r.t. cbv
-         before checking convertion there. *)
-      let ri = EcReduction.full_red in
-      let icosts = EcCallbyValue.norm_cbv ri hyps icosts
-      and ocosts = EcCallbyValue.norm_cbv ri hyps ocosts in
-
       let proc = fin.fs_name in
       if not (EcReduction.is_conv_cproc hyps ~proc ~mode icosts ocosts) then
         let err = match mode with
@@ -2152,10 +2146,7 @@ let replace_if_provided
           mr'.mr_cost
         end
     in
-    { mr_xpaths;
-      mr_mpaths;
-      mr_params;
-      mr_cost; }
+    { mr_xpaths; mr_mpaths; mr_params; mr_cost; }
 
 (* -------------------------------------------------------------------- *)
 let trans_restr_mem env (r_mem : pmod_restr_mem) =

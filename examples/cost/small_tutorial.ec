@@ -362,7 +362,7 @@ qed.
 
 lemma Inv_compl_partial_inst (H1 <: H) :
   choare[Inv(MyAdv, H1).i] time `[:.., H1.o : N 2 ].
-proof. print Inv_compl_partial. 
+proof. 
   apply (Inv_compl_partial `[: ..] 2 MyAdv _ H1);
   [1: by move => H0; conseq (MyAdv_compl H0) | 2: done].
 qed.

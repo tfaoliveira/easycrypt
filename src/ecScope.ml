@@ -996,7 +996,6 @@ module Ax = struct
                  axs_params  = odfl [] scparams;
                  axs_spec    = concl; } in
 
-      (* TODO: A: check this. *)
       Some (unloc ax.pa_name),
       bind_schema scope (snd pucflags).puc_local (unloc ax.pa_name, sc)
 

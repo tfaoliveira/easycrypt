@@ -6,8 +6,6 @@ open EcSymbols
 val check_loaded : EcEnv.env -> unit
 
 (* -------------------------------------------------------------------- *)
-val oget_c_bnd : form option -> bool -> form
-
 val cost_orcl : symbol -> xpath -> form -> form
 
 (* -------------------------------------------------------------------- *)

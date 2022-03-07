@@ -389,7 +389,6 @@ and process_abbrev (scope : EcScope.scope) (a : pabbrev located) =
 (* -------------------------------------------------------------------- *)
 and process_axiom (scope : EcScope.scope) (ax : paxiom located) =
   EcScope.check_state `InTop "axiom" scope;
-  (* TODO: A: aybe rename, as this now also adds schemata. *)
   let (name, scope) = EcScope.Ax.add scope (Pragma.get ()).pm_check ax in
     name |> EcUtils.oiter
       (fun x ->

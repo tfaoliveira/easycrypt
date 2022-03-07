@@ -13,11 +13,6 @@ open EcEnv
 open EcPath
 open EcSymbols
 
-(* TODO A: cleanup file *)
-
-(* -------------------------------------------------------------------- *)
-let oget_c_bnd = EcCoreFol.oget_c_bnd
-
 (* -------------------------------------------------------------------- *)
 let cost_orcl (proc : symbol) (o : xpath) (mc : form) : form =
   let mo, mf = mget_ident o.x_top, o.x_sub in
@@ -36,9 +31,6 @@ let cost_sub ~(c : form) ~(sub : form) : csub_res =
 let f_xsubcond (f1 : form) (f2 : form) : form =
   f_or (f_is_inf f1) (f_is_int f2)
 
-let f_xsub (f1 : form) (f2 : form) : form * form =
-  f_xsubcond f1 f2, f_xadd f1 (f_xopp f2)
-
 (* Same as [cost_sub], but only for the concrete cost.
    [c] of type [tcost], [sub] of type [xint]. *)
 let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
@@ -51,45 +43,6 @@ let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
 let cost_add_self ~(c : form) ~(a : form) : form =
   let a_c = f_cost_r (cost_r a Mx.empty true) in
   f_cost_add c a_c
-
-(* -------------------------------------------------------------------- *)
-(* Result of a backward reasoning on cost: given [c1] and [c2], we try to solve
-   the equation [c1 = x + c2] over [x]. *)
-type cost_backward_res = [
-  | `Ok of form * cost          (* [`Ok (c,x)] means that [x] is a solution
-                                   whenever [c] holds. *)
-  | `FullError                  (* full minus not full *)
-]
-
-(* Backward reasoning on cost.
-   [cost_sub c1 c2] looks for a solution [x] of [c1 = x + c2]. *)
-let cost_vec_sub (c1 : cost) (c2 : cost) : cost_backward_res =
-  let exception Failed of [`FullError ] in
-  try
-    let cond, c_self = f_xsub c1.c_self c2.c_self in
-
-    let call_cond = ref f_true in
-    let c_calls =
-      EcPath.Mx.merge (fun _ call1 call2 ->
-          let call1 = oget_c_bnd call1 c1.c_full
-          and call2 = oget_c_bnd call2 c2.c_full in
-
-          let xcond, bnd = f_xsub call1 call2 in
-          call_cond := f_and_simpl !call_cond xcond;
-          Some bnd
-        ) c1.c_calls c2.c_calls
-    in
-    let c_full = c1.c_full && c2.c_full in
-
-    if c1.c_full && not c2.c_full then
-      raise (Failed `FullError);
-
-    (* final condition *)
-    let fcond = f_and_simpl cond !call_cond in
-
-    `Ok (fcond, cost_r c_self c_calls c_full)
-  with Failed x -> (x :> cost_backward_res)
-
 
 (* -------------------------------------------------------------------- *)
 let loaded (env : env) : bool =
