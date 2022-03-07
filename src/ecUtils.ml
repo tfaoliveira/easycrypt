@@ -523,6 +523,14 @@ module List = struct
         | Some v -> Some v
     end
 
+  let concat_map f l =
+    let rec aux f acc = function
+      | [] -> rev acc
+      | x :: l ->
+        let xs = f x in
+        aux f (List.rev_append xs acc) l
+    in aux f [] l
+
   let rec is_unique ?(eq = (=)) (xs : 'a list) =
     match xs with
     | []      -> true

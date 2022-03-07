@@ -336,11 +336,12 @@ module FunAbsLow = struct
 
   (* Return: pre, post, total cost, sub-goals *)
   let choareF_abs_spec
-      (pf : proofenv)
+      (pf  : proofenv)
       (env : env)
       (f   : xpath)
       (inv : form)
-      (xc  : abs_inv_inf) : form * form * form * form list
+      (xc  : abs_inv_inf)
+    : form * form * form * form list
     =
     let {top; oi_param; cost_info; } = EcLowPhlGoal.abstract_info env f in
     let ppe = EcPrinting.PPEnv.ofenv env in
@@ -385,7 +386,7 @@ module FunAbsLow = struct
     let pr = f_app_simpl inv kargs_pr tbool in
 
     (* build the subgoal for the i-th oracle *)
-    let ospec (o_called : xpath) : form * form =
+    let ospec (o_called : xpath) : form =
       let { cost = o_cost; finite = o_finite } =
         try List.find (fun x -> x_equal x.oracle o_called) xc
         with Not_found ->
@@ -408,14 +409,6 @@ module FunAbsLow = struct
         if o_finite then
           f_app_simpl o_cost [f_local k_called tint] tcost
         else o_cost
-      in
-
-      (* if [o_finite], create a subgoal checking that [k_o_cost] is finite. *)
-      let subg =
-        if o_finite then
-          f_forall_simpl [k_called, GTty tint] (f_is_int k_o_cost)
-        else
-          f_true
       in
 
       (* instantisation of [bds] for the post-condition. Type [tint].
@@ -445,11 +438,21 @@ module FunAbsLow = struct
       let call_bounds = f_ands0_simpl call_bounds in
 
       let form = f_cHoareF pr o_called po k_o_cost in
-      subg, f_forall_simpl bds (f_imp_simpl call_bounds form)
+      f_forall_simpl bds (f_imp_simpl call_bounds form)
     in
 
     (* We have the conditions for the oracles. *)
-    let sg_finite, sg_orcls = List.split (List.map ospec ois) in
+    let sg_orcls = List.map ospec ois in
+
+    (* check user finiteness annotation on oracles  *)
+    let sg_finite =
+      List.map (fun xc_el ->
+          assert (xc_el.finite);
+          let cbd = EcCHoare.cost_orcl f.x_sub xc_el.oracle cost_info in
+          f_is_int cbd
+        ) xc_fin
+    in
+
 
     (* Finally, we compute the conclusion. *)
     (* choare [{ inv 0 } f {exists ks, 0 <= ks <= cbd /\ inv ks }]

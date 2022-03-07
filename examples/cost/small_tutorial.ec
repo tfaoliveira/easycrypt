@@ -215,7 +215,7 @@ qed.
 lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k]]) : 
   choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
 proof.
-  by proc; do !(call(_: true)); auto => /=. 
+  by proc; do !(call(_: true)); auto.
 qed.
 
 (* The same lemma, but in a section. *)
@@ -266,15 +266,12 @@ lemma Inv_compl
     choare[Inv(Adv0, H0).i] time `[:N 1, Adv0.a : N 1, H0.o : N k ].
 proof.
   move => hk; proc.
-  call (_: true : []). 
-
-  (* TODO A: type error there, terms mis-created *)
-  by auto.
+  call (_: true).
 
   by move => i Hi /=; proc*; call(_: true).
 
-  by move => /=; rewrite bigi_constC. 
-  by auto => /=; rewrite bigi_constC. 
+  by rewrite bigi_constC. 
+  by auto; rewrite bigi_constC. 
 qed.
 
 (* TODO A: *)

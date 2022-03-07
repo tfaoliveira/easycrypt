@@ -282,6 +282,7 @@ module List : sig
   val fpick      : (unit -> 'a option) list -> 'a option
   val pivot_at   : int -> 'a list -> 'a list * 'a * 'a list
   val find_pivot : ('a -> bool) -> 'a list -> 'a list * 'a * 'a list
+  val concat_map : ('a -> 'b list) -> 'a t -> 'b list
   val map_fold   : ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val mapi_fold  : (int -> 'a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val pmapi      : (int -> 'a -> 'b option) -> 'a list -> 'b list
