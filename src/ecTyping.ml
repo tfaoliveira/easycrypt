@@ -894,25 +894,6 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
   let s_params : (EcIdent.t * (EcIdent.t * module_type * module_sig)) list =
     List.map (fun (id, param_mt) ->
         let param_msig = EcEnv.ModTy.sig_of_mt env_mt param_mt in
-        (* let param_restr = param_mt.mt_restr in
-         * let param_ms = EcEnv.ModTy.sig_of_mt env_mt param_mt in
-         *
-         * let param_restr' : mod_restr =
-         *   List.fold_left (fun param_restr' (Tys_function fn) ->
-         *       let oi = Msym.find fn.fs_name param_restr.mr_oinfos in
-         *       match OI.cost_self oi with
-         *       | C_bounded _ -> param_restr'
-         *       | C_unbounded ->
-         *         let self = OI.cost_self oi in
-         *         let calls = OI.cost_calls oi in
-         *         let oi' = OI.mk (OI.allowed oi) (OI.is_in oi) self calls in
-         *         let param_restr' = add_oinfo param_restr' fn.fs_name oi' in
-         *         param_restr'
-         *     ) param_restr param_ms.mis_body
-         * in
-         *
-         * let param_mt = { param_mt with mt_restr = param_restr' } in *)
-
         id, (EcIdent.fresh id, param_mt, param_msig)
       ) mt.mt_params
   in
@@ -2323,8 +2304,17 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
 
   (name, { oi_in; oi_allowed; }, c_cost )
 
-(* See [trans_restr_fun] for the requirements on [env], [env_in], [params]. *)
-and transmod_restr env env_in (params : Sm.t) (mr : pmod_restr) : mod_restr =
+(* See [trans_restr_fun] for the requirements on [env], [env_in], [params].
+   [procs] are the procedures names of the module sig the restriction will be
+   attached to. *)
+and transmod_restr
+    (env    : EcEnv.env)
+    (env_in : EcEnv.env)
+    (params : Sm.t)
+    (procs  : Ssym.t)
+    (mr     : pmod_restr)
+  : mod_restr
+  =
   let r_mem = trans_restr_mem env mr.pmr_mem in
 
   let mr_params, mod_cost =
@@ -2336,8 +2326,17 @@ and transmod_restr env env_in (params : Sm.t) (mr : pmod_restr) : mod_restr =
         Msym.add name proc_cost mod_cost
       ) (Msym.empty, Msym.empty) mr.pmr_procs
   in
+  (* add missing procedures to the module cost *)
+  let mod_cost =
+    Ssym.fold (fun proc mod_cost ->
+        if not (Msym.mem proc mod_cost) then
+          Msym.add proc proc_cost_top mod_cost
+        else mod_cost
+      ) procs mod_cost
+  in
 
   let mr_cost = f_mod_cost_r mod_cost in
+
   { mr_xpaths = fst r_mem;
     mr_mpaths = snd r_mem;
     mr_params;
@@ -2346,8 +2345,20 @@ and transmod_restr env env_in (params : Sm.t) (mr : pmod_restr) : mod_restr =
 (* -------------------------------------------------------------------- *)
 (* Return the module type updated with some restriction.
  * Remark: the module type has not been entered. *)
-and trans_restr_for_modty env modty (pmr : pmod_restr option) =
+and trans_restr_for_modty
+    (env   : EcEnv.env)
+    (modty : module_type)
+    (pmr   : pmod_restr option)
+  : module_type
+  =
   let mr = modty.mt_restr in
+
+  (* procedures of [modty] *)
+  let procs =
+    let ms = EcEnv.ModTy.sig_of_mt env modty in
+    List.map (fun (Tys_function mf) -> mf.fs_name) ms.mis_body
+    |> Ssym.of_list
+  in
 
   let mr' = match pmr with
     | None -> None
@@ -2360,7 +2371,7 @@ and trans_restr_for_modty env modty (pmr : pmod_restr option) =
       let env_in  = EcEnv.Mod.bind_locals mi_params env in
 
       (* We type the restricion. *)
-      transmod_restr env env_in s_params restr |> some in
+      transmod_restr env env_in s_params procs restr |> some in
 
   (* We update the memory restriction in [mr] if a new restriction
      is provided. *)
@@ -2369,7 +2380,12 @@ and trans_restr_for_modty env modty (pmr : pmod_restr option) =
   { modty with mt_restr = new_mr }
 
 (* -------------------------------------------------------------------- *)
-and transmodsig (env : EcEnv.env) (name : symbol) (modty : pmodule_sig) =
+and transmodsig
+    (env   : EcEnv.env)
+    (name  : symbol)
+    (modty : pmodule_sig)
+  : module_sig
+  =
   let Pmty_struct modty = modty in
 
   let margs =
@@ -2385,8 +2401,14 @@ and transmodsig (env : EcEnv.env) (name : symbol) (modty : pmodule_sig) =
   (* We compute the body of the signature, and the restrictions given at
      function declarations. *)
   let body, mr = transmodsig_body env params modty.pmsig_body in
+
+  (* procedures of [body] *)
+  let procs =
+    List.map (fun (Tys_function mf) -> mf.fs_name) body
+    |> Ssym.of_list
+  in
   (* We translate the additional restrictions that may have been given. *)
-  let mr' = omap (transmod_restr env env params) modty.pmsig_restr in
+  let mr' = omap (transmod_restr env env params procs) modty.pmsig_restr in
 
   let mr = replace_if_provided env mr mr' modty.pmsig_restr in
 

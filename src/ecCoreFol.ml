@@ -1111,8 +1111,13 @@ let f_cost_le      f1 f2 = f_app fop_cost_le      [f1; f2] tbool
 let f_cost_lt      f1 f2 = f_app fop_cost_lt      [f1; f2] tbool
 let f_cost_subcond f1 f2 = f_app fop_cost_subcond [f1; f2] tbool
 
-(*  [f_cost_inf] and [f_cost_zero] definitions *)
+
 let f_cost_inf0 = f_cost_r (cost_r f_Inf EcPath.Mx.empty false)
+
+(* FIXME: since we cannot define abbrevs and operators for cost (yet),
+   do not use the operator but directly its definition *)
+let f_cost_inf = f_cost_inf0
+
 let f_cost_zero = f_cost_r (cost_r  f_x0 EcPath.Mx.empty true)
 
 (* -------------------------------------------------------------------- *)

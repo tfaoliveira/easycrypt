@@ -37,11 +37,9 @@ val mr_equal : mod_restr -> mod_restr -> bool
 val mr_add_restr :
   mod_restr -> EcPath.Sx.t use_restr -> EcPath.Sm.t use_restr -> mod_restr
 
-(* val add_oinfo : mod_restr -> string -> oi_params -> cost -> mod_restr *)
-(* val change_oicalls : mod_restr -> string -> xpath list -> mod_restr *)
-
-val cost_has_restr      : cost     -> bool
-val modcost_has_restr   : mod_cost -> bool
+(* -------------------------------------------------------------------- *)
+val cost_has_restr    : cost     -> bool
+val modcost_has_restr : mod_cost -> bool
 
 val f_cost_has_restr         : form ->           [`Known of bool | `Unknown]
 val f_modcost_has_restr      : form ->           [`Known of bool | `Unknown]

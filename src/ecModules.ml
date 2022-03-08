@@ -54,21 +54,6 @@ let mr_add_restr
     mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
     mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm; }
 
-(* let change_oinfo restr f oi =
- *   { restr with mr_oinfos = Msym.add f oi restr.mr_oinfos }
- *
- * let add_oinfo restr f oi = change_oinfo restr f oi *)
-
-(* let change_oicalls (restr : mod_restr) (f : string) (ocalls : xpath list) =
- *   let oi_params =
- *     try
- *       let oi_param = Msym.find f restr.mr_params in
- *       let filter x = List.mem x ocalls in
- *       filter_param oi_param
- *     with Not_found -> OI.mk ocalls true r_cost_default
- *   in
- *   { restr with mr_params = oi_params; } *)
-
 (* -------------------------------------------------------------------- *)
 let cost_has_restr (c : cost) : bool =
   not (is_inf c.c_self) ||
