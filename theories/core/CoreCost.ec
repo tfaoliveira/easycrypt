@@ -3,6 +3,7 @@ require import CoreXint Int.
 (* -------------------------------------------------------------------- *)
 op zero : cost.
 
+(* FIXME: remove after generalized expressions *)
 axiom zero_def : zero = `[: N 0].
 
 hint simplify zero_def.
@@ -31,30 +32,30 @@ abbrev ( <  ) = lt.
 op subcond = fun x y => (x - y) + y = x.
 
 (* -------------------------------------------------------------------- *)
-axiom scale0cost (x : cost): 0 * x = zero.
-axiom scale1cost : left_id 1 scale.
+axiom scale0c (x : cost): 0 * x = zero.
+axiom scale1c : left_id 1 scale.
 
-hint simplify scale0cost, scale1cost.
+hint simplify scale0c, scale1c.
 
 axiom scale_distr (i j : int) (x : cost) : 
   (i + j) * x = i * x + j * x.
 
 (* -------------------------------------------------------------------- *)
-axiom add0cost : left_id zero add.
-axiom addcost0 : right_id zero add.
+axiom add0c : left_id zero add.
+axiom addc0 : right_id zero add.
 
-hint simplify add0cost, addcost0.
+hint simplify add0c, addc0.
 
-axiom addcostA : associative add.
+axiom addcA : associative add.
 
-axiom addcostC : commutative add.
+axiom addcC : commutative add.
 
 (* -------------------------------------------------------------------- *)
-axiom cost_le (c : cost) : c <= inf.
+axiom c_le_inf (c : cost) : c <= inf.
 
-hint simplify cost_le.
+hint simplify c_le_inf.
 
-axiom cost_le0 (c : cost) : c <= `[..].
+axiom c_le0 (c : cost) : c <= `[..].
 
-hint exact : cost_le0.
+hint exact : c_le0.
 

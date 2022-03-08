@@ -1075,6 +1075,15 @@ let f_cost_xscale_simpl (f : form) (c : form) =
       (fun c -> f_cost_xscale f c)
       c
 
+(* -------------------------------------------------------------------- *)
+let cost_is_zero (c : form) : bool =
+  if not (is_cost c) then false
+  else
+    let c = destr_cost c in
+    c.c_full &&
+    f_equal f_x0 c.c_self &&
+    EcPath.Mx.for_all (fun _ -> f_equal f_x0) c.c_calls
+
 (* lift a binary operator over [txint] to [tcost] *)
 let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
   if not (is_cost c1 && is_cost c2) then
@@ -1092,7 +1101,10 @@ let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
     in
     f_cost_r (cost_r self calls (c1.c_full && c2.c_full))
 
-let f_cost_add_simpl = f_cost_mk_bin_simpl f_xadd_simpl f_cost_add
+let f_cost_add_simpl c1 c2 =
+  if cost_is_zero c1 then c2 else
+  if cost_is_zero c2 then c1 else
+    f_cost_mk_bin_simpl f_xadd_simpl f_cost_add c1 c2
 
 (* lift a binary comparison over [txint] to [tcost] *)
 let f_cost_mk_cmp fullcmp xcmp costcmp (c1 : form) (c2 : form) : form =
