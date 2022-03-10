@@ -2433,11 +2433,20 @@ module Fsubst = struct
 
   and add_bindings ~tx = List.map_fold (add_binding ~tx)
 
-  (* complicated, because if a local module is substituted by a concrete module,
-     its cost (time the number of times it is called) need to be added to the
-     self cost (see instantiation rule).  *)
-  and cost_subst ~tx (s : f_subst) (init_cost : cost) : form =
-    let c_self = f_subst ~tx s init_cost.c_self
+  (* complicated, because if a local module is substituted by a concrete
+     module, its cost (time the number of times it is called) need to be
+     moved (see instantiation rule):
+     - for [cost], by adding it to the whole cost;
+     - for [proc_cost], by adding it added to the self cost.
+
+     Return: record after substitution, costs to be moved. *)
+  and crecord_subst
+      ~(tx       : form -> form -> form)
+      (s         : f_subst)
+      (init_crec : crecord)
+    : crecord * form list
+    =
+    let c_self = f_subst ~tx s init_crec.c_self
     (* [concs] are the local modules that have been substituted by concrete
        modules. *)
     and concs, c_calls = EcPath.Mx.fold (fun x cb (concs,calls) ->
@@ -2453,58 +2462,54 @@ module Fsubst = struct
         | `Concrete _ ->
           let m_conc = EcPath.mget_ident x.x_top in
           EcIdent.Sid.add m_conc concs, calls
-      ) init_cost.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
+      ) init_crec.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
     in
-    let cost = f_cost_r { c_self; c_calls; c_full = init_cost.c_full } in
+    let crec = { c_self; c_calls; c_full = init_crec.c_full } in
 
-    (* for every module [mid] that have been concretized *)
-    EcIdent.Sid.fold (fun mid cost ->
-        let _, minfo = EcIdent.Mid.find mid s.fs_mp in
-        let minfo : form = oget minfo in (* must not be [None] *)
-        let mp = EcPath.mident mid in
-        let mprocs = match minfo.f_ty.ty_node with
-          | Tmodcost { procs } -> procs
-          | _ -> assert false   (* cannot happen, type must be reduced *)
-        in
+    (* intrinsic costs of abstract modules that have been concetized. *)
+    let to_move : form list =
+      (* for every module [mid] that have been concretized *)
+      EcIdent.Sid.fold (fun mid to_move ->
+          let _, minfo = EcIdent.Mid.find mid s.fs_mp in
+          let mp = EcPath.mident mid in
+          match minfo with
+          | None -> f_cost_inf :: to_move
+          (* if we have no information, use [inf] *)
 
-        (* for every procedure [f] of [mid] *)
-        EcSymbols.Msym.fold (fun (f : symbol) _ cost ->
-            let xf = EcPath.xpath mp f in
-
-            (* the *intrinsic* cost of [f], of type [cost] *)
-            let f_cost : form = f_cost_proj_r minfo (Intr f) in
-
-            (* times the number of times [f] has been called in [init_cost] *)
-            let f_called : form = (* of type `xint` *)
-              oget_c_bnd
-                (EcPath.Mx.find_opt xf init_cost.c_calls)
-                init_cost.c_full
+          | Some minfo ->
+            let mprocs = match minfo.f_ty.ty_node with
+              | Tmodcost { procs } -> procs
+              | _ -> assert false   (* cannot happen, type must be reduced *)
             in
 
-            (* compute: [cost + f_called * f_cost] *)
-            f_cost_add cost (f_cost_xscale f_called f_cost)
-          ) mprocs cost
-      ) concs cost
+            (* for every procedure [f] of [mid] *)
+            EcSymbols.Msym.fold (fun (f : symbol) _ to_move ->
+                let xf = EcPath.xpath mp f in
 
-  (* substitution in a [proc_cost] is simpler. *)
-  (* TODO A: is this true ? check that this makes sense. *)
-  and proc_cost_subst ~tx (s : f_subst) (mpc : proc_cost) : proc_cost =
-    let c_self = f_subst ~tx s mpc.c_self in
-    (* if parameters are substituted, we do not need to move their cost
-       elsewhere. *)
-    let c_calls = EcPath.Mx.fold (fun x cb r_params ->
-        let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
+                (* the *intrinsic* cost of [f], of type [tcost] *)
+                let f_cost : form = f_cost_proj_r minfo (Intr f) in
 
-        assert(EcPath.m_is_local x'.x_top);
+                (* times the number of times [f] has been called in [init_crec] *)
+                let f_called : form = (* of type `xint` *)
+                  oget_c_bnd
+                    (EcPath.Mx.find_opt xf init_crec.c_calls)
+                    init_crec.c_full
+                in
 
-        let cb' = f_subst ~tx s cb in
-        EcPath.Mx.change
-          (fun old -> assert (old  = None); Some cb')
-          x' r_params
-      ) mpc.c_calls EcPath.Mx.empty
+                (* compute: [f_called * f_cost] *)
+                f_cost_xscale f_called f_cost :: to_move
+              ) mprocs to_move
+        ) concs []
     in
+    crec, to_move
 
-    { c_self; c_calls; c_full = mpc.c_full; }
+  and cost_subst ~tx (s : f_subst) (c : cost) : form =
+    let cost, to_move = crecord_subst ~tx s c in
+    List.fold_left f_cost_add (f_cost_r cost) to_move
+
+  and proc_cost_subst ~tx (s : f_subst) (pc : proc_cost) : proc_cost =
+    let pc, to_move = crecord_subst ~tx s pc in
+    { pc with c_self = List.fold_left f_cost_add pc.c_self to_move }
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)

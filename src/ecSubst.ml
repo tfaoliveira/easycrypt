@@ -217,7 +217,7 @@ and subst_modtype (s : _subst) (modty : module_type) =
   { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
     mt_name   = s.s_p modty.mt_name;
     mt_args   = List.map s.s_fmp modty.mt_args;
-    mt_restr = subst_mod_restr s modty.mt_restr; }
+    mt_restr  = subst_mod_restr s modty.mt_restr; }
 
 (* -------------------------------------------------------------------- *)
 let subst_function_def (s : _subst) (def : function_def) =

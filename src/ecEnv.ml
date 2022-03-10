@@ -1881,7 +1881,8 @@ end
 module Mod = struct
   type t = module_expr
 
-  let unsuspend_r f istop (i, args) (spi, params) o =
+  let unsuspend_r f istop (i, args)
+      ((spi, params) : (int * (EcIdent.t * module_type) list)) o =
     if List.length args > List.length params then
       assert false;
     if i <> spi then
@@ -1892,8 +1893,10 @@ module Mod = struct
     let params = List.take (List.length args) params in
 
     let s =
-      List.fold_left2
-        (fun s (x, _) a -> EcSubst.add_module s x a None)
+      List.fold_left2 (fun s (x, xmt) a ->
+          let xcost = xmt.mt_restr.mr_cost in
+          EcSubst.add_module s x a (Some xcost)
+        )
         EcSubst.empty params args
     in
       f s o
