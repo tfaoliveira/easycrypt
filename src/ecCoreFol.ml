@@ -204,6 +204,8 @@ and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
 
+and module_sig = form p_module_sig
+
 type mod_restr = form p_mod_restr
 
 (*-------------------------------------------------------------------- *)
@@ -756,6 +758,7 @@ module Hsform = Why3.Hashcons.Make (struct
       { f with f_tag = n; f_fv = fv; }
 end)
 
+
 (* -------------------------------------------------------------------- *)
 let gty_as_ty =
   function GTty ty -> ty | _ -> assert false
@@ -818,6 +821,52 @@ let f_tt     = f_op EcCoreLib.CI_Unit.p_tt    [] tunit
 let f_true   = f_op EcCoreLib.CI_Bool.p_true  [] tbool
 let f_false  = f_op EcCoreLib.CI_Bool.p_false [] tbool
 let f_bool   = fun b -> if b then f_true else f_false
+
+(* -------------------------------------------------------------------- *)
+let check_modcost (f : form) (params : EcIdent.t list) : bool =
+  match f.f_node with
+  | Fmodcost mc ->
+    Msym.for_all (fun _ pc ->
+        EcPath.Mx.for_all (fun orcl _ ->
+            match orcl.x_top.m_top with
+            | `Local id -> List.mem id params
+            | _ -> assert false
+          ) pc.c_calls
+      ) mc
+  | _ -> f_equal f f_true
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types.
+   Check that the module cost record only refers to (non-instantiated)
+   module parameters. *)
+let mk_mt_r
+    ~(mt_params : (EcIdent.t * 'a p_module_type) list)
+    ~(mt_name   : EcPath.path)
+    ~(mt_args   : EcPath.mpath list)
+    ~(mt_restr  : 'a p_mod_restr)
+  : module_type
+  =
+  let check (f : form) : bool =
+    (* keep only non-instantiated parameters *)
+    let _, params = List.takedrop (List.length mt_args) mt_params in
+    let params = List.map fst params in
+    check_modcost f params
+  in
+  EcCoreModules._prelude_mk_mt_r ~check ~mt_params ~mt_name ~mt_args ~mt_restr
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module signatures.
+   Check that the module cost record only refers to module parameters. *)
+let mk_msig_r
+    ~(mis_params : (EcIdent.t * module_type) list)
+    ~(mis_body   : module_sig_body)
+    ~(mis_restr  : mod_restr)
+  : module_sig
+  =
+  let check (f : form) : bool =
+    check_modcost f (List.map fst mis_params)
+  in
+  EcCoreModules._prelude_mk_msig_r ~check ~mis_params ~mis_body ~mis_restr
 
 (* -------------------------------------------------------------------- *)
 let f_tuple args =
@@ -2390,7 +2439,7 @@ module Fsubst = struct
     let mt_name   = s.fs_sty.ts_p mty.mt_name in
     let mt_args   = List.map sm mty.mt_args in
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
-    { mt_params; mt_name; mt_args; mt_restr; }
+    mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
 
   and subst_gty ~tx s gty =
     if is_subst_id s then gty else

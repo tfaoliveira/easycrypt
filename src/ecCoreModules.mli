@@ -171,23 +171,42 @@ val p_mr_equal :
 val p_mr_hash : ('a -> int) -> 'a p_mod_restr -> int
 
 (* -------------------------------------------------------------------- *)
-(* An oracle in a function provided by a module parameter of a functor *)
-type 'a p_module_type = {          (* Always in eta-normal form *)
+(* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
+type 'a p_module_type = private {          (* Always in eta-normal form *)
   mt_params : (EcIdent.t * 'a p_module_type) list;
   mt_name   : EcPath.path;
   mt_args   : EcPath.mpath list;
   mt_restr  : 'a p_mod_restr;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
+val _prelude_mk_mt_r :
+  check     : ('a -> bool) ->
+  mt_params : ((EcIdent.t * 'a p_module_type) list) ->
+  mt_name   : EcPath.path ->
+  mt_args   : EcPath.mpath list ->
+  mt_restr  : 'a p_mod_restr ->
+  'a p_module_type
+
+(* -------------------------------------------------------------------- *)
 type module_sig_body_item = Tys_function of funsig
 
 type module_sig_body = module_sig_body_item list
 
-type 'a p_module_sig = {
+(* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
+type 'a p_module_sig = private {
   mis_params : (EcIdent.t * 'a p_module_type) list;
   mis_body   : module_sig_body;
   mis_restr  : 'a p_mod_restr;
 }
+
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_msig_r] everywhere else. *)
+val _prelude_mk_msig_r :
+  check      : ('a -> bool) ->
+  mis_params : (EcIdent.t * 'a p_module_type) list ->
+  mis_body   : module_sig_body ->
+  mis_restr  : 'a p_mod_restr ->
+  'a p_module_sig
 
 (* -------------------------------------------------------------------- *)
 (* Simple module signature, without restrictions. *)

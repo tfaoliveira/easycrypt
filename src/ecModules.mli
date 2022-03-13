@@ -27,6 +27,41 @@ type module_item       = form p_module_item
 type module_comps      = form p_module_comps
 type module_comps_item = form p_module_comps_item
 
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+val mk_mt_r :
+  mt_params : ((EcIdent.t * module_type) list) ->
+  mt_name   : EcPath.path ->
+  mt_args   : EcPath.mpath list ->
+  mt_restr  : mod_restr ->
+  module_type
+
+(* Update existing module type *)
+val update_mt :
+  ?mt_params : (EcIdent.t * EcCoreFol.module_type) list ->
+  ?mt_name   : EcPath.path ->
+  ?mt_args   : EcPath.mpath list ->
+  ?mt_restr  : EcCoreFol.form p_mod_restr ->
+  module_type ->
+  module_type
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+val mk_msig_r :
+  mis_params : (EcIdent.t * module_type) list ->
+  mis_body   : module_sig_body ->
+  mis_restr  : mod_restr ->
+  module_sig
+
+(* Update existing module type *)
+val update_msig :
+  ?mis_params : (EcIdent.t * module_type) list ->
+  ?mis_body   : module_sig_body ->
+  ?mis_restr  : mod_restr ->
+  module_sig ->
+  module_sig
+
+(* -------------------------------------------------------------------- *)
 (* Careful, the available oracles are empty in both [mr_empty] and [mr_full]. *)
 val mr_empty : mod_restr
 val mr_full  : mod_restr

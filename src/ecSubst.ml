@@ -205,19 +205,20 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
   in
 
   let comps =
-    { mis_params = newparams;
-      mis_body   = subst_modsig_body sbody comps.mis_body;
-      mis_restr  = subst_mod_restr sbody comps.mis_restr;
-    }
+    EcModules.mk_msig_r
+      ~mis_params:newparams
+      ~mis_body:(subst_modsig_body sbody comps.mis_body)
+      ~mis_restr:(subst_mod_restr sbody comps.mis_restr)
   in
     (sbody, comps)
 
 (* -------------------------------------------------------------------- *)
 and subst_modtype (s : _subst) (modty : module_type) =
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
-    mt_name   = s.s_p modty.mt_name;
-    mt_args   = List.map s.s_fmp modty.mt_args;
-    mt_restr  = subst_mod_restr s modty.mt_restr; }
+  let mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params in
+  let mt_name   = s.s_p modty.mt_name in
+  let mt_args   = List.map s.s_fmp modty.mt_args in
+  let mt_restr  = subst_mod_restr s modty.mt_restr in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
 
 (* -------------------------------------------------------------------- *)
 let subst_function_def (s : _subst) (def : function_def) =

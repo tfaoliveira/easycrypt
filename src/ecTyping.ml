@@ -1105,13 +1105,15 @@ let lookup_fun env name =
 (* -------------------------------------------------------------------- *)
 let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
   let (p, sig_) = lookup_module_type env modty in
-  let modty = {                         (* eta-normal form *)
-    mt_params = sig_.mis_params;
-    mt_name   = p;
-    mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
-    mt_restr  = sig_.mis_restr;
-  } in
-    (modty, sig_)
+  (* eta-normal form *)
+  let modty =
+    mk_mt_r
+      ~mt_params:sig_.mis_params
+      ~mt_name:p
+      ~mt_args:(List.map (EcPath.mident -| fst) sig_.mis_params)
+      ~mt_restr:sig_.mis_restr
+  in
+  (modty, sig_)
 
 (* -------------------------------------------------------------------- *)
 let rec transty (tp : typolicy) (env : EcEnv.env) ue ty =
@@ -2377,7 +2379,7 @@ and trans_restr_for_modty
      is provided. *)
   let new_mr = replace_if_provided env mr mr' pmr in
 
-  { modty with mt_restr = new_mr }
+  update_mt ~mt_restr:new_mr modty
 
 (* -------------------------------------------------------------------- *)
 and transmodsig
@@ -2413,9 +2415,7 @@ and transmodsig
   let mr = replace_if_provided env mr mr' modty.pmsig_restr in
 
   assert (Msym.cardinal mr.mr_params = List.length body);
-  { mis_params = margs;
-    mis_body   = body;
-    mis_restr  = mr; }
+  mk_msig_r ~mis_params:margs ~mis_body:body ~mis_restr:mr
 
 (* -------------------------------------------------------------------- *)
 and transmodsig_body

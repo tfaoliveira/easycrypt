@@ -10,6 +10,7 @@
 open EcSymbols
 open EcPath
 open EcCoreFol
+open EcUtils
 
 module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
@@ -31,6 +32,30 @@ type module_item       = form p_module_item
 type module_comps      = form p_module_comps
 type module_comps_item = form p_module_comps_item
 
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+let mk_mt_r = EcCoreFol.mk_mt_r
+
+(* Update existing module type *)
+let update_mt ?mt_params ?mt_name ?mt_args ?mt_restr mt : module_type =
+  let mt_params = odfl mt.mt_params mt_params
+  and mt_name   = odfl mt.mt_name   mt_name
+  and mt_args   = odfl mt.mt_args   mt_args
+  and mt_restr  = odfl mt.mt_restr  mt_restr in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module sigs *)
+let mk_msig_r = EcCoreFol.mk_msig_r
+
+(* Update existing module sig *)
+let update_msig ?mis_params ?mis_body ?mis_restr mis : module_sig =
+  let mis_params = odfl mis.mis_params mis_params
+  and mis_body   = odfl mis.mis_body   mis_body
+  and mis_restr  = odfl mis.mis_restr  mis_restr in
+  mk_msig_r ~mis_params ~mis_body ~mis_restr
+
+(* -------------------------------------------------------------------- *)
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;

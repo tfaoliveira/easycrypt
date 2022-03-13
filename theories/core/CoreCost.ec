@@ -55,7 +55,7 @@ axiom c_le_inf (c : cost) : c <= inf.
 
 hint simplify c_le_inf.
 
-axiom c_le0 (c : cost) : c <= `[..].
+axiom c_le_inf0 (c : cost) : c <= `[: .., ..].
 
-hint exact : c_le0.
+hint exact : c_le_inf0.
 

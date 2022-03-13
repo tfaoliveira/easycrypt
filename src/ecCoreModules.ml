@@ -671,6 +671,19 @@ type 'a p_module_type = {
   mt_restr  : 'a p_mod_restr;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
+let _prelude_mk_mt_r
+    ~(check     : 'a -> bool)
+    ~(mt_params : (EcIdent.t * 'a p_module_type) list)
+    ~(mt_name   : EcPath.path)
+    ~(mt_args   : EcPath.mpath list)
+    ~(mt_restr  : 'a p_mod_restr)
+  : 'a p_module_type
+  =
+  assert (check mt_restr.mr_cost);
+  { mt_params; mt_name; mt_args; mt_restr }
+
+(* -------------------------------------------------------------------- *)
 type module_sig_body_item = Tys_function of funsig
 
 type module_sig_body = module_sig_body_item list
@@ -680,6 +693,17 @@ type 'a p_module_sig = {
   mis_body   : module_sig_body;
   mis_restr  : 'a p_mod_restr;
 }
+
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_msig_r] everywhere else. *)
+let _prelude_mk_msig_r
+    ~(check     : 'a -> bool)
+    ~(mis_params : (EcIdent.t * 'a p_module_type) list)
+    ~(mis_body   : module_sig_body)
+    ~(mis_restr  : 'a p_mod_restr)
+  : 'a p_module_sig
+  =
+  assert (check mis_restr.mr_cost);
+  { mis_params; mis_body; mis_restr }
 
 (* -------------------------------------------------------------------- *)
 (* Simple module signature, without restrictions. *)

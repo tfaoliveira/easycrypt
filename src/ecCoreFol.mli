@@ -207,6 +207,8 @@ and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
 
+and module_sig = form p_module_sig
+
 type mod_restr = form p_mod_restr
 
 (* -------------------------------------------------------------------- *)
@@ -427,6 +429,22 @@ val proc_cost_top : proc_cost
 
 val mod_cost_top   : Ssym.t -> mod_cost
 val mod_cost_top_r : Ssym.t -> form
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+val mk_mt_r :
+  mt_params : ((EcIdent.t * module_type) list) ->
+  mt_name   : EcPath.path ->
+  mt_args   : EcPath.mpath list ->
+  mt_restr  : mod_restr ->
+  module_type
+
+(* Smart constructor for module signatures *)
+val mk_msig_r :
+  mis_params : (EcIdent.t * module_type) list ->
+  mis_body   : module_sig_body ->
+  mis_restr  : mod_restr ->
+  module_sig
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig

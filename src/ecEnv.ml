@@ -2024,8 +2024,9 @@ module Mod = struct
       let update me =
         match me.me_body with
         | ME_Decl mt ->
-          let mr = mr_add_restr mt.mt_restr rx rm in
-          { me with me_body = ME_Decl { mt with mt_restr = mr } }
+          let mt_restr = mr_add_restr mt.mt_restr rx rm in
+          let mt = update_mt ~mt_restr mt in
+          { me with me_body = ME_Decl mt }
         | _ -> me
       in
       MMsym.map_at
@@ -2452,9 +2453,10 @@ module NormMp = struct
     let mp = norm_mpath env mp in
     let me = Mod.by_mpath mp env in
 
-    { mis_params = me.me_params;
-      mis_body = me.me_sig_body;
-      mis_restr = get_restr_me env me mp }
+    EcModules.mk_msig_r
+      ~mis_params:me.me_params
+      ~mis_body:me.me_sig_body
+      ~mis_restr:(get_restr_me env me mp)
 
   let norm_pvar env pv =
     match pv with
@@ -2712,9 +2714,7 @@ module ModTy = struct
       indeed, we probably need to substitute the arguments by mr_params in mr_cost *)
     } in
 
-    { mis_params = params;
-      mis_body   = items;
-      mis_restr  = restr; }
+    mk_msig_r ~mis_params:params ~mis_body:items ~mis_restr:restr
 end
 
 
