@@ -207,17 +207,26 @@ section.
       progress; 1,2,4,6,7,8,9: smt (cset_pos bounded_set).
       * have -> : (qH = qH - 1 + 1) by smt ().
         apply bounded_set. 
-        smt (cset_pos bounded_set).
+        smt ().
 
       * rewrite addzC.
         apply bounded_set. 
-        smt (cset_pos bounded_set).
+        smt ().
 
     wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
            time [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
-      rnd;auto => &hr />; rewrite dbits_ll /=; smt(cset_pos bounded_set cA_pos).
+      rnd;auto => &hr />; rewrite dbits_ll /=.
+      progress; 1,2,4,6,7,8,9: 
+      smt(cset_pos bounded_set cA_pos).
+      * have -> : (qH = qH - 1 + 1) by smt ().
+        apply bounded_set. 
+        smt (cA_pos).
+
+      * rewrite addzC.
+        apply bounded_set. 
+        smt ().
     inline *; auto => />.
     split => *.
     + smt (bounded_empty dbits_ll size_ge0 size_eq0 cA_pos).
