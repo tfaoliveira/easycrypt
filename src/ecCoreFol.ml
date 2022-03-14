@@ -823,13 +823,23 @@ let f_false  = f_op EcCoreLib.CI_Bool.p_false [] tbool
 let f_bool   = fun b -> if b then f_true else f_false
 
 (* -------------------------------------------------------------------- *)
+(* check that record entries in the procedure costs appearing in a
+   module cost only contain parameters of the corresponding module. *)
 let check_modcost (f : form) (params : EcIdent.t list) : bool =
   match f.f_node with
   | Fmodcost mc ->
     Msym.for_all (fun _ pc ->
         EcPath.Mx.for_all (fun orcl _ ->
             match orcl.x_top.m_top with
-            | `Local id -> List.mem id params
+            | `Local id ->
+              if not (List.mem id params) then begin
+                Format.eprintf "%s does not appear in %s@."
+                  (EcPath.m_tostring orcl.x_top)
+                  (String.concat ", " (List.map EcIdent.tostring params));
+                false
+              end
+              else true
+
             | _ -> assert false
           ) pc.c_calls
       ) mc
@@ -847,9 +857,26 @@ let mk_mt_r
   : module_type
   =
   let check (f : form) : bool =
-    (* keep only non-instantiated parameters *)
-    let _, params = List.takedrop (List.length mt_args) mt_params in
-    let params = List.map fst params in
+    (* Keep only non-instantiated parameters from [mt_params].
+       Since module types are in eta-normal form, this require going through
+       [mt_params] and [mt_args] until we find an identical element. *)
+    let rec eta_reduce params args acc =
+      match params, args with
+      | [], [] -> List.rev acc
+      | (p,_) :: params, a :: args ->
+        if EcPath.m_equal (EcPath.mident p) a then
+          begin
+          assert (List.for_all2 (fun (p, _) a ->
+              EcPath.m_equal (EcPath.mident p) a
+            ) params args);
+          List.rev (p :: acc)
+        end
+        else
+          eta_reduce params args (p :: acc)
+      | _ -> assert false       (* cannot happen *)
+    in
+    let params = eta_reduce mt_params mt_args [] in
+
     check_modcost f params
   in
   EcCoreModules._prelude_mk_mt_r ~check ~mt_params ~mt_name ~mt_args ~mt_restr
