@@ -599,12 +599,18 @@ val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
 (* A predicate on memory: λ mem. -> pred *)
 type mem_pr = EcMemory.memory * form
 
+
 (* -------------------------------------------------------------------- *)
-type f_subst = private {
+(* Module substitution info.
+   The formula must be of type [tmodcost _], and contains the cost
+   information associated to a module being instantiated. *)
+type ms_info = Refresh | Cost of form option
+
+(* -------------------------------------------------------------------- *)
+type f_subst = {
   fs_freshen : bool; (* true means freshen locals *)
 
-  fs_mp      : (EcPath.mpath * form option) Mid.t;
-  (* the formulas must be of type [tmodcost _] *)
+  fs_mp      : (EcPath.mpath * ms_info) Mid.t;
 
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
@@ -626,7 +632,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:((EcPath.mpath * form option) Mid.t)
+    -> ?mods:((EcPath.mpath * ms_info) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -638,8 +644,14 @@ module Fsubst : sig
   val f_bind_local   : f_subst -> EcIdent.t -> form -> f_subst
   val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
-  val f_bind_loc_mod : f_subst -> EcIdent.t -> mpath -> f_subst
-  val f_bind_mod     : f_subst -> EcIdent.t -> mpath -> form option -> f_subst
+
+  (* [f_bind_mod subst id m oinfo]: the formula [oinfo] contains the
+     cost informations used to correctly substiture formulas of
+     type [tcost].  *)
+  val f_bind_mod    : f_subst -> EcIdent.t -> mpath -> form option -> f_subst
+
+  (* when refreshing a local module, no need for cost information *)
+  val f_refresh_mod : f_subst -> EcIdent.t -> mpath                -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 

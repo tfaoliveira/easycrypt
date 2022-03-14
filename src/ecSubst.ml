@@ -31,7 +31,7 @@ exception InconsistentSubst
 
 (* -------------------------------------------------------------------- *)
 type subst = {
-  sb_modules : (EcPath.mpath * form option) Mid.t;
+  sb_modules : (EcPath.mpath * ms_info) Mid.t;
   sb_path    : EcPath.path Mp.t;
   sb_tydef   : (EcIdent.t list * ty) Mp.t;
   sb_opdef   : (EcIdent.t list * expr) Mp.t;
@@ -52,7 +52,14 @@ let is_empty s =
 
 let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : form option) =
   let merger = function
-    | None   -> Some (m, mcost)
+    | None   -> Some (m, EcCoreFol.Cost mcost)
+    | Some _ -> raise (SubstNameClash (`Ident x))
+  in
+    { s with sb_modules = Mid.change merger x s.sb_modules }
+
+let refresh_module s (x : EcIdent.t) (m : EcPath.mpath) : subst =
+  let merger = function
+    | None   -> Some (m, EcCoreFol.Refresh)
     | Some _ -> raise (SubstNameClash (`Ident x))
   in
     { s with sb_modules = Mid.change merger x s.sb_modules }
@@ -187,7 +194,7 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
               (fun (s : subst) (a, aty) ->
                 let a'   = EcIdent.fresh a in
                 let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-                  add_module s a (EcPath.mident a') None, decl)
+                  refresh_module s a (EcPath.mident a'), decl)
               s.s_s comps.mis_params
           in
             fst_map _subst_of_subst aout
@@ -198,7 +205,7 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
         List.map_fold
           (fun (s : subst) ((a, aty), a') ->
               let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-                add_module s a (EcPath.mident a') None, decl)
+                refresh_module s a (EcPath.mident a'), decl)
             s.s_s (List.combine comps.mis_params params)
         in
           fst_map _subst_of_subst aout
@@ -292,7 +299,7 @@ and subst_module (s : _subst) (m : module_expr) =
         (fun (s : subst) (a, aty) ->
           let a'   = EcIdent.fresh a in
           let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-           add_module s a (EcPath.mident a') None, decl)
+           refresh_module s a (EcPath.mident a'), decl)
         s.s_s m.me_params
       in
       fst_map _subst_of_subst aout in

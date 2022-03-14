@@ -1973,11 +1973,16 @@ let expr_of_form mh f =
 type mem_pr = EcMemory.memory * form
 
 (* -------------------------------------------------------------------- *)
+(* Module substitution info.
+   The formula must be of type [tmodcost _], and contains the cost
+   information associated to a module being instantiated. *)
+type ms_info = Refresh | Cost of form option
+
+(* -------------------------------------------------------------------- *)
 type f_subst = {
   fs_freshen : bool; (* true means freshen locals *)
 
-  fs_mp      : (EcPath.mpath * form option) Mid.t;
-  (* the formulas must be of type [tmodcost _] *)
+  fs_mp      : (EcPath.mpath * ms_info) Mid.t;
 
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
@@ -2044,24 +2049,33 @@ module Fsubst = struct
     let merger _ = Some m2 in
     { s with fs_mem = Mid.change merger m1 s.fs_mem }
 
-  (* [oinfo] are cost informations used to correctly substiture formulas of
+
+  (* ------------------------------------------------------------------ *)
+  let _f_bind_mod s x mp ms_info =
+    let merger o = assert (o = None); Some (mp, ms_info) in
+    let smp = Mid.change merger x s.fs_mp in
+    let sty = s.fs_sty in
+    let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
+    { s with fs_mp = smp; fs_sty = sty; fs_ty = ty_subst sty }
+
+  (* [f_bind_mod subst id m oinfo]: the formula [oinfo] contains the
+     cost informations used to correctly substiture formulas of
      type [tcost].  *)
   let f_bind_mod
       (s     : f_subst)
       (x     : EcIdent.t)
       (mp    : EcPath.mpath)
-      (oinfo : form option) : f_subst
+      (oinfo : form option)
+    : f_subst
     =
-    let merger o = assert (o = None); Some (mp, oinfo) in
-    let smp = Mid.change merger x s.fs_mp in
-    let sty = s.fs_sty in
-    let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
-      { s with fs_mp = smp; fs_sty = sty; fs_ty = ty_subst sty }
+    _f_bind_mod s x mp (Cost oinfo)
 
-  let f_bind_loc_mod  s x mp        = f_bind_mod s x mp None
-  let f_bind_conc_mod s x mp oinfos = f_bind_mod s x mp (Some oinfos)
+  (* when refreshing a local module, no need for cost information *)
+  let f_refresh_mod (s : f_subst) (x : EcIdent.t) (mp : EcPath.mpath): f_subst =
+    assert (EcPath.m_is_local mp);
+    _f_bind_mod s x mp Refresh
 
-
+  (* ------------------------------------------------------------------ *)
   let f_bind_rename s xfrom xto ty =
     let xf = f_local xto ty in
     let xe = e_local xto ty in
@@ -2475,7 +2489,7 @@ module Fsubst = struct
     else
       let s = match gty' with
         | GTty   ty -> f_bind_rename s x x' ty
-        | GTmodty _ -> f_bind_mod s x (EcPath.mident x') None
+        | GTmodty _ -> f_refresh_mod s x (EcPath.mident x')
         | GTmem   _ -> f_bind_mem s x x'
       in
         (s, (x', gty'))
@@ -2490,42 +2504,67 @@ module Fsubst = struct
 
      Return: record after substitution, costs to be moved. *)
   and crecord_subst
+      ~(mode     : [`Cost | `ProcCost])
       ~(tx       : form -> form -> form)
       (s         : f_subst)
       (init_crec : crecord)
     : crecord * form list
     =
+    (* check if a local [xpath] can stay in the cost record after
+       substitution:
+       - if [mode = `Cost], this is always true
+       - if [mode = `ProcCost] *)
+    let keep (oldx : EcPath.xpath) (newx : EcPath.xpath) : bool =
+      assert (EcPath.m_is_local newx.x_top); (* only for local xpaths *)
+      if EcPath.x_equal oldx newx then true
+      else
+        let mid = (EcPath.mget_ident oldx.x_top) in
+        let _, minfo = EcIdent.Mid.find mid s.fs_mp in
+        match mode, minfo with
+        | `Cost, _ -> true
+        | `ProcCost, Refresh -> true
+        | `ProcCost, Cost _  -> false
+    in
+
     let c_self = f_subst ~tx s init_crec.c_self
-    (* [concs] are the local modules that have been substituted by concrete
-       modules. *)
+    (* - [mode = `Cost]: [concs] are the local modules that have been
+       substituted by concrete modules.
+       - [mode = `ProcCost]: [concs] are functor parameters that have been
+       instantiated (by abstract or concrete modules). *)
     and concs, c_calls = EcPath.Mx.fold (fun x cb (concs,calls) ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
         let cb' = f_subst ~tx s cb in
         match x'.x_top.m_top with
-        | `Local _ ->
+        (* if [x'] is local, check if it can stays in the record *)
+        | `Local _ when keep x x' ->
           ( concs,
             EcPath.Mx.change
               (fun old -> assert (old  = None); Some cb')
               x' calls )
 
-        | `Concrete _ ->
+        (* if [x'] cannot stay in the record, or if it is a concrete
+           module, move its cost. *)
+        | _ ->
           let m_conc = EcPath.mget_ident x.x_top in
           EcIdent.Sid.add m_conc concs, calls
       ) init_crec.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
     in
     let crec = { c_self; c_calls; c_full = init_crec.c_full } in
 
-    (* intrinsic costs of abstract modules that have been concetized. *)
+    (* intrinsic costs of modules that have been evicted from the record. *)
     let to_move : form list =
-      (* for every module [mid] that have been concretized *)
+      (* for every module [mid] that have been evicted *)
       EcIdent.Sid.fold (fun mid to_move ->
           let _, minfo = EcIdent.Mid.find mid s.fs_mp in
           let mp = EcPath.mident mid in
           match minfo with
-          | None -> f_cost_inf :: to_move
+          | Refresh -> assert false
+          (* refreshed module path cannot be evicted in either mode *)
+
+          | Cost None -> f_cost_inf :: to_move
           (* if we have no information, use [inf] *)
 
-          | Some minfo ->
+          | Cost (Some minfo) ->
             let mprocs = match minfo.f_ty.ty_node with
               | Tmodcost { procs } -> procs
               | _ -> assert false   (* cannot happen, type must be reduced *)
@@ -2553,11 +2592,11 @@ module Fsubst = struct
     crec, to_move
 
   and cost_subst ~tx (s : f_subst) (c : cost) : form =
-    let cost, to_move = crecord_subst ~tx s c in
+    let cost, to_move = crecord_subst ~mode:`Cost ~tx s c in
     List.fold_left f_cost_add (f_cost_r cost) to_move
 
   and proc_cost_subst ~tx (s : f_subst) (pc : proc_cost) : proc_cost =
-    let pc, to_move = crecord_subst ~tx s pc in
+    let pc, to_move = crecord_subst ~mode:`ProcCost ~tx s pc in
     { pc with c_self = List.fold_left f_cost_add pc.c_self to_move }
 
   (* ------------------------------------------------------------------ *)
