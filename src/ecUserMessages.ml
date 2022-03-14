@@ -566,6 +566,11 @@ end = struct
     | LvMapOnNonAssign ->
         msg "map-style left-value cannot be used with assignments"
 
+    | NoDefaultMemRestr ->
+      msg "no default sign for memory restriction. Use '+' or '-', or \
+           set the %s pragma to retrieve the old behaviour"
+        EcGState.old_mem_restr
+
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
 

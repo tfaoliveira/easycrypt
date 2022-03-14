@@ -162,8 +162,9 @@ type f_or_mod_ident =
 
 
 type pmod_restr_mem_el =
-  | PMPlus  of f_or_mod_ident
-  | PMMinus of f_or_mod_ident
+  | PMPlus    of f_or_mod_ident
+  | PMMinus   of f_or_mod_ident
+  | PMDefault of f_or_mod_ident
 
 (* A memory restricition. *)
 type pmod_restr_mem = pmod_restr_mem_el list

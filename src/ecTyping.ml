@@ -183,6 +183,7 @@ type tyerror =
 | ModuleNotAbstract      of symbol
 | ProcedureUnbounded     of symbol * symbol
 | LvMapOnNonAssign
+| NoDefaultMemRestr
 
 (* -------------------------------------------------------------------- *)
 exception TyError of EcLocation.t * EcEnv.env * tyerror
@@ -2098,6 +2099,10 @@ let top_is_mem_binding pf = match pf with
   | PFscope   _ -> false
 
 
+let f_or_mod_ident_loc : f_or_mod_ident -> EcLocation.t = function
+  | FM_FunOrVar x -> loc x
+  | FM_Mod      x -> loc x
+
 (* -------------------------------------------------------------------- *)
 (* We unify both restriction, by replacing fields in [mr] by the fields in
    [mr'] that have been provided in [pmr]. This is a bit messy. *)
@@ -2157,8 +2162,14 @@ let trans_restr_mem env (r_mem : pmod_restr_mem) =
 
   List.fold_left (fun (mem_x, mem_m) el ->
       let sign,el = match el with
-        | PMPlus x -> `Plus, x
-        | PMMinus x -> `Minus, x in
+        | PMPlus x    -> `Plus, x
+        | PMMinus x   -> `Minus, x
+        | PMDefault x ->
+          if EcGState.get_old_mem_restr (EcEnv.gstate env) then
+            `Minus, x
+          else
+            tyerror (f_or_mod_ident_loc x) env NoDefaultMemRestr
+      in
 
       match el with
       | FM_Mod m ->

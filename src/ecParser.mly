@@ -1672,6 +1672,7 @@ mod_params:
 mem_restr_el:
   | PLUS  el=f_or_mod_ident { PMPlus el }
   | MINUS el=f_or_mod_ident { PMMinus el }
+  |       el=f_or_mod_ident { PMDefault el }
 
 mem_restr:
   | ol=rlist0(mem_restr_el,COMMA) { ol }
