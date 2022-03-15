@@ -1815,16 +1815,10 @@ and _pp_crecord ppe fmt
     Format.fprintf fmt ": %a"
       (pp_form ppe) self
 
-  (* Format.fprintf fmt "%a : `_"
-   *   (pp_funname ppe) f *)
-
   and pp_call_el fmt (f,c) =
     Format.fprintf fmt "%a : %a"
       (pp_funname ppe) f
       (pp_form ppe) c
-
-  (* Format.fprintf fmt "%a : `_"
-   *   (pp_funname ppe) f *)
 
   and pp_full fmt = if not full then Format.fprintf fmt ".." in
 

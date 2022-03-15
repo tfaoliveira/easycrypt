@@ -701,3 +701,6 @@ type core_op = [
 ]
 
 val core_op_kind : path -> core_op option
+
+(* -------------------------------------------------------------------- *)
+val dump_form : Format.formatter -> form -> unit

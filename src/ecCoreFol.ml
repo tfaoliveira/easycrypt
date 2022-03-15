@@ -2721,3 +2721,176 @@ let core_ops =
 
 let core_op_kind (p : EcPath.path) =
   EcPath.Hp.find_opt core_ops p
+
+
+(* -------------------------------------------------------------------- *)
+(* FIXME A: factorize with EcPrinting *)
+let string_of_quant = function
+  | Lforall -> "forall"
+  | Lexists -> "exists"
+  | Llambda -> "fun"
+
+(* FIXME A: factorize with EcPrinting *)
+let pp_cost_proj fmt (p : cost_proj) =
+  match p with
+  | Conc       -> Format.fprintf fmt "conc"
+  | Abs (id,f) -> Format.fprintf fmt "%a.%s" EcIdent.pp_ident id f
+  | Intr  f    -> Format.fprintf fmt "%s.self" f
+  | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
+
+(* FIXME A: factorize with EcPrinting *)
+let rec pp_list sep pp fmt xs =
+  let pp_list = pp_list sep pp in
+    match xs with
+    | []      -> ()
+    | [x]     -> Format.fprintf fmt "%a" pp x
+    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
+
+let dump_todo fmt = Format.fprintf fmt "TODO"
+
+(* FIXME A: keep it ? *)
+let rec dump_form fmt (f : form) =
+  match f.f_node with
+  | Fint n ->
+    Format.fprintf fmt "%a" BI.pp_print n
+
+  | Flocal id -> Format.fprintf fmt "%s" (EcIdent.tostring id)
+
+  | Fpvar (x, i) ->
+    Format.fprintf fmt "%s{%s}" (string_of_pvar x) (EcIdent.tostring i)
+
+  | Fglob (mp, i) ->
+    Format.fprintf fmt "(glob %s){%s}" (EcPath.m_tostring mp) (EcIdent.tostring i)
+
+  | Fquant (q, bd, f) ->
+    Format.fprintf fmt "@[<hov 2>%s (%a),@ %a@]"
+      (string_of_quant q)
+      dump_bindings bd
+      dump_form f
+
+  | Fif (b, f1, f2) ->
+    Format.fprintf fmt "@[@[<hov 2>if %a@ then@ %a@]@ @[<hov 2>else@ %a@]@]"
+      dump_form b
+      dump_form f1
+      dump_form f2
+
+  | Flet (lp, f1, f2) -> dump_let fmt (lp, f1, f2)
+
+  | Ftuple args -> dump_tuple fmt args
+
+  | Fop (op, tvi) ->
+    Format.fprintf fmt "%s[%s]"
+      (EcPath.tostring op)
+      (String.concat ", " (List.map dump_ty tvi))
+
+  | Fapp (e, args) ->
+    Format.fprintf fmt "(%a)" (pp_list " " dump_form) (e :: args)
+
+  | Fproj (e, i) ->
+    Format.fprintf fmt "(%a).%d" dump_form e i
+
+  | Fcost c -> dump_crecord fmt c
+
+  | Fmodcost mc -> dump_modcost fmt mc
+
+  | Fcost_proj (f,p) ->
+    Format.fprintf fmt "%a#%a" dump_form f pp_cost_proj p
+
+
+  | FhoareF   _hf  -> dump_todo fmt
+  | FhoareS   _hs  -> dump_todo fmt
+  | FequivF   _eqv -> dump_todo fmt
+  | FequivS   _es  -> dump_todo fmt
+  | FeagerF   _eg  -> dump_todo fmt
+  | FcHoareF  _chf -> dump_todo fmt
+  | FcHoareS  _chs -> dump_todo fmt
+  | FbdHoareF _hf  -> dump_todo fmt
+  | FbdHoareS _hs  -> dump_todo fmt
+  | Fcoe      _coe -> dump_todo fmt
+  | Fpr       _pr  -> dump_todo fmt
+  | _              -> dump_todo fmt
+
+and _dump_crecord fmt
+    ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
+  =
+  let pp_self fmt self =
+    Format.fprintf fmt ": %a"
+      dump_form self
+
+  and pp_call_el fmt (f,c) =
+    Format.fprintf fmt "%s : %a"
+      (EcPath.x_tostring f)
+      dump_form c
+
+  and pp_full fmt = if not full then Format.fprintf fmt ".." in
+
+  Format.fprintf fmt "@[<hv 1>`[%a%t%a%t%t]@]"
+    pp_self self
+    (fun fmt -> if calls <> [] then Format.fprintf fmt ",@ ")
+    (pp_list ",@ " pp_call_el) calls
+    (fun fmt -> if not full then Format.fprintf fmt ",@ ")
+    pp_full
+
+and dump_crecord fmt (c : crecord) =
+  _dump_crecord fmt
+    (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
+
+and dump_cost      fmt c = dump_crecord fmt c
+and dump_proc_cost fmt c = dump_crecord fmt c
+
+and dump_modcost fmt (mc : mod_cost) =
+  let pp_elt fmt (f, proc_cost) =
+    Format.fprintf fmt "@[%s : %a@]"
+      f dump_proc_cost proc_cost
+  in
+
+  let elts = Msym.bindings mc in
+  Format.fprintf fmt "@[<hv 1>`[%a]@]"
+    (pp_list ",@ " pp_elt) elts
+
+and dump_bindings fmt bds =
+  List.iter (dump_binding fmt) bds
+
+and dump_binding fmt (x,ty) : unit =
+  match ty with
+  | GTty ty ->
+    Format.fprintf fmt "(%s : %s)" (EcIdent.tostring x) (dump_ty ty)
+
+  | GTmem _m ->
+    Format.fprintf fmt "(%s : ??)" (EcIdent.tostring x)
+
+  | GTmodty mt ->
+    Format.fprintf fmt "(%s <: %a)" (EcIdent.tostring x) dump_modty mt
+
+and dump_modty fmt (mty : module_type) : unit =
+  Format.fprintf fmt "@[<hv 2>%s%a@]"
+    (EcPath.tostring mty.mt_name) dump_restr mty.mt_restr
+
+and dump_restr fmt (mr : mod_restr) : unit =
+  Format.fprintf fmt "{%a} [%a] `[%a]"
+    dump_mem_restr mr
+    dump_orcl_call mr.mr_params
+    dump_form mr.mr_cost
+
+and dump_mem_restr fmt (_mr : mod_restr) : unit =
+  Format.fprintf fmt "??"
+
+and dump_orcl_call fmt _mr_params : unit =
+  Format.fprintf fmt "??"
+
+and dump_tuple fmt fs =
+  let pp_ident fmt f = Format.fprintf fmt "%a" dump_form f in
+  Format.fprintf fmt "@[<hov 0>(%a)@]"
+    (pp_list ",@ " pp_ident) fs
+
+and dump_idents fmt es =
+  let pp_ident fmt id = Format.fprintf fmt "%s" (EcIdent.tostring id) in
+  Format.fprintf fmt "@[<hov 0>(%a)@]"
+    (pp_list ",@ " pp_ident) es
+
+and dump_let fmt (pt, e1, e2) =
+  let ids    = lp_ids pt in
+  Format.fprintf fmt "@[<hov 0>let %a =@;<1 2>@[%a@]@ in@ %a@]"
+    dump_idents ids
+    dump_form e1
+    dump_form e2
