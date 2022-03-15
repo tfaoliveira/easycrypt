@@ -288,22 +288,6 @@ proof.
   by auto; rewrite bigi_constC. 
 qed.
 
-(* alternative proof, inlining intrinsic cost *)
-lemma Inv_compl'
-    (c : cost) (k : int)
-    (Adv0 <: Adv [a : [c, #H0.o : N k]]) 
-    (H0   <: H) : 
-    0 <= k =>
-    choare[Inv(Adv0, H0).i] time (`[:N 1, H0.o : N k ] + c).
-proof.
-  move => ?. 
-  have C := (Inv_compl c k Adv0 H0 _); 1:done.
-
-  conseq C.
-  move => ? /=.
-  admit. (* TODO: how to finish the proof ? *)
-qed.
-
 (* TODO A: *)
 (* Alternative future syntax *)
 (* lemma Inv_compl *)
