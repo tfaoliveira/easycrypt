@@ -347,42 +347,33 @@ module B (S:Scheme) (A:AdvCPA) (LR:LR) = {
   }
 }.
 
-(* Complexity of the adversary *)
-op cA : { int | 0 <= cA } as cA_pos.
 
-type cScheme = {
-  ckg  : int;
-  cenc : int;
-  cdec : int;
-}.
-
-(* Complexity of the scheme *)
-op cs : cScheme.
-axiom cs_pos : 0 <= cs.`ckg /\ 0 <= cs.`cenc /\ 0 <= cs.`cdec.
+section. 
 
 schema cost_Hq `{P} : cost [P : H.q] = '0.
 hint simplify cost_Hq.
 
-section.
-declare module S<:Scheme [ kg : `{N cs.`ckg}, enc: `{N cs.`cenc}] {-K, -H.Count, -H.HybOrcl}.
+declare module S<:Scheme {-K, -H.Count, -H.HybOrcl}.
   (* Normaly I would like to locally
      clone Indist in the section, in that case
      restrictions at least on H.c are not needed.
      But LRB and B are used so we need to do it
    *)
 
-declare module A <: AdvCPA [main : `{N cA, #LR.orcl: H.q}] {-K,-H.Count,-H.HybOrcl,-S}.
+op cA : cost.
+
+declare module A <: AdvCPA [main : [cA, #LR.orcl: N H.q]] {-K,-H.Count,-H.HybOrcl,-S}.
 
 declare axiom La : forall (LR<:LR{-A}), islossless LR.orcl => islossless A(LR).main.
 
 local lemma cost_AL : 
    choare [A(OrclL(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q] 
-   time [N (H.q * cincr H.q);
-         A.main : 1;
-         S.enc  : H.q].
+   time `[       : N (H.q * cincr H.q),
+          A.main : N 1,
+          S.enc  : N H.q].
 proof.
-  proc (H.Count.c = k) :
-       time [ OrclL(ToOrcl(S)).orcl k : [N (cincr H.q); S.enc : 1] ] => //.
+  proc (H.Count.c = k) 
+       : [ OrclL(ToOrcl(S)).orcl k : `[:N (cincr H.q), S.enc : N 1] ] => //.
   + by move => />; rewrite !bigi_constz 1..2:#smt:(H.q_ge0).
   move=> zo hzo; proc; inline *. 
   wp := (`|H.Count.c| <= H.q); call (: true); auto => &hr />.

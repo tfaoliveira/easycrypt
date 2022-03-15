@@ -170,9 +170,9 @@ theory Bigcost.
            op Support.(+) <- CoreCost.(+)
     proof *.
   
-  realize Support.Axioms.addmA by exact/addcostA.
-  realize Support.Axioms.addmC by exact/addcostC.
-  realize Support.Axioms.add0m by exact/add0cost.
+  realize Support.Axioms.addmA by exact/addcA.
+  realize Support.Axioms.addmC by exact/addcC.
+  realize Support.Axioms.add0m by exact/add0c.
   
   lemma nosmt big_const_C (P : 'a -> bool) (x : cost)s:
     big P (fun _ => x) s = (count P s) * x.
