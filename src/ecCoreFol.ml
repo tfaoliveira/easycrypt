@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -289,31 +289,19 @@ let gty_hash = function
 
 let mr_fv (mr : mod_restr) =
   let fv =
-  (* [mr.mr_mpaths]'s fv *)
-    EcPath.Sm.fold (fun mp fv ->
-        EcPath.m_fv fv mp)
-      (Sm.union
-         mr.mr_mpaths.ur_neg
-         (EcUtils.odfl Sm.empty mr.mr_mpaths.ur_pos))
-      EcIdent.Mid.empty
-
-    (* [mr.mr_xpaths]'s fv *)
-    |> EcPath.Sx.fold (fun xp fv ->
-        EcPath.x_fv fv xp)
-      (Sx.union
-         mr.mr_xpaths.ur_neg
-         (EcUtils.odfl Sx.empty mr.mr_xpaths.ur_pos))
-
-    (* [mr_params]'s fv *)
+    fv_union
+      (mr_xpaths_fv mr.mr_xpaths)
+      (mr_mpaths_fv mr.mr_mpaths)
     |> params_fv mr.mr_params
   in
   fv_union fv (f_fv mr.mr_cost)
 
+(* -------------------------------------------------------------------- *)
 let gty_fv = function
   | GTty ty -> ty.ty_fv
   | GTmodty mty -> mr_fv mty.mt_restr
-
   | GTmem mt -> EcMemory.mt_fv mt
+
 
 (* -------------------------------------------------------------------- *)
 let gtty (ty : EcTypes.ty) =
@@ -324,6 +312,11 @@ let gtmodty (mt : module_type) =
 
 let gtmem (mt : EcMemory.memtype) =
   GTmem mt
+
+(* -------------------------------------------------------------------- *)
+let as_gtty  = function GTty ty  -> ty  | _ -> assert false
+let as_modty = function GTmodty mty -> mty | _ -> assert false
+let as_mem   = function GTmem m -> m | _ -> assert false
 
 (*-------------------------------------------------------------------- *)
 let b_equal (b1 : bindings) (b2 : bindings) =
@@ -1585,6 +1578,7 @@ let f_iter g f =
   | Fcoe      coe -> g coe.coe_pre;
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
 
+
 (* -------------------------------------------------------------------- *)
 let f_ops f =
   let aout = ref EcPath.Sp.empty in
@@ -2244,11 +2238,13 @@ module Fsubst = struct
         FSmart.f_glob (fp, (mp, m)) (mp', m')
 
     | FhoareF hf ->
-      assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
+      let pr', po' =
+        let s   = f_rem_mem s mhr in
         let pr' = f_subst ~tx s hf.hf_pr in
         let po' = f_subst ~tx s hf.hf_po in
-        let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp hf.hf_f in
-        FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; }
+        (pr', po') in
+      let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp hf.hf_f in
+      FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; }
 
     | FhoareS hs ->
         assert (not (Mid.mem (fst hs.hs_m) s.fs_mem));
@@ -2283,11 +2279,13 @@ module Fsubst = struct
         { chs_pr = pr'; chs_po = po'; chs_s = st'; chs_m = me'; chs_co = c'; }
 
     | FbdHoareF bhf ->
-      assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
-      let pr' = f_subst ~tx s bhf.bhf_pr in
-      let po' = f_subst ~tx s bhf.bhf_po in
+      let pr', po', bd' =
+        let s = f_rem_mem s mhr in
+        let pr' = f_subst ~tx s bhf.bhf_pr in
+        let po' = f_subst ~tx s bhf.bhf_po in
+        let bd' = f_subst ~tx s bhf.bhf_bd in
+        (pr', po', bd') in
       let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp bhf.bhf_f in
-      let bd' = f_subst ~tx s bhf.bhf_bd in
       FSmart.f_bdHoareF (fp, bhf)
         { bhf with bhf_pr = pr'; bhf_po = po';
                    bhf_f  = mp'; bhf_bd = bd'; }
@@ -2306,10 +2304,13 @@ module Fsubst = struct
                    bhs_bd = bd'; bhs_m  = me'; }
 
     | FequivF ef ->
-      assert (not (Mid.mem mleft s.fs_mem) && not (Mid.mem mright s.fs_mem));
       let m_subst = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
-      let pr' = f_subst ~tx s ef.ef_pr in
-      let po' = f_subst ~tx s ef.ef_po in
+      let pr', po' =
+        let s = f_rem_mem s mleft in
+        let s = f_rem_mem s mright in
+        let pr' = f_subst ~tx s ef.ef_pr in
+        let po' = f_subst ~tx s ef.ef_po in
+        (pr', po') in
       let fl' = m_subst ef.ef_fl in
       let fr' = m_subst ef.ef_fr in
       FSmart.f_equivF (fp, ef)
@@ -2334,10 +2335,13 @@ module Fsubst = struct
           es_sl = sl'; es_sr = sr'; }
 
     | FeagerF eg ->
-      assert (not (Mid.mem mleft s.fs_mem) && not (Mid.mem mright s.fs_mem));
       let m_subst = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
-      let pr' = f_subst ~tx s eg.eg_pr in
-      let po' = f_subst ~tx s eg.eg_po in
+      let pr', po' =
+        let s = f_rem_mem s mleft in
+        let s = f_rem_mem s mright in
+        let pr' = f_subst ~tx s eg.eg_pr in
+        let po' = f_subst ~tx s eg.eg_po in
+        (pr', po') in
       let fl' = m_subst eg.eg_fl in
       let fr' = m_subst eg.eg_fr in
 
@@ -2383,10 +2387,10 @@ module Fsubst = struct
         { coe_pre = pr'; coe_mem = me'; coe_e = e'; }
 
     | Fpr pr ->
-      assert (not (Mid.mem mhr s.fs_mem));
       let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
       let pr_fun   = EcPath.x_substm s.fs_sty.ts_p s.fs_mp pr.pr_fun in
       let pr_args  = f_subst ~tx s pr.pr_args in
+      let s = f_rem_mem s mhr in
       let pr_event = f_subst ~tx s pr.pr_event in
 
       FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; }

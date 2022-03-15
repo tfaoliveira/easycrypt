@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -41,19 +41,25 @@ val memtype  : memenv -> memtype
 
 (* -------------------------------------------------------------------- *)
 (* [empty_local witharg id] if witharg then allows to use symbol "arg"  *)
-val empty_local : witharg:bool -> memory -> memenv
+val empty_local    : witharg:bool -> memory -> memenv
+val empty_local_mt : witharg:bool -> memtype
+
 val schema    : memory -> memenv
 val schema_mt : memtype
+
 val abstract    : memory -> memenv
 val abstract_mt : memtype
 
 val is_schema : memtype -> bool
 
 exception DuplicatedMemoryBinding of symbol
-val bindall : variable list -> memenv -> memenv
+
+val bindall    : variable list -> memenv -> memenv
+val bindall_mt : variable list -> memtype -> memtype
 
 val bind_fresh : variable -> memenv -> memenv * variable
 val bindall_fresh : variable list -> memenv -> memenv * variable list
+
 (* -------------------------------------------------------------------- *)
 val lookup :
   symbol -> memtype -> (variable * proj_arg option * int option) option
@@ -74,6 +80,8 @@ val me_subst : memory EcIdent.Mid.t -> (ty -> ty) -> memenv -> memenv
 
 (* -------------------------------------------------------------------- *)
 val for_printing : memtype -> (symbol option * variable list) option
+
+val dump_memtype : memtype -> string
 
 (* -------------------------------------------------------------------- *)
 val local_type : memtype -> ty option

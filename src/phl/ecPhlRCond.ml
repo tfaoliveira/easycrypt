@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -56,7 +56,7 @@ module Low = struct
     let m  = EcMemory.memory chs.chs_m in
     let hd,e_expr,e,s = gen_rcond !!tc b m at_pos chs.chs_s in
     let { cond; res = cost } =
-      cost_sub_self chs.chs_co (EcCHoare.cost_of_expr c chs.chs_m e_expr)
+      cost_sub_self ~c:chs.chs_co ~sub:(EcCHoare.cost_of_expr c chs.chs_m e_expr)
     in
     let concl1  =
       f_hoareS chs.chs_m chs.chs_pr hd (f_and_simpl c e) in
@@ -263,7 +263,7 @@ module LowMatch = struct
                      independent of the head statement (maybe use sp first?)."
     | Some lam_cost ->
       let { cond; res = cost; } =
-        EcCHoare.cost_sub_self chs.chs_co (lam_cost chs.chs_pr)
+        EcCHoare.cost_sub_self ~c:chs.chs_co ~sub:(lam_cost chs.chs_pr)
       in
 
       let pr = ofold f_and chs.chs_pr epr in
@@ -340,6 +340,6 @@ let t_rcond_match side c at_pos tc =
 
   match side with
   | None when is_bdHoareS concl -> LowMatch.t_bdhoare_rcond_match c at_pos tc
-  | None when is_cHoareS concl  -> LowMatch.t_choare_rcond_match c at_pos tc
+  | None when is_cHoareS concl -> LowMatch.t_choare_rcond_match c at_pos tc
   | None -> LowMatch.t_hoare_rcond_match c at_pos tc
   | Some side -> LowMatch.t_equiv_rcond_match side c at_pos tc

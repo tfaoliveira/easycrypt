@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-B-V1 license
  * -------------------------------------------------------------------- *)
@@ -21,6 +21,11 @@ clone include Distr.MFinite with
   rename "dunifin" as "dbool"
   rename "cunifin" as "cdbool"
 proof Support.enum_spec by case.
+
+op cdbool : { int | 0 <= cdbool } as ge0_cdbool.
+
+schema cost_dbool `{P} : cost [P: dbool] = N cdbool.
+hint simplify cost_dbool.
 
 lemma dboolE (E : bool -> bool):
   mu dbool E =   (if E true  then 1%r/2%r else 0%r)
@@ -61,7 +66,7 @@ op dbiased (p : real) = Distr.mk (mbiased p).
 lemma dbiased1E (p : real) (b : bool) :
   mu1 (dbiased p) b =
    if b then clamp p else 1%r - clamp p.
-proof. by rewrite -massE muK  // isdistr_mbiased. qed.
+proof. by rewrite muK  // isdistr_mbiased. qed.
 
 lemma dbiasedE (p : real) (E : bool -> bool) :
   mu (dbiased p) E =
@@ -69,7 +74,7 @@ lemma dbiasedE (p : real) (E : bool -> bool) :
     + (if E false then 1%r - clamp p else 0%r).
 proof.
 rewrite muE (@sumE_fin _ [true; false]) => [|[]|] //.
-by rewrite 2!big_cons big_nil => @/predT /=; rewrite !massE !dbiased1E.
+by rewrite 2!big_cons big_nil => @/predT /=; rewrite !dbiased1E.
 qed.
 
 lemma supp_dbiased (p : real) b :

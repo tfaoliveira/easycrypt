@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -48,7 +48,7 @@ let tc_error_noXhl ?(kinds : hlkinds option) pf =
   let string_of_form =
     function `Pred -> "[F]" | `Stmt -> "[S]" | `Any -> "" in
 
-  let rec string_of_kind kind =
+  let string_of_kind kind =
     let kind, fm =
       match kind with
       | `Hoare  fm -> ("hoare" , fm)
@@ -605,7 +605,7 @@ let t_code_transform
         let (me, stmt, cs) =
           tx (pf, hyps) cpos (pr, po) (chs.chs_m, chs.chs_s) in
         let EcCHoare.{ cond; res = cost } =
-          EcCHoare.cost_sub_self chs.chs_co c
+          EcCHoare.cost_sub_self ~c:chs.chs_co ~sub:c
         in
         let concl = f_cHoareS_r { chs with chs_m = me;
                                            chs_s = stmt;

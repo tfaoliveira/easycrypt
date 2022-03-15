@@ -14,6 +14,11 @@ rename
   "dunifin" as "dbits".
 import DWord.
 
+op cdbits : { int | 0 <= cdbits } as ge0_cdbits.
+
+schema cost_cdbits `{P} : cost [P: dbits] = N cdbits.
+hint simplify cost_cdbits.
+
 (* Upper bound on complexity of the adversary *)
 type adv_cost = {
   cchoose : int; (* cost *)
@@ -86,7 +91,9 @@ clone import ROM as RO with
   type d_in_t  <- unit,
   type d_out_t <- bool,
   op   dout _  <- dbits.
+
 import Lazy.
+
 clone import ROM_BadCall as ROC with
   op qH <- qH.
 
@@ -115,11 +122,10 @@ module S = Hashed_ElGamal(H).
    the probability of B = CDH_from_CPA(SCDH_from_CPA(A,RO)) winning CDH(B) *)
 
 section.
-
-  declare module A: Adversary [choose : [cA.`cchoose, #O.o : cA.`ochoose],
+  declare module A<: Adversary [choose : [cA.`cchoose, #O.o : cA.`ochoose],
                                guess  : [cA.`cguess,  #O.o : cA.`oguess]] {-H}.
 
-  axiom guess_ll (O <: POracle {-A}) : islossless O.o => islossless A(O).guess.
+  declare axiom guess_ll (O <: POracle {-A}) : islossless O.o => islossless A(O).guess.
 
   local module G0 = {
     var gxy:group
@@ -168,7 +174,7 @@ section.
   local lemma Pr_G0_res &m : 
      Pr[G0.main() @ &m: res] <= 1%r/2%r.
   proof.
-    byphoare => //; proc.
+    byphoare => //; proc. 
     rnd (pred1 b'); conseq (_:true) => //.
     by move=> /> *; rewrite DBool.dbool1E.
   qed.
@@ -200,12 +206,30 @@ section.
            [H.o k : [:N(3 + cunifin + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
-      by rnd; auto => &hr />; rewrite dbits_ll /=; smt (cset_pos bounded_set).
-    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs) :
-           [H.o k : [:N(3 + cunifin + cget qH + cset qH + cin qH)]]).
+      rnd; auto => &hr />; rewrite dbits_ll /=.
+      progress; 1,2,4,6,7,8,9: smt (cset_pos bounded_set).
+      * have -> : (qH = qH - 1 + 1) by smt ().
+        apply bounded_set. 
+        smt ().
+
+      * rewrite addzC.
+        apply bounded_set. 
+        smt ().
+
+    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
+           time [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
     + move=> zo hzo; proc; inline *.
       wp := (bounded LRO.m qH).
-      rnd;auto => &hr />; rewrite dbits_ll /=; smt(cset_pos bounded_set cA_pos).
+      rnd;auto => &hr />; rewrite dbits_ll /=.
+      progress; 1,2,4,6,7,8,9: 
+      smt(cset_pos bounded_set cA_pos).
+      * have -> : (qH = qH - 1 + 1) by smt ().
+        apply bounded_set. 
+        smt (cA_pos).
+
+      * rewrite addzC.
+        apply bounded_set. 
+        smt ().
     inline *; auto => />.
     split => *.
     + smt (bounded_empty dbits_ll size_ge0 size_eq0 cA_pos).

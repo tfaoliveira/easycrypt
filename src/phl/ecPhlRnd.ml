@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -64,8 +64,8 @@ module Core = struct
       | _ -> assert false in
     let EcCHoare.{ cond; res = cost;} =
       EcCHoare.cost_sub_self
-        chs.chs_co
-        (EcCHoare.cost_of_expr cost_pre chs.chs_m distr_e)
+        ~c:chs.chs_co
+        ~sub:(EcCHoare.cost_of_expr cost_pre chs.chs_m distr_e)
     in
     let concl = f_cHoareS_r { chs with chs_s = s;
                                        chs_po = f_and_simpl cost_pre post;

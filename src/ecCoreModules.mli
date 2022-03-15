@@ -155,9 +155,13 @@ val filter_param : (xpath -> bool) -> oi_param -> oi_param
 (* -------------------------------------------------------------------- *)
 (* ['a] will be instantiated by [EcCoreFol.form] *)
 
+type mr_xpaths = EcPath.Sx.t use_restr
+
+type mr_mpaths = EcPath.Sm.t use_restr
+
 type 'a p_mod_restr = {
-  mr_xpaths : EcPath.Sx.t use_restr;
-  mr_mpaths : EcPath.Sm.t use_restr;
+  mr_xpaths : mr_xpaths;
+  mr_mpaths : mr_mpaths;
   mr_params : oi_params;
   mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
@@ -169,6 +173,9 @@ val p_mr_equal :
   bool
 
 val p_mr_hash : ('a -> int) -> 'a p_mod_restr -> int
+
+val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
+val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
 (* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
@@ -207,6 +214,12 @@ val _prelude_mk_msig_r :
   mis_body   : module_sig_body ->
   mis_restr  : 'a p_mod_restr ->
   'a p_module_sig
+
+(* -------------------------------------------------------------------- *)
+type 'a p_top_module_sig = {
+  tms_sig  : 'a p_module_sig;
+  tms_loca : is_local;
+}
 
 (* -------------------------------------------------------------------- *)
 (* Simple module signature, without restrictions. *)
@@ -287,6 +300,11 @@ and 'a p_module_item =
 and 'a p_module_comps = 'a p_module_comps_item list
 
 and 'a p_module_comps_item = 'a p_module_item
+
+type 'a p_top_module_expr = {
+  tme_expr : 'a p_module_expr;
+  tme_loca : locality;
+}
 
 (* -------------------------------------------------------------------- *)
 val p_mty_equal :

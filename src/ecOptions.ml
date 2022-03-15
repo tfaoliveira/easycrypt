@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -67,6 +67,7 @@ type ini_options = {
   ini_ovrevict : string list;
   ini_provers  : string list;
   ini_idirs    : (string option * string) list;
+  ini_rdirs    : (string option * string) list;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -83,13 +84,11 @@ and xspec = [
 
 and xkind = [ `Flag | `Int | `String ]
 
-type xvalue = [ `Bool of bool | `Int of int | `String of string ]
-
 (* -------------------------------------------------------------------- *)
 let print_usage ?progname ?(out = stderr) ?msg specs =
   let progname = odfl Sys.argv.(0) progname in
 
-  let rec ccspecs hashelp specs =
+  let ccspecs hashelp specs =
     let for1 = function
       | `Spec (name, kind, help) ->
         let kind =
@@ -278,7 +277,7 @@ let get_string name values =
 
 let get_string_list name values : string list =
   let split x =
-    let aout = List.map String.trim (String.nsplit x ",") in
+    let aout = List.map String.trim (String.split_on_string x ~by:",") in
     List.filter ((<>) "") aout
   in
 
@@ -324,9 +323,11 @@ let ldr_options_of_values ?ini values =
     let idirs   = omap_dfl (fun x -> x.ini_idirs) [] ini in
     let idirs   = List.map (add_rec false) idirs in
     let idirs_I = List.map (add_rec false) (List.map parse_idir (get_strings "I" values)) in
+    let rdirs   = omap_dfl (fun x -> x.ini_rdirs) [] ini in
+    let rdirs   = List.map (add_rec true) rdirs in
     let idirs_R = List.map (add_rec true)  (List.map parse_idir (get_strings "R" values)) in
 
-    { ldro_idirs = idirs @ idirs_I @ idirs_R;
+    { ldro_idirs = idirs @ idirs_I @ rdirs @ idirs_R;
       ldro_boot  = false; }
 
 let glb_options_of_values ?ini values =
@@ -477,10 +478,12 @@ let read_ini_file (filename : string) =
       ini_why3     = tryget  "why3conf";
       ini_ovrevict = trylist "no-evict";
       ini_provers  = trylist "provers" ;
-      ini_idirs    = List.map parse_idir (trylist "idirs"); } in
+      ini_idirs    = List.map parse_idir (trylist "idirs");
+      ini_rdirs    = List.map parse_idir (trylist "rdirs"); } in
 
   { ini_ppwidth  = ini.ini_ppwidth;
     ini_why3     = omap expand ini.ini_why3;
     ini_ovrevict = ini.ini_ovrevict;
     ini_provers  = ini.ini_provers;
-    ini_idirs    = ini.ini_idirs; }
+    ini_idirs    = ini.ini_idirs;
+    ini_rdirs    = ini.ini_rdirs; }

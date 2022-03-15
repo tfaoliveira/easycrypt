@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -35,7 +35,7 @@ let t_hoare_app = FApi.t_low2 "hoare-app" t_hoare_app_r
 let t_choare_app_r i phi cost tc =
   let chs = tc1_as_choareS tc in
   let s1, s2 = s_split i chs.chs_s in
-  let {cond; res = cost1} = cost_sub chs.chs_co cost in
+  let {cond; res = cost1} = cost_sub ~c:chs.chs_co ~sub:cost in
 
   let a = f_cHoareS_r { chs with chs_s  = stmt s1;
                                  chs_po = phi;

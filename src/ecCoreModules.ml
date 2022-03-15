@@ -360,7 +360,6 @@ end = struct
   type i_match    = EcTypes.expr * ((EcIdent.t * ty) list * stmt) list
   type i_assert   = EcTypes.expr
   type i_abstract = EcIdent.t
-  type s_stmt     = instr list
 
   let lv_var (lv, pvt) pvt' =
     if pvt == pvt' then lv else LvVar pvt'
@@ -632,9 +631,13 @@ let filter_param (f : xpath -> bool) (oi : oi_param) : oi_param =
 (* -------------------------------------------------------------------- *)
 (* ['a] will be instantiated by [EcCoreFol.form] *)
 
+type mr_xpaths = EcPath.Sx.t use_restr
+
+type mr_mpaths = EcPath.Sm.t use_restr
+
 type 'a p_mod_restr = {
-  mr_xpaths : EcPath.Sx.t use_restr;
-  mr_mpaths : EcPath.Sm.t use_restr;
+  mr_xpaths : mr_xpaths;
+  mr_mpaths : mr_mpaths;
   mr_params : oi_params;
   mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
@@ -648,6 +651,22 @@ let p_mr_equal
   && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
   && params_equal mr1.mr_params mr2.mr_params
   && a_equal mr1.mr_cost mr2.mr_cost
+
+let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
+  EcPath.Sx.fold
+    (fun xp fv -> EcPath.x_fv fv xp)
+    (Sx.union
+       m.ur_neg
+       (EcUtils.odfl Sx.empty m.ur_pos))
+    EcIdent.Mid.empty
+
+let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
+  EcPath.Sm.fold
+    (fun mp fv -> EcPath.m_fv fv mp)
+    (Sm.union
+       m.ur_neg
+       (EcUtils.odfl Sm.empty m.ur_pos))
+    EcIdent.Mid.empty
 
 (* -------------------------------------------------------------------- *)
 type funsig = {
@@ -705,6 +724,11 @@ let _prelude_mk_msig_r
   assert (check mis_restr.mr_cost);
   { mis_params; mis_body; mis_restr }
 
+(* -------------------------------------------------------------------- *)
+type 'a p_top_module_sig = {
+  tms_sig  : 'a p_module_sig;
+  tms_loca : is_local;
+}
 (* -------------------------------------------------------------------- *)
 (* Simple module signature, without restrictions. *)
 type 'a p_module_smpl_sig = {
@@ -815,6 +839,11 @@ and 'a p_module_item =
 and 'a p_module_comps = 'a p_module_comps_item list
 
 and 'a p_module_comps_item = 'a p_module_item
+
+type 'a p_top_module_expr = {
+  tme_expr : 'a p_module_expr;
+  tme_loca : locality;
+}
 
 (* -------------------------------------------------------------------- *)
 let ur_hash elems el_hash ur =

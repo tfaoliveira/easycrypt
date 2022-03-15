@@ -108,7 +108,7 @@ let choare_xsum (cost : form) (m, n) : form =
 
 
 (* -------------------------------------------------------------------- *)
-let rec free_expr (e : EcTypes.expr) : bool =
+let free_expr (e : EcTypes.expr) : bool =
   match e.e_node with
   | Elocal _ | Evar _ | Eint _ -> true
 

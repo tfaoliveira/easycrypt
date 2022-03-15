@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -295,45 +295,108 @@ module PV = struct
       | _ -> fv in
     List.fold_left do1 fv b
 
-  let rec aux (env : EcEnv.env) (m : EcIdent.t) (fv : t) (f : form) : t =
-    match f.f_node with
-    | Fquant(_,b,f1) ->
-      let env = Mod.add_mod_binding b env in
-      let fv1 = aux env m fv f1 in
-      remove_aux b fv1
-    | Fif(f1,f2,f3) -> List.fold_left (aux env m) fv [f1;f2;f3]
-    | Fmatch(b,bs,_) -> List.fold_left (aux env m) fv (b::bs)
-    | Flet(_,f1,f2) -> aux env m (aux env m fv f1) f2
-    | Fpvar(x,m') ->
-      if EcIdent.id_equal m m' then add env x f.f_ty fv else fv
-    | Fglob (mp,m') ->
-      if EcIdent.id_equal m m' then
-        let f' = NormMp.norm_glob env m mp in
-        if f_equal f f' then add_glob env mp fv
-        else aux env m fv f'
-      else fv
-    | Fint _ | Flocal _ | Fop _ -> fv
-    | Fapp(e, es) -> List.fold_left (aux env m) (aux env m fv e) es
-    | Ftuple es   -> List.fold_left (aux env m) fv es
-    | Fproj(e,_)  -> aux env m fv e
+  let fv env m f =
 
-    | Fcost c -> cost_fold (fun t fv -> aux env m fv t) c fv
+    let remove b fv =
+      let do1 fv (id, gty) =
+        match gty with
+        | GTmodty _ ->
+            { fv with s_gl = Sm.remove (EcPath.mident id) fv.s_gl }
+        | _ -> fv in
+      List.fold_left do1 fv b in
 
-    | Fmodcost mc ->
-      EcSymbols.Msym.fold (fun _ t fv ->
-          proc_cost_fold (fun t fv -> aux env m fv t) t fv
-        ) mc fv
+    let rec aux (env : env) (fv : t) (f : form) : t =
+      match f.f_node with
+      | Fquant (_, b, f1) ->
+        let env = Mod.add_mod_binding b env in
+        let fv1 = aux env fv f1 in
+        remove b fv1
 
-    | Fcost_proj (f, _) -> aux env m fv f
+      | Fif (f1, f2, f3) ->
+          List.fold_left (aux env) fv [f1; f2; f3]
 
-    | Fcoe      _
-    | FhoareF   _ | FhoareS   _
-    | FcHoareF  _ | FcHoareS  _
-    | FbdHoareF _ | FbdHoareS _
-    | FequivF   _ | FequivS   _
-    | FeagerF   _ | Fpr       _ -> assert false
+      | Fmatch (b, bs, _) ->
+          List.fold_left (aux env) fv (b :: bs)
 
-  let fv env m f = aux env m empty f
+      | Flet (_, f1, f2) ->
+          aux env (aux env fv f1) f2
+
+      | Fpvar (x, m') ->
+        if EcIdent.id_equal m m' then add env x f.f_ty fv else fv
+
+      | Fglob (mp, m') ->
+        if EcIdent.id_equal m m' then
+          let f' = NormMp.norm_glob env m mp in
+          if   f_equal f f'
+          then add_glob env mp fv
+          else aux env fv f'
+        else fv
+
+      | Fint _ | Flocal _ | Fop _ -> fv
+
+      | Fapp (e, es) ->
+          List.fold_left (aux env) (aux env fv e) es
+
+      | Ftuple es ->
+          List.fold_left (aux env) fv es
+
+      | Fproj (e, _) ->
+          aux env fv e
+
+      | Fcost c -> cost_fold (fun t fv -> aux env fv t) c fv
+
+      | Fmodcost mc ->
+        EcSymbols.Msym.fold (fun _ t fv ->
+            proc_cost_fold (fun t fv -> aux env fv t) t fv
+          ) mc fv
+
+      | Fcost_proj (f, _) -> aux env fv f
+
+      | FhoareF hf ->
+          in_mem_scope env fv [mhr] [hf.hf_pr; hf.hf_po]
+
+      | FhoareS hs ->
+          in_mem_scope env fv [fst hs.hs_m] [hs.hs_pr; hs.hs_po]
+
+      | FcHoareF chf ->
+          let fv = in_mem_scope env fv [mhr] [chf.chf_pr; chf.chf_po] in
+          aux env fv chf.chf_co
+
+      | FcHoareS chs ->
+          let fv = in_mem_scope env fv [fst chs.chs_m] [chs.chs_pr; chs.chs_po] in
+          aux env fv chs.chs_co
+
+      | FbdHoareF bhf ->
+          in_mem_scope env fv [mhr] [bhf.bhf_pr; bhf.bhf_po; bhf.bhf_bd]
+
+      | FbdHoareS bhs ->
+          in_mem_scope env fv
+            [fst bhs.bhs_m] [bhs.bhs_pr; bhs.bhs_po; bhs.bhs_bd]
+
+      | FequivF ef ->
+          in_mem_scope env fv [mleft; mright] [ef.ef_pr; ef.ef_po]
+
+      | FequivS es ->
+          in_mem_scope env fv [fst es.es_ml; fst es.es_mr] [es.es_pr; es.es_po]
+
+      | FeagerF eg ->
+          in_mem_scope env fv [mhr] [eg.eg_pr; eg.eg_po]
+
+      | Fcoe coe ->
+          let m = fst coe.coe_mem in
+          let e = form_of_expr m coe.coe_e in
+          in_mem_scope env fv [m; m] [coe.coe_pre; e]
+
+      | Fpr pr ->
+          let fv = aux env fv pr.pr_args in
+          in_mem_scope env fv [pr.pr_mem] [pr.pr_event]
+
+    and in_mem_scope env fv mems fs =
+      if   List.exists (EcIdent.id_equal m) mems
+      then fv
+      else List.fold_left (aux env) fv fs
+
+    in aux env empty f
 
   let pp env fmt fv =
     let ppe = EcPrinting.PPEnv.ofenv env in

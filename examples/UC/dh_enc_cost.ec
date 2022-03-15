@@ -886,10 +886,10 @@ section.
    group element in the real-world. Then it shows that the simulator
    perfectly emulates this modified game *)
 
-declare module Z : REAL.ENV {-DHKE_SIM, -FKE, 
-                           -HybFChan.F2Auth.FAuthLR.FAuth,
-                           -HybFChan.F2Auth.FAuthRL.FAuth,
-                           -DHKE}.
+declare module Z <: REAL.ENV {-DHKE_SIM, -FKE, 
+                              -HybFChan.F2Auth.FAuthLR.FAuth,
+                              -HybFChan.F2Auth.FAuthRL.FAuth,
+                              -DHKE}.
 
 lemma hop1 &m : 
    Pr[ REAL.UC_emul(Z,CompRF(DHKE,HybFChan.F2Auth.F2Auth)).main() @ &m : res] =
@@ -1063,7 +1063,10 @@ wp; call (_:
   (* We step Rho *)
   + by move => m1 p; inline *;wp;skip; smt(). 
   (* We step F2Auth *)
-  by move => m2 p;inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp /#.
+
+    move => m2 p;inline *; auto => /> &1 &2.
+    rewrite /staterel /leak oget_some /unblock /kstp.
+    by case (FKE.st{2}.`kst) => /> /#. 
 
 (* BACKDOOR *)
 + proc.
@@ -1071,7 +1074,9 @@ wp; call (_:
   (* Backdoor Rho *)
   + by move => *; inline *;auto => /#.   
   (* Backdoor F2Auth *)
-  by move=> m2 p; inline *; auto => /> &1 &2; rewrite /staterel /leak oget_some /unblock /kstp /rcv /#.
+  move=> m2 p; inline *; auto => /> &1 &2.
+  rewrite /staterel /leak oget_some /unblock /kstp /rcv. 
+  by case (FKE.st{2}.`kst) => /> /#. 
 
 (* WRAP-UP CALL *)
 by auto => /#.
@@ -1584,7 +1589,7 @@ module (OTPLazy : RHO) (KEAuth: Pi.REAL.IO) = {
    }
 }.
 
-declare module Z : REAL.ENV {-FKE, -FSC, -FChan.FAuth.FAuth, -OTP_SIM, 
+declare module Z <: REAL.ENV {-FKE, -FSC, -FChan.FAuth.FAuth, -OTP_SIM, 
                              -OTP, -DHKE.FKE.FKEAuth.FChan.FAuth.FAuth, -OTPLazy}.
 
 (* To prove that our change of sampling in OTP is sound we use a generic
@@ -1659,7 +1664,9 @@ proof.
             (DHKE.FKE.FKEAuth.FChan.FAuth.FAuth.st{2} <> Ch_Init => 
                    FKE.st{2}.`key = oget RO.m{2}.[()])
              ); conseq />.
-    + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_start /kstp /= /#.
+    + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_start /kstp /=. 
+      progress; smt (). 
+
     + proc => /=; inline *; wp; skip => /> &1 &2; rewrite /party_output /kstp /= /#.    
     + proc; match; 1,2 : smt().
       + move=> m1 m2.      
@@ -1809,6 +1816,14 @@ proof.
 rewrite /enc; rewrite log_bij !(Ring.rw_algebra, inv_def); ring. 
 qed.
 
+
+lemma aux ['a] (b : bool) (u v : 'a) :
+  b => (if b then u else v) = u
+by case b. 
+lemma aux2 ['a] (b : bool) (u v : 'a) :
+  !b => (if b then u else v) = v
+by case b.
+
 lemma OTPAdv2 &m :
       Pr[ REAL.UC_emul(Z,CompRF(OTPLazy,DHKE.FKE.FKEAuth.FKEAuth)).main() @ &m : res] =
          Pr[ REAL.UC_emul(Z,CompS(FSC, OTP_SIM)).main() @ &m : res].
@@ -1831,7 +1846,29 @@ call (_: invotp OTP.Initiator.p{1}
 
 (* OUTPUTS *)
 + proc;inline *.
-  by wp; skip => /> &1 &2; rewrite /rcv /= /party_output /invotp /kstp /=; smt (correctness). 
+  wp; skip => /> &1 &2; rewrite /rcv /= /party_output /invotp /kstp /=.
+
+  (* MERGE-COST: old proof *)
+  (* smt (correctness). *)
+
+  (* MERGE-COST: new proof *)
+  progress; 1,3: smt ().
+  move :H; case (FSC.st{2}); case (FKE.st{1}.`kst) => />.
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).
+  smt (correctness).  
+  smt (correctness).
+  move :H0 H1.
+  case (OTP.Initiator.p{1}); case (p{2}) => />. 
+  rewrite /leakpkg /pld /rcv /snd /=. 
+  smt(correctness).
+  (* MERGE-COST: end *)
+
 
 (* Step *)
 + proc;inline *.
@@ -1880,7 +1917,23 @@ call (_: invotp OTP.Initiator.p{1}
                        fresh1 * (pld OTP.Initiator.p{1}) * (inv (g ^ F.zero))) 
                     (fun (fresh2 : group) => 
                        fresh2 * (inv (pld OTP.Initiator.p{1})) * (g ^ F.zero)).
-            by wp;skip;smt(alg_lem1 sup_lem1 sup_lem2 alg_lem2 enc_lem).
+
+            (* MERGE-COST: old proof *)
+            (* by wp;skip;smt(alg_lem1 sup_lem1 sup_lem2 alg_lem2 enc_lem). *)
+
+            (* MERGE-COST: new proof *)
+            wp;skip. 
+            move => />. 
+            progress.
+            smt(alg_lem1 alg_lem2 enc_lem). 
+            by apply sup_lem1.
+            by apply sup_lem2.
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            smt(alg_lem1 alg_lem2 enc_lem).
+            (* MERGE-COST: end *)
+
           by wp;skip;rewrite /invotp;smt().
         seq 0 3 : (#pre /\ (oget (getl (oget lfa{2}))) <> Ch_Init); 
           first by wp;skip;smt().
@@ -2116,8 +2169,8 @@ call (:true; time [ CompR_I(OTP, I0).inputs  : [N 9; I0.inputs : 1],
   match Right 1; [auto; smt() | done |].
   by wp; call (:true); auto.  
 inline *; auto => />.
-rewrite !bigi_constz 1..4:[smt(cz_pos)] /=.
-rewrite !StdBigop.Bigint.bigi_constz; smt (cz_pos).
+rewrite !bigi_constz; 1..4:smt(cz_pos). 
+rewrite /= !StdBigop.Bigint.bigi_constz; smt (cz_pos).
 qed.
 
 import DHKE.

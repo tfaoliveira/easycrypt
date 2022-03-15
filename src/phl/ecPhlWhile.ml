@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -128,7 +128,7 @@ let t_choare_while_r inv qdec n (lam_cost : form) tc =
   (* TODO A: add a choare rule for loops that may not always terminates. *)
   let body_cost = EcCHoare.choare_xsum lam_cost (f_i0, f_N n) in
   let { cond; res = cost} =
-    cost_sub chs.chs_co (EcCHoare.cost_add_self body_cost e_cost_self)
+    cost_sub ~c:chs.chs_co ~sub:(EcCHoare.cost_add_self ~c:body_cost ~a:e_cost_self)
   in
 
   (* The wp of the while. *)

@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -120,6 +120,7 @@ let empty_lenv : lenv =
 
 let get_memtype lenv m =
   try Mid.find m lenv.le_mt with Not_found -> assert false
+
 (* -------------------------------------------------------------------- *)
 let str_p p =
   WIdent.id_fresh (String.map (function '.' -> '_' | c -> c) p)
@@ -128,6 +129,16 @@ let preid    id = WIdent.id_fresh (EcIdent.name id)
 let preid_p  p  = str_p (EcPath.tostring p)
 let preid_mp mp = str_p (EcPath.m_tostring mp)
 let preid_xp xp = str_p (EcPath.x_tostring xp)
+
+
+(* -------------------------------------------------------------------- *)
+let dump_tasks (tasks : WTask.task) (filename : string) =
+  let stream = open_out filename in
+    EcUtils.try_finally
+      (fun () -> Format.fprintf
+        (Format.formatter_of_out_channel stream)
+        "%a@." Why3.Pretty.print_task tasks)
+      (fun () -> close_out stream)
 
 (* -------------------------------------------------------------------- *)
 module Cast = struct
@@ -184,7 +195,7 @@ module Cast = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let load_wtheory genv th =
+let load_wtheory (genv : tenv) (th : WTheory.theory) : unit =
   genv.te_task <- WTask.use_export genv.te_task th
 
 (* -------------------------------------------------------------------- *)
@@ -1369,11 +1380,6 @@ let unwanted_ops =
 (* See "Lightweight Relevance Filtering for Machine-Generated           *)
 (* Resolution Problems" for a description of axioms selection.          *)
 
-type ax_info = {
-  ax_name : path;
-  ax_symb : Sp.t;
-}
-
 module Frequency = struct
 
   (* -------------------------------------------------------------------- *)
@@ -1542,7 +1548,7 @@ let init_relevant env pi rs =
   let push e r = r := e :: !r in
   let do1 p ax =
     let wanted = wanted_ax p in
-    if wanted || (not ax.ax_nosmt && not (unwanted_ax p)) then begin
+    if wanted || (ax.ax_visibility = `Visible && not (unwanted_ax p)) then begin
       Frequency.add fr ax.ax_spec;
       let used = Frequency.f_ops unwanted_ops ax.ax_spec in
       let paxu = (p,ax), used in
@@ -1607,20 +1613,13 @@ let create_global_task () =
   let task  = WTask.use_export task thmap in
   task
 
-(* -------------------------------------------------------------------- *)
 let dump_why3 (env : EcEnv.env) (filename : string) =
   let known = Lazy.force core_theories in
   let tenv  = empty_tenv env (create_global_task ()) known in
   let ()    = add_core_bindings tenv in
 
   List.iter (trans_axiom tenv) (EcEnv.Ax.all env);
-
-  let stream = open_out filename in
-    EcUtils.try_finally
-      (fun () -> Format.fprintf
-        (Format.formatter_of_out_channel stream)
-        "%a@." Why3.Pretty.print_task tenv.te_task)
-      (fun () -> close_out stream)
+  dump_tasks tenv.te_task filename
 
 (* -------------------------------------------------------------------- *)
 let cnt = Counter.create ()
@@ -1673,7 +1672,7 @@ let check ?notify pi (hyps : LDecl.hyps) (concl : form) =
 
   if pi.P.pr_all then
     let init_select p ax =
-      not ax.ax_nosmt && not (P.Hints.mem p pi.P.pr_unwanted) in
+      ax.ax_visibility = `Visible && not (P.Hints.mem p pi.P.pr_unwanted) in
     (execute_task (EcEnv.Ax.all ~check:init_select env) = Some true)
   else
     let rs = Frequency.f_ops_goal unwanted_ops hyps.h_local concl in

@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -118,8 +118,8 @@ let t_choare_call fpre fpost fcost tc =
       f_xadd cost (EcCHoare.cost_of_expr_any chs.chs_m e)
     ) f_x0 args
   in
-  let { cond = cond1; res = cost } = cost_sub chs.chs_co fcost in
-  let { cond = cond2; res = cost } = EcCHoare.cost_sub_self cost args_cost in
+  let { cond = cond1; res = cost } = cost_sub ~c:chs.chs_co ~sub:fcost in
+  let { cond = cond2; res = cost } = EcCHoare.cost_sub_self ~c:cost ~sub:args_cost in
   let concl = f_cHoareS_r { chs with chs_s = s;
                                      chs_po = post;
                                      chs_co = cost } in

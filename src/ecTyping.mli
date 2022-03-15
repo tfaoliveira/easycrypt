@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -171,6 +171,7 @@ type tyerror =
 | ModuleNotAbstract      of symbol
 | ProcedureUnbounded     of symbol * symbol
 | LvMapOnNonAssign
+| NoDefaultMemRestr
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror
@@ -248,14 +249,13 @@ val trans_pattern  : env -> ptnmap -> EcUnify.unienv -> pformula -> EcFol.form
 
 (* -------------------------------------------------------------------- *)
 val trans_memtype :
-  env -> EcUnify.unienv -> EcIdent.t -> pmemtype -> EcMemory.memenv
+  env -> EcUnify.unienv -> pmemtype -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val trans_restr_for_modty :
   env -> module_type -> pmod_restr option -> module_type
 
-(* -------------------------------------------------------------------- *)
-val transmodsig  : env -> symbol -> pmodule_sig  -> module_sig
+val transmodsig  : env -> pinterface -> top_module_sig
 val transmodtype : env -> pmodule_type -> module_type * module_sig
 val transmod     : attop:bool -> env -> pmodule_def -> module_expr
 

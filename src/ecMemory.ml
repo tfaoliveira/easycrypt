@@ -1,7 +1,7 @@
 (* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
+ * Copyright (c) - 2012--2021 - Inria
+ * Copyright (c) - 2012--2021 - Ecole Polytechnique
  *
  * Distributed under the terms of the CeCILL-C-V1 license
  * -------------------------------------------------------------------- *)
@@ -125,9 +125,12 @@ let memtype  (_,mt) = mt
 exception DuplicatedMemoryBinding of symbol
 
 (* -------------------------------------------------------------------- *)
-let empty_local ~witharg (me : memory) =
+let empty_local_mt ~witharg =
   let lmt = mk_lmt (if witharg then Some arg_symbol else None) [] Msym.empty in
-  (me, Lmt_concrete (Some lmt))
+  Lmt_concrete (Some lmt)
+
+let empty_local ~witharg (me : memory) =
+  me, empty_local_mt ~witharg
 
 let schema_mt = Lmt_schema
 let schema (me:memory) = me, schema_mt
@@ -190,10 +193,13 @@ let bindall_lmt (vs:variable list) lmt =
   let mt_proj = List.fold_lefti add_proj lmt.mt_proj vs in
   mk_lmt lmt.mt_name mt_decl mt_proj
 
-let bindall (vs:variable list) ((m,mt) : memenv) =
+let bindall_mt (vs:variable list) (mt : memtype) : memtype =
   match mt with
   | Lmt_schema | Lmt_concrete None -> assert false
-  | Lmt_concrete (Some lmt) -> m, Lmt_concrete (Some (bindall_lmt vs lmt))
+  | Lmt_concrete (Some lmt) -> Lmt_concrete (Some (bindall_lmt vs lmt))
+
+let bindall (vs:variable list) ((m,mt) : memenv) : memenv =
+  m, bindall_mt vs mt
 
 let bindall_fresh (vs:variable list) ((m,mt) : memenv) =
   match mt with
@@ -254,6 +260,26 @@ let for_printing mt =
   | Lmt_concrete None -> None
   | Lmt_concrete (Some mt) -> Some (mt.mt_name, mt.mt_decl)
 
+
+(* -------------------------------------------------------------------- *)
+let rec pp_list sep pp fmt xs =
+  let pp_list = pp_list sep pp in
+    match xs with
+    | []      -> ()
+    | [x]     -> Format.fprintf fmt "%a" pp x
+    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
+
+let dump_memtype mt =
+  match mt with
+  | Lmt_schema        -> "schema"
+  | Lmt_concrete None -> "abstract"
+  | Lmt_concrete (Some mt) ->
+    let pp_vd fmt v =
+      Format.fprintf fmt "@[%s: %s@]" v.v_name (EcTypes.dump_ty v.v_type)
+    in
+    Format.asprintf "@[{@[%a@]}@]" (pp_list ",@ " pp_vd) mt.mt_decl
+
+(* -------------------------------------------------------------------- *)
 let get_name s p (_,mt) =
   match mt with
   | Lmt_schema        -> None
