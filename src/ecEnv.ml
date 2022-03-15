@@ -1920,7 +1920,7 @@ module Mod = struct
                (fun (args, obj) ->
                  (fst (MC._downpath_for_mod spsc env p args), obj))
 
-  let by_mpath (p : mpath) (env : env) =
+  let by_mpath (p : mpath) (env : env) : module_expr =
     let (ip, (i, args)) = ipath_of_mpath p in
 
       match MC.by_path (fun mc -> mc.mc_modules) ip env with
@@ -2658,18 +2658,21 @@ module ModTy = struct
     if List.length mty1.mt_args <> List.length mty2.mt_args then
       raise ModTypeNotEquiv;
 
-    if not (NormMp.equal_restr f_equiv env mty1.mt_restr mty2.mt_restr) then
-      raise ModTypeNotEquiv;
-
     let subst =
       List.fold_left2
         (fun subst (x1, p1) (x2, p2) ->
           let p1 = EcSubst.subst_modtype subst p1 in
           let p2 = EcSubst.subst_modtype subst p2 in
-            mod_type_equiv f_equiv env p1 p2;
-            EcSubst.add_module subst x1 (EcPath.mident x2) None)
+          mod_type_equiv f_equiv env p1 p2;
+          EcSubst.refresh_module subst x1 (EcPath.mident x2))
         EcSubst.empty mty1.mt_params mty2.mt_params
     in
+
+    let restr1 = EcSubst.subst_mod_restr subst mty1.mt_restr in
+    let restr2 = EcSubst.subst_mod_restr subst mty2.mt_restr in
+
+    if not (NormMp.equal_restr f_equiv env restr1 restr2) then
+      raise ModTypeNotEquiv;
 
     if not (
          List.all2

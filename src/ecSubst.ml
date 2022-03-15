@@ -220,8 +220,36 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
     (sbody, comps)
 
 (* -------------------------------------------------------------------- *)
-and subst_modtype (s : _subst) (modty : module_type) =
-  let mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params in
+and subst_modtype
+    ?(in_me_decl = false)
+    (s     : _subst)
+    (modty : module_type)
+  : module_type
+  =
+  (* TODO A: can we improve on this ?*)
+  (* In a [ME_Decl], module parameters are binded by the enclosing
+     [module_sig] and the [module_type]. Both need to be refreshed
+     simultaneously, hence the special behavior.  *)
+  let subst_ident (id : EcIdent.t) : EcIdent.t =
+    if in_me_decl then
+      match
+        let mp, _ = Mid.find id s.s_s.sb_modules in
+        mp.m_top
+      with
+      | `Local newid   -> newid
+      | `Concrete _
+      | exception Not_found -> id
+    else id
+  in
+
+  let mt_params =
+    if in_me_decl then
+      List.map (fun (id, mt) ->
+          subst_ident id, subst_modtype s mt
+        ) modty.mt_params
+    else
+      List.map (snd_map (subst_modtype s)) modty.mt_params
+  in
   let mt_name   = s.s_p modty.mt_name in
   let mt_args   = List.map s.s_fmp modty.mt_args in
   let mt_restr  = subst_mod_restr s modty.mt_restr in
@@ -275,7 +303,7 @@ and subst_module_struct (s : _subst) (bstruct : module_structure) =
     { ms_body   = subst_module_items s bstruct.ms_body; }
 
 (* -------------------------------------------------------------------- *)
-and subst_module_body (s : _subst) (body : module_body) =
+and subst_module_body (s : _subst) (body : module_body) : module_body =
   match body with
   | ME_Alias (arity,m) ->
       ME_Alias (arity, s.s_fmp m)
@@ -283,14 +311,14 @@ and subst_module_body (s : _subst) (body : module_body) =
   | ME_Structure bstruct ->
       ME_Structure (subst_module_struct s bstruct)
 
-  | ME_Decl p -> ME_Decl (subst_modtype s p)
+  | ME_Decl p -> ME_Decl (subst_modtype ~in_me_decl:true s p)
 
 (* -------------------------------------------------------------------- *)
 and subst_module_comps (s : _subst) (comps : module_comps) =
   (subst_module_items s comps : module_comps)
 
 (* -------------------------------------------------------------------- *)
-and subst_module (s : _subst) (m : module_expr) =
+and subst_module (s : _subst) (m : module_expr) : module_expr =
   let sbody,me_params = match m.me_params with
     | [] -> (s, [])
     | _  ->

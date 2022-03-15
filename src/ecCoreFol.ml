@@ -859,20 +859,15 @@ let mk_mt_r
   let check (f : form) : bool =
     (* Keep only non-instantiated parameters from [mt_params].
        Since module types are in eta-normal form, this require going through
-       [mt_params] and [mt_args] until we find an identical element. *)
+       [mt_params] and [mt_args] until we find an different element. *)
     let rec eta_reduce params args acc =
       match params, args with
       | [], [] -> List.rev acc
       | (p,_) :: params, a :: args ->
-        if EcPath.m_equal (EcPath.mident p) a then
-          begin
-          assert (List.for_all2 (fun (p, _) a ->
-              EcPath.m_equal (EcPath.mident p) a
-            ) params args);
-          List.rev (p :: acc)
-        end
-        else
-          eta_reduce params args (p :: acc)
+        if EcPath.m_equal (EcPath.mident p) a
+        then eta_reduce params args (p :: acc)
+        else List.rev acc
+
       | _ -> assert false       (* cannot happen *)
     in
     let params = eta_reduce mt_params mt_args [] in
