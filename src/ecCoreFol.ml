@@ -2522,11 +2522,15 @@ module Fsubst = struct
 
   and add_bindings ~tx = List.map_fold (add_binding ~tx)
 
-  (* complicated, because if a local module is substituted by a concrete
-     module, its cost (time the number of times it is called) need to be
+  (* complicated, because when a local module is substituted, its
+     cost (time the number of times it is called) may need to be
      moved (see instantiation rule):
-     - for [cost], by adding it to the whole cost;
-     - for [proc_cost], by adding it added to the self cost.
+     - for [mode = `Cost], abstract module that are instantiated by
+     a concrete module need to be evicted, by adding the module
+     cost to the concrete cost;
+     - for [mode = `ProcCost], abstract module that appeared in the record
+     part of the cost (i.e. module paramters) and that are not refreshed
+     need to be evicted in the self cost.
 
      Return: record after substitution, costs to be moved. *)
   and crecord_subst
@@ -2539,7 +2543,7 @@ module Fsubst = struct
     (* check if a local [xpath] can stay in the cost record after
        substitution:
        - if [mode = `Cost], this is always true
-       - if [mode = `ProcCost] *)
+       - if [mode = `ProcCost], this is true for refreshed module. *)
     let keep (oldx : EcPath.xpath) (newx : EcPath.xpath) : bool =
       assert (EcPath.m_is_local newx.x_top); (* only for local xpaths *)
       if EcPath.x_equal oldx newx then true
@@ -2553,17 +2557,17 @@ module Fsubst = struct
     in
 
     let c_self = f_subst ~tx s init_crec.c_self
-    (* - [mode = `Cost]: [concs] are the local modules that have been
+    (* - [mode = `Cost]: [evict] are the local modules that have been
        substituted by concrete modules.
-       - [mode = `ProcCost]: [concs] are functor parameters that have been
+       - [mode = `ProcCost]: [evict] are functor parameters that have been
        instantiated (by abstract or concrete modules). *)
-    and concs, c_calls = EcPath.Mx.fold (fun x cb (concs,calls) ->
+    and evict, c_calls = EcPath.Mx.fold (fun x cb (evict,calls) ->
         let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
         let cb' = f_subst ~tx s cb in
         match x'.x_top.m_top with
         (* if [x'] is local, check if it can stays in the record *)
         | `Local _ when keep x x' ->
-          ( concs,
+          ( evict,
             EcPath.Mx.change
               (fun old -> assert (old  = None); Some cb')
               x' calls )
@@ -2572,14 +2576,14 @@ module Fsubst = struct
            module, move its cost. *)
         | _ ->
           let m_conc = EcPath.mget_ident x.x_top in
-          EcIdent.Sid.add m_conc concs, calls
+          EcIdent.Sid.add m_conc evict, calls
       ) init_crec.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
     in
     let crec = { c_self; c_calls; c_full = init_crec.c_full } in
 
     (* intrinsic costs of modules that have been evicted from the record. *)
     let to_move : form list =
-      (* for every module [mid] that have been evicted *)
+      (* for every module [mid] that must be evicted *)
       EcIdent.Sid.fold (fun mid to_move ->
           let _, minfo = EcIdent.Mid.find mid s.fs_mp in
           let mp = EcPath.mident mid in
@@ -2613,7 +2617,7 @@ module Fsubst = struct
                 (* compute: [f_called * f_cost] *)
                 f_cost_xscale f_called f_cost :: to_move
               ) mprocs to_move
-        ) concs []
+        ) evict []
     in
     crec, to_move
 

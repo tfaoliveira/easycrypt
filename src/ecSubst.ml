@@ -60,6 +60,7 @@ let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : form option) =
     { s with sb_modules = Mid.change merger x s.sb_modules }
 
 let refresh_module s (x : EcIdent.t) (m : EcPath.mpath) : subst =
+  assert (EcPath.m_is_local m);
   let merger = function
     | None   -> Some (m, EcCoreFol.Refresh)
     | Some _ -> raise (SubstNameClash (`Ident x))
