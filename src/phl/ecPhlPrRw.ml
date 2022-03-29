@@ -160,11 +160,11 @@ let t_pr_rewrite_low (s,dof) tc =
     | `MuGe0   -> select_pr_ge0
     | `MuLe1   -> select_pr_le1 in
 
-  let select xs fp = if select xs fp then `Accept (-1) else `Continue in
-  let env, _, concl = FApi.tc1_eflat tc in
+  let select xs _ fp = if select xs fp then `Accept (-1) else `Continue in
+  let env, hyps, concl = FApi.tc1_eflat tc in
   let torw =
     try
-      ignore (EcMatching.FPosition.select select concl);
+      ignore (EcMatching.FPosition.select select hyps concl);
       tc_error !!tc "cannot find a pattern for %s" s
     with FoundPr f -> f in
 

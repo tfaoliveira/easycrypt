@@ -320,7 +320,7 @@ let pf_find_occurence
 
   let mode = { mode with fm_conv = occmode.k_conv } in
 
-  let trymatch mode bds tp =
+  let trymatch mode bds pte_hy tp =
     if not (keycheck tp key) then `Continue else
 
     let tp =
@@ -335,7 +335,7 @@ let pf_find_occurence
       if not (Mid.set_disjoint bds tp.f_fv) then
         `Continue
       else begin
-        pf_form_match ~mode pt ~ptn tp;
+        pf_form_match ~mode { pt with pte_hy } ~ptn tp;
         raise (E.MatchFound tp)
       end
     with EcMatching.MatchFailure -> `Continue
@@ -346,8 +346,8 @@ let pf_find_occurence
   try
     let _ =
       if   rooted
-      then ignore (trymatch mode Mid.empty subject)
-      else ignore (EcMatching.FPosition.select (trymatch mode) subject)
+      then ignore (trymatch mode Mid.empty pt.pte_hy subject)
+      else ignore (EcMatching.FPosition.select (trymatch mode) pt.pte_hy subject)
     in raise (FindOccFailure `MatchFailure)
   with E.MatchFound subf ->
      if full && not (can_concretize pt) then begin

@@ -3193,7 +3193,9 @@ and trans_form_or_pattern
 
                   let module E = struct exception MatchFound end in
 
-                  let test =
+                  let test hyps =
+                    let env = EcEnv.LDecl.toenv hyps in
+
                     match ppt with
                     | `Pattern ppt ->
                          let ue   = EcUnify.UniEnv.create None in
@@ -3246,7 +3248,8 @@ and trans_form_or_pattern
 
                   let test target =
                     try
-                      ignore (EcMatching.FPosition.select (fun _ -> test) target);
+                      let hyps = EcEnv.LDecl.init env [] in
+                      ignore (EcMatching.FPosition.select (fun _ -> test) hyps target);
                       false
                     with E.MatchFound -> true in
 
