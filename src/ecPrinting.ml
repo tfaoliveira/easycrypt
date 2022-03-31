@@ -738,7 +738,7 @@ let pp_mem (ppe : PPEnv.t) fmt x =
 
 let pp_memtype ppe fmt mt =
   match EcMemory.for_printing mt with
-  | None -> ()
+  | None -> Format.fprintf fmt "{}"
   | Some (arg, decl) ->
     match arg with
     | Some arg ->
@@ -1880,7 +1880,6 @@ and pp_orclinfo ppe fmt (sym, oi, o_cost) =
     (if is_in oi then "" else " *")
     pp_symbol sym
     (pp_orclinfo_bare ppe) (oi, o_cost)
-
  (* Try to decompose [mc].[proc] as a cost record.
     Leave a pending projection if it can't. *)
 and modcost_info
