@@ -714,7 +714,7 @@ let rec f_eq_simpl f1 f2 =
     -> f_false
 
   | Ftuple fs1, Ftuple fs2 when List.length fs1 = List.length fs2 ->
-      f_andas_simpl (List.map2 f_eq_simpl fs1 fs2) f_true
+      f_ands_simpl (List.map2 f_eq_simpl fs1 fs2) f_true
 
   | Fcost c1, Fcost c2 ->
     cost_mk_cmp (=) f_eq_simpl c1 c2
