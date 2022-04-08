@@ -31,7 +31,7 @@ val is_empty   : subst -> bool
 
 (* -------------------------------------------------------------------- *)
 val add_module     : subst -> EcIdent.t -> mpath -> form option -> subst
-val refresh_module : subst -> EcIdent.t -> mpath         -> subst
+val refresh_module : subst -> EcIdent.t -> mpath                -> subst
 
 val add_path   : subst -> src:path -> dst:path -> subst
 val add_tydef  : subst -> path -> (EcIdent.t list * ty) -> subst

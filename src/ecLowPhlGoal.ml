@@ -503,24 +503,37 @@ let generalize_mod env m modi f =
 (* -------------------------------------------------------------------- *)
 
 type abstract_info = {
-  top       : EcPath.mpath;
-  f         : EcPath.xpath;
-  oi_param  : oi_param;
-  cost_info : form;
-  (* of type [Tmodsig t], where [t] contains an entry for [f.x_sub]  *)
+  top       : EcPath.mpath;     (* top functor (args stripped) *)
+  f         : EcPath.xpath;     (* procedure (normalized) *)
+  oi_param  : oi_param;         (* oracle parameters of [f] *)
 
-  fsig      : funsig;
+  cost_info : form;
+  (* Cost information of the functor [top].
+     Of type [Tmodsig t], where [t] contains an entry for [f.x_sub]. *)
+
+  args_map : (EcPath.mpath * EcIdent.t) list;
+  (* Mapping between [f]'s arguments and [top]'s abstract argument names.
+     E.g. if [top] is [F(H : O)], and [M] is a module of type [O], then
+     [args_map] contains the entry [(M, O)]. *)
+
+  fsig : funsig;                (* signature of [f] *)
 }
 
 
 let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let f   = EcEnv.NormMp.norm_xfun env f1 in
   let top = EcPath.m_functor f.EcPath.x_top in
-  let def = EcEnv.Fun.by_xpath f env in
 
-  let oi_param, cost_info =
+  let me, _ = EcEnv.Mod.by_mpath top env in
+  let cost_info = (EcEnv.NormMp.get_restr_me env me top).mr_cost in
+  let args_map =
+    List.map2 (fun x (y,_) -> x,y) f.x_top.EcPath.m_args me.me_params
+  in
+
+  let def = EcEnv.Fun.by_xpath f env in
+  let oi_param =
     match def.f_def with
-    | FBabs (oi_param, (f_cost,_)) -> oi_param, f_cost
+    | FBabs (oi_param, _) -> oi_param
     | _ ->
       let ppe = EcPrinting.PPEnv.ofenv env in
         if EcPath.x_equal f1 f then
@@ -533,7 +546,14 @@ let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
             (EcPrinting.pp_funname ppe) f1
             (EcPrinting.pp_funname ppe) f
   in
-  { top; f; oi_param; cost_info; fsig = def.f_sig }
+
+  (* Format.eprintf "@.@.oi_cost:@.%a@.oi_cost':@.%a@.params: %s@. params': %s"
+   *   (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env)) cost_info
+   *   (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env)) cost_info'
+   *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param))
+   *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param')); *)
+
+  { top; f; oi_param; args_map; cost_info; fsig = def.f_sig }
 
 (* -------------------------------------------------------------------- *)
 let abstract_info2

@@ -851,7 +851,7 @@ let mk_mt_r
   =
   let check (f : form) : bool =
     (* Keep only non-instantiated parameters from [mt_params].
-       Since module types are in eta-normal form, this require going through
+       Since module types are in eta-expanded form, this require going through
        [mt_params] and [mt_args] until we find an different element. *)
     let rec eta_reduce params args acc =
       match params, args with

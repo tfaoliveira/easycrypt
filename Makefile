@@ -21,7 +21,7 @@ default: build
 	@true
 
 build:
-	rm -f ec.native && $(DUNE) build && ln -sf src/ec.exe ec.native
+	rm -f ec.native src/ec.exe && $(DUNE) build && ln -sf src/ec.exe ec.native
 
 install: build
 	dune install

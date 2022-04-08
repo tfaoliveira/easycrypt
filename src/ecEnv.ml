@@ -1722,9 +1722,8 @@ module Fun = struct
              o
            else
              let s =
-               (* TODO A: this refresh is not correct *)
                List.fold_left2
-                 (fun s (x, _) a -> EcSubst.refresh_module s x a)
+                 (fun s (x, _) a -> EcSubst.add_module s x a None)
                  (EcSubst.empty ()) params args
              in
              EcSubst.subst_function s o

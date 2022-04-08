@@ -179,7 +179,7 @@ val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
 (* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
-type 'a p_module_type = private {          (* Always in eta-normal form *)
+type 'a p_module_type = private {          (* Always in eta-expanded form *)
   mt_params : (EcIdent.t * 'a p_module_type) list;
   mt_name   : EcPath.path;
   mt_args   : EcPath.mpath list;

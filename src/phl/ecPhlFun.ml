@@ -298,6 +298,21 @@ module FunAbsLow = struct
 
     inv, xc
 
+
+  (* Given an oracle procedure [o] of an xpath [f], compute the corresponding
+     abstract oracle procedure of the functor associated to [f]. *)
+  let func_orcl (o : xpath) (i : abstract_info) : xpath =
+    let arg_o = List.assoc o.x_top i.args_map in
+    EcPath.xpath (mident arg_o) o.x_sub
+
+  (* Given an oracle procedure [o] of [f], gives the maximum number
+     of calls that can be made to [o], using the cost restrictions of
+     the functor associated to [f]. *)
+  let func_cost_orcl
+      (proc : EcSymbols.symbol) (o : xpath) (i : abstract_info) : form
+    =
+    EcCHoare.cost_orcl proc (func_orcl o i) i.cost_info
+
   (* Arguments:
      - [top] is a functor name (with erased module arguments)
      - [fn] is the procedure of [top] called
@@ -308,11 +323,11 @@ module FunAbsLow = struct
 
      Computes the total cost of the call to [top.fn] according to [xc]. *)
   let abs_spec_cost
-      (top       : mpath)
-      (fn        : EcSymbols.symbol)
-      (ois       : xpath list)
-      (cost_info : form)
-      (xc        : abs_inv_inf) : form
+      (top  : mpath)
+      (fn   : EcSymbols.symbol)
+      (ois  : xpath list)
+      (info : abstract_info)
+      (xc   : abs_inv_inf) : form
     =
     let fn_orcl = EcPath.xpath top fn in
 
@@ -327,7 +342,7 @@ module FunAbsLow = struct
 
         (* Upper-bound on the costs of [o]'s calls. *)
         if finite then
-          let cbd = EcCHoare.cost_orcl fn o cost_info in
+          let cbd = func_cost_orcl fn o info in
           EcCHoare.choare_xsum o_cost (f_i0, cbd)
         else f_cost_xscale f_Inf o_cost
       ) ois
@@ -344,7 +359,10 @@ module FunAbsLow = struct
       (xc  : abs_inv_inf)
     : form * form * form * form list
     =
-    let {top; oi_param; cost_info; } = EcLowPhlGoal.abstract_info env f in
+    (* [top] is the functor associated to [f.x_top] (i.e. arguments are stripped). *)
+    let {top; oi_param; } as info =
+      EcLowPhlGoal.abstract_info env f
+    in
     let ppe = EcPrinting.PPEnv.ofenv env in
 
     (* We check that the invariant cannot be modified by the adversary. *)
@@ -357,7 +375,7 @@ module FunAbsLow = struct
     let ois : xpath list =
       let ois = allowed oi_param in
       List.filter (fun o ->
-          let c = EcCHoare.cost_orcl f.x_sub o cost_info in
+          let c = func_cost_orcl f.x_sub o info in
           let c = EcReduction.simplify EcReduction.full_red hyps c in
           match destr_xint c with
           | `Inf | `Unknown -> true
@@ -403,9 +421,9 @@ module FunAbsLow = struct
 
       (* We now compute the cost of the [k]-th call to [o_called].
          - if [o] can be called a finite number of times, the cost is
-         parametrized by the number of the i-th call.
+           parametrized by the number of the i-th call.
          - otherwise, the cost information to prove is a constant
-         upper-bound. *)
+           upper-bound. *)
       let k_o_cost =
         if o_finite then
           f_app_simpl o_cost [f_local k_called tint] tcost
@@ -428,7 +446,7 @@ module FunAbsLow = struct
         List.map2 (fun xc_el (x,_) ->
             let xf  = f_local x tint in
             let ge0 = f_int_le f_i0 xf in
-            let cbd = EcCHoare.cost_orcl f.x_sub xc_el.oracle cost_info in
+            let cbd = func_cost_orcl f.x_sub xc_el.oracle info in
             let max =
               if EcIdent.id_equal x k_called then f_xlt (f_N xf) cbd
               else f_xle (f_N xf) cbd
@@ -449,7 +467,7 @@ module FunAbsLow = struct
     let sg_finite =
       List.map (fun xc_el ->
           assert (xc_el.finite);
-          let cbd = EcCHoare.cost_orcl f.x_sub xc_el.oracle cost_info in
+          let cbd = func_cost_orcl f.x_sub xc_el.oracle info in
           f_is_int cbd
         ) xc_fin
     in
@@ -468,7 +486,7 @@ module FunAbsLow = struct
         List.map2 (fun xc_el (x,_) ->
             let xf  = f_local x tint in
             let ge0 = f_int_le f_i0 xf in
-            let cbd = EcCHoare.cost_orcl f.x_sub xc_el.oracle cost_info in
+            let cbd = func_cost_orcl f.x_sub xc_el.oracle info in
             let max = f_xle (f_N xf) cbd in
             f_anda ge0 max
           ) xc_fin bds
@@ -477,7 +495,7 @@ module FunAbsLow = struct
       f_exists bds (f_and call_bounds pr)
     in
 
-    let total_cost = abs_spec_cost top f.x_sub ois cost_info xc in
+    let total_cost = abs_spec_cost top f.x_sub ois info xc in
 
     (pre_inv, post_inv, total_cost, sg_finite @ sg_orcls)
 
