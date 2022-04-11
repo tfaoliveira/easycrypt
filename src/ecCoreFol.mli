@@ -609,7 +609,7 @@ type mem_pr = EcMemory.memory * form
 (* Module substitution info.
    The formula must be of type [tmodcost _], and contains the cost
    information associated to a module being instantiated. *)
-type ms_info = Refresh | Cost of form option
+type ms_info = Refresh | Cost of form
 
 (* -------------------------------------------------------------------- *)
 type f_subst = {
@@ -650,19 +650,16 @@ module Fsubst : sig
   val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
 
-  (* [f_bind_mod subst id m oinfo]: the formula [oinfo] contains the
-     cost informations used to correctly substiture formulas of
-     type [tcost].  *)
-  val f_bind_mod    : f_subst -> EcIdent.t -> mpath -> form option -> f_subst
+  val f_bind_mod : f_subst -> EcIdent.t -> module_type -> mpath -> f_subst
 
   (* when refreshing a local module, no need for cost information *)
-  val f_refresh_mod : f_subst -> EcIdent.t -> mpath                -> f_subst
+  val f_refresh_mod : f_subst -> EcIdent.t -> mpath -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-  val f_subst_mod   : EcIdent.t -> mpath -> form -> form option -> form
+  val f_subst_mod   : EcIdent.t -> module_type -> mpath -> form -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form

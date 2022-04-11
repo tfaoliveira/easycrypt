@@ -1723,7 +1723,7 @@ module Fun = struct
            else
              let s =
                List.fold_left2
-                 (fun s (x, _) a -> EcSubst.add_module s x a None)
+                 (fun s (x, mt) a -> EcSubst.add_module s x mt a)
                  (EcSubst.empty ()) params args
              in
              EcSubst.subst_function s o
@@ -1964,9 +1964,8 @@ module Mod = struct
     let params = List.take (List.length args) params in
 
     let s =
-      List.fold_left2 (fun s (x, xmt) a ->
-          let xcost = xmt.mt_restr.mr_cost in
-          EcSubst.add_module s x a (Some xcost)
+      List.fold_left2 (fun s (x, mt) a ->
+          EcSubst.add_module s x mt a
         )
         (EcSubst.empty ()) params args
     in
@@ -2257,7 +2256,7 @@ module NormMp = struct
           let params = List.take arity me.me_params in
           let s =
             List.fold_left2
-              (fun s (x, _) a -> EcSubst.add_module s x a None)
+              (fun s (x, mt) a -> EcSubst.add_module s x mt a)
               (EcSubst.empty ()) params args in
           let mp = EcSubst.subst_mpath s mp in
           let args' = mp.EcPath.m_args in
@@ -2835,8 +2834,8 @@ module ModTy = struct
   let sig_of_mt env (mt : module_type) : module_sig =
     let { tms_sig = sig_ } = by_path mt.mt_name env in
     let subst =
-      List.fold_left2 (fun s (x1,_) a ->
-          EcSubst.add_module s x1 a None
+      List.fold_left2 (fun s (x1,mt1) a ->
+          EcSubst.add_module s x1 mt1 a
         ) (EcSubst.empty ()) sig_.mis_params mt.mt_args
     in
     let items =

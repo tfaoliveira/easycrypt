@@ -1992,7 +1992,7 @@ type mem_pr = EcMemory.memory * form
 (* Module substitution info.
    The formula must be of type [tmodcost _], and contains the cost
    information associated to a module being instantiated. *)
-type ms_info = Refresh | Cost of form option
+type ms_info = Refresh | Cost of form
 
 (* -------------------------------------------------------------------- *)
 type f_subst = {
@@ -2078,13 +2078,14 @@ module Fsubst = struct
      cost informations used to correctly substiture formulas of
      type [tcost].  *)
   let f_bind_mod
-      (s     : f_subst)
-      (x     : EcIdent.t)
-      (mp    : EcPath.mpath)
-      (oinfo : form option)
+      (s  : f_subst)
+      (x  : EcIdent.t)
+      (mt : module_type)
+      (mp : EcPath.mpath)
     : f_subst
     =
-    _f_bind_mod s x mp (Cost oinfo)
+    let cost = mt.mt_restr.mr_cost in
+    _f_bind_mod s x mp (Cost cost)
 
   (* when refreshing a local module, no need for cost information *)
   let f_refresh_mod (s : f_subst) (x : EcIdent.t) (mp : EcPath.mpath): f_subst =
@@ -2591,10 +2592,7 @@ module Fsubst = struct
           | Refresh -> assert false
           (* refreshed module path cannot be evicted in either mode *)
 
-          | Cost None -> f_cost_inf :: to_move
-          (* if we have no information, use [inf] *)
-
-          | Cost (Some minfo) ->
+          | Cost minfo ->
             let mprocs = match minfo.f_ty.ty_node with
               | Tmodcost { procs } -> procs
               | _ -> assert false   (* cannot happen, type must be reduced *)
@@ -2648,8 +2646,8 @@ module Fsubst = struct
     let s = f_bind_mem f_subst_id m1 m2 in
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
 
-  let f_subst_mod (x : EcIdent.t) mp f info : form =
-    let s = f_bind_mod f_subst_id x mp info in
+  let f_subst_mod (x : EcIdent.t) (mt : module_type) mp f : form =
+    let s = f_bind_mod f_subst_id x mt mp in
     if Mid.mem x f.f_fv then f_subst s f else f
 
   (* ------------------------------------------------------------------ *)

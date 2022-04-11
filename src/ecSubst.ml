@@ -52,9 +52,10 @@ let empty ?(freshen = true) () : subst = {
 let is_empty s =
   Mp.is_empty s.sb_path && Mid.is_empty s.sb_modules
 
-let add_module s (x : EcIdent.t) (m : EcPath.mpath) (mcost : form option) =
+let add_module s (x : EcIdent.t) (mt : module_type) (m : EcPath.mpath) =
+  let cost = mt.mt_restr.mr_cost in
   let merger = function
-    | None   -> Some (m, EcCoreFol.Cost mcost)
+    | None   -> Some (m, EcCoreFol.Cost cost)
     | Some _ -> raise (SubstNameClash (`Ident x))
   in
     { s with sb_modules = Mid.change merger x s.sb_modules }

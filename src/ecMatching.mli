@@ -97,9 +97,9 @@ end
 
 (* -------------------------------------------------------------------- *)
 type mevmap = {
-  evm_form : form            evmap;
-  evm_mem  : EcMemory.memory evmap;
-  evm_mod  : EcPath.mpath    evmap;
+  evm_form : form                         evmap;
+  evm_mem  : EcMemory.memory              evmap;
+  evm_mod  : (EcPath.mpath * module_type) evmap;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -107,7 +107,7 @@ module MEV : sig
   type item = [
     | `Form of form
     | `Mem  of EcMemory.memory
-    | `Mod  of EcPath.mpath
+    | `Mod  of EcPath.mpath * module_type
   ]
 
   type kind = [ `Form | `Mem | `Mod ]

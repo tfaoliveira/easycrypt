@@ -812,7 +812,7 @@ let rec check_sig_cnv
              tymod_cnv_failure
                (E_TyModCnv_SubTypeArg(xin, tyout, tyin, err))
          end;
-         EcSubst.add_module subst xout (EcPath.mident xin) None)
+         EcSubst.add_module subst xout tyout (EcPath.mident xin))
       (EcSubst.empty ()) sin.mis_params sout.mis_params
   in
   let bout = EcSubst.subst_modsig_body bsubst sout.mis_body
@@ -1075,7 +1075,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
 
       let subst =
           List.fold_left2
-            (fun s (x,_) a -> EcSubst.add_module s x a None)
+            (fun s (x,mt) a -> EcSubst.add_module s x mt a)
             (EcSubst.empty ()) params args
       in
 

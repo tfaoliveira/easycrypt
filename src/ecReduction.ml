@@ -430,7 +430,7 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
     ensure (ModTy.mod_type_equiv test env p1 p2);
     Mod.bind_local x1 p1 env,
     if id_equal x1 x2 then subst
-    else Fsubst.f_bind_mod subst x2 (EcPath.mident x1) None
+    else Fsubst.f_refresh_mod subst x2 (EcPath.mident x1)
 
   | GTmem me1, GTmem me2  ->
     check_memtype env me1 me2;

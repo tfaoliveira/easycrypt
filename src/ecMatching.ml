@@ -253,9 +253,9 @@ end
 
 (* -------------------------------------------------------------------- *)
 type mevmap = {
-  evm_form : form            evmap;
-  evm_mem  : EcMemory.memory evmap;
-  evm_mod  : EcPath.mpath    evmap;
+  evm_form : form                         evmap;
+  evm_mem  : EcMemory.memory              evmap;
+  evm_mod  : (EcPath.mpath * module_type) evmap;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -263,7 +263,7 @@ module MEV = struct
   type item = [
     | `Form of form
     | `Mem  of EcMemory.memory
-    | `Mod  of EcPath.mpath
+    | `Mod  of EcPath.mpath * module_type
   ]
 
   type kind = [ `Form | `Mem | `Mod ]
@@ -327,8 +327,7 @@ module MEV = struct
     let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
-    (* FIXME: A: get information on the binded module *)
-    let subst = EV.fold (fun x m s -> Fsubst.f_bind_mod s x m None) ev.evm_mod subst in
+    let subst = EV.fold (fun x (m,mt) s -> Fsubst.f_bind_mod s x mt m) ev.evm_mod subst in
     let seen  = ref Sid.empty in
 
     let rec for_ident x binding subst =
@@ -765,7 +764,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             let subst =
               if   id_equal x1 x2
               then subst
-              else Fsubst.f_bind_mod subst x2 (EcPath.mident x1) None
+              else Fsubst.f_refresh_mod subst x2 (EcPath.mident x1)
 
             and env = EcEnv.Mod.bind_local x1 p1 env in
 

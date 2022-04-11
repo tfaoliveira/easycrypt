@@ -185,8 +185,7 @@ module LowApply = struct
                 else f_and (f_ands obl) f
             in
 
-            let orcl_info = emt.mt_restr.mr_cost in
-            (Fsubst.f_bind_mod sbt x mp (Some orcl_info), f)
+            (Fsubst.f_bind_mod sbt x emt mp, f)
           with _ -> raise InvalidProofTerm
         end
 
@@ -482,7 +481,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
     | GTmodty i ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty i, Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)) None)
+        (id, LD_modty i, Fsubst.f_refresh_mod sbt x (EcPath.mident (tg_val id)))
   in
 
   let add_ld id ld hyps =
