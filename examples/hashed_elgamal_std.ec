@@ -205,7 +205,17 @@ end section Security.
 
 print conclusion.
 
-abstract theory Complexity.
+
+(* -------------------------------------------------------------------- *)
+abstract theory Cost.
+
+clone include AllCore.Cost.
+clone include Bool.Cost.
+clone include Bits.Cost.
+clone include DBool.Cost.
+clone include G.Cost.
+clone include FDistr.Cost.
+clone include PrimeField.Cost.
 
 op cddh = 3 + cxor + chash + cdbool + cdhkey.
 op cguess = 3 + 2*cgpow + cxor + cdbool + 2 * cdt.
@@ -230,3 +240,5 @@ proof.
   proc; call (:true : []); wp; rnd; call(:true : []); rnd; skip => />.
   rewrite dhkey_ll dbool_ll /=. smt (ge0_cxor ge0_cdbool ge0_chash ge0_cdhkey).
 qed.
+
+end Cost.
