@@ -32,8 +32,8 @@ abbrev ( <  ) = lt.
 op subcond = fun x y => (x - y) + y = x.
 
 (* -------------------------------------------------------------------- *)
-axiom scale0c (x : cost): 0 * x = zero.
-axiom scale1c : left_id 1 scale.
+axiom scale0c (x : cost) : 0 * x = zero.
+axiom scale1c (x : cost) : 1 * x = x.
 
 hint simplify scale0c, scale1c.
 
@@ -41,8 +41,8 @@ axiom scale_distr (i j : int) (x : cost) :
   (i + j) * x = i * x + j * x.
 
 (* -------------------------------------------------------------------- *)
-axiom add0c : left_id zero add.
-axiom addc0 : right_id zero add.
+axiom add0c (x : cost) : zero + x = x.
+axiom addc0 (x : cost) : x + zero = x.
 
 hint simplify add0c, addc0.
 

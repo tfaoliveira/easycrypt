@@ -8,11 +8,11 @@ lemma subrK (x y : xint) : is_inf x \/ is_int y => (x - y) + y = x.
 proof. case y => //; case x => //= *; ring. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma add0x : left_id '0 xadd.
-proof. by case. qed.
+lemma add0x (x : xint) : '0 + x = x.
+proof. by case x. qed.
 
-lemma addx0 : right_id '0 xadd.
-proof. by case. qed.
+lemma addx0 (x : xint) : x + '0 = x.
+proof. by case x. qed.
 
 hint simplify add0x, addx0.
 

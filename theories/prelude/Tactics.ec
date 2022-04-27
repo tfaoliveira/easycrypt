@@ -96,3 +96,10 @@ lemma nosmt eq_ind ['a] x y (f:'a -> bool) : x = y => f x => f y by [].
 lemma nosmt and3_s1 b1 b2 b3 : b1 => b2 && b3 => b1 && b2 && b3 by [].
 lemma nosmt and3_s2 b1 b2 b3 : b2 => b1 && b3 => b1 && b2 && b3 by [].
 lemma nosmt and3_s3 b1 b2 b3 : b3 => b1 && b2 => b1 && b2 && b3 by [].
+
+(* -------------------------------------------------------------------- *)
+(* we cannot directly define `inf` for now, so we must go through 
+  an axiom. *)
+axiom inf_def : inf = `[: .., ..]. 
+
+hint simplify inf_def.

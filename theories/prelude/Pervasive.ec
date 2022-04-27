@@ -38,9 +38,3 @@ op witness : 'a.                (* All types are inhabited in EC *)
 type cost.
 
 op inf : cost.
-
-(* we cannot directly define `inf` for now, so we must go through 
-  an axiom. *)
-axiom inf_def : inf = `[: .., ..]. 
-
-hint simplify inf_def.
