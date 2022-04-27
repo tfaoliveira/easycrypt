@@ -620,6 +620,7 @@ let e_uni_prio_uminus = fst e_bin_prio_lop2
 let e_app_prio        = (10000, `Infix `Left)
 let e_get_prio        = (20000, `Infix `Left)
 let e_uni_prio_rint   = (100, `Postfix)
+let e_uni_prio_projc  = (35, `Postfix)
 
 let min_op_prec = (-1     , `Infix `NonAssoc)
 let max_op_prec = (max_int, `Infix `NonAssoc)
@@ -1253,9 +1254,9 @@ let string_of_hcmp = function
 let pp_cost_proj fmt (p : cost_proj) =
   match p with
   | Conc       -> Format.fprintf fmt "conc"
-  | Abs (id,f) -> Format.fprintf fmt "%a.%s" EcIdent.pp_ident id f
-  | Intr  f    -> Format.fprintf fmt "%s.self" f
-  | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
+  | Abs (id,f) -> Format.fprintf fmt "%s.%s" (EcIdent.tostring id) f
+  | Intr  f    -> Format.fprintf fmt "%s:intr" f
+  | Param p    -> Format.fprintf fmt "%s:%s.%s" p.proc p.param_m p.param_p
 
 (* -------------------------------------------------------------------- *)
 let string_of_locality = function
@@ -1714,7 +1715,11 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
   | Fmodcost mc -> pp_modcost ppe fmt mc
 
   | Fcost_proj (f,p) ->
-    Format.fprintf fmt "%a#%a" (pp_form ppe) f pp_cost_proj p
+    let pp fmt f =
+      maybe_paren outer ([],e_uni_prio_projc) (pp_form ppe) fmt f
+    in
+    Format.fprintf fmt "%a.#%a" pp f pp_cost_proj p
+
 
   | FcHoareF chf ->
     let mepr, mepo = EcEnv.Fun.hoareF_memenv chf.chf_f ppe.PPEnv.ppe_env in
