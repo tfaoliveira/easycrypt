@@ -157,6 +157,19 @@ and pdatatype = (psymbol * pty list) list
 and precord = (psymbol * pty) list
 
 (* -------------------------------------------------------------------- *)
+type pcost_proj =
+  | PConc
+  | PAbs of psymbol * psymbol (* abstract module, procedure *)
+
+  | PIntr of psymbol          (* procedure *)
+  | PParam of {
+      proc    : psymbol;      (* procedure *)
+      param_m : psymbol;      (* parameter module *)
+      param_p : psymbol;      (* parameter procedure *)
+    }
+
+
+(* -------------------------------------------------------------------- *)
 type f_or_mod_ident =
   | FM_FunOrVar of pgamepath
   | FM_Mod of pmsymbol located
@@ -209,6 +222,7 @@ and pformula_r =
 
   | PFcost    of pcost
   | PFmodcost of pmodcost
+  | PFprojc   of pformula * pcost_proj
 
   | PFhoareF   of pformula * pgamepath * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula

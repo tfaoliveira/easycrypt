@@ -166,6 +166,9 @@ type tyerror =
 | LvMapOnNonAssign
 | NoDefaultMemRestr
 | ProcAssign             of qsymbol
+| CostProjUnknownProc    of symbol
+| CostProjUnknownOracle  of symbol * symbol (* oracle ident, oracle proc *)
+| NotModCost
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror

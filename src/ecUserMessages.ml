@@ -558,6 +558,15 @@ end = struct
     | ProcAssign f ->
         msg "`%a' is a procedure name. Assign its result to a variable using `<@` instead" pp_qsymbol f
 
+    | NotModCost ->
+      msg "not a module cost (maybe add explicit type annotations)"
+
+    | CostProjUnknownProc p ->
+      msg "unknown procedure projection: %s" p
+
+    | CostProjUnknownOracle (o,f) ->
+      msg "unknown oracle projection: %s.%s" o f
+
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
 

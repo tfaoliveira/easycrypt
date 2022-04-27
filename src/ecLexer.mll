@@ -60,6 +60,8 @@
     "hoare"       , HOARE      ;        (* KW: prog *)
     "choare"      , CHOARE     ;        (* KW: prog *)
     "cost"        , COST       ;        (* KW: prog *)
+    "intr"        , INTR       ;        (* KW: prog *)
+    "conc"        , CONC       ;        (* KW: prog *)
     "phoare"      , PHOARE     ;        (* KW: prog *)
     "islossless"  , LOSSLESS   ;        (* KW: prog *)
     "async"       , ASYNC      ;        (* KW: prog *)
@@ -403,6 +405,7 @@ rule main = parse
   | "<$"  { [LESAMPLE       ] }
   | "<@"  { [LEAT           ] }
   | ":~"  { [COLONTILD      ] }
+  | ".#"  { [DOTSHARP       ] }
 
   | "/~="  { [SLASHTILDEQ     ] }
   | "//~=" { [SLASHSLASHTILDEQ] }

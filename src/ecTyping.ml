@@ -176,6 +176,9 @@ type tyerror =
 | LvMapOnNonAssign
 | NoDefaultMemRestr
 | ProcAssign             of qsymbol
+| CostProjUnknownProc    of symbol
+| CostProjUnknownOracle  of symbol * symbol (* oracle ident, oracle proc *)
+| NotModCost
 
 (* -------------------------------------------------------------------- *)
 exception TyError of EcLocation.t * EcEnv.env * tyerror
@@ -1079,7 +1082,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
        { miss_params = remn;
          miss_body   = body; })
 
-let trans_msymbol env msymb =
+let trans_msymbol env (msymb : pmsymbol located) : mpath * module_smpl_sig =
   let ((m,_),mt) = trans_msymbol env msymb in
   (m,mt)
 
@@ -1845,7 +1848,7 @@ let transcall transexp env ue loc fsig args =
     (args, fsig.fs_ret)
 
 (* -------------------------------------------------------------------- *)
-let trans_gamepath (env : EcEnv.env) gp =
+let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
   let loc = gp.pl_loc in
 
   let modsymb = List.map (unloc -| fst) (fst (unloc gp))
@@ -1864,7 +1867,7 @@ let trans_gamepath (env : EcEnv.env) gp =
         EcPath.xpath mpath funsymb
 
 (* -------------------------------------------------------------------- *)
-let trans_oracle (env : EcEnv.env) (m,f) =
+let trans_oracle (env : EcEnv.env) ((m,f) : psymbol * psymbol) : xpath =
   let msymbol = mk_loc (loc m) [m,None] in
   let (mpath, sig_) = trans_msymbol env msymbol in
 
@@ -2042,6 +2045,7 @@ let top_is_mem_binding pf = match pf with
 
   | PFChoareFT _ -> false
 
+  | PFprojc   _
   | PFmodcost _
   | PFcost    _
   | PFmatch   _
@@ -2066,10 +2070,54 @@ let top_is_mem_binding pf = match pf with
   | PFlsless  _
   | PFscope   _ -> false
 
-
+(* -------------------------------------------------------------------- *)
 let f_or_mod_ident_loc : f_or_mod_ident -> EcLocation.t = function
   | FM_FunOrVar x -> loc x
   | FM_Mod      x -> loc x
+
+(* -------------------------------------------------------------------- *)
+let trans_cost_proj env ~f_loc ~f_ty (p : pcost_proj) : cost_proj =
+  match p with
+  | PConc -> Conc
+  | PAbs (mid, f) ->
+    let x = trans_oracle env (mid, f) in
+    let mid = EcPath.mget_ident x.EcPath.x_top in
+    Abs (mid, unloc f)
+
+  | PIntr proc ->
+    let procs, _ =
+      match f_ty.ty_node with
+      | Tmodcost {procs; oracles} -> procs, oracles
+      | _ -> tyerror f_loc env NotModCost
+    in
+    if not (Msym.mem (unloc proc) procs) then
+      tyerror (loc proc) env (CostProjUnknownProc (unloc proc));
+
+    Intr (unloc proc)
+
+  | PParam { proc; param_m; param_p } ->
+    let procs, oracles =
+      match f_ty.ty_node with
+      | Tmodcost {procs; oracles} -> procs, oracles
+      | _ -> tyerror f_loc env NotModCost
+    in
+    if not (Msym.mem (unloc proc) procs) then
+      tyerror (loc proc) env (CostProjUnknownProc (unloc proc));
+
+    let is_full = Msym.find (unloc proc) procs in
+    let mem_oracle =
+      Msym.exists (fun m s ->
+          (unloc param_m) = m && Ssym.mem (unloc param_p) s
+        ) oracles
+    in
+    if is_full && not mem_oracle then begin
+      let loc = EcLocation.merge (loc param_m) (loc param_p) in
+      tyerror loc env (CostProjUnknownOracle (unloc param_m, unloc param_p))
+    end;
+
+    Param { proc    = unloc proc;
+            param_m = unloc param_m;
+            param_p = unloc param_p; }
 
 (* -------------------------------------------------------------------- *)
 let proc_cost_is_unbounded (c : crecord) : bool =
@@ -2547,12 +2595,14 @@ and transmodsig_body
   (items, mr)
 
 (* -------------------------------------------------------------------- *)
-and transmod ~attop (env : EcEnv.env) (me : pmodule_def) =
+and transmod ~attop (env : EcEnv.env) (me : pmodule_def) : module_expr =
   snd (transmod_header ~attop env me.ptm_header [] me.ptm_body)
 
 (* -------------------------------------------------------------------- *)
 and transmod_header
-    ~attop (env : EcEnv.env) (mh:pmodule_header) params (me:pmodule_expr) =
+    ~attop (env : EcEnv.env) (mh:pmodule_header) params (me:pmodule_expr)
+  : int * module_expr
+  =
   match mh with
   | Pmh_ident x ->
     0, transmod_body ~attop env x params me
@@ -3774,6 +3824,10 @@ and trans_form_or_pattern
     | PFcost c -> f_cost_r (trans_cost ~self_ty:txint opsc ~incoe env c)
 
     | PFmodcost mc -> f_mod_cost_r (trans_modcost opsc ~incoe env mc)
+
+    | PFprojc (f,p) ->
+      let f' = transf env f in
+      f_cost_proj_r f' (trans_cost_proj env ~f_loc:(loc f) ~f_ty:f'.f_ty p)
 
     | PFChoareF _ | PFChoareFT _ ->
       EcCHoare.check_loaded env;

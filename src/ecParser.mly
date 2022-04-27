@@ -410,6 +410,7 @@
 %token COLON
 %token COLONTILD
 %token COMMA
+%token CONC
 %token CONGR
 %token CONSEQ
 %token CONST
@@ -422,6 +423,7 @@
 %token DONE
 %token DOT
 %token DOTDOT
+%token DOTSHARP
 %token DOTTICK
 %token DROP
 %token DUMP
@@ -468,6 +470,7 @@
 %token INDUCTIVE
 %token INLINE
 %token INTERLEAVE
+%token INTR
 %token INSTANCE
 %token INSTANTIATE
 %token IOTA
@@ -1092,6 +1095,7 @@ sc_ptybindings_decl:
 %inline hole: UNDERSCORE { PFhole }
 %inline none: IMPOSSIBLE { assert false }
 
+(* -------------------------------------------------------------------- *)
 cost_elc(P):
 | DOTDOT          { `Unbounded }
 | c=form_r(P)     { `Bounded c }
@@ -1121,12 +1125,22 @@ costs(P):
     { let c, b = cbody in
       PC_costs (c,b) }
 
+(* -------------------------------------------------------------------- *)
 modcosts_el(P):
 | f=lident COLON c=costs(P) { f,c }
 
 modcosts(P):
 | TICKLBRACKET l=rlist1(modcosts_el(P),COMMA) RBRACKET { l }
 
+(* -------------------------------------------------------------------- *)
+cost_proj:
+| CONC                     { PConc }
+| a=uident DOT p=lident    { PAbs (a,p)}
+| proc=lident COLON INTR   { PIntr proc }
+| proc=lident COLON a=uident DOT p=lident
+                           { PParam {proc; param_m = a; param_p = p; } }
+
+(* -------------------------------------------------------------------- *)
 qident_or_res_or_glob:
 | x=qident
     { GVvar x }
@@ -1266,6 +1280,8 @@ sform_u(P):
      PFproji(f,n.pl_desc - 1) }
 
 | c=costs(P)     { PFcost c }
+
+| f=sform_r(P) DOTSHARP p=cost_proj { PFprojc (f,p) }
 
 | mc=modcosts(P) { PFmodcost mc }
 
