@@ -4007,8 +4007,6 @@ and trans_memtype env ue (pmemtype : pmemtype) : memtype =
         {v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
 
     let mt = fundef_add_symbol_mt env memtype xs in
-    (* REM *)
-    Format.eprintf "dump: %s@." (EcMemory.dump_memtype mt);
     mt
   in
 
