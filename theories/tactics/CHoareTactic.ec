@@ -120,6 +120,9 @@ lemma lex_add_posl (x y : xint) :
   '0 <= x => y <= x + y.
 proof. rewrite (addxC x); exact lex_add_posr. qed.
 
+lemma lex_inv_pos (x : xint) : '0 <= x - x.
+proof. by case x. qed.
+
 (* -------------------------------------------------------------------- *)
 lemma sub_completness (t1 t2 t:xint) : 
    t1 + t2 <= t <=>

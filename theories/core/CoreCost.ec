@@ -104,16 +104,18 @@ lemma lec_add2l (x1 x2 y : cost) :
   x1 <= x2 => y + x1 <= y + x2.
 proof. by rewrite !(@addcC y) &(lec_add2r). qed.
 
-(* -------------------------------------------------------------------- *)
-(* lifted from lemmas in [CHoareTactic] *)
-
-(* This axiom can be used to prove the side-conditions of our rules 
-   for seq, wp ... *)
-axiom subrcle (x y : cost) : y <= x => subcond x y.
-
 axiom lec_add_posr (x y : cost) :
   zero <= x => y <= y + x.
 
 lemma lec_add_posl (x y : cost) :
   zero <= x => y <= x + y.
 proof. rewrite (addcC x); exact lec_add_posr. qed.
+
+axiom lec_inv_pos (x : cost) : zero <= x - x.
+
+(* -------------------------------------------------------------------- *)
+(* lifted from lemmas in [CHoareTactic] *)
+
+(* This axiom can be used to prove the side-conditions of our rules 
+   for seq, wp ... *)
+axiom subrcle (x y : cost) : y <= x => subcond x y.
