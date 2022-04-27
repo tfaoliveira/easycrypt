@@ -123,11 +123,11 @@ module CI_Xint = struct
   let p_is_int = mk_Xint "is_int"
   let p_xoget  = mk_Xint "xoget"
 
-  let p_choaretac = EcPath.pqname p_top "CHoareTactic"
+  let p_xle     = mk_Xint "xle"
+  let p_xlt     = mk_Xint "xlt"
+  let p_xmax    = mk_Xint "xmax"
 
-  let p_xle     = EcPath.pqname p_choaretac "xle"
-  let p_xlt     = EcPath.pqname p_choaretac "xlt"
-  let p_xmax    = EcPath.pqname p_choaretac "xmax"
+  let p_choaretac = EcPath.pqname p_top "CHoareTactic"
 
   let p_Bigxint = EcPath.pqname p_choaretac "Bigxint"
   let p_Bigcost = EcPath.pqname p_choaretac "Bigcost"

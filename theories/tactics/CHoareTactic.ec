@@ -4,9 +4,15 @@ require (*--*) Bigop.
 (*---*) import IntID IntOrder Bigint.
 
 (* This lemma ensure the correctness of our rules for seq, wp ... *)
+lemma subrK_completeness (x y : xint) : is_inf x \/ is_int y <=> (x - y) + y = x.
+proof. case y => //; case x => //= *; ring. qed.
+
 lemma subrK (x y : xint) : is_inf x \/ is_int y => (x - y) + y = x.
 proof. case y => //; case x => //= *; ring. qed.
 
+lemma subrle (x y : xint) : y <= x => (x - y) + y = x.
+proof. case y => //; case x => //= *; ring. qed.
+  
 (* -------------------------------------------------------------------- *)
 lemma add0x (x : xint) : '0 + x = x.
 proof. by case x. qed.
@@ -45,6 +51,20 @@ lemma mulxC : commutative xmul.
 proof. by case=> [x|] [y|] => //=; rewrite mulrC. qed.
 
 (* -------------------------------------------------------------------- *)
+(* not that this does not hold for negative scaling, taking [j = -i]. *)
+lemma xscale_distri (i j : int) (x : xint) : 
+  0 <= i => 0 <= j => (N (i + j)) * x = (N i) * x + (N j) * x.
+proof.
+ move => H. case x => //=. smt(). case (i+j = 0). smt(). smt (). 
+qed.
+
+lemma xscale_distrx (i : int) (x y : xint) : 
+  (N i) * (x + y) = (N i) * x + (N i) * y.
+proof.
+ case x; case y => // /#.
+qed.
+
+(* -------------------------------------------------------------------- *)
 
 lemma xaddInfx (x:xint) : Inf + x = Inf.
 proof. by case: x. qed.
@@ -61,18 +81,7 @@ proof. by case: x => i //= ->. qed.
 hint simplify xaddInfx, xaddxInf, xmulInfx, xmulxInf.
 
 (* -------------------------------------------------------------------- *)
-op xle (x y : xint) =
-  with x = N x, y = N y => (x <= y)
-  with x = N x, y = Inf => true
-  with x = Inf, y = N y => false
-  with x = Inf, y = Inf => true.
-
-op xlt = fun x y => xle x y /\ !(x = y).
-
-abbrev (<=) = xle.
-abbrev (<)  = xlt.
-
-lemma lexx : reflexive (<=).
+lemma lexx : reflexive (<=)%Xint.
 proof. by case. qed.
 
 lemma lexx_rw (x y : xint) : x = y => x <= y.
@@ -83,7 +92,7 @@ hint simplify lexx_rw.
 lemma lex_anti (x y : xint) : x <= y <= x => x = y.
 proof. by case: x y => [x|] [y|] //=; apply: ler_anti. qed.
 
-lemma lex_trans : transitive (<=).
+lemma lex_trans : transitive (<=)%Xint.
 proof. by case=> [x|] [y|] [z|] //=; apply: ler_trans. qed.
 
 lemma lex_inf (x : xint) : x <= Inf.
@@ -96,19 +105,22 @@ proof.
 by case: x1 x2 y => [x1|] [x2|] [y|] //=; apply: ler_add2r.
 qed.
 
-lemma is_int_le x y : x <= y => is_int y => is_int x.
+lemma is_int_le (x : xint) (y : xint): x <= y => is_int y => is_int x.
 proof. by case: x => //; case: y. qed.
 
 lemma lex_add2l (x1 x2 y : xint) :
   x1 <= x2 => y + x1 <= y + x2.
 proof. by rewrite !(@addxC y) &(lex_add2r). qed.
 
-op xmax (x y : xint) = 
-  with x = N x, y = N y => N (max x y)
-  with x = N _, y = Inf => Inf
-  with x = Inf, y = N _ => Inf
-  with x = Inf, y = Inf => Inf.
+lemma lex_add_posr (x y : xint) :
+  '0 <= x => y <= y + x.
+proof. have // := lex_add2l ('0) x y. qed.
 
+lemma lex_add_posl (x y : xint) :
+  '0 <= x => y <= x + y.
+proof. rewrite (addxC x); exact lex_add_posr. qed.
+
+(* -------------------------------------------------------------------- *)
 lemma sub_completness (t1 t2 t:xint) : 
    t1 + t2 <= t <=>
    t1 <= t - t2 /\ (is_int t2 \/ is_inf t).
@@ -170,7 +182,8 @@ theory Bigcost.
     big P (fun _ => x) s = (count P s) * x.
   proof. 
     elim: s => [|y s ih] /=; 1: by rewrite /big.
-    by rewrite big_cons ih; case: (P y); [1: rewrite scale_distr].
+    rewrite big_cons ih; case: (P y) => //. 
+    rewrite scale_distri //; smt(count_ge0). 
   qed.
     
   lemma big_constC (x : cost) (s: 'a list) :
