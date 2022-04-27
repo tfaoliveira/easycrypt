@@ -2744,26 +2744,31 @@ let rec pp_list sep pp fmt xs =
     | [x]     -> Format.fprintf fmt "%a" pp x
     | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
 
-let dump_todo fmt = Format.fprintf fmt "TODO"
+let dump_todo fmt = Format.fprintf fmt "#?"
+
+let ident_to_string ~long = if long then EcIdent.tostring else EcIdent.name
 
 (* FIXME A: keep it ? *)
-let rec dump_form fmt (f : form) =
+let rec dump_form ~(long:bool) fmt (f : form) =
+  let ident_to_string = ident_to_string ~long in
+  let dump_form = dump_form ~long in
+
   match f.f_node with
   | Fint n ->
     Format.fprintf fmt "%a" BI.pp_print n
 
-  | Flocal id -> Format.fprintf fmt "%s" (EcIdent.tostring id)
+  | Flocal id -> Format.fprintf fmt "%s" (ident_to_string id)
 
   | Fpvar (x, i) ->
-    Format.fprintf fmt "%s{%s}" (string_of_pvar x) (EcIdent.tostring i)
+    Format.fprintf fmt "%s{%s}" (string_of_pvar x) (ident_to_string i)
 
   | Fglob (mp, i) ->
-    Format.fprintf fmt "(glob %s){%s}" (EcPath.m_tostring mp) (EcIdent.tostring i)
+    Format.fprintf fmt "(glob %a){%s}" EcPath.pp_m mp (ident_to_string i)
 
   | Fquant (q, bd, f) ->
     Format.fprintf fmt "@[<hov 2>%s (%a),@ %a@]"
       (string_of_quant q)
-      dump_bindings bd
+      (dump_bindings ~long) bd
       dump_form f
 
   | Fif (b, f1, f2) ->
@@ -2772,14 +2777,18 @@ let rec dump_form fmt (f : form) =
       dump_form f1
       dump_form f2
 
-  | Flet (lp, f1, f2) -> dump_let fmt (lp, f1, f2)
+  | Flet (lp, f1, f2) -> dump_let ~long fmt (lp, f1, f2)
 
-  | Ftuple args -> dump_tuple fmt args
+  | Ftuple args -> dump_tuple ~long fmt args
 
   | Fop (op, tvi) ->
-    Format.fprintf fmt "%s[%s]"
-      (EcPath.tostring op)
-      (String.concat ", " (List.map dump_ty tvi))
+    if long then
+      Format.fprintf fmt "%s[%s]"
+        (EcPath.tostring op)
+        (String.concat ", " (List.map dump_ty tvi))
+    else
+      let _, op = EcPath.toqsymbol op in
+      Format.fprintf fmt "%s" op
 
   | Fapp (e, args) ->
     Format.fprintf fmt "(%a)" (pp_list " " dump_form) (e :: args)
@@ -2787,9 +2796,9 @@ let rec dump_form fmt (f : form) =
   | Fproj (e, i) ->
     Format.fprintf fmt "(%a).%d" dump_form e i
 
-  | Fcost c -> dump_crecord fmt c
+  | Fcost c -> dump_cost ~long fmt c
 
-  | Fmodcost mc -> dump_modcost fmt mc
+  | Fmodcost mc -> dump_modcost ~long fmt mc
 
   | Fcost_proj (f,p) ->
     Format.fprintf fmt "%a#%a" dump_form f pp_cost_proj p
@@ -2808,17 +2817,17 @@ let rec dump_form fmt (f : form) =
   | Fpr       _pr  -> dump_todo fmt
   | _              -> dump_todo fmt
 
-and _dump_crecord fmt
+and _dump_crecord ~(long:bool) fmt
     ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
   =
   let pp_self fmt self =
     Format.fprintf fmt ": %a"
-      dump_form self
+      (dump_form ~long) self
 
   and pp_call_el fmt (f,c) =
     Format.fprintf fmt "%s : %a"
       (EcPath.x_tostring f)
-      dump_form c
+      (dump_form ~long) c
 
   and pp_full fmt = if not full then Format.fprintf fmt ".." in
 
@@ -2829,46 +2838,47 @@ and _dump_crecord fmt
     (fun fmt -> if not full then Format.fprintf fmt ",@ ")
     pp_full
 
-and dump_crecord fmt (c : crecord) =
-  _dump_crecord fmt
+and dump_crecord ~(long:bool) fmt (c : crecord) =
+  (_dump_crecord ~long) fmt
     (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
 
-and dump_cost      fmt c = dump_crecord fmt c
-and dump_proc_cost fmt c = dump_crecord fmt c
+and dump_cost      ~(long:bool) fmt c = dump_crecord ~long fmt c
+and dump_proc_cost ~(long:bool) fmt c = dump_crecord ~long fmt c
 
-and dump_modcost fmt (mc : mod_cost) =
+and dump_modcost ~(long:bool) fmt (mc : mod_cost) =
   let pp_elt fmt (f, proc_cost) =
     Format.fprintf fmt "@[%s : %a@]"
-      f dump_proc_cost proc_cost
+      f (dump_proc_cost ~long) proc_cost
   in
 
   let elts = Msym.bindings mc in
   Format.fprintf fmt "@[<hv 1>`[%a]@]"
     (pp_list ",@ " pp_elt) elts
 
-and dump_bindings fmt bds =
-  List.iter (dump_binding fmt) bds
+and dump_bindings ~(long:bool) fmt bds =
+  List.iter (dump_binding ~long fmt) bds
 
-and dump_binding fmt (x,ty) : unit =
+and dump_binding ~(long:bool) fmt (x,ty) : unit =
+  let ident_to_string = ident_to_string ~long in
   match ty with
   | GTty ty ->
-    Format.fprintf fmt "(%s : %s)" (EcIdent.tostring x) (dump_ty ty)
+    Format.fprintf fmt "(%s : %s)" (ident_to_string x) (dump_ty ty)
 
   | GTmem _m ->
-    Format.fprintf fmt "(%s : ??)" (EcIdent.tostring x)
+    Format.fprintf fmt "(%s : ??)" (ident_to_string x)
 
   | GTmodty mt ->
-    Format.fprintf fmt "(%s <: %a)" (EcIdent.tostring x) dump_modty mt
+    Format.fprintf fmt "(%s <: %a)" (ident_to_string x) (dump_modty ~long) mt
 
-and dump_modty fmt (mty : module_type) : unit =
+and dump_modty ~(long:bool) fmt (mty : module_type) : unit =
   Format.fprintf fmt "@[<hv 2>%s%a@]"
-    (EcPath.tostring mty.mt_name) dump_restr mty.mt_restr
+    (EcPath.tostring mty.mt_name) (dump_restr ~long) mty.mt_restr
 
-and dump_restr fmt (mr : mod_restr) : unit =
+and dump_restr ~(long:bool) fmt (mr : mod_restr) : unit =
   Format.fprintf fmt "{%a} [%a] `[%a]"
     dump_mem_restr mr
     dump_orcl_call mr.mr_params
-    dump_form mr.mr_cost
+    (dump_form ~long) mr.mr_cost
 
 and dump_mem_restr fmt (_mr : mod_restr) : unit =
   Format.fprintf fmt "??"
@@ -2876,19 +2886,32 @@ and dump_mem_restr fmt (_mr : mod_restr) : unit =
 and dump_orcl_call fmt _mr_params : unit =
   Format.fprintf fmt "??"
 
-and dump_tuple fmt fs =
-  let pp_ident fmt f = Format.fprintf fmt "%a" dump_form f in
+and dump_tuple ~(long:bool) fmt fs =
+  let pp_ident fmt f = Format.fprintf fmt "%a" (dump_form ~long) f in
   Format.fprintf fmt "@[<hov 0>(%a)@]"
     (pp_list ",@ " pp_ident) fs
 
-and dump_idents fmt es =
-  let pp_ident fmt id = Format.fprintf fmt "%s" (EcIdent.tostring id) in
+and dump_idents ~(long:bool) fmt es =
+  let ident_to_string = ident_to_string ~long in
+  let pp_ident fmt id = Format.fprintf fmt "%s" (ident_to_string id) in
   Format.fprintf fmt "@[<hov 0>(%a)@]"
     (pp_list ",@ " pp_ident) es
 
-and dump_let fmt (pt, e1, e2) =
-  let ids    = lp_ids pt in
+and dump_let ~(long:bool) fmt (pt, e1, e2) =
+  let ids = lp_ids pt in
   Format.fprintf fmt "@[<hov 0>let %a =@;<1 2>@[%a@]@ in@ %a@]"
-    dump_idents ids
-    dump_form e1
-    dump_form e2
+    (dump_idents ~long) ids
+    (dump_form ~long) e1
+    (dump_form ~long) e2
+
+(* -------------------------------------------------------------------- *)
+(** Exported *)
+
+let dump_form_long = dump_form ~long:true
+let dump_form      = dump_form ~long:false
+
+let dump_modcost_long = dump_modcost ~long:true
+let dump_modcost      = dump_modcost ~long:true
+
+let dump_modty_long = dump_modty ~long:true
+let dump_modty      = dump_modty ~long:true

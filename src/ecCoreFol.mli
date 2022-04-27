@@ -697,5 +697,10 @@ type core_op = [
 val core_op_kind : path -> core_op option
 
 (* -------------------------------------------------------------------- *)
-val dump_form  : Format.formatter -> form        -> unit
-val dump_modty : Format.formatter -> module_type -> unit
+val dump_form    : Format.formatter -> form        -> unit
+val dump_modty   : Format.formatter -> module_type -> unit
+val dump_modcost : Format.formatter -> mod_cost    -> unit
+
+val dump_form_long    : Format.formatter -> form        -> unit
+val dump_modty_long   : Format.formatter -> module_type -> unit
+val dump_modcost_long : Format.formatter -> mod_cost    -> unit
