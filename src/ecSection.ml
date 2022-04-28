@@ -304,7 +304,6 @@ let rec on_form (cb : cb) (f : EcFol.form) =
 
   and on_cost_proj _cb : EcFol.cost_proj -> unit = function
     | Conc | Intr _ | Param _ -> ()
-    | Abs (_, _) -> ()
   in
     on_ty cb f.EcFol.f_ty; fornode ()
 

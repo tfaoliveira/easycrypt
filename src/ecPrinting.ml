@@ -1254,7 +1254,6 @@ let string_of_hcmp = function
 let pp_cost_proj fmt (p : cost_proj) =
   match p with
   | Conc       -> Format.fprintf fmt "conc"
-  | Abs (id,f) -> Format.fprintf fmt "%s.%s" (EcIdent.tostring id) f
   | Intr  f    -> Format.fprintf fmt "%s:intr" f
   | Param p    -> Format.fprintf fmt "%s:%s.%s" p.proc p.param_m p.param_p
 

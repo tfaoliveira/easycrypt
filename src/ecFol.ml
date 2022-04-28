@@ -1107,11 +1107,6 @@ let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
   match f.f_node, p with
   | Fcost c, Conc -> c.c_self
 
-  | Fcost c, Abs (id,f) ->
-    let xp = EcPath.xpath (EcPath.mident id) f in
-    let c_idf = EcPath.Mx.find_opt xp c.c_calls in
-    oget_c_bnd c_idf c.c_full
-
   | Fmodcost mc, Intr fname ->
     let pcost = Msym.find fname mc in (* cannot fail *)
     pcost.c_self

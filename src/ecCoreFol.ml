@@ -27,7 +27,6 @@ type hoarecmp = FHle | FHeq | FHge
 (* projection of a cost record or module cost record *)
 type cost_proj =
   | Conc
-  | Abs   of EcIdent.t * symbol   (* abstract module, procedure *)
 
   | Intr  of symbol               (* procedure *)
   | Param of {
@@ -213,16 +212,12 @@ let qt_hash  : quantif -> int = Hashtbl.hash
 (*-------------------------------------------------------------------- *)
 let cost_proj_ty : cost_proj -> ty = function
   | Conc    -> txint
-  | Abs   _ -> txint
   | Intr  _ -> tcost
   | Param _ -> txint
 
 let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
   match p1, p2 with
   | Conc, Conc -> true
-
-  | Abs (id1, s1), Abs (id2, s2) ->
-    EcIdent.tag id1 = EcIdent.tag id2 && s1 = s2
 
   | Intr s1, Intr s2 -> s1 = s2
 
@@ -236,7 +231,6 @@ let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
 let cost_proj_hash (p : cost_proj) : int =
   match p with
   | Conc        -> 0
-  | Abs (id, s) -> Why3.Hashcons.combine2 1 (EcIdent.tag id) (Hashtbl.hash s)
   | Intr s      -> Why3.Hashcons.combine  2 (Hashtbl.hash s)
 
   | Param { param_p; param_m; proc } ->
@@ -664,12 +658,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fcost c             -> cost_fv c
     | Fmodcost mc         -> mod_cost_fv mc
 
-    | Fcost_proj (f, proj) ->
-      let fv_proj = match proj with
-        | Param _ | Conc | Intr _ -> Mid.empty
-        | Abs (id, _)             -> Mid.singleton id 1
-      in
-      fv_union (f_fv f) fv_proj
+    | Fcost_proj (f, _) -> fv_union (f_fv f) Mid.empty
 
     | Fquant(_, b, f) ->
       let do1 (id, ty) fv = fv_union (gty_fv ty) (Mid.remove id fv) in
@@ -2392,6 +2381,8 @@ module Fsubst = struct
 
     | Fmodcost mc -> f_mod_cost_r (Msym.map (proc_cost_subst ~tx s) mc)
 
+    | Fcost_proj (f,p) -> f_cost_proj_r (f_subst ~tx s f) p
+
     | _ ->
       f_map s.fs_ty (f_subst ~tx s) fp)
 
@@ -2732,8 +2723,7 @@ let string_of_quant = function
 let pp_cost_proj fmt (p : cost_proj) =
   match p with
   | Conc       -> Format.fprintf fmt "conc"
-  | Abs (id,f) -> Format.fprintf fmt "%a.%s" EcIdent.pp_ident id f
-  | Intr  f    -> Format.fprintf fmt "%s.self" f
+  | Intr  f    -> Format.fprintf fmt "%s.intr" f
   | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
 
 (* FIXME A: factorize with EcPrinting *)

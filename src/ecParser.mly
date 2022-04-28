@@ -1135,7 +1135,6 @@ modcosts(P):
 (* -------------------------------------------------------------------- *)
 cost_proj:
 | CONC                     { PConc }
-| a=uident DOT p=lident    { PAbs (a,p)}
 | proc=lident COLON INTR   { PIntr proc }
 | proc=lident COLON a=uident DOT p=lident
                            { PParam {proc; param_m = a; param_p = p; } }

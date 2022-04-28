@@ -25,7 +25,6 @@ type hoarecmp = FHle | FHeq | FHge
 (* projection of a cost record or module cost record *)
 type cost_proj =
   | Conc
-  | Abs   of EcIdent.t * symbol   (* abstract module, procedure *)
 
   | Intr  of symbol               (* procedure *)
   | Param of {

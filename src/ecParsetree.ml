@@ -159,7 +159,6 @@ and precord = (psymbol * pty) list
 (* -------------------------------------------------------------------- *)
 type pcost_proj =
   | PConc
-  | PAbs of psymbol * psymbol (* abstract module, procedure *)
 
   | PIntr of psymbol          (* procedure *)
   | PParam of {

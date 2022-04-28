@@ -2079,10 +2079,6 @@ let f_or_mod_ident_loc : f_or_mod_ident -> EcLocation.t = function
 let trans_cost_proj env ~f_loc ~f_ty (p : pcost_proj) : cost_proj =
   match p with
   | PConc -> Conc
-  | PAbs (mid, f) ->
-    let x = trans_oracle env (mid, f) in
-    let mid = EcPath.mget_ident x.EcPath.x_top in
-    Abs (mid, unloc f)
 
   | PIntr proc ->
     let procs, _ =
