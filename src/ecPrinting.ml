@@ -1881,7 +1881,11 @@ and pp_allowed_orcl ppe fmt orcls =
 
 and pp_orclinfo_bare ppe fmt (oi,o_cost) =
   let pp_ocost fmt = function
-    | `Crecord c      -> pp_proc_cost ppe fmt c
+    | `Crecord c      ->
+      if proc_cost_has_restr c then
+        pp_proc_cost ppe fmt c
+      else ()
+
     | `Proj (mc, sym) -> Format.fprintf fmt "%a#%s" (pp_form ppe) mc sym
   in
 

@@ -221,8 +221,8 @@ op cddh = 3 + cxor + chash + cdbool + cdhkey.
 op cguess = 3 + 2*cgpow + cxor + cdbool + 2 * cdt.
 
 lemma ex_conclusion (A <: Adversary) &m :
-  exists (Dddh <: DDH.Adversary [guess : [cddh, A.choose : 1, A.guess : 1]])
-         (Des <: AdvES [guess: [cguess, A.choose : 1, A.guess : 1]]),
+  exists (Dddh <: DDH.Adversary [guess : [`[:N cddh, A.choose : '1, A.guess : '1]]])
+         (Des <: AdvES [guess: [`[:N cguess, A.choose : '1, A.guess : '1]]]),
 
    `|Pr[CPA(Hashed_ElGamal, A).main() @ &m : res] - 1%r / 2%r| <=
    `|Pr[DDH0(Dddh).main() @ &m : res] - Pr[DDH1(Dddh).main() @ &m : res]| +
@@ -231,14 +231,14 @@ proof.
   exists (DDHAdv(A)); split; last first.
   exists (ESAdv(A)); split; last first.
   apply (conclusion A _ _ &m).
-  + conseq (_ : _ : time [:N 0, A.choose : 1]).
+  + conseq (_ : _ : time `[:N 0, A.choose : '1]).
     by proc true : []. 
-  + conseq (_ : _ : time [:N 0, A.guess : 1]). 
+  + conseq (_ : _ : time `[:N 0, A.guess : '1]). 
     by proc true : [].
-  + proc; call (: true: []); rnd; call(:true: []); do 2!rnd; skip => />.
-    rewrite dt_ll dbool_ll /=. smt (ge0_cg ge0_cxor ge0_cdbool ge0_cdt).
-  proc; call (:true : []); wp; rnd; call(:true : []); rnd; skip => />.
-  rewrite dhkey_ll dbool_ll /=. smt (ge0_cxor ge0_cdbool ge0_chash ge0_cdhkey).
+  + proc; call (: true); rnd; call(:true); do 2!rnd; skip => />.
+    rewrite dt_ll dbool_ll /=; smt (ge0_cg ge0_cxor ge0_cdbool ge0_cdt).
+  proc; call (:true); wp; rnd; call(:true); rnd; skip => />.
+  rewrite dhkey_ll dbool_ll /=; smt (ge0_cxor ge0_cdbool ge0_chash ge0_cdhkey).
 qed.
 
 end Cost.

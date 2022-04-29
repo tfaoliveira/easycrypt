@@ -80,13 +80,19 @@ let cost_has_restr (c : cost) : bool =
   c.c_full
 
 let f_cost_has_restr (c : form) =
-  if is_modcost c then
+  if is_cost c then
     let c = destr_cost c in
     `Known (cost_has_restr c)
   else `Unknown
 
+(* -------------------------------------------------------------------- *)
+let proc_cost_has_restr (c : cost) : bool =
+  not (f_equal f_cost_inf c.c_self || f_equal f_cost_inf0 c.c_self) ||
+  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  c.c_full
+
 let modcost_has_restr (mc : mod_cost) : bool =
-  Msym.exists (fun _ proc_c -> cost_has_restr proc_c) mc
+  Msym.exists (fun _ proc_c -> proc_cost_has_restr proc_c) mc
 
 let f_modcost_has_restr (mc : form) =
   if is_modcost mc then
@@ -98,7 +104,7 @@ let f_modcost_proc_has_restr (mc : form) proc =
   if is_modcost mc then
     let mc = destr_modcost mc in
     let p = Msym.find proc mc in
-    `Known (cost_has_restr p)
+    `Known (proc_cost_has_restr p)
   else `Unknown
 
 (* -------------------------------------------------------------------- *)

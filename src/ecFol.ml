@@ -1068,7 +1068,6 @@ let f_lam_cost_map
     (c     : form)              (* type [args -> tcost] *)
   : form                        (* type [tcost] *)
   =
-  Format.eprintf "[W] trying: %a@." dump_form c;
   let bd, body = decompose_lambda c in
   if not (is_cost body) then costf c
   else
