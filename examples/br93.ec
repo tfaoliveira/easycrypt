@@ -674,9 +674,9 @@ apply/(Reduction (A_CPA(A)) _ _ &m).
 by move=> O O_o_ll; proc; call (A_a2_ll O O_o_ll).
 qed.
 
-lemma ex_Reduction (cA:adv_cost) 
-    (A<:Adv [choose : [_, #ARO.o : cA.`ochoose],
-             guess  : [_, #ARO.o : cA.`oguess]] {-Log, -LRO}) &m:
+lemma ex_Reduction (cA:cost) (kc kg : int)
+    (A<:Adv [choose : [.., #ARO.o : N kc],
+             guess  : [.., #ARO.o : N kg]] {-Log, -LRO}) &m:
   (0 <= cA.`ochoose /\ 0 <= cA.`oguess) =>
   (forall (O <: POracle{-A}), islossless O.o => islossless A(O).guess) =>
   let qH = cA.`ochoose + cA.`oguess in

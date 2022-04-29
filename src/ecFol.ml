@@ -757,6 +757,7 @@ type op_kind = [
   | `Cost_xscale
   | `Cost_le
   | `Cost_lt
+  | `Cost_big
 
   | `Real_add
   | `Real_opp
@@ -794,6 +795,7 @@ let operators =
      CI.CI_Cost.p_cost_opp   , `Cost_opp   ;
      CI.CI_Cost.p_cost_scale , `Cost_scale ;
      CI.CI_Cost.p_cost_xscale, `Cost_xscale;
+     CI.CI_Xint.p_bigcost    , `Cost_big   ;
 
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
@@ -1020,10 +1022,10 @@ let f_is_int_simpl (c : form) : form =
 (* -------------------------------------------------------------------- *)
 (* lift a unary function to [tcost] *)
 let f_cost_map
-    (xf    : form -> form)
-    (costf : form -> form)
-    (c     : form)
-  : form
+    (xf    : form -> form)      (* type [txint -> txint] *)
+    (costf : form -> form)      (* type [tcost -> tcost] *)
+    (c     : form)              (* type [tcost] *)
+  : form                        (* type [tcost] *)
   =
   if not (is_cost c) then costf c
   else
@@ -1057,6 +1059,30 @@ let f_cost_xscale_simpl (f : form) (c : form) =
       c
 
 (* -------------------------------------------------------------------- *)
+(* Lift a unary function over [args -> txint] to [args -> tcost]
+   where [args] is [a_1 -> ... -> a_n].
+   I.e. commutes a λ-binding and the cost record. *)
+let f_lam_cost_map
+    (xf    : form -> form)      (* type [(args -> txint) -> txint] *)
+    (costf : form -> form)      (* type [(args -> tcost) -> tcost] *)
+    (c     : form)              (* type [args -> tcost] *)
+  : form                        (* type [tcost] *)
+  =
+  Format.eprintf "[W] trying: %a@." dump_form c;
+  let bd, body = decompose_lambda c in
+  if not (is_cost body) then costf c
+  else
+    let body = destr_cost body in
+    let self = xf (f_lambda bd body.c_self) in
+    let calls = EcPath.Mx.map (fun x -> xf (f_lambda bd x)) body.c_calls in
+    f_cost_r (cost_r self calls body.c_full)
+
+let f_bigcost_simpl (pred : form) (cost : form) (l : form) : form =
+  f_lam_cost_map
+    (fun x -> f_bigx pred x l)
+    (fun c -> f_bigcost pred c l)
+    cost
+(* -------------------------------------------------------------------- *)
 let cost_is_zero (c : form) : bool =
   if not (is_cost c) then false
   else
@@ -1065,6 +1091,7 @@ let cost_is_zero (c : form) : bool =
     f_equal f_x0 c.c_self &&
     EcPath.Mx.for_all (fun _ -> f_equal f_x0) c.c_calls
 
+(* -------------------------------------------------------------------- *)
 (* lift a binary operator over [txint] to [tcost] *)
 let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
   if not (is_cost c1 && is_cost c2) then

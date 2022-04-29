@@ -181,7 +181,7 @@ proof.
      and that the cost of all iterations is smaller than the final
      cost. *)
   skip => * /=; split; 1: by smt().
-  by rewrite big_constC !size_range /#.
+  by rewrite bigi_constz // /#.
 qed.
 
 (* Match example *)
@@ -281,11 +281,9 @@ lemma Inv_compl
 proof.
   move => hk; proc.
   call (_: true).
-
-  by move => i Hi /=; proc*; call(_: true).
-
-  by rewrite bigi_constC. 
-  by auto; rewrite bigi_constC. 
+  + by move => i Hi /=; proc*; call(_: true).
+  + by rewrite bigi_constC. 
+  by auto; rewrite !bigi_constz //=. 
 qed.
 
 (* TODO A: *)
@@ -321,7 +319,7 @@ move => hk; proc.
 call (_: true).
 + by move => i Hi /=; proc*; call(_: true : []); auto => /=.
 + by rewrite bigi_constC.
-+ by auto; rewrite bigi_constC. 
+by auto; rewrite bigi_constz. 
 qed.
 
 (* using `conseq` to conclude *)

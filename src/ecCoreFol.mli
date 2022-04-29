@@ -399,6 +399,15 @@ val f_cost_lt      : form -> form -> form
 val f_cost_subcond : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
+val f_bigcost : form -> form -> form -> form
+val f_bigx    : form -> form -> form -> form
+val f_big     : form -> form -> form -> form
+
+val f_bigicost : form -> form -> form -> form
+val f_bigix    : form -> form -> form -> form
+val f_bigi     : form -> form -> form -> form
+
+(* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
 val f_is_int : form -> form
 

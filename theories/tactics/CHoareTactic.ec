@@ -181,7 +181,7 @@ theory Bigcost.
   realize Support.Axioms.addmC by exact/addcC.
   realize Support.Axioms.add0m by exact/add0c.
   
-  lemma nosmt big_const_C (P : 'a -> bool) (x : cost)s:
+  lemma nosmt big_const_C (P : 'a -> bool) (x : cost) s:
     big P (fun _ => x) s = (count P s) * x.
   proof. 
     elim: s => [|y s ih] /=; 1: by rewrite /big.

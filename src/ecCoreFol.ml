@@ -1176,6 +1176,43 @@ let f_int_mul_simpl f1 f2 =
   else f_int_mul f1 f2
 
 (* -------------------------------------------------------------------- *)
+let q_List = [EcCoreLib.i_top; "List"]
+
+let tlist =
+  let tlist = EcPath.fromqsymbol (q_List, "list") in
+  fun ty -> EcTypes.tconstr tlist [ty]
+
+let range =
+  let rg = EcPath.fromqsymbol (q_List @ ["Range"], "range") in
+  let rg = f_op rg [] (toarrow [tint; tint] (tlist tint)) in
+  fun m n -> f_app rg [m; n] (tlist tint)
+
+let f_predT = f_op EcCoreLib.CI_Pred.p_predT [tint] (tpred tint)
+
+let f_op_bigcost =
+  f_op EcCoreLib.CI_Xint.p_bigcost [tint]
+    (toarrow [tpred tint; tfun tint tcost; tlist tint] tcost)
+
+let f_op_bigx =
+  f_op EcCoreLib.CI_Xint.p_bigx [tint]
+    (toarrow [tpred tint; tfun tint txint; tlist tint] txint)
+
+let f_op_big =
+  let p_big =
+    EcPath.fromqsymbol ([EcCoreLib.i_top;"StdBigop"; "Bigint"; "BIA"], "big")
+  in
+  f_op p_big [tint]
+    (toarrow [tpred tint; tfun tint tint; tlist tint] tint)
+
+let f_bigcost p f l = f_app f_op_bigcost [p; f; l] tcost
+let f_bigx    p f l = f_app f_op_bigx    [p; f; l] txint
+let f_big     p f l = f_app f_op_big     [p; f; l] tint
+
+let f_bigicost f m n = f_app f_op_bigcost [f_predT; f; range m n] tcost
+let f_bigix    f m n = f_app f_op_bigx    [f_predT; f; range m n] txint
+let f_bigi     f m n = f_app f_op_big     [f_predT; f; range m n] tint
+
+(* -------------------------------------------------------------------- *)
 (* Get the value of a [c_bnd] according to [full] *)
 let oget_c_bnd (c : form option) (full : bool) =
   match c with
