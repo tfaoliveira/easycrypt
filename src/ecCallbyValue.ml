@@ -125,6 +125,50 @@ and f_map_set_simplify st m x =
   | _ -> m
 
 (* -------------------------------------------------------------------- *)
+(* Simplifies a expression [0 <= (c1 + ... + cn)] over [tcost] using:
+   - [0 <= c - c]
+   - the monotonicity of [+]
+   Note that, [tcost], [c - c] is not [0], hence only inequalities can be
+   simplified. *)
+let cost_geq0_simplify (cost : form) : form =
+  let add_p = EcCoreLib.CI_Cost.p_cost_add in
+
+  (* decompose [c] into a sum of elements *)
+  let rec decompose_add (c : form) : form list =
+    match destr_app2_eq ~name:"" add_p c with
+    | c1, c2 -> decompose_add c1 @ decompose_add c2
+    | exception DestrError _ -> [c]
+  in
+
+  (* [x = -y] or [-x = y] *)
+  let is_opp (x : form) (y : form) : bool =
+    f_equal x (f_cost_opp y) || f_equal (f_cost_opp x) y
+  in
+
+  (* did we found a reduction *)
+  let reduced = ref false in
+
+  (* remove pairs of elements [(x, -x)] *)
+  let rec simplify : form list -> form list = function
+    | [] -> []
+    | x :: l ->
+      try
+        let l1, _, l2 = List.find_pivot (is_opp x) l in
+        reduced := true;
+        simplify (List.rev_append l1 l2)
+      with Not_found -> x :: simplify l
+  in
+
+  let sum (l : form list) : form =
+    match List.rev l with
+    | [] -> f_cost_zero
+    | f :: l -> List.fold_left ((^~) f_cost_add) f l
+  in
+
+  let new_cost = sum (simplify (decompose_add cost)) in
+  if !reduced then new_cost else cost
+
+(* -------------------------------------------------------------------- *)
 module Args : sig
   type args = private { resty : ty; stack : form list; }
 
@@ -507,7 +551,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chf_pr = norm st s chf.chf_pr in
     let chf_po = norm st s chf.chf_po in
     let chf_f  = norm_xfun st s chf.chf_f in
-    let chf_c  = norm st s chf.chf_co in
+
+    let chf_c  = cost_geq0_simplify (norm st s chf.chf_co) in
+
     f_cHoareF_r { chf_pr; chf_f; chf_po; chf_co = chf_c; }
 
   | FcHoareS chs ->
@@ -517,7 +563,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chs_po = norm st s chs.chs_po in
     let chs_s  = norm_stmt s chs.chs_s in
     let chs_m  = norm_me s chs.chs_m in
-    let chs_c  = norm st s chs.chs_co in
+
+    let chs_c  = cost_geq0_simplify (norm st s chs.chs_co) in
+
     f_cHoareS_r { chs_pr; chs_po; chs_s; chs_m; chs_co = chs_c; }
 
   | FbdHoareF hf ->

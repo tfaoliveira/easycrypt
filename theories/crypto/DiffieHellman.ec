@@ -176,15 +176,13 @@ theory List_CDH.
           cost(&hr: {gx, gy, x : group, s : group list})[size s <= n : duniform s].
         by case: t => // ? /#.
 
+      move => /=.
       skip => />; split.
       + by move=> *; apply duniform_ll;rewrite -size_eq0 /#.
 
       move: h; pose t :=
-        cost(&hr: {gx, gy, x : group, s : group list})[size s <= n : duniform s].
-      case: t => // ?.
-      move=> H /=; rewrite -addcA -addcA (addcA _ _ (-cs)) /=. 
-      rewrite (addcC _ (-cs)) addcA.
-      apply lec_add_posr.
+        cost(&hr: {gx, gy, x : group, s : group list})[size s <= n : duniform s]. 
+      smt().
     qed.
 
   end Cost.
