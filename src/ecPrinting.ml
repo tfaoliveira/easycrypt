@@ -1658,7 +1658,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         pp_proji ppe pp_form_r (fst outer) fmt (e1,i)
     end
 
-  | Fcost c -> pp_crecord ppe fmt c
+  | Fcost c -> pp_cost ppe fmt c
 
   | FhoareF hf ->
       let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.hf_f ppe.PPEnv.ppe_env in
@@ -1826,33 +1826,41 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 (* -------------------------------------------------------------------- *)
-and _pp_crecord ppe fmt
+(** if [proccost] is true, we print the function path without looking
+    in the environment. *)
+and _pp_crecord ~proccost ppe fmt
     ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
   =
+  let pp_f fmt (f : EcPath.xpath) =
+    if not proccost then
+      pp_funname ppe fmt f
+    else
+      Format.fprintf fmt "%a.%s"
+        EcIdent.pp_ident (EcPath.mget_ident f.EcPath.x_top)
+        f.x_sub
+  in
+
   let pp_self fmt self =
-    Format.fprintf fmt ": %a"
-      (pp_form ppe) self
+    Format.fprintf fmt ": %a" (pp_form ppe) self
 
   and pp_call_el fmt (f,c) =
-    Format.fprintf fmt "%a : %a"
-      (pp_funname ppe) f
-      (pp_form ppe) c
+    Format.fprintf fmt "%a : %a" pp_f f (pp_form ppe) c
 
   and pp_full fmt = if not full then Format.fprintf fmt ".." in
 
-  Format.fprintf fmt "@[<hv 1>`[%a%t%a%t%t]@]"
+  Format.fprintf fmt "@[<hv 2>`[%a%t%a%t%t]@]"
     pp_self self
     (fun fmt -> if calls <> [] then Format.fprintf fmt ",@ ")
     (pp_list ",@ " pp_call_el) calls
     (fun fmt -> if not full then Format.fprintf fmt ",@ ")
     pp_full
 
-and pp_crecord ppe fmt (c : crecord) =
-  _pp_crecord ppe fmt
+and pp_crecord ~proccost ppe fmt (c : crecord) =
+  _pp_crecord ~proccost ppe fmt
     (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
 
-and pp_cost      ppe fmt c = pp_crecord ppe fmt c
-and pp_proc_cost ppe fmt c = pp_crecord ppe fmt c
+and pp_cost      ppe fmt c = pp_crecord ~proccost:false ppe fmt c
+and pp_proc_cost ppe fmt c = pp_crecord ~proccost:true  ppe fmt c
 
 and pp_modcost ppe fmt (mc : mod_cost) =
   let pp_elt fmt (f, proc_cost) =
@@ -1873,7 +1881,7 @@ and pp_allowed_orcl ppe fmt orcls =
 
 and pp_orclinfo_bare ppe fmt (oi,o_cost) =
   let pp_ocost fmt = function
-    | `Crecord c      -> pp_crecord ppe fmt c
+    | `Crecord c      -> pp_proc_cost ppe fmt c
     | `Proj (mc, sym) -> Format.fprintf fmt "%a#%s" (pp_form ppe) mc sym
   in
 
@@ -1887,6 +1895,7 @@ and pp_orclinfo ppe fmt (sym, oi, o_cost) =
     (if is_in oi then "" else " *")
     pp_symbol sym
     (pp_orclinfo_bare ppe) (oi, o_cost)
+
  (* Try to decompose [mc].[proc] as a cost record.
     Leave a pending projection if it can't. *)
 and modcost_info
