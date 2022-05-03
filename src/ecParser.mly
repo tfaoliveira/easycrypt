@@ -504,6 +504,8 @@
 %token NOTATION
 %token OF
 %token OP
+%token OPAQUE
+%token OPEN
 %token PCENT
 %token PHOARE
 %token PIPE
@@ -1795,20 +1797,29 @@ mod_restr_el:
 	      pmre_orcls = orcl;
 	      pmre_compl = cmpl; } }
 
+mod_opacity:
+| OPEN       { Some `Open }
+| OPAQUE     { Some `Opaque }
+|            { None }
+
+mod_restr_el_list:
+| op=mod_opacity l=rlist1(mod_restr_el,COMMA) { op, l }
+| op=mod_opacity                              { op, [] }
+
 mod_restr:
   | LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
-	      pmr_procs = [] } }
+	      pmr_procs = (None, []) } }
 
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
+  | LBRACKET l=mod_restr_el_list RBRACKET
     { { pmr_mem = [];
 	      pmr_procs = l } }
 
-  | LBRACE mr=mem_restr RBRACE LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
+  | LBRACE mr=mem_restr RBRACE LBRACKET l=mod_restr_el_list RBRACKET
     { { pmr_mem = mr;
 	      pmr_procs = l } }
 
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET LBRACE mr=mem_restr RBRACE
+  | LBRACKET l=mod_restr_el_list RBRACKET LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
 	      pmr_procs = l } }
 

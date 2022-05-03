@@ -31,12 +31,15 @@ type top_module_expr   = form p_top_module_expr
 let mk_mt_r = EcCoreFol.mk_mt_r
 
 (* Update existing module type *)
-let update_mt ?mt_params ?mt_name ?mt_args ?mt_restr mt : module_type =
-  let mt_params = odfl mt.mt_params mt_params
-  and mt_name   = odfl mt.mt_name   mt_name
-  and mt_args   = odfl mt.mt_args   mt_args
-  and mt_restr  = odfl mt.mt_restr  mt_restr in
-  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
+let update_mt ?mt_params ?mt_name ?mt_args ?mt_restr ?mt_opacity mt
+  : module_type
+  =
+  let mt_params  = odfl mt.mt_params  mt_params
+  and mt_name    = odfl mt.mt_name    mt_name
+  and mt_args    = odfl mt.mt_args    mt_args
+  and mt_restr   = odfl mt.mt_restr   mt_restr
+  and mt_opacity = odfl mt.mt_opacity mt_opacity in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity ~mt_restr
 
 (* -------------------------------------------------------------------- *)
 (* Smart constructor for module sigs *)

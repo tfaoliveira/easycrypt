@@ -24,18 +24,20 @@ type top_module_expr   = form p_top_module_expr
 (* -------------------------------------------------------------------- *)
 (* Smart constructor for module types *)
 val mk_mt_r :
-  mt_params : ((EcIdent.t * module_type) list) ->
-  mt_name   : EcPath.path ->
-  mt_args   : EcPath.mpath list ->
-  mt_restr  : mod_restr ->
+  mt_params  : ((EcIdent.t * module_type) list) ->
+  mt_name    : EcPath.path ->
+  mt_args    : EcPath.mpath list ->
+  mt_restr   : mod_restr ->
+  mt_opacity : mod_opacity ->
   module_type
 
 (* Update existing module type *)
 val update_mt :
-  ?mt_params : (EcIdent.t * EcCoreFol.module_type) list ->
-  ?mt_name   : EcPath.path ->
-  ?mt_args   : EcPath.mpath list ->
-  ?mt_restr  : EcCoreFol.form p_mod_restr ->
+  ?mt_params  : (EcIdent.t * EcCoreFol.module_type) list ->
+  ?mt_name    : EcPath.path ->
+  ?mt_args    : EcPath.mpath list ->
+  ?mt_restr   : EcCoreFol.form p_mod_restr ->
+  ?mt_opacity : mod_opacity ->
   module_type ->
   module_type
 

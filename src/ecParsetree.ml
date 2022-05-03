@@ -306,8 +306,9 @@ and pmod_restr_el = {
 }
 
 and pmod_restr = {
-  pmr_mem   : pmod_restr_mem;
-	pmr_procs : pmod_restr_el list;
+  pmr_mem     : pmod_restr_mem;
+	pmr_procs   : [`Open | `Opaque] option * pmod_restr_el list;
+ (* default to Opaque *)
  }
 
 (* -------------------------------------------------------------------- *)

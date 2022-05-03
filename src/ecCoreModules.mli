@@ -170,21 +170,27 @@ val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
 val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
+type mod_opacity =
+  | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
+  | Opaque                (* calling [A.f] costs `[A.f : 1] *)
+
 (* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
 type 'a p_module_type = private {          (* Always in eta-expanded form *)
-  mt_params : (EcIdent.t * 'a p_module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : 'a p_mod_restr;
+  mt_params  : (EcIdent.t * 'a p_module_type) list;
+  mt_name    : EcPath.path;
+  mt_args    : EcPath.mpath list;
+  mt_restr   : 'a p_mod_restr;
+  mt_opacity : mod_opacity;
 }
 
 (* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
 val _prelude_mk_mt_r :
-  check     : ('a -> bool) ->
-  mt_params : ((EcIdent.t * 'a p_module_type) list) ->
-  mt_name   : EcPath.path ->
-  mt_args   : EcPath.mpath list ->
-  mt_restr  : 'a p_mod_restr ->
+  check      : ('a -> bool) ->
+  mt_params  : ((EcIdent.t * 'a p_module_type) list) ->
+  mt_name    : EcPath.path ->
+  mt_args    : EcPath.mpath list ->
+  mt_restr   : 'a p_mod_restr ->
+  mt_opacity : mod_opacity ->
   'a p_module_type
 
 (* -------------------------------------------------------------------- *)

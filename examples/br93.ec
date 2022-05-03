@@ -749,12 +749,13 @@ lemma ex_Reduction &m :
   let cB = 
     4 + (4 + cf + ceqrand) * (k1 + k2) + cdptxt + 
     (3 + cdptxt + cget qH + cset qH + cin qH) * (k1 + k2) in
-  exists (B <: Inverter [invert : [`[: N cB, A.a2 : '1, A.a1 : '1]]]),
+  exists (B <: Inverter [open invert : [`[: N cB, A.a2 : '1, A.a1 : '1]]]),
        Pr[CPA(LRO, BR, A).main() @ &m : res] - 1%r/2%r 
     <= Pr[Exp_OW(B).main() @ &m: res].
 proof.
   move=> cA_pos A_choose_ll qH.
   exists (Self.I(A, LRO)); split. 
+
   (* Proof of the complexity *)
   + proc.
     seq 5 : (size Log.qs <= k1 + k2) 
@@ -779,6 +780,7 @@ proof.
     + move => &hr; smt (size_ge0 size_eq0).
     + done.
     by auto => /> &hr; rewrite bigi_constz /#.
+
   (* Proof of the bound *) 
   have := Reduction A A_choose_ll &m.
   have -> //: Pr[OW(I(A)).main() @ &m : res] = Pr[OW(Ifind(A)).main() @ &m : res].

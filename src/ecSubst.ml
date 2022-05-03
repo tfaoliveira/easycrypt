@@ -249,10 +249,11 @@ and subst_modtype
     else
       List.map (snd_map (subst_modtype s)) modty.mt_params
   in
-  let mt_name   = s.s_p modty.mt_name in
-  let mt_args   = List.map s.s_fmp modty.mt_args in
-  let mt_restr  = subst_mod_restr s modty.mt_restr in
-  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
+  let mt_name    = s.s_p modty.mt_name in
+  let mt_args    = List.map s.s_fmp modty.mt_args in
+  let mt_restr   = subst_mod_restr s modty.mt_restr in
+  let mt_opacity = modty.mt_opacity in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity ~mt_restr
 
 let subst_top_modsig (s : _subst) (ms: top_module_sig) =
   { tms_sig = snd (subst_modsig s ms.tms_sig);

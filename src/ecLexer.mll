@@ -60,6 +60,8 @@
     "hoare"       , HOARE      ;        (* KW: prog *)
     "choare"      , CHOARE     ;        (* KW: prog *)
     "cost"        , COST       ;        (* KW: prog *)
+    "open"        , OPEN       ;        (* KW: prog *)
+    "opaque"      , OPAQUE     ;        (* KW: prog *)
     "intr"        , INTR       ;        (* KW: prog *)
     "conc"        , CONC       ;        (* KW: prog *)
     "phoare"      , PHOARE     ;        (* KW: prog *)

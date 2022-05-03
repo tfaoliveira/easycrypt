@@ -438,10 +438,11 @@ val mod_cost_top_r : Ssym.t -> form
 (* -------------------------------------------------------------------- *)
 (* Smart constructor for module types *)
 val mk_mt_r :
-  mt_params : ((EcIdent.t * module_type) list) ->
-  mt_name   : EcPath.path ->
-  mt_args   : EcPath.mpath list ->
-  mt_restr  : mod_restr ->
+  mt_params  : ((EcIdent.t * module_type) list) ->
+  mt_name    : EcPath.path ->
+  mt_args    : EcPath.mpath list ->
+  mt_restr   : mod_restr ->
+  mt_opacity : mod_opacity ->
   module_type
 
 (* Smart constructor for module signatures *)

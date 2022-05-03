@@ -158,7 +158,7 @@ theory List_CDH.
 
     lemma ex_reduction (cs:cost) (A<:Adversary) &m :
       choare[A.solve : true ==> 0 < size res <= n] time cs =>
-      exists (B <:CDH.Adversary [solve : [cs + `[:N cduniform_n]] ] {+A}),
+      exists (B <:CDH.Adversary [open solve : [cs + `[:N cduniform_n]] ] {+A}),
       Pr[LCDH(A).main() @ &m: res] <= n%r * Pr[CDH.CDH(B).main() @ &m: res]. 
     proof.
       move=> hcA;exists (CDH_from_LCDH(A));split; last first.

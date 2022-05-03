@@ -1911,7 +1911,7 @@ and modcost_info
     `Crecord (Msym.find proc modcost)
   else `Proj (mc, proc)
 
-and pp_orclinfos ppe fmt (ois, cost) =
+and pp_orclinfos ppe fmt (opacity, ois, cost) =
   (* if there are no oracle restrictions, we do not print anything *)
   let orcl_infos =
     List.filter_map (fun (sym, oi) ->
@@ -1924,10 +1924,11 @@ and pp_orclinfos ppe fmt (ois, cost) =
           Some (sym, oi, o_cost)
       ) (Msym.bindings ois)
   in
-  if orcl_infos = [] then
+  if orcl_infos = [] && opacity = Opaque then
     Format.fprintf fmt ""
   else
-  Format.fprintf fmt "[@[<hv>%a@]]"
+  Format.fprintf fmt "[@[<hv>%t%a@]]"
+    (fun fmt -> if opacity <> Opaque then Format.fprintf fmt "open@;")
     (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos
 
 (* -------------------------------------------------------------------- *)
@@ -1973,15 +1974,15 @@ and pp_mem_restr ppe fmt mr =
 
 (* -------------------------------------------------------------------- *)
 (* Use in an hv box. *)
-and pp_restr ppe fmt mr =
+and pp_restr ppe fmt (opacity, mr) =
   Format.fprintf fmt "%a%a"
     (pp_mem_restr ppe) mr
-    (pp_orclinfos ppe) (mr.mr_params, mr.mr_cost)
+    (pp_orclinfos ppe) (opacity, mr.mr_params, mr.mr_cost)
 
 (* -------------------------------------------------------------------- *)
 and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
   Format.fprintf fmt "@[<hv 2>%a%a@]"
-    (pp_modtype1 ppe) mty (pp_restr ppe) mty.mt_restr
+    (pp_modtype1 ppe) mty (pp_restr ppe) (mty.mt_opacity, mty.mt_restr)
 
 (* -------------------------------------------------------------------- *)
 and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
@@ -3606,82 +3607,82 @@ module ObjectInfo = struct
 end
 
 (* ------------------------------------------------------------------ *)
-type ppsign = SNone | SPlus | SMinus
-
-let pp_sign fmt = function
-  | SNone  -> ()
-  | SPlus  -> pp_restr_s fmt true
-  | SMinus -> pp_restr_s fmt false
-
-let pp_v ~sign ppe fmt xp =
-  Format.fprintf fmt "%a%a"
-    pp_sign sign
-    (pp_pv ppe) (pv_glob xp)
-
-let pp_m ~sign ppe fmt m =
-  Format.fprintf fmt "%a%a"
-    pp_sign sign
-    (pp_topmod ppe) m
-
-let pp_m_xt ~print_abstract ~sign env fmt m =
-  let ppe = PPEnv.ofenv env in
-  if print_abstract then
-    let r = EcEnv.NormMp.get_restr env m in
-    Format.fprintf fmt "@[<hv>%a{@;<0 2>%a@,}@]"
-      (pp_m ~sign ppe) m
-      (pp_restr ppe) r
-  else pp_m ~sign ppe fmt m
-
-let sm_of_mid mid =
-  EcIdent.Mid.fold (fun x _ sm ->
-      EcPath.Sm.add (EcPath.mident x) sm
-    ) mid EcPath.Sm.empty
-
-let pp_use ppe fmt us =
-  let open EcEnv in
-  let sm = sm_of_mid us.us_gl in
-
-  Format.fprintf fmt "@[<v 0>Abstract modules [# = %d]:@ @[<h>%a@]@;"
-    (Sid.cardinal us.us_gl)
-    (pp_list "@ " (pp_m ~sign:SNone ppe))
-    (EcPath.Sm.ntr_elements sm);
-  Format.fprintf fmt "Variables [# = %d]:@ @[<h>%a@]@;@]"
-    (EcPath.Mx.cardinal us.us_pv)
-    (pp_list "@ " (pp_v ~sign:SNone ppe))
-    (EcPath.Sx.ntr_elements (EcPath.Mx.map (fun _ -> ()) us.us_pv))
-
-let pp_use_restr env ~print_abstract fmt ur =
-  let open EcEnv in
-  let ppe = PPEnv.ofenv env in
-
-  let sm_p = omap (fun x -> sm_of_mid x.us_gl) ur.EcModules.ur_pos
-  and sm_n = sm_of_mid ur.EcModules.ur_neg.us_gl in
-
-  let sx_p =
-    omap (fun x -> EcPath.Mx.map (fun _ -> ())x.us_pv) ur.EcModules.ur_pos
-  and sx_n =
-    EcPath.Mx.map (fun _ -> ()) ur.EcModules.ur_neg.us_pv in
-
-  Format.fprintf fmt "@[<v 0>Abstract modules:@ @[<h>%a@]@ @[<h>%a@]@;"
-    (fun fmt opt -> match opt with
-       | None      ->
-         Format.fprintf fmt "%s" all_mem_sym
-      | Some sm_p ->
-        pp_list "@ " (pp_m_xt ~print_abstract ~sign:SPlus env) fmt sm_p)
-    (omap EcPath.Sm.ntr_elements sm_p)
-    (pp_list "@ " (pp_m_xt ~print_abstract ~sign:SMinus env))
-    (EcPath.Sm.ntr_elements sm_n);
-
-  Format.fprintf fmt "Variables:@ @[<h>%a@]@ @[<h>%a@]@;@]"
-    (fun fmt opt -> match opt with
-      | None      -> Format.fprintf fmt "%s" all_mem_sym
-      | Some sm_p -> pp_list "@ " (pp_v ~sign:SPlus ppe) fmt sm_p)
-    (omap EcPath.Sx.ntr_elements sx_p)
-    (pp_list "@ " (pp_v ~sign:SMinus ppe))
-    (EcPath.Sx.ntr_elements sx_n)
-
-let () =
-  EcEnv.pp_debug_form :=
-    (fun env fmt f ->
-       let ppe = PPEnv.ofenv env in
-       pp_form ppe fmt f)
+(* type ppsign = SNone | SPlus | SMinus
+ *
+ * let pp_sign fmt = function
+ *   | SNone  -> ()
+ *   | SPlus  -> pp_restr_s fmt true
+ *   | SMinus -> pp_restr_s fmt false
+ *
+ * let pp_v ~sign ppe fmt xp =
+ *   Format.fprintf fmt "%a%a"
+ *     pp_sign sign
+ *     (pp_pv ppe) (pv_glob xp)
+ *
+ * let pp_m ~sign ppe fmt m =
+ *   Format.fprintf fmt "%a%a"
+ *     pp_sign sign
+ *     (pp_topmod ppe) m
+ *
+ * let pp_m_xt ~print_abstract ~sign env fmt m =
+ *   let ppe = PPEnv.ofenv env in
+ *   if print_abstract then
+ *     let r = EcEnv.NormMp.get_restr env m in
+ *     Format.fprintf fmt "@[<hv>%a{@;<0 2>%a@,}@]"
+ *       (pp_m ~sign ppe) m
+ *       (pp_restr ppe) r
+ *   else pp_m ~sign ppe fmt m
+ *
+ * let sm_of_mid mid =
+ *   EcIdent.Mid.fold (fun x _ sm ->
+ *       EcPath.Sm.add (EcPath.mident x) sm
+ *     ) mid EcPath.Sm.empty
+ *
+ * let pp_use ppe fmt us =
+ *   let open EcEnv in
+ *   let sm = sm_of_mid us.us_gl in
+ *
+ *   Format.fprintf fmt "@[<v 0>Abstract modules [# = %d]:@ @[<h>%a@]@;"
+ *     (Sid.cardinal us.us_gl)
+ *     (pp_list "@ " (pp_m ~sign:SNone ppe))
+ *     (EcPath.Sm.ntr_elements sm);
+ *   Format.fprintf fmt "Variables [# = %d]:@ @[<h>%a@]@;@]"
+ *     (EcPath.Mx.cardinal us.us_pv)
+ *     (pp_list "@ " (pp_v ~sign:SNone ppe))
+ *     (EcPath.Sx.ntr_elements (EcPath.Mx.map (fun _ -> ()) us.us_pv))
+ *
+ * let pp_use_restr env ~print_abstract fmt ur =
+ *   let open EcEnv in
+ *   let ppe = PPEnv.ofenv env in
+ *
+ *   let sm_p = omap (fun x -> sm_of_mid x.us_gl) ur.EcModules.ur_pos
+ *   and sm_n = sm_of_mid ur.EcModules.ur_neg.us_gl in
+ *
+ *   let sx_p =
+ *     omap (fun x -> EcPath.Mx.map (fun _ -> ())x.us_pv) ur.EcModules.ur_pos
+ *   and sx_n =
+ *     EcPath.Mx.map (fun _ -> ()) ur.EcModules.ur_neg.us_pv in
+ *
+ *   Format.fprintf fmt "@[<v 0>Abstract modules:@ @[<h>%a@]@ @[<h>%a@]@;"
+ *     (fun fmt opt -> match opt with
+ *        | None      ->
+ *          Format.fprintf fmt "%s" all_mem_sym
+ *       | Some sm_p ->
+ *         pp_list "@ " (pp_m_xt ~print_abstract ~sign:SPlus env) fmt sm_p)
+ *     (omap EcPath.Sm.ntr_elements sm_p)
+ *     (pp_list "@ " (pp_m_xt ~print_abstract ~sign:SMinus env))
+ *     (EcPath.Sm.ntr_elements sm_n);
+ *
+ *   Format.fprintf fmt "Variables:@ @[<h>%a@]@ @[<h>%a@]@;@]"
+ *     (fun fmt opt -> match opt with
+ *       | None      -> Format.fprintf fmt "%s" all_mem_sym
+ *       | Some sm_p -> pp_list "@ " (pp_v ~sign:SPlus ppe) fmt sm_p)
+ *     (omap EcPath.Sx.ntr_elements sx_p)
+ *     (pp_list "@ " (pp_v ~sign:SMinus ppe))
+ *     (EcPath.Sx.ntr_elements sx_n)
+ *
+ * let () =
+ *   EcEnv.pp_debug_form :=
+ *     (fun env fmt f ->
+ *        let ppe = PPEnv.ofenv env in
+ *        pp_form ppe fmt f) *)

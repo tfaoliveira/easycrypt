@@ -1967,7 +1967,11 @@ let process_exists args (tc : tcenv1) =
           match xty with
           | GTty    _ -> trans_pterm_arg_value pte arg
           | GTmem   _ -> trans_pterm_arg_mem   pte arg
-          | GTmodty _ -> trans_pterm_arg_mod   pte arg
+          | GTmodty mt ->
+            if mt.mt_opacity <> Open then
+              tc_error !!tc "cannot destruct opaque exists";
+
+            trans_pterm_arg_mod   pte arg
         in
           PT.check_pterm_arg pte (x, xty) f arg.ptea_arg
   in

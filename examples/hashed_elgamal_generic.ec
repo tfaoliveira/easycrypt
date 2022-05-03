@@ -265,8 +265,9 @@ section.
   qed.
 
   lemma ex_reduction &m : 
-    exists (B<:CDH.Adversary 
-      [solve : [`[         : N (C1.cduniform_n +
+    exists (B<: CDH.Adversary 
+      [open
+       solve : [ `[        : N (C1.cduniform_n +
                                 6 + cdbits +
                                 (3 + cdbits + cget qH + cset qH + cin qH) *
                                 (cA.`oguess + cA.`ochoose)),
@@ -278,12 +279,10 @@ section.
   proof. print C1.ex_reduction.
     have [B hB]:= C1.ex_reduction _ ALCDH &m cost_ALCDH.
     exists B; split => /=.
-    
-    (* TENTATIVE *)
-    proc*; call(: true) => /=. skip.
+    + proc*; call(: true) => /=. 
+      - by rewrite /subcond /=; smt (cA_pos).
+      by skip => /=; smt (cA_pos).
 
-    (* OLD *)
-    + proc true : [] => // _. 
     move: (Pr_CPA_G0 &m) (Pr_G0_res &m) (Pr_G0_LCDHPr_G0_res) => /#.
   qed.
 

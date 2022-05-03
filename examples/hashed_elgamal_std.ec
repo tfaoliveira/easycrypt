@@ -221,8 +221,10 @@ op cddh = 3 + cxor + chash + cdbool + cdhkey.
 op cguess = 3 + 2*cgpow + cxor + cdbool + 2 * cdt.
 
 lemma ex_conclusion (A <: Adversary) &m :
-  exists (Dddh <: DDH.Adversary [guess : [`[:N cddh, A.choose : '1, A.guess : '1]]])
-         (Des <: AdvES [guess: [`[:N cguess, A.choose : '1, A.guess : '1]]]),
+  exists (Dddh <: DDH.Adversary [open 
+                                 guess : [`[:N cddh, A.choose : '1, A.guess : '1]]])
+         (Des <: AdvES [open
+                        guess: [`[:N cguess, A.choose : '1, A.guess : '1]]]),
 
    `|Pr[CPA(Hashed_ElGamal, A).main() @ &m : res] - 1%r / 2%r| <=
    `|Pr[DDH0(Dddh).main() @ &m : res] - Pr[DDH1(Dddh).main() @ &m : res]| +

@@ -675,11 +675,16 @@ let fs_equal f1 f2 =
     && (EcSymbols.sym_equal f1.fs_name f2.fs_name)
 
 (* -------------------------------------------------------------------- *)
+type mod_opacity =
+  | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
+  | Opaque                (* calling [A.f] costs `[A.f : 1] *)
+
 type 'a p_module_type = {
-  mt_params : (EcIdent.t * 'a p_module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : 'a p_mod_restr;
+  mt_params  : (EcIdent.t * 'a p_module_type) list;
+  mt_name    : EcPath.path;
+  mt_args    : EcPath.mpath list;
+  mt_restr   : 'a p_mod_restr;
+  mt_opacity : mod_opacity;
 }
 
 (* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
@@ -689,10 +694,11 @@ let _prelude_mk_mt_r
     ~(mt_name   : EcPath.path)
     ~(mt_args   : EcPath.mpath list)
     ~(mt_restr  : 'a p_mod_restr)
+    ~(mt_opacity : mod_opacity)
   : 'a p_module_type
   =
   assert (check mt_restr.mr_cost);
-  { mt_params; mt_name; mt_args; mt_restr }
+  { mt_params; mt_name; mt_opacity; mt_args; mt_restr }
 
 (* -------------------------------------------------------------------- *)
 type module_sig_body_item = Tys_function of funsig
@@ -855,7 +861,9 @@ let p_mr_hash (a_hash : 'a -> int) (mr : 'a p_mod_restr) : int =
 
 let p_mty_hash a_hash mty =
   Why3.Hashcons.combine3
-    (EcPath.p_hash mty.mt_name)
+    (Why3.Hashcons.combine
+       (EcPath.p_hash mty.mt_name)
+       (Hashtbl.hash mty.mt_opacity))
     (Why3.Hashcons.combine_list
        (fun (x, _) -> EcIdent.id_hash x)
        0 mty.mt_params)
@@ -868,6 +876,7 @@ let rec p_mty_equal a_equal mty1 mty2 =
   && (List.all2 (pair_equal EcIdent.id_equal (p_mty_equal a_equal))
         mty1.mt_params mty2.mt_params)
   && (p_mr_equal a_equal mty1.mt_restr mty2.mt_restr)
+  && mty1.mt_opacity = mty2.mt_opacity
 
 (* -------------------------------------------------------------------- *)
 let get_uninit_read_of_fun (f : _ p_function_) =

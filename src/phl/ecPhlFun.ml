@@ -311,7 +311,7 @@ module FunAbsLow = struct
      - [top] is a functor name (with erased module arguments)
      - [fn] is the procedure of [top] called
      - [ois] is the list of available oracles
-     - [cost_info] contains the cost informations of [top]
+     - [info] contains the cost informations of [top]
      - [xc] are cost information provided by the user on some of the oracles
        in [ois]
 
@@ -325,7 +325,11 @@ module FunAbsLow = struct
     =
     let fn_orcl = EcPath.xpath top fn in
 
-    let f_cost = f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true) in
+    let f_cost =
+      match info.opacity with
+      | Opaque -> f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true)
+      | Open -> f_cost_proj_r info.cost_info (Intr fn)
+    in
 
     let orcls_cost = List.map (fun o ->
         (* [finite]: is the number of calls to [o] finite.

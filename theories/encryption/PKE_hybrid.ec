@@ -581,7 +581,7 @@ proof.
 qed.
 
 lemma ex_CPA1_CPAn &m : 
-  exists (B <: AdvCPA {+A,+H.HybOrcl, +K, +S}),
+  exists (B <: AdvCPA [open] {+A,+H.HybOrcl, +K, +S}),
     (forall (clr:cost) (MLR<:LR [orcl: [clr]] {-H.HybOrcl}), 
        choare[B(MLR).main : true ==> true] 
        time `[          : N (H.q * (cincr H.q + ceqint H.q + cltint H.q) + 
