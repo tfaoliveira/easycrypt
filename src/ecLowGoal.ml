@@ -170,6 +170,9 @@ module LowApply = struct
             let obl = EcTyping.check_modtype env mp mt emt in
             EcPV.check_module_in env mp emt;
 
+            if mode = `Intro && emt.mt_opacity <> Open then
+              raise InvalidProofTerm;
+
             let f = match obl with
               | `Ok ->  f
               | `ProofObligation obl ->
@@ -210,7 +213,9 @@ module LowApply = struct
 
       | `Intro -> begin
           match TTC.destruct_exists hyps ax with
-          | Some (`Exists (x, xty, f)) -> (check_binder (x, xty) f, arg)
+          | Some (`Exists (x, xty, f)) ->
+            (check_binder (x, xty) f, arg)
+
           | None ->
               if Fsubst.is_subst_id sbt then
                 raise InvalidProofTerm;

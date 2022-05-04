@@ -170,10 +170,13 @@ val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
 val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
+(* Opacity tells what is the intrinsic cost of a call to an abstract module.
+   Default to [Opaque]. *)
 type mod_opacity =
   | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
   | Opaque                (* calling [A.f] costs `[A.f : 1] *)
 
+(* -------------------------------------------------------------------- *)
 (* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
 type 'a p_module_type = private {          (* Always in eta-expanded form *)
   mt_params  : (EcIdent.t * 'a p_module_type) list;
