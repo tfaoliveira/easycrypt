@@ -48,34 +48,34 @@ hint simplify cost_Left.
 hint simplify cost_Right.
 
 type cenv = {
-  cd    : int; (* self complexity of the distinguisher *)
-  ci    : int; (* number of call to inputs             *)
-  co    : int; (* number of call to outputs            *)
-  cs    : int; (* number of call to step               *)
-  cb    : int; (* number of call to backdoor           *)
+  cd    : cost; (* self complexity of the distinguisher *)
+  ci    : xint; (* number of call to inputs             *)
+  co    : xint; (* number of call to outputs            *)
+  cs    : xint; (* number of call to step               *)
+  cb    : xint; (* number of call to backdoor           *)
 }.
   
 op cenv_pos (c:cenv) = 
-   0 <= c.`cd /\
-   0 <= c.`ci /\
-   0 <= c.`co /\
-   0 <= c.`cs /\
-   0 <= c.`cb.
+   zero <= c.`cd /\
+   '0 <= c.`ci /\
+   '0 <= c.`co /\
+   '0 <= c.`cs /\
+   '0 <= c.`cb.
 
 type cprot = {
-  cpinit     : int;
-  cpinputs   : int;
-  cpoutputs  : int;
-  cpstep     : int;
-  cpbackdoor : int;
+  cpinit     : cost;
+  cpinputs   : cost;
+  cpoutputs  : cost;
+  cpstep     : cost;
+  cpbackdoor : cost;
 }.
 
 op cprot_pos (cp:cprot) = 
-  0 <= cp.`cpinit     /\
-  0 <= cp.`cpinputs   /\
-  0 <= cp.`cpoutputs  /\
-  0 <= cp.`cpstep     /\
-  0 <= cp.`cpbackdoor.
+  zero <= cp.`cpinit     /\
+  zero <= cp.`cpinputs   /\
+  zero <= cp.`cpoutputs  /\
+  zero <= cp.`cpstep     /\
+  zero <= cp.`cpbackdoor.
 
 abstract theory ProtocolType.
 
@@ -155,7 +155,7 @@ abstract theory C.
   axiom c_pos : cenv_pos c.
 
   module type CENV (I : E_INTERFACE) = {
-    proc distinguish() : bool `{N c.`cd, I.inputs:c.`ci, I.outputs:c.`co, I.step:c.`cs, I.backdoor:c.`cb}
+    proc distinguish() : bool [c.`cd, I.inputs:c.`ci, I.outputs:c.`co, I.step:c.`cs, I.backdoor:c.`cb]
   }.
 
 end C.
@@ -167,15 +167,15 @@ abstract theory CP.
   axiom cp_pos : cprot_pos cp.
 
   module type CPROTOCOL  = {
-    proc init() : unit `{N cp.`cpinit}
+    proc init() : unit [cp.`cpinit]
     
-    proc inputs(i : inputs) : unit `{N cp.`cpinputs}
+    proc inputs(i : inputs) : unit [cp.`cpinputs]
     
-    proc outputs(o : ask_outputs) : outputs option `{N cp.`cpoutputs}
+    proc outputs(o : ask_outputs) : outputs option [cp.`cpoutputs]
     
-    proc step(m : step) : unit `{N cp.`cpstep}
+    proc step(m : step) : unit [cp.`cpstep]
     
-    proc backdoor(m : ask_backdoor) : backdoor option `{N cp.`cpbackdoor}
+    proc backdoor(m : ask_backdoor) : backdoor option [cp.`cpbackdoor]
   }.
 
 end CP.
@@ -183,23 +183,23 @@ end CP.
 end EXEC_MODEL.
 
 type csim = {
-  cinit : int;
-  cstep : int;
-  cs_s  : int;
-  cs_b  : int;
-  cbackdoor : int;
-  cb_s  : int;
-  cb_b  : int;
+  cinit : cost;
+  cstep : cost;
+  cs_s  : xint;
+  cs_b  : xint;
+  cbackdoor : cost;
+  cb_s  : xint;
+  cb_b  : xint;
 }.
 
 op csim_pos (c:csim) = 
-  0 <= c.`cinit /\
-  0 <= c.`cstep /\
-  0 <= c.`cs_s  /\ 
-  0 <= c.`cs_b  /\ 
-  0 <= c.`cbackdoor /\ 
-  0 <= c.`cb_s  /\
-  0 <= c.`cb_b.
+  zero <= c.`cinit /\
+  zero <= c.`cstep /\
+  '0 <= c.`cs_s  /\ 
+  '0 <= c.`cs_b  /\ 
+  zero <= c.`cbackdoor /\ 
+  '0 <= c.`cb_s  /\
+  '0 <= c.`cb_b.
 
 abstract theory REAL_IDEAL.
 
@@ -232,9 +232,9 @@ abstract theory REAL_IDEAL.
     axiom csi_pos : csim_pos csi.
 
     module type CSIMULATOR (FB:IDEAL.BACKDOORS) = {
-      proc init() : unit {} `{N csi.`cinit}
-      proc step(m : REAL.step) : unit `{N csi.`cstep, FB.step:csi.`cs_s, FB.backdoor:csi.`cs_b}
-      proc backdoor(m : REAL.ask_backdoor) : REAL.backdoor option `{N csi.`cbackdoor, FB.step:csi.`cb_s, FB.backdoor:csi.`cb_b}
+      proc init() : unit {} [csi.`cinit]
+      proc step(m : REAL.step) : unit [csi.`cstep, FB.step:csi.`cs_s, FB.backdoor:csi.`cs_b]
+      proc backdoor(m : REAL.ask_backdoor) : REAL.backdoor option [csi.`cbackdoor, FB.step:csi.`cb_s, FB.backdoor:csi.`cb_b]
     }.
 
   end C.
@@ -295,21 +295,21 @@ theory NONDUMMY_EQUIV_DUMMY.
   clone import NON_DUMMY as NON_DUMMY.
   
   type cadv = {
-    cas   : int;
-    cas_s : int;
-    cas_b : int;
-    cab   : int;
-    cab_s : int;
-    cab_b : int
+    cas   : cost;
+    cas_s : xint;
+    cas_b : xint;
+    cab   : cost;
+    cab_s : xint;
+    cab_b : xint
   }.
 
   op cadv_pos cA = 
-    0 <= cA.`cas   /\
-    0 <= cA.`cas_s /\
-    0 <= cA.`cas_b /\
-    0 <= cA.`cab   /\
-    0 <= cA.`cab_s /\
-    0 <= cA.`cab_b.
+    zero <= cA.`cas   /\
+    '0 <= cA.`cas_s /\
+    '0 <= cA.`cas_b /\
+    zero <= cA.`cab   /\
+    '0 <= cA.`cab_s /\
+    '0 <= cA.`cab_b.
   
    module (SeqSA(A:ADV, S:RI.SIMULATOR): NONDUMMY_RI.SIMULATOR) (B:NONDUMMY_RI.IDEAL.BACKDOORS) = {
      proc init () = {
@@ -331,10 +331,10 @@ theory NONDUMMY_EQUIV_DUMMY.
 
   op csa (cA:cadv) (cS:csim) = {|
     cinit = cS.`cinit;
-    cstep = cA.`cas + cS.`cstep * cA.`cas_s + cS.`cbackdoor * cA.`cas_b;
+    cstep = cA.`cas + cA.`cas_s ** cS.`cstep + cA.`cas_b ** cS.`cbackdoor ;
     cs_s  = cS.`cs_s * cA.`cas_s + cS.`cb_s * cA.`cas_b;
     cs_b  = cS.`cs_b * cA.`cas_s + cS.`cb_b * cA.`cas_b;
-    cbackdoor =  cA.`cab + cS.`cstep * cA.`cab_s + cS.`cbackdoor * cA.`cab_b;
+    cbackdoor =  cA.`cab + cA.`cab_s ** cS.`cstep + cA.`cab_b ** cS.`cbackdoor ;
     cb_s  = cS.`cs_s * cA.`cab_s + cS.`cb_s * cA.`cab_b;
     cb_b  = cS.`cs_b * cA.`cab_s + cS.`cb_b * cA.`cab_b;
   |}.
@@ -342,23 +342,25 @@ theory NONDUMMY_EQUIV_DUMMY.
   lemma dummy_nondummy (P<:RI.REAL.PROTOCOL) (F<:RI.IDEAL.PROTOCOL) &m eps (cS: csim) :
     csim_pos cS => 
     forall (S<: RI.SIMULATOR
-                 [init : `{N cS.`cinit} {},
-                  step : `{N cS.`cstep, #FB.step : cS.`cs_s, #FB.backdoor : cS.`cs_b},
-                  backdoor : `{N cS.`cbackdoor, #FB.step: cS.`cb_s, #FB.backdoor : cS.`cb_b}]
+                 [open 
+                  init : [cS.`cinit] {},
+                  step : [cS.`cstep, #FB.step : cS.`cs_s, #FB.backdoor : cS.`cs_b],
+                  backdoor : [cS.`cbackdoor, #FB.step: cS.`cb_s, #FB.backdoor : cS.`cb_b]]
                  {-F}),
       (forall (Z<: RI.REAL.ENV {-P,-F,-S}),
         `| Pr[RI.REAL.UC_emul(Z,P).main() @ &m : res] -
            Pr[RI.REAL.UC_emul(Z,RI.CompS(F,S)).main() @ &m : res] | <= eps) =>
 
-    forall (cA:cadv) (A<:ADV [step : `{N cA.`cas, #B.step: cA.`cas_s, #B.backdoor: cA.`cas_b},
-                              backdoor : `{N cA.`cab, #B.step: cA.`cab_s, #B.backdoor: cA.`cab_b}]
+    forall (cA:cadv) (A<:ADV [step : [cA.`cas, #B.step: cA.`cas_s, #B.backdoor: cA.`cas_b],
+                              backdoor : [cA.`cab, #B.step: cA.`cab_s, #B.backdoor: cA.`cab_b]]
                               {-F, -P, -S}),
      cadv_pos cA =>                       
      let csa = csa cA cS in
      exists (S1<: NONDUMMY_RI.SIMULATOR 
-                  [init : `{N csa.`cinit} {},
-                   step : `{N csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b},
-                   backdoor : `{N csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b}]
+                  [open
+                   init : [csa.`cinit] {},
+                   step : [csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b],
+                   backdoor : [csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b]]
                   {+S, + A, -F}), (* Remark the -F, is redoundant since S and A cannot use it *)
       forall (Z<: NONDUMMY_RI.REAL.ENV {-A, -P, -F, -S1}),
         `| Pr[NONDUMMY_RI.REAL.UC_emul(Z,A_PROTOCOL(A,P)).main() @ &m : res] -
@@ -366,8 +368,10 @@ theory NONDUMMY_EQUIV_DUMMY.
   proof.
     move=> hcS S hS cA A hcA csa.
     exists (SeqSA(A,S)); split.
-    + (split; last split) => kb ks FB hkb hks.
-      + by proc; call (:true; time []); skip => /= /#. 
+    + (split; last split) => FB /=.
+      + proc; call (:true). 
+        + by rewrite /subcond /csa /=. 
+          by move => @/csa /=; skip. 
       + move=> /=; proc true : time 
               [S(FB).step : [N (cS.`cstep + ks * cS.`cs_s + kb * cS.`cs_b)],
                S(FB).backdoor : [N (cS.`cbackdoor + ks * cS.`cb_s + kb * cS.`cb_b)]] => //=.
@@ -438,9 +442,9 @@ theory NONDUMMY_EQUIV_DUMMY.
                      backdoor : `{N cA.`cab, #B.step: cA.`cab_s, #B.backdoor: cA.`cab_b} ]),
      let csa = cS cA in
      exists (S<: NONDUMMY_RI.SIMULATOR 
-                  [init : `{N csa.`cinit} {},
-                   step : `{N csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b},
-                   backdoor : `{N csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b}]
+                  [init : [csa.`cinit] {},
+                   step : [csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b],
+                   backdoor : [csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b]]
                   {+Mem, -F}),
       forall (Z<: NONDUMMY_RI.REAL.ENV {-A, -P, -F, -S}),
         `| Pr[NONDUMMY_RI.REAL.UC_emul(Z,A_PROTOCOL(A,P)).main() @ &m : res] -
@@ -448,9 +452,9 @@ theory NONDUMMY_EQUIV_DUMMY.
     let cdA = {| cas = 0; cas_s = 1; cas_b = 0; cab = 0; cab_s = 0; cab_b = 1 |} in
     let csd = cS cdA in
     (exists (S<: RI.SIMULATOR
-                 [init : `{N csd.`cinit} {},
-                  step : `{N csd.`cstep, #FB.step : csd.`cs_s, #FB.backdoor : csd.`cs_b},
-                  backdoor : `{N csd.`cbackdoor, #FB.step: csd.`cb_s, #FB.backdoor : csd.`cb_b}]
+                 [init : [csd.`cinit] {},
+                  step : [csd.`cstep, #FB.step : csd.`cs_s, #FB.backdoor : csd.`cs_b],
+                  backdoor : [csd.`cbackdoor, #FB.step: csd.`cb_s, #FB.backdoor : csd.`cb_b]]
                  {+Mem, -F}),
       forall (Z<: RI.REAL.ENV {-P,-F,-S}),
         `| Pr[RI.REAL.UC_emul(Z,P).main() @ &m : res] -
@@ -648,7 +652,7 @@ abstract theory TRANSITIVITY.
    qed.
 
    lemma cost_SeqS_init (FB <: GOAL.IDEAL.BACKDOORS):
-      choare[SeqS(S23, S12, FB).init] time [N cs13.`cinit].
+      choare[SeqS(S23, S12, FB).init] time cs13.`cinit.
    proof. proc; call(:true);call(:true);skip => /#. qed.
   
    lemma cost_SeqS_step (kbackdoor kstep : int) (FB <: GOAL.IDEAL.BACKDOORS[backdoor : `{N kbackdoor} , step : `{N kstep} ]): 

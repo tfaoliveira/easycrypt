@@ -1131,8 +1131,6 @@ let f_cost_lt_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cos
 (* -------------------------------------------------------------------- *)
 let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
   match f.f_node, p with
-  | Fcost c, Conc -> c.c_self
-
   | Fmodcost mc, Intr fname ->
     let pcost = Msym.find fname mc in (* cannot fail *)
     pcost.c_self

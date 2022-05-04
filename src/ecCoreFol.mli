@@ -24,8 +24,6 @@ type hoarecmp = FHle | FHeq | FHge
 
 (* projection of a cost record or module cost record *)
 type cost_proj =
-  | Conc
-
   | Intr  of symbol               (* procedure *)
   | Param of {
       proc    : symbol;           (* procedure *)

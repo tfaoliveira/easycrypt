@@ -20,17 +20,10 @@ type csub_res = { cond : form; res : form; }
 let cost_sub ~(c : form) ~(sub : form) : csub_res =
   { cond = f_cost_subcond c sub; res = f_cost_add c (f_cost_opp sub); }
 
-(* [f1], [f2] of type [txint].
-   Condition under which [(f1 - f2) + f2 = f1] *)
-let f_xsubcond (f1 : form) (f2 : form) : form =
-  f_or (f_is_inf f1) (f_is_int f2)
-
 (* Same as [cost_sub], but only for the concrete cost.
    [c] of type [tcost], [sub] of type [xint]. *)
 let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
-  let cond = f_xsubcond (f_cost_proj_r c Conc) sub in
-  let sub_c = f_cost_r (cost_r sub Mx.empty true) in
-  { cond; res = f_cost_add c (f_cost_opp sub_c); }
+  cost_sub ~c ~sub:(f_cost_r (cost_r sub Mx.empty true))
 
 (* -------------------------------------------------------------------- *)
 (* [c] of type [tcost], [a] of type [xint] *)

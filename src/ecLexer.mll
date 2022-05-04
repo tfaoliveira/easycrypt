@@ -63,7 +63,6 @@
     "open"        , OPEN       ;        (* KW: prog *)
     "opaque"      , OPAQUE     ;        (* KW: prog *)
     "intr"        , INTR       ;        (* KW: prog *)
-    "conc"        , CONC       ;        (* KW: prog *)
     "phoare"      , PHOARE     ;        (* KW: prog *)
     "islossless"  , LOSSLESS   ;        (* KW: prog *)
     "async"       , ASYNC      ;        (* KW: prog *)

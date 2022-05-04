@@ -105,7 +105,7 @@ let t_choare_while_r inv qdec n (lam_cost : form) tc =
                                        chs_co  = c_cost; } in
   let c_concl = f_forall_simpl [(k_id,GTty tint)] c_concl in
 
-  (* When the decreasing quantity is less than zero, the loop exists *)
+  (* When the decreasing quantity is less than zero, the loop exits *)
   let n_term = f_imp_simpl (f_and_simpl inv (f_int_le qdec f_i0)) (f_not e) in
   let n_term = f_forall_mems [chs.chs_m] n_term in
 

@@ -925,9 +925,9 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
         List.fold_left (fun c_calls (Tys_function o_f) ->
             let ofx = EcPath.xpath (EcPath.mident o) o_f.fs_name in
             let id_proc_cost =
-              get_cost (Param {proc = fn;
-                               param_m = EcIdent.name o;
-                               param_p = o_f.fs_name})
+              get_cost (Param { proc = fn;
+                                param_m = EcIdent.name o;
+                                param_p = o_f.fs_name })
             in
             Mx.add ofx id_proc_cost c_calls
           ) c_calls o_msig.mis_body
@@ -2079,8 +2079,6 @@ let f_or_mod_ident_loc : f_or_mod_ident -> EcLocation.t = function
 (* -------------------------------------------------------------------- *)
 let trans_cost_proj env ~f_loc ~f_ty (p : pcost_proj) : cost_proj =
   match p with
-  | PConc -> Conc
-
   | PIntr proc ->
     let procs, _ =
       match f_ty.ty_node with

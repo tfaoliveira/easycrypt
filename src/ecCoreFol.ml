@@ -26,8 +26,6 @@ type hoarecmp = FHle | FHeq | FHge
 
 (* projection of a cost record or module cost record *)
 type cost_proj =
-  | Conc
-
   | Intr  of symbol               (* procedure *)
   | Param of {
       proc    : symbol;           (* procedure *)
@@ -211,14 +209,11 @@ let qt_hash  : quantif -> int = Hashtbl.hash
 
 (*-------------------------------------------------------------------- *)
 let cost_proj_ty : cost_proj -> ty = function
-  | Conc    -> txint
   | Intr  _ -> tcost
   | Param _ -> txint
 
 let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
   match p1, p2 with
-  | Conc, Conc -> true
-
   | Intr s1, Intr s2 -> s1 = s2
 
   | Param p1, Param p2 ->
@@ -230,7 +225,6 @@ let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
 
 let cost_proj_hash (p : cost_proj) : int =
   match p with
-  | Conc        -> 0
   | Intr s      -> Why3.Hashcons.combine  2 (Hashtbl.hash s)
 
   | Param { param_p; param_m; proc } ->
@@ -2761,7 +2755,6 @@ let string_of_quant = function
 (* FIXME A: factorize with EcPrinting *)
 let pp_cost_proj fmt (p : cost_proj) =
   match p with
-  | Conc       -> Format.fprintf fmt "conc"
   | Intr  f    -> Format.fprintf fmt "%s.intr" f
   | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
 

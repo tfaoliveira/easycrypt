@@ -158,8 +158,6 @@ and precord = (psymbol * pty) list
 
 (* -------------------------------------------------------------------- *)
 type pcost_proj =
-  | PConc
-
   | PIntr of psymbol          (* procedure *)
   | PParam of {
       proc    : psymbol;      (* procedure *)

@@ -410,7 +410,6 @@
 %token COLON
 %token COLONTILD
 %token COMMA
-%token CONC
 %token CONGR
 %token CONSEQ
 %token CONST
@@ -1136,7 +1135,6 @@ modcosts(P):
 
 (* -------------------------------------------------------------------- *)
 cost_proj:
-| CONC                     { PConc }
 | proc=lident COLON INTR   { PIntr proc }
 | proc=lident COLON a=uident DOT p=lident
                            { PParam {proc; param_m = a; param_p = p; } }

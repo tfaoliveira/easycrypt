@@ -415,12 +415,17 @@ proof.
   + by move=> &hr /> ->.
   + by move=> /> /#.
   move=> zo hzo; proc; inline *.
-  wp := (`|H.HybOrcl.l| <= H.q).
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 1:smt().
+  wp := (`|H.HybOrcl.l| <= H.q); 1: by rewrite /subcond /= /#. 
+  
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 
+  [1:smt() | 2,4: by rewrite /subcond /= /#]. 
   + wp; call (:true); auto => &hr />.
-  smt (ge0_cincr ge0_cltint ge0_ceqint).
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //. 
-  + wp := (`|H.Count.c| <= 1); call (:true); auto => &hr />.
+    smt (ge0_cincr ge0_cltint ge0_ceqint).
+  
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //;
+  [1,3: by rewrite /subcond /= /#]. 
+  + wp := (`|H.Count.c| <= 1); 1: by rewrite /subcond /= /#.
+    call (:true); auto => &hr />.
     smt (ge0_cincr ge0_cltint ge0_ceqint).
   by wp; call (:true); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint).
 qed.
