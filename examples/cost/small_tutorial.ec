@@ -282,7 +282,6 @@ proof.
   move => hk; proc.
   call (_: true).
   + by move => i Hi /=; proc*; call(_: true).
-  + by rewrite bigi_constC. 
   by auto; rewrite !bigi_constz //=. 
 qed.
 
@@ -318,7 +317,6 @@ proof.
 move => hk; proc.
 call (_: true).
 + by move => i Hi /=; proc*; call(_: true : []); auto => /=.
-+ by rewrite bigi_constC.
 by auto; rewrite bigi_constz. 
 qed.
 

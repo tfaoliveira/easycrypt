@@ -128,6 +128,7 @@ val f_cost_xscale_simpl : form -> form -> form
 val f_cost_le_simpl     : form -> form -> form
 val f_cost_lt_simpl     : form -> form -> form
 val f_bigcost_simpl     : form -> form -> form -> form
+val f_cost_is_int_simpl : form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf_simpl : form -> form
@@ -178,6 +179,7 @@ type op_kind = [
   | `Cost_le
   | `Cost_lt
   | `Cost_big
+  | `Cost_is_int
 
   | `Real_add
   | `Real_opp

@@ -100,6 +100,7 @@ module CI_Cost = struct
   let p_cost_le      = _Cost "le"
   let p_cost_lt      = _Cost "lt"
   let p_cost_subcond = _Cost "subcond"
+  let p_cost_is_int  = _Cost "is_int"
 end
 
 (* -------------------------------------------------------------------- *)

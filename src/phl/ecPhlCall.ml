@@ -550,7 +550,7 @@ let process_call side info tc =
   let ts =
     match (FApi.tc1_goal tc).f_node with
     | FcHoareS _ ->
-      [ (fun x -> t_trivial x); t_trivial; t_id]
+      [ (fun x -> t_solve x); t_solve; t_id]
     | _ -> [t_id]
   in
 

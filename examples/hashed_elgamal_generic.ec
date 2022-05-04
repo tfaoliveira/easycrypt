@@ -223,8 +223,6 @@ section.
         apply bounded_set. 
         smt ().
 
-   by rewrite bigi_constC //= 1:#smt:(cA_pos) /subcond /#.
-
     move => /=.
     wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs) :
             [H.o k : `[: N(3 + cdbits + cget qH + cset qH + cin qH)]]).
@@ -241,9 +239,7 @@ section.
         apply bounded_set. 
         smt ().
 
-    by rewrite bigi_constC //= 1:#smt:(cA_pos) /subcond /#.
-
-    inline *; auto => />.
+    inline *; auto => // />. 
     split => *.
     + smt (bounded_empty dbits_ll size_ge0 size_eq0 cA_pos).
     rewrite !bigi_constz /=; smt(cA_pos).     
@@ -280,7 +276,6 @@ section.
     have [B hB]:= C1.ex_reduction _ ALCDH &m cost_ALCDH.
     exists B; split => /=.
     + proc*; call(: true) => /=. 
-      - by rewrite /subcond /=; smt (cA_pos).
       by skip => /=; smt (cA_pos).
 
     move: (Pr_CPA_G0 &m) (Pr_G0_res &m) (Pr_G0_LCDHPr_G0_res) => /#.

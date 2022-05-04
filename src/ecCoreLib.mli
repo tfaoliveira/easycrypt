@@ -100,6 +100,7 @@ module CI_Cost : sig
   val p_cost_le      : path
   val p_cost_lt      : path
   val p_cost_subcond : path
+  val p_cost_is_int  : path
 end
 
 (* -------------------------------------------------------------------- *)

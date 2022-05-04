@@ -1042,6 +1042,7 @@ let reduce_logic ri env hyps f p args =
     | Some (`Cost_scale ), [f1;f2]    -> f_cost_scale_simpl f1 f2
     | Some (`Cost_xscale), [f1;f2]    -> f_cost_xscale_simpl f1 f2
     | Some (`Cost_big   ), [f1;f2;f3] -> f_bigcost_simpl f1 f2 f3
+    | Some (`Cost_is_int), [f1]       -> f_cost_is_int_simpl f1
 
     | Some (`Real_add ), [f1;f2] -> f_real_add_simpl f1 f2
     | Some (`Real_opp ), [f]     -> f_real_opp_simpl f

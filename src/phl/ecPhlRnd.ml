@@ -460,7 +460,7 @@ let process_rnd side tac_info tc =
       | _ -> tc_error !!tc "invalid arguments" in
 
       FApi.t_seqsub (t_choare_rnd tac_info)
-                    [EcLowGoal.t_trivial; EcLowGoal.t_id]
+                    [EcLowGoal.t_solve; EcLowGoal.t_id]
         tc
 
   | None, _ when is_bdHoareS concl ->

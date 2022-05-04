@@ -415,16 +415,14 @@ proof.
   + by move=> &hr /> ->.
   + by move=> /> /#.
   move=> zo hzo; proc; inline *.
-  wp := (`|H.HybOrcl.l| <= H.q); 1: by rewrite /subcond /= /#. 
+  wp := (`|H.HybOrcl.l| <= H.q).
   
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 
-  [1:smt() | 2,4: by rewrite /subcond /= /#]. 
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 1: smt().
   + wp; call (:true); auto => &hr />.
     smt (ge0_cincr ge0_cltint ge0_ceqint).
   
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //;
-  [1,3: by rewrite /subcond /= /#]. 
-  + wp := (`|H.Count.c| <= 1); 1: by rewrite /subcond /= /#.
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //.
+  + wp := (`|H.Count.c| <= 1).
     call (:true); auto => &hr />.
     smt (ge0_cincr ge0_cltint ge0_ceqint).
   by wp; call (:true); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint).
@@ -605,11 +603,9 @@ proof.
                  S.enc    : N (H.q - 1),
                  A.main   : '1,
                  MLR.orcl : '1] => //=.
-
-  + by rewrite /subcond /= /#. 
   + wp. 
     instantiate /(_ H.q) /= h := (cost_dinterval {b' : bool, pk : pkey} 0 H.q).
-    rnd (0 <= H.q <= H.q - 0); 1: by rewrite h.
+    rnd (0 <= H.q <= H.q - 0). 
     skip => &hr />.
     rewrite h /=.
     smt (DInterval.supp_dinter DInterval.dinter_ll q_gt0).
@@ -625,7 +621,6 @@ proof.
     if := (`|H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //. 
     + wp; call(:true); auto => &hr /> /#.
     by wp; call (:true); auto => &hr /> /#. 
-  + rewrite /subcond !/bigi_constz /=. admit.
   skip => &hr />; move: (H.HybOrcl.l0{hr}) => {l0}l0 h0 hq . 
   rewrite bigi_constz 1:#smt:(q_gt0) /=. 
   rewrite !big_morph_N /= !big_b2i !(bigi_b2i_split l0 0 H.q) 1,2:// /b2i /=.

@@ -395,6 +395,7 @@ val f_cost_xscale  : form -> form -> form
 val f_cost_le      : form -> form -> form
 val f_cost_lt      : form -> form -> form
 val f_cost_subcond : form -> form -> form
+val f_cost_is_int  : form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_bigcost : form -> form -> form -> form

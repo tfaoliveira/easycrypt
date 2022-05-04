@@ -119,3 +119,9 @@ axiom lec_inv_pos (x : cost) : zero <= x - x.
 (* This axiom can be used to prove the side-conditions of our rules 
    for seq, wp ... *)
 axiom subrcle (x y : cost) : y <= x => subcond x y.
+
+(* -------------------------------------------------------------------- *)
+op is_int : cost -> bool.
+
+axiom subcond_int (x y : cost) : is_int y => subcond x y.
+hint exact : subcond_int. 

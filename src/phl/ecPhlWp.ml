@@ -210,6 +210,6 @@ let process_wp k cost_pre tc =
     | None -> None in
   let t_after =
     match (FApi.tc1_goal tc).f_node with
-    | FcHoareS _ -> [(fun x -> EcLowGoal.t_trivial x); EcLowGoal.t_id]
+    | FcHoareS _ -> [(fun x -> EcLowGoal.t_solve x); EcLowGoal.t_id]
     | _          -> [ EcLowGoal.t_id] in
   FApi.t_seqsub (t_wp ?cost_pre k) t_after tc

@@ -370,7 +370,7 @@ theory NONDUMMY_EQUIV_DUMMY.
     exists (SeqSA(A,S)); split.
     + (split; last split) => FB /=.
       + proc; call (:true). 
-        + by rewrite /subcond /csa /=. 
+        + by rewrite /csa /= subrcle.
           by move => @/csa /=; skip. 
       + move=> /=; proc true : time 
               [S(FB).step : [N (cS.`cstep + ks * cS.`cs_s + kb * cS.`cs_b)],

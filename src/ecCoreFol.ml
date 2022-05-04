@@ -1142,6 +1142,7 @@ let fop_cost_xscale  = f_op CI_Cost.p_cost_xscale  [] (toarrow [txint; tcost] tc
 let fop_cost_le      = f_op CI_Cost.p_cost_le      [] (toarrow [tcost; tcost] tbool)
 let fop_cost_lt      = f_op CI_Cost.p_cost_lt      [] (toarrow [tcost; tcost] tbool)
 let fop_cost_subcond = f_op CI_Cost.p_cost_subcond [] (toarrow [tcost; tcost] tbool)
+let fop_cost_is_int  = f_op CI_Cost.p_cost_is_int  [] (toarrow [tcost]        tbool)
 
 let f_cost_inf           = f_app fop_cost_inf     []       tcost
 let f_cost_opp     f     = f_app fop_cost_opp     [f]      tcost
@@ -1151,6 +1152,7 @@ let f_cost_xscale  f1 f2 = f_app fop_cost_xscale  [f1; f2] tcost
 let f_cost_le      f1 f2 = f_app fop_cost_le      [f1; f2] tbool
 let f_cost_lt      f1 f2 = f_app fop_cost_lt      [f1; f2] tbool
 let f_cost_subcond f1 f2 = f_app fop_cost_subcond [f1; f2] tbool
+let f_cost_is_int  f1    = f_app fop_cost_is_int  [f1]     tbool
 
 
 let f_cost_inf0 = f_cost_r (cost_r f_Inf EcPath.Mx.empty false)

@@ -758,6 +758,7 @@ type op_kind = [
   | `Cost_le
   | `Cost_lt
   | `Cost_big
+  | `Cost_is_int
 
   | `Real_add
   | `Real_opp
@@ -795,7 +796,9 @@ let operators =
      CI.CI_Cost.p_cost_opp   , `Cost_opp   ;
      CI.CI_Cost.p_cost_scale , `Cost_scale ;
      CI.CI_Cost.p_cost_xscale, `Cost_xscale;
+     CI.CI_Cost.p_cost_is_int, `Cost_is_int;
      CI.CI_Xint.p_bigcost    , `Cost_big   ;
+
 
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
@@ -1127,6 +1130,18 @@ let f_cost_le_simpl f f' =
     f_cost_mk_cmp (fun b b' -> not b' || b = b') f_xle_simpl f_cost_le f f'
 
 let f_cost_lt_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cost_lt
+
+let f_cost_is_int_simpl c =
+  if not (is_cost c) then f_cost_is_int c
+  else
+    let c = destr_cost c in
+    if c.c_full = false then f_false
+    else
+      let self = f_is_int_simpl c.c_self in
+      let calls =
+        List.map (fun (_, x) -> f_is_int_simpl x) (EcPath.Mx.bindings c.c_calls)
+      in
+      f_ands0_simpl (self :: calls)
 
 (* -------------------------------------------------------------------- *)
 let f_cost_proj_simpl (f : form) (p : cost_proj) : form =

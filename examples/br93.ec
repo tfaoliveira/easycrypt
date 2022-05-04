@@ -760,8 +760,7 @@ proof.
   + proc.
     seq 5 : (size Log.qs <= k1 + k2) 
       time `[:N((4 + cf + ceqrand) * (k1 + k2) + 2)] => //=.
-    + by rewrite /subcond //= /#. 
-    + wp. print A. print I.
+    + wp. 
       call (_: size Log.qs- k1 <= k /\ bounded LRO.m (size Log.qs) :
            [Top.I(A, LRO).QRO.o k : `[:N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
       + move=> zo hzo; proc; inline *.
