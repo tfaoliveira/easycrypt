@@ -76,6 +76,10 @@ type tymod_cnv_failure =
 | E_TyModCnv_SubTypeArg        of
     EcIdent.t * module_type * module_type * tymod_cnv_failure
 
+| E_TyModCnv_AlreadyComplRestr
+| E_TyModCnv_NotACostVector of form
+
+
 type modapp_error =
 | MAE_WrongArgCount       of int * int  (* expected, got *)
 | MAE_InvalidArgType      of EcPath.mpath * tymod_cnv_failure
@@ -915,9 +919,17 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
     let xfn = EcPath.xpath mp_in_app fn in
 
     (* Cost of [fn] in [mt]. *)
-    let get_cost = f_cost_proj_r cost in
+    let get_cost =
+      match cost.f_node with
+      | Fmodcost mc -> mod_cost_proj_simpl mc
+      | _ -> tymod_cnv_failure (E_TyModCnv_NotACostVector cost)
+    in
 
-    let c_self = get_cost (Intr fn) in (* type [tcost] *)
+    let c_self : cost =
+      match (get_cost (Intr fn)).f_node with
+      | Fcost c -> c
+      | _ -> tymod_cnv_failure (E_TyModCnv_NotACostVector (get_cost (Intr fn)))
+    in
 
     (* for every module parameter [o] *)
     let c_calls : form Mx.t = List.fold_left (fun c_calls (_, (o, _, o_msig)) ->
@@ -934,9 +946,16 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
       ) Mx.empty s_params
     in
 
-    let cost_calls = f_cost_r (cost_r f_x0 c_calls true) in
+    let new_calls = Mx.merge (fun _ c1 c2 ->
+        match c1, c2 with
+        | None, Some c | Some c, None -> Some c
 
-    let final_cost = f_cost_add c_self cost_calls in
+        | _ -> assert false (* cannot happen: the keys must be disjoints *)
+      ) c_calls c_self.c_calls
+    in
+
+    let final_cost = f_cost_r (cost_r c_self.c_self new_calls c_self.c_full) in
+
     f_cHoareF f_true xfn f_true final_cost
   in
 
@@ -2170,7 +2189,7 @@ let replace_if_provided
           (* otherwise, we check that [mr] did not already contain any cost
              restrictions, and then use [mr'.mr_cost]. *)
           if not (modcost_is_unbounded mr.mr_cost) then
-            assert false;            (* TODO A: error message *)
+            tymod_cnv_failure E_TyModCnv_AlreadyComplRestr;
 
           mr'.mr_cost
         end

@@ -1969,7 +1969,7 @@ let process_exists args (tc : tcenv1) =
           | GTmem   _ -> trans_pterm_arg_mem   pte arg
           | GTmodty mt ->
             if mt.mt_opacity <> Open then
-              tc_error !!tc "cannot destruct opaque exists";
+              tc_error !!tc "cannot introduce opaque existential";
 
             trans_pterm_arg_mod   pte arg
         in

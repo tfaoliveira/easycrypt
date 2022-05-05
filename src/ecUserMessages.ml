@@ -208,6 +208,16 @@ end = struct
         (EcPrinting.pp_modtype ppe) t2
         (pp_cnv_failure env) err
 
+    | E_TyModCnv_AlreadyComplRestr ->
+      msg "module already has a complexity restriction: \
+           do not know how to merge them"
+
+    | E_TyModCnv_NotACostVector f ->
+      let ppe = EcPrinting.PPEnv.ofenv env in
+      msg "cannot build complexity proof obligation: \
+           %a is not an explicit cost record"
+        (EcPrinting.pp_form ppe) f
+
   let pp_modappl_error env fmt error =
     let msg x = Format.fprintf fmt x in
 

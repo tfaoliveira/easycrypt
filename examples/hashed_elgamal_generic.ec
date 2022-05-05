@@ -272,8 +272,17 @@ section.
                {+A, +H}),
     Pr[CPA(S,A(LRO)).main() @ &m: res] - 1%r/2%r <= 
     qH%r * Pr[CDH.CDH(B).main() @ &m: res].
-  proof. print C1.ex_reduction.
-    have [B hB]:= C1.ex_reduction _ ALCDH &m cost_ALCDH.
+  proof. print C1.ex_reduction. 
+    have [B hB]:= 
+      C1.ex_reduction 
+       `[         : N (6 + cdbits + 
+                    (3 + cdbits + cget qH + cset qH + cin qH) * 
+                    (cA.`oguess + cA.`ochoose)), 
+         A.guess  : '1,
+         A.choose : '1] 
+      ALCDH _ &m _. 
+    by conseq cost_ALCDH.
+    by move=>/=; conseq cost_ALCDH.
     exists B; split => /=.
     + proc*; call(: true) => /=. 
       by skip => /=; smt (cA_pos).

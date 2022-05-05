@@ -66,6 +66,9 @@ type tymod_cnv_failure =
 | E_TyModCnv_SubTypeArg        of
     EcIdent.t * module_type * module_type * tymod_cnv_failure
 
+| E_TyModCnv_AlreadyComplRestr
+| E_TyModCnv_NotACostVector of form
+
 type modapp_error =
 | MAE_WrongArgCount      of int * int  (* expected, got *)
 | MAE_InvalidArgType     of EcPath.mpath * tymod_cnv_failure

@@ -141,7 +141,9 @@ val f_xle_simpl  : form -> form -> form
 val f_xlt_simpl  : form -> form -> form
 val f_xmax_simpl : form -> form -> form
 
-val f_cost_proj_simpl : form -> cost_proj -> form
+(* -------------------------------------------------------------------- *)
+val mod_cost_proj_simpl : mod_cost -> cost_proj -> form
+val f_cost_proj_simpl   : form     -> cost_proj -> form
 
 (* -------------------------------------------------------------------- *)
 val destr_exists_prenex : form -> bindings * form

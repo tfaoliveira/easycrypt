@@ -1144,13 +1144,13 @@ let f_cost_is_int_simpl c =
       f_ands0_simpl (self :: calls)
 
 (* -------------------------------------------------------------------- *)
-let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
-  match f.f_node, p with
-  | Fmodcost mc, Intr fname ->
+let mod_cost_proj_simpl (mc : mod_cost) (p : cost_proj) : form =
+  match p with
+  | Intr fname ->
     let pcost = Msym.find fname mc in (* cannot fail *)
     pcost.c_self
 
-  | Fmodcost mc, Param {proc = fname; param_m; param_p } ->
+  | Param {proc = fname; param_m; param_p } ->
     let pcost = Msym.find fname mc in (* cannot fail *)
 
     let c = EcPath.Mx.find_fun_opt (fun xp _ ->
@@ -1161,6 +1161,9 @@ let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
 
     oget_c_bnd c pcost.c_full
 
+let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
+  match f.f_node with
+  | Fmodcost mc -> mod_cost_proj_simpl mc p
   | _ -> f_cost_proj_r f p
 
 (* -------------------------------------------------------------------- *)
