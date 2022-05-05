@@ -275,6 +275,7 @@ module FunAbsLow = struct
     let xc, new_bds =
       List.fold_left (fun (xc, new_bds) oracle ->
           if EcPath.m_is_local oracle.x_top &&
+             oracle.x_top.m_args = [] &&
              not (List.exists (fun x -> x_equal x.oracle oracle) xc) then
             let k = EcIdent.create "k", GTty tint in
 
