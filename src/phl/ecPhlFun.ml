@@ -309,12 +309,12 @@ module FunAbsLow = struct
     EcCHoare.cost_orcl proc (func_orcl o i) i.cost_info
 
   (* Arguments:
-     - [top] is a functor name (with erased module arguments)
-     - [fn] is the procedure of [top] called
-     - [ois] is the list of available oracles
-     - [info] contains the cost informations of [top]
-     - [xc] are cost information provided by the user on some of the oracles
-       in [ois]
+     - [top]  : functor name (with erased module arguments)
+     - [fn]   : procedure of [top] called
+     - [ois]  : list of available oracles
+     - [info] : cost informations of [top]
+     - [xc]   : cost information provided by the user on some of the oracles
+                in [ois]
 
      Computes the total cost of the call to [top.fn] according to [xc]. *)
   let abs_spec_cost
