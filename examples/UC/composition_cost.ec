@@ -210,7 +210,7 @@ abstract theory REAL_IDEAL.
     type outputs     <- REAL.outputs.        
 
   module type SIMULATOR (FB:IDEAL.BACKDOORS) = {
-    proc init() : unit {}
+    proc init() : unit {FB.step, FB.backdoor}
     include REAL.BACKDOORS
   }.
 
@@ -436,7 +436,7 @@ theory NONDUMMY_EQUIV_DUMMY.
         + by move=> ???;proc true : [].
         by move=> ???;proc true : [].
 
-    (* Probability part of the proof *)
+    (* probability part of the proof *)
     move=> Z.
     have := hS (SeqZA(Z,A)).
     have -> : Pr[RI.REAL.UC_emul(SeqZA(Z, A), P).main() @ &m : res] = 
@@ -483,7 +483,8 @@ theory NONDUMMY_EQUIV_DUMMY.
        let csa = cS cA in
        
        exists (S<: NONDUMMY_RI.SIMULATOR 
-                   [init : [csa.`cinit] {},
+                   [open
+                    init : [csa.`cinit] {#FB.step, #FB.backdoor},
                     step : [               csa.`cstep, 
                             #FB.step     : N csa.`cs_s, 
                             #FB.backdoor : N csa.`cs_b],
@@ -501,29 +502,14 @@ theory NONDUMMY_EQUIV_DUMMY.
 
     (exists (S<: RI.SIMULATOR 
                   [open
-                   init : [csd.`cinit(* `[: '0, S.init : '1] *)] {},
-                   step : [csd.`cstep,
-                           (* `[             : '0,  *)
-                           (*   A.step       : '1,  *)
-                           (*   S.step       : N cA.`cas_s,  *)
-                           (*   S.backdoor   : N cA.`cas_b ],  *)
-                             #FB.step     : N csd.`cs_s, 
-                             #FB.backdoor : N csd.`cs_b],
-                   backdoor : [csd.`cbackdoor,
-                               (* `[            : '0,  *)
-                               (*   A.backdoor  : '1,  *)
-                               (*   S.step      : N cA.`cab_s,  *)
-                               (*   S.backdoor  : N cA.`cab_b ],  *)
+                   init : [csd.`cinit] {#FB.step, #FB.backdoor},
+                   step : [ csd.`cstep,
+                            #FB.step     : N csd.`cs_s, 
+                            #FB.backdoor : N csd.`cs_b],
+                   backdoor : [ csd.`cbackdoor,
                                 #FB.step     : N csd.`cb_s, 
                                 #FB.backdoor : N csd.`cb_b]]
                   {+Mem, -F}),
-
-
-    (* (exists (S<: RI.SIMULATOR *)
-    (*              [init : [csd.`cinit] {}, *)
-    (*               step : [csd.`cstep, #FB.step : csd.`cs_s, #FB.backdoor : csd.`cs_b], *)
-    (*               backdoor : [csd.`cbackdoor, #FB.step: csd.`cb_s, #FB.backdoor : csd.`cb_b]] *)
-    (*              {+Mem, -F}), *)
       forall (Z<: RI.REAL.ENV {-P,-F,-S}),
         `| Pr[RI.REAL.UC_emul(Z,P).main() @ &m : res] -
            Pr[RI.REAL.UC_emul(Z,RI.CompS(F,S)).main() @ &m : res] | <= eps).
@@ -534,8 +520,20 @@ theory NONDUMMY_EQUIV_DUMMY.
     + by move=> B; proc; call(:true); auto.
     + by move=> B; proc; call(:true); auto.
     clear hA.
-    exists S; split.
-    + (split; last split) => kBb kBs FB ??.
+    exists S; split; 1: clear hS.
+    + (split; last split) => ?.
+
+      (* new proof: WIP *)
+      (* S(FB).init *) 
+      - split; last split.
+      + proc true : [] => //=.
+          rewrite !bigi_constz //=. admit.
+      + by move => *; proc*; call(:true). 
+      + by move => *; proc*; call(:true). 
+        admit. admit.
+
+
+    (* old proof *)
       + by proc true : []. 
       + proc true : [FB.step : [N kBs],FB.backdoor :[N kBb]] => //=.
         + have cS_pos := hcS cdA _; 1: done.
@@ -547,6 +545,8 @@ theory NONDUMMY_EQUIV_DUMMY.
         by rewrite !bigi_constz /#. 
       + by move=> *; proc true : [].
       by move=> *; proc true : [].                 
+
+    (* probability part of the proof *)
     move=> Z; have := hS Z. 
     have -> : Pr[NONDUMMY_RI.REAL.UC_emul(Z, A_PROTOCOL(DUMMY_A, P)).main() @ &m : res] = 
               Pr[RI.REAL.UC_emul(Z, P).main() @ &m : res].

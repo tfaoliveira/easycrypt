@@ -921,19 +921,9 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
     let xfn = EcPath.xpath mp_in_app fn in
 
     (* Cost of [fn] in [mt]. *)
-    let get_cost =
-      match EcReduction.destruct_modcost ~reduce:true hyps cost with
-      | Some mc -> mod_cost_proj_simpl mc
-      | None -> tymod_cnv_failure (E_TyModCnv_NotACostVector cost)
-    in
+    let get_cost proj = f_cost_proj_simpl cost proj in
 
-    let c_self : cost =
-      match EcReduction.destruct_cost ~reduce:true hyps (get_cost (Intr fn)) with
-      | Some c -> c
-      | None -> tymod_cnv_failure (E_TyModCnv_NotACostVector (get_cost (Intr fn)))
-    in
-
-    (* for every module parameter [o] *)
+    (* for every module parameter [o], maximum number of calls to [o] *)
     let c_calls : form Mx.t = List.fold_left (fun c_calls (_, (o, _, o_msig)) ->
         (* for every procedure [o_f] of [o] *)
         List.fold_left (fun c_calls (Tys_function o_f) ->
@@ -948,17 +938,42 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
       ) Mx.empty s_params
     in
 
-    let new_calls = Mx.merge (fun _ c1 c2 ->
-        match c1, c2 with
-        | None, Some c | Some c, None -> Some c
-
-        | _ -> assert false (* cannot happen: the keys must be disjoints *)
-      ) c_calls c_self.c_calls
+    let c_self : cost option =
+      match EcReduction.destruct_modcost ~reduce:true hyps cost with
+      | None -> None
+      | Some mc ->
+        let intr_cost = mod_cost_proj_simpl mc (Intr fn) in
+        EcReduction.destruct_cost ~reduce:true hyps intr_cost
     in
+    match c_self with
+    | None ->
+      let sg_self =
+        let calls_infnty = Mx.map (fun _ -> f_Inf) c_calls in
+        let cost_oracle_infnty = f_cost_r (cost_r f_x0 calls_infnty true) in
 
-    let final_cost = f_cost_r (cost_r c_self.c_self new_calls c_self.c_full) in
+        let masked_cost = f_cost_add (get_cost (Intr fn)) cost_oracle_infnty in
+        f_cHoareF f_true xfn f_true masked_cost
+      in
+      let subg =
+        Mx.fold (fun oracle ocall subgoals ->
+            let fc = f_cost_r (cost_r f_Inf (Mx.singleton oracle ocall) false) in
+            let sg = f_cHoareF f_true xfn f_true fc in
+            sg :: subgoals
+          ) c_calls [sg_self]
+      in
+      f_ands subg
 
-    f_cHoareF f_true xfn f_true final_cost
+    | Some c_self ->
+      let new_calls = Mx.merge (fun _ c1 c2 ->
+          match c1, c2 with
+          | None, Some c | Some c, None -> Some c
+
+          | _ -> assert false (* cannot happen: the keys must be disjoints *)
+        ) c_calls c_self.c_calls
+      in
+
+      let final_cost = f_cost_r (cost_r c_self.c_self new_calls c_self.c_full) in
+      f_cHoareF f_true xfn f_true final_cost
   in
 
   (* All procedures for which a proof obligation must be checked. *)
