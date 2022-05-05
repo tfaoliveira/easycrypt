@@ -537,7 +537,7 @@ let process_call side info tc =
 
   let pt =
     let rec doit pt =
-      match TTC.destruct_product ~reduce:true (FApi.tc1_hyps tc) pt.PT.ptev_ax with
+      match EcReduction.destruct_product ~reduce:true (FApi.tc1_hyps tc) pt.PT.ptev_ax with
       | None   -> pt
       | Some _ -> doit (EcProofTerm.apply_pterm_to_hole pt)
     in doit pt in

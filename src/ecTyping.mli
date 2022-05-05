@@ -272,7 +272,7 @@ val check_mem_restr_fun :
   env -> xpath -> mod_restr -> unit
 
 val check_modtype :
-  env -> mpath -> module_sig -> module_type ->
+  LDecl.hyps -> mpath -> module_sig -> module_type ->
   [> `Ok | `ProofObligation of EcFol.form list ]
 
 (* -------------------------------------------------------------------- *)

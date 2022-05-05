@@ -2365,3 +2365,62 @@ module EqTest = struct
   let for_msig  = fun env ?(norm = true) -> for_module_sig  env ~norm
   let for_mexpr = fun env ?(norm = true) -> for_module_expr env ~norm
 end
+
+(* -------------------------------------------------------------------- *)
+exception NoMatch
+
+(* -------------------------------------------------------------------- *)
+let rec lazy_destruct ?(reduce = true) hyps tx fp =
+  try  Some (tx fp)
+  with
+  | NoMatch when not reduce -> None
+  | NoMatch ->
+      match h_red_opt full_red hyps fp with
+      | None    -> None
+      | Some fp -> lazy_destruct ~reduce hyps tx fp
+
+(* -------------------------------------------------------------------- *)
+type dproduct = [
+  | `Imp    of form * form
+  | `Forall of EcIdent.t * gty * form
+]
+
+let destruct_product ?(reduce = true) hyps fp : dproduct option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFquant (Lforall, (x, t), lazy f) -> `Forall (x, t, f)
+    | SFimp (f1, f2) -> `Imp (f1, f2)
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+type dexists = [
+  | `Exists of EcIdent.t * gty * form
+]
+
+let destruct_exists ?(reduce = true) hyps fp : dexists option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFquant (Lexists, (x, t), lazy f) -> `Exists (x, t, f)
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+let destruct_modcost ?(reduce = true) hyps fp : mod_cost option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFmodcost mc -> mc
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+let destruct_cost ?(reduce = true) hyps fp : cost option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFcost c -> c
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp

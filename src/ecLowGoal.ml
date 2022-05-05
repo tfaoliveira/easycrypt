@@ -167,7 +167,7 @@ module LowApply = struct
         | GTmodty emt, PAModule (mp, mt) -> begin
           (* FIXME: poor API ==> poor error recovery *)
           try
-            let obl = EcTyping.check_modtype env mp mt emt in
+            let obl = EcTyping.check_modtype hyps mp mt emt in
             EcPV.check_module_in env mp emt;
 
             if mode = `Intro && emt.mt_opacity <> Open then
@@ -189,7 +189,7 @@ module LowApply = struct
 
       match mode with
       | `Elim -> begin
-          match TTC.destruct_product hyps ax, arg with
+          match EcReduction.destruct_product hyps ax, arg with
           | Some (`Imp (f1, f2)), PASub subpt when mode = `Elim ->
               let f1    = Fsubst.f_subst sbt f1 in
               let subpt =
@@ -212,7 +212,7 @@ module LowApply = struct
       end
 
       | `Intro -> begin
-          match TTC.destruct_exists hyps ax with
+          match EcReduction.destruct_exists hyps ax with
           | Some (`Exists (x, xty, f)) ->
             (check_binder (x, xty) f, arg)
 
@@ -367,7 +367,7 @@ let rec t_lazy_match ?(reduce = `Full) (tx : form -> FApi.backward)
   (tc : tcenv1) =
   let concl = FApi.tc1_goal tc in
   try tx concl tc
-  with TTC.NoMatch ->
+  with EcReduction.NoMatch ->
     let strategy =
       match reduce with
       | `None    -> raise InvalidGoalShape
@@ -679,7 +679,7 @@ module Apply = struct
               noinstance `IncompleteInference;
             pt
           with EcMatching.MatchFailure ->
-            match TTC.destruct_product hyps pt.PT.ptev_ax with
+            match EcReduction.destruct_product hyps pt.PT.ptev_ax with
             | Some _ ->
                 (* FIXME: add internal marker *)
                 instantiate canview false (PT.apply_pterm_to_hole pt)
@@ -911,7 +911,7 @@ let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) =
         t_reflex_s f1 tc
       else
         raise InvalidGoalShape
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_reflex_r tc
 
@@ -923,7 +923,7 @@ let t_symmetry ?reduce (tc : tcenv1) =
   let t_symmetry_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f2) -> t_symmetry_s f1 f2 tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_symmetry_r tc
 
@@ -935,7 +935,7 @@ let t_transitivity ?reduce f2 (tc : tcenv1) =
   let t_transitivity_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f3) -> t_transitivity_s f1 f2 f3 tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_transitivity_r tc
 
@@ -962,7 +962,7 @@ let t_or_intro ?reduce (side : side) (tc : tcenv1) =
   let t_or_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFor (b, (left, right)) -> t_or_intro_s b side (left, right) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_or_intro_r tc
 
@@ -983,7 +983,7 @@ let t_and_intro ?reduce (tc : tcenv1) =
   let t_and_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFand (b, (left, right)) -> t_and_intro_s b (left, right) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_and_intro_r tc
 
@@ -995,7 +995,7 @@ let t_iff_intro ?reduce (tc : tcenv1) =
   let t_iff_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFiff (f1, f2) -> t_iff_intro_s (f1, f2) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_iff_intro_r tc
 
@@ -1045,7 +1045,7 @@ let t_tuple_intro ?reduce (tc : tcenv1) =
     | SFeq (f1, f2) when is_tuple f1 && is_tuple f2 ->
         let fs = List.combine (destr_tuple f1) (destr_tuple f2) in
         t_tuple_intro_s fs tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_tuple_intro_r tc
 
@@ -1059,7 +1059,7 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
         match
           List.opick (fun tx ->
               try  Some (tx (f1, sf1) f2 tc)
-              with TTC.NoMatch -> None)
+              with EcReduction.NoMatch -> None)
             txs
         with
         | Some gs -> gs
@@ -1083,7 +1083,7 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
 let t_elim_false_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFfalse -> t_apply_s LG.p_false_elim [] ~args:[concl] tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_false ?reduce tc = t_elim_r ?reduce [t_elim_false_r] tc
 
@@ -1098,7 +1098,7 @@ let t_elim_and_r ((_, sf) : form * sform) concl tc =
 
       in t_apply_s p [] ~args:[a1; a2; concl] ~sk:1 tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_and ?reduce goal = t_elim_r ?reduce [t_elim_and_r] goal
 
@@ -1113,7 +1113,7 @@ let t_elim_or_r ((_, sf) : form * sform) concl tc =
 
       in t_apply_s p [] ~args:[a1; a2; concl] ~sk:2 tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_or ?reduce tc = t_elim_r ?reduce [t_elim_or_r] tc
 
@@ -1122,7 +1122,7 @@ let t_elim_iff_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFiff (a1, a2) ->
       t_apply_s LG.p_iff_elim [] ~args:[a1; a2; concl] ~sk:1 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_iff ?reduce tc = t_elim_r ?reduce [t_elim_iff_r] tc
 
@@ -1131,7 +1131,7 @@ let t_elim_if_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFif (a1, a2, a3) ->
       t_apply_s LG.p_if_elim [] ~args:[a1; a2; a3; concl] ~sk:2 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_if ?reduce tc = t_elim_r ?reduce [t_elim_if_r] tc
 
@@ -1184,7 +1184,7 @@ let t_elim_eq_tuple_r_n ((_, sf) : form * sform) concl tc =
       RApi.of_pure_u (tt_apply_hd hd ~args ~sk:1) tc;
       List.length tys, RApi.tcenv_of_rtcenv tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_eq_tuple_r f concl tc = snd (t_elim_eq_tuple_r_n f concl tc)
 
@@ -1199,7 +1199,7 @@ let t_elim_exists_r ((f, _) : form * sform) concl tc =
       let newc  = f_forall bd (f_imp (Fsubst.f_subst subst body) concl) in
       let tc    = FApi.mutate1 tc (fun hd -> VExtern (`Exists, [hd])) newc in
       FApi.tcenv_of_tcenv1 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_exists ?reduce tc = t_elim_r ?reduce [t_elim_exists_r] tc
 
@@ -1241,7 +1241,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
 
   let (aa2, ax) =
     let rec doit ax aa =
-      match TTC.destruct_product hyps ax with
+      match EcReduction.destruct_product hyps ax with
       | Some (`Imp (f1, f2)) when Mid.mem pr f1.f_fv -> doit f2 (aa+1)
       | _ -> (aa, ax)
     in
@@ -1261,7 +1261,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
       if   EcReduction.is_conv hyps pf_inst concl
       then (aa, sk)
       else
-        match TTC.destruct_product hyps pf_inst with
+        match EcReduction.destruct_product hyps pf_inst with
         | Some (`Imp (_, f2)) -> doit f2 (aa+1, sk+1)
         | _ -> raise InvalidGoalShape
     in
@@ -1362,7 +1362,7 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
           tc
       end
 
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
 
   in t_lazy_match ?reduce doit tc
 
@@ -1411,7 +1411,7 @@ let t_elim_prind_r ?reduce ?accept (_mode : [`Case | `Ind]) tc =
 
        in t_apply_s p tv ~args:(args @ [f2]) ~sk tc
 
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
 
   in t_lazy_match ?reduce doit tc
 
@@ -1468,7 +1468,7 @@ let t_split ?(closeonly = false) ?reduce (tc : tcenv1) =
         let tc = if f_equal concl fp then tc else t_change1 fp tc in
         let tc = t_case cond tc in
           tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_split_r tc
 
@@ -1550,8 +1550,8 @@ let t_rewrite
           s = `LtoR && ER.EqTest.for_type env ax.f_ty tbool
           -> (pt, ax, f_true)
 
-      | _ -> raise TTC.NoMatch
-    in oget ~exn:InvalidProofTerm (TTC.lazy_destruct hyps doit ax)
+      | _ -> raise EcReduction.NoMatch
+    in oget ~exn:InvalidProofTerm (EcReduction.lazy_destruct hyps doit ax)
   in
 
   let (left, right) =

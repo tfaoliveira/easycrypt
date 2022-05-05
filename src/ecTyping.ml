@@ -882,7 +882,9 @@ let check_sig_mt_cnv ?(proof_obl=false) env sym_in sin tyout =
 (* Sub-typing proof obligation for oracle complexity restrictions,
    where [mp_in] must verify [mt].
    Precondition: [mp_in] and [mt] types must be compatible. *)
-let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
+let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
+  let env = EcEnv.LDecl.toenv hyps in
+
   let mt_sig = EcEnv.ModTy.sig_of_mt env mt in
 
   (* Environement where [mt]'s parameters are binded. *)
@@ -920,15 +922,15 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
 
     (* Cost of [fn] in [mt]. *)
     let get_cost =
-      match cost.f_node with
-      | Fmodcost mc -> mod_cost_proj_simpl mc
-      | _ -> tymod_cnv_failure (E_TyModCnv_NotACostVector cost)
+      match EcReduction.destruct_modcost ~reduce:true hyps cost with
+      | Some mc -> mod_cost_proj_simpl mc
+      | None -> tymod_cnv_failure (E_TyModCnv_NotACostVector cost)
     in
 
     let c_self : cost =
-      match (get_cost (Intr fn)).f_node with
-      | Fcost c -> c
-      | _ -> tymod_cnv_failure (E_TyModCnv_NotACostVector (get_cost (Intr fn)))
+      match EcReduction.destruct_cost ~reduce:true hyps (get_cost (Intr fn)) with
+      | Some c -> c
+      | None -> tymod_cnv_failure (E_TyModCnv_NotACostVector (get_cost (Intr fn)))
     in
 
     (* for every module parameter [o] *)
@@ -969,9 +971,12 @@ let restr_proof_obligation env (mp_in : mpath) (mt : module_type) : form list =
   List.map (fun hyp -> f_forall mbindings hyp) hyps
 
 (* -------------------------------------------------------------------- *)
-let check_modtype env (mp : mpath) (mt : module_sig) (i : module_type) :
-  [> `Ok | `ProofObligation of EcFol.form list ]
+let check_modtype
+    (hyps : EcEnv.LDecl.hyps)
+    (mp : mpath) (mt : module_sig) (i : module_type)
+  : [> `Ok | `ProofObligation of EcFol.form list ]
   =
+  let env = EcEnv.LDecl.toenv hyps in
   let restr : mod_restr = i.mt_restr in
   let use = NormMp.mod_use env mp in
   check_mem_restr env mp use restr;
@@ -985,7 +990,7 @@ let check_modtype env (mp : mpath) (mt : module_sig) (i : module_type) :
   | TymodCnvFailure _
     when EcModules.f_modcost_has_restr i.mt_restr.mr_cost <> `Known false ->
     check_sig_mt_cnv ~proof_obl:true env sym mt i;
-    let obl = restr_proof_obligation env mp i in
+    let obl = restr_proof_obligation hyps mp i in
     `ProofObligation obl
 
 (* -------------------------------------------------------------------- *)

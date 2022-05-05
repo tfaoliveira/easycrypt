@@ -288,7 +288,7 @@ module LowRewrite = struct
         in pt1 @ (otolist pt2) @ (odfl [] pt3)) in
 
         let rec doit reduce =
-          match TTC.destruct_product ~reduce hyps ax with
+          match EcReduction.destruct_product ~reduce hyps ax with
           | None -> begin
              if reduce then Lazy.force ptb else
                let pts = doit true in
@@ -461,7 +461,7 @@ let process_apply_fwd ~implicits (pe, hyp) tc =
 
   try
     let rec instantiate pte =
-      match TTC.destruct_product hyps pte.PT.ptev_ax with
+      match EcReduction.destruct_product hyps pte.PT.ptev_ax with
       | None -> raise E.NoInstance
 
       | Some (`Forall _) ->
@@ -501,7 +501,7 @@ let process_apply_fwd ~implicits (pe, hyp) tc =
 let process_apply_top tc =
   let hyps, concl = FApi.tc1_flat tc in
 
-  match TTC.destruct_product hyps concl with
+  match EcReduction.destruct_product hyps concl with
   | Some (`Imp _) -> begin
      let h = LDecl.fresh_id hyps "h" in
 
@@ -852,7 +852,7 @@ let process_elimT qs tc =
   let (hyps, concl) = FApi.tc1_flat tc in
 
   let (pf, pfty, _concl) =
-    match TTC.destruct_product hyps concl with
+    match EcReduction.destruct_product hyps concl with
     | Some (`Forall (x, GTty xty, concl)) -> (x, xty, concl)
     | _ -> noelim ()
   in
@@ -865,7 +865,7 @@ let process_elimT qs tc =
   let pt = PT.tc1_process_full_pterm tc qs in
 
   let (_xp, xpty, ax) =
-    match TTC.destruct_product hyps pt.ptev_ax with
+    match EcReduction.destruct_product hyps pt.ptev_ax with
     | Some (`Forall (xp, GTty xpty, f)) -> (xp, xpty, f)
     | _ -> noelim ()
   in
@@ -881,7 +881,7 @@ let process_elimT qs tc =
   let ax = PT.concretize_form pt.ptev_env ax in
 
   let rec skip ax =
-    match TTC.destruct_product hyps ax with
+    match EcReduction.destruct_product hyps ax with
     | Some (`Imp (_f1, f2)) -> skip f2
     | Some (`Forall (x, GTty xty, f)) -> ((x, xty), f)
     | _ -> noelim ()
@@ -895,7 +895,7 @@ let process_elimT qs tc =
   let (_xabs, body) = FPosition.topattern ~x:x ptnpos concl in
 
   let rec skipmatch ax body sk =
-    match TTC.destruct_product hyps ax, TTC.destruct_product hyps body with
+    match EcReduction.destruct_product hyps ax, EcReduction.destruct_product hyps body with
     | Some (`Imp (i1, f1)), Some (`Imp (i2, f2)) ->
         if   EcReduction.is_alpha_eq hyps i1 i2
         then skipmatch f1 f2 (sk+1)
@@ -926,9 +926,9 @@ let process_view1 pe tc =
       | SFquant (Lforall, (x, t), lazy f) -> `Forall (x, t, f)
       | SFimp (f1, f2) -> `Imp (f1, f2)
       | SFiff (f1, f2) -> `Iff (f1, f2)
-      | _ -> raise EcProofTyping.NoMatch
+      | _ -> raise EcReduction.NoMatch
     in
-      EcProofTyping.lazy_destruct hyps doit fp
+      EcReduction.lazy_destruct hyps doit fp
   in
 
   let rec instantiate fp ids pte =
@@ -960,7 +960,7 @@ let process_view1 pe tc =
   in
 
   try
-    match TTC.destruct_product (tc1_hyps tc) (FApi.tc1_goal tc) with
+    match EcReduction.destruct_product (tc1_hyps tc) (FApi.tc1_goal tc) with
     | None -> raise E.NoTopAssumption
 
     | Some (`Forall _) ->
@@ -980,7 +980,7 @@ let process_view1 pe tc =
 
               snd (List.fold_left_map (fun f1 arg ->
                 let pre, f1 =
-                  match oget (TTC.destruct_product (tc1_hyps tc) f1) with
+                  match oget (EcReduction.destruct_product (tc1_hyps tc) f1) with
                   | `Imp    (_, f1)      -> (None, f1)
                   | `Forall (x, xty, f1) ->
                     let aout =
@@ -1960,7 +1960,7 @@ let process_exists args (tc : tcenv1) =
   let pte  = PT.ptenv !!tc (FApi.tc1_hyps tc) pte in
 
   let for1 concl arg =
-    match TTC.destruct_exists hyps concl with
+    match EcReduction.destruct_exists hyps concl with
     | None -> tc_error !!tc "not an existential"
     | Some (`Exists (x, xty, f)) ->
         let arg =

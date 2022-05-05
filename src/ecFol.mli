@@ -222,6 +222,9 @@ type sform =
   | SFeq    of form * form
   | SFop    of (path * ty list) * (form list)
 
+  | SFcost of cost
+  | SFmodcost of mod_cost
+
   | SFhoareF  of sHoareF
   | SFhoareS  of sHoareS
   | SFcHoareF  of cHoareF

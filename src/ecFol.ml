@@ -856,6 +856,9 @@ type sform =
   | SFeq    of form * form
   | SFop    of (EcPath.path * ty list) * (form list)
 
+  | SFcost of cost
+  | SFmodcost of mod_cost
+
   | SFhoareF  of sHoareF
   | SFhoareS  of sHoareS
   | SFcHoareF  of cHoareF
@@ -913,6 +916,9 @@ let rec sform_of_form fp =
 
   | Fapp ({ f_node = Fop (op, ty) }, args) ->
       sform_of_op (op, ty) args
+
+  | Fcost c     -> SFcost c
+  | Fmodcost mc -> SFmodcost mc
 
   | _ -> SFother fp
 

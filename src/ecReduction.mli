@@ -121,3 +121,25 @@ type xconv = [`Eq | `AlphaEq | `Conv]
 val xconv : xconv -> LDecl.hyps -> form -> form -> bool
 
 (* -------------------------------------------------------------------- *)
+exception NoMatch
+
+val lazy_destruct :
+     ?reduce:bool
+  -> EcEnv.LDecl.hyps
+  -> (form -> 'a)
+  -> (form -> 'a option)
+
+(* -------------------------------------------------------------------- *)
+type dproduct = [
+  | `Imp    of form * form
+  | `Forall of EcIdent.t * gty * form
+]
+
+type dexists = [
+  | `Exists of EcIdent.t * gty * form
+]
+
+val destruct_product : ?reduce:bool -> EcEnv.LDecl.hyps -> form -> dproduct option
+val destruct_exists  : ?reduce:bool -> EcEnv.LDecl.hyps -> form -> dexists  option
+val destruct_modcost : ?reduce:bool -> EcEnv.LDecl.hyps -> form -> mod_cost option
+val destruct_cost    : ?reduce:bool -> EcEnv.LDecl.hyps -> form -> cost     option
