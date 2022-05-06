@@ -1,5 +1,7 @@
 FROM easycryptpa/ec-base-box:latest
 
+ARG SOURCE_BRANCH=main
+
 MAINTAINER Pierre-Yves Strub <pierre-yves@strub.nu>
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -10,7 +12,7 @@ RUN \
 	sudo pip3 install --no-cache-dir pyyaml
 
 RUN \
-	opam pin add -n easycrypt https://github.com/EasyCrypt/easycrypt.git && \
+	opam pin add -n easycrypt https://github.com/EasyCrypt/easycrypt.git#${SOURCE_BRANCH} && \
 	opam install depext && opam depext easycrypt && \
 	opam install --deps-only easycrypt && \
 	opam clean

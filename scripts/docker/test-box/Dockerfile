@@ -1,6 +1,6 @@
 FROM easycryptpa/ec-build-box:latest
 
-ARG SOURCE_BRANCH=r2022.04
+ARG SOURCE_BRANCH=main
 
 RUN \
 	opam pin --dev-repo add -n easycrypt https://github.com/EasyCrypt/easycrypt.git#${SOURCE_BRANCH} && \

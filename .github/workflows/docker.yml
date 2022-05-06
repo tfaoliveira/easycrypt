@@ -1,0 +1,59 @@
+name: Publish Docker image
+
+on:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+      - deploy-docker
+
+jobs:
+  docker:
+    name: Push Docker image to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: easycryptpa/box
+          tags: |
+            # set latest tag for default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # branch event
+            type=ref,event=branch
+      
+      - name: Build and push Docker image (base box)
+        uses: docker/build-push-action@v3
+        if: github.ref != 'refs/heads/main'
+        with:
+          context: scripts/docker/base-box
+          outputs: type=image,name=easycryptpa/ec-base-box,push=false
+
+      - name: Build and push Docker image (build box)
+        uses: docker/build-push-action@v3
+        if: github.ref != 'refs/heads/main'
+        with:
+          context: scripts/docker/build-box
+          outputs: type=registry
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: easycryptpa/ec-build-box
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: scripts/docker/test-box
+          outputs: type=registry
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: easycryptpa/ec-test-box
+          build-args: |
+            SOURCE_BRANCH=${{ github.sha }}
