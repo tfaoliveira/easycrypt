@@ -654,10 +654,10 @@ let norm_cbv (ri : reduction_info) hyps f =
     st_ri   = ri
   } in
 
-  let add_hyp s (x,k) =
-    match k with
-    | LD_var (_, Some e) when ri.delta_h x ->
-      let v = cbv_init st s e in Subst.bind_local s x v
+  let add_hyp s (hyp : l_local) =
+    match hyp.l_kind with
+    | LD_var (_, Some e) when ri.delta_h hyp.l_id ->
+      let v = cbv_init st s e in Subst.bind_local s hyp.l_id v
     | _ -> s in
 
   let s =

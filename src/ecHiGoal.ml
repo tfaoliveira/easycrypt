@@ -95,7 +95,7 @@ let process_simplify_info ri (tc : tcenv1) =
   let do1 (sop, sid) ps =
     match ps.pl_desc with
     | ([], s) when LDecl.has_name s hyps ->
-        let id = fst (LDecl.by_name s hyps) in
+        let id = LDecl.get_id s hyps in
         (sop, Sid.add id sid)
 
     | qs ->
@@ -153,7 +153,7 @@ let process_clear symbols tc =
   let toid s =
     if not (LDecl.has_name (unloc s) hyps) then
       tc_lookup_error !!tc ~loc:s.pl_loc `Local ([], unloc s);
-    fst (LDecl.by_name (unloc s) hyps)
+    LDecl.get_id (unloc s) hyps
   in
 
   try  t_clears (List.map toid symbols) tc
@@ -1605,7 +1605,7 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
         | PFident ({pl_desc = ([], s)}, None)
             when not doeq && is_none occ && LDecl.has_name s hyps
           ->
-            let id = fst (LDecl.by_name s hyps) in
+            let id = LDecl.get_id s hyps in
             t_generalize_hyp ~clear id tc
 
         | _ ->
@@ -1655,7 +1655,7 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
         | FPNamed ({ pl_desc = ([], s) }, None)
             when LDecl.has_name s hyps && List.is_empty fp.fp_args
           ->
-            let id = fst (LDecl.by_name s hyps) in
+            let id = LDecl.get_id s hyps in
             t_generalize_hyp ~clear id tc
 
         | _ ->
@@ -1668,15 +1668,12 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
 
     | `LetIn x ->
         let id =
-          let binding =
-            try  Some (LDecl.by_name (unloc x) hyps)
-            with EcEnv.LDecl.LdeclError _ -> None in
-
-            match binding  with
-            | Some (id, LD_var (_, Some _)) -> id
-            | _ ->
-                let msg = "symbol must reference let-in" in
-                tc_error ~loc:(loc x) !!tc "%s" msg
+          match LDecl.by_name (unloc x) hyps with
+          | { l_id; l_kind = LD_var (_, Some _)} -> l_id
+          | _
+          | exception EcEnv.LDecl.LdeclError _ ->
+            let msg = "symbol must reference let-in" in
+            tc_error ~loc:(loc x) !!tc "%s" msg
 
         in t_generalize_hyp ~clear ~letin:true id tc
   in
@@ -2042,7 +2039,7 @@ let process_wlog ids wlog tc =
   let toid s =
     if not (LDecl.has_name (unloc s) hyps) then
       tc_lookup_error !!tc ~loc:s.pl_loc `Local ([], unloc s);
-    fst (LDecl.by_name (unloc s) hyps) in
+    LDecl.get_id (unloc s) hyps in
 
   let ids = List.map toid ids in
 
@@ -2065,7 +2062,7 @@ let process_wlog_suff ids wlog tc =
   let toid s =
     if not (LDecl.has_name (unloc s) hyps) then
       tc_lookup_error !!tc ~loc:s.pl_loc `Local ([], unloc s);
-    fst (LDecl.by_name (unloc s) hyps) in
+    LDecl.get_id (unloc s) hyps in
 
   let ids = List.map toid ids in
 
@@ -2092,7 +2089,7 @@ let process_genhave (ttenv : ttenv) ((name, ip, ids, gen) : pgenhave) tc =
   let toid s =
     if not (LDecl.has_name (unloc s) hyps) then
       tc_lookup_error !!tc ~loc:s.pl_loc `Local ([], unloc s);
-    fst (LDecl.by_name (unloc s) hyps) in
+    LDecl.get_id (unloc s) hyps in
 
   let ids = List.map toid ids in
 

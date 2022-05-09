@@ -887,7 +887,7 @@ and apply_pterm_to_holes ?loc n pt =
 
 (* -------------------------------------------------------------------- *)
 and apply_pterm_to_local ?loc pt id =
-  match LDecl.by_id id pt.ptev_env.pte_hy with
+  match LDecl.lk_by_id id pt.ptev_env.pte_hy with
   | LD_var (ty, _) ->
       apply_pterm_to_arg_r ?loc pt (PVAFormula (f_local id ty))
 

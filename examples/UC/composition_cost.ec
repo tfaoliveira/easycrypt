@@ -484,7 +484,7 @@ theory NONDUMMY_EQUIV_DUMMY.
        
        exists (S<: NONDUMMY_RI.SIMULATOR 
                    [open
-                    init : [csa.`cinit] {#FB.step, #FB.backdoor},
+                    init : [csa.`cinit] {},
                     step : [               csa.`cstep, 
                             #FB.step     : N csa.`cs_s, 
                             #FB.backdoor : N csa.`cs_b],
@@ -502,7 +502,7 @@ theory NONDUMMY_EQUIV_DUMMY.
 
     (exists (S<: RI.SIMULATOR 
                   [open
-                   init : [csd.`cinit] {#FB.step, #FB.backdoor},
+                   init : [csd.`cinit] {},
                    step : [ csd.`cstep,
                             #FB.step     : N csd.`cs_s, 
                             #FB.backdoor : N csd.`cs_b],
@@ -520,13 +520,35 @@ theory NONDUMMY_EQUIV_DUMMY.
     + by move=> B; proc; call(:true); auto.
     + by move=> B; proc; call(:true); auto.
     clear hA.
-    exists S; split; 1: clear hS.
-    + (split; last split) => ?.
+    exists S; split; 1: clear hS. 
 
+    op c : cost
+
+    c : 1   
+    FB : 2
+    current: 2
+
+    move:c => c.
+
+    FB : 2
+    c : 2
+
+
+    c : 1   
+    FB : 2
+    current: 2
+
+    move: FB. 
+
+    c : 1   
+    current: 1
+
+
+    + (split; last split). move => FB. 
       (* new proof: WIP *)
       (* S(FB).init *) 
       - split; last split.
-      + proc true : [] => //=.
+      + proc true : [] => //=. 
           rewrite !bigi_constz //=. admit.
       + by move => *; proc*; call(:true). 
       + by move => *; proc*; call(:true). 

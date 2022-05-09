@@ -1132,7 +1132,7 @@ let add_axiom ((genv, _) as env) preid form =
   genv.te_task <- WTask.add_decl genv.te_task decl
 
 (* -------------------------------------------------------------------- *)
-let trans_hyp ((genv, lenv) as env) (x, ty) =
+let trans_hyp ((genv, lenv) as env) { l_id = x; l_kind = ty; } =
   match ty with
   | LD_var (ty, body) ->
     let dom, codom = EcEnv.Ty.signature genv.te_env ty in
@@ -1423,7 +1423,7 @@ module Frequency = struct
     !sp, !sf
 
 
-  let f_ops_hyp unwanted_op rs (_,ld) =
+  let f_ops_hyp unwanted_op rs { l_kind = ld } =
     match ld with
     | LD_var(_ty, b) ->
       begin match b with
@@ -1437,7 +1437,7 @@ module Frequency = struct
 
   let f_ops_hyps unwanted_op = List.fold_left (f_ops_hyp unwanted_op)
 
-  let f_ops_goal unwanted_op hyps concl =
+  let f_ops_goal unwanted_op (hyps : l_locals) concl =
     f_ops_hyps unwanted_op (f_ops unwanted_op concl) hyps
 
   let f_ops_oper unwanted_op env p rs =

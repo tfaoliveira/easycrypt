@@ -3594,31 +3594,46 @@ module LDecl = struct
 
   (* ------------------------------------------------------------------ *)
   let by_name s hyps =
-    match List.ofind ((=) s |- EcIdent.name |- fst) hyps.h_local with
+    match List.ofind ((=) s |- EcIdent.name |- l_id) hyps.h_local with
     | None   -> error (LookupError (`Symbol s))
     | Some h -> h
 
   let by_id id hyps =
-    match List.ofind (EcIdent.id_equal id |- fst) hyps.h_local with
+    match List.ofind (EcIdent.id_equal id |- l_id) hyps.h_local with
     | None   -> error (LookupError (`Ident id))
-    | Some x -> snd x
+    | Some x -> x
+
+  let lk_by_id id hyps =
+    match List.ofind (EcIdent.id_equal id |- l_id) hyps.h_local with
+    | None   -> error (LookupError (`Ident id))
+    | Some x -> x.l_kind
 
   (* ------------------------------------------------------------------ *)
-  let as_hyp = function
+  let get_id name (hyps : hyps) = (by_name name hyps).l_id
+
+  (* ------------------------------------------------------------------ *)
+  let _as_hyp : _ -> EcIdent.t * form = function
     | (id, LD_hyp f) -> (id, f)
     | (id, _) -> error (InvalidKind (id, `Hypothesis))
 
-  let as_var = function
+  let _as_var : _ -> EcIdent.t * glob_var_bind = function
     | (id, LD_var (ty, _)) -> (id, ty)
     | (id, _) -> error (InvalidKind (id, `Variable))
+
+  (* ------------------------------------------------------------------ *)
+  let as_hyp (x : l_local) : EcIdent.t * form =
+    _as_hyp (x.l_id, x.l_kind)
+
+  let as_var (x : l_local) : EcIdent.t * glob_var_bind =
+    _as_var (x.l_id, x.l_kind)
 
   (* ------------------------------------------------------------------ *)
   let hyp_by_name s hyps = as_hyp (by_name s hyps)
   let var_by_name s hyps = as_var (by_name s hyps)
 
   (* ------------------------------------------------------------------ *)
-  let hyp_by_id x hyps = as_hyp (x, by_id x hyps)
-  let var_by_id x hyps = as_var (x, by_id x hyps)
+  let hyp_by_id x hyps = _as_hyp (x, lk_by_id x hyps)
+  let var_by_id x hyps = _as_var (x, lk_by_id x hyps)
 
   (* ------------------------------------------------------------------ *)
   let has_gen dcast s hyps =
@@ -3638,18 +3653,18 @@ module LDecl = struct
     | _ -> false
 
   let has_name ?(dep = false) s hyps =
-    let test (id, k) =
+    let test { l_id = id; l_kind = k; } =
       EcIdent.name id = s || (dep && has_inld s k)
     in List.exists test hyps.h_local
 
   (* ------------------------------------------------------------------ *)
   let can_unfold id hyps =
-    try  match by_id id hyps with LD_var (_, Some _) -> true | _ -> false
+    try  match lk_by_id id hyps with LD_var (_, Some _) -> true | _ -> false
     with LdeclError _ -> false
 
   let unfold id hyps =
     try
-      match by_id id hyps with
+      match lk_by_id id hyps with
       | LD_var (_, Some f) -> f
       | _ -> raise NotReducible
     with LdeclError _ -> raise NotReducible
@@ -3665,7 +3680,7 @@ module LDecl = struct
 
   let add_local id ld hyps =
     check_name_clash id hyps;
-    { hyps with h_local = (id, ld) :: hyps.h_local }
+    { hyps with h_local = { l_id = id; l_kind = ld; } :: hyps.h_local }
 
   (* ------------------------------------------------------------------ *)
   let fresh_id hyps s =
@@ -3701,7 +3716,7 @@ module LDecl = struct
     match k with
     | LD_var (ty, _)  -> Var.bind_local x ty env
     | LD_mem mt       -> Memory.push (x, mt) env
-    | LD_modty i -> Mod.bind_local x i env
+    | LD_modty i      -> Mod.bind_local x i env
     | LD_hyp   _      -> env
     | LD_abs_st us    -> AbsStmt.bind x us env
 
@@ -3715,7 +3730,7 @@ module LDecl = struct
   let init env ?(locals = []) tparams =
     let buildenv env =
       List.fold_right
-        (fun (x, k) env -> add_local_env x k env)
+        (fun { l_id = x; l_kind = k; } env -> add_local_env x k env)
         locals env
     in
 
@@ -3725,8 +3740,10 @@ module LDecl = struct
 
   (* ------------------------------------------------------------------ *)
   let clear ?(leniant = false) ids hyps =
-    let rec filter ids hyps =
-      match hyps with [] -> [] | ((id, lk) as bd) :: hyps ->
+    let rec filter ids (hyps : EcBaseLogic.l_locals) =
+      match hyps with
+      | [] -> []
+      | ({ l_id = id; l_kind = lk; } as bd) :: hyps ->
 
       let ids, bd =
         if EcIdent.Sid.mem id ids then (ids, None) else
@@ -3754,11 +3771,15 @@ module LDecl = struct
 
     let init locals = init hyps.le_init ~locals hyps.le_hyps.h_tvar in
 
-    let rec doit locals =
+    let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
-      | (y, LD_hyp fp) :: locals when EcIdent.id_equal x y -> begin
+      | ({ l_id = y; l_kind = LD_hyp fp } as l) :: locals
+        when EcIdent.id_equal x y -> begin
           let fp' = check (lazy (init locals)) fp in
-          if fp == fp' then raise E.NoOp else (x, LD_hyp fp') :: locals
+          if fp == fp' then
+            raise E.NoOp
+          else
+            { l with l_kind = LD_hyp fp' } :: locals
       end
 
       | [] -> error (LookupError (`Ident x))
@@ -3768,9 +3789,9 @@ module LDecl = struct
 
   (* ------------------------------------------------------------------ *)
   let local_hyps x hyps =
-    let rec doit locals =
+    let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
-      | (y, _) :: locals ->
+      | { l_id = y } :: locals ->
           if EcIdent.id_equal x y then locals else doit locals
       | [] ->
           error (LookupError (`Ident x)) in
@@ -3779,8 +3800,11 @@ module LDecl = struct
     init hyps.le_init ~locals hyps.le_hyps.h_tvar
 
   (* ------------------------------------------------------------------ *)
-  let by_name s hyps = by_name s (tohyps hyps)
-  let by_id   x hyps = by_id   x (tohyps hyps)
+  let by_name  s hyps = by_name  s (tohyps hyps)
+  let by_id    x hyps = by_id    x (tohyps hyps)
+  let lk_by_id x hyps = lk_by_id x (tohyps hyps)
+
+  let get_id s hyps = get_id s (tohyps hyps)
 
   let has_name s hyps = has_name ~dep:false s (tohyps hyps)
   let has_id   x hyps = has_id x (tohyps hyps)

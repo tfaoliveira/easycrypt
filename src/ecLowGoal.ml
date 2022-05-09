@@ -69,11 +69,11 @@ module LowApply = struct
 
     let env     = env1 in
     let hyps    = LDecl.init env ld1.h_tvar in
-    let tophyps = Mid.of_list ld2.h_local in
+    let tophyps = Mid.of_list (List.map (fun x -> x.l_id, x) ld2.h_local) in
 
-    let h_eqs (x, v) =
+    let h_eqs { l_id = x; l_kind = v; } =
       match Mid.find_opt x tophyps  with
-      | None -> false | Some v' ->
+      | None -> false | Some { l_kind = v' } ->
 
         (v (*φ*)== v') ||
           match v, v' with
@@ -260,7 +260,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
   try
     let hypstc, concl = FApi.tc1_flat tc in
     let { h_tvar; h_local = hyps } = EcEnv.LDecl.tohyps hypstc in
-    let hyps = Mid.of_list hyps in
+    let hyps = Mid.of_list (List.map (fun x -> x.l_id, x) hyps) in
 
     let test_fv known fv =
       let test x _ =
@@ -275,19 +275,20 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
     let new_ = LDecl.init (LDecl.baseenv hypstc) h_tvar in
 
     let known, new_ =
-      let add1 (known, new_) x =
-        if Sid.mem x known then raise E.InvalidShuffle;
-        let bd = Mid.find_opt x hyps in
-        let bd = oget ~exn:E.InvalidShuffle bd in
+      let add1 (known, new_) id =
+        if Sid.mem id known then raise E.InvalidShuffle;
+        let x = Mid.find_opt id hyps in
+        let x = oget ~exn:E.InvalidShuffle x in
 
-        begin match bd with
+        begin match x.l_kind with
         | LD_var (ty, f) -> for_type known ty; oiter (for_form known) f
 
         | LD_hyp f -> for_form known f
 
         | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
         end;
-        (Sid. add x known, LDecl.add_local x bd new_)
+        (* TODO A: epoch: do not refresh epoch *)
+        (Sid.add id known, LDecl.add_local id x.l_kind new_)
 
       in List.fold_left add1 (Sid.empty, new_) ids in
     for_form known concl;
@@ -769,7 +770,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         | `NoClear  -> cls
       in
 
-      match LDecl.ld_subst s (LDecl.by_id id hyps) with
+      match LDecl.ld_subst s (LDecl.lk_by_id id hyps) with
       | LD_var (ty, Some body) when letin ->
           let x    = fresh id in
           let s    = Fsubst.f_bind_rename s id x ty in
@@ -851,12 +852,12 @@ let t_generalize_hyp ?clear ?missing ?naming ?letin id tc =
 module LowAssumption = struct
   (* ------------------------------------------------------------------ *)
   let gen_find_in_hyps test hyps =
-    let test (_, lk) =
+    let test { l_kind = lk } =
       match lk with
       | LD_hyp f  -> test f
       | _         -> false
     in
-      fst (List.find test (LDecl.tohyps hyps).h_local)
+    (List.find test (LDecl.tohyps hyps).h_local).l_id
 
   (* ------------------------------------------------------------------ *)
   let t_gen_assumption tests tc =
@@ -1624,7 +1625,7 @@ module LowSubst = struct
   let is_member_for_subst ?kind hyps var f =
     let kind = odfl default_subst_kind kind in
     let env = LDecl.toenv hyps in
-    let is_let x = match LDecl.by_id x hyps with LD_var (_, Some _) -> true | _ -> false in
+    let is_let x = match LDecl.lk_by_id x hyps with LD_var (_, Some _) -> true | _ -> false in
     match f.f_node, var with
     (* Substitution of logical variables *)
     | Flocal x, None when kind.sk_local && not (is_let x) ->
@@ -1713,7 +1714,7 @@ module LowSubst = struct
           (* check if x is a declared module *)
           let fv = Sid.add x fv in
           if EcEnv.Mod.by_mpath_opt (EcPath.mident x) env <> None then fv
-          else match LDecl.by_id x hyps with
+          else match LDecl.lk_by_id x hyps with
           | LD_var (_, Some f) -> add_f fv f
           | _ -> fv
       and add_f fv f = Mid.fold_left add fv f.f_fv in
@@ -1756,8 +1757,8 @@ h1 : x = f w
 h2 : y = z
  *)
 
-let gen_hyps post gG =
-  let do1 gG (id, d) =
+let gen_hyps (post : l_locals) gG =
+  let do1 gG { l_id = id; l_kind = d } =
     match d with
     | LD_var (_ty, Some body) -> f_let1 id body gG
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
@@ -1774,11 +1775,11 @@ let build_var var ty =
   | `PVar(x,m)   -> f_pvar x ty m
 
 
-let t_rw_for_subst y togen concl side eqid tc =
+let t_rw_for_subst y (togen : l_locals) concl side eqid tc =
   let hyps = FApi.tc1_hyps tc in
   let eq = LDecl.hyp_by_id eqid hyps in
   let f1', f2' = destr_eq_or_iff eq in
-  let ids = List.map fst togen in
+  let ids = List.map l_id togen in
   let ty = f1'.f_ty in
   let posty_G = f_lambda [y, GTty ty] (gen_hyps (List.rev togen) concl) in
   let f1, f2 = if side = `LtoR then f2', f1' else f1', f2' in
@@ -1809,71 +1810,73 @@ let t_rw_for_subst y togen concl side eqid tc =
 let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc : tcenv1) =
   let env, hyps, concl = FApi.tc1_eflat tc in
 
-  let subst_pre (subst, check, depend) moved (id, lk) =
-    if Sid.mem id depend then `Pre (id, lk)
+  let subst_pre (subst, check, depend) moved (hyp : l_local)
+    : [`Pre of l_local | `Post of l_local ]
+    =
+    if Sid.mem hyp.l_id depend then `Pre hyp
     else
 
     let check_moved f = not (Mid.disjoint (fun _ _ _ -> false) f.f_fv moved) in
 
-    match lk with
+    match hyp.l_kind with
     | LD_var (_ty, None) ->
-        `Pre (id, lk)
+        `Pre hyp
 
     | LD_var (ty, Some body) ->
       if check_moved body then
         let body =
-          if check body && not (Sid.mem id except)
+          if check body && not (Sid.mem hyp.l_id except)
           then subst body
           else body in
-        `Post (id, LD_var (ty, Some body))
+        `Post { hyp with l_kind = LD_var (ty, Some body) }
       else
-        if check body && not (Sid.mem id except)
-        then `Post (id, LD_var (ty, Some (subst body)))
-        else `Pre  (id, lk)
+        if check body && not (Sid.mem hyp.l_id except)
+        then `Post { hyp with l_kind = LD_var (ty, Some (subst body))}
+        else `Pre  hyp
 
     | LD_hyp body ->
       if check_moved body then
         let body =
-          if check body && not (Sid.mem id except) then subst body
+          if check body && not (Sid.mem hyp.l_id except) then subst body
           else body in
-        `Post (id, LD_hyp body)
+        `Post { hyp with l_kind = LD_hyp body }
       else
-        if check body && not (Sid.mem id except)
-        then `Post (id, LD_hyp (subst body))
-        else `Pre  (id, lk)
+        if check body && not (Sid.mem hyp.l_id except)
+        then `Post { hyp with l_kind = LD_hyp (subst body)}
+        else `Pre  hyp
 
-    | LD_mem    _ -> `Pre (id, lk)
-    | LD_modty  _ -> `Pre (id, lk) (* TODO: subst cost *)
-    | LD_abs_st _ -> `Pre (id, lk)
+    | LD_mem    _ -> `Pre hyp
+    | LD_modty  _ -> `Pre hyp (* TODO: subst cost *)
+    | LD_abs_st _ -> `Pre hyp
   in
 
   let try1 eq =
-    match eq with
+    match eq.l_id, eq.l_kind with
     | id, LD_hyp f  when is_eq_or_iff f -> begin
         let dosubst (side, var, f, depend) =
           let y, fy =
             let y = EcIdent.create "y" in
             y, f_local y f.f_ty in
           let subst, check = LowSubst.build_subst env var fy in
-          let post, (id', _), pre =
-            try  List.find_pivot (id_equal id |- fst) (LDecl.tohyps hyps).h_local
+          let post, { l_id = id' }, pre =
+            try  List.find_pivot (id_equal id |- l_id) (LDecl.tohyps hyps).h_local
             with Not_found -> assert false
           in
 
           assert (id_equal id id');
           let hpost, _ =
             List.fold_right
-              (fun ((x,_) as h) (hpost, moved) ->
+              (fun h (hpost, moved) ->
                 match subst_pre (subst, check, depend) moved h with
                 | `Pre  _ -> (hpost, moved)
-                | `Post (id, lk) -> ((id, lk) :: hpost, Sid.add x moved))
+                | `Post h' -> (h' :: hpost, Sid.add h.l_id moved))
               pre ([], Sid.empty) in
           let post =
             List.fold_right
               (fun h post ->
-                assert (not (id_equal (fst h) id));
+                assert (not (id_equal h.l_id id));
                 match subst_pre (subst, check, depend) Sid.empty h with
-                | `Pre (id, lk) | `Post (id, lk) -> (id, lk) :: post )
+                | `Pre h | `Post h -> h :: post )
               post [] in
           let apost = List.rev_append hpost post in
           let concl = subst concl in
@@ -1885,7 +1888,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
             | SCall ->
               match var with
               | `Local x ->
-                begin match LDecl.by_id x hyps with
+                begin match LDecl.lk_by_id x hyps with
                 | LD_var (_, None) -> [x; id]
                 | _ -> [id]
                 end
@@ -1911,7 +1914,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
 
   let eqs =
     eqid
-      |> omap  (fun id -> [id, LD_hyp (LDecl.hyp_by_id id hyps)])
+      |> omap  (fun id -> [LDecl.by_id id hyps])
       |> ofdfl (fun () -> (LDecl.tohyps hyps).h_local)
   in
 
@@ -1946,13 +1949,13 @@ let t_absurd_hyp ?(conv  = `AlphaEq) id tc =
   ]) tc
 
 (* -------------------------------------------------------------------- *)
-let t_absurd_hyp ?conv ?id tc =
+let t_absurd_hyp ?conv ?id (tc : tcenv1) : tcenv =
   let tabsurd = t_absurd_hyp ?conv in
 
   match id with
   | Some id -> tabsurd id tc
   | None    ->
-      let tott (id, lk) =
+      let tott { l_id = id; l_kind = lk } =
         match lk with
         | LD_hyp f when is_not f -> Some (tabsurd id)
         | _ -> None
@@ -1976,13 +1979,13 @@ let t_false ?(conv = `Eq) id tc =
     tc
 
 (* -------------------------------------------------------------------- *)
-let t_false ?conv ?id tc =
+let t_false ?conv ?id (tc : tcenv1) : tcenv =
   let tfalse = t_false ?conv in
 
   match id with
   | Some id -> tfalse id tc
   | None    ->
-      let tott (id, lk) =
+      let tott { l_id = id; l_kind = lk; } =
         match lk with
         | LD_hyp _ -> Some (tfalse id)
         | _ -> None
@@ -2187,7 +2190,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
       let bd  = fst (destr_forall concl) in
       let ids = List.map (EcIdent.name |- fst) bd in
       let ids = LDecl.fresh_ids hyps ids in
-      let st = { st with cs_undosubst = Sid.of_list (List.map fst (LDecl.tohyps hyps).h_local) } in
+      let st = { st with cs_undosubst = Sid.of_list (List.map l_id (LDecl.tohyps hyps).h_local) } in
       FApi.t_seqs
         [t_intros_i ids; aux0 st;
          t_generalize_hyps ~clear:`Yes ~missing:true ids]
@@ -2229,7 +2232,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
        let reduce = if delta then `Full else `NoDelta in
        let thesplit tc = t_split ~closeonly:false ~reduce tc in
        let hyps0 = FApi.tc1_hyps tc in
-       let shuffle = List.rev_map fst (LDecl.tohyps (FApi.tc1_hyps tc)).h_local in
+       let shuffle = List.rev_map l_id (LDecl.tohyps (FApi.tc1_hyps tc)).h_local in
        let st_split = { st with cs_undosubst = Sid.of_list shuffle } in
        let tc =
          match FApi.t_try_base (thesplit @! aux0 st_split) tc with
@@ -2311,7 +2314,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
         Format.eprintf "apost = @[%a@]@." (EcPrinting.pp_list "@ " EcIdent.pp_ident) (List.map fst apost);*)
         let moved = ref Sid.empty in
         let check_moved f = not (Mid.disjoint (fun _ _ _ -> false) f.f_fv !moved) in
-        let doit (x,h) =
+        let doit { l_id = x; l_kind = h } =
           let test =
             (Sid.mem x st.cs_undosubst &&
                match h with

@@ -2955,7 +2955,7 @@ type ppgoal = (EcBaseLogic.hyps * EcFol.form) * [
 module PPGoal = struct
   let goalline i = String.make i '-'
 
-  let pre_pp_hyp ppe (id, k) =
+  let pre_pp_hyp ppe EcBaseLogic.{ l_id = id; l_kind = k } =
     let ppe =
       match k with
       | EcBaseLogic.LD_mem m ->
