@@ -749,10 +749,14 @@ section Probability_Collision.
   declare axiom A_run_ll (O <: RCPA_Oracles { -A }): islossless O.enc => islossless A(O).distinguish.
 
   local clone import Birthday as BBound with
-    type T  <- block,
-    op   uT <- dBlock,
-    op   q  <- q * ell
-  proof * by smt (dBlock_uffu IntOrder.divr_ge0 gt0_q gt0_ell).
+    type in_t   <- unit,
+    type out_t  <- block,
+    op   dout _ <- dBlock
+  proof *.
+
+  local clone import BBound.BoundedOracle with
+    op q <- q * ell
+  proof ge0_q by smt(gt0_q gt0_ell).
 
   local module Wrap(A : RCPA_Adversary,S : ASampler) = {
     var qC : int
@@ -793,16 +797,17 @@ section Probability_Collision.
       Pr[Exp(Bounder(Sample),Wrap(A)).main() @ &m: p Sample.l]
     = Pr[Exp(Sample,Bounded(Wrap(A))).main() @ &m: p Sample.l].
   proof.
-  byequiv (: ={glob Wrap(A), glob Sample} ==> ={glob Wrap(A), glob Sample})=> //=.
+  byequiv (: ={glob Wrap(A), glob Sample}
+             ==> ={glob Wrap(A), glob Sample})=> //=.
   by conseq (PushBound Sample (Wrap(A))).
   qed.
 
   lemma Bound_by_Birthday &m:
-    Pr[INDR_CPA_direct(Compute,QueryBounder(A)).main() @ &m: Compute.bad]
+       Pr[INDR_CPA_direct(Compute,QueryBounder(A)).main() @ &m: Compute.bad]
     <= ((q * ell)^2)%r * mu dBlock (pred1 witness).
   proof.
   apply/(ler_trans Pr[Exp(Bounder(Sample),Wrap(A)).main() @ &m: !(uniq Sample.l)]).
-  + rewrite (pr_PushBound_list (fun l=> !uniq l) &m)=> /=.
+  + rewrite (pr_PushBound_list (fun l=> !uniq l) &m)=> //=.
     byequiv (: ={glob A} ==> Compute.bad{1} => !uniq Sample.l{2})=> //.
     proc; inline *; wp.
     call (_:    OracleBounder.qC{1} = Wrap.qC{2}
@@ -820,12 +825,13 @@ section Probability_Collision.
                /\ 0 <= Bounder.c{2} <= Wrap.qC{2} * ell + i{2}
                /\ (Compute.bad{1} <=> !List.uniq Sample.l{2})
                /\ (forall x, mem Compute.qs{1} x <=> mem Sample.l{2} x)).
-        + rcondt{2} 3; first by auto=> /#.
+        + rcondt{2} 4; first by auto=> /#.
           by auto=> /> &1 &2; smt(in_fsetU in_fset1).
         by auto=> />; smt(size_ge0).
       by while (={i, p} /\ r{1} = c{2}); auto.
     by auto; smt (in_fset0 gt0_q).
-  have:= BBound.pr_collision_bounded_oracles (Wrap(A)) _ &m.
+  rewrite -List.map_id.
+  apply: (BoundedOracle.pr_collision_bounded_oracles (Wrap(A)) _ _ _ _ &m)=> //=.
   + move=> S S_s_ll; proc.
     call (A_run_ll (<: Wrap(A,S).O) _).
     + proc; sp; if.
@@ -834,8 +840,7 @@ section Probability_Collision.
         by auto; rewrite -/predT; smt (dBlock_uffu).
       by while (true) (size p + 1 - i); auto=> /#.
     by auto.
-  have [] + [] _ dBlock_fu:= dBlock_uffu.
-  by rewrite /is_uniform=> /(_ _ _ (dBlock_fu maxu) (dBlock_fu witness)) ->.
+  by move=> y; rewrite dmap1E /idfun /(\o) #smt:(dBlock_uffu).
   qed.
 end section Probability_Collision.
 

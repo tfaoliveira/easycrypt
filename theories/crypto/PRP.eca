@@ -535,16 +535,10 @@ section CollisionProbability.
   declare axiom D_bounded  : hoare [D(PRFi).distinguish : PRFi.m = empty ==> card (fdom PRFi.m) <= q].
 
   local clone import Birthday as BBound with
-    op   q <- q,
-    type T <- D,
-    op   uT <- dD,
-    op maxu <- witness
+    type in_t <- unit,
+    type out_t <- D,
+    op   dout _ <- dD
   proof *.
-  realize ge0_q by apply ge0_q.
-  realize maxuP. 
-  proof.
-  by move=> x; exact/StdOrder.RealOrder.lerr_eq/dD_funi.
-  qed.
 
   (* We construct a Birthday Bound adversary from the IND
      experiment. *)
@@ -596,8 +590,12 @@ section CollisionProbability.
     if => //=.
     auto => /> &1 &2 h1 h2 h3 h4 r _.
     rewrite fdom_set fcardUI_indep 2:fcard1; 1: by rewrite fsetI1 mem_fdom h4. 
-    smt (get_setE mem_frng rngE collision_add).
-  auto; smt (size_eq0 fdom0 fcards0 frng0 in_fset0 mem_empty).
+    split=> [/#|].
+    split; 1:by move=> x; rewrite -h2 !mem_frng !rngE #smt:(get_setE).
+    split=> [x0 x1 neq_x /mem_set + /mem_set|].
+    + by rewrite !get_setE negb_and -h2 mem_frng rngE /#.
+    by rewrite negb_and /= collision_add // -h2 mem_frng h3 /#.
+  by auto; smt (size_eq0 fdom0 fcards0 frng0 in_fset0 mem_empty).
   qed.
 
   local hoare IND_bounded : IND(PRFi,D).main : true ==> card (fdom PRFi.m) <= q.
@@ -611,15 +609,17 @@ section CollisionProbability.
   + byequiv => //.
     symmetry; proc *; inline Exp(Sample, A).main.
     by call IND_Exp; inline *; auto => /#.
-  apply (pr_collision A A_ll _ &m).
-  conseq IND_Exp IND_bounded => /#.
+  rewrite -map_id.
+  apply: (pr_collision A A_ll ge0_q _ _ &m)=> //.
+  + by move=> _ y; rewrite dmap1E /idfun /(\o) /= (@dD_funi y witness<:D>).
+  by conseq IND_Exp IND_bounded=> /#.
   qed.
 
   lemma Conclusion &m:
     `|Pr[IND(RP, D).main() @ &m: res]- Pr[IND(PRFi,D).main() @ &m: res]|
       <= (q*(q-1))%r/2%r * mu1 dD witness.
   proof.
-    move: (pr_PRPi_PRPi'_Indirect D &m) (pr_PRPi'_Indirect_PRFi D D_ll &m) (pr_PRFi_collision &m) => /#.
+  by move: (pr_PRPi_PRPi'_Indirect D &m) (pr_PRPi'_Indirect_PRFi D D_ll &m) (pr_PRFi_collision &m) => /#.
   qed.
 
 end section CollisionProbability.
