@@ -885,6 +885,8 @@ let check_sig_mt_cnv ?(proof_obl=false) env sym_in sin tyout =
 let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
   let env = EcEnv.LDecl.toenv hyps in
 
+  EcCHoare.check_loaded env;
+
   let mt_sig = EcEnv.ModTy.sig_of_mt env mt in
 
   (* Environement where [mt]'s parameters are binded. *)
