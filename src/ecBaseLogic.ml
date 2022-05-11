@@ -14,6 +14,7 @@ module Epoch = struct
 
   let next (e : t) : t = e + 1
   let max (e : t) (e' : t) = max e e'
+  let min (e : t) (e' : t) = min e e'
 end
 
 (* -------------------------------------------------------------------- *)
@@ -45,3 +46,6 @@ type hyps = {
 
 let hyps_epoch (hyps : hyps) : Epoch.t =
   List.fold_left (fun e l -> Epoch.max e l.l_epoch) Epoch.init hyps.h_local
+
+let by_id_opt (id : EcIdent.t) (hyps : hyps) : l_local option =
+  List.ofind (EcIdent.id_equal id |- l_id) hyps.h_local

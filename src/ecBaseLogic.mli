@@ -13,6 +13,7 @@ module Epoch : sig
 
   val next : t -> t
   val max : t -> t -> t
+  val min : t -> t -> t
 end
 
 (* -------------------------------------------------------------------- *)
@@ -42,3 +43,5 @@ type hyps = {
 }
 
 val hyps_epoch : hyps -> Epoch.t
+
+val by_id_opt : EcIdent.t -> hyps -> l_local option

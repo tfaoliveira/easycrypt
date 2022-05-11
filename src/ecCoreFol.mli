@@ -386,6 +386,11 @@ val f_int_edivz : form -> form -> form
 val f_int_max   : form -> form -> form
 
 (* -------------------------------------------------------------------- *)
+val fop_cost_opp    : form
+val fop_cost_add    : form
+val fop_cost_scale  : form
+val fop_cost_xscale : form
+
 val f_cost_zero    : form
 val f_cost_inf     : form
 val f_cost_inf0    : form
@@ -410,6 +415,11 @@ val f_bigi     : form -> form -> form -> form
 (* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
 val f_is_int : form -> form
+
+val f_op_xopp  : form
+val f_op_xadd  : form
+val f_op_xmul  : form
+val f_op_xmuli : form
 
 val f_Inf   : form
 val f_N     : form -> form

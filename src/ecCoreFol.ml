@@ -1092,6 +1092,7 @@ let f_im1 = f_int_opp f_i1
 let f_op_xopp   = f_op EcCoreLib.CI_Xint.p_xopp  [] (toarrow [txint        ] txint)
 let f_op_xadd   = f_op EcCoreLib.CI_Xint.p_xadd  [] (toarrow [txint; txint ] txint)
 let f_op_xmul   = f_op EcCoreLib.CI_Xint.p_xmul  [] (toarrow [txint; txint ] txint)
+let f_op_xmuli  = f_op EcCoreLib.CI_Xint.p_xmuli [] (toarrow [tint;  txint ] txint)
 let f_op_xle    = f_op EcCoreLib.CI_Xint.p_xle   [] (toarrow [txint; txint ] tbool)
 let f_op_xlt    = f_op EcCoreLib.CI_Xint.p_xlt   [] (toarrow [txint; txint ] tbool)
 let f_op_xmax   = f_op EcCoreLib.CI_Xint.p_xmax  [] (toarrow [txint;  txint] txint)

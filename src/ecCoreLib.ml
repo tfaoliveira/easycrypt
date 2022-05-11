@@ -120,6 +120,7 @@ module CI_Xint = struct
   let p_xopp   = mk_Xint "xopp"
   let p_xadd   = mk_Xint "xadd"
   let p_xmul   = mk_Xint "xmul"
+  let p_xmuli  = mk_Xint "xmuli"
   let p_is_inf = mk_Xint "is_inf"
   let p_is_int = mk_Xint "is_int"
   let p_xoget  = mk_Xint "xoget"

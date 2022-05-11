@@ -54,6 +54,8 @@ op xmax (x y : xint) =
   with x = Inf, y = N _ => Inf
   with x = Inf, y = Inf => Inf.
 
+op muli (x : int, y : xint) = (N x) * y.
+
 (* -------------------------------------------------------------------- *)
 lemma xmulz_l (c : xint) : '0 * c = '0 by case c.
 lemma xmulz_r (c : xint) : c * '0 = '0 by case c.

@@ -5,6 +5,7 @@ open EcSymbols
 open EcTypes
 open EcMemory
 open EcBigInt.Notations
+open EcBaseLogic
 
 module BI = EcBigInt
 module CI = EcCoreLib
@@ -1135,7 +1136,8 @@ let f_cost_le_simpl f f' =
   else
     f_cost_mk_cmp (fun b b' -> not b' || b = b') f_xle_simpl f_cost_le f f'
 
-let f_cost_lt_simpl = f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cost_lt
+let f_cost_lt_simpl =
+  f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl f_cost_lt
 
 let f_cost_is_int_simpl c =
   if not (is_cost c) then f_cost_is_int c
@@ -1148,6 +1150,125 @@ let f_cost_is_int_simpl c =
         List.map (fun (_, x) -> f_is_int_simpl x) (EcPath.Mx.bindings c.c_calls)
       in
       f_ands0_simpl (self :: calls)
+
+(* -------------------------------------------------------------------- *)
+(** Simplification of cost equality and inequality tests using
+    module freshness and epochs. *)
+module CostSimplify = struct
+  type cproj =
+    | PFresh of EcPath.xpath * Epoch.t
+    (* proj. over a procedure of a [Fresh] module with its epoch *)
+
+    | AllExcept of EcPath.xpath list * Epoch.t
+    (* procedures and concrete cost except some (already projected) procedures
+       of [Fresh] modules, and the minimum epoch of all these [Fresh] modules. *)
+
+
+  (* replace arithmetic operations by their counterpart after projection *)
+  let cproj_op (p : cproj) (f : form) : form =
+    match p with
+    | AllExcept _ -> f
+    | PFresh _ ->
+      snd @@
+      List.find (f_equal f |- fst)
+        [ (fop_cost_add    , f_op_xadd);
+          (fop_cost_opp    , f_op_xopp);
+          (fop_cost_scale  , f_op_xmuli);
+          (fop_cost_xscale , f_op_xmul); ]
+
+
+  let mk_cprojs (hyps : EcEnv.LDecl.hyps) : cproj list =
+    let env = EcEnv.LDecl.toenv hyps in
+
+    let locals = (EcEnv.LDecl.tohyps hyps).h_local in
+    let fresh_mts =
+      List.filter_map (fun { l_id; l_kind; l_epoch = e } ->
+          match l_kind with
+          | LD_modty (Fresh, mt) -> Some (l_id, mt, e)
+          | _ -> None
+        ) locals
+    in
+
+    (* arbitrary epoch in [fresh_mts]. Can be anything if [fresh_mts] is empty. *)
+    let e = match fresh_mts with
+      | [] -> Epoch.init
+      | (_, _, e) :: _ -> e
+    in
+
+    let min_epoch, procs =
+      List.fold_left_map (fun e (mid, mt, e') ->
+          let procs =
+            List.map (fun (EcModules.Tys_function fs) ->
+                let xp = EcPath.xpath (EcPath.mident mid) fs.fs_name in
+                xp, e'
+              )
+              (EcEnv.ModTy.sig_of_mt env mt).EcModules.mis_body
+          in
+          Epoch.min e e', procs
+        ) e fresh_mts
+    in
+    let procs = List.flatten procs in
+
+    let allxp = List.map fst procs in
+    let projs = List.map (fun (xp, e) -> PFresh (xp, e)) procs in
+
+    AllExcept (allxp, min_epoch) :: projs
+
+  (* Try to simplify the projection.
+     - [f] has type [tcost]
+     - return: type [tcost] if [p = AllExceptFresh], [txint] otherwise *)
+  let simpl_cproj
+      (hyps : EcEnv.LDecl.hyps) (p : cproj) (f : form)
+    : form option
+    =
+    let exception SFail in
+
+    let rec simpl (f : form) : form =
+      match f.f_node with
+      | Fcost c ->
+        let calls = EcPath.Mx.filter (fun xp _ ->
+            match p with
+            | AllExcept (xps,_) ->
+              not (List.exists (EcPath.x_equal xp) xps)
+
+            | PFresh (xp', _) -> EcPath.x_equal xp xp'
+          ) c.c_calls
+        in
+        let full = match p with
+          | PFresh    _ -> true
+          | AllExcept _ -> c.c_full
+        in
+        f_cost_r (cost_r c.c_self calls full)
+
+      | Fapp (f_op, lf)
+        when List.exists (f_equal f_op) [fop_cost_add; fop_cost_opp] ->
+        f_app (cproj_op p f_op) (List.map simpl lf) f.f_ty
+
+      | Fapp (f_op, [scale; fc]) when
+          List.exists (f_equal f_op) [fop_cost_scale; fop_cost_xscale] ->
+        f_app (cproj_op p f_op) [scale; simpl fc] f.f_ty
+
+      | Flocal l ->
+        let { l_epoch = e } = oget (by_id_opt l (EcEnv.LDecl.tohyps hyps)) in
+        begin match p with
+          | PFresh (_, e') ->
+            if Epoch.lt e e' then f_x0 else raise SFail
+
+          | AllExcept (_,e') ->
+            if Epoch.lt e e' then f else raise SFail
+        end
+
+      | Fop _ ->
+        begin match p with
+          | PFresh    _ -> f_x0
+          | AllExcept _ -> f
+        end
+
+      | _ -> raise SFail
+
+    in
+    try Some (simpl f) with SFail -> None
+end
 
 (* -------------------------------------------------------------------- *)
 let mod_cost_proj_simpl (mc : mod_cost) (p : cost_proj) : form =

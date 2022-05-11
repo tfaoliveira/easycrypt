@@ -3599,12 +3599,12 @@ module LDecl = struct
     | Some h -> h
 
   let by_id id hyps =
-    match List.ofind (EcIdent.id_equal id |- l_id) hyps.h_local with
+    match EcBaseLogic.by_id_opt id hyps with
     | None   -> error (LookupError (`Ident id))
     | Some x -> x
 
   let lk_by_id id hyps =
-    match List.ofind (EcIdent.id_equal id |- l_id) hyps.h_local with
+    match EcBaseLogic.by_id_opt id hyps with
     | None   -> error (LookupError (`Ident id))
     | Some x -> x.l_kind
 
