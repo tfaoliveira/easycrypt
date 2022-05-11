@@ -417,8 +417,9 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
   | GTty ty1, GTty ty2 ->
     add_local (env, subst) (x1,ty1) (x2,ty2)
 
-  | GTmodty p1, GTmodty p2 ->
+  | GTmodty (ns1,p1), GTmodty (ns2,p2) ->
     let test f1 f2 = test env subst f1 f2 in
+    ensure (ns1 = ns2);
     ensure (ModTy.mod_type_equiv test env p1 p2);
     Mod.bind_local x1 p1 env,
     if id_equal x1 x2 then subst

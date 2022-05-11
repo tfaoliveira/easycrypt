@@ -139,6 +139,31 @@ module OSmart : sig
 end
 
 (* -------------------------------------------------------------------- *)
+type 'a pp = Format.formatter -> 'a -> unit
+
+val pp_id    : 'a pp -> 'a pp
+val pp_if    : bool -> 'a pp -> 'a pp -> 'a pp
+val pp_maybe : bool -> ('a pp -> 'a pp) -> 'a pp -> 'a pp
+val pp_opt   : 'a pp -> 'a option pp
+
+val pp_enclose:
+       pre:('a, 'b, 'c, 'd, 'd, 'a) format6
+   -> post:('a, 'b, 'c, 'd, 'd, 'a) format6
+   -> 'a pp -> 'a pp
+
+val pp_paren : 'a pp -> 'a pp
+
+val pp_list : ('a, 'b, 'c, 'd, 'd, 'a) format6 -> 'a pp -> 'a list pp
+
+val pp_null : 'a pp
+
+val pp_option : 'a pp -> 'a option pp
+
+val pp_maybe_paren : bool -> 'a pp -> 'a pp
+
+val pp_string : string pp
+
+(* -------------------------------------------------------------------- *)
 type ('a, 'b) tagged = Tagged of ('a * 'b option)
 
 val tg_val : ('a, 'b) tagged -> 'a

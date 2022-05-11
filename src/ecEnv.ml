@@ -2062,7 +2062,7 @@ module Mod = struct
   let add_mod_binding bd env =
     let do1 env (x,gty) =
       match gty with
-      | GTmodty p -> bind_local x p env
+      | GTmodty (_,p) -> bind_local x p env
       | _ -> env
     in
       List.fold_left do1 env bd
@@ -3560,9 +3560,9 @@ module LDecl = struct
         let mt = EcMemory.mt_subst s.fs_ty mt
         in LD_mem mt
 
-    | LD_modty p ->
-        let p = gty_as_mod (Fsubst.subst_gty s (GTmodty p))
-        in LD_modty p
+    | LD_modty (ns,p) ->
+        let _, p = gty_as_mod (Fsubst.subst_gty s (GTmodty (ns,p)))
+        in LD_modty (ns,p)
 
     | LD_hyp f ->
         LD_hyp (Fsubst.f_subst s f)
@@ -3580,8 +3580,8 @@ module LDecl = struct
       EcMemory.mt_fv mt
   | LD_hyp f ->
       f.f_fv
-  | LD_modty p ->
-      gty_fv (GTmodty p)
+  | LD_modty (ns,p) ->
+      gty_fv (GTmodty (ns,p))
   | LD_abs_st us ->
     let add fv (x,_) = match x with
       | PVglob x -> EcPath.x_fv fv x
@@ -3680,7 +3680,12 @@ module LDecl = struct
 
   let add_local id ld hyps =
     check_name_clash id hyps;
-    { hyps with h_local = { l_id = id; l_kind = ld; } :: hyps.h_local }
+    let hyp = {
+      l_id    = id;
+      l_kind  = ld;
+      l_epoch = Epoch.next (hyps_epoch hyps);
+    } in
+    { hyps with h_local = hyp :: hyps.h_local }
 
   (* ------------------------------------------------------------------ *)
   let fresh_id hyps s =
@@ -3714,11 +3719,12 @@ module LDecl = struct
 
   let add_local_env x k env =
     match k with
-    | LD_var (ty, _)  -> Var.bind_local x ty env
-    | LD_mem mt       -> Memory.push (x, mt) env
-    | LD_modty i      -> Mod.bind_local x i env
-    | LD_hyp   _      -> env
-    | LD_abs_st us    -> AbsStmt.bind x us env
+    | LD_var (ty, _)   -> Var.bind_local x ty env
+    | LD_mem mt        -> Memory.push (x, mt) env
+    | LD_modty (_ns,i) -> Mod.bind_local x i env
+    (* namespace [ns] only recorded in the local hypotheses *)
+    | LD_hyp   _       -> env
+    | LD_abs_st us     -> AbsStmt.bind x us env
 
   (* ------------------------------------------------------------------ *)
   let add_local x k h =
@@ -3736,7 +3742,7 @@ module LDecl = struct
 
     { le_init = env;
       le_env  = buildenv env;
-      le_hyps = { h_tvar = tparams; h_local = locals; }; }
+      le_hyps = { h_tvar = tparams; h_local = locals}; }
 
   (* ------------------------------------------------------------------ *)
   let clear ?(leniant = false) ids hyps =

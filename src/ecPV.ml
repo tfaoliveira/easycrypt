@@ -401,12 +401,12 @@ module PV = struct
     begin
       if vs = [] || gs = [] then
         Format.fprintf fmt "@[%a%a@]"
-          (EcPrinting.pp_list ",@ " pp_vs) vs
-          (EcPrinting.pp_list ",@ " pp_gl) gs
+          (EcUtils.pp_list ",@ " pp_vs) vs
+          (EcUtils.pp_list ",@ " pp_gl) gs
       else
         Format.fprintf fmt "@[%a,@ %a@]"
-          (EcPrinting.pp_list ",@ " pp_vs) vs
-          (EcPrinting.pp_list ",@ " pp_gl) gs
+          (EcUtils.pp_list ",@ " pp_vs) vs
+          (EcUtils.pp_list ",@ " pp_gl) gs
     end
 
   let check_depend env fv mp =

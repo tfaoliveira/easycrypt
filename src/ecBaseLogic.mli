@@ -1,19 +1,18 @@
 (* -------------------------------------------------------------------- *)
-open EcUtils
 open EcTypes
 open EcCoreFol
 
 (* -------------------------------------------------------------------- *)
-module Epoch = struct
-  type t = int
+module Epoch : sig
+  type t
 
-  let init : t = 0
+  val init : t
 
-  let lt = (<)
-  let leq = (<=)
+  val lt  : t -> t -> bool
+  val leq : t -> t -> bool
 
-  let next (e : t) : t = e + 1
-  let max (e : t) (e' : t) = max e e'
+  val next : t -> t
+  val max : t -> t -> t
 end
 
 (* -------------------------------------------------------------------- *)
@@ -33,9 +32,8 @@ type l_local = {
 
 type l_locals = l_local list
 
-let l_id x = x.l_id
-
-let l_epoch x = x.l_epoch
+val l_id    : l_local -> EcIdent.t
+val l_epoch : l_local -> Epoch.t
 
 (* -------------------------------------------------------------------- *)
 type hyps = {
@@ -43,5 +41,4 @@ type hyps = {
   h_local : l_local list;
 }
 
-let hyps_epoch (hyps : hyps) : Epoch.t =
-  List.fold_left (fun e l -> Epoch.max e l.l_epoch) Epoch.init hyps.h_local
+val hyps_epoch : hyps -> Epoch.t

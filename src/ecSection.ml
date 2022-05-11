@@ -330,7 +330,7 @@ and on_gbinding (cb : cb) (b : gty) =
   match b with
   | EcFol.GTty ty ->
       on_ty cb ty
-  | EcFol.GTmodty mty ->
+  | EcFol.GTmodty (_,mty) ->
       on_mdecl cb mty
   | EcFol.GTmem m ->
       on_memtype cb m
@@ -625,7 +625,7 @@ let generalize_type to_gen ty =
 
 let add_declared_mod to_gen id modty =
   { to_gen with
-    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty modty);
+    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Any modty);
     tg_subst  = EcSubst.add_module to_gen.tg_subst id modty (mpath_abs id [])
   }
 
@@ -675,7 +675,7 @@ let add_declared_op to_gen path opdecl =
 
 let rec gty_fv_and_tvar : gty -> int Mid.t = function
   | GTty ty -> EcTypes.ty_fv_and_tvar ty
-  | GTmodty { mt_restr = restr } ->
+  | GTmodty (_, { mt_restr = restr }) ->
     (* mr_oinfos *)
     let fv =
       EcSymbols.Msym.fold (fun _ oi fv ->

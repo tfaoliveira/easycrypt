@@ -1964,7 +1964,9 @@ let process_exists args (tc : tcenv1) =
           match xty with
           | GTty    _ -> trans_pterm_arg_value pte arg
           | GTmem   _ -> trans_pterm_arg_mem   pte arg
-          | GTmodty mt ->
+          | GTmodty (ns,mt) ->
+            assert( ns = Any);  (* unsupported *)
+
             if mt.mt_opacity <> Open then
               tc_error !!tc "cannot introduce opaque existential";
 

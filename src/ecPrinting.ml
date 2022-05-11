@@ -362,55 +362,6 @@ module PPEnv = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let pp_id pp fmt x = Format.fprintf fmt "%a" pp x
-
-(* -------------------------------------------------------------------- *)
-let pp_null (_fmt : Format.formatter) = fun _ -> ()
-
-(* -------------------------------------------------------------------- *)
-let pp_if c pp1 pp2 fmt x =
-  match c with
-  | true  -> Format.fprintf fmt "%a" pp1 x
-  | false -> Format.fprintf fmt "%a" pp2 x
-
-(* -------------------------------------------------------------------- *)
-let pp_maybe c tx pp fmt x =
-  pp_if c (tx pp) pp fmt x
-
-(* -------------------------------------------------------------------- *)
-let pp_opt pp_el fmt = function
-  | None   -> Format.fprintf fmt "None"
-  | Some x -> Format.fprintf fmt "Some %a" pp_el x
-
-(* -------------------------------------------------------------------- *)
-let rec pp_list sep pp fmt xs =
-  let pp_list = pp_list sep pp in
-    match xs with
-    | []      -> ()
-    | [x]     -> Format.fprintf fmt "%a" pp x
-    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
-
-(* -------------------------------------------------------------------- *)
-let pp_option pp fmt x =
-  match x with None -> () | Some x -> pp fmt x
-
-(* -------------------------------------------------------------------- *)
-let pp_enclose ~pre ~post pp fmt x =
-  Format.fprintf fmt "%(%)%a%(%)" pre pp x post
-
-(* -------------------------------------------------------------------- *)
-let pp_paren pp fmt x =
-  pp_enclose ~pre:"(" ~post:")" pp fmt x
-
-(* -------------------------------------------------------------------- *)
-let pp_maybe_paren c pp =
-  pp_maybe c pp_paren pp
-
-(* -------------------------------------------------------------------- *)
-let pp_string fmt x =
-  Format.fprintf fmt "%s" x
-
-(* -------------------------------------------------------------------- *)
 let pp_path fmt p =
   Format.fprintf fmt "%s" (P.tostring p)
 
@@ -1240,23 +1191,6 @@ let pp_locbinds ppe ?fv vs =
   pp_locbinds_blocks ppe ?fv (merge vs)
 
 (* -------------------------------------------------------------------- *)
-let string_of_quant = function
-  | Lforall -> "forall"
-  | Lexists -> "exists"
-  | Llambda -> "fun"
-
-(* -------------------------------------------------------------------- *)
-let string_of_hcmp = function
-  | FHle -> "<="
-  | FHeq -> "="
-  | FHge -> ">="
-
-let pp_cost_proj fmt (p : cost_proj) =
-  match p with
-  | Intr  f    -> Format.fprintf fmt "%s:intr" f
-  | Param p    -> Format.fprintf fmt "%s:%s.%s" p.proc p.param_m p.param_p
-
-(* -------------------------------------------------------------------- *)
 let string_of_locality = function
   | `Global  -> None
   | `Local   -> Some "local "
@@ -2010,13 +1944,14 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
       in
         (tenv1, pp)
 
-  | GTmodty mt ->
+  | GTmodty (ns,mt) ->
       let tenv1  = PPEnv.add_mods ppe xs mt in
       let pp fmt =
         let (ppe, pp_params) = pp_mod_params ppe mt.mt_params in
-        Format.fprintf fmt "@[<hv>(%a%t <:@;<1 2>%a)@]"
+        Format.fprintf fmt "@[<hv>(%a%t <:@;<1 2>%a%a)@]"
           (pp_list pp_sep (pp_local tenv1)) xs
           pp_params
+          pp_mod_ns ns
           (pp_modtype ppe) mt
       in
         (tenv1, pp)
@@ -2962,7 +2897,7 @@ module PPGoal = struct
           let ppe = PPEnv.add_local ~force:true ppe id in
           PPEnv.create_and_push_mem ppe (id, m)
 
-      | EcBaseLogic.LD_modty p ->
+      | EcBaseLogic.LD_modty (_ns,p) ->
           PPEnv.add_mods ~force:true ppe [id] p
 
       | EcBaseLogic.LD_var _ when EcIdent.name id = "_" ->
@@ -2995,9 +2930,12 @@ module PPGoal = struct
         | EcBaseLogic.LD_mem m ->
             (None, fun fmt -> pp_memtype ppe fmt m)
 
-        | EcBaseLogic.LD_modty p ->
+        | EcBaseLogic.LD_modty (ns,p) ->
           let (ppe, pp) = pp_mod_params ppe p.mt_params in
-          (Some pp, fun fmt -> pp_modtype ppe fmt p)
+          (Some pp, fun fmt ->
+              Format.fprintf fmt "%a%a"
+                pp_mod_ns ns
+                (pp_modtype ppe) p)
 
         | EcBaseLogic.LD_hyp f ->
             (None, fun fmt -> pp_form ppe fmt f)

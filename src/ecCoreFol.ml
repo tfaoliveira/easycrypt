@@ -33,9 +33,15 @@ type cost_proj =
       param_p : symbol;           (* parameter procedure *)
     }
 
+(** module namespace *)
+type mod_ns =
+  | Any                   (* any name *)
+  | Fresh                 (* fresh name w.r.t. the environment *)
+
+(* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty
-  | GTmodty of module_type
+  | GTmodty of mod_ns * module_type
   | GTmem   of EcMemory.memtype
 
 and binding  = (EcIdent.t * gty)
@@ -225,7 +231,7 @@ let cost_proj_equal (p1 : cost_proj) (p2 : cost_proj) : bool  =
 
 let cost_proj_hash (p : cost_proj) : int =
   match p with
-  | Intr s      -> Why3.Hashcons.combine  2 (Hashtbl.hash s)
+  | Intr s -> Why3.Hashcons.combine 2 (Hashtbl.hash s)
 
   | Param { param_p; param_m; proc } ->
     Why3.Hashcons.combine_list Hashtbl.hash 3 [param_p; param_m; proc]
@@ -254,8 +260,8 @@ let gty_equal ty1 ty2 =
   | GTty ty1, GTty ty2 ->
       EcTypes.ty_equal ty1 ty2
 
-  | GTmodty p1, GTmodty p2  ->
-    mty_equal p1 p2
+  | GTmodty (ns1, p1), GTmodty (ns2,p2)  ->
+    ns1 = ns2 && mty_equal p1 p2
 
   | GTmem mt1, GTmem mt2 ->
       EcMemory.mt_equal mt1 mt2
@@ -264,7 +270,7 @@ let gty_equal ty1 ty2 =
 
 let gty_hash = function
   | GTty ty -> EcTypes.ty_hash ty
-  | GTmodty p  ->  mty_hash p
+  | GTmodty (ns, p) -> Why3.Hashcons.combine (Hashtbl.hash ns) (mty_hash p)
   | GTmem _ -> 1
 
 let mr_fv (mr : mod_restr) =
@@ -279,7 +285,7 @@ let mr_fv (mr : mod_restr) =
 (* -------------------------------------------------------------------- *)
 let gty_fv = function
   | GTty ty -> ty.ty_fv
-  | GTmodty mty -> mr_fv mty.mt_restr
+  | GTmodty (_, mty) -> mr_fv mty.mt_restr
   | GTmem mt -> EcMemory.mt_fv mt
 
 
@@ -287,16 +293,11 @@ let gty_fv = function
 let gtty (ty : EcTypes.ty) =
   GTty ty
 
-let gtmodty (mt : module_type) =
-  GTmodty mt
+let gtmodty (ns : mod_ns) (mt : module_type) =
+  GTmodty (ns, mt)
 
 let gtmem (mt : EcMemory.memtype) =
   GTmem mt
-
-(* -------------------------------------------------------------------- *)
-let as_gtty  = function GTty ty  -> ty  | _ -> assert false
-let as_modty = function GTmodty mty -> mty | _ -> assert false
-let as_mem   = function GTmem m -> m | _ -> assert false
 
 (*-------------------------------------------------------------------- *)
 let b_equal (b1 : bindings) (b2 : bindings) =
@@ -734,7 +735,7 @@ let gty_as_ty =
 let gty_as_mem =
   function GTmem m -> m  | _ -> assert false
 
-let gty_as_mod = function GTmodty mt -> mt | _ -> assert false
+let gty_as_mod = function GTmodty (ns,mt) -> ns, mt | _ -> assert false
 
 let kind_of_gty = function
   | GTty    _ -> `Form
@@ -2508,12 +2509,12 @@ module Fsubst = struct
         let ty' = s.fs_ty ty in
         if ty == ty' then gty else GTty ty'
 
-    | GTmodty p ->
+    | GTmodty (ns,p) ->
         let p'   = subst_mty ~tx s p in
 
         if   p == p'
         then gty
-        else GTmodty p'
+        else GTmodty (ns,p')
 
     | GTmem mt ->
         let mt' = EcMemory.mt_subst s.fs_ty mt in
@@ -2746,28 +2747,31 @@ let core_ops =
 let core_op_kind (p : EcPath.path) =
   EcPath.Hp.find_opt core_ops p
 
-
 (* -------------------------------------------------------------------- *)
-(* FIXME A: factorize with EcPrinting *)
 let string_of_quant = function
   | Lforall -> "forall"
   | Lexists -> "exists"
   | Llambda -> "fun"
 
-(* FIXME A: factorize with EcPrinting *)
+(* -------------------------------------------------------------------- *)
+let string_of_hcmp = function
+  | FHle -> "<="
+  | FHeq -> "="
+  | FHge -> ">="
+
+(* -------------------------------------------------------------------- *)
 let pp_cost_proj fmt (p : cost_proj) =
   match p with
-  | Intr  f    -> Format.fprintf fmt "%s.intr" f
-  | Param p    -> Format.fprintf fmt "%s.%s.%s" p.proc p.param_m p.param_p
+  | Intr  f -> Format.fprintf fmt "%s:intr" f
+  | Param p -> Format.fprintf fmt "%s:%s.%s" p.proc p.param_m p.param_p
 
-(* FIXME A: factorize with EcPrinting *)
-let rec pp_list sep pp fmt xs =
-  let pp_list = pp_list sep pp in
-    match xs with
-    | []      -> ()
-    | [x]     -> Format.fprintf fmt "%a" pp x
-    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
+(* -------------------------------------------------------------------- *)
+let pp_mod_ns fmt (ns : mod_ns) =
+  match ns with
+  | Any -> ()
+  | Fresh -> Format.fprintf fmt "$"
 
+(* -------------------------------------------------------------------- *)
 let dump_todo fmt = Format.fprintf fmt "#?"
 
 let ident_to_string ~long = if long then EcIdent.tostring else EcIdent.name
@@ -2891,8 +2895,11 @@ and dump_binding ~(long:bool) fmt (x,ty) : unit =
   | GTmem _m ->
     Format.fprintf fmt "(%s : ??)" (ident_to_string x)
 
-  | GTmodty mt ->
-    Format.fprintf fmt "(%s <: %a)" (ident_to_string x) (dump_modty ~long) mt
+  | GTmodty (ns,mt) ->
+    Format.fprintf fmt "(%s <: %a%a)"
+      (ident_to_string x)
+      pp_mod_ns ns
+      (dump_modty ~long) mt
 
 and dump_modty ~(long:bool) fmt (mty : module_type) : unit =
   Format.fprintf fmt "@[<hv 2>%s%a@]"

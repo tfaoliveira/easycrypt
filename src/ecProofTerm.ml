@@ -807,7 +807,8 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
-  | GTmodty emt -> begin
+  (* TODO A: what do we do with [ns] here ? *)
+  | GTmodty (ns,emt) -> begin
       match dfl_arg_for_mod pe arg with
       | PVAModule (mp, mt) -> begin
           try
@@ -891,7 +892,7 @@ and apply_pterm_to_local ?loc pt id =
   | LD_var (ty, _) ->
       apply_pterm_to_arg_r ?loc pt (PVAFormula (f_local id ty))
 
-  | LD_modty mty ->
+  | LD_modty (ns,mty) ->
       let env  = LDecl.toenv pt.ptev_env.pte_hy in
       let msig = EcEnv.ModTy.sig_of_mt env mty in
       apply_pterm_to_arg_r ?loc pt (PVAModule (EcPath.mident id, msig))

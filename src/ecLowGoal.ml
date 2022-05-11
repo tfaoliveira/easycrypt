@@ -71,9 +71,25 @@ module LowApply = struct
     let hyps    = LDecl.init env ld1.h_tvar in
     let tophyps = Mid.of_list (List.map (fun x -> x.l_id, x) ld2.h_local) in
 
-    let h_eqs { l_id = x; l_kind = v; } =
+    (* Subsumption test for module with fresh names at declaration.
+       - [e1] is the epoch of declaration of a fresh module in [ld1]
+         (idem for [e2] and [ld2])
+       - we check that for any local declaration with an epoch smaller than
+         [e1] in [ld1], there exists a corresponding declaration in [e2]
+         with an epoch smaller than [e2] *)
+    let mt_check_epochs e1 e2 =
+      let check1 { l_id = y; l_epoch = ey1 } =
+        if not (Epoch.leq ey1 e1) then true
+        else match Mid.find_opt y tophyps  with
+          | None -> false
+          | Some { l_epoch = ey2 } -> Epoch.leq ey2 e2
+      in
+      List.for_all check1 ld1.h_local
+    in
+
+    let h_eqs { l_id = x; l_kind = v; l_epoch = e1 } =
       match Mid.find_opt x tophyps  with
-      | None -> false | Some { l_kind = v' } ->
+      | None -> false | Some { l_kind = v'; l_epoch = e2; } ->
 
         (v (*φ*)== v') ||
           match v, v' with
@@ -84,8 +100,13 @@ module LowApply = struct
           | LD_mem m1, LD_mem m2 ->
              EcMemory.mt_equal m1 m2
 
-          | LD_modty mt1, LD_modty mt2 ->
-            mt1 == mt2
+          | LD_modty (ns1,mt1), LD_modty (ns2,mt2) ->
+            let check_ns =
+              ns1 = Any ||
+              ( ns1 = Fresh && ns2 = Fresh &&
+                mt_check_epochs e1 e2 )
+            in
+            check_ns && mt1 == mt2
 
           | LD_hyp f1, LD_hyp f2 ->
              is_alpha_eq hyps f1 f2
@@ -164,9 +185,11 @@ module LowApply = struct
         | GTmem _, PAMemory m ->
             (Fsubst.f_bind_mem sbt x m, f)
 
-        | GTmodty emt, PAModule (mp, mt) -> begin
+        | GTmodty (ns,emt), PAModule (mp, mt) -> begin
           (* FIXME: poor API ==> poor error recovery *)
           try
+            if ns <> Any then raise InvalidProofTerm; (* [Fresh] unsupported *)
+
             let obl = EcTyping.check_modtype hyps mp mt emt in
             EcPV.check_module_in env mp emt;
 
@@ -477,9 +500,9 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     | GTmem me ->
         LowIntro.check_name_validity !!tc `Memory name;
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
-    | GTmodty i ->
+    | GTmodty (ns,i) ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty i, Fsubst.f_refresh_mod sbt x (EcPath.mident (tg_val id)))
+        (id, LD_modty (ns,i), Fsubst.f_refresh_mod sbt x (EcPath.mident (tg_val id)))
   in
 
   let add_ld id ld hyps =
@@ -792,12 +815,13 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         let args = PAMemory id :: args in
         (s, bds, args, cls)
 
-      | LD_modty mt ->
+      (* TODO A: improve by replacing [Any] by [Fresh] if the epochs allow it*)
+      | LD_modty (ns,mt) ->
         let x    = fresh id in
         let s    = Fsubst.f_refresh_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
-        let bds  = `Forall (x, GTmodty mt) :: bds in
+        let bds  = `Forall (x, GTmodty (Any,mt)) :: bds in
         let args = PAModule (mp, sig_) :: args in
         (s, bds, args, cls)
 
@@ -1757,13 +1781,14 @@ h1 : x = f w
 h2 : y = z
  *)
 
+(* TODO A: improve by replacing [Any] by [Fresh] if the epochs allow it*)
 let gen_hyps (post : l_locals) gG =
   let do1 gG { l_id = id; l_kind = d } =
     match d with
     | LD_var (_ty, Some body) -> f_let1 id body gG
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
     | LD_mem mt               -> f_forall_mems [id, mt] gG
-    | LD_modty mt             -> f_forall [id, GTmodty mt] gG
+    | LD_modty (ns,mt)        -> f_forall [id, GTmodty (Any,mt)] gG
     | LD_hyp f                -> f_imp f gG
     | LD_abs_st _             -> raise InvalidGoalShape in
   List.fold_left do1 gG post
@@ -2311,7 +2336,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
 (*        let f = EcEnv.LDecl.hyp_by_id eqid (FApi.tc1_hyps tc) in
         Format.eprintf "subst %s %a@." (if side = `LtoR then "LtoR" else "RtoL")
         (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv (FApi.tc1_env tc))) f;
-        Format.eprintf "apost = @[%a@]@." (EcPrinting.pp_list "@ " EcIdent.pp_ident) (List.map fst apost);*)
+        Format.eprintf "apost = @[%a@]@." (EcUtils.pp_list "@ " EcIdent.pp_ident) (List.map fst apost);*)
         let moved = ref Sid.empty in
         let check_moved f = not (Mid.disjoint (fun _ _ _ -> false) f.f_fv !moved) in
         let doit { l_id = x; l_kind = h } =
@@ -2332,7 +2357,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
         if upost = [] then t_clear eqid tc
         else
         let side = if side = `LtoR then `RtoL else `LtoR in
-      (*  Format.eprintf "upost = @[%a@]@." (EcPrinting.pp_list "@ " EcIdent.pp_ident) (List.map fst upost); *)
+      (*  Format.eprintf "upost = @[%a@]@." (EcUtils.pp_list "@ " EcIdent.pp_ident) (List.map fst upost); *)
         FApi.t_seqs [
           t_rw_for_subst y upost (FApi.tc1_goal tc) side eqid;
           t_generalize_hyp ~clear:`Yes ~missing:false eqid] tc

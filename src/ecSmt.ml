@@ -1642,7 +1642,7 @@ let check ?notify pi (hyps : LDecl.hyps) (concl : form) =
       let fmt    = Format.formatter_of_buffer buffer in
       let ppe    = EcPrinting.PPEnv.ofenv env in
       let l      = List.map fst toadd in
-      let pp fmt = EcPrinting.pp_list "@ " (EcPrinting.pp_axname ppe) fmt in
+      let pp fmt = EcUtils.pp_list "@ " (EcPrinting.pp_axname ppe) fmt in
       Format.fprintf fmt "selected lemmas: @[%a@]@." pp l;
       notify |> oiter (fun notify -> notify `Warning
         (lazy (Buffer.contents buffer)))

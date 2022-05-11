@@ -33,9 +33,15 @@ type cost_proj =
 
 val cost_proj_equal : cost_proj -> cost_proj -> bool
 
+(** module namespace *)
+type mod_ns =
+  | Any                   (* any name *)
+  | Fresh                 (* fresh name w.r.t. the environment *)
+
+(* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty
-  | GTmodty of module_type
+  | GTmodty of mod_ns * module_type
   | GTmem   of EcMemory.memtype
 
 and binding  = (EcIdent.t * gty)
@@ -202,13 +208,8 @@ type mod_restr = form p_mod_restr
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
-val gtmodty : module_type -> gty
+val gtmodty : mod_ns -> module_type -> gty
 val gtmem   : EcMemory.memtype -> gty
-
-(* -------------------------------------------------------------------- *)
-val as_gtty  : gty -> EcTypes.ty
-val as_modty : gty -> module_type
-val as_mem   : gty -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val gty_equal : gty -> gty -> bool
@@ -255,7 +256,7 @@ val proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
 val gty_as_mem : gty -> EcMemory.memtype
-val gty_as_mod : gty -> module_type
+val gty_as_mod : gty -> mod_ns * module_type
 val kind_of_gty: gty -> [`Form | `Mem | `Mod]
 
 (* soft-constructors - common leaves *)
@@ -703,6 +704,13 @@ type core_op = [
 ]
 
 val core_op_kind : path -> core_op option
+
+(* -------------------------------------------------------------------- *)
+val string_of_quant : quantif -> string
+val string_of_hcmp  : hoarecmp -> string
+
+val pp_cost_proj : Format.formatter -> cost_proj -> unit
+val pp_mod_ns    : Format.formatter -> mod_ns    -> unit
 
 (* -------------------------------------------------------------------- *)
 val dump_form    : Format.formatter -> form        -> unit

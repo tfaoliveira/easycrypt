@@ -741,7 +741,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
               else Fsubst.f_bind_mem subst x2 x1
             in (env, subst)
 
-        | GTmodty p1, GTmodty p2 ->
+        | GTmodty (ns1,p1), GTmodty (ns2,p2) ->
           let f_equiv f1 f2 =
             try doit env (subst, mxs) f1 f2; true with
             | MatchFailure ->
@@ -750,7 +750,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
                   (!EcEnv.pp_debug_form env) f2;
                 false in
 
-            if not (ModTy.mod_type_equiv f_equiv env p1 p2) then
+            if ns1 <> ns2 || not (ModTy.mod_type_equiv f_equiv env p1 p2) then
               raise MatchFailure;
 
             let subst =

@@ -36,8 +36,8 @@ let bd_goal tc fcmp fbd cmp bd =
     let ppe = EcPrinting.PPEnv.ofenv (FApi.tc1_env tc) in
     tc_error !!tc
       "do not know how to change phoare[...]%s %a into phoare[...]%s %a"
-      (EcPrinting.string_of_hcmp fcmp) (EcPrinting.pp_form ppe) fbd
-      (EcPrinting.string_of_hcmp cmp) (EcPrinting.pp_form ppe) bd
+      (string_of_hcmp fcmp) (EcPrinting.pp_form ppe) fbd
+      (string_of_hcmp cmp) (EcPrinting.pp_form ppe) bd
   | Some fp -> fp
 
 (* -------------------------------------------------------------------- *)

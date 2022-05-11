@@ -904,7 +904,8 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
   (* Bindings for the proof obligation formula. *)
   let mbindings : (EcIdent.t * EcCoreFol.gty) list =
     List.map (fun (_, (fid, param_mt, _)) ->
-        fid, GTmodty param_mt
+        (* fresh module names for namespace proof obligation *)
+        fid, GTmodty (Fresh,param_mt)
       ) s_params
   in
 
@@ -3220,7 +3221,8 @@ and trans_gbinding env ue decl =
         let mi = fst (transmodtype env mi) in
         let mi = trans_restr_for_modty env mi restr in
 
-        let ty = GTmodty mi in
+        (* there is no user-level syntax to require a module to be fresh *)
+        let ty = GTmodty (Any,mi) in
 
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in

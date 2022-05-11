@@ -82,7 +82,7 @@ end = struct
     | MF_restr (env, `Sub sx) ->
         let ppe = EcPrinting.PPEnv.ofenv env in
         msg "the function is not allowed to use %a"
-          (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+          (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
           (Sx.ntr_elements sx)
 
     | MF_restr (env, `Eq (ex, got)) ->
@@ -93,12 +93,12 @@ end = struct
 
         if has_allowed then
           msg "the function should be allowed to use %a"
-            (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+            (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements allowed);
         if not (Sx.is_empty notallowed) then
           msg "%sthe function is not allowed to use %a"
             (if has_allowed then ",@ " else "")
-            (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+            (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements notallowed)
 
     | MF_compl (env, proc, info) ->
@@ -119,58 +119,58 @@ end = struct
     match error with
     | `Sub (xs,ms) when Sm.is_empty ms ->
       msg "is not allowed to use the variable(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
 
     | `Sub (xs,ms) when Sx.is_empty xs ->
       msg "is not allowed to use the modules(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ms)
 
     | `Sub (xs,ms) ->
       msg "is not allowed to use the variable(s)@ %a@ \
            and the module(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
 
     | `RevSub None ->
       msg "must be unrestricted"
 
     | `RevSub (Some (xs,ms)) when Sm.is_empty ms ->
       msg "must be allowed to use the variable(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
 
     | `RevSub (Some (xs,ms)) when Sx.is_empty xs ->
       msg "must be allowed to use the modules(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ms)
 
     | `RevSub (Some (xs,ms)) ->
       msg "must be allowed to use the variable(s)@ %a@ \
            and the module(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
 
     | `Eq (xl,ml,xr,mr) when Sm.is_empty ml && Sm.is_empty mr ->
       msg "the memory restriction@ %a@ \
            is not compatible with the memory restriction@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
 
     | `Eq (xl,ml,xr,mr) when Sx.is_empty xl && Sx.is_empty xr ->
       msg "the memory module restriction@ %a@ \
            is not compatible with the memory module restriction@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ml)
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements mr)
 
     | `Eq (xl,ml,xr,mr) ->
       msg "the memory restriction@ %a@ %a@ \
            is not compatible with the memory restriction@ %a@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ml)
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements mr)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ml)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements mr)
 
     | `FunCanCallUnboundedOracle (fn,o) ->
       msg "proof obligation cannot be met, because procedure \
@@ -418,7 +418,7 @@ end = struct
           | _  ->
             Format.fprintf fmt "%a <%a>"
               EcPrinting.pp_path op
-              (EcPrinting.pp_list ",@ " pp_type) inst
+              (EcUtils.pp_list ",@ " pp_type) inst
           end;
 
           let myuvars = List.map EcTypes.Tuni.univars inst in
@@ -496,7 +496,7 @@ end = struct
 
     | InvalidModSig (MTS_NotAnOracle xp_l) ->
         msg "not a functor parameter: %a"
-          (EcPrinting.pp_list " " (EcPrinting.pp_funname env) ) xp_l
+          (EcUtils.pp_list " " (EcPrinting.pp_funname env) ) xp_l
 
     | InvalidMem (name, MAE_IsConcrete) ->
         msg "the memory %s must be abstract" name
@@ -931,7 +931,7 @@ let pp_error_clear fmt err =
   | `ClearInGoal xs ->
       Format.fprintf fmt
         "cannot clear %a that is/are used in the conclusion"
-        (EcPrinting.pp_list ",@ " pp_id) xs
+        (EcUtils.pp_list ",@ " pp_id) xs
   | `ClearDep (x, y) ->
       Format.fprintf fmt
         "cannot clear %a that is used in %a"

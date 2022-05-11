@@ -521,29 +521,6 @@ theory NONDUMMY_EQUIV_DUMMY.
     + by move=> B; proc; call(:true); auto.
     clear hA.
     exists S; split; 1: clear hS. 
-
-    op c : cost
-
-    c : 1   
-    FB : 2
-    current: 2
-
-    move:c => c.
-
-    FB : 2
-    c : 2
-
-
-    c : 1   
-    FB : 2
-    current: 2
-
-    move: FB. 
-
-    c : 1   
-    current: 1
-
-
     + (split; last split). move => FB. 
       (* new proof: WIP *)
       (* S(FB).init *) 
