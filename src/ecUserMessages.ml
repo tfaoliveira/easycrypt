@@ -565,8 +565,10 @@ end = struct
            set the %s pragma to retrieve the old behaviour"
         EcGState.old_mem_restr
 
-    | ProcAssign f ->
-        msg "`%a' is a procedure name. Assign its result to a variable using `<@` instead" pp_qsymbol f
+    | ProcAssign q ->
+        msg "the right-hand side of this assignment cannot be typed as an expression;
+             if you meant to call procedure `%a', assign its result using `<@' rather than `<-'"
+            pp_qsymbol q
 
     | NotModCost ->
       msg "not a module cost (maybe add explicit type annotations)"
