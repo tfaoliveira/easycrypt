@@ -2948,3 +2948,6 @@ let dump_modcost      = dump_modcost ~long:true
 
 let dump_modty_long = dump_modty ~long:true
 let dump_modty      = dump_modty ~long:true
+
+let dump_proc_cost_long = dump_proc_cost ~long:true
+let dump_proc_cost      = dump_proc_cost ~long:true

@@ -298,9 +298,9 @@ lemma Inv_compl_inst (H1 <: H) :
 proof. 
   (* TODO: can we improve the matching, so that we do not have to
      provide all arguments? *)
-  (* apply (Inv_compl `[: N 3] _ MyAdv _ H1). *)
-  apply (Inv_compl `[: N 3] 2 MyAdv _ H1) => //=.
-  by apply MyAdv_compl.
+  (* apply (Inv_compl `[: N 3] _ MyAdv _ H1). *) 
+  apply (Inv_compl `[: N 3] 2 MyAdv _ H1) => //=. 
+  move => H; by apply (MyAdv_compl H).
 qed.
 
 

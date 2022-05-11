@@ -1963,7 +1963,7 @@ let is_conv_cproc
             and c2 = EcFol.oget_c_bnd c2 a2.c_full in
             let f = match mode with
               | `Eq  -> EcFol.f_eq  c1 c2
-              | `Sub -> EcFol.f_xle c2 c2
+              | `Sub -> EcFol.f_xle c1 c2
             in
             if not (conv ri env f f_true []) then raise Failed
           ) a1.c_calls a2.c_calls ();

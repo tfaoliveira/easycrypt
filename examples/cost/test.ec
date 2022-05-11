@@ -203,22 +203,18 @@ section.
     exists A0; split.
   qed.
 
-  (* [A1]: proof obligation, calls at most 42 *)  
+  (* [A1]: subtyping concludes: no proof obligation *)  
   lemma test_ex2 &m: exists (B <: F1 [open f : [.., #O1.o : N 42]]),
      (glob B){m} = (glob B){m} => (glob B){m} = (glob B){m}. 
   proof.
     exists A1; split.
-    move => /= O1; proc*; call(:true) => /=.
-    + by move=> ??; proc*; call(:true).
-    + by auto; rewrite bigi_constz.
-    move => ?; assumption.
   qed.  
 
   (* [A1]: proof obligation, calls at most 1 *)  
   lemma test_ex3 &m: exists (B <: F1 [open f : [.., #O1.o : N 1]]),
      (glob B){m} = (glob B){m} => (glob B){m} = (glob B){m}. 
-  proof.
-    exists A1; split.
+  proof. 
+    exists A1; split. 
     move => /= O1; proc*; call(:true) => /=.
     + by move=> ??; proc*; call(:true).
     + auto; rewrite bigi_constz //=. 

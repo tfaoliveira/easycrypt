@@ -713,10 +713,12 @@ val pp_cost_proj : Format.formatter -> cost_proj -> unit
 val pp_mod_ns    : Format.formatter -> mod_ns    -> unit
 
 (* -------------------------------------------------------------------- *)
-val dump_form    : Format.formatter -> form        -> unit
-val dump_modty   : Format.formatter -> module_type -> unit
-val dump_modcost : Format.formatter -> mod_cost    -> unit
+val dump_form      : Format.formatter -> form        -> unit
+val dump_modty     : Format.formatter -> module_type -> unit
+val dump_modcost   : Format.formatter -> mod_cost    -> unit
+val dump_proc_cost : Format.formatter -> proc_cost   -> unit
 
-val dump_form_long    : Format.formatter -> form        -> unit
-val dump_modty_long   : Format.formatter -> module_type -> unit
-val dump_modcost_long : Format.formatter -> mod_cost    -> unit
+val dump_form_long      : Format.formatter -> form        -> unit
+val dump_modty_long     : Format.formatter -> module_type -> unit
+val dump_modcost_long   : Format.formatter -> mod_cost    -> unit
+val dump_proc_cost_long : Format.formatter -> proc_cost   -> unit
