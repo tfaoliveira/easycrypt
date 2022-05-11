@@ -813,7 +813,7 @@ let rec check_sig_cnv
              tymod_cnv_failure
                (E_TyModCnv_SubTypeArg(xin, tyout, tyin, err))
          end;
-         EcSubst.add_module subst xout tyout (EcPath.mident xin))
+         EcSubst.refresh_module subst xout (EcPath.mident xin))
       (EcSubst.empty ()) sin.mis_params sout.mis_params
   in
   let bout = EcSubst.subst_modsig_body bsubst sout.mis_body
