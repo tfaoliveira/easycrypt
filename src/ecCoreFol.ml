@@ -2690,7 +2690,6 @@ module Fsubst = struct
       | Flocal id ->
           (try Mid.find id s with Not_found -> f)
       | _ ->
-        (* TODO: (Adrien) is thit ok? *)
         f_map (fun ty -> ty) aux f)
 
   let subst_local id f1 f2 =

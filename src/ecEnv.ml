@@ -1289,8 +1289,6 @@ module Memory = struct
     { env with env_memories = Mmem.add (fst me) (snd me) env.env_memories; }
 
   let push (me : EcMemory.memenv) (env : env) =
-    (* TODO : A: *)
-    (* FIXME: assert (byid (EcMemory.memory me) env = None); *)
     update me env
 
   let push_all memenvs env =
@@ -2379,7 +2377,6 @@ module NormMp = struct
       { mt.mt_restr with
         mr_params = Msym.map do1 mt.mt_restr.mr_params;
         mr_cost   = mt.mt_restr.mr_cost; }
-    (* TODO A: I am not sure we are computing the correct cost here *)
 
     | _ ->
       (* We compute the oracle call information. *)

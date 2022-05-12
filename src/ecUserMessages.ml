@@ -793,6 +793,8 @@ end = struct
     | AE_CannotInferMod  -> msg "%s" "cannot infer module arguments"
     | AE_NotFunctional   -> msg "%s" "too many argument"
 
+    | AE_InvalidModNameSpace -> msg "%s" "cannot module namespace"
+
     | AE_InvalidArgForm (IAF_Mismatch (src, dst)) ->
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
        let dst = Tuni.offun (EcUnify.UniEnv.assubst ue) dst in

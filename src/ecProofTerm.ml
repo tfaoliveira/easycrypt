@@ -43,6 +43,7 @@ type apperror =
   | AE_CannotInfer
   | AE_CannotInferMod
   | AE_NotFunctional
+  | AE_InvalidModNameSpace
   | AE_InvalidArgForm     of invalid_arg_form
   | AE_InvalidArgMod      of EcTyping.tymod_cnv_failure
   | AE_InvalidArgProof    of (form * form)
@@ -807,13 +808,17 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
-  (* TODO A: what do we do with [ns] here ? *)
   | GTmodty (ns,emt) -> begin
       match dfl_arg_for_mod pe arg with
       | PVAModule (mp, mt) -> begin
           try
             let obl = EcTyping.check_modtype pe.pte_hy mp mt emt in
             EcPV.check_module_in env mp emt;
+
+            (* for now, we forbid to instantiate any quantification
+               with a [Fresh] module namespace. *)
+            if ns <> Any then
+              tc_pterm_apperror ?loc pe (AE_InvalidModNameSpace);
 
             let f = Fsubst.f_subst_mod x emt mp f in
             let f = match obl with
@@ -892,7 +897,10 @@ and apply_pterm_to_local ?loc pt id =
   | LD_var (ty, _) ->
       apply_pterm_to_arg_r ?loc pt (PVAFormula (f_local id ty))
 
-  | LD_modty (ns,mty) ->
+  | LD_modty (_ns,mty) ->
+      (* Ignore module namespace. This is soundness because a
+         [Fresh] module is just an arbitrary module with an additional
+         freshness assumption on its name. *)
       let env  = LDecl.toenv pt.ptev_env.pte_hy in
       let msig = EcEnv.ModTy.sig_of_mt env mty in
       apply_pterm_to_arg_r ?loc pt (PVAModule (EcPath.mident id, msig))

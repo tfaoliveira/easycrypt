@@ -310,7 +310,6 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
 
         | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
         end;
-        (* TODO A: epoch: do not refresh epoch *)
         (Sid.add id known, LDecl.add_local id x.l_kind new_)
 
       in List.fold_left add1 (Sid.empty, new_) ids in
@@ -815,12 +814,13 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         let args = PAMemory id :: args in
         (s, bds, args, cls)
 
-      (* TODO A: improve by replacing [Any] by [Fresh] if the epochs allow it*)
-      | LD_modty (ns,mt) ->
+      | LD_modty (_ns,mt) ->
         let x    = fresh id in
         let s    = Fsubst.f_refresh_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
+        (* TODO: precision improvement: we could replace [Any] by [Fresh]
+           if the epochs allow it (it is a bit complicated to check though) *)
         let bds  = `Forall (x, GTmodty (Any,mt)) :: bds in
         let args = PAModule (mp, sig_) :: args in
         (s, bds, args, cls)
@@ -1781,14 +1781,17 @@ h1 : x = f w
 h2 : y = z
  *)
 
-(* TODO A: improve by replacing [Any] by [Fresh] if the epochs allow it*)
-let gen_hyps (post : l_locals) gG =
+let gen_hyps (post : l_locals) (gG : form) : form =
   let do1 gG { l_id = id; l_kind = d } =
     match d with
     | LD_var (_ty, Some body) -> f_let1 id body gG
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
     | LD_mem mt               -> f_forall_mems [id, mt] gG
-    | LD_modty (ns,mt)        -> f_forall [id, GTmodty (Any,mt)] gG
+
+    | LD_modty (_ns,mt)       -> f_forall [id, GTmodty (Any,mt)] gG
+    (* TODO: precision improvement: we could replace [Any] by [Fresh]
+       if the epochs allow it (it is a bit complicated to check though) *)
+
     | LD_hyp f                -> f_imp f gG
     | LD_abs_st _             -> raise InvalidGoalShape in
   List.fold_left do1 gG post
