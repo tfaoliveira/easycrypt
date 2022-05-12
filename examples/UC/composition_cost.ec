@@ -183,21 +183,21 @@ end CP.
 end EXEC_MODEL.
 
 type csim = {
-  cinit : cost;
-  cstep : cost;
-  cs_s  : int;
-  cs_b  : int;
+  cinit     : cost;
+  cstep     : cost;
+  cs_s      : int;
+  cs_b      : int;
   cbackdoor : cost;
-  cb_s  : int;
-  cb_b  : int;
+  cb_s      : int;
+  cb_b      : int;
 }.
 
 op csim_pos (c:csim) = 
-  (* zero <= c.`cinit /\ *)
-  (* zero <= c.`cstep /\ *)
+  zero <= c.`cinit /\
+  zero <= c.`cstep /\
   0 <= c.`cs_s  /\ 
   0 <= c.`cs_b  /\ 
-  (* zero <= c.`cbackdoor /\  *)
+  zero <= c.`cbackdoor /\
   0 <= c.`cb_s  /\
   0 <= c.`cb_b.
 
@@ -329,12 +329,16 @@ theory NONDUMMY_EQUIV_DUMMY.
     proc distinguish = Z(IA).distinguish
   }.
 
+(* The cinit, cstep and cbackdoor fields values are unused (hence we arbitrarily set them to zero).
+   Instead, we inline the correct cost directly.
+   This comes from the fact that EC expressions do not allow cost vectors (this is a technical
+   inlined limitation, to be lifted eventually). *)
   op csa (cA:cadv) (cS:csim) = {|
-    cinit = cS.`cinit;
-    cstep = cA.`cas + cA.`cas_s * cS.`cstep + cA.`cas_b * cS.`cbackdoor ;
+    cinit = zero; 
+    cstep = zero;
     cs_s  = cS.`cs_s * cA.`cas_s + cS.`cb_s * cA.`cas_b;
     cs_b  = cS.`cs_b * cA.`cas_s + cS.`cb_b * cA.`cas_b;
-    cbackdoor =  cA.`cab + cA.`cab_s * cS.`cstep + cA.`cab_b * cS.`cbackdoor ;
+    cbackdoor = zero;
     cb_s  = cS.`cs_s * cA.`cab_s + cS.`cb_s * cA.`cab_b;
     cb_b  = cS.`cs_b * cA.`cab_s + cS.`cb_b * cA.`cab_b;
   |}.
@@ -672,24 +676,37 @@ abstract theory TRANSITIVITY.
      cb = cz.`cs * cs12.`cs_b + cz.`cb * cs12.`cb_b;
    |}.
 
+(* cinit, cstep and cbackdoor fields values are unused.
+   C.f. explanation at `op csa` *)
    op cs13 = {| 
-       cinit = cs12.`cinit + cs23.`cinit;
-       cstep = cs12.`cstep + cs23.`cstep * cs12.`cs_s + cs23.`cbackdoor * cs12.`cs_b;
-       cs_s  = cs12.`cs_s * cs23.`cs_s + cs12.`cs_b * cs23.`cb_s;
-       cs_b  = cs12.`cs_s * cs23.`cs_b + cs12.`cs_b * cs23.`cb_b;
-       cbackdoor = cs12.`cbackdoor + cs23.`cstep * cs12.`cb_s + cs23.`cbackdoor * cs12.`cb_b;
-       cb_s  = cs12.`cb_s * cs23.`cs_s + cs12.`cb_b * cs23.`cb_s;
-       cb_b  = cs12.`cb_s * cs23.`cs_b + cs12.`cb_b * cs23.`cb_b;
+       cinit     = zero; (* cs12.`cinit + cs23.`cinit; *)
+       cstep     = zero; (* cs12.`cstep + cs23.`cstep * cs12.`cs_s + cs23.`cbackdoor * cs12.`cs_b; *)
+       cs_s      = cs12.`cs_s * cs23.`cs_s + cs12.`cs_b * cs23.`cb_s;
+       cs_b      = cs12.`cs_s * cs23.`cs_b + cs12.`cs_b * cs23.`cb_b;
+       cbackdoor = zero;
+                   (* cs12.`cbackdoor + cs23.`cstep * cs12.`cb_s + cs23.`cbackdoor * cs12.`cb_b; *)
+       cb_s      = cs12.`cb_s * cs23.`cs_s + cs12.`cb_b * cs23.`cb_s;
+       cb_b      = cs12.`cb_s * cs23.`cs_b + cs12.`cb_b * cs23.`cb_b;
      |}.
 
    clone H1.C as CH1 with
      op c <- cz,
      op csi <- cs12
      proof * by smt(cz_pos cs12_pos cs23_pos).
-   
+
    clone H2.C as CH2 with 
      op c <- cz23,
      op csi <- cs23
+     (* realize c_pos. rewrite /cenv_pos /cz23 //=. progress. *)
+     (* have @/cenv_pos /= ? := cz_pos.  *)
+     (* have @/csim_pos /= ? := cs12_pos.  *)
+     (* have @/csim_pos /= ? := cs23_pos.  *)
+     (* rewrite -!zero_def. *)
+     (* do !apply lec_add2 => /=. smt(). smt().  *)
+     (* (* TODO: stupid and trivial subgoals over costs ... *) *)
+     (* admit.  *)
+
+     (* OLD PROOF*)
      proof * by smt(cz_pos cs12_pos cs23_pos).
 
    clone GOAL.C as CGOAL with

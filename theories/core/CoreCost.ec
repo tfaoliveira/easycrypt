@@ -111,6 +111,15 @@ lemma lec_add_posl (x y : cost) :
   zero <= x => y <= x + y.
 proof. rewrite (addcC x); exact lec_add_posr. qed.
 
+lemma lec_add2 (c c' : cost) : zero <= c => zero <= c' => zero <= c + c'. 
+proof. 
+  move => H H'. 
+  have U := (lec_add2r zero c' c _); 1: done. 
+  rewrite add0c in U. 
+  apply (lec_trans c) => //. 
+  by rewrite (addcC).
+qed.
+
 axiom lec_inv_pos (x : cost) : zero <= x - x.
 
 (* -------------------------------------------------------------------- *)
