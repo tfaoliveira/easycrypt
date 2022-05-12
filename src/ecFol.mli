@@ -125,8 +125,8 @@ val f_cost_opp_simpl    : form -> form
 val f_cost_add_simpl    : form -> form -> form
 val f_cost_scale_simpl  : form -> form -> form
 val f_cost_xscale_simpl : form -> form -> form
-val f_cost_le_simpl     : form -> form -> form
-val f_cost_lt_simpl     : form -> form -> form
+val f_cost_le_simpl     : EcEnv.LDecl.hyps -> form -> form -> form
+val f_cost_lt_simpl     : EcEnv.LDecl.hyps -> form -> form -> form
 val f_bigcost_simpl     : form -> form -> form -> form
 val f_cost_is_int_simpl : form -> form
 

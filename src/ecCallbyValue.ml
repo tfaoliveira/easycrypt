@@ -62,67 +62,6 @@ end
 
 type subst = Subst.subst
 
-(* -------------------------------------------------------------------- *)
-let rec f_eq_simpl st f1 f2 =
-  if f_equal f1 f2 then f_true else
-
-  match fst_map f_node (destr_app f1), fst_map f_node (destr_app f2) with
-  | (Fop (p1, _), args1), (Fop (p2, _), args2)
-      when EcEnv.Op.is_dtype_ctor st.st_env p1
-           && EcEnv.Op.is_dtype_ctor st.st_env p2 ->
-
-    let idx p =
-      let idx = EcEnv.Op.by_path p st.st_env in
-      snd (EcDecl.operator_as_ctor idx)
-    in
-    if   idx p1 <> idx p2
-    then f_false
-    else f_ands0_simpl (List.map2 (f_eq_simpl st) args1 args2)
-
-  | _, _ ->
-    if (EqTest.for_type st.st_env f1.f_ty EcTypes.tunit &&
-        EqTest.for_type st.st_env f2.f_ty EcTypes.tunit) ||
-       is_alpha_eq st.st_hyps f1 f2
-    then f_true
-    else EcFol.f_eq_simpl f1 f2
-
-(* -------------------------------------------------------------------- *)
-let rec f_map_get_simpl st m x bty =
-  match m.f_node with
-  | Fapp({ f_node = Fop(p, _)}, [e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_cst ->
-    e
-
-  | Fapp({f_node = Fop(p, _)}, [m'; x'; e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_set
-    -> begin
-
-    match sform_of_form (f_eq_simpl st x' x) with
-    | SFtrue  -> e
-    | SFfalse -> f_map_get_simpl st m' x bty
-    | _       ->
-      let m' = f_map_set_simplify st m' x in
-      let m' = f_map_set m' x' e in
-      f_map_get m' x bty
-  end
-
-  | _ -> f_map_get m x bty
-
-and f_map_set_simplify st m x =
-  match m.f_node with
-  | Fapp({ f_node = Fop(p, _)}, [m'; x'; e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_set
-    -> begin
-
-    match sform_of_form (f_eq_simpl st x' x) with
-    | SFtrue  -> f_map_cst x.f_ty e
-    | SFfalse -> f_map_set_simplify st m' x
-    | _       ->
-      let m' = f_map_set_simplify st m' x in
-      f_map_set m' x' e
-  end
-
-  | _ -> m
 
 (* -------------------------------------------------------------------- *)
 (* Simplifies a expression [0 <= (c1 + ... + cn)] over [tcost] using:

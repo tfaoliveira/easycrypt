@@ -957,14 +957,11 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
         let masked_cost = f_cost_add (get_cost (Intr fn)) cost_oracle_infnty in
         f_cHoareF f_true xfn f_true masked_cost
       in
-      let subg =
-        Mx.fold (fun oracle ocall subgoals ->
-            let fc = f_cost_r (cost_r f_Inf (Mx.singleton oracle ocall) false) in
-            let sg = f_cHoareF f_true xfn f_true fc in
-            sg :: subgoals
-          ) c_calls [sg_self]
+      let sg_calls =
+        let fc = f_cost_r (cost_r f_Inf c_calls false) in
+        f_cHoareF f_true xfn f_true fc
       in
-      f_ands subg
+      f_and sg_self sg_calls
 
     | Some c_self ->
       let new_calls = Mx.merge (fun _ c1 c2 ->

@@ -389,7 +389,7 @@ theory NONDUMMY_EQUIV_DUMMY.
     + (split; last split) => FB /=.
 
       (* SeqSA(A, S, FB).init *)
-      + proc; call (:true). 
+      + proc; call (:true). move => /=.
         by move => @/csa /=; skip. 
 
       (* A(S(FB)).step *)
@@ -521,29 +521,32 @@ theory NONDUMMY_EQUIV_DUMMY.
     + by move=> B; proc; call(:true); auto.
     clear hA.
     exists S; split; 1: clear hS. 
-    + (split; last split). move => FB. 
+    + (split; last split) => FB. 
       (* new proof: WIP *)
       (* S(FB).init *) 
-      - split; last split.
-      + proc true : [] => //=. 
-          rewrite !bigi_constz //=. admit.
-      + by move => *; proc*; call(:true). 
-      + by move => *; proc*; call(:true). 
-        admit. admit.
-
-
-    (* old proof *)
-      + by proc true : []. 
-      + proc true : [FB.step : [N kBs],FB.backdoor :[N kBb]] => //=.
-        + have cS_pos := hcS cdA _; 1: done.
-          by rewrite !bigi_constz /#. 
-        + by move=> *; proc true : [].
-        by move=> *; proc true : [].
-      proc true : [FB.step : [N kBs],FB.backdoor :[N kBb]] => //=.
-      + have cS_pos := hcS cdA _; 1: done.
-        by rewrite !bigi_constz /#. 
-      + by move=> *; proc true : [].
-      by move=> *; proc true : [].                 
+      + by split; proc true : [].
+      + split.
+        + proc true : [] => //=. 
+          + have cS_pos := hcS cdA _; 1: done.
+            by rewrite !bigi_constz /#. 
+          + by move=> *; proc true : [].
+          by move=> *; proc true : [].
+        + proc true : [] => //=. 
+          + have cS_pos := hcS cdA _; 1: done.
+            by rewrite !bigi_constz /#. 
+          + by move=> *; proc true : [].
+          by move=> *; proc true : [].
+      + split.
+        + proc true : [] => //=. 
+          + have cS_pos := hcS cdA _; 1: done.
+            by rewrite !bigi_constz /#. 
+          + by move=> *; proc true : [].
+          by move=> *; proc true : [].
+        + proc true : [] => //=. 
+          + have cS_pos := hcS cdA _; 1: done.
+            by rewrite !bigi_constz /#. 
+          + by move=> *; proc true : [].
+          by move=> *; proc true : [].
 
     (* probability part of the proof *)
     move=> Z; have := hS Z. 

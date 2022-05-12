@@ -22,9 +22,6 @@ module Sp   = EcPath.Sp
 type prpo_display = { prpo_pr : bool; prpo_po : bool; }
 
 (* -------------------------------------------------------------------- *)
-type 'a pp = Format.formatter -> 'a -> unit
-
-(* -------------------------------------------------------------------- *)
 module PPEnv = struct
   type t = {
     ppe_env     : EcEnv.env;

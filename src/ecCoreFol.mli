@@ -390,6 +390,8 @@ val fop_cost_opp    : form
 val fop_cost_add    : form
 val fop_cost_scale  : form
 val fop_cost_xscale : form
+val fop_cost_le     : form
+val fop_cost_lt     : form
 
 val f_cost_zero    : form
 val f_cost_inf     : form
@@ -420,6 +422,8 @@ val f_op_xopp  : form
 val f_op_xadd  : form
 val f_op_xmul  : form
 val f_op_xmuli : form
+val f_op_xle   : form
+val f_op_xlt   : form
 
 val f_Inf   : form
 val f_N     : form -> form
