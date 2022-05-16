@@ -1947,7 +1947,7 @@ operator:
       po_args     = odfl [] args;
       po_def      = opdef_of_opbody sty (omap (unloc |- fst) b);
       po_ax       = obind snd b;
-      po_nosmt    = st;
+      po_nosmt    = st || (is_some (obind snd b));
       po_locality = locality; } }
 
 | locality=locality k=op_or_const st=nosmt tags=bracket(ident*)?

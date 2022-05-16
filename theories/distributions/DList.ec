@@ -216,7 +216,8 @@ rewrite (big1 (predC (mem (I `|` J)))) ?mulr1.
 rewrite -big_filter (eq_big_perm _ _ _ (elems I ++ elems J)) ?big_cat.
 - apply uniq_perm_eq => [| |x].
   + by rewrite filter_uniq range_uniq.
-  + rewrite cat_uniq !uniq_elems => />; apply/hasPn; smt().
+  + rewrite cat_uniq !uniq_elems=> />; apply: hasPn=> x.
+    by rewrite -!memE /#.
   + by rewrite mem_filter mem_range mem_cat -!memE in_fsetU /#.
 rewrite big_seq_cond (eq_bigr _ _ (fun _ => mu d p)) -?big_seq_cond.
   move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.

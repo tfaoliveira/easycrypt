@@ -231,7 +231,7 @@ section.
 
   (* TODO: I would like to declare this operator as local,
      and to not see it outside the section *)
-  op valid (pks_sks: (pkey, skey) fmap) (qs : (pkey * message * signature) fset) = 
+  local op valid (pks_sks: (pkey, skey) fmap) (qs : (pkey * message * signature) fset) = 
     (forall pk sk, pks_sks.[pk] = Some sk => (pk,sk) \in keygen) /\
     (forall pk m s, (pk,m,s) \in qs =>
        exists sk, (pk,sk) \in keygen /\ s \in sign(sk,m)).
@@ -257,10 +257,10 @@ section.
     +  move => ??; conseq |>; proc; sp; if; auto => />; smt(keygen_ll). 
     + by move => ?; conseq |>; proc; sp; if; auto => />; smt(keygen_ll). 
     + conseq |>; proc; sp; if; 1: smt().
-        if;
-           1: smt(); 
-           by auto => />; smt(verify_sign in_fsetU1). 
-        by auto => /> /#.
+      + if; [1,3:by auto=> />].
+        auto=> /> &2 _ H0 H1 _ pk_in_d sig sig_valid pk0 m0 s0; rewrite in_fsetU1=> - [/H1 //|/>].
+        by move: pk_in_d; rewrite domE /=; case _: (RealSigServ.pks_sks.[pk]{2})=> /> /#.
+      by auto => /> /#.
     + move => ??; conseq |>; proc; sp; if; auto => />. 
        if; first by move => *; auto => />; smt(sign_ll). 
        by auto.

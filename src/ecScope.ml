@@ -1163,15 +1163,14 @@ module Op = struct
 
     let nosmt = op.po_nosmt in
 
-    if nosmt &&
-       (match body with
+    let nosmt = nosmt && not (match body with
         | `Plain _  -> false
         | `Fix _    -> false
         | `Abstract ->
             match refts with
             | [] -> true
-            | _  -> false) then
-      hierror ~loc ("[nosmt] is not supported for pure abstract operators");
+            | _  -> false)
+    in
 
     let uni     = Tuni.offun (EcUnify.UniEnv.close ue) in
     let ty      = uni ty in
