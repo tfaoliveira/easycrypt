@@ -99,6 +99,7 @@ let rec on_ty (cb : cb) (ty : ty) =
   match ty.ty_node with
   | Tunivar _        -> ()
   | Tvar    _        -> ()
+  | Tmodcost _       -> ()
   | Tglob mp         -> on_mp cb mp
   | Ttuple tys       -> List.iter (on_ty cb) tys
   | Tconstr (p, tys) -> cb (`Type p); List.iter (on_ty cb) tys
@@ -201,6 +202,12 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
     | EcFol.Ftuple    fs           -> List.iter cbrec fs
     | EcFol.Fproj     (f, _)       -> cbrec f
+
+    | EcFol.Fcost     c            -> on_cost cb c
+    | EcFol.Fmodcost  mc           -> on_modcost cb mc
+
+    | EcFol.Fcost_proj (f,p)       -> cbrec f; on_cost_proj cb p
+
     | EcFol.Fpvar     (pv, _)      -> on_pv  cb pv
     | EcFol.Fglob     (mp, _)      -> on_mp  cb mp
     | EcFol.FhoareF   hf           -> on_hf  cb hf
@@ -251,13 +258,13 @@ let rec on_form (cb : cb) (f : EcFol.form) =
   and on_chf cb chf =
     on_form cb chf.EcFol.chf_pr;
     on_form cb chf.EcFol.chf_po;
-    on_cost cb chf.EcFol.chf_co;
+    on_form cb chf.EcFol.chf_co;
     on_xp cb chf.EcFol.chf_f
 
   and on_chs cb chs =
     on_form cb chs.EcFol.chs_pr;
     on_form cb chs.EcFol.chs_po;
-    on_cost cb chs.EcFol.chs_co;
+    on_form cb chs.EcFol.chs_co;
     on_stmt cb chs.EcFol.chs_s;
     on_memenv cb chs.EcFol.chs_m
 
@@ -283,13 +290,20 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     on_xp cb pr.EcFol.pr_fun;
     List.iter (on_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
 
-  and on_cost cb (cost : cost) =
+  and on_cost cb cost =
     on_form cb cost.EcFol.c_self;
     Mx.iter (fun f c ->
         on_xp cb f;
-        on_form cb c.EcFol.cb_called;
-        on_form cb c.EcFol.cb_cost) cost.EcFol.c_calls
+        on_form cb c;
+      ) cost.EcFol.c_calls
 
+  and on_modcost cb mc =
+    Msym.iter (fun _ c ->
+        on_cost cb c;
+      ) mc
+
+  and on_cost_proj _cb : EcFol.cost_proj -> unit = function
+    | Intr _ | Param _ -> ()
   in
     on_ty cb f.EcFol.f_ty; fornode ()
 
@@ -298,7 +312,10 @@ and on_restr (cb : cb) (restr : mod_restr) =
   oiter (Sx.iter (on_xp cb)) restr.mr_xpaths.ur_pos;
   Sm.iter (on_mp cb) restr.mr_mpaths.ur_neg;
   oiter (Sm.iter (on_mp cb)) restr.mr_mpaths.ur_pos;
-  Msym.iter (fun _ oi -> on_oi cb oi) restr.mr_oinfos
+  Msym.iter (fun _ oi ->
+      List.iter (on_xp cb) (allowed oi)
+    ) restr.mr_params;
+  on_form cb restr.mr_cost
 
 and on_modty cb mty =
   cb (`ModuleType mty.mt_name);
@@ -313,7 +330,7 @@ and on_gbinding (cb : cb) (b : gty) =
   match b with
   | EcFol.GTty ty ->
       on_ty cb ty
-  | EcFol.GTmodty mty ->
+  | EcFol.GTmodty (_,mty) ->
       on_mdecl cb mty
   | EcFol.GTmem m ->
       on_memtype cb m
@@ -348,7 +365,8 @@ and on_fun_body (cb : cb) (fbody : function_body) =
   match fbody with
   | FBalias xp -> on_xp cb xp
   | FBdef fdef -> on_fun_def cb fdef
-  | FBabs oi   -> on_oi  cb oi
+  | FBabs (oi,(f,_)) ->
+    List.iter (on_xp cb) (allowed oi); on_form cb f
 
 and on_fun_def (cb : cb) (fdef : function_def) =
   List.iter (fun v -> on_ty cb v.v_type) fdef.f_locals;
@@ -373,16 +391,16 @@ and on_oi_costs (cb : cb) (b : [`Bounded of form * form Mx.t | `Unbounded]) =
           ()) m
     in ()
 
-and on_oi (cb : cb) (oi : OI.t) =
-  List.iter (on_xp cb) (OI.allowed oi);
-  on_oi_costs cb (OI.costs oi)
-
 (* -------------------------------------------------------------------- *)
 let on_typeclasses cb s =
   Sp.iter (fun p -> cb (`Typeclass p)) s
 
 let on_typarams cb typarams =
     List.iter (fun (_,s) -> on_typeclasses cb s) typarams
+
+(* FIXME: new merge: keep ?*)
+and on_mpath_fun_oi cb oi =
+  List.iter (fun x -> cb x.x_top) (allowed oi)
 
 (* -------------------------------------------------------------------- *)
 let on_tydecl (cb : cb) (tyd : tydecl) =
@@ -607,8 +625,8 @@ let generalize_type to_gen ty =
 
 let add_declared_mod to_gen id modty =
   { to_gen with
-    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty modty);
-    tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
+    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Any modty);
+    tg_subst  = EcSubst.add_module to_gen.tg_subst id modty (mpath_abs id [])
   }
 
 let add_declared_ty to_gen path tydecl =
@@ -657,19 +675,12 @@ let add_declared_op to_gen path opdecl =
 
 let rec gty_fv_and_tvar : gty -> int Mid.t = function
   | GTty ty -> EcTypes.ty_fv_and_tvar ty
-  | GTmodty { mt_restr = restr } ->
+  | GTmodty (_, { mt_restr = restr }) ->
     (* mr_oinfos *)
     let fv =
       EcSymbols.Msym.fold (fun _ oi fv ->
-          let fv = List.fold_left EcPath.x_fv fv (PreOI.allowed oi) in
-          match PreOI.costs oi with
-          | `Unbounded -> fv
-          | `Bounded (self,calls) ->
-            EcPath.Mx.fold (fun xp call fv ->
-                let fv = EcPath.x_fv fv xp in
-                EcIdent.fv_union fv (fv_and_tvar_f call)
-              ) calls (EcIdent.fv_union fv (fv_and_tvar_f self))
-        ) restr.mr_oinfos Mid.empty
+          List.fold_left EcPath.x_fv fv (allowed oi)
+        ) restr.mr_params (fv_and_tvar_f restr.mr_cost)
     in
 
     EcIdent.fv_union fv

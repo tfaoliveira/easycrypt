@@ -98,7 +98,7 @@
         piota  = true; peta   = true;
         plogic = true; pdelta = None;
         pmodpath = true; puser = true;
-	pcost = false; }
+	      pcost = false; }
     else
       let doarg acc = function
         | `Delta l ->
@@ -112,8 +112,8 @@
         | `Eta     -> { acc with peta     = true }
         | `Logic   -> { acc with plogic   = true }
         | `ModPath -> { acc with pmodpath = true }
+        | `Cost    -> { acc with pcost    = true }
         | `User    -> { acc with puser    = true }
-	| `Cost    -> { acc with pcost    = true }
       in
         List.fold_left doarg
           { pbeta  = false; pzeta  = false;
@@ -427,6 +427,7 @@
 %token DONE
 %token DOT
 %token DOTDOT
+%token DOTSHARP
 %token DOTTICK
 %token DROP
 %token DUMP
@@ -474,6 +475,7 @@
 %token INDUCTIVE
 %token INLINE
 %token INTERLEAVE
+%token INTR
 %token INSTANCE
 %token INSTANTIATE
 %token IOTA
@@ -507,6 +509,8 @@
 %token NOTATION
 %token OF
 %token OP
+%token OPAQUE
+%token OPEN
 %token PCENT
 %token PHOARE
 %token PIPE
@@ -581,6 +585,7 @@
 %token THEN
 %token THEORY
 %token TICKBRACE
+%token TICKLBRACKET
 %token TICKPAREN
 %token TICKPIPE
 %token TILD
@@ -1098,17 +1103,50 @@ sc_ptybindings_decl:
 %inline hole: UNDERSCORE { PFhole }
 %inline none: IMPOSSIBLE { assert false }
 
-orcl_time(P):
- | m=uident DOT f=lident COLON c=form_r(P) { (m,f, c) }
+(* -------------------------------------------------------------------- *)
+cost_elc(P):
+| DOTDOT          { `Unbounded }
+| c=form_r(P)     { `Bounded c }
 
-cost_calls(P,S):
+cost_self(P):
+| COLON c=cost_elc(P) { c }
+
+orcl_time(P):
+| m=uident DOT f=lident COLON c=cost_elc(P) { (m,f, c) }
+
+%inline cost_calls(P,S):
 | calls=rlist1(orcl_time(P), S) { calls }
 
-costs(P):
-| LBRACKET c=form_r(P) RBRACKET     {PC_costs(c,[])}
-| LBRACKET c=form_r(P) SEMICOLON calls=cost_calls(P,SEMICOLON) RBRACKET
-                                      {PC_costs(c,calls)}
+%inline cost_body_non_empty(P):
+| s=cost_self(P)                               { s,[] }
+| s=cost_self(P) COMMA c=cost_calls(P,COMMA)   { s,c }
+| c=cost_calls(P,COMMA)                        { `Unbounded,c }
 
+cost_body(P):
+| DOTDOT                                 { (`Unbounded, []), false }
+| c=cost_body_non_empty(P) COMMA DOTDOT  { c, false }
+| c=cost_body_non_empty(P)               { c, true }
+
+
+costs(P):
+| TICKLBRACKET cbody=cost_body(P) RBRACKET
+    { let c, b = cbody in
+      PC_costs (c,b) }
+
+(* -------------------------------------------------------------------- *)
+modcosts_el(P):
+| f=lident COLON c=costs(P) { f,c }
+
+modcosts(P):
+| TICKLBRACKET l=rlist1(modcosts_el(P),COMMA) RBRACKET { l }
+
+(* -------------------------------------------------------------------- *)
+cost_proj:
+| proc=lident COLON INTR   { PIntr proc }
+| proc=lident COLON a=uident DOT p=lident
+                           { PParam {proc; param_m = a; param_p = p; } }
+
+(* -------------------------------------------------------------------- *)
 qident_or_res_or_glob:
 | x=qident
     { GVvar x }
@@ -1247,6 +1285,12 @@ sform_u(P):
        parse_error n.pl_loc (Some "tuple projection start at 1");
      PFproji(f,n.pl_desc - 1) }
 
+| c=costs(P)     { PFcost c }
+
+| f=sform_r(P) DOTSHARP p=cost_proj { PFprojc (f,p) }
+
+| mc=modcosts(P) { PFmodcost mc }
+
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 
 | EQUIV LBRACKET eb=equiv_body(P) RBRACKET { eb }
@@ -1380,11 +1424,11 @@ choare_body(P):
     pre=form_r(P) LONGARROW post=form_r(P)
   RBRACKET
   TIME
-  c=costs(P)
+  c=sform_r(P)
   { PFChoareF (pre, mp, post, c) }
 | LBRACKET mp=loc(fident) RBRACKET
   TIME
-  c=costs(P)
+  c=sform_r(P)
   { PFChoareFT (mp, c) }
 
 coe_ty:
@@ -1427,6 +1471,13 @@ pgtybindings:
 (* -------------------------------------------------------------------- *)
 (* Type expressions                                                     *)
 
+pty_oracle_el:
+| m=uident DOT f=lident { m, f }
+
+pty_proc_el:
+| f=lident        { f, `Closed }
+| f=lident DOTDOT { f, `Open }
+
 simpl_type_exp:
 | UNDERSCORE                  { PTunivar       }
 | x=qident                    { PTnamed x      }
@@ -1434,6 +1485,14 @@ simpl_type_exp:
 | tya=type_args x=qident      { PTapp (x, tya) }
 | GLOB m=loc(mod_qident)      { PTglob m       }
 | LPAREN ty=type_exp RPAREN   { ty             }
+
+/* special rule, because COST is a reserved key-word */
+| COST                        { PTcost         }
+
+| TICKLBRACKET procs=rlist0(pty_proc_el, COMMA) SHARP
+               oracles=rlist0(pty_oracle_el, empty) RBRACKET
+                              { PTmodcost (procs,oracles) }
+| SHARP x=uqident             { PTmodcost_q x }
 
 type_args:
 | ty=loc(simpl_type_exp)                          { [ty] }
@@ -1445,7 +1504,6 @@ type_exp:
 | ty1=loc(type_exp) RARROW ty2=loc(type_exp) { PTfun(ty1,ty2) }
 
 (* -------------------------------------------------------------------- *)
-(* Parameter declarations                                              *)
 var_or_anon:
 | x=loc(UNDERSCORE)
     { mk_loc x.pl_loc None }
@@ -1679,9 +1737,16 @@ mem_restr:
 (* qident optionally taken in a (implicit) module parameters. *)
 qident_inparam:
 | SHARP q=qident { { inp_in_params = true;
-		     inp_qident    = q; } }
-| q=qident { { inp_in_params = false;
-	       inp_qident    = q; } }
+		                 inp_content    = q; } }
+| q=qident       { { inp_in_params = false;
+	                   inp_content    = q; } }
+
+(* gamepath optionally taken in a (implicit) module parameters. *)
+gamepath_inparam:
+| SHARP m=uident DOT f=lident  { { inp_in_params = true;
+		                               inp_content    = (m,f); } }
+| m=uident DOT f=lident        { { inp_in_params = false;
+	                                 inp_content    = (m,f); } }
 
 (* -------------------------------------------------------------------- *)
 (* Oracle restrictions *)
@@ -1690,17 +1755,31 @@ oracle_restr:
 
 (* -------------------------------------------------------------------- *)
 (* Complexity restrictions *)
+
+compl_elc:
+| DOTDOT         { None }
+| c=form_r(none) { Some c }
+
 compl_el:
-| o=qident_inparam COLON c=form_r(none) { (o, c) }
+| o=gamepath_inparam COLON c=compl_elc { (o, c) }
+
+%inline compl_restr0:
+| self=compl_elc                                  { self,[] }
+| self=compl_elc COMMA c=rlist1(compl_el,COMMA)   { self,c }
+
+compl_restr1:
+  | c=compl_restr0
+    { let self, calls = c in
+      PCompl (self, calls, true) }
+  | c=compl_restr0 COMMA DOTDOT
+    { let self, calls = c in
+      PCompl (self, calls, false) }
 
 compl_restr:
-| TICKBRACE self=form_r(none) RBRACE
-    { PCompl (self,[]) }
-| TICKBRACE self=form_r(none) COMMA c=rlist1(compl_el,COMMA) RBRACE
-    { PCompl (self,c) }
+| LBRACKET c=compl_restr1 RBRACKET { c }
 
 (* -------------------------------------------------------------------- *)
-(* Module restrictions *)
+(* module restrictions *)
 
 fun_restr:
   | orcl=oracle_restr cl=compl_restr
@@ -1719,23 +1798,35 @@ mod_restr_el:
   | i=iboption(STAR) f=lident COLON fr=fun_restr
     { let orcl, cmpl = fr in
       { pmre_in = not i;
-	pmre_name = f;
-	pmre_orcls = orcl;
-	pmre_compl = cmpl; } }
+	      pmre_name = f;
+	      pmre_orcls = orcl;
+	      pmre_compl = cmpl; } }
+
+mod_opacity:
+| OPEN       { Some `Open }
+| OPAQUE     { Some `Opaque }
+|            { None }
+
+mod_restr_el_list:
+| op=mod_opacity l=rlist1(mod_restr_el,COMMA) { op, l }
+| op=mod_opacity                              { op, [] }
 
 mod_restr:
   | LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
-	pmr_procs = [] } }
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
+	      pmr_procs = (None, []) } }
+
+  | LBRACKET l=mod_restr_el_list RBRACKET
     { { pmr_mem = [];
-	pmr_procs = l } }
-  | LBRACE mr=mem_restr RBRACE LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
+	      pmr_procs = l } }
+
+  | LBRACE mr=mem_restr RBRACE LBRACKET l=mod_restr_el_list RBRACKET
     { { pmr_mem = mr;
-	pmr_procs = l } }
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET LBRACE mr=mem_restr RBRACE
+	      pmr_procs = l } }
+
+  | LBRACKET l=mod_restr_el_list RBRACKET LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr;
-	pmr_procs = l } }
+	      pmr_procs = l } }
 
 
 (* -------------------------------------------------------------------- *)
@@ -1776,7 +1867,7 @@ sig_param:
 signature_item:
 | INCLUDE i=mod_type xs=bracket(minclude_proc)? qs=brace(qident*)?
     { let qs = omap (List.map (fun x -> { inp_in_params = false;
-					  inp_qident    = x;     })) qs in
+					                                inp_content    = x;     })) qs in
       `Include (i, xs, qs) }
 | PROC i=boption(STAR) x=lident pd=param_decl COLON ty=loc(type_exp) fr=fun_restr?
     { let orcl, compl = odfl (None,None) fr in
@@ -1838,6 +1929,10 @@ rec_field_def:
 typedecl:
 | locality=locality TYPE td=rlist1(tyd_name, COMMA)
     { List.map (fun x -> mk_tydecl ~locality x (PTYD_Abstract [])) td }
+
+/* special rule, because COST is a reserved key-word */
+| locality=locality TYPE l=loc(COST)
+    { [mk_tydecl ~locality ([], mk_loc l.pl_loc ("cost")) (PTYD_Abstract [])] }
 
 | locality=locality TYPE td=tyd_name LTCOLON tcs=rlist1(qident, COMMA)
     { [mk_tydecl ~locality td (PTYD_Abstract tcs)] }
@@ -2664,7 +2759,7 @@ simplify_arg:
 | ETA              { `Eta }
 | LOGIC            { `Logic }
 | MODPATH          { `ModPath }
-| COST             { `ModPath }
+| COST             { `Cost }
 
 simplify:
 | l=simplify_arg+     { l }
@@ -2693,23 +2788,33 @@ conseq_xt:
 | UNDERSCORE COLON cmp=hoare_bd_cmp? bd=sform
                                                { (None, None),
 						 Some (CQI_bd (cmp, bd)) }
-| c=conseq   COLON TIME co=costs(none)         { c, Some (CQI_c co) }
-| UNDERSCORE COLON TIME co=costs(none)         { (None, None), Some (CQI_c co) }
+| c=conseq   COLON TIME co=sform         { c, Some (CQI_c co) }
+| UNDERSCORE COLON TIME co=sform         { (None, None), Some (CQI_c co) }
 
 
 ci_cost_el:
-| o=loc(fident) x=ident? COLON co=costs(none) {o, x, co}
+| o=loc(fident) x=ident COLON co=form
+    { {p_oracle = o; p_finite = true; p_param = Some x; p_cost = co;} }
+/* finite, with call counter parameter */
+
+| o=loc(fident) UNDERSCORE COLON co=form
+    { {p_oracle = o; p_finite = true; p_param = None; p_cost = co;} }
+/* finite, no call counter parameter */
+
+| o=loc(fident) COLON co=form
+    { {p_oracle = o; p_finite = false; p_param = None; p_cost = co;} }
+/* not finite (hence no call counter parameter) */
 
 abs_call_info:
-| TIME LBRACKET xc=rlist0(ci_cost_el, COMMA) RBRACKET { xc }
+| LBRACKET xc=rlist0(ci_cost_el, COMMA) RBRACKET { xc }
 
 call_info:
 | f1=form LONGARROW f2=form          { CI_spec (f1, f2, None) }
-| f1=form LONGARROW f2=form TIME co=costs(none)
+| f1=form LONGARROW f2=form TIME co=form
                                      { CI_spec (f1, f2, Some co) }
 | f=form                             { CI_inv  (f, None) }
-| f=form TIME co=costs(none)         { CI_inv  (f, Some (`Std co)) }
-| f=form SEMICOLON inf=abs_call_info     { let info = `CostAbs inf in
+| f=form TIME co=form                { CI_inv  (f, Some (P_Std co)) }
+| f=form COLON inf=abs_call_info     { let info = P_CostAbs inf in
                                        CI_inv  (f, Some info) }
 | bad=form COMMA p=form              { CI_upto (bad,p,None) }
 | bad=form COMMA p=form COMMA q=form { CI_upto (bad,p,Some q) }
@@ -2771,7 +2876,7 @@ while_tac_info:
 | inv=sform vrnt=sform k=sform eps=sform
     { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (`Bd (k, eps)); } }
 
-| inv=sform vrnt=sform k=sform TIME co=costs(none)
+| inv=sform vrnt=sform k=sform TIME co=sform
     { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (`Cost (k, co)); } }
 
 async_while_tac_info:
@@ -2862,7 +2967,7 @@ app_bd_info:
 | f=sform
     { PAppSingle f }
 
-| TIME co=costs(none)
+| TIME co=sform
     { PAppCost co }
 
 | f=prod_form g=prod_form s=sform?

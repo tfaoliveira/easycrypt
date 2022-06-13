@@ -83,10 +83,28 @@ module CI_Int : sig
   val p_int_lt    : path
   val p_int_pow   : path
   val p_int_edivz : path
+  val p_int_max   : path
 end
 
 (* -------------------------------------------------------------------- *)
-module CI_xint : sig
+module CI_Cost : sig
+  val i_Cost : string
+  val p_Cost : path
+  val p_cost : path
+
+  val p_cost_inf     : path
+  val p_cost_opp     : path
+  val p_cost_add     : path
+  val p_cost_scale   : path
+  val p_cost_xscale  : path
+  val p_cost_le      : path
+  val p_cost_lt      : path
+  val p_cost_subcond : path
+  val p_cost_is_int  : path
+end
+
+(* -------------------------------------------------------------------- *)
+module CI_Xint : sig
   val p_Xint      : path
   val p_xint      : path
   val p_N         : path
@@ -94,13 +112,18 @@ module CI_xint : sig
   val p_xopp      : path
   val p_xadd      : path
   val p_xmul      : path
+  val p_xmuli     : path
   val p_xle       : path
+  val p_xlt       : path
   val p_xmax      : path
   val p_is_int    : path
   val p_is_inf    : path
+  val p_xoget     : path
   val p_choaretac : path
-  val p_bigxint   : path
-  val p_big       : path
+  val p_Bigxint   : path
+  val p_Bigcost   : path
+  val p_bigx      : path
+  val p_bigcost   : path
 end
 
 (* -------------------------------------------------------------------- *)

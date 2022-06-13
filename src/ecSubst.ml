@@ -24,7 +24,7 @@ exception InconsistentSubst
 (* -------------------------------------------------------------------- *)
 type subst = {
   sb_freshen : bool;
-  sb_modules : EcPath.mpath Mid.t;
+  sb_modules : (EcPath.mpath * ms_info) Mid.t;
   sb_path    : EcPath.path Mp.t;
   sb_tydef   : (EcIdent.t list * ty) Mp.t;
   sb_opdef   : (EcIdent.t list * expr) Mp.t;
@@ -44,9 +44,18 @@ let empty ?(freshen = true) () : subst = {
 let is_empty s =
   Mp.is_empty s.sb_path && Mid.is_empty s.sb_modules
 
-let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
+let add_module s (x : EcIdent.t) (mt : module_type) (m : EcPath.mpath) =
+  let cost = mt.mt_restr.mr_cost in
   let merger = function
-    | None   -> Some m
+    | None   -> Some (m, EcCoreFol.Cost cost)
+    | Some _ -> raise (SubstNameClash (`Ident x))
+  in
+    { s with sb_modules = Mid.change merger x s.sb_modules }
+
+let refresh_module s (x : EcIdent.t) (m : EcPath.mpath) : subst =
+  assert (EcPath.m_is_local m);
+  let merger = function
+    | None   -> Some (m, EcCoreFol.Refresh)
     | Some _ -> raise (SubstNameClash (`Ident x))
   in
     { s with sb_modules = Mid.change merger x s.sb_modules }
@@ -126,10 +135,13 @@ let subst_fun_uses (s : _subst) (u : uses) =
   EcModules.mk_uses calls reads writes
 
 (* -------------------------------------------------------------------- *)
-let subst_oracle_info (s:_subst) =
+let subst_param (s : _subst) : oi_param -> oi_param =
   let s = f_subst_of_subst s in
-  fun oi -> Fsubst.subst_oi s oi
+  fun oi -> Fsubst.subst_param s oi
 
+let subst_params (s : _subst) : oi_params -> oi_params =
+  let s = f_subst_of_subst s in
+  fun oi -> Fsubst.subst_params s oi
 
 (* -------------------------------------------------------------------- *)
 let subst_funsig (s : _subst) (funsig : funsig) =
@@ -143,16 +155,21 @@ let subst_funsig (s : _subst) (funsig : funsig) =
     fs_ret    = fs_ret; }
 
 (* -------------------------------------------------------------------- *)
-let subst_mod_restr (s : _subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (EcPath.x_subst s.s_fmp x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (s.s_fmp x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
-  let ois = EcSymbols.Msym.map (fun oi ->
-      subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
+let subst_mod_restr (s : _subst) (mr : mod_restr) : mod_restr =
+  let rx =
+    ur_app (fun set -> EcPath.Sx.fold (fun x r ->
+        EcPath.Sx.add (EcPath.x_subst s.s_fmp x) r
+      ) set EcPath.Sx.empty) mr.mr_xpaths
+  in
+  let r =
+    ur_app (fun set -> EcPath.Sm.fold (fun x r ->
+        EcPath.Sm.add (s.s_fmp x) r
+      ) set EcPath.Sm.empty) mr.mr_mpaths
+  in
+  let mr_params = subst_params s mr.mr_params in
+  let mr_cost = subst_form s mr.mr_cost in
+
+  { mr_xpaths = rx; mr_mpaths = r; mr_params; mr_cost; }
 
 (* -------------------------------------------------------------------- *)
 let rec subst_modsig_body_item (s : _subst) (item : module_sig_body_item) =
@@ -176,7 +193,7 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
               (fun (s : subst) (a, aty) ->
                 let a'   = EcIdent.fresh a in
                 let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-                  add_module s a (EcPath.mident a'), decl)
+                  refresh_module s a (EcPath.mident a'), decl)
               s.s_s comps.mis_params
           in
             fst_map _subst_of_subst aout
@@ -187,26 +204,56 @@ and subst_modsig ?params (s : _subst) (comps : module_sig) =
         List.map_fold
           (fun (s : subst) ((a, aty), a') ->
               let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-                add_module s a (EcPath.mident a'), decl)
+                refresh_module s a (EcPath.mident a'), decl)
             s.s_s (List.combine comps.mis_params params)
         in
           fst_map _subst_of_subst aout
   in
 
   let comps =
-    { mis_params = newparams;
-      mis_body   = subst_modsig_body sbody comps.mis_body;
-      mis_restr  = subst_mod_restr sbody comps.mis_restr;
-    }
+    EcModules.mk_msig_r
+      ~mis_params:newparams
+      ~mis_body:(subst_modsig_body sbody comps.mis_body)
+      ~mis_restr:(subst_mod_restr sbody comps.mis_restr)
   in
     (sbody, comps)
 
 (* -------------------------------------------------------------------- *)
-and subst_modtype (s : _subst) (modty : module_type) =
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
-    mt_name   = s.s_p modty.mt_name;
-    mt_args   = List.map s.s_fmp modty.mt_args;
-    mt_restr = subst_mod_restr s modty.mt_restr; }
+and subst_modtype
+    ?(in_me_decl = false)
+    (s     : _subst)
+    (modty : module_type)
+  : module_type
+  =
+  (* TODO A: can we improve on this ?*)
+  (* In a [ME_Decl], module parameters are binded by the enclosing
+     [module_sig] and the [module_type]. Both need to be refreshed
+     simultaneously, hence the special behavior.  *)
+  let subst_ident (id : EcIdent.t) : EcIdent.t =
+    if in_me_decl then
+      match
+        let mp, _ = Mid.find id s.s_s.sb_modules in
+        mp.m_top
+      with
+      | `Local newid   -> newid
+      | `Concrete _
+      | exception Not_found -> id
+    else id
+  in
+
+  let mt_params =
+    if in_me_decl then
+      List.map (fun (id, mt) ->
+          subst_ident id, subst_modtype s mt
+        ) modty.mt_params
+    else
+      List.map (snd_map (subst_modtype s)) modty.mt_params
+  in
+  let mt_name    = s.s_p modty.mt_name in
+  let mt_args    = List.map s.s_fmp modty.mt_args in
+  let mt_restr   = subst_mod_restr s modty.mt_restr in
+  let mt_opacity = modty.mt_opacity in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity ~mt_restr
 
 let subst_top_modsig (s : _subst) (ms: top_module_sig) =
   { tms_sig = snd (subst_modsig s ms.tms_sig);
@@ -227,7 +274,10 @@ let subst_function (s : _subst) (f : function_) =
     match f.f_def with
     | FBdef def -> FBdef (subst_function_def s def)
     | FBalias f -> FBalias (EcPath.x_subst s.s_fmp f)
-    | FBabs oi  -> FBabs (subst_oracle_info s oi) in
+    | FBabs (params, (mod_cost, symb)) ->
+      FBabs (subst_param s params, (subst_form s mod_cost, symb))
+  in
+
   { f_name = f.f_name;
     f_sig  = sig';
     f_def  = def' }
@@ -257,7 +307,7 @@ and subst_module_struct (s : _subst) (bstruct : module_structure) =
     { ms_body   = subst_module_items s bstruct.ms_body; }
 
 (* -------------------------------------------------------------------- *)
-and subst_module_body (s : _subst) (body : module_body) =
+and subst_module_body (s : _subst) (body : module_body) : module_body =
   match body with
   | ME_Alias (arity,m) ->
       ME_Alias (arity, s.s_fmp m)
@@ -265,14 +315,14 @@ and subst_module_body (s : _subst) (body : module_body) =
   | ME_Structure bstruct ->
       ME_Structure (subst_module_struct s bstruct)
 
-  | ME_Decl p -> ME_Decl (subst_modtype s p)
+  | ME_Decl p -> ME_Decl (subst_modtype ~in_me_decl:true s p)
 
 (* -------------------------------------------------------------------- *)
 and subst_module_comps (s : _subst) (comps : module_comps) =
   (subst_module_items s comps : module_comps)
 
 (* -------------------------------------------------------------------- *)
-and subst_module (s : _subst) (m : module_expr) =
+and subst_module (s : _subst) (m : module_expr) : module_expr =
   let sbody,me_params = match m.me_params with
     | [] -> (s, [])
     | _  ->
@@ -281,7 +331,7 @@ and subst_module (s : _subst) (m : module_expr) =
         (fun (s : subst) (a, aty) ->
           let a'   = EcIdent.fresh a in
           let decl = (a', subst_modtype (_subst_of_subst s) aty) in
-           add_module s a (EcPath.mident a'), decl)
+           refresh_module s a (EcPath.mident a'), decl)
         s.s_s m.me_params
       in
       fst_map _subst_of_subst aout in

@@ -60,6 +60,9 @@
     "hoare"       , HOARE      ;        (* KW: prog *)
     "choare"      , CHOARE     ;        (* KW: prog *)
     "cost"        , COST       ;        (* KW: prog *)
+    "open"        , OPEN       ;        (* KW: prog *)
+    "opaque"      , OPAQUE     ;        (* KW: prog *)
+    "intr"        , INTR       ;        (* KW: prog *)
     "phoare"      , PHOARE     ;        (* KW: prog *)
     "islossless"  , LOSSLESS   ;        (* KW: prog *)
     "async"       , ASYNC      ;        (* KW: prog *)
@@ -381,28 +384,30 @@ rule main = parse
   | "{0,1}" { [RBOOL    ] }
 
   (* punctuation *)
-  | '_'   { [UNDERSCORE] }
-  | "#<"  { [DASHLT    ] }
-  | '('   { [LPAREN    ] }
-  | ')'   { [RPAREN    ] }
-  | '{'   { [LBRACE    ] }
-  | '}'   { [RBRACE    ] }
-  | '['   { [LBRACKET  ] }
-  | ']'   { [RBRACKET  ] }
-  | ','   { [COMMA     ] }
-  | ';'   { [SEMICOLON ] }
-  | '?'   { [QUESTION  ] }
-  | "~"   { [TILD      ] }
-  | "!"   { [NOT       ] }
-  | "@"   { [AT        ] }
-  | "{|"  { [LPBRACE   ] }
-  | "|}"  { [RPBRACE   ] }
-  | "`|"  { [TICKPIPE  ] }
-  | "`{"  { [TICKBRACE ] }
-  | "`("  { [TICKPAREN ] }
-  | "<$"  { [LESAMPLE  ] }
-  | "<@"  { [LEAT      ] }
-  | ":~"  { [COLONTILD ] }
+  | '_'   { [UNDERSCORE     ] }
+  | "#<"  { [DASHLT         ] }
+  | '('   { [LPAREN         ] }
+  | ')'   { [RPAREN         ] }
+  | '{'   { [LBRACE         ] }
+  | '}'   { [RBRACE         ] }
+  | '['   { [LBRACKET       ] }
+  | ']'   { [RBRACKET       ] }
+  | ','   { [COMMA          ] }
+  | ';'   { [SEMICOLON      ] }
+  | '?'   { [QUESTION       ] }
+  | "~"   { [TILD           ] }
+  | "!"   { [NOT            ] }
+  | "@"   { [AT             ] }
+  | "{|"  { [LPBRACE        ] }
+  | "|}"  { [RPBRACE        ] }
+  | "`["  { [TICKLBRACKET   ] }
+  | "`|"  { [TICKPIPE       ] }
+  | "`{"  { [TICKBRACE      ] }
+  | "`("  { [TICKPAREN      ] }
+  | "<$"  { [LESAMPLE       ] }
+  | "<@"  { [LEAT           ] }
+  | ":~"  { [COLONTILD      ] }
+  | ".#"  { [DOTSHARP       ] }
 
   | "/~="  { [SLASHTILDEQ     ] }
   | "//~=" { [SLASHSLASHTILDEQ] }

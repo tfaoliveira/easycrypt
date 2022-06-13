@@ -1415,13 +1415,13 @@ module Mod = struct
       let pp fmt (xp, names) =
         Format.fprintf fmt "  - %a -> [%a]"
           (EcPrinting.pp_funname ppe) (xastrip xp)
-          (EcPrinting.pp_list ", " pp_symbol)
+          (EcUtils.pp_list ", " pp_symbol)
           (Ssym.elements names)
       in
 
       notify scope `Warning
         "these procedures may use uninitialized local variables:@\n@[<v>%a@]"
-        (EcPrinting.pp_list "@," pp) ur
+        (EcUtils.pp_list "@," pp) ur
     end;
 
     bind scope {tme_expr = m; tme_loca = lc}

@@ -89,9 +89,9 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
 
   let rec scheme1 p (pred, fac) ty =
     match (normty ty).ty_node with
-    | Tglob   _ -> assert false
-    | Tunivar _ -> assert false
-    | Tvar    _ -> None
+    | Tglob _ | Tunivar _ | Tmodcost _ -> assert false
+
+    | Tvar _ -> None
 
     | Ttuple tys -> begin
         let xs  = List.map (fun xty -> (fresh_id_of_ty xty, xty)) tys in

@@ -153,27 +153,33 @@ theory List_CDH.
 
     op cduniform_n : { int | 0 <= cduniform_n } as ge0_cduniform_n.
 
-    schema cost_duniform `{P} {s : group list} : 
+    schema cost_duniform `{P} {s : group list} :
        cost [P /\ size s <= n : duniform s] <= cost [P : s] + N cduniform_n.
-
-    lemma ex_reduction (cs:int) (A<:Adversary) &m :
-      choare[A.solve : true ==> 0 < size res <= n] time [N cs] =>
-      exists (B <:CDH.Adversary [solve : `{N(cduniform_n + cs)} ] {+A}),
+    hint simplify cost_duniform.
+ 
+    lemma ex_reduction (cs:cost) (A<:Adversary[solve: [cs]]) &m :
+      choare[A.solve : true ==> 0 < size res <= n] time `[: '0, A.solve : '1] =>
+      exists (B <:CDH.Adversary [open solve : [`[:N cduniform_n, A.solve: '1]] ] {+A}),
       Pr[LCDH(A).main() @ &m: res] <= n%r * Pr[CDH.CDH(B).main() @ &m: res]. 
     proof.
       move=> hcA;exists (CDH_from_LCDH(A));split; last first.
       + have /= h1 := Reduction A &m.  
         rewrite -ler_pdivr_mull; smt(lt_fromint gt0_n).
       proc => //.
-      instantiate /= h := (cost_duniform {gx, gy, x : group, s : group list} 
-                        `(true) s).
-      rnd (size s <= n).
-      + by apply: (is_int_le _ _ h).
-      call hcA; skip => />; split.
-      + move=> *; apply duniform_ll;rewrite -size_eq0 /#.
-      move: h; pose t :=
-        cost(&hr: {gx, gy, x : group, s : group list})[size s <= n : duniform s].
-      by case: t => // ? /#.
+      instantiate /= H := 
+       (cost_duniform {gx, gy, x : group, s : group list} `(true) s).
+      rnd (size s <= n) => //=.
+      + apply subcond_int => /=; apply (is_int_le _ _ H); done.
+
+      call hcA. 
+
+      move => /=.
+      skip => />; split.
+      + by move=> *; apply duniform_ll;rewrite -size_eq0 /#.
+
+      move: H; pose t :=
+        cost(&hr: {gx, gy, x : group, s : group list})[size s <= n : duniform s]. 
+      smt().
     qed.
 
   end Cost.

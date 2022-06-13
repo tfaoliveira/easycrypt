@@ -21,12 +21,17 @@ type ty = private {
 }
 
 and ty_node =
-  | Tglob   of EcPath.mpath (* The tuple of global variable of the module *)
-  | Tunivar of EcUid.uid
-  | Tvar    of EcIdent.t
-  | Ttuple  of ty list
-  | Tconstr of EcPath.path * ty list
-  | Tfun    of ty * ty
+  | Tglob    of EcPath.mpath (* The tuple of global variable of the module *)
+  | Tunivar  of EcUid.uid
+  | Tvar     of EcIdent.t
+  | Ttuple   of ty list
+  | Tconstr  of EcPath.path * ty list
+  | Tfun     of ty * ty
+  | Tmodcost of {
+      procs   : bool Msym.t;        (* procedures (bool: is the proc cost open) *)
+      oracles : Ssym.t Msym.t;      (* oracles to their procedures *)
+      name    : EcPath.path option; (* optional name, for printing *)
+    }
 
 module Mty : Map.S with type key = ty
 module Sty : Set.S with module M = Map.MakeBase(Mty)
@@ -39,13 +44,14 @@ val dump_ty : ty -> string
 val ty_equal : ty -> ty -> bool
 val ty_hash  : ty -> int
 
-val tuni    : EcUid.uid -> ty
-val tvar    : EcIdent.t -> ty
-val ttuple  : ty list -> ty
-val tconstr : EcPath.path -> ty list -> ty
-val tfun    : ty -> ty -> ty
-val tglob   : EcPath.mpath -> ty
-val tpred   : ty -> ty
+val tuni     : EcUid.uid -> ty
+val tvar     : EcIdent.t -> ty
+val ttuple   : ty list -> ty
+val tconstr  : EcPath.path -> ty list -> ty
+val tfun     : ty -> ty -> ty
+val tglob    : EcPath.mpath -> ty
+val tpred    : ty -> ty
+val tmodcost : ?name:EcPath.path -> bool Msym.t -> Ssym.t Msym.t -> ty
 
 val ty_fv_and_tvar : ty -> int Mid.t
 
@@ -53,6 +59,7 @@ val ty_fv_and_tvar : ty -> int Mid.t
 val tunit   : ty
 val tbool   : ty
 val tint    : ty
+val tcost   : ty
 val txint   : ty
 val treal   : ty
 val tdistr  : ty -> ty
@@ -295,7 +302,7 @@ val e_subst_init :
   -> (EcPath.path -> EcPath.path)
   -> (ty -> ty)
   -> (EcIdent.t list * expr) EcPath.Mp.t
-  -> EcPath.mpath EcIdent.Mid.t
+  -> (EcPath.mpath * 'info) EcIdent.Mid.t
   -> expr Mid.t
   -> e_subst
 

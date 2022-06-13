@@ -245,9 +245,9 @@ end
 
 (* -------------------------------------------------------------------- *)
 type mevmap = {
-  evm_form : form            evmap;
-  evm_mem  : EcMemory.memory evmap;
-  evm_mod  : EcPath.mpath    evmap;
+  evm_form : form                         evmap;
+  evm_mem  : EcMemory.memory              evmap;
+  evm_mod  : (EcPath.mpath * module_type) evmap;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -255,7 +255,7 @@ module MEV = struct
   type item = [
     | `Form of form
     | `Mem  of EcMemory.memory
-    | `Mod  of EcPath.mpath
+    | `Mod  of EcPath.mpath * module_type
   ]
 
   type kind = [ `Form | `Mem | `Mod ]
@@ -319,7 +319,7 @@ module MEV = struct
     let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
-    let subst = EV.fold (fun x m s -> Fsubst.f_bind_mod s x m) ev.evm_mod subst in
+    let subst = EV.fold (fun x (m,mt) s -> Fsubst.f_bind_mod s x mt m) ev.evm_mod subst in
     let seen  = ref Sid.empty in
 
     let rec for_ident x binding subst =
@@ -415,14 +415,12 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       | Flocal x, _ -> begin
           match EV.get x !ev.evm_form with
           | None ->
-            (* TODO: bug? why not failure ()?*)
               raise MatchFailure
 
           | Some `Unset ->
               let ssbj = Fsubst.f_subst subst subject in
               let ssbj = Fsubst.f_subst (MEV.assubst ue !ev) ssbj in
               if not (Mid.set_disjoint mxs ssbj.f_fv) then
-                (* TODO: bug? why not failure ()?*)
                 raise MatchFailure;
               begin
                 try  EcUnify.unify env ue ptn.f_ty subject.f_ty
@@ -576,28 +574,31 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             [hf2.bhf_pr; hf2.bhf_po; hf2.bhf_bd]
       end
 
-      | FcHoareF hf1, FcHoareF hf2 -> begin
-          let x2 = EcFol.Fsubst.subst_xpath subst hf2.chf_f in
+      | FcHoareF hf1, FcHoareF hf2 ->
+        if not (EcReduction.EqTest.for_xp env hf1.chf_f hf2.chf_f) then
+          failure ();
 
-          if not (EcReduction.EqTest.for_xp env hf1.chf_f x2) then
-            failure ();
-          let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
+        let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
+        List.iter2 (doit env (subst, mxs))
+          [hf1.chf_pr; hf1.chf_po; hf1.chf_co]
+          [hf2.chf_pr; hf2.chf_po; hf2.chf_co];
 
-          let calls2 = EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls in
 
-          EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
-              match cb1, cb2 with
-              | None, None -> assert false
-              | None, Some _ | Some _, None -> failure ()
-              | Some cb1, Some cb2 ->
-                List.iter2 (doit env (subst, mxs))
-                  [cb1.cb_cost; cb1.cb_called]
-                  [cb2.cb_cost; cb2.cb_called]
-            ) hf1.chf_co.c_calls calls2 ();
-          List.iter2 (doit env (subst, mxs))
-            [hf1.chf_pr; hf1.chf_po; hf1.chf_co.c_self]
-            [hf2.chf_pr; hf2.chf_po; hf2.chf_co.c_self];
-        end
+      | Fcost c1, Fcost c2 ->
+        doit_crecord env (subst, mxs) c1 c2
+
+      | Fmodcost mc1, Fmodcost mc2 ->
+        EcSymbols.Msym.fold2_union (fun _ pr1 pr2 () ->
+            let pr1, pr2 = match pr1, pr2 with
+              | None, _ | _, None -> failure ()
+              | Some pr1, Some pr2 -> pr1, pr2
+            in
+            doit_crecord env (subst, mxs) pr1 pr2
+          ) mc1 mc2 ()
+
+      | Fcost_proj (f1,p1), Fcost_proj (f2,p2) ->
+        if not (cost_proj_equal p1 p2) then failure ();
+        doit env (subst, mxs) f1 f2
 
       | FequivF hf1, FequivF hf2 -> begin
           if not (EcReduction.EqTest.for_xp env hf1.ef_fl hf2.ef_fl) then
@@ -676,6 +677,21 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       with LookupFailure _ -> raise MatchFailure in
     cb (odfl reduced (EcReduction.h_red_opt EcReduction.beta_red hyps reduced))
 
+  and doit_crecord env (subst,mxs) c1 c2 =
+    if c1.c_full <> c2.c_full then raise MatchFailure;
+
+    let calls2 =
+      EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) c2.c_calls
+    in
+
+    EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
+        let cb1 = EcFol.oget_c_bnd cb1 c1.c_full
+        and cb2 = EcFol.oget_c_bnd cb2 c2.c_full in
+        doit env (subst, mxs) cb1 cb2
+      ) c1.c_calls calls2 ();
+
+    doit env (subst, mxs) c1.c_self c2.c_self
+
   and doit_mem _env mxs m1 m2 =
     match EV.get m1 !ev.evm_mem with
     | None ->
@@ -725,7 +741,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
               else Fsubst.f_bind_mem subst x2 x1
             in (env, subst)
 
-        | GTmodty p1, GTmodty p2 ->
+        | GTmodty (ns1,p1), GTmodty (ns2,p2) ->
           let f_equiv f1 f2 =
             try doit env (subst, mxs) f1 f2; true with
             | MatchFailure ->
@@ -734,13 +750,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
                   (!EcEnv.pp_debug_form env) f2;
                 false in
 
-            if not (ModTy.mod_type_equiv f_equiv env p1 p2) then
+            if ns1 <> ns2 || not (ModTy.mod_type_equiv f_equiv env p1 p2) then
               raise MatchFailure;
 
             let subst =
               if   id_equal x1 x2
               then subst
-              else Fsubst.f_bind_mod subst x2 (EcPath.mident x1)
+              else Fsubst.f_refresh_mod subst x2 (EcPath.mident x1)
 
             and env = EcEnv.Mod.bind_local x1 p1 env in
 
@@ -874,20 +890,32 @@ module FPosition = struct
 
           | FcHoareF chs ->
             let subctxt = Sid.add EcFol.mhr ctxt in
+            doit pos (`WithSubCtxt [ (subctxt, chs.chf_pr);
+                                     (subctxt, chs.chf_po);
+                                     (ctxt   , chs.chf_co) ])
+
+          | Fcost c ->
             let calls =
-              List.map (fun (_,cb) -> ctxt,cb.cb_called)
-                (EcPath.Mx.bindings chs.chf_co.c_calls) in
-            doit pos (`WithSubCtxt ((subctxt, chs.chf_pr) ::
-                                    (subctxt, chs.chf_po) ::
-                                    (ctxt, chs.chf_co.c_self) ::
-                                    calls))
+              List.map (fun (_,cb) -> cb) (EcPath.Mx.bindings c.c_calls)
+            in
+            doit pos (`WithCtxt (ctxt, c.c_self :: calls))
+
+          | Fmodcost mc ->
+            let forms = EcSymbols.Msym.fold (fun _ pc forms ->
+                let calls =
+                  List.map (fun (_,cb) -> cb) (EcPath.Mx.bindings pc.c_calls)
+                in
+                pc.c_self :: (calls @ forms)
+              ) mc []
+            in
+            doit pos (`WithCtxt (ctxt, forms))
+
+          | Fcost_proj (f,_) -> doit pos (`WithCtxt (ctxt, [f]))
 
           | Fcoe coe ->
             let subctxt = Sid.add (fst coe.coe_mem) ctxt in
             doit pos (`WithSubCtxt [subctxt, coe.coe_pre])
 
-          (* TODO: A: From what I undertand, there is an error there:
-             it should be  (subctxt, hs.bhf_bd) *)
           | FbdHoareF hs ->
               let subctxt = Sid.add EcFol.mhr ctxt in
               doit pos (`WithSubCtxt ([(subctxt, hs.bhf_pr);
@@ -976,6 +1004,42 @@ module FPosition = struct
     in select ?o (test xconv) target
 
   (* ------------------------------------------------------------------ *)
+  type key = [
+    | `Pre
+    | `Post
+    | `Self
+    | `Xpath of EcPath.Mx.key
+  ]
+
+  type kforms = (key * form) list
+  (* ------------------------------------------------------------------ *)
+  let kforms_of_crecord (c : crecord) : kforms =
+    let calls =
+      List.map (fun (f,cb) -> `Xpath f, cb) (EcPath.Mx.bindings c.c_calls)
+    in
+    (`Self, c.c_self) :: calls
+
+  (* Build a cost record and return the unused elements of [kfs].
+     Keys order is not arbitrary. *)
+  let crecord_of_kforms (old_c : crecord) (kfs : kforms) : kforms * crecord =
+    let c_self, kfs =
+      match kfs with
+      | (`Self, self) :: kfs -> self, kfs
+      | _ -> assert false
+    in
+
+    let kfs', calls =
+      let rec get_xp calls kfs =
+        match kfs with
+        | (`Xpath xp, f) :: kfs -> get_xp ((xp, f) :: calls) kfs
+        | _ -> kfs, List.rev calls
+      in
+      get_xp [] kfs
+    in
+    kfs', cost_r c_self (EcPath.Mx.of_list calls) old_c.c_full
+
+
+  (* ------------------------------------------------------------------ *)
   let map (p : ptnpos) (tx : form -> form) (f : form) =
     let rec doit1 p fp =
       match p with
@@ -1031,31 +1095,41 @@ module FPosition = struct
               let (args', event') = as_seq2 (doit p [pr.pr_args; pr.pr_event]) in
               f_pr pr.pr_mem pr.pr_fun args' event'
 
+          | Fcost c ->
+            let kfs_cost = kforms_of_crecord c in
+            let sub = kdoit p kfs_cost in
+            let kfs, cost = crecord_of_kforms c sub in
+            assert (kfs = []);
+            FSmart.f_cost (fp, c) cost
+
+          | Fmodcost mc ->
+            let kfs =
+              EcSymbols.Msym.fold (fun _ pc kfs ->
+                  kforms_of_crecord pc @ kfs
+                ) mc []
+            in
+            let sub = kdoit p kfs in
+            let sub, mc' =
+              EcSymbols.Msym.fold (fun s old_pc (sub, mc') ->
+                  let sub, pc = crecord_of_kforms old_pc sub in
+                  sub, EcSymbols.Msym.add s pc mc'
+                ) mc (sub, EcSymbols.Msym.empty)
+            in
+            assert (sub = []);
+            FSmart.f_mod_cost (fp, mc, fp.f_ty) (mc', fp.f_ty)
+
           | FhoareF hf ->
               let (hf_pr, hf_po) = as_seq2 (doit p [hf.hf_pr; hf.hf_po]) in
               f_hoareF_r { hf with hf_pr; hf_po; }
 
+          | Fcost_proj (f, proj) ->
+            let f' = as_seq1 (doit p [f]) in
+            FSmart.f_cost_proj (fp, f, proj) (f', proj)
+
           | FcHoareF chf ->
-            let fkeys, calls = EcPath.Mx.bindings chf.chf_co.c_calls
-                               |> List.map (fun (f,cb) -> ((f,cb.cb_cost),
-                                                           cb.cb_called))
-                               |> List.split in
-            let sub = doit p (chf.chf_pr ::
-                              chf.chf_po ::
-                              chf.chf_co.c_self ::
-                              calls) in
-            begin match sub with
-              | chf_pr :: chf_po :: c_self :: calls ->
-                let c_calls = List.fold_left2 (fun acc (f,cb_cost) cb_called ->
-                    EcPath.Mx.change
-                      (fun old ->
-                         assert (old = None);
-                         Some (call_bound_r cb_cost cb_called)) f acc
-                  ) EcPath.Mx.empty fkeys calls in
-                let cost = cost_r c_self c_calls in
-                f_cHoareF_r { chf with chf_pr; chf_po;
-                                       chf_co = cost; }
-              | _ -> assert false end
+            let sub = doit p [chf.chf_pr; chf.chf_po; chf.chf_co] in
+            let chf_pr, chf_po, chf_co = as_seq3 sub in
+            f_cHoareF_r { chf with chf_pr; chf_po; chf_co; }
 
           | FbdHoareF hf ->
               let sub = doit p [hf.bhf_pr; hf.bhf_po; hf.bhf_bd] in
@@ -1078,17 +1152,31 @@ module FPosition = struct
           | FeagerF   _ -> raise InvalidPosition
       end
 
-    and doit ps fps =
-      match Mint.is_empty ps with
-      | true  -> fps
-      | false ->
+    (* no keys *)
+    and doit ps (fps : form list) : form list =
+      let fps = List.map (fun x -> (), x) fps in
+      List.map (fun ((), x) -> x) (kdoit ps fps)
+
+    (* with keys *)
+    and kdoit : type a.
+      ptnpos -> (a * form) list -> (a * form) list
+      =
+      fun ps fps ->
+        match Mint.is_empty ps with
+        | true  -> fps
+        | false ->
           let imin = fst (Mint.min_binding ps)
           and imax = fst (Mint.max_binding ps) in
           if imin < 0 || imax >= List.length fps then
             raise InvalidPosition;
-          let fps = List.mapi (fun i x -> (x, Mint.find_opt i ps)) fps in
-          let fps = List.map (function (f, None) -> f | (f, Some p) -> doit1 p f) fps in
-            fps
+          let fps = List.mapi (fun i (k,x) -> (k,x, Mint.find_opt i ps)) fps in
+          let fps =
+            List.map (function
+                | (k,f, None) -> k,f
+                | (k,f, Some p) -> k,doit1 p f
+              ) fps
+          in
+          fps
 
     in
       as_seq1 (doit p [f])

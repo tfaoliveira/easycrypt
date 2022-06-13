@@ -841,8 +841,6 @@ and replay_reduction
   let for1 (p, opts, rule) =
     let p = EcSubst.subst_path subst p in
 
-    (* TODO: A: schema are not replayed for now, but reduction rules can use a
-       schema. Fix this. *)
     let rule =
       obind (fun rule ->
         try

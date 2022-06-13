@@ -44,6 +44,15 @@ type pty_r =
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
   | PTglob   of pmsymbol located
+
+  | PTcost
+
+  | PTmodcost   of (psymbol * [`Closed | `Open]) list * (psymbol * psymbol) list
+  (* concrete module cost record type *)
+
+  | PTmodcost_q of pqsymbol
+  (* module cost record from a pqsymbol *)
+
 and pty = pty_r located
 
 type ptyannot_r =
@@ -148,6 +157,16 @@ and pdatatype = (psymbol * pty list) list
 and precord = (psymbol * pty) list
 
 (* -------------------------------------------------------------------- *)
+type pcost_proj =
+  | PIntr of psymbol          (* procedure *)
+  | PParam of {
+      proc    : psymbol;      (* procedure *)
+      param_m : psymbol;      (* parameter module *)
+      param_p : psymbol;      (* parameter procedure *)
+    }
+
+
+(* -------------------------------------------------------------------- *)
 type f_or_mod_ident =
   | FM_FunOrVar of pgamepath
   | FM_Mod of pmsymbol located
@@ -198,13 +217,17 @@ and pformula_r =
   | PFlsless  of pgamepath
   | PFscope   of pqsymbol * pformula
 
+  | PFcost    of pcost
+  | PFmodcost of pmodcost
+  | PFprojc   of pformula * pcost_proj
+
   | PFhoareF   of pformula * pgamepath * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
   | PFBDhoareF of pformula * pgamepath * pformula * phoarecmp * pformula
-  | PFChoareF  of pformula * pgamepath * pformula * pcost
-  | PFChoareFT of pgamepath * pcost
+  | PFChoareF  of pformula * pgamepath * pformula * pformula
+  | PFChoareFT of pgamepath * pformula
   | PFCoe      of osymbol * pmemtype option * pformula * pexpr * pty option
   | PFWP       of pgamepath * pexpr list * pformula
 
@@ -240,10 +263,13 @@ and pfrange = [
 
 and pfindex = [ `Index of int | `Match of pformula * int option]
 
-and pcost_call  = psymbol * psymbol * pformula
+and p_elc       = [`Unbounded | `Bounded of pformula]
+and pcost_call  = psymbol * psymbol * p_elc
 and pcost_calls = pcost_call list
 
-and pcost  = PC_costs of pformula * pcost_calls
+and pcost  = PC_costs of (p_elc * pcost_calls) * bool
+
+and pmodcost  = (psymbol * pcost) list
 
 (* if [pmty_mem] is [None], there are no user-supplied restriction, which is
    different from the user supplying an empty restriction.
@@ -255,13 +281,20 @@ and pmodule_type_restr =
     pmty_mem : pmod_restr option; }
 
 (* -------------------------------------------------------------------- *)
+and 'a g_inparam = { inp_in_params : bool;
+	                   inp_content   : 'a; }
+
 (* qident optionally taken in a (implicit) module parameters. *)
-and qident_inparam = { inp_in_params : bool;
-	                     inp_qident    : pqsymbol; }
+and qident_inparam = pqsymbol g_inparam
+
+(* gamepath optionally taken in a (implicit) module parameters. *)
+and gamepath_inparam = (psymbol * psymbol) g_inparam
 
 and poracles = qident_inparam list
 
-and pcompl = PCompl of pformula * (qident_inparam * pformula) list
+and pcompl = PCompl of pformula option *
+                       (gamepath_inparam * pformula option) list *
+                       bool
 
 and pmod_restr_el = {
   pmre_in    : bool;
@@ -271,8 +304,9 @@ and pmod_restr_el = {
 }
 
 and pmod_restr = {
-  pmr_mem   : pmod_restr_mem;
-	pmr_procs : pmod_restr_el list;
+  pmr_mem     : pmod_restr_mem;
+	pmr_procs   : [`Open | `Opaque] option * pmod_restr_el list;
+ (* default to Opaque *)
  }
 
 (* -------------------------------------------------------------------- *)
@@ -531,24 +565,30 @@ type pipattern =
 
 and pspattern = unit
 
-type poracles_cost = (pgamepath * psymbol option * pcost) list
+type poracle_cost = {
+  p_oracle : pgamepath;
+  p_finite : bool;
 
-(* For cost judgement with abstract calls.
-   ci_oracles : list of pairs of oracles and their costs.
-   ci_vrnts   : list of pairs of oracles and their increasing quantity. *)
-type p_abs_inv_inf = poracles_cost
+  p_param  : psymbol option;
+  (* if not finite, must be [None] *)
+  p_cost   : pformula;
+  (* if [finite], of type [tint -> tcost]. Otherwise, of type [tcost]. *)
+}
 
-type p_call_inv_info = [` Std of pcost | `CostAbs of p_abs_inv_inf ]
+(* User information for cost judgement with abstract calls. *)
+type p_abs_inv_inf = poracle_cost list
+
+type p_call_inv_info = P_Std of pformula | P_CostAbs of p_abs_inv_inf
 
 type call_info =
-  | CI_spec of (pformula * pformula * pcost option)
+  | CI_spec of (pformula * pformula * pformula option)
   | CI_inv of pformula * p_call_inv_info option
   | CI_upto of (pformula * pformula * pformula option)
 
 type p_app_xt_info =
   | PAppNone
   | PAppSingle of pformula
-  | PAppCost   of pcost
+  | PAppCost   of pformula
   | PAppMult   of (pformula option) tuple5
 
 type ('a, 'b, 'c) rnd_tac_info =
@@ -635,7 +675,7 @@ type pcond_info = [
 type while_info = {
   wh_inv  : pformula;
   wh_vrnt : pformula option;
-  wh_bds  : [`Bd of pformula pair | `Cost of pformula * pcost ] option;
+  wh_bds  : [`Bd of pformula pair | `Cost of pformula * pformula ] option;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -668,7 +708,7 @@ type fel_info = {
 type deno_ppterm   = (pformula option pair) gppterm
 type conseq_info =
   | CQI_bd of phoarecmp option * pformula
-  | CQI_c  of pcost
+  | CQI_c  of pformula
 
 type conseq_ppterm = ((pformula option pair) * (conseq_info) option) gppterm
 

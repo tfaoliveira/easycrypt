@@ -122,29 +122,31 @@ val ur_union :
   'a use_restr -> 'a use_restr -> 'a use_restr
 
 (* -------------------------------------------------------------------- *)
-(* Oracle information of a procedure [M.f]. *)
-module PreOI : sig
-  type 'a t
+(* - [oi_allowed] : list of functor parameters that can be called by [M.f].
+   - [oi_in]      : true if equality of globals is required to ensure
+     equality of result and globals (in the post). *)
+type oi_param = {
+  oi_allowed : xpath list;
+  oi_in      : bool;
+}
 
-  val hash : ('a -> int) -> 'a t -> int
-  val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+(* map from a functor `M` procedures to the procedure information *)
+type oi_params = oi_param Msym.t
 
-  val is_in : 'a t -> bool
+val params_fv : oi_params -> int EcIdent.Mid.t -> int EcIdent.Mid.t
 
-  val cost_self : 'a t -> [`Bounded of 'a | `Unbounded]
-  val cost : 'a t -> xpath -> [`Bounded of 'a | `Zero | `Unbounded]
-  val cost_calls : 'a t -> [`Bounded of 'a Mx.t | `Unbounded]
-  val costs : 'a t -> [`Bounded of 'a * 'a Mx.t | `Unbounded]
+val is_in : oi_param -> bool
 
-  val allowed : 'a t -> xpath list
-  val allowed_s : 'a t -> Sx.t
+val allowed   : oi_param -> xpath list
+val allowed_s : oi_param -> Sx.t
 
-  val mk : xpath list -> bool -> [`Bounded of 'a * 'a Mx.t | `Unbounded] -> 'a t
-  (* val change_calls : 'a t -> xpath list -> 'a t *)
-  val filter : (xpath -> bool) -> 'a t -> 'a t
-end
+val params_equal : oi_params -> oi_params -> bool
+
+val filter_param : (xpath -> bool) -> oi_param -> oi_param
 
 (* -------------------------------------------------------------------- *)
+(* ['a] will be instantiated by [EcCoreFol.form] *)
+
 type mr_xpaths = EcPath.Sx.t use_restr
 
 type mr_mpaths = EcPath.Sm.t use_restr
@@ -152,7 +154,8 @@ type mr_mpaths = EcPath.Sm.t use_restr
 type 'a p_mod_restr = {
   mr_xpaths : mr_xpaths;
   mr_mpaths : mr_mpaths;
-  mr_oinfos : 'a PreOI.t Msym.t;
+  mr_params : oi_params;
+  mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
 
 val p_mr_equal :
@@ -163,32 +166,57 @@ val p_mr_equal :
 
 val p_mr_hash : ('a -> int) -> 'a p_mod_restr -> int
 
-val has_compl_restriction : 'a p_mod_restr -> bool
-
-val mr_is_empty : 'a p_mod_restr -> bool
-
 val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
 val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
-(* An oracle in a function provided by a module parameter of a functor *)
-type 'a p_module_type = {          (* Always in eta-normal form *)
-  mt_params : (EcIdent.t * 'a p_module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : 'a p_mod_restr;
+(* Opacity tells what is the intrinsic cost of a call to an abstract module.
+   Default to [Opaque]. *)
+type mod_opacity =
+  | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
+  | Opaque                (* calling [A.f] costs `[A.f : 1] *)
+
+(* -------------------------------------------------------------------- *)
+(* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
+type 'a p_module_type = private {          (* Always in eta-expanded form *)
+  mt_params  : (EcIdent.t * 'a p_module_type) list;
+  mt_name    : EcPath.path;
+  mt_args    : EcPath.mpath list;
+  mt_restr   : 'a p_mod_restr;
+  mt_opacity : mod_opacity;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
+val _prelude_mk_mt_r :
+  check      : ('a -> bool) ->
+  mt_params  : ((EcIdent.t * 'a p_module_type) list) ->
+  mt_name    : EcPath.path ->
+  mt_args    : EcPath.mpath list ->
+  mt_restr   : 'a p_mod_restr ->
+  mt_opacity : mod_opacity ->
+  'a p_module_type
+
+(* -------------------------------------------------------------------- *)
 type module_sig_body_item = Tys_function of funsig
 
 type module_sig_body = module_sig_body_item list
 
-type 'a p_module_sig = {
+(* Private type to ensure that [mt_restr] is well-formed w.r.t. [mt_params]. *)
+type 'a p_module_sig = private {
   mis_params : (EcIdent.t * 'a p_module_type) list;
   mis_body   : module_sig_body;
   mis_restr  : 'a p_mod_restr;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_msig_r] everywhere else. *)
+val _prelude_mk_msig_r :
+  check      : ('a -> bool) ->
+  mis_params : (EcIdent.t * 'a p_module_type) list ->
+  mis_body   : module_sig_body ->
+  mis_restr  : 'a p_mod_restr ->
+  'a p_module_sig
+
+(* -------------------------------------------------------------------- *)
 type 'a p_top_module_sig = {
   tms_sig  : 'a p_module_sig;
   tms_loca : is_local;
@@ -226,7 +254,10 @@ val fd_hash  : function_def -> int
 type 'a p_function_body =
 | FBdef   of function_def
 | FBalias of xpath
-| FBabs   of 'a PreOI.t
+| FBabs   of oi_param * ('a * symbol)
+ (* In [FBabs (oi, (mc, fsymb))], the element [(mc, fsymb)]
+    represents the projection of [mc] over [fsymb].
+    - [mc] is a formula of type `Tmod_cost` *)
 
 type 'a p_function_ = {
   f_name   : symbol;
@@ -255,7 +286,7 @@ type 'a p_module_expr = {
    [List.length mp.mt_params = List.length mp.mt_args]  *)
 and 'a p_module_body =
   | ME_Alias       of int * EcPath.mpath
-  | ME_Structure   of 'a p_module_structure       (* Concrete modules. *)
+  | ME_Structure   of 'a p_module_structure    (* Concrete modules. *)
   | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
 
 and 'a p_module_structure = {

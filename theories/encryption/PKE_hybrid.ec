@@ -343,89 +343,89 @@ module B (S:Scheme) (A:AdvCPA) (LR:LR) = {
   }
 }.
 
-(* Complexity of the adversary *)
-op cA : { int | 0 <= cA } as cA_pos.
 
-type cScheme = {
-  ckg  : int;
-  cenc : int;
-  cdec : int;
-}.
-
-(* Complexity of the scheme *)
-op cs : cScheme.
-axiom cs_pos : 0 <= cs.`ckg /\ 0 <= cs.`cenc /\ 0 <= cs.`cdec.
+section. 
 
 schema cost_Hq `{P} : cost [P : H.q] = '0.
 hint simplify cost_Hq.
 
-section.
-declare module S<:Scheme [ kg : `{N cs.`ckg}, enc: `{N cs.`cenc}] {-K, -H.Count, -H.HybOrcl}.
+declare module S<:Scheme {-K, -H.Count, -H.HybOrcl}.
   (* Normaly I would like to locally
      clone Indist in the section, in that case
      restrictions at least on H.c are not needed.
      But LRB and B are used so we need to do it
    *)
 
-declare module A <: AdvCPA [main : `{N cA, #LR.orcl: H.q}] {-K,-H.Count,-H.HybOrcl,-S}.
+op cA : cost.
+
+declare module A <: AdvCPA [main : [cA, #LR.orcl: N H.q]] {-K,-H.Count,-H.HybOrcl,-S}.
 
 declare axiom La : forall (LR<:LR{-A}), islossless LR.orcl => islossless A(LR).main.
 
 local lemma cost_AL : 
    choare [A(OrclL(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q] 
-   time [N (H.q * cincr H.q);
-         A.main : 1;
-         S.enc  : H.q].
+   time `[       : N (H.q * cincr H.q),
+          A.main : N 1,
+          S.enc  : N H.q].
 proof.
-  proc (H.Count.c = k) :
-       time [ OrclL(ToOrcl(S)).orcl k : [N (cincr H.q); S.enc : 1] ] => //.
-  + by move => />; rewrite !bigi_constz 1..2:#smt:(H.q_ge0).
+  proc (H.Count.c = k) 
+       : [ OrclL(ToOrcl(S)).orcl k : `[:N (cincr H.q), S.enc : N 1] ] => //=. 
+  + rewrite !bigi_constz // 1..2:#smt:(H.q_ge0).
   move=> zo hzo; proc; inline *. 
-  wp := (`|H.Count.c| <= H.q); call (: true); auto => &hr />.
-  smt (cs_pos).
+  wp := (`|H.Count.c| <= H.q); call (: true); auto => &hr /> /#. 
 qed.
 
-local lemma AL_bound : hoare [A(OrclL(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q].
+local lemma AL_bound : 
+  hoare [A(OrclL(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q].
 proof. by conseq cost_AL. qed.
 
 local lemma cost_AR : 
    choare [A(OrclR(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q] 
-   time [N (H.q * cincr H.q);
-         A.main : 1;
-         S.enc  : H.q].
+   time `[       : N (H.q * cincr H.q),
+          A.main : N 1,
+          S.enc  : N H.q].
 proof.
-  proc (H.Count.c = k) : time
-       [ OrclR(ToOrcl(S)).orcl k : [N (cincr H.q); S.enc : 1] ] => //.
-  + by move => />; rewrite !bigi_constz 1..2:#smt:(H.q_ge0).
-  move=> zo hzo; proc; inline *; wp; call(:true); wp:=(`|H.Count.c| <= H.q); skip => &hr />.
-  smt(cs_pos).
+  proc (H.Count.c = k) 
+       : [ OrclR(ToOrcl(S)).orcl k : `[: N (cincr H.q), S.enc : N 1] ] => //=.
+  + by move => />; rewrite !bigi_constz // 1..2:#smt:(H.q_ge0).
+  move=> zo hzo; proc; inline *.
+  wp; call(:true); wp:=(`|H.Count.c| <= H.q); skip => &hr /> /#.
 qed.
 
-local lemma AR_bound : hoare [A(OrclR(ToOrcl(S))).main : H.Count.c = 0 ==> H.Count.c <= H.q].
+local lemma AR_bound : hoare [A(OrclR(ToOrcl(S))).main : 
+  H.Count.c = 0 ==> H.Count.c <= H.q].
 proof. by conseq cost_AR. qed.
 
 local lemma cost_AHL : 
-   choare [A(HybOrcl2(ToOrcl(S), OrclL(ToOrcl(S)))).main : 
-       0 <= H.HybOrcl.l0 <= H.q /\ H.HybOrcl.l = 0 /\ H.Count.c = 0 ==> 
-       H.HybOrcl.l <= H.q /\ H.Count.c <= 1 ]
-    time [N (H.q * (cincr H.q + cincr 1 + cltint H.q + ceqint H.q)); S.enc : H.q; A.main : 1].
+  choare [A(HybOrcl2(ToOrcl(S), OrclL(ToOrcl(S)))).main : 
+          0 <= H.HybOrcl.l0 <= H.q /\ H.HybOrcl.l = 0 /\ H.Count.c = 0 ==> 
+          H.HybOrcl.l <= H.q /\ H.Count.c <= 1 ]
+  time `[       : N (H.q * (cincr H.q + cincr 1 + cltint H.q + ceqint H.q)),
+         S.enc  : N H.q,
+         A.main : N 1].
 proof.
   proc 
-    (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ H.Count.c = if H.HybOrcl.l <= H.HybOrcl.l0 then 0 else 1):
-    time
-    [ HybOrcl2(ToOrcl(S), OrclL(ToOrcl(S))).orcl k : [N(cincr H.q + cincr 1 + cltint H.q + ceqint H.q); S.enc : 1] ] => //=.
-  + by rewrite !bigi_constz 1,2:#smt:(H.q_ge0).
+    (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ 
+     H.Count.c = if H.HybOrcl.l <= H.HybOrcl.l0 then 0 else 1) :
+       [ HybOrcl2(ToOrcl(S), OrclL(ToOrcl(S))).orcl k : 
+         `[      : N (cincr H.q + cincr 1 + cltint H.q + ceqint H.q), 
+           S.enc : N 1] 
+       ] => //=.
+  + by rewrite !bigi_constz // 1..2:#smt:(H.q_ge0).
   + by move=> &hr /> ->.
   + by move=> /> /#.
   move=> zo hzo; proc; inline *.
   wp := (`|H.HybOrcl.l| <= H.q).
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //. smt().
-  + wp; call (:true; time []); auto => &hr />.
-  smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
-  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //. 
-  + wp := (`|H.Count.c| <= 1); call (:true; time []); auto => &hr />.
-    smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
-  by wp; call (:true; time []); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
+  
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 1: smt().
+  + wp; call (:true); auto => &hr />.
+    smt (ge0_cincr ge0_cltint ge0_ceqint).
+  
+  if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //.
+  + wp := (`|H.Count.c| <= 1).
+    call (:true); auto => &hr />.
+    smt (ge0_cincr ge0_cltint ge0_ceqint).
+  by wp; call (:true); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint).
 qed.
 
 local lemma AHL_bound :  
@@ -436,24 +436,29 @@ proof. by conseq cost_AHL. qed.
 
 local lemma cost_AHR : 
    choare [A(HybOrcl2(ToOrcl(S), OrclR(ToOrcl(S)))).main : 
-       0 <= H.HybOrcl.l0 <= H.q /\ H.HybOrcl.l = 0 /\ H.Count.c = 0 ==> 
-       H.HybOrcl.l <= H.q /\ H.Count.c <= 1 ]
-    time [N (H.q * (cincr H.q + cincr 1 + cltint H.q + ceqint H.q)); S.enc : H.q; A.main : 1].
+           0 <= H.HybOrcl.l0 <= H.q /\ H.HybOrcl.l = 0 /\ H.Count.c = 0 ==> 
+           H.HybOrcl.l <= H.q /\ H.Count.c <= 1 ]
+   time `[       : N (H.q * (cincr H.q + cincr 1 + cltint H.q + ceqint H.q)),
+          S.enc  : N H.q,
+          A.main : N 1].
 proof.
   proc 
-    (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ H.Count.c = if H.HybOrcl.l <= H.HybOrcl.l0 then 0 else 1): time
-    [ HybOrcl2(ToOrcl(S), OrclR(ToOrcl(S))).orcl k : [N (cincr H.q + cincr 1 + cltint H.q + ceqint H.q); S.enc : 1] ] => //=.
-  + by rewrite !bigi_constz 1,2:#smt:(H.q_ge0).
+    (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ 
+     H.Count.c = if H.HybOrcl.l <= H.HybOrcl.l0 then 0 else 1) : 
+    [ HybOrcl2(ToOrcl(S), OrclR(ToOrcl(S))).orcl k :
+      `[      : N (cincr H.q + cincr 1 + cltint H.q + ceqint H.q),
+        S.enc : N 1]] => //=.
+  + by rewrite !bigi_constz // 1..2:#smt:(H.q_ge0).
   + by move=> &hr /> ->.
   + by move=> /> /#.
   move=> zo hzo; proc; inline *.
   wp := (`|H.HybOrcl.l| <= H.q).
   if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q)=> //; 1: smt().
-  + wp; call (:true; time []); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
+  + wp; call (:true); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint).
   if := (`| H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q)=> //.
-  + wp; call (:true; time []); wp := (`|H.Count.c| <= 1); skip => &hr />.
-    smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
-  by wp; call (:true; time []); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint cs_pos).
+  + wp; call (:true); wp := (`|H.Count.c| <= 1); skip => &hr />.
+    smt (ge0_cincr ge0_cltint ge0_ceqint).
+  by wp; call (:true); auto => &hr />; smt (ge0_cincr ge0_cltint ge0_ceqint).
 qed.
 
 local lemma AHR_bound :  
@@ -486,11 +491,11 @@ proof.
       by proc;inline ToOrcl(S).orcl H.Count.incr;wp;call (_:true);wp.
     by wp;call (_:true);wp.
   have := IND1_INDn (ToOrcl(S)) (ToAdv(A)) _ _ _ q_gt0 &m (fun ga go c, true) => //=.
-  + have h : choare [ToOrcl(S).leaks : true ==> true] time ['0; S.kg:1].
-    + by proc; call (_:true); skip => /=; smt(cs_pos).
-    conseq h.
-  + have h : choare [ToOrcl(S).orcl : true ==> true] time ['0; S.enc:1].
-    + by proc; call (_:true); skip => /=; smt(cs_pos).
+  + have h : choare [ToOrcl(S).leaks : true ==> true] time `[: '0, S.kg : '1].
+    + by proc; call (_:true); skip => /=; smt().
+    by conseq h.
+  + have h : choare [ToOrcl(S).orcl : true ==> true] time `[: '0, S.enc: '1].
+    + by proc; call (_:true); skip => /=; smt().
     conseq h.
     move=> O LR Llr Ll Lo;proc;call (La LR _) => //.
     by call Ll.
@@ -579,43 +584,46 @@ proof.
 qed.
 
 lemma ex_CPA1_CPAn &m : 
-  exists (B <: AdvCPA {+A,+H.HybOrcl, +K, +S}),
-    (forall (clr:int) (MLR<:LR [orcl: `{N clr}] {-H.HybOrcl}),          
-       choare[B(MLR).main : true ==> true] time
-                [ N (H.q * (cincr H.q + ceqint H.q + cltint H.q) + cdinterval H.q);
-                  S.enc: (H.q - 1);
-                  A.main : 1;
-                  MLR.orcl : 1]) /\
+  exists (B <: AdvCPA [open] {+A,+H.HybOrcl, +K, +S}),
+    (forall (clr:cost) (MLR<:LR [orcl: [clr]] {-H.HybOrcl}), 
+       choare[B(MLR).main : true ==> true] 
+       time `[          : N (H.q * (cincr H.q + ceqint H.q + cltint H.q) + 
+                          cdinterval H.q),
+               S.enc    : N (H.q - 1),
+               A.main   : '1,
+               MLR.orcl : '1]) /\
     Pr[CPAL(S,A).main() @ &m : res] - Pr[CPAR(S,A).main() @ &m : res] =
     H.q%r * (Pr[CPAL(S,B).main() @ &m : res] - Pr[CPAR(S,B).main() @ &m : res]).
 proof.
   exists (B(S,A)); split; last by have -> := CPA1_CPAn &m; field; smt (q_gt0).
   move=> clr MLR.
   proc. 
-  seq 2 : (H.HybOrcl.l =0 /\ 0 <= H.HybOrcl.l0 < H.q) time [ N (H.q * (cincr H.q + ceqint H.q + cltint H.q));
-                                                             S.enc : (H.q - 1);
-                                                             A.main : 1;
-                                                             MLR.orcl : 1] => //.
+  seq 2 : (H.HybOrcl.l =0 /\ 0 <= H.HybOrcl.l0 < H.q)
+          time `[         : N (H.q * (cincr H.q + ceqint H.q + cltint H.q)),
+                 S.enc    : N (H.q - 1),
+                 A.main   : '1,
+                 MLR.orcl : '1] => //=.
   + wp. 
     instantiate /(_ H.q) /= h := (cost_dinterval {b' : bool, pk : pkey} 0 H.q).
-    rnd (0 <= H.q <= H.q - 0); 1: by rewrite h.
+    rnd (0 <= H.q <= H.q - 0). 
     skip => &hr />.
     rewrite h /=.
     smt (DInterval.supp_dinter DInterval.dinter_ll q_gt0).
   exlim H.HybOrcl.l0 => l0. 
-  call (: (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ l0 = H.HybOrcl.l0); time 
-    [ HybOrcl2(ToOrcl(S), MLR).orcl k : [N (cincr H.q + ceqint H.q + cltint H.q); 
-                                           S.enc : b2i (k <> l0); MLR.orcl : b2i(k=l0)] ]) => //=.
+  call (: (H.HybOrcl.l = k /\ 0 <= H.HybOrcl.l0 <= H.q /\ l0 = H.HybOrcl.l0) : 
+       [ HybOrcl2(ToOrcl(S), MLR).orcl k : 
+        `[         : N (cincr H.q + ceqint H.q + cltint H.q),
+          S.enc    : N (b2i (k <> l0)),
+          MLR.orcl : N (b2i(k=l0))]]) => //=.
   + move=> zo hzo; proc; inline *; wp := (`|H.HybOrcl.l| <= H.q).
     if := (`|H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //; 1: smt().
-    + by wp; call (:true; time []); auto => &hr />; smt (ge0_ceqint). 
+    + by wp; call (:true); auto => &hr />; smt (ge0_ceqint). 
     if := (`|H.HybOrcl.l0| <= H.q /\ `|H.HybOrcl.l| <= H.q) => //. 
-    + wp; call(:true; time []); auto => &hr /> /#.
-    by wp; call (:true; time []); auto => &hr /> /#. 
-  rewrite /=.
-  skip => &hr />; move: (H.HybOrcl.l0{hr}) => {l0}l0 h0 hq .
-  rewrite bigi_constz 1:#smt:(q_gt0) /=.
-  rewrite !big_b2i !(bigi_b2i_split l0 0 H.q) 1,2:// /b2i /=.
+    + wp; call(:true); auto => &hr /> /#.
+    by wp; call (:true); auto => &hr /> /#. 
+  skip => &hr />; move: (H.HybOrcl.l0{hr}) => {l0}l0 h0 hq . 
+  rewrite bigi_constz 1:#smt:(q_gt0) /=. 
+  rewrite !big_morph_N /= !big_b2i !(bigi_b2i_split l0 0 H.q) 1,2:// /b2i /=.
   rewrite !(bigi_inP _ _ (fun (k : int) => k <> l0)) 1,2:/# !bigi_constz 1:// 1:/#.
   by rewrite !bigi1 /= /#.
 qed.

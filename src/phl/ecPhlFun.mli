@@ -19,13 +19,18 @@ val subst_pre :
 (* -------------------------------------------------------------------- *)
 type p_upto_info = pformula * pformula * (pformula option)
 
-type abs_inv_inf = (EcPath.xpath * EcParsetree.ptybinding * EcFol.cost) list
+(* invariant information provided by the user, used to apply the rule *)
+type abs_inv_el = {
+  oracle : xpath; (* Oracle *)
+  finite : bool;  (* number of calls to the oracle is finite *)
+  cost   : form;
+  (* Cost of an oracle call.
+     If [finite], of type [tint -> tcost].
+     Otherwise, of type [tcost]. *)
+}
 
-val process_p_abs_inv_inf :
-  EcCoreGoal.tcenv1 ->
-  EcEnv.LDecl.hyps ->
-  p_abs_inv_inf ->
-  abs_inv_inf
+(* abstract call rull invariant information *)
+type abs_inv_inf = abs_inv_el list
 
 val process_inv_pabs_inv_finfo:
   EcCoreGoal.tcenv1 ->
@@ -33,10 +38,9 @@ val process_inv_pabs_inv_finfo:
   p_abs_inv_inf ->
   form * abs_inv_inf
 
-type inv_inf =  [
-  | `Std     of cost
-  | `CostAbs of abs_inv_inf
-]
+type inv_inf =
+  | Std     of form
+  | CostAbs of abs_inv_inf
 
 val process_fun_def       : FApi.backward
 val process_fun_abs       : pformula -> p_abs_inv_inf option -> FApi.backward
@@ -52,7 +56,7 @@ module FunAbsLow : sig
 
   val choareF_abs_spec :
        proofenv -> EcEnv.env -> xpath -> form -> abs_inv_inf
-    -> form * form * cost * form list
+    -> form * form * form * form list
 
   val bdhoareF_abs_spec :
        proofenv -> EcEnv.env -> xpath -> form

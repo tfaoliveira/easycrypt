@@ -54,14 +54,14 @@ let rec callable_oracles_f env modv os f =
   | FBalias _ ->
       assert false (* normal form *)
 
-  | FBabs oi ->
+  | FBabs (oi, _) ->
     let called_fs =
       List.fold_left
         (fun s o ->
            if   PV.indep env modv (f_write env o)
            then s
            else EcPath.Sx.add o s)
-        EcPath.Sx.empty (OI.allowed oi)
+        EcPath.Sx.empty (allowed oi)
     in
 
     List.fold_left

@@ -36,25 +36,39 @@ end = struct
 
     let pp_type fmt ty = EcPrinting.pp_type ppe0 fmt ty in
 
-    let pp_cost ppe fmt c =
-        EcPrinting.pp_form ppe fmt c in
+    let pp_diff_cost ppe fmt proc info =
+      let mode, ic, oc = match info with
+        | `Eq  (ic,oc) -> `Eq, ic, oc
+        | `Sub (ic,oc) -> `Sub, ic, oc
+      in
+      (* tries to project [ic] and [oc] over [proc].
+         if the projection failes, we print the full module cost *)
+      match ic.EcFol.f_node, oc.EcFol.f_node with
+      | Fmodcost imc, Fmodcost omc ->
+        let ipc, opc = Msym.find proc imc, Msym.find proc omc in
+        Format.fprintf fmt
+          "@[<v>   \
+           @[%a@]@; \
+           cannot be shown to be %s:\
+           @;   \
+           @[%a@]@]"
+          (EcPrinting.pp_proc_cost ppe) ipc
+          (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
+          (EcPrinting.pp_proc_cost ppe) opc
 
-    let pp_self ppe mode fmt (iself,oself) =
-      Format.fprintf fmt
-        "@[<v>self cost:@;  @[%a@]@; cannot be shown \
-         to be %s:@;  @[%a@]@]"
-        (pp_cost ppe) iself
-        (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oself in
-
-    let pp_diff ppe mode fmt (f,(ic,oc)) =
-      Format.fprintf fmt
-        "@[<v>the maximal number of calls to %a:@;  @[%a@]@; cannot be shown \
-         to be %s:@;  @[%a@]@]"
-        (EcPrinting.pp_funname ppe) f
-        (pp_cost ppe) ic
-        (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
-        (pp_cost ppe) oc in
+      | _ ->
+        Format.fprintf fmt
+          "@[<v>   \
+           @[%a.%s@]@; \
+           cannot be shown to be %s:\
+           @;   \
+           @[%a.%s@]@]"
+          (EcPrinting.pp_form ppe) ic
+          proc
+          (match mode with `Eq -> "equal to" | `Sub -> "upper-bounded by")
+          (EcPrinting.pp_form ppe) oc
+          proc
+    in
 
     match error with
     | MF_targs (ex, got) ->
@@ -68,7 +82,7 @@ end = struct
     | MF_restr (env, `Sub sx) ->
         let ppe = EcPrinting.PPEnv.ofenv env in
         msg "the function is not allowed to use %a"
-          (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+          (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
           (Sx.ntr_elements sx)
 
     | MF_restr (env, `Eq (ex, got)) ->
@@ -79,46 +93,17 @@ end = struct
 
         if has_allowed then
           msg "the function should be allowed to use %a"
-            (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+            (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements allowed);
         if not (Sx.is_empty notallowed) then
           msg "%sthe function is not allowed to use %a"
             (if has_allowed then ",@ " else "")
-            (EcPrinting.pp_list " or@ " (EcPrinting.pp_funname ppe))
+            (EcUtils.pp_list " or@ " (EcPrinting.pp_funname ppe))
             (Sx.ntr_elements notallowed)
 
-    | MF_compl (env, `Sub (self,diffs)) ->
+    | MF_compl (env, proc, info) ->
       let ppe = EcPrinting.PPEnv.ofenv env in
-      let pp_self_sep fmt = function
-        | None -> ()
-        | Some self ->
-          if Mx.is_empty diffs then
-            pp_self ppe `Sub fmt self
-          else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Sub) self in
-      Format.fprintf fmt "@[<v>%a%a@]"
-        pp_self_sep self
-        (EcPrinting.pp_list "@;" (pp_diff ppe `Sub))
-        (Mx.bindings diffs)
-
-    | MF_compl (env, `Eq (self,diffs)) ->
-      let ppe = EcPrinting.PPEnv.ofenv env in
-      let pp_self_sep fmt = function
-        | None -> ()
-        | Some self ->
-          if Mx.is_empty diffs then
-            pp_self ppe `Sub fmt self
-          else
-            Format.fprintf fmt "%a@;" (pp_self ppe `Eq) self in
-
-      Format.fprintf fmt "@[<v>%a%a@]"
-        pp_self_sep self
-        (EcPrinting.pp_list "@;" (pp_diff ppe `Eq))
-        (Mx.bindings diffs)
-
-    | MF_unbounded ->
-      msg "the function does not satisfy the required complexity restriction \
-          (at least, it cannot be infered from its type)"
+      pp_diff_cost ppe fmt proc info
 
   let pp_restr_err_aux env fmt error =
     let msg x = Format.fprintf fmt x in
@@ -134,58 +119,58 @@ end = struct
     match error with
     | `Sub (xs,ms) when Sm.is_empty ms ->
       msg "is not allowed to use the variable(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
 
     | `Sub (xs,ms) when Sx.is_empty xs ->
       msg "is not allowed to use the modules(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ms)
 
     | `Sub (xs,ms) ->
       msg "is not allowed to use the variable(s)@ %a@ \
            and the module(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
 
     | `RevSub None ->
       msg "must be unrestricted"
 
     | `RevSub (Some (xs,ms)) when Sm.is_empty ms ->
       msg "must be allowed to use the variable(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
 
     | `RevSub (Some (xs,ms)) when Sx.is_empty xs ->
       msg "must be allowed to use the modules(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ms)
 
     | `RevSub (Some (xs,ms)) ->
       msg "must be allowed to use the variable(s)@ %a@ \
            and the module(s)@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xs)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ms)
 
     | `Eq (xl,ml,xr,mr) when Sm.is_empty ml && Sm.is_empty mr ->
       msg "the memory restriction@ %a@ \
            is not compatible with the memory restriction@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
 
     | `Eq (xl,ml,xr,mr) when Sx.is_empty xl && Sx.is_empty xr ->
       msg "the memory module restriction@ %a@ \
            is not compatible with the memory module restriction@ %a"
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements ml)
-        (EcPrinting.pp_list " and@ " pp_m)
+        (EcUtils.pp_list " and@ " pp_m)
         (Sm.ntr_elements mr)
 
     | `Eq (xl,ml,xr,mr) ->
       msg "the memory restriction@ %a@ %a@ \
            is not compatible with the memory restriction@ %a@ %a"
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements ml)
-        (EcPrinting.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
-        (EcPrinting.pp_list " and@ " pp_m) (Sm.ntr_elements mr)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xl)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements ml)
+        (EcUtils.pp_list " and@ " pp_v) (Sx.ntr_elements xr)
+        (EcUtils.pp_list " and@ " pp_m) (Sm.ntr_elements mr)
 
     | `FunCanCallUnboundedOracle (fn,o) ->
       msg "proof obligation cannot be met, because procedure \
@@ -212,7 +197,7 @@ end = struct
         x (pp_restr_err_aux env) restr_err
 
     | E_TyModCnv_MismatchFunSig (x,err) ->
-      msg "@[<hov 2>procedure `%s' is not compatible:@ %a@]"
+      msg "procedure `%s' is not compatible:@ %a"
         x (pp_mismatch_funsig env) err
 
     | E_TyModCnv_SubTypeArg(x,t1,t2,err) ->
@@ -222,6 +207,16 @@ end = struct
         (EcPrinting.pp_modtype ppe) t1
         (EcPrinting.pp_modtype ppe) t2
         (pp_cnv_failure env) err
+
+    | E_TyModCnv_AlreadyComplRestr ->
+      msg "module already has a complexity restriction: \
+           do not know how to merge them"
+
+    | E_TyModCnv_NotACostVector f ->
+      let ppe = EcPrinting.PPEnv.ofenv env in
+      msg "cannot build complexity proof obligation: \
+           %a is not an explicit cost record"
+        (EcPrinting.pp_form ppe) f
 
   let pp_modappl_error env fmt error =
     let msg x = Format.fprintf fmt x in
@@ -423,7 +418,7 @@ end = struct
           | _  ->
             Format.fprintf fmt "%a <%a>"
               EcPrinting.pp_path op
-              (EcPrinting.pp_list ",@ " pp_type) inst
+              (EcUtils.pp_list ",@ " pp_type) inst
           end;
 
           let myuvars = List.map EcTypes.Tuni.univars inst in
@@ -499,6 +494,10 @@ end = struct
     | InvalidModSig (MTS_DupArgName (f, x)) ->
         msg "duplicated proc. arg. name in signature: `%s.%s'" f x
 
+    | InvalidModSig (MTS_NotAnOracle xp_l) ->
+        msg "not a functor parameter: %a"
+          (EcUtils.pp_list " " (EcPrinting.pp_funname env) ) xp_l
+
     | InvalidMem (name, MAE_IsConcrete) ->
         msg "the memory %s must be abstract" name
 
@@ -570,6 +569,15 @@ end = struct
         msg "the right-hand side of this assignment cannot be typed as an expression;
              if you meant to call procedure `%a', assign its result using `<@' rather than `<-'"
             pp_qsymbol q
+
+    | NotModCost ->
+      msg "not a module cost (maybe add explicit type annotations)"
+
+    | CostProjUnknownProc p ->
+      msg "unknown procedure projection: %s" p
+
+    | CostProjUnknownOracle (o,f) ->
+      msg "unknown oracle projection: %s.%s" o f
 
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
@@ -787,6 +795,8 @@ end = struct
     | AE_CannotInferMod  -> msg "%s" "cannot infer module arguments"
     | AE_NotFunctional   -> msg "%s" "too many argument"
 
+    | AE_InvalidModNameSpace -> msg "%s" "cannot module namespace"
+
     | AE_InvalidArgForm (IAF_Mismatch (src, dst)) ->
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
        let dst = Tuni.offun (EcUnify.UniEnv.assubst ue) dst in
@@ -925,7 +935,7 @@ let pp_error_clear fmt err =
   | `ClearInGoal xs ->
       Format.fprintf fmt
         "cannot clear %a that is/are used in the conclusion"
-        (EcPrinting.pp_list ",@ " pp_id) xs
+        (EcUtils.pp_list ",@ " pp_id) xs
   | `ClearDep (x, y) ->
       Format.fprintf fmt
         "cannot clear %a that is used in %a"

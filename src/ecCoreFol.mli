@@ -1,5 +1,6 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
+open EcSymbols
 open EcBigInt
 open EcPath
 open EcMaps
@@ -21,9 +22,26 @@ type quantif =
 
 type hoarecmp = FHle | FHeq | FHge
 
+(* projection of a cost record or module cost record *)
+type cost_proj =
+  | Intr  of symbol               (* procedure *)
+  | Param of {
+      proc    : symbol;           (* procedure *)
+      param_m : symbol;           (* parameter module *)
+      param_p : symbol;           (* parameter procedure *)
+    }
+
+val cost_proj_equal : cost_proj -> cost_proj -> bool
+
+(** module namespace *)
+type mod_ns =
+  | Any                   (* any name *)
+  | Fresh                 (* fresh name w.r.t. the environment *)
+
+(* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty
-  | GTmodty of module_type
+  | GTmodty of mod_ns * module_type
   | GTmem   of EcMemory.memtype
 
 and binding  = (EcIdent.t * gty)
@@ -49,6 +67,12 @@ and f_node =
   | Fapp    of form * form list
   | Ftuple  of form list
   | Fproj   of form * int
+
+  | Fcost      of cost
+  | Fmodcost   of mod_cost
+  | Fcost_proj of form * cost_proj
+  (* [Fmodcost_proj mod_cost p] projects [mod_cost] over
+     procedure [proc] and [p]. *)
 
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
@@ -103,13 +127,14 @@ and sHoareS = {
   hs_m  : EcMemory.memenv;
   hs_pr : form;
   hs_s  : stmt;
-  hs_po : form; }
+  hs_po : form;
+}
 
 and cHoareF = {
   chf_pr : form;
   chf_f  : EcPath.xpath;
   chf_po : form;
-  chf_co : cost;
+  chf_co : form; (* type `cost` *)
 }
 
 and cHoareS = {
@@ -117,7 +142,8 @@ and cHoareS = {
   chs_pr : form;
   chs_s  : stmt;
   chs_po : form;
-  chs_co : cost; }
+  chs_co : form; (* type `cost` *)
+}
 
 and bdHoareF = {
   bhf_pr  : form;
@@ -150,34 +176,40 @@ and pr = {
 }
 
 
-(* Invariant: keys of c_calls are functions of local modules,
-   with no arguments. *)
-and cost = private {
-  c_self  : form;
-  c_calls : call_bound EcPath.Mx.t;
+(* A cost record, used in both CHoares and in procedure cost restrictions.
+   Keys of [c_calls] are functions of local modules, with no arguments.
+   Missing entries in [c_calls] are:
+   - any number of times in if [full] is [false]
+   - zero times if [full] is [true] *)
+and crecord = private {
+  c_self  : form;              (* type [txint] for [cost],
+                                  type [tcost] for [proc_cost] *)
+  c_calls : form EcPath.Mx.t;  (* type [xint] *)
+  c_full  : bool;
 }
 
-(* Call with cost at most [cb_cost], called at mist [cb_called].
-   [cb_cost] is here to properly handle substsitution when instantiating an
-   abstract module by a concrete one. *)
-and call_bound = private {
-  cb_cost  : form;
-  cb_called : form;
-}
+and cost = crecord
+
+(* A module procedure `F.f` cost, where `F` can be an non-applied functor.
+   The cost is split between:
+   - intrinsic cost [c_self], of type [tcost]
+   - the number of calls [c_calls] to the parameters of `F` *)
+and proc_cost = crecord
+
+(* A module `F` cost, where `F` can be an non-applied functor.
+   All declared procedures of `F` must appear. *)
+and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
+
+and module_sig = form p_module_sig
 
 type mod_restr = form p_mod_restr
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
-val gtmodty : module_type -> gty
+val gtmodty : mod_ns -> module_type -> gty
 val gtmem   : EcMemory.memtype -> gty
-
-(* -------------------------------------------------------------------- *)
-val as_gtty  : gty -> EcTypes.ty
-val as_modty : gty -> module_type
-val as_mem   : gty -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val gty_equal : gty -> gty -> bool
@@ -210,13 +242,21 @@ val f_node  : form -> f_node
 (* not recursive *)
 val f_map  : (EcTypes.ty -> EcTypes.ty) -> (form -> form) -> form -> form
 val f_iter : (form -> unit) -> form -> unit
-val form_exists: (form -> bool) -> form -> bool
-val form_forall: (form -> bool) -> form -> bool
+
+(* -------------------------------------------------------------------- *)
+(* not recursive *)
+val cost_iter : (form -> unit)     -> cost       -> unit
+val cost_map  : (form -> form)     -> cost       -> cost
+val cost_fold : (form -> 'a -> 'a) -> cost -> 'a -> 'a
+
+val proc_cost_iter : (form -> unit)     -> proc_cost       -> unit
+val proc_cost_map  : (form -> form)     -> proc_cost       -> proc_cost
+val proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
 val gty_as_mem : gty -> EcMemory.memtype
-val gty_as_mod : gty -> module_type
+val gty_as_mod : gty -> mod_ns * module_type
 val kind_of_gty: gty -> [`Form | `Mem | `Mod]
 
 (* soft-constructors - common leaves *)
@@ -242,6 +282,16 @@ val f_lambda : bindings -> form -> form
 
 val f_forall_mems : (EcIdent.t * memtype) list -> form -> form
 
+(* soft-constructors - cost hoare *)
+val cost_r   : form -> form EcPath.Mx.t -> bool -> cost
+val f_cost_r : cost -> form
+
+val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
+
+val f_mod_cost_r : mod_cost -> form
+
+val f_cost_proj_r : form -> cost_proj -> form
+
 (* soft-constructors - hoare *)
 val f_hoareF_r : sHoareF -> form
 val f_hoareS_r : sHoareS -> form
@@ -249,15 +299,11 @@ val f_hoareS_r : sHoareS -> form
 val f_hoareF : form -> xpath -> form -> form
 val f_hoareS : memenv -> form -> stmt -> form -> form
 
-(* soft-constructors - cost hoare *)
-val cost_r : form -> call_bound EcPath.Mx.t -> cost
-val call_bound_r : form -> form -> call_bound
-
 val f_cHoareF_r : cHoareF -> form
 val f_cHoareS_r : cHoareS -> form
 
-val f_cHoareF : form -> xpath -> form -> cost -> form
-val f_cHoareS : memenv -> form -> stmt -> form -> cost -> form
+val f_cHoareF : form -> xpath -> form -> form -> form
+val f_cHoareS : memenv -> form -> stmt -> form -> form -> form
 
 (* soft-constructors - bd hoare *)
 val hoarecmp_opp : hoarecmp -> hoarecmp
@@ -337,10 +383,47 @@ val f_int_opp   : form -> form
 val f_int_mul   : form -> form -> form
 val f_int_pow   : form -> form -> form
 val f_int_edivz : form -> form -> form
+val f_int_max   : form -> form -> form
+
+(* -------------------------------------------------------------------- *)
+val fop_cost_opp    : form
+val fop_cost_add    : form
+val fop_cost_scale  : form
+val fop_cost_xscale : form
+val fop_cost_le     : form
+val fop_cost_lt     : form
+
+val f_cost_zero    : form
+val f_cost_inf     : form
+val f_cost_inf0    : form
+val f_cost_opp     : form -> form
+val f_cost_add     : form -> form -> form
+val f_cost_scale   : form -> form -> form
+val f_cost_xscale  : form -> form -> form
+val f_cost_le      : form -> form -> form
+val f_cost_lt      : form -> form -> form
+val f_cost_subcond : form -> form -> form
+val f_cost_is_int  : form -> form
+
+(* -------------------------------------------------------------------- *)
+val f_bigcost : form -> form -> form -> form
+val f_bigx    : form -> form -> form -> form
+val f_big     : form -> form -> form -> form
+
+val f_bigicost : form -> form -> form -> form
+val f_bigix    : form -> form -> form -> form
+val f_bigi     : form -> form -> form -> form
 
 (* -------------------------------------------------------------------- *)
 val f_is_inf : form -> form
 val f_is_int : form -> form
+
+val f_op_xopp  : form
+val f_op_xadd  : form
+val f_op_xmul  : form
+val f_op_xmuli : form
+val f_op_xle   : form
+val f_op_xlt   : form
 
 val f_Inf   : form
 val f_N     : form -> form
@@ -349,10 +432,39 @@ val f_xadd  : form -> form -> form
 val f_xmul  : form -> form -> form
 val f_xmuli : form -> form -> form
 val f_xle   : form -> form -> form
+val f_xlt   : form -> form -> form
 val f_xmax  : form -> form -> form
+val f_xoget : form -> form
 
 val f_x0 : form
 val f_x1 : form
+
+(* -------------------------------------------------------------------- *)
+val oget_c_bnd : form option -> bool -> form
+val cost_add   : cost -> cost -> cost
+
+(* -------------------------------------------------------------------- *)
+val proc_cost_top : proc_cost
+
+val mod_cost_top   : Ssym.t -> mod_cost
+val mod_cost_top_r : Ssym.t -> form
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+val mk_mt_r :
+  mt_params  : ((EcIdent.t * module_type) list) ->
+  mt_name    : EcPath.path ->
+  mt_args    : EcPath.mpath list ->
+  mt_restr   : mod_restr ->
+  mt_opacity : mod_opacity ->
+  module_type
+
+(* Smart constructor for module signatures *)
+val mk_msig_r :
+  mis_params : (EcIdent.t * module_type) list ->
+  mis_body   : module_sig_body ->
+  mis_restr  : mod_restr ->
+  module_sig
 
 (* -------------------------------------------------------------------- *)
 module FSmart : sig
@@ -378,11 +490,12 @@ module FSmart : sig
   val f_tuple    : (form * a_tuple  ) -> a_tuple   -> form
   val f_app      : (form * a_app    ) -> a_app     -> form
   val f_proj     : (form * a_proj   ) -> a_proj    -> int -> form
+  val f_cost     : (form * cost     ) -> cost      -> form
   val f_glob     : (form * a_glob   ) -> a_glob    -> form
-  val f_hoareF   : (form * sHoareF  ) -> sHoareF    -> form
-  val f_hoareS   : (form * sHoareS  ) -> sHoareS    -> form
-  val f_cHoareF  : (form * cHoareF  ) -> cHoareF    -> form
-  val f_cHoareS  : (form * cHoareS  ) -> cHoareS    -> form
+  val f_hoareF   : (form * sHoareF  ) -> sHoareF   -> form
+  val f_hoareS   : (form * sHoareS  ) -> sHoareS   -> form
+  val f_cHoareF  : (form * cHoareF  ) -> cHoareF   -> form
+  val f_cHoareS  : (form * cHoareS  ) -> cHoareS   -> form
   val f_bdHoareF : (form * bdHoareF ) -> bdHoareF  -> form
   val f_bdHoareS : (form * bdHoareS ) -> bdHoareS  -> form
   val f_equivF   : (form * equivF   ) -> equivF    -> form
@@ -390,6 +503,9 @@ module FSmart : sig
   val f_eagerF   : (form * eagerF   ) -> eagerF    -> form
   val f_coe      : (form * coe      ) -> coe       -> form
   val f_pr       : (form * pr       ) -> pr        -> form
+
+  val f_mod_cost  : (form * mod_cost * ty   ) -> (mod_cost * ty   ) -> form
+  val f_cost_proj : (form * form * cost_proj) -> (form * cost_proj) -> form
 end
 
 (* -------------------------------------------------------------------- *)
@@ -442,6 +558,8 @@ val destr_cHoareS   : form -> cHoareS
 val destr_bdHoareF  : form -> bdHoareF
 val destr_bdHoareS  : form -> bdHoareS
 val destr_coe       : form -> coe
+val destr_cost      : form -> cost
+val destr_modcost   : form -> mod_cost
 val destr_pr        : form -> pr
 val destr_programS  : [`Left | `Right] option -> form -> memenv * stmt
 val destr_int       : form -> zint
@@ -449,9 +567,12 @@ val destr_int       : form -> zint
 val destr_glob      : form -> EcPath.mpath     * memory
 val destr_pvar      : form -> EcTypes.prog_var * memory
 
+val destr_xint : form -> [`Int of form | `Inf | `Unknown]
+
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool
 val is_false     : form -> bool
+val is_inf       : form -> bool
 val is_tuple     : form -> bool
 val is_not       : form -> bool
 val is_and       : form -> bool
@@ -477,6 +598,8 @@ val is_cHoareS   : form -> bool
 val is_bdHoareF  : form -> bool
 val is_bdHoareS  : form -> bool
 val is_coe       : form -> bool
+val is_cost      : form -> bool
+val is_modcost   : form -> bool
 val is_pr        : form -> bool
 val is_eq_or_iff : form -> bool
 
@@ -496,10 +619,19 @@ val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
 (* A predicate on memory: λ mem. -> pred *)
 type mem_pr = EcMemory.memory * form
 
+
 (* -------------------------------------------------------------------- *)
-type f_subst = private {
-  fs_freshen : bool; (* true means realloc local *)
-  fs_mp      : mpath Mid.t;
+(* Module substitution info.
+   The formula must be of type [tmodcost _], and contains the cost
+   information associated to a module being instantiated. *)
+type ms_info = Refresh | Cost of form
+
+(* -------------------------------------------------------------------- *)
+type f_subst = {
+  fs_freshen : bool; (* true means freshen locals *)
+
+  fs_mp      : (EcPath.mpath * ms_info) Mid.t;
+
   fs_loc     : form Mid.t;
   fs_mem     : EcIdent.t Mid.t;
   fs_sty     : ty_subst;
@@ -508,8 +640,9 @@ type f_subst = private {
   fs_pddef   : (EcIdent.t list * form) Mp.t;
   fs_esloc   : expr Mid.t;
   fs_memtype : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
+
+  fs_mempred : mem_pr Mid.t;
+  (* For predicates over memories, only substituted in Fcoe *)
 }
 
 (* -------------------------------------------------------------------- *)
@@ -519,7 +652,7 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:mpath Mid.t
+    -> ?mods:((EcPath.mpath * ms_info) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
@@ -528,16 +661,20 @@ module Fsubst : sig
     -> ?mempred:(mem_pr Mid.t)
     -> unit -> f_subst
 
-  val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> mpath -> f_subst
-  val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+  val f_bind_local   : f_subst -> EcIdent.t -> form -> f_subst
+  val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+
+  val f_bind_mod : f_subst -> EcIdent.t -> module_type -> mpath -> f_subst
+
+  (* when refreshing a local module, no need for cost information *)
+  val f_refresh_mod : f_subst -> EcIdent.t -> mpath -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-  val f_subst_mod   : EcIdent.t -> mpath -> form -> form
+  val f_subst_mod   : EcIdent.t -> module_type -> mpath -> form -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form
@@ -559,7 +696,9 @@ module Fsubst : sig
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
-  val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t
+  val subst_param    : f_subst -> oi_param -> oi_param
+  val subst_params   : f_subst -> oi_params -> oi_params
+  (* val subst_oi       : f_subst -> c_bnd PreOI.t -> c_bnd PreOI.t *)
   val subst_gty      : f_subst -> gty -> gty
 end
 
@@ -579,3 +718,21 @@ type core_op = [
 ]
 
 val core_op_kind : path -> core_op option
+
+(* -------------------------------------------------------------------- *)
+val string_of_quant : quantif -> string
+val string_of_hcmp  : hoarecmp -> string
+
+val pp_cost_proj : Format.formatter -> cost_proj -> unit
+val pp_mod_ns    : Format.formatter -> mod_ns    -> unit
+
+(* -------------------------------------------------------------------- *)
+val dump_form      : Format.formatter -> form        -> unit
+val dump_modty     : Format.formatter -> module_type -> unit
+val dump_modcost   : Format.formatter -> mod_cost    -> unit
+val dump_proc_cost : Format.formatter -> proc_cost   -> unit
+
+val dump_form_long      : Format.formatter -> form        -> unit
+val dump_modty_long     : Format.formatter -> module_type -> unit
+val dump_modcost_long   : Format.formatter -> mod_cost    -> unit
+val dump_proc_cost_long : Format.formatter -> proc_cost   -> unit

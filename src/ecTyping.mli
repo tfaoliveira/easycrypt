@@ -31,10 +31,7 @@ type mismatch_funsig =
 | MF_targs  of ty * ty                               (* expected, got *)
 | MF_tres   of ty * ty                               (* expected, got *)
 | MF_restr  of EcEnv.env * Sx.t mismatch_sets
-| MF_compl     of EcEnv.env *
-                  ((form * form) option
-                   * (form * form) Mx.t) suboreq
-| MF_unbounded
+| MF_compl  of EcEnv.env * symbol * (form * form) suboreq
 
 type restr_failure = Sx.t * Sm.t
 
@@ -69,6 +66,9 @@ type tymod_cnv_failure =
 | E_TyModCnv_SubTypeArg        of
     EcIdent.t * module_type * module_type * tymod_cnv_failure
 
+| E_TyModCnv_AlreadyComplRestr
+| E_TyModCnv_NotACostVector of form
+
 type modapp_error =
 | MAE_WrongArgCount      of int * int  (* expected, got *)
 | MAE_InvalidArgType     of EcPath.mpath * tymod_cnv_failure
@@ -82,6 +82,7 @@ type modtyp_error =
 type modsig_error =
 | MTS_DupProcName of symbol
 | MTS_DupArgName  of symbol * symbol
+| MTS_NotAnOracle of EcPath.xpath list
 
 type funapp_error =
 | FAE_WrongArgCount
@@ -168,6 +169,9 @@ type tyerror =
 | LvMapOnNonAssign
 | NoDefaultMemRestr
 | ProcAssign             of qsymbol
+| CostProjUnknownProc    of symbol
+| CostProjUnknownOracle  of symbol * symbol (* oracle ident, oracle proc *)
+| NotModCost
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror
@@ -258,7 +262,7 @@ val transmod     : attop:bool -> env -> pmodule_def -> module_expr
 val trans_topmsymbol : env -> pmsymbol located -> mpath
 val trans_msymbol    : env -> pmsymbol located -> mpath * module_smpl_sig
 val trans_gamepath   : env -> pgamepath -> xpath
-val trans_oracle     : env -> psymbol * psymbol -> xpath * form
+val trans_oracle     : env -> psymbol * psymbol -> xpath
 val trans_restr_mem : env -> pmod_restr_mem -> Sx.t use_restr * Sm.t use_restr
 
 (* -------------------------------------------------------------------- *)
@@ -268,7 +272,7 @@ val check_mem_restr_fun :
   env -> xpath -> mod_restr -> unit
 
 val check_modtype :
-  env -> mpath -> module_sig -> module_type ->
+  LDecl.hyps -> mpath -> module_sig -> module_type ->
   [> `Ok | `ProofObligation of EcFol.form list ]
 
 (* -------------------------------------------------------------------- *)

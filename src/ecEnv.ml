@@ -1289,8 +1289,6 @@ module Memory = struct
     { env with env_memories = Mmem.add (fst me) (snd me) env.env_memories; }
 
   let push (me : EcMemory.memenv) (env : env) =
-    (* TODO : A: *)
-    (* FIXME: assert (byid (EcMemory.memory me) env = None); *)
     update me env
 
   let push_all memenvs env =
@@ -1602,7 +1600,7 @@ module Fun = struct
            else
              let s =
                List.fold_left2
-                 (fun s (x, _) a -> EcSubst.add_module s x a)
+                 (fun s (x, mt) a -> EcSubst.add_module s x mt a)
                  (EcSubst.empty ()) params args
              in
              EcSubst.subst_function s o
@@ -1829,7 +1827,8 @@ module Mod = struct
   type lkt = module_expr * locality option
   type spt = mpath * module_expr suspension * locality option
 
-  let unsuspend_r f istop (i, args) (spi, params) o =
+  let unsuspend_r f istop (i, args)
+      ((spi, params) : (int * (EcIdent.t * module_type) list)) o =
     if List.length args > List.length params then
       assert false;
     if i <> spi then
@@ -1840,8 +1839,9 @@ module Mod = struct
     let params = List.take (List.length args) params in
 
     let s =
-      List.fold_left2
-        (fun s (x, _) a -> EcSubst.add_module s x a)
+      List.fold_left2 (fun s (x, mt) a ->
+          EcSubst.add_module s x mt a
+        )
         (EcSubst.empty ()) params args
     in
       f s o
@@ -1865,7 +1865,7 @@ module Mod = struct
                (fun (args, obj) ->
                  (fst (MC._downpath_for_mod spsc env p args), obj))
 
-  let by_mpath (p : mpath) (env : env) =
+  let by_mpath (p : mpath) (env : env) : lkt =
     let (ip, (i, args)) = ipath_of_mpath p in
 
       match MC.by_path (fun mc -> mc.mc_modules) ip env with
@@ -1925,7 +1925,8 @@ module Mod = struct
         | ME_Decl ({ mt_restr } as mt) ->
           let mt_restr =
             mr_add_restr mt_restr (ur_empty xs) (ur_empty Sm.empty) in
-          { me with me_body = ME_Decl { mt with mt_restr } }
+          let mt = update_mt ~mt_restr mt in
+          { me with me_body = ME_Decl mt }
         | _ -> me
       in
       MMsym.map_at
@@ -2022,8 +2023,9 @@ module Mod = struct
       let update me =
         match me.me_body with
         | ME_Decl mt ->
-          let mr = mr_add_restr mt.mt_restr rx rm in
-          { me with me_body = ME_Decl { mt with mt_restr = mr } }
+          let mt_restr = mr_add_restr mt.mt_restr rx rm in
+          let mt = update_mt ~mt_restr mt in
+          { me with me_body = ME_Decl mt }
         | _ -> me
       in
       MMsym.map_at
@@ -2058,7 +2060,7 @@ module Mod = struct
   let add_mod_binding bd env =
     let do1 env (x,gty) =
       match gty with
-      | GTmodty p -> bind_local x p env
+      | GTmodty (_,p) -> bind_local x p env
       | _ -> env
     in
       List.fold_left do1 env bd
@@ -2129,7 +2131,7 @@ module NormMp = struct
           let params = List.take arity me.me_params in
           let s =
             List.fold_left2
-              (fun s (x, _) a -> EcSubst.add_module s x a)
+              (fun s (x, mt) a -> EcSubst.add_module s x mt a)
               (EcSubst.empty ()) params args in
           let mp = EcSubst.subst_mpath s mp in
           let args' = mp.EcPath.m_args in
@@ -2251,8 +2253,12 @@ module NormMp = struct
   let add_glob_except rm id us =
     if Sid.mem id rm then us else add_glob id us
 
-  let gen_fun_use env fdone rm =
-    let rec fun_use us f =
+  let gen_fun_use
+      (env : env)
+      (fdone : Sx.t ref)
+      (rm : Sid.t) : use -> xpath -> use
+    =
+    let rec fun_use (us : use) (f : xpath) : use =
       let f = norm_xfun env f in
       if Mx.mem f !fdone then us
       else
@@ -2265,13 +2271,10 @@ module NormMp = struct
           let us = Sx.fold (add_var env) vars us in
           List.fold_left fun_use us f_uses.us_calls
 
-        | FBabs oi ->
-            let id =
-              match f.x_top.m_top with
-              | `Local id -> id
-              | _ -> assert false in
+        | FBabs (param, _) ->
+            let id = mget_ident f.x_top in
             let us = add_glob_except rm id us in
-            List.fold_left fun_use us (OI.allowed oi)
+            List.fold_left fun_use us (allowed param)
 
         | FBalias _ -> assert false in
     fun_use
@@ -2355,37 +2358,36 @@ module NormMp = struct
                         get_restr_use = Mm.add mp res en.get_restr_use };
       res
 
-  let get_restr_me env me mp =
+  let get_restr_me (env : env) (me : module_expr) (mp : mpath) : mod_restr =
+    let mparams =
+      List.fold_left (fun mparams (id,_) ->
+          Sm.add (EcPath.mident id) mparams
+        ) Sm.empty me.me_params
+    in
+
     match me.me_body with
     | EcModules.ME_Decl mt ->
       (* As an invariant, we have that [mt] is fully applied. *)
       assert (List.length mt.mt_params = List.length mt.mt_args);
 
       (* We need to clear the oracle restriction using [me] params *)
-      let keep =
-        List.fold_left (fun k (x,_) ->
-            EcPath.Sm.add (EcPath.mident x) k) EcPath.Sm.empty me.me_params in
-      let keep_info f =
-        EcPath.Sm.mem (f.EcPath.x_top) keep in
-      let do1 oi = OI.filter keep_info oi in
+      let keep_info f = EcPath.Sm.mem f.EcPath.x_top mparams in
+      let do1 oi = filter_param keep_info oi in
 
       { mt.mt_restr with
-        mr_oinfos = Msym.map do1 mt.mt_restr.mr_oinfos }
+        mr_params = Msym.map do1 mt.mt_restr.mr_params;
+        mr_cost   = mt.mt_restr.mr_cost; }
 
     | _ ->
       (* We compute the oracle call information. *)
-      let mparams =
-        List.fold_left (fun mparams (id,_) ->
-            Sm.add (EcPath.mident id) mparams) Sm.empty me.me_params in
-
       let env = List.fold_left (fun env (x,mt) ->
           Mod.bind_local x mt env
         ) env me.me_params in
 
-      let comp_oi oi it = match it with
+      let comp_oi (oi : oi_params) it = match it with
         | MI_Module  _ | MI_Variable _ -> oi
         | MI_Function f ->
-          let rec f_call c f =
+          let rec f_call (c : Sx.t) (f : xpath) : Sx.t =
             let f = norm_xfun env f in
             if EcPath.Sx.mem f c then c
             else
@@ -2394,22 +2396,27 @@ module NormMp = struct
               match fun_.f_def with
               | FBalias _ -> assert false
               | FBdef def -> List.fold_left f_call c def.f_uses.us_calls
-              | FBabs oi  ->
-                List.fold_left f_call c (OI.allowed oi) in
+              | FBabs (params, _) ->
+                List.fold_left f_call c (allowed params)
+          in
 
           let all_calls =
             match f.f_def with
             | FBalias f -> f_call EcPath.Sx.empty f
             | FBdef def ->
               List.fold_left f_call EcPath.Sx.empty def.f_uses.us_calls
-            | FBabs oi ->
-              List.fold_left f_call EcPath.Sx.empty (OI.allowed oi) in
+            | FBabs (params, _) ->
+              List.fold_left f_call EcPath.Sx.empty (allowed params)
+          in
+
           let filter f =
             let ftop = EcPath.m_functor f.EcPath.x_top in
-            Sm.mem ftop mparams in
+            Sm.mem ftop mparams
+          in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name (OI.mk calls true `Unbounded) oi in
+          Msym.add f.f_name { oi_in = true; oi_allowed = calls; } oi
+      in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in
 
@@ -2424,30 +2431,38 @@ module NormMp = struct
           Sm.add (EcPath.mident m) sm
         ) use.us_gl Sm.empty in
       let ur_mpaths = { ur_pos = Some sm;
-                      ur_neg = Sm.empty; } in
+                        ur_neg = Sm.empty; } in
 
+      let procs = Msym.map (fun _ -> ()) oi in
       { mr_xpaths = ur_xpaths;
         mr_mpaths = ur_mpaths;
-        mr_oinfos = oi; }
+        mr_params = oi;
+        mr_cost   = mod_cost_top_r procs; }
 
   let get_restr env mp =
     let mp = norm_mpath env mp in
     let me, _ = Mod.by_mpath mp env in
     get_restr_me env me mp
 
-  let equal_restr (f_equiv : form -> form -> bool) env r1 r2 =
+  let equal_restr
+      (f_equiv : form -> form -> bool)
+      (env     : env)
+      (r1      : mod_restr)
+      (r2      : mod_restr) : bool
+    =
     let us1,us2 = restr_use env r1, restr_use env r2 in
     ur_equal use_equal us1 us2
-    && Msym.equal (PreOI.equal f_equiv) r1.mr_oinfos r2.mr_oinfos
-
+    && params_equal r1.mr_params r2.mr_params
+    && f_equiv r1.mr_cost r2.mr_cost
 
   let sig_of_mp env mp =
     let mp = norm_mpath env mp in
     let me, _ = Mod.by_mpath mp env in
 
-    { mis_params = me.me_params;
-      mis_body = me.me_sig_body;
-      mis_restr = get_restr_me env me mp }
+    EcModules.mk_msig_r
+      ~mis_params:me.me_params
+      ~mis_body:me.me_sig_body
+      ~mis_restr:(get_restr_me env me mp)
 
   let norm_pvar env pv =
     match pv with
@@ -2526,19 +2541,13 @@ module NormMp = struct
 
         | FcHoareF chf ->
           let pre' = aux chf.chf_pr and p' = norm_xfun env chf.chf_f
-          and post' = aux chf.chf_po in
-          let c_self' = aux chf.chf_co.c_self in
-          let c_calls' = Mx.fold (fun f c calls ->
-              let f' = f        (* not normalized. *)
-              and c' = call_bound_r (aux c.cb_cost) (aux c.cb_called) in
-              Mx.change (fun old -> assert (old = None); Some c') f' calls
-            ) chf.chf_co.c_calls Mx.empty in
+          and post' = aux chf.chf_po
+          and cost' = aux chf.chf_co in
+
           if chf.chf_pr == pre' && chf.chf_f == p' &&
-             chf.chf_po == post' && chf.chf_co.c_self == c_self' &&
-             Mx.equal (fun a b -> a == b) chf.chf_co.c_calls c_calls'
-          then f else
-            let calls' = cost_r c_self' c_calls' in
-            f_cHoareF pre' p' post' calls'
+             chf.chf_po == post' && chf.chf_co == cost'
+          then f
+          else f_cHoareF pre' p' post' cost'
 
         (* TODO: missing cases: FbdHoareF and every F*HoareS *)
 
@@ -2636,10 +2645,12 @@ module ModTy = struct
   let modtype p env =
     let { tms_sig = sig_ } = by_path p env in
     (* eta-normal form *)
-    { mt_params = sig_.mis_params;
-      mt_name   = p;
-      mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
-      mt_restr  = sig_.mis_restr; }
+    mk_mt_r
+      ~mt_params:sig_.mis_params
+      ~mt_name:p
+      ~mt_args:(List.map (EcPath.mident -| fst) sig_.mis_params)
+      ~mt_restr:sig_.mis_restr
+      ~mt_opacity:Opaque
 
   let bind ?(import = import0) name modty env =
     let env = if import.im_immediate then MC.bind_modty name modty env else env in
@@ -2657,18 +2668,24 @@ module ModTy = struct
     if List.length mty1.mt_args <> List.length mty2.mt_args then
       raise ModTypeNotEquiv;
 
-    if not (NormMp.equal_restr f_equiv env mty1.mt_restr mty2.mt_restr) then
-      raise ModTypeNotEquiv;
-
     let subst =
       List.fold_left2
         (fun subst (x1, p1) (x2, p2) ->
           let p1 = EcSubst.subst_modtype subst p1 in
           let p2 = EcSubst.subst_modtype subst p2 in
-            mod_type_equiv f_equiv env p1 p2;
-            EcSubst.add_module subst x1 (EcPath.mident x2))
+          mod_type_equiv f_equiv env p1 p2;
+          EcSubst.refresh_module subst x1 (EcPath.mident x2))
         (EcSubst.empty ()) mty1.mt_params mty2.mt_params
     in
+
+    let restr1 = EcSubst.subst_mod_restr subst mty1.mt_restr in
+    let restr2 = EcSubst.subst_mod_restr subst mty2.mt_restr in
+
+    if not (NormMp.equal_restr f_equiv env restr1 restr2) then
+      raise ModTypeNotEquiv;
+
+    if mty1.mt_opacity <> mty2.mt_opacity then
+      raise ModTypeNotEquiv;
 
     if not (
          List.all2
@@ -2686,27 +2703,34 @@ module ModTy = struct
   let has_mod_type (env : env) (dst : module_type list) (src : module_type) =
     List.exists (mod_type_equiv f_equal env src) dst
 
-  let sig_of_mt env (mt:module_type) =
+  let sig_of_mt env (mt : module_type) : module_sig =
     let { tms_sig = sig_ } = by_path mt.mt_name env in
     let subst =
-      List.fold_left2 (fun s (x1,_) a ->
-        EcSubst.add_module s x1 a) (EcSubst.empty ()) sig_.mis_params mt.mt_args in
+      List.fold_left2 (fun s (x1,mt1) a ->
+          EcSubst.add_module s x1 mt1 a
+        ) (EcSubst.empty ()) sig_.mis_params mt.mt_args
+    in
     let items =
       EcSubst.subst_modsig_body subst sig_.mis_body in
     let params = mt.mt_params in
 
     let keep =
       List.fold_left (fun k (x,_) ->
-        EcPath.Sm.add (EcPath.mident x) k) EcPath.Sm.empty params in
-    let keep_info f =
-      EcPath.Sm.mem (f.EcPath.x_top) keep in
-    let do1 oi = OI.filter keep_info oi in
-    let restr = { mt.mt_restr with
-                  mr_oinfos = Msym.map do1 mt.mt_restr.mr_oinfos } in
+          EcPath.Sm.add (EcPath.mident x) k
+        ) EcPath.Sm.empty params
+    in
+    let keep_info f = EcPath.Sm.mem (f.EcPath.x_top) keep in
 
-    { mis_params = params;
-      mis_body   = items;
-      mis_restr  = restr; }
+    let do1 oi = filter_param keep_info oi in
+    let restr = {
+      mt.mt_restr with
+      mr_params = Msym.map do1 mt.mt_restr.mr_params;
+      mr_cost   = mt.mt_restr.mr_cost;
+      (* TODO A: I am not sure we are computing the correct cost here
+      indeed, we probably need to substitute the arguments by mr_params in mr_cost *)
+    } in
+
+    mk_msig_r ~mis_params:params ~mis_body:items ~mis_restr:restr
 end
 
 (* -------------------------------------------------------------------- *)
@@ -3533,9 +3557,9 @@ module LDecl = struct
         let mt = EcMemory.mt_subst s.fs_ty mt
         in LD_mem mt
 
-    | LD_modty p ->
-        let p = gty_as_mod (Fsubst.subst_gty s (GTmodty p))
-        in LD_modty p
+    | LD_modty (ns,p) ->
+        let _, p = gty_as_mod (Fsubst.subst_gty s (GTmodty (ns,p)))
+        in LD_modty (ns,p)
 
     | LD_hyp f ->
         LD_hyp (Fsubst.f_subst s f)
@@ -3553,8 +3577,8 @@ module LDecl = struct
       EcMemory.mt_fv mt
   | LD_hyp f ->
       f.f_fv
-  | LD_modty p ->
-      gty_fv (GTmodty p)
+  | LD_modty (ns,p) ->
+      gty_fv (GTmodty (ns,p))
   | LD_abs_st us ->
     let add fv (x,_) = match x with
       | PVglob x -> EcPath.x_fv fv x
@@ -3567,31 +3591,46 @@ module LDecl = struct
 
   (* ------------------------------------------------------------------ *)
   let by_name s hyps =
-    match List.ofind ((=) s |- EcIdent.name |- fst) hyps.h_local with
+    match List.ofind ((=) s |- EcIdent.name |- l_id) hyps.h_local with
     | None   -> error (LookupError (`Symbol s))
     | Some h -> h
 
   let by_id id hyps =
-    match List.ofind (EcIdent.id_equal id |- fst) hyps.h_local with
+    match EcBaseLogic.by_id_opt id hyps with
     | None   -> error (LookupError (`Ident id))
-    | Some x -> snd x
+    | Some x -> x
+
+  let lk_by_id id hyps =
+    match EcBaseLogic.by_id_opt id hyps with
+    | None   -> error (LookupError (`Ident id))
+    | Some x -> x.l_kind
 
   (* ------------------------------------------------------------------ *)
-  let as_hyp = function
+  let get_id name (hyps : hyps) = (by_name name hyps).l_id
+
+  (* ------------------------------------------------------------------ *)
+  let _as_hyp : _ -> EcIdent.t * form = function
     | (id, LD_hyp f) -> (id, f)
     | (id, _) -> error (InvalidKind (id, `Hypothesis))
 
-  let as_var = function
+  let _as_var : _ -> EcIdent.t * glob_var_bind = function
     | (id, LD_var (ty, _)) -> (id, ty)
     | (id, _) -> error (InvalidKind (id, `Variable))
+
+  (* ------------------------------------------------------------------ *)
+  let as_hyp (x : l_local) : EcIdent.t * form =
+    _as_hyp (x.l_id, x.l_kind)
+
+  let as_var (x : l_local) : EcIdent.t * glob_var_bind =
+    _as_var (x.l_id, x.l_kind)
 
   (* ------------------------------------------------------------------ *)
   let hyp_by_name s hyps = as_hyp (by_name s hyps)
   let var_by_name s hyps = as_var (by_name s hyps)
 
   (* ------------------------------------------------------------------ *)
-  let hyp_by_id x hyps = as_hyp (x, by_id x hyps)
-  let var_by_id x hyps = as_var (x, by_id x hyps)
+  let hyp_by_id x hyps = _as_hyp (x, lk_by_id x hyps)
+  let var_by_id x hyps = _as_var (x, lk_by_id x hyps)
 
   (* ------------------------------------------------------------------ *)
   let has_gen dcast s hyps =
@@ -3611,18 +3650,18 @@ module LDecl = struct
     | _ -> false
 
   let has_name ?(dep = false) s hyps =
-    let test (id, k) =
+    let test { l_id = id; l_kind = k; } =
       EcIdent.name id = s || (dep && has_inld s k)
     in List.exists test hyps.h_local
 
   (* ------------------------------------------------------------------ *)
   let can_unfold id hyps =
-    try  match by_id id hyps with LD_var (_, Some _) -> true | _ -> false
+    try  match lk_by_id id hyps with LD_var (_, Some _) -> true | _ -> false
     with LdeclError _ -> false
 
   let unfold id hyps =
     try
-      match by_id id hyps with
+      match lk_by_id id hyps with
       | LD_var (_, Some f) -> f
       | _ -> raise NotReducible
     with LdeclError _ -> raise NotReducible
@@ -3638,7 +3677,12 @@ module LDecl = struct
 
   let add_local id ld hyps =
     check_name_clash id hyps;
-    { hyps with h_local = (id, ld) :: hyps.h_local }
+    let hyp = {
+      l_id    = id;
+      l_kind  = ld;
+      l_epoch = Epoch.next (hyps_epoch hyps);
+    } in
+    { hyps with h_local = hyp :: hyps.h_local }
 
   (* ------------------------------------------------------------------ *)
   let fresh_id hyps s =
@@ -3672,11 +3716,12 @@ module LDecl = struct
 
   let add_local_env x k env =
     match k with
-    | LD_var (ty, _)  -> Var.bind_local x ty env
-    | LD_mem mt       -> Memory.push (x, mt) env
-    | LD_modty i -> Mod.bind_local x i env
-    | LD_hyp   _      -> env
-    | LD_abs_st us    -> AbsStmt.bind x us env
+    | LD_var (ty, _)   -> Var.bind_local x ty env
+    | LD_mem mt        -> Memory.push (x, mt) env
+    | LD_modty (_ns,i) -> Mod.bind_local x i env
+    (* namespace [ns] only recorded in the local hypotheses *)
+    | LD_hyp   _       -> env
+    | LD_abs_st us     -> AbsStmt.bind x us env
 
   (* ------------------------------------------------------------------ *)
   let add_local x k h =
@@ -3688,18 +3733,20 @@ module LDecl = struct
   let init env ?(locals = []) tparams =
     let buildenv env =
       List.fold_right
-        (fun (x, k) env -> add_local_env x k env)
+        (fun { l_id = x; l_kind = k; } env -> add_local_env x k env)
         locals env
     in
 
     { le_init = env;
       le_env  = buildenv env;
-      le_hyps = { h_tvar = tparams; h_local = locals; }; }
+      le_hyps = { h_tvar = tparams; h_local = locals}; }
 
   (* ------------------------------------------------------------------ *)
   let clear ?(leniant = false) ids hyps =
-    let rec filter ids hyps =
-      match hyps with [] -> [] | ((id, lk) as bd) :: hyps ->
+    let rec filter ids (hyps : EcBaseLogic.l_locals) =
+      match hyps with
+      | [] -> []
+      | ({ l_id = id; l_kind = lk; } as bd) :: hyps ->
 
       let ids, bd =
         if EcIdent.Sid.mem id ids then (ids, None) else
@@ -3727,11 +3774,15 @@ module LDecl = struct
 
     let init locals = init hyps.le_init ~locals hyps.le_hyps.h_tvar in
 
-    let rec doit locals =
+    let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
-      | (y, LD_hyp fp) :: locals when EcIdent.id_equal x y -> begin
+      | ({ l_id = y; l_kind = LD_hyp fp } as l) :: locals
+        when EcIdent.id_equal x y -> begin
           let fp' = check (lazy (init locals)) fp in
-          if fp == fp' then raise E.NoOp else (x, LD_hyp fp') :: locals
+          if fp == fp' then
+            raise E.NoOp
+          else
+            { l with l_kind = LD_hyp fp' } :: locals
       end
 
       | [] -> error (LookupError (`Ident x))
@@ -3741,9 +3792,9 @@ module LDecl = struct
 
   (* ------------------------------------------------------------------ *)
   let local_hyps x hyps =
-    let rec doit locals =
+    let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
-      | (y, _) :: locals ->
+      | { l_id = y } :: locals ->
           if EcIdent.id_equal x y then locals else doit locals
       | [] ->
           error (LookupError (`Ident x)) in
@@ -3752,8 +3803,11 @@ module LDecl = struct
     init hyps.le_init ~locals hyps.le_hyps.h_tvar
 
   (* ------------------------------------------------------------------ *)
-  let by_name s hyps = by_name s (tohyps hyps)
-  let by_id   x hyps = by_id   x (tohyps hyps)
+  let by_name  s hyps = by_name  s (tohyps hyps)
+  let by_id    x hyps = by_id    x (tohyps hyps)
+  let lk_by_id x hyps = lk_by_id x (tohyps hyps)
+
+  let get_id s hyps = get_id s (tohyps hyps)
 
   let has_name s hyps = has_name ~dep:false s (tohyps hyps)
   let has_id   x hyps = has_id x (tohyps hyps)

@@ -573,111 +573,56 @@ let ur_inter union inter ur1 ur2 =
     ur_neg = inter ur1.ur_neg ur2.ur_neg; }
 
 (* -------------------------------------------------------------------- *)
-(* Oracle information of a procedure [M.f]. *)
-module PreOI : sig
-  type 'a t
+(* - [oi_allowed] : list of functor parameters that can be called by [M.f].
+   - [oi_in]      : true if equality of globals is required to ensure
+     equality of result and globals (in the post). *)
+type oi_param = {
+  oi_allowed : xpath list;
+  oi_in      : bool;
+}
 
-  val hash : ('a -> int) -> 'a t -> int
-  val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+let is_in (oi : oi_param) : bool = oi.oi_in
 
-  val is_in : 'a t -> bool
+let allowed   (oi : oi_param) : xpath list = oi.oi_allowed
+let allowed_s (oi : oi_param) : Sx.t       = Sx.of_list (oi.oi_allowed)
 
-  val cost_self : 'a t -> [`Bounded of 'a | `Unbounded]
-  val cost : 'a t -> xpath -> [`Bounded of 'a | `Zero | `Unbounded]
-  val cost_calls : 'a t -> [`Bounded of 'a Mx.t | `Unbounded]
-  val costs : 'a t -> [`Bounded of 'a * 'a Mx.t | `Unbounded]
+let param_fv fv (oi : oi_param) : int Mid.t =
+  List.fold_left EcPath.x_fv fv oi.oi_allowed
 
-  val allowed : 'a t -> xpath list
-  val allowed_s : 'a t -> Sx.t
+let param_equal (oi1 : oi_param) (oi2 : oi_param) : bool =
+  oi1.oi_in = oi2.oi_in
+  && List.all2 EcPath.x_equal oi1.oi_allowed oi1.oi_allowed
 
-  val mk : xpath list -> bool -> [`Bounded of 'a * 'a Mx.t | `Unbounded] -> 'a t
-  (* val change_calls : 'a t -> xpath list -> 'a t *)
-  val filter : (xpath -> bool) -> 'a t -> 'a t
-end = struct
-  (* Oracle information of a procedure [M.f]:
-   * - oi_calls : list of oracles that can be called by [M.f].
-   * - oi_in    : true if equality of globals is required to ensure
-   * equality of result and globals (in the post).
-   * - oi_costs : self cost, plus a mapping from oracles to the number of time
-   * that they can be called by [M.f]. Missing entries are can be called
-   * zero times. No restrictio of [None]
-   *
-   * Remark: there is redundancy between oi_calls and oi_costs. *)
-  type 'a t = {
-    oi_calls : xpath list;
-    oi_in    : bool;
-    oi_costs : ('a * 'a Mx.t) option;
-  }
-
-  let is_in t = t.oi_in
-
-  let allowed oi = oi.oi_calls
-
-  let allowed_s oi = allowed oi |> Sx.of_list
-
-  let cost_self (oi : 'a t) =
-    omap_dfl (fun (self,_) -> `Bounded self) `Unbounded oi.oi_costs
-
-  let cost (oi : 'a t) (x : xpath) =
-    omap_dfl (fun (_,oi) ->
-        let c = Mx.find_opt x oi in
-        omap_dfl (fun c -> `Bounded c) `Zero c)
-      `Unbounded oi.oi_costs
-
-  let cost_calls oi = omap_dfl (fun (_,x) -> `Bounded x) `Unbounded oi.oi_costs
-
-  let costs oi = omap_dfl (fun x -> `Bounded x) `Unbounded oi.oi_costs
-
-  let mk oi_calls oi_in oi_costs = match oi_costs with
-    | `Bounded oi_costs ->
-      { oi_calls; oi_in; oi_costs = Some (oi_costs) ; }
-    | `Unbounded ->
-      { oi_calls; oi_in; oi_costs = None; }
-
-  (* let change_calls oi calls =
-   *   mk calls oi.oi_in
-   *     (Mx.filter (fun x _ -> List.mem x calls) oi.oi_costs) *)
-
-  let filter f oi =
-    let costs = match oi.oi_costs with
-      | Some (self,costs) -> `Bounded (self, Mx.filter (fun x _ -> f x) costs)
-      | None -> `Unbounded in
-    mk (List.filter f oi.oi_calls) oi.oi_in costs
-
-  let equal a_equal oi1 oi2 =
-    let check_costs_eq c1 c2 =
-      match c1,c2 with
-      | None, None -> true
-      | Some _, None | None, Some _ -> false
-      | Some (s1,c1), Some (s2,c2) ->
-        let exception Not_equal in
-        try Mx.fold2_union (fun _ a b () -> match a, b with
-            | Some _, None | None, Some _ -> raise Not_equal
-            | None, None -> ()
-            | Some a, Some b -> if a_equal a b then () else raise Not_equal
-          ) c1 c2 ();
-          a_equal s1 s2
-        with Not_equal -> false in
-
-    oi1.oi_in = oi2.oi_in
-    && List.all2 EcPath.x_equal oi1.oi_calls oi1.oi_calls
-    && check_costs_eq oi1.oi_costs oi2.oi_costs
-
-  let hash ahash oi =
-    let costs_hash =
-      Why3.Hashcons.combine_option (fun (self,costs) ->
-          (Why3.Hashcons.combine_list
-             (Why3.Hashcons.combine_pair EcPath.x_hash ahash)
-             (ahash self) (Mx.bindings costs))) oi.oi_costs in
-
-    Why3.Hashcons.combine2
-      (if oi.oi_in then 0 else 1)
-      (Why3.Hashcons.combine_list EcPath.x_hash 0
-         (List.sort EcPath.x_compare oi.oi_calls))
-      costs_hash
-end
+let param_hash (oi : oi_param) : int =
+  Why3.Hashcons.combine
+    (if oi.oi_in then 0 else 1)
+    (Why3.Hashcons.combine_list EcPath.x_hash 0
+       (List.sort EcPath.x_compare oi.oi_allowed))
 
 (* -------------------------------------------------------------------- *)
+(* map from a functor `M` procedures to the procedure information *)
+type oi_params = oi_param Msym.t
+
+let params_fv (p : oi_params) fv : int Mid.t =
+  Msym.fold (fun _ oi fv -> param_fv fv oi) p fv
+
+let params_equal (p1 : oi_params) (p2 : oi_params) : bool =
+  Msym.equal param_equal p1 p2
+
+let params_hash (p : oi_params) : int =
+  let l = Msym.bindings p in
+  let l = List.sort (fun (s1,_) (s2,_) -> EcSymbols.sym_compare s1 s2) l in
+  Why3.Hashcons.combine_list
+    (Why3.Hashcons.combine_pair Hashtbl.hash param_hash)
+    0 l
+
+let filter_param (f : xpath -> bool) (oi : oi_param) : oi_param =
+  { oi_in      = oi.oi_in;
+    oi_allowed = List.filter f oi.oi_allowed; }
+
+(* -------------------------------------------------------------------- *)
+(* ['a] will be instantiated by [EcCoreFol.form] *)
+
 type mr_xpaths = EcPath.Sx.t use_restr
 
 type mr_mpaths = EcPath.Sm.t use_restr
@@ -685,20 +630,19 @@ type mr_mpaths = EcPath.Sm.t use_restr
 type 'a p_mod_restr = {
   mr_xpaths : mr_xpaths;
   mr_mpaths : mr_mpaths;
-  mr_oinfos : 'a PreOI.t Msym.t;
+  mr_params : oi_params;
+  mr_cost   : 'a ;              (* of type [Tmodcost _] *)
 }
 
-let p_mr_equal a_equal mr1 mr2 =
+let p_mr_equal
+    (a_equal : 'a -> 'a -> bool)
+    (mr1 : 'a p_mod_restr)
+    (mr2 : 'a p_mod_restr) : bool
+  =
   ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
   && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
-  && Msym.equal (PreOI.equal a_equal) mr1.mr_oinfos mr2.mr_oinfos
-
-let has_compl_restriction mr =
-  Msym.exists (fun _ oi -> (PreOI.costs oi) <> `Unbounded) mr.mr_oinfos
-
-let mr_is_empty mr =
-     not (has_compl_restriction mr)
-  && Msym.for_all (fun _ oi -> [] = PreOI.allowed oi && PreOI.is_in oi) mr.mr_oinfos
+  && params_equal mr1.mr_params mr2.mr_params
+  && a_equal mr1.mr_cost mr2.mr_cost
 
 let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
   EcPath.Sx.fold
@@ -731,13 +675,32 @@ let fs_equal f1 f2 =
     && (EcSymbols.sym_equal f1.fs_name f2.fs_name)
 
 (* -------------------------------------------------------------------- *)
+type mod_opacity =
+  | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
+  | Opaque                (* calling [A.f] costs `[A.f : 1] *)
+
 type 'a p_module_type = {
-  mt_params : (EcIdent.t * 'a p_module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : 'a p_mod_restr;
+  mt_params  : (EcIdent.t * 'a p_module_type) list;
+  mt_name    : EcPath.path;
+  mt_args    : EcPath.mpath list;
+  mt_restr   : 'a p_mod_restr;
+  mt_opacity : mod_opacity;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_mt_r] everywhere else. *)
+let _prelude_mk_mt_r
+    ~(check     : 'a -> bool)
+    ~(mt_params : (EcIdent.t * 'a p_module_type) list)
+    ~(mt_name   : EcPath.path)
+    ~(mt_args   : EcPath.mpath list)
+    ~(mt_restr  : 'a p_mod_restr)
+    ~(mt_opacity : mod_opacity)
+  : 'a p_module_type
+  =
+  assert (check mt_restr.mr_cost);
+  { mt_params; mt_name; mt_opacity; mt_args; mt_restr }
+
+(* -------------------------------------------------------------------- *)
 type module_sig_body_item = Tys_function of funsig
 
 type module_sig_body = module_sig_body_item list
@@ -748,11 +711,22 @@ type 'a p_module_sig = {
   mis_restr  : 'a p_mod_restr;
 }
 
+(* only to be used in [EcCoreFol]. Use [EcModules.mk_msig_r] everywhere else. *)
+let _prelude_mk_msig_r
+    ~(check     : 'a -> bool)
+    ~(mis_params : (EcIdent.t * 'a p_module_type) list)
+    ~(mis_body   : module_sig_body)
+    ~(mis_restr  : 'a p_mod_restr)
+  : 'a p_module_sig
+  =
+  assert (check mis_restr.mr_cost);
+  { mis_params; mis_body; mis_restr }
+
+(* -------------------------------------------------------------------- *)
 type 'a p_top_module_sig = {
   tms_sig  : 'a p_module_sig;
   tms_loca : is_local;
 }
-
 (* -------------------------------------------------------------------- *)
 (* Simple module signature, without restrictions. *)
 type 'a p_module_smpl_sig = {
@@ -816,7 +790,10 @@ let fd_hash f =
 type 'a p_function_body =
 | FBdef   of function_def
 | FBalias of xpath
-| FBabs   of 'a PreOI.t
+| FBabs   of oi_param * ('a * symbol)
+ (* In [FBabs (oi, (mc, fsymb))], the element [(mc, fsymb)]
+    represents the projection of [mc] over [fsymb].
+    - [mc] is a formula of type `Tmod_cost` *)
 
 type 'a p_function_ = {
   f_name   : symbol;
@@ -842,11 +819,11 @@ type 'a p_module_expr = {
 (* Invariant:
    In an abstract module [ME_Decl mt], [mt] must not be a functor, i.e. it must
    be fully applied. Therefore, we must have:
-   [List.length mp.mt_params = List.length mp.mt_args]  *)
+   [List.length mt.mt_params = List.length mt.mt_args]  *)
 and 'a p_module_body =
-  | ME_Alias       of int * EcPath.mpath
-  | ME_Structure   of 'a p_module_structure       (* Concrete modules. *)
-  | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
+  | ME_Alias     of int * EcPath.mpath
+  | ME_Structure of 'a p_module_structure    (* Concrete modules. *)
+  | ME_Decl      of 'a p_module_type         (* Abstract modules. *)
 
 and 'a p_module_structure = {
   ms_body      : 'a p_module_item list;
@@ -875,18 +852,18 @@ let ur_hash elems el_hash ur =
     (Why3.Hashcons.combine_list el_hash 0
        (elems ur.ur_neg))
 
-let p_mr_hash a_hash mr =
-  Why3.Hashcons.combine2
+let p_mr_hash (a_hash : 'a -> int) (mr : 'a p_mod_restr) : int =
+  Why3.Hashcons.combine3
     (ur_hash EcPath.Sx.ntr_elements EcPath.x_hash mr.mr_xpaths)
     (ur_hash EcPath.Sm.ntr_elements EcPath.m_hash mr.mr_mpaths)
-    (Why3.Hashcons.combine_list
-       (Why3.Hashcons.combine_pair Hashtbl.hash (PreOI.hash a_hash)) 0
-       (EcSymbols.Msym.bindings mr.mr_oinfos
-        |> List.sort (fun (s,_) (s',_) -> EcSymbols.sym_compare s s')))
+    (params_hash mr.mr_params)
+    (a_hash mr.mr_cost)
 
 let p_mty_hash a_hash mty =
   Why3.Hashcons.combine3
-    (EcPath.p_hash mty.mt_name)
+    (Why3.Hashcons.combine
+       (EcPath.p_hash mty.mt_name)
+       (Hashtbl.hash mty.mt_opacity))
     (Why3.Hashcons.combine_list
        (fun (x, _) -> EcIdent.id_hash x)
        0 mty.mt_params)
@@ -899,6 +876,7 @@ let rec p_mty_equal a_equal mty1 mty2 =
   && (List.all2 (pair_equal EcIdent.id_equal (p_mty_equal a_equal))
         mty1.mt_params mty2.mt_params)
   && (p_mr_equal a_equal mty1.mt_restr mty2.mt_restr)
+  && mty1.mt_opacity = mty2.mt_opacity
 
 (* -------------------------------------------------------------------- *)
 let get_uninit_read_of_fun (f : _ p_function_) =

@@ -69,11 +69,27 @@ module LowApply = struct
 
     let env     = env1 in
     let hyps    = LDecl.init env ld1.h_tvar in
-    let tophyps = Mid.of_list ld2.h_local in
+    let tophyps = Mid.of_list (List.map (fun x -> x.l_id, x) ld2.h_local) in
 
-    let h_eqs (x, v) =
+    (* Subsumption test for module with fresh names at declaration.
+       - [e1] is the epoch of declaration of a fresh module in [ld1]
+         (idem for [e2] and [ld2])
+       - we check that for any local declaration with an epoch smaller than
+         [e1] in [ld1], there exists a corresponding declaration in [e2]
+         with an epoch smaller than [e2] *)
+    let mt_check_epochs e1 e2 =
+      let check1 { l_id = y; l_epoch = ey1 } =
+        if not (Epoch.leq ey1 e1) then true
+        else match Mid.find_opt y tophyps  with
+          | None -> false
+          | Some { l_epoch = ey2 } -> Epoch.leq ey2 e2
+      in
+      List.for_all check1 ld1.h_local
+    in
+
+    let h_eqs { l_id = x; l_kind = v; l_epoch = e1 } =
       match Mid.find_opt x tophyps  with
-      | None -> false | Some v' ->
+      | None -> false | Some { l_kind = v'; l_epoch = e2; } ->
 
         (v (*φ*)== v') ||
           match v, v' with
@@ -84,8 +100,13 @@ module LowApply = struct
           | LD_mem m1, LD_mem m2 ->
              EcMemory.mt_equal m1 m2
 
-          | LD_modty mt1, LD_modty mt2 ->
-            mt1 == mt2
+          | LD_modty (ns1,mt1), LD_modty (ns2,mt2) ->
+            let check_ns =
+              ns1 = Any ||
+              ( ns1 = Fresh && ns2 = Fresh &&
+                mt_check_epochs e1 e2 )
+            in
+            check_ns && mt1 == mt2
 
           | LD_hyp f1, LD_hyp f2 ->
              is_alpha_eq hyps f1 f2
@@ -164,11 +185,16 @@ module LowApply = struct
         | GTmem _, PAMemory m ->
             (Fsubst.f_bind_mem sbt x m, f)
 
-        | GTmodty emt, PAModule (mp, mt) -> begin
+        | GTmodty (ns,emt), PAModule (mp, mt) -> begin
           (* FIXME: poor API ==> poor error recovery *)
           try
-            let obl = EcTyping.check_modtype env mp mt emt in
+            if ns <> Any then raise InvalidProofTerm; (* [Fresh] unsupported *)
+
+            let obl = EcTyping.check_modtype hyps mp mt emt in
             EcPV.check_module_in env mp emt;
+
+            if mode = `Intro && emt.mt_opacity <> Open then
+              raise InvalidProofTerm;
 
             let f = match obl with
               | `Ok ->  f
@@ -177,7 +203,7 @@ module LowApply = struct
                 else f_and (f_ands obl) f
             in
 
-            (Fsubst.f_bind_mod sbt x mp, f)
+            (Fsubst.f_bind_mod sbt x emt mp, f)
           with _ -> raise InvalidProofTerm
         end
 
@@ -186,7 +212,7 @@ module LowApply = struct
 
       match mode with
       | `Elim -> begin
-          match TTC.destruct_product hyps ax, arg with
+          match EcReduction.destruct_product hyps ax, arg with
           | Some (`Imp (f1, f2)), PASub subpt when mode = `Elim ->
               let f1    = Fsubst.f_subst sbt f1 in
               let subpt =
@@ -209,8 +235,10 @@ module LowApply = struct
       end
 
       | `Intro -> begin
-          match TTC.destruct_exists hyps ax with
-          | Some (`Exists (x, xty, f)) -> (check_binder (x, xty) f, arg)
+          match EcReduction.destruct_exists hyps ax with
+          | Some (`Exists (x, xty, f)) ->
+            (check_binder (x, xty) f, arg)
+
           | None ->
               if Fsubst.is_subst_id sbt then
                 raise InvalidProofTerm;
@@ -255,7 +283,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
   try
     let hypstc, concl = FApi.tc1_flat tc in
     let { h_tvar; h_local = hyps } = EcEnv.LDecl.tohyps hypstc in
-    let hyps = Mid.of_list hyps in
+    let hyps = Mid.of_list (List.map (fun x -> x.l_id, x) hyps) in
 
     let test_fv known fv =
       let test x _ =
@@ -270,19 +298,19 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
     let new_ = LDecl.init (LDecl.baseenv hypstc) h_tvar in
 
     let known, new_ =
-      let add1 (known, new_) x =
-        if Sid.mem x known then raise E.InvalidShuffle;
-        let bd = Mid.find_opt x hyps in
-        let bd = oget ~exn:E.InvalidShuffle bd in
+      let add1 (known, new_) id =
+        if Sid.mem id known then raise E.InvalidShuffle;
+        let x = Mid.find_opt id hyps in
+        let x = oget ~exn:E.InvalidShuffle x in
 
-        begin match bd with
+        begin match x.l_kind with
         | LD_var (ty, f) -> for_type known ty; oiter (for_form known) f
 
         | LD_hyp f -> for_form known f
 
         | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
         end;
-        (Sid. add x known, LDecl.add_local x bd new_)
+        (Sid.add id known, LDecl.add_local id x.l_kind new_)
 
       in List.fold_left add1 (Sid.empty, new_) ids in
     for_form known concl;
@@ -362,7 +390,7 @@ let rec t_lazy_match ?(reduce = `Full) (tx : form -> FApi.backward)
   (tc : tcenv1) =
   let concl = FApi.tc1_goal tc in
   try tx concl tc
-  with TTC.NoMatch ->
+  with EcReduction.NoMatch ->
     let strategy =
       match reduce with
       | `None    -> raise InvalidGoalShape
@@ -471,9 +499,9 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     | GTmem me ->
         LowIntro.check_name_validity !!tc `Memory name;
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
-    | GTmodty i ->
+    | GTmodty (ns,i) ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty i, Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)))
+        (id, LD_modty (ns,i), Fsubst.f_refresh_mod sbt x (EcPath.mident (tg_val id)))
   in
 
   let add_ld id ld hyps =
@@ -674,7 +702,7 @@ module Apply = struct
               noinstance `IncompleteInference;
             pt
           with EcMatching.MatchFailure ->
-            match TTC.destruct_product hyps pt.PT.ptev_ax with
+            match EcReduction.destruct_product hyps pt.PT.ptev_ax with
             | Some _ ->
                 (* FIXME: add internal marker *)
                 instantiate canview false (PT.apply_pterm_to_hole pt)
@@ -764,7 +792,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         | `NoClear  -> cls
       in
 
-      match LDecl.ld_subst s (LDecl.by_id id hyps) with
+      match LDecl.ld_subst s (LDecl.lk_by_id id hyps) with
       | LD_var (ty, Some body) when letin ->
           let x    = fresh id in
           let s    = Fsubst.f_bind_rename s id x ty in
@@ -786,12 +814,14 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         let args = PAMemory id :: args in
         (s, bds, args, cls)
 
-      | LD_modty mt ->
+      | LD_modty (_ns,mt) ->
         let x    = fresh id in
-        let s    = Fsubst.f_bind_mod s id (EcPath.mident x) in
+        let s    = Fsubst.f_refresh_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
-        let bds  = `Forall (x, GTmodty mt) :: bds in
+        (* TODO: precision improvement: we could replace [Any] by [Fresh]
+           if the epochs allow it (it is a bit complicated to check though) *)
+        let bds  = `Forall (x, GTmodty (Any,mt)) :: bds in
         let args = PAModule (mp, sig_) :: args in
         (s, bds, args, cls)
 
@@ -846,12 +876,12 @@ let t_generalize_hyp ?clear ?missing ?naming ?letin id tc =
 module LowAssumption = struct
   (* ------------------------------------------------------------------ *)
   let gen_find_in_hyps test hyps =
-    let test (_, lk) =
+    let test { l_kind = lk } =
       match lk with
       | LD_hyp f  -> test f
       | _         -> false
     in
-      fst (List.find test (LDecl.tohyps hyps).h_local)
+    (List.find test (LDecl.tohyps hyps).h_local).l_id
 
   (* ------------------------------------------------------------------ *)
   let t_gen_assumption tests tc =
@@ -906,7 +936,7 @@ let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) =
         t_reflex_s f1 tc
       else
         raise InvalidGoalShape
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_reflex_r tc
 
@@ -918,7 +948,7 @@ let t_symmetry ?reduce (tc : tcenv1) =
   let t_symmetry_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f2) -> t_symmetry_s f1 f2 tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_symmetry_r tc
 
@@ -930,7 +960,7 @@ let t_transitivity ?reduce f2 (tc : tcenv1) =
   let t_transitivity_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f3) -> t_transitivity_s f1 f2 f3 tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_transitivity_r tc
 
@@ -957,7 +987,7 @@ let t_or_intro ?reduce (side : side) (tc : tcenv1) =
   let t_or_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFor (b, (left, right)) -> t_or_intro_s b side (left, right) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_or_intro_r tc
 
@@ -978,7 +1008,7 @@ let t_and_intro ?reduce (tc : tcenv1) =
   let t_and_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFand (b, (left, right)) -> t_and_intro_s b (left, right) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_and_intro_r tc
 
@@ -990,7 +1020,7 @@ let t_iff_intro ?reduce (tc : tcenv1) =
   let t_iff_intro_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFiff (f1, f2) -> t_iff_intro_s (f1, f2) tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_iff_intro_r tc
 
@@ -1040,7 +1070,7 @@ let t_tuple_intro ?reduce (tc : tcenv1) =
     | SFeq (f1, f2) when is_tuple f1 && is_tuple f2 ->
         let fs = List.combine (destr_tuple f1) (destr_tuple f2) in
         t_tuple_intro_s fs tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_tuple_intro_r tc
 
@@ -1054,7 +1084,7 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
         match
           List.opick (fun tx ->
               try  Some (tx (f1, sf1) f2 tc)
-              with TTC.NoMatch -> None)
+              with EcReduction.NoMatch -> None)
             txs
         with
         | Some gs -> gs
@@ -1078,7 +1108,7 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
 let t_elim_false_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFfalse -> t_apply_s LG.p_false_elim [] ~args:[concl] tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_false ?reduce tc = t_elim_r ?reduce [t_elim_false_r] tc
 
@@ -1093,7 +1123,7 @@ let t_elim_and_r ((_, sf) : form * sform) concl tc =
 
       in t_apply_s p [] ~args:[a1; a2; concl] ~sk:1 tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_and ?reduce goal = t_elim_r ?reduce [t_elim_and_r] goal
 
@@ -1108,7 +1138,7 @@ let t_elim_or_r ((_, sf) : form * sform) concl tc =
 
       in t_apply_s p [] ~args:[a1; a2; concl] ~sk:2 tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_or ?reduce tc = t_elim_r ?reduce [t_elim_or_r] tc
 
@@ -1117,7 +1147,7 @@ let t_elim_iff_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFiff (a1, a2) ->
       t_apply_s LG.p_iff_elim [] ~args:[a1; a2; concl] ~sk:1 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_iff ?reduce tc = t_elim_r ?reduce [t_elim_iff_r] tc
 
@@ -1126,7 +1156,7 @@ let t_elim_if_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFif (a1, a2, a3) ->
       t_apply_s LG.p_if_elim [] ~args:[a1; a2; a3; concl] ~sk:2 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_if ?reduce tc = t_elim_r ?reduce [t_elim_if_r] tc
 
@@ -1179,7 +1209,7 @@ let t_elim_eq_tuple_r_n ((_, sf) : form * sform) concl tc =
       RApi.of_pure_u (tt_apply_hd hd ~args ~sk:1) tc;
       List.length tys, RApi.tcenv_of_rtcenv tc
 
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_eq_tuple_r f concl tc = snd (t_elim_eq_tuple_r_n f concl tc)
 
@@ -1194,7 +1224,7 @@ let t_elim_exists_r ((f, _) : form * sform) concl tc =
       let newc  = f_forall bd (f_imp (Fsubst.f_subst subst body) concl) in
       let tc    = FApi.mutate1 tc (fun hd -> VExtern (`Exists, [hd])) newc in
       FApi.tcenv_of_tcenv1 tc
-  | _ -> raise TTC.NoMatch
+  | _ -> raise EcReduction.NoMatch
 
 let t_elim_exists ?reduce tc = t_elim_r ?reduce [t_elim_exists_r] tc
 
@@ -1236,7 +1266,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
 
   let (aa2, ax) =
     let rec doit ax aa =
-      match TTC.destruct_product hyps ax with
+      match EcReduction.destruct_product hyps ax with
       | Some (`Imp (f1, f2)) when Mid.mem pr f1.f_fv -> doit f2 (aa+1)
       | _ -> (aa, ax)
     in
@@ -1256,7 +1286,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
       if   EcReduction.is_conv hyps pf_inst concl
       then (aa, sk)
       else
-        match TTC.destruct_product hyps pf_inst with
+        match EcReduction.destruct_product hyps pf_inst with
         | Some (`Imp (_, f2)) -> doit f2 (aa+1, sk+1)
         | _ -> raise InvalidGoalShape
     in
@@ -1357,7 +1387,7 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
           tc
       end
 
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
 
   in t_lazy_match ?reduce doit tc
 
@@ -1406,7 +1436,7 @@ let t_elim_prind_r ?reduce ?accept (_mode : [`Case | `Ind]) tc =
 
        in t_apply_s p tv ~args:(args @ [f2]) ~sk tc
 
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
 
   in t_lazy_match ?reduce doit tc
 
@@ -1463,7 +1493,7 @@ let t_split ?(closeonly = false) ?reduce (tc : tcenv1) =
         let tc = if f_equal concl fp then tc else t_change1 fp tc in
         let tc = t_case cond tc in
           tc
-    | _ -> raise TTC.NoMatch
+    | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_split_r tc
 
@@ -1545,8 +1575,8 @@ let t_rewrite
           s = `LtoR && ER.EqTest.for_type env ax.f_ty tbool
           -> (pt, ax, f_true)
 
-      | _ -> raise TTC.NoMatch
-    in oget ~exn:InvalidProofTerm (TTC.lazy_destruct hyps doit ax)
+      | _ -> raise EcReduction.NoMatch
+    in oget ~exn:InvalidProofTerm (EcReduction.lazy_destruct hyps doit ax)
   in
 
   let (left, right) =
@@ -1619,7 +1649,7 @@ module LowSubst = struct
   let is_member_for_subst ?kind hyps var f =
     let kind = odfl default_subst_kind kind in
     let env = LDecl.toenv hyps in
-    let is_let x = match LDecl.by_id x hyps with LD_var (_, Some _) -> true | _ -> false in
+    let is_let x = match LDecl.lk_by_id x hyps with LD_var (_, Some _) -> true | _ -> false in
     match f.f_node, var with
     (* Substitution of logical variables *)
     | Flocal x, None when kind.sk_local && not (is_let x) ->
@@ -1708,7 +1738,7 @@ module LowSubst = struct
           (* check if x is a declared module *)
           let fv = Sid.add x fv in
           if EcEnv.Mod.by_mpath_opt (EcPath.mident x) env <> None then fv
-          else match LDecl.by_id x hyps with
+          else match LDecl.lk_by_id x hyps with
           | LD_var (_, Some f) -> add_f fv f
           | _ -> fv
       and add_f fv f = Mid.fold_left add fv f.f_fv in
@@ -1751,13 +1781,17 @@ h1 : x = f w
 h2 : y = z
  *)
 
-let gen_hyps post gG =
-  let do1 gG (id, d) =
+let gen_hyps (post : l_locals) (gG : form) : form =
+  let do1 gG { l_id = id; l_kind = d } =
     match d with
     | LD_var (_ty, Some body) -> f_let1 id body gG
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
     | LD_mem mt               -> f_forall_mems [id, mt] gG
-    | LD_modty mt             -> f_forall [id, GTmodty mt] gG
+
+    | LD_modty (_ns,mt)       -> f_forall [id, GTmodty (Any,mt)] gG
+    (* TODO: precision improvement: we could replace [Any] by [Fresh]
+       if the epochs allow it (it is a bit complicated to check though) *)
+
     | LD_hyp f                -> f_imp f gG
     | LD_abs_st _             -> raise InvalidGoalShape in
   List.fold_left do1 gG post
@@ -1769,11 +1803,11 @@ let build_var var ty =
   | `PVar(x,m)   -> f_pvar x ty m
 
 
-let t_rw_for_subst y togen concl side eqid tc =
+let t_rw_for_subst y (togen : l_locals) concl side eqid tc =
   let hyps = FApi.tc1_hyps tc in
   let eq = LDecl.hyp_by_id eqid hyps in
   let f1', f2' = destr_eq_or_iff eq in
-  let ids = List.map fst togen in
+  let ids = List.map l_id togen in
   let ty = f1'.f_ty in
   let posty_G = f_lambda [y, GTty ty] (gen_hyps (List.rev togen) concl) in
   let f1, f2 = if side = `LtoR then f2', f1' else f1', f2' in
@@ -1804,71 +1838,73 @@ let t_rw_for_subst y togen concl side eqid tc =
 let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc : tcenv1) =
   let env, hyps, concl = FApi.tc1_eflat tc in
 
-  let subst_pre (subst, check, depend) moved (id, lk) =
-    if Sid.mem id depend then `Pre (id, lk)
+  let subst_pre (subst, check, depend) moved (hyp : l_local)
+    : [`Pre of l_local | `Post of l_local ]
+    =
+    if Sid.mem hyp.l_id depend then `Pre hyp
     else
 
     let check_moved f = not (Mid.disjoint (fun _ _ _ -> false) f.f_fv moved) in
 
-    match lk with
+    match hyp.l_kind with
     | LD_var (_ty, None) ->
-        `Pre (id, lk)
+        `Pre hyp
 
     | LD_var (ty, Some body) ->
       if check_moved body then
         let body =
-          if check body && not (Sid.mem id except)
+          if check body && not (Sid.mem hyp.l_id except)
           then subst body
           else body in
-        `Post (id, LD_var (ty, Some body))
+        `Post { hyp with l_kind = LD_var (ty, Some body) }
       else
-        if check body && not (Sid.mem id except)
-        then `Post (id, LD_var (ty, Some (subst body)))
-        else `Pre  (id, lk)
+        if check body && not (Sid.mem hyp.l_id except)
+        then `Post { hyp with l_kind = LD_var (ty, Some (subst body))}
+        else `Pre  hyp
 
     | LD_hyp body ->
       if check_moved body then
         let body =
-          if check body && not (Sid.mem id except) then subst body
+          if check body && not (Sid.mem hyp.l_id except) then subst body
           else body in
-        `Post (id, LD_hyp body)
+        `Post { hyp with l_kind = LD_hyp body }
       else
-        if check body && not (Sid.mem id except)
-        then `Post (id, LD_hyp (subst body))
-        else `Pre  (id, lk)
+        if check body && not (Sid.mem hyp.l_id except)
+        then `Post { hyp with l_kind = LD_hyp (subst body)}
+        else `Pre  hyp
 
-    | LD_mem    _ -> `Pre (id, lk)
-    | LD_modty  _ -> `Pre (id, lk) (* TODO: subst cost *)
-    | LD_abs_st _ -> `Pre (id, lk)
+    | LD_mem    _ -> `Pre hyp
+    | LD_modty  _ -> `Pre hyp (* TODO: subst cost *)
+    | LD_abs_st _ -> `Pre hyp
   in
 
   let try1 eq =
-    match eq with
+    match eq.l_id, eq.l_kind with
     | id, LD_hyp f  when is_eq_or_iff f -> begin
         let dosubst (side, var, f, depend) =
           let y, fy =
             let y = EcIdent.create "y" in
             y, f_local y f.f_ty in
           let subst, check = LowSubst.build_subst env var fy in
-          let post, (id', _), pre =
-            try  List.find_pivot (id_equal id |- fst) (LDecl.tohyps hyps).h_local
+          let post, { l_id = id' }, pre =
+            try  List.find_pivot (id_equal id |- l_id) (LDecl.tohyps hyps).h_local
             with Not_found -> assert false
           in
 
           assert (id_equal id id');
           let hpost, _ =
             List.fold_right
-              (fun ((x,_) as h) (hpost, moved) ->
+              (fun h (hpost, moved) ->
                 match subst_pre (subst, check, depend) moved h with
                 | `Pre  _ -> (hpost, moved)
-                | `Post (id, lk) -> ((id, lk) :: hpost, Sid.add x moved))
+                | `Post h' -> (h' :: hpost, Sid.add h.l_id moved))
               pre ([], Sid.empty) in
           let post =
             List.fold_right
               (fun h post ->
-                assert (not (id_equal (fst h) id));
+                assert (not (id_equal h.l_id id));
                 match subst_pre (subst, check, depend) Sid.empty h with
-                | `Pre (id, lk) | `Post (id, lk) -> (id, lk) :: post )
+                | `Pre h | `Post h -> h :: post )
               post [] in
           let apost = List.rev_append hpost post in
           let concl = subst concl in
@@ -1880,7 +1916,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
             | SCall ->
               match var with
               | `Local x ->
-                begin match LDecl.by_id x hyps with
+                begin match LDecl.lk_by_id x hyps with
                 | LD_var (_, None) -> [x; id]
                 | _ -> [id]
                 end
@@ -1906,7 +1942,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
 
   let eqs =
     eqid
-      |> omap  (fun id -> [id, LD_hyp (LDecl.hyp_by_id id hyps)])
+      |> omap  (fun id -> [LDecl.by_id id hyps])
       |> ofdfl (fun () -> (LDecl.tohyps hyps).h_local)
   in
 
@@ -1941,13 +1977,13 @@ let t_absurd_hyp ?(conv  = `AlphaEq) id tc =
   ]) tc
 
 (* -------------------------------------------------------------------- *)
-let t_absurd_hyp ?conv ?id tc =
+let t_absurd_hyp ?conv ?id (tc : tcenv1) : tcenv =
   let tabsurd = t_absurd_hyp ?conv in
 
   match id with
   | Some id -> tabsurd id tc
   | None    ->
-      let tott (id, lk) =
+      let tott { l_id = id; l_kind = lk } =
         match lk with
         | LD_hyp f when is_not f -> Some (tabsurd id)
         | _ -> None
@@ -1971,13 +2007,13 @@ let t_false ?(conv = `Eq) id tc =
     tc
 
 (* -------------------------------------------------------------------- *)
-let t_false ?conv ?id tc =
+let t_false ?conv ?id (tc : tcenv1) : tcenv =
   let tfalse = t_false ?conv in
 
   match id with
   | Some id -> tfalse id tc
   | None    ->
-      let tott (id, lk) =
+      let tott { l_id = id; l_kind = lk; } =
         match lk with
         | LD_hyp _ -> Some (tfalse id)
         | _ -> None
@@ -2182,7 +2218,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
       let bd  = fst (destr_forall concl) in
       let ids = List.map (EcIdent.name |- fst) bd in
       let ids = LDecl.fresh_ids hyps ids in
-      let st = { st with cs_undosubst = Sid.of_list (List.map fst (LDecl.tohyps hyps).h_local) } in
+      let st = { st with cs_undosubst = Sid.of_list (List.map l_id (LDecl.tohyps hyps).h_local) } in
       FApi.t_seqs
         [t_intros_i ids; aux0 st;
          t_generalize_hyps ~clear:`Yes ~missing:true ids]
@@ -2224,7 +2260,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
        let reduce = if delta then `Full else `NoDelta in
        let thesplit tc = t_split ~closeonly:false ~reduce tc in
        let hyps0 = FApi.tc1_hyps tc in
-       let shuffle = List.rev_map fst (LDecl.tohyps (FApi.tc1_hyps tc)).h_local in
+       let shuffle = List.rev_map l_id (LDecl.tohyps (FApi.tc1_hyps tc)).h_local in
        let st_split = { st with cs_undosubst = Sid.of_list shuffle } in
        let tc =
          match FApi.t_try_base (thesplit @! aux0 st_split) tc with
@@ -2303,10 +2339,10 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
 (*        let f = EcEnv.LDecl.hyp_by_id eqid (FApi.tc1_hyps tc) in
         Format.eprintf "subst %s %a@." (if side = `LtoR then "LtoR" else "RtoL")
         (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv (FApi.tc1_env tc))) f;
-        Format.eprintf "apost = @[%a@]@." (EcPrinting.pp_list "@ " EcIdent.pp_ident) (List.map fst apost);*)
+        Format.eprintf "apost = @[%a@]@." (EcUtils.pp_list "@ " EcIdent.pp_ident) (List.map fst apost);*)
         let moved = ref Sid.empty in
         let check_moved f = not (Mid.disjoint (fun _ _ _ -> false) f.f_fv !moved) in
-        let doit (x,h) =
+        let doit { l_id = x; l_kind = h } =
           let test =
             (Sid.mem x st.cs_undosubst &&
                match h with
@@ -2324,7 +2360,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
         if upost = [] then t_clear eqid tc
         else
         let side = if side = `LtoR then `RtoL else `LtoR in
-      (*  Format.eprintf "upost = @[%a@]@." (EcPrinting.pp_list "@ " EcIdent.pp_ident) (List.map fst upost); *)
+      (*  Format.eprintf "upost = @[%a@]@." (EcUtils.pp_list "@ " EcIdent.pp_ident) (List.map fst upost); *)
         FApi.t_seqs [
           t_rw_for_subst y upost (FApi.tc1_goal tc) side eqid;
           t_generalize_hyp ~clear:`Yes ~missing:false eqid] tc

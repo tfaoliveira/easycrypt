@@ -1,9 +1,11 @@
 (* -------------------------------------------------------------------- *)
 open EcIdent
 open EcUtils
+open EcSymbols
 open EcTypes
 open EcMemory
 open EcBigInt.Notations
+open EcBaseLogic
 
 module BI = EcBigInt
 module CI = EcCoreLib
@@ -268,6 +270,15 @@ let f_int_add_simpl =
         ofdfl
           (fun () -> f_int_add f1 f2)
           (List.Exceptionless.find_map (fun f -> f ()) simpls)
+
+(* -------------------------------------------------------------------- *)
+let f_int_max_simpl f1 f2 =
+    let i1 = try Some (destr_int f1) with DestrError _ -> None in
+    let i2 = try Some (destr_int f2) with DestrError _ -> None in
+
+    match i1, i2 with
+    | Some i1, Some i2 -> f_int (EcBigInt.max i1 i2)
+    | _ -> f_int_max f1 f2
 
 (* -------------------------------------------------------------------- *)
 let f_int_sub_simpl f1 f2 =
@@ -545,16 +556,19 @@ and can_betared f =
   | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) -> true
   | _ -> false
 
-let f_forall_simpl b f =
-  let b = List.filter (fun (id,_) -> Mid.mem id (f_fv f)) b in
-  f_forall b f
+let rec f_forall_simpl bs f =
+  match bs with
+  | [] -> f
+  | (b, ty) :: bs ->
+    let f = f_forall_simpl bs f in
+    if Mid.mem b (f_fv f) then f_forall [b, ty] f else f
 
-let f_exists_simpl b f =
-  let b = List.filter (fun (id,_) -> Mid.mem id (f_fv f)) b in
-  f_exists b f
-
-let f_quant_simpl q b f =
-  if q = Lforall then f_forall_simpl b f else f_exists b f
+let rec f_exists_simpl bs f =
+  match bs with
+  | [] -> f
+  | (b, ty) :: bs ->
+    let f = f_exists_simpl bs f in
+    if Mid.mem b (f_fv f) then f_exists [b, ty] f else f
 
 let f_not_simpl f =
   if is_not f then destr_not f
@@ -647,6 +661,24 @@ let rec f_iff_simpl f1 f2 =
         -> f_iff_simpl f1 f2
     | _ -> f_iff f1 f2
 
+(* Lift a binary comparison over [txint] to cost record. *)
+let cost_mk_cmp
+    (fullcmp : bool -> bool -> bool)
+    (xcmp    : form -> form -> form)
+    (c1      : cost)
+    (c2      : cost) : form
+  =
+  let full = if fullcmp c1.c_full c2.c_full then f_true else f_false in
+  let self = xcmp c1.c_self c2.c_self in
+  let calls =
+    EcPath.Mx.fold2_union (fun _ x1 x2 forms ->
+        let x1 = oget_c_bnd x1 c1.c_full
+        and x2 = oget_c_bnd x2 c2.c_full in
+        xcmp x1 x2 :: forms
+      ) c1.c_calls c2.c_calls []
+  in
+  f_ands0_simpl (full :: self :: (List.rev calls))
+
 let rec f_eq_simpl f1 f2 =
   if f_equal f1 f2 then f_true
   else match f1.f_node, f2.f_node with
@@ -674,6 +706,29 @@ let rec f_eq_simpl f1 f2 =
   | Ftuple fs1, Ftuple fs2 when List.length fs1 = List.length fs2 ->
       f_ands_simpl (List.map2 f_eq_simpl fs1 fs2) f_true
 
+  | Fcost c1, Fcost c2 ->
+    cost_mk_cmp (=) f_eq_simpl c1 c2
+
+  | Fmodcost mc1, Fmodcost mc2 ->
+    let similar =
+      let exception Fail in
+      try
+        Msym.fold2_union (fun _ pc1 pc2 () ->
+            match pc1, pc2 with
+            | Some _, Some _ -> ()
+            | _ -> raise Fail
+          ) mc1 mc2 ();
+        true
+        with Fail -> false
+    in
+    if similar then
+      Msym.fold2_union (fun _ pc1 pc2 cond ->
+          let pc1, pc2 = oget pc1, oget pc2 in
+          f_and_simpl (cost_mk_cmp (=) f_eq_simpl pc1 pc2) cond
+        ) mc1 mc2 f_true
+    else f_eq f1 f2
+
+
   | _ -> f_eq f1 f2
 
 (* -------------------------------------------------------------------- *)
@@ -692,9 +747,20 @@ type op_kind = [
   | `Real_lt
   | `Int_add
   | `Int_mul
+  | `Int_max
   | `Int_pow
   | `Int_opp
   | `Int_edivz
+
+  | `Cost_add
+  | `Cost_opp
+  | `Cost_scale
+  | `Cost_xscale
+  | `Cost_le
+  | `Cost_lt
+  | `Cost_big
+  | `Cost_is_int
+
   | `Real_add
   | `Real_opp
   | `Real_mul
@@ -721,8 +787,19 @@ let operators =
      CI.CI_Int .p_int_add , `Int_add  ;
      CI.CI_Int .p_int_opp , `Int_opp  ;
      CI.CI_Int .p_int_mul , `Int_mul  ;
+     CI.CI_Int .p_int_max , `Int_max  ;
      CI.CI_Int .p_int_pow , `Int_pow  ;
      CI.CI_Int .p_int_edivz , `Int_edivz  ;
+
+     CI.CI_Cost.p_cost_le    , `Cost_le    ;
+     CI.CI_Cost.p_cost_lt    , `Cost_lt    ;
+     CI.CI_Cost.p_cost_add   , `Cost_add   ;
+     CI.CI_Cost.p_cost_opp   , `Cost_opp   ;
+     CI.CI_Cost.p_cost_scale , `Cost_scale ;
+     CI.CI_Cost.p_cost_xscale, `Cost_xscale;
+     CI.CI_Cost.p_cost_is_int, `Cost_is_int;
+     CI.CI_Xint.p_bigcost    , `Cost_big   ;
+
 
      CI.CI_Real.p_real_add, `Real_add ;
      CI.CI_Real.p_real_opp, `Real_opp ;
@@ -779,6 +856,9 @@ type sform =
   | SFiff   of form * form
   | SFeq    of form * form
   | SFop    of (EcPath.path * ty list) * (form list)
+
+  | SFcost of cost
+  | SFmodcost of mod_cost
 
   | SFhoareF  of sHoareF
   | SFhoareS  of sHoareS
@@ -838,6 +918,9 @@ let rec sform_of_form fp =
   | Fapp ({ f_node = Fop (op, ty) }, args) ->
       sform_of_op (op, ty) args
 
+  | Fcost c     -> SFcost c
+  | Fmodcost mc -> SFmodcost mc
+
   | _ -> SFother fp
 
 
@@ -872,6 +955,14 @@ let real_of_form f =
       else None
   | _ -> None
 
+(* [x] of type [txint]. *)
+let decompose_N x =
+  match destr_app x with
+  | { f_node = Fop (p, _) }, [f]
+    when EcPath.p_equal p EcCoreLib.CI_Xint.p_N   -> Some f
+  | _ -> None
+
+
 (* -------------------------------------------------------------------- *)
 let f_int_le_simpl f1 f2 =
   if f_equal f1 f2 then f_true else
@@ -900,6 +991,384 @@ let f_real_lt_simpl f1 f2 =
   match opair real_of_form f1 f2 with
   | Some (x1, x2) -> f_bool (BI.compare x1 x2 < 0)
   | _ -> f_real_lt f1 f2
+
+(* -------------------------------------------------------------------- *)
+let f_xle_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_int_le_simpl c1 c2
+  | _                -> f_xle c1 c2
+
+let f_xlt_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_int_lt_simpl c1 c2
+  | _                -> f_xlt c1 c2
+
+let f_xadd_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_add_simpl c1 c2)
+  | _                -> f_xadd c1 c2
+
+let f_xmul_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_mul_simpl c1 c2)
+  | _                -> f_xmul c1 c2
+
+let f_xmax_simpl (c1 : form) (c2 : form) : form =
+  match decompose_N c1, decompose_N c2 with
+  | Some c1, Some c2 -> f_N (f_int_max_simpl c1 c2)
+  | _                -> f_xmax c1 c2
+
+let f_xopp_simpl (c : form) : form =
+  match decompose_N c with
+  | Some c -> f_N (f_int_opp_simpl c)
+  | _      -> f_xopp c
+
+let f_is_inf_simpl (c : form) : form =
+  if is_inf c then f_true else f_is_inf c
+
+let f_is_int_simpl (c : form) : form =
+  if is_inf c then f_false else f_is_int c
+
+(* -------------------------------------------------------------------- *)
+
+(** Simplification of cost equality and inequality tests using
+    module freshness and epochs. *)
+module CostCompSimplify = struct
+  type cproj =
+    | PFresh of EcPath.xpath * Epoch.t
+    (* proj. over a procedure of a [Fresh] module with its epoch *)
+
+    | AllExcept of EcPath.xpath list * Epoch.t
+    (* procedures and concrete cost except some (already projected) procedures
+       of [Fresh] modules, and the minimum epoch of all these [Fresh] modules. *)
+
+
+  (* replace arithmetic operations by their counterpart after projection *)
+  let cproj_op (p : cproj) (f : form) : form =
+    match p with
+    | AllExcept _ -> f
+    | PFresh _ ->
+      snd @@
+      List.find (f_equal f |- fst)
+        [ (fop_cost_add    , f_op_xadd);
+          (fop_cost_opp    , f_op_xopp);
+          (fop_cost_scale  , f_op_xmuli);
+          (fop_cost_xscale , f_op_xmul); ]
+
+  (* replace comparison operations by their counterpart after projection *)
+  let cproj_cmp (p : cproj) (f : form) : form =
+    match p with
+    | AllExcept _ -> f
+    | PFresh _ ->
+      snd @@
+      List.find (f_equal f |- fst)
+        [ (fop_cost_le, f_op_xle );
+          (fop_cost_le, f_op_xlt );
+          (fop_eq EcTypes.tcost, fop_eq EcTypes.txint); ]
+
+  (* built the list of projections resulting from some local hyps *)
+  let mk_cprojs (hyps : EcEnv.LDecl.hyps) : cproj list =
+    let env = EcEnv.LDecl.toenv hyps in
+
+    let locals = (EcEnv.LDecl.tohyps hyps).h_local in
+    let fresh_mts =
+      List.filter_map (fun { l_id; l_kind; l_epoch = e } ->
+          match l_kind with
+          | LD_modty (Fresh, mt) -> Some (l_id, mt, e)
+          | _ -> None
+        ) locals
+    in
+
+    (* arbitrary epoch in [fresh_mts]. Can be anything if [fresh_mts] is empty. *)
+    let e = match fresh_mts with
+      | [] -> Epoch.init
+      | (_, _, e) :: _ -> e
+    in
+
+    let min_epoch, procs =
+      List.fold_left_map (fun e (mid, mt, e') ->
+          let procs =
+            List.map (fun (EcModules.Tys_function fs) ->
+                let xp = EcPath.xpath (EcPath.mident mid) fs.fs_name in
+                xp, e'
+              )
+              (EcEnv.ModTy.sig_of_mt env mt).EcModules.mis_body
+          in
+          Epoch.min e e', procs
+        ) e fresh_mts
+    in
+    let procs = List.flatten procs in
+
+    let allxp = List.map fst procs in
+    let projs = List.map (fun (xp, e) -> PFresh (xp, e)) procs in
+
+    AllExcept (allxp, min_epoch) :: projs
+
+
+  exception SFail
+
+  (* check that some formula occurs strictly before some epoch *)
+  let check_before (hyps : EcEnv.LDecl.hyps) (etop : Epoch.t) (f : form) : unit =
+    let rec check f =
+      match f.f_node with
+      | Flocal l ->
+        begin
+          match by_id_opt l (EcEnv.LDecl.tohyps hyps) with
+          | None -> raise SFail
+          | Some { l_epoch = e } ->
+            if not (Epoch.lt e etop) then raise SFail
+        end
+      | Fapp (f, fs) -> List.iter check (f :: fs)
+      | Flet (_, f, f') -> check_l [f; f']
+      | Fglob _
+      | Fint _
+      | Fop _ -> ()
+      | Fif (f,f1,f2) -> check_l [f; f1; f2]
+      | Ftuple l -> check_l l
+      | Fproj (f, _) -> check f
+      | _ -> raise SFail
+
+    and check_l l = List.iter check l in
+
+    check f
+
+  (* Try to simplify the projection.
+     - [f] has type [tcost]
+     - return: type [tcost] if [p = AllExceptFresh], [txint] otherwise
+     - raise [SFail] if the simplification failed *)
+  let simpl_cproj
+      (hyps : EcEnv.LDecl.hyps) (p : cproj) (f : form)
+    : form
+    =
+    let rec simpl (f : form) : form =
+      match f.f_node with
+      | Fcost c ->
+        begin match p with
+          | AllExcept (xps,_) ->
+            let calls = EcPath.Mx.filter (fun xp _ ->
+                not (List.exists (EcPath.x_equal xp) xps)
+              ) c.c_calls
+            in
+            f_cost_r (cost_r c.c_self calls c.c_full)
+
+          | PFresh (xp', _) ->
+            oget_c_bnd (EcPath.Mx.find_opt xp' c.c_calls) c.c_full
+        end
+
+      | Fapp (f_op, lf)
+        when List.exists (f_equal f_op) [fop_cost_add; fop_cost_opp] ->
+        f_app (cproj_op p f_op) (List.map simpl lf) f.f_ty
+
+      | Fapp (f_op, [scale; fc]) when
+          List.exists (f_equal f_op) [fop_cost_scale; fop_cost_xscale] ->
+        f_app (cproj_op p f_op) [scale; simpl fc] f.f_ty
+
+      | Flocal l ->
+        begin
+          match by_id_opt l (EcEnv.LDecl.tohyps hyps) with
+          | None -> raise SFail
+          | Some { l_epoch = e } ->
+            match p with
+            | PFresh (_, e') ->
+              if Epoch.lt e e' then f_x0 else raise SFail
+
+            | AllExcept (_,e') ->
+              if Epoch.lt e e' then f else raise SFail
+        end
+
+      | Fop _ ->
+        begin match p with
+          | PFresh    _ -> f_x0
+          | AllExcept _ -> f
+        end
+
+      | _ ->
+        match p with
+        | PFresh _ -> f_x0
+        | AllExcept (_, etop) ->
+          check_before hyps etop f;
+          f
+    in
+    simpl f
+
+  let simpl (hyps : EcEnv.LDecl.hyps) (f : form) : form =
+    match f.f_node with
+    | Fapp (fop, [f1; f2])
+      when List.exists (f_equal fop)
+          [fop_cost_le; fop_cost_le; fop_eq EcTypes.tcost; ] ->
+      let cprojs = mk_cprojs hyps in
+
+      begin try
+          let forms =
+            List.map (fun cp ->
+                let f1' = simpl_cproj hyps cp f1 in
+                let f2' = simpl_cproj hyps cp f2 in
+                let fop' = cproj_cmp cp fop in
+
+                let f' = f_app fop' [f1'; f2'] tbool in
+
+                if f_equal f f' then raise SFail;
+
+                f'
+              ) cprojs
+          in
+           f_ands0_simpl forms
+        with SFail -> f           (* simplification failed, we do nothing *)
+      end
+
+    | _ -> f
+end
+
+(* -------------------------------------------------------------------- *)
+(* lift a unary function to [tcost] *)
+let f_cost_map
+    (xf    : form -> form)      (* type [txint -> txint] *)
+    (costf : form -> form)      (* type [tcost -> tcost] *)
+    (c     : form)              (* type [tcost] *)
+  : form                        (* type [tcost] *)
+  =
+  if not (is_cost c) then costf c
+  else
+    let c = destr_cost c in
+    let self = xf c.c_self in
+    let calls = EcPath.Mx.map (fun x -> xf x) c.c_calls in
+    f_cost_r (cost_r self calls c.c_full)
+
+let f_cost_opp_simpl =
+  f_cost_map
+    (fun x -> f_xopp_simpl x)
+    (fun c -> f_cost_opp c)
+
+let f_cost_scale_simpl (f : form) (c : form) =
+  if      f_equal f f_i0 then f_cost_zero
+  else if f_equal f f_i1 then c
+  else
+    f_cost_map
+      (fun x -> f_xmul_simpl (f_N f) x)
+      (fun c -> f_cost_scale f c)
+      c
+
+let f_cost_xscale_simpl (f : form) (c : form) =
+  if      f_equal f f_x0  then f_cost_zero
+  else if f_equal f f_x1  then c
+  else if f_equal f f_Inf then f_cost_inf
+  else
+    f_cost_map
+      (fun x -> f_xmul_simpl f x)
+      (fun c -> f_cost_xscale f c)
+      c
+
+(* -------------------------------------------------------------------- *)
+(* Lift a unary function over [args -> txint] to [args -> tcost]
+   where [args] is [a_1 -> ... -> a_n].
+   I.e. commutes a λ-binding and the cost record. *)
+let f_lam_cost_map
+    (xf    : form -> form)      (* type [(args -> txint) -> txint] *)
+    (costf : form -> form)      (* type [(args -> tcost) -> tcost] *)
+    (c     : form)              (* type [args -> tcost] *)
+  : form                        (* type [tcost] *)
+  =
+  let bd, body = decompose_lambda c in
+  if not (is_cost body) then costf c
+  else
+    let body = destr_cost body in
+    let self = xf (f_lambda bd body.c_self) in
+    let calls = EcPath.Mx.map (fun x -> xf (f_lambda bd x)) body.c_calls in
+    f_cost_r (cost_r self calls body.c_full)
+
+let f_bigcost_simpl (pred : form) (cost : form) (l : form) : form =
+  f_lam_cost_map
+    (fun x -> f_bigx pred x l)
+    (fun c -> f_bigcost pred c l)
+    cost
+(* -------------------------------------------------------------------- *)
+let cost_is_zero (c : form) : bool =
+  if not (is_cost c) then false
+  else
+    let c = destr_cost c in
+    c.c_full &&
+    f_equal f_x0 c.c_self &&
+    EcPath.Mx.for_all (fun _ -> f_equal f_x0) c.c_calls
+
+(* -------------------------------------------------------------------- *)
+(* lift a binary operator over [txint] to [tcost] *)
+let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
+  if not (is_cost c1 && is_cost c2) then
+    costop c1 c2
+  else
+    let c1, c2 = destr_cost c1, destr_cost c2 in
+
+    let self = xop c1.c_self c2.c_self in
+    let calls =
+      EcPath.Mx.merge (fun _ x1 x2 ->
+          let x1 = oget_c_bnd x1 c1.c_full
+          and x2 = oget_c_bnd x2 c2.c_full in
+          Some (xop x1 x2)
+        ) c1.c_calls c2.c_calls
+    in
+    f_cost_r (cost_r self calls (c1.c_full && c2.c_full))
+
+let f_cost_add_simpl c1 c2 =
+  if cost_is_zero c1 then c2 else
+  if cost_is_zero c2 then c1 else
+    f_cost_mk_bin_simpl f_xadd_simpl f_cost_add c1 c2
+
+(* lift a binary comparison over [txint] to [tcost] *)
+let f_cost_mk_cmp fullcmp xcmp costcmp (c1 : form) (c2 : form) : form =
+  if not (is_cost c1 && is_cost c2) then
+    costcmp c1 c2
+  else
+    let c1, c2 = destr_cost c1, destr_cost c2 in
+    cost_mk_cmp fullcmp xcmp c1 c2
+
+let f_cost_le_simpl (hyps : EcEnv.LDecl.hyps) f f' =
+  if f_equal f' f_cost_inf || f_equal f' f_cost_inf0 then f_true
+  else
+    let mk_le f f' =
+      CostCompSimplify.simpl hyps (f_cost_le f f')
+    in
+    f_cost_mk_cmp (fun b b' -> not b' || b = b') f_xle_simpl mk_le f f'
+
+let f_cost_lt_simpl (hyps : EcEnv.LDecl.hyps) f f' =
+  let mk_lt f f' =
+    CostCompSimplify.simpl hyps (f_cost_lt f f')
+  in
+  f_cost_mk_cmp (fun b b' -> b' || b = b') f_xlt_simpl mk_lt f f'
+
+let f_cost_is_int_simpl c =
+  if not (is_cost c) then f_cost_is_int c
+  else
+    let c = destr_cost c in
+    if c.c_full = false then f_false
+    else
+      let self = f_is_int_simpl c.c_self in
+      let calls =
+        List.map (fun (_, x) -> f_is_int_simpl x) (EcPath.Mx.bindings c.c_calls)
+      in
+      f_ands0_simpl (self :: calls)
+
+(* -------------------------------------------------------------------- *)
+let mod_cost_proj_simpl (mc : mod_cost) (p : cost_proj) : form =
+  match p with
+  | Intr fname ->
+    let pcost = Msym.find fname mc in (* cannot fail *)
+    pcost.c_self
+
+  | Param {proc = fname; param_m; param_p } ->
+    let pcost = Msym.find fname mc in (* cannot fail *)
+
+    let c = EcPath.Mx.find_fun_opt (fun xp _ ->
+        EcIdent.name (EcPath.mget_ident xp.x_top) = param_m &&
+        xp.x_sub = param_p
+      ) pcost.c_calls
+    in
+
+    oget_c_bnd c pcost.c_full
+
+let f_cost_proj_simpl (f : form) (p : cost_proj) : form =
+  match f.f_node with
+  | Fmodcost mc -> mod_cost_proj_simpl mc p
+  | _ -> f_cost_proj_r f p
 
 (* -------------------------------------------------------------------- *)
 (* destr_exists_prenex destructs recursively existentials in a formula

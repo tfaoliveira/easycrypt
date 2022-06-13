@@ -14,6 +14,7 @@ type apperror =
   | AE_CannotInfer
   | AE_CannotInferMod
   | AE_NotFunctional
+  | AE_InvalidModNameSpace
   | AE_InvalidArgForm     of invalid_arg_form
   | AE_InvalidArgMod      of EcTyping.tymod_cnv_failure
   | AE_InvalidArgProof    of (form * form)

@@ -270,6 +270,47 @@ module OSmart = struct
 end
 
 (* -------------------------------------------------------------------- *)
+type 'a pp = Format.formatter -> 'a -> unit
+
+let pp_id pp fmt x = Format.fprintf fmt "%a" pp x
+
+let pp_null (_fmt : Format.formatter) = fun _ -> ()
+
+let pp_if c pp1 pp2 fmt x =
+  match c with
+  | true  -> Format.fprintf fmt "%a" pp1 x
+  | false -> Format.fprintf fmt "%a" pp2 x
+
+let pp_maybe c tx pp fmt x =
+  pp_if c (tx pp) pp fmt x
+
+let pp_opt pp_el fmt = function
+  | None   -> Format.fprintf fmt "None"
+  | Some x -> Format.fprintf fmt "Some %a" pp_el x
+
+let rec pp_list sep pp fmt xs =
+  let pp_list = pp_list sep pp in
+    match xs with
+    | []      -> ()
+    | [x]     -> Format.fprintf fmt "%a" pp x
+    | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
+
+let pp_option pp fmt x =
+  match x with None -> () | Some x -> pp fmt x
+
+let pp_enclose ~pre ~post pp fmt x =
+  Format.fprintf fmt "%(%)%a%(%)" pre pp x post
+
+let pp_paren pp fmt x =
+  pp_enclose ~pre:"(" ~post:")" pp fmt x
+
+let pp_maybe_paren c pp =
+  pp_maybe c pp_paren pp
+
+let pp_string fmt x =
+  Format.fprintf fmt "%s" x
+
+(* -------------------------------------------------------------------- *)
 type ('a, 'b) tagged = Tagged of ('a * 'b option)
 
 let tg_val (Tagged (x, _)) = x
@@ -388,6 +429,8 @@ module List = struct
   let opick = Exceptionless.find_map
 
   let ocons o xs = match o with None -> xs | Some x -> x :: xs
+
+  let oconsd = function x :: xs -> Some (x, xs) | _ -> None
 
   (* ------------------------------------------------------------------ *)
   let oindex (f : 'a -> bool) (xs : 'a list) : int option =
@@ -519,6 +562,14 @@ module List = struct
         | None   -> fpick xs
         | Some v -> Some v
     end
+
+  let concat_map f l =
+    let rec aux f acc = function
+      | [] -> rev acc
+      | x :: l ->
+        let xs = f x in
+        aux f (List.rev_append xs acc) l
+    in aux f [] l
 
   let rec is_unique ?(eq = (=)) (xs : 'a list) =
     match xs with

@@ -85,7 +85,6 @@ val f_lets_simpl : (EcTypes.lpattern * form) list -> form -> form
 
 val f_forall_simpl : bindings -> form -> form
 val f_exists_simpl : bindings -> form -> form
-val f_quant_simpl  : quantif -> bindings -> form -> form
 val f_app_simpl    : form -> form list -> EcTypes.ty -> form
 
 val f_not_simpl   : form -> form
@@ -111,6 +110,7 @@ val f_int_add_simpl   : form -> form -> form
 val f_int_opp_simpl   : form -> form
 val f_int_sub_simpl   : form -> form -> form
 val f_int_mul_simpl   : form -> form -> form
+val f_int_max_simpl   : form -> form -> form
 val f_int_edivz_simpl : form -> form -> form
 
 val f_real_add_simpl : form -> form -> form
@@ -119,6 +119,31 @@ val f_real_sub_simpl : form -> form -> form
 val f_real_mul_simpl : form -> form -> form
 val f_real_div_simpl : form -> form -> form
 val f_real_inv_simpl : form -> form
+
+(* -------------------------------------------------------------------- *)
+val f_cost_opp_simpl    : form -> form
+val f_cost_add_simpl    : form -> form -> form
+val f_cost_scale_simpl  : form -> form -> form
+val f_cost_xscale_simpl : form -> form -> form
+val f_cost_le_simpl     : EcEnv.LDecl.hyps -> form -> form -> form
+val f_cost_lt_simpl     : EcEnv.LDecl.hyps -> form -> form -> form
+val f_bigcost_simpl     : form -> form -> form -> form
+val f_cost_is_int_simpl : form -> form
+
+(* -------------------------------------------------------------------- *)
+val f_is_inf_simpl : form -> form
+val f_is_int_simpl : form -> form
+
+val f_xopp_simpl : form -> form
+val f_xadd_simpl : form -> form -> form
+val f_xmul_simpl : form -> form -> form
+val f_xle_simpl  : form -> form -> form
+val f_xlt_simpl  : form -> form -> form
+val f_xmax_simpl : form -> form -> form
+
+(* -------------------------------------------------------------------- *)
+val mod_cost_proj_simpl : mod_cost -> cost_proj -> form
+val f_cost_proj_simpl   : form     -> cost_proj -> form
 
 (* -------------------------------------------------------------------- *)
 val destr_exists_prenex : form -> bindings * form
@@ -144,9 +169,20 @@ type op_kind = [
   | `Real_lt
   | `Int_add
   | `Int_mul
+  | `Int_max
   | `Int_pow
   | `Int_opp
   | `Int_edivz
+
+  | `Cost_add
+  | `Cost_opp
+  | `Cost_scale
+  | `Cost_xscale
+  | `Cost_le
+  | `Cost_lt
+  | `Cost_big
+  | `Cost_is_int
+
   | `Real_add
   | `Real_opp
   | `Real_mul
@@ -186,6 +222,9 @@ type sform =
   | SFeq    of form * form
   | SFop    of (path * ty list) * (form list)
 
+  | SFcost of cost
+  | SFmodcost of mod_cost
+
   | SFhoareF  of sHoareF
   | SFhoareS  of sHoareS
   | SFcHoareF  of cHoareF
@@ -219,15 +258,3 @@ module DestrReal : sig
   val div : form -> form * form
   val abs : form -> form
 end
-
-(* -------------------------------------------------------------------- *)
-(*val cost_sub_self : cost -> form -> cost
-val cost_add_self : cost -> form -> cost
-val cost_sub_call : EcEnv.env -> cost -> EcPath.xpath -> form -> cost
-val cost_add_call : EcEnv.env -> cost -> EcPath.xpath -> form -> cost
-
-val cost_map      : (form -> form) -> cost -> cost
-val cost_op       : EcEnv.env -> (form -> form -> form ) -> cost -> cost -> cost
-val cost_app      : cost -> form list -> cost
-
-val cost_flatten  : cost -> form *)

@@ -7,6 +7,8 @@ open EcDecl
 open EcModules
 open EcFol
 
+open EcCHoare
+
 open EcCoreGoal
 open EcLowPhlGoal
 
@@ -45,10 +47,9 @@ module Low = struct
     let chs = tc1_as_choareS tc in
     let m  = EcMemory.memory chs.chs_m in
     let hd,e_expr,e,s = gen_rcond !!tc b m at_pos chs.chs_s in
-    let cond, cost =
-      EcCHoare.cost_sub_self
-        chs.chs_co
-        (EcCHoare.cost_of_expr c chs.chs_m e_expr) in
+    let { cond; res = cost } =
+      cost_sub_self ~c:chs.chs_co ~sub:(EcCHoare.cost_of_expr c chs.chs_m e_expr)
+    in
     let concl1  =
       f_hoareS chs.chs_m chs.chs_pr hd (f_and_simpl c e) in
     let concl2  = f_cHoareS_r { chs with chs_s = s;
@@ -253,8 +254,9 @@ module LowMatch = struct
       tc_error !!tc "choare match: the matched expression must be \
                      independent of the head statement (maybe use sp first?)."
     | Some lam_cost ->
-      let cond, cost =
-        EcCHoare.cost_sub_self chs.chs_co (lam_cost chs.chs_pr) in
+      let { cond; res = cost; } =
+        EcCHoare.cost_sub_self ~c:chs.chs_co ~sub:(lam_cost chs.chs_pr)
+      in
 
       let pr = ofold f_and chs.chs_pr epr in
 

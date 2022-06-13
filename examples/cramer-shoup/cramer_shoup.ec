@@ -964,7 +964,6 @@ section Security_Aux.
     + by rewrite fromintD;ring.
     smt (mu_bounded).
   qed.
-
 end section Security_Aux.
 
 section Security.

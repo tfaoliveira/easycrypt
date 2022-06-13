@@ -2,49 +2,13 @@
 open EcSymbols
 open EcPath
 open EcCoreFol
+open EcUtils
 
 module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
 
 (* -------------------------------------------------------------------- *)
 include EcCoreModules
-
-(* -------------------------------------------------------------------- *)
-(* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
-module OI : sig
-  type t = form PreOI.t
-
-  val hash : t -> int
-  val equal : t -> t -> bool
-
-  val is_in : t -> bool
-
-  val cost_self : t -> [`Bounded of form | `Unbounded]
-  val cost : t -> xpath -> [`Bounded of form | `Zero | `Unbounded]
-  val cost_calls : t -> [`Bounded of form Mx.t | `Unbounded]
-  val costs : t -> [`Bounded of form * form Mx.t | `Unbounded]
-
-  val allowed : t -> xpath list
-  val allowed_s : t -> Sx.t
-
-  val mk : xpath list -> bool -> [`Bounded of form * form Mx.t | `Unbounded] -> t
-  (* val change_calls : t -> xpath list -> t *)
-  val filter : (xpath -> bool) -> t -> t
-end = struct
-  type t = EcCoreFol.form PreOI.t
-
-  let is_in        = PreOI.is_in
-  let allowed      = PreOI.allowed
-  let allowed_s    = PreOI.allowed_s
-  let cost_self    = PreOI.cost_self
-  let cost         = PreOI.cost
-  let cost_calls   = PreOI.cost_calls
-  let costs        = PreOI.costs
-  let mk           = PreOI.mk
-  let filter       = PreOI.filter
-  let equal        = PreOI.equal EcCoreFol.f_equal
-  let hash         = PreOI.hash EcCoreFol.f_hash
-end
 
 (* -------------------------------------------------------------------- *)
 type module_type       = EcCoreFol.module_type
@@ -62,40 +26,89 @@ type module_comps_item = form p_module_comps_item
 type top_module_sig    = form p_top_module_sig
 type top_module_expr   = form p_top_module_expr
 
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module types *)
+let mk_mt_r = EcCoreFol.mk_mt_r
+
+(* Update existing module type *)
+let update_mt ?mt_params ?mt_name ?mt_args ?mt_restr ?mt_opacity mt
+  : module_type
+  =
+  let mt_params  = odfl mt.mt_params  mt_params
+  and mt_name    = odfl mt.mt_name    mt_name
+  and mt_args    = odfl mt.mt_args    mt_args
+  and mt_restr   = odfl mt.mt_restr   mt_restr
+  and mt_opacity = odfl mt.mt_opacity mt_opacity in
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity ~mt_restr
+
+(* -------------------------------------------------------------------- *)
+(* Smart constructor for module sigs *)
+let mk_msig_r = EcCoreFol.mk_msig_r
+
+(* Update existing module sig *)
+let update_msig ?mis_params ?mis_body ?mis_restr mis : module_sig =
+  let mis_params = odfl mis.mis_params mis_params
+  and mis_body   = odfl mis.mis_body   mis_body
+  and mis_restr  = odfl mis.mis_restr  mis_restr in
+  mk_msig_r ~mis_params ~mis_body ~mis_restr
+
+(* -------------------------------------------------------------------- *)
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;
-  mr_oinfos = Msym.empty;
+  mr_params = Msym.empty;
+  mr_cost   = f_cost_zero;
 }
 
 let mr_full = {
   mr_xpaths = ur_full EcPath.Sx.empty;
   mr_mpaths = ur_full EcPath.Sm.empty;
-  mr_oinfos = Msym.empty;
+  mr_params = Msym.empty;
+  mr_cost   = f_cost_zero;
 }
 
-let mr_add_restr mr (rx : Sx.t use_restr) (rm : Sm.t use_restr) =
-  { mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
-    mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm;
-    mr_oinfos = mr.mr_oinfos; }
+let mr_add_restr
+    (mr : mod_restr)
+    (rx : Sx.t use_restr)
+    (rm : Sm.t use_restr) : mod_restr
+  =
+  { mr with
+    mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
+    mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm; }
 
-let change_oinfo restr f oi =
-  { restr with mr_oinfos = Msym.add f oi restr.mr_oinfos }
+(* -------------------------------------------------------------------- *)
+let cost_has_restr (c : cost) : bool =
+  not (is_inf c.c_self) ||
+  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  c.c_full
 
-let add_oinfo restr f oi = change_oinfo restr f oi
+let f_cost_has_restr (c : form) =
+  if is_cost c then
+    let c = destr_cost c in
+    `Known (cost_has_restr c)
+  else `Unknown
 
-let oicalls_filter restr f filter =
-  match Msym.find f restr.mr_oinfos with
-  | oi -> change_oinfo restr f (OI.filter filter oi)
-  | exception Not_found -> restr
+(* -------------------------------------------------------------------- *)
+let proc_cost_has_restr (c : cost) : bool =
+  not (f_equal f_cost_inf c.c_self || f_equal f_cost_inf0 c.c_self) ||
+  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  c.c_full
 
-let change_oicalls restr f ocalls =
-  let oi = match Msym.find f restr.mr_oinfos with
-    | oi ->
-      let filter x = List.mem x ocalls in
-      OI.filter filter oi
-    | exception Not_found -> OI.mk ocalls true `Unbounded in
-  add_oinfo restr f oi
+let modcost_has_restr (mc : mod_cost) : bool =
+  Msym.exists (fun _ proc_c -> proc_cost_has_restr proc_c) mc
+
+let f_modcost_has_restr (mc : form) =
+  if is_modcost mc then
+    let mc = destr_modcost mc in
+    `Known (modcost_has_restr mc)
+  else `Unknown
+
+let f_modcost_proc_has_restr (mc : form) proc =
+  if is_modcost mc then
+    let mc = destr_modcost mc in
+    let p = Msym.find proc mc in
+    `Known (proc_cost_has_restr p)
+  else `Unknown
 
 (* -------------------------------------------------------------------- *)
 let mty_hash  = EcCoreFol.mty_hash

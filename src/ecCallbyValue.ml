@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcIdent
+open EcSymbols
 open EcTypes
 open EcEnv
 open EcFol
@@ -61,67 +62,50 @@ end
 
 type subst = Subst.subst
 
-(* -------------------------------------------------------------------- *)
-let rec f_eq_simpl st f1 f2 =
-  if f_equal f1 f2 then f_true else
-
-  match fst_map f_node (destr_app f1), fst_map f_node (destr_app f2) with
-  | (Fop (p1, _), args1), (Fop (p2, _), args2)
-      when EcEnv.Op.is_dtype_ctor st.st_env p1
-           && EcEnv.Op.is_dtype_ctor st.st_env p2 ->
-
-    let idx p =
-      let idx = EcEnv.Op.by_path p st.st_env in
-      snd (EcDecl.operator_as_ctor idx)
-    in
-    if   idx p1 <> idx p2
-    then f_false
-    else f_ands0_simpl (List.map2 (f_eq_simpl st) args1 args2)
-
-  | _, _ ->
-    if (EqTest.for_type st.st_env f1.f_ty EcTypes.tunit &&
-        EqTest.for_type st.st_env f2.f_ty EcTypes.tunit) ||
-       is_alpha_eq st.st_hyps f1 f2
-    then f_true
-    else EcFol.f_eq_simpl f1 f2
 
 (* -------------------------------------------------------------------- *)
-let rec f_map_get_simpl st m x bty =
-  match m.f_node with
-  | Fapp({ f_node = Fop(p, _)}, [e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_cst ->
-    e
+(* Simplifies a expression [0 <= (c1 + ... + cn)] over [tcost] using:
+   - [0 <= c - c]
+   - the monotonicity of [+]
+   Note that, [tcost], [c - c] is not [0], hence only inequalities can be
+   simplified. *)
+let cost_geq0_simplify (cost : form) : form =
+  let add_p = EcCoreLib.CI_Cost.p_cost_add in
 
-  | Fapp({f_node = Fop(p, _)}, [m'; x'; e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_set
-    -> begin
+  (* decompose [c] into a sum of elements *)
+  let rec decompose_add (c : form) : form list =
+    match destr_app2_eq ~name:"" add_p c with
+    | c1, c2 -> decompose_add c1 @ decompose_add c2
+    | exception DestrError _ -> [c]
+  in
 
-    match sform_of_form (f_eq_simpl st x' x) with
-    | SFtrue  -> e
-    | SFfalse -> f_map_get_simpl st m' x bty
-    | _       ->
-      let m' = f_map_set_simplify st m' x in
-      let m' = f_map_set m' x' e in
-      f_map_get m' x bty
-  end
+  (* [x = -y] or [-x = y] *)
+  let is_opp (x : form) (y : form) : bool =
+    f_equal x (f_cost_opp y) || f_equal (f_cost_opp x) y
+  in
 
-  | _ -> f_map_get m x bty
+  (* did we found a reduction *)
+  let reduced = ref false in
 
-and f_map_set_simplify st m x =
-  match m.f_node with
-  | Fapp({ f_node = Fop(p, _)}, [m'; x'; e])
-      when EcPath.p_equal p EcCoreLib.CI_Map.p_set
-    -> begin
+  (* remove pairs of elements [(x, -x)] *)
+  let rec simplify : form list -> form list = function
+    | [] -> []
+    | x :: l ->
+      try
+        let l1, _, l2 = List.find_pivot (is_opp x) l in
+        reduced := true;
+        simplify (List.rev_append l1 l2)
+      with Not_found -> x :: simplify l
+  in
 
-    match sform_of_form (f_eq_simpl st x' x) with
-    | SFtrue  -> f_map_cst x.f_ty e
-    | SFfalse -> f_map_set_simplify st m' x
-    | _       ->
-      let m' = f_map_set_simplify st m' x in
-      f_map_set m' x' e
-  end
+  let sum (l : form list) : form =
+    match List.rev l with
+    | [] -> f_cost_zero
+    | f :: l -> List.fold_left ((^~) f_cost_add) f l
+  in
 
-  | _ -> m
+  let new_cost = sum (simplify (decompose_add cost)) in
+  if !reduced then new_cost else cost
 
 (* -------------------------------------------------------------------- *)
 module Args : sig
@@ -174,17 +158,17 @@ let rec norm st s f =
  let f = cbv st s f (Args.empty (Subst.subst_ty s f.f_ty)) in
  norm_lambda st f
 
-and norm_cost st s c =
+and norm_cost st s (c : cost) : cost =
   let self'  = norm st s c.c_self
   and calls' =
     EcPath.Mx.fold (fun f cb calls ->
         (* We do not normalize the xpath, as it is not a valid xpath. *)
         let f' = Subst.subst_xpath s f
-        and cb' = call_bound_r (norm st s cb.cb_cost)
-                               (norm st s cb.cb_called) in
+        and cb' = norm st s cb in
         EcPath.Mx.change (fun old -> assert (old = None); Some cb') f' calls
-      ) c.c_calls EcPath.Mx.empty in
-  cost_r self' calls'
+      ) c.c_calls EcPath.Mx.empty
+  in
+  cost_r self' calls' c.c_full
 
 
 and norm_lambda (st : state) (f : form) =
@@ -203,12 +187,13 @@ and norm_lambda (st : state) (f : form) =
 
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
   | Fglob   _ | Fpvar   _ | Fop       _
+  | Fcost _
   | FhoareF _   | FhoareS _
   | FcHoareF _  | FcHoareS _
   | FbdHoareF _ | FbdHoareS _
   | FequivF _   | FequivS _
   | FeagerF   _ | Fpr _ | Fcoe _
-
+  | Fmodcost _  | Fcost_proj _
     -> f
 
 (* -------------------------------------------------------------------- *)
@@ -221,7 +206,7 @@ and betared st s bd f args =
      Subst.subst s (f_quant Llambda bd f)
 
   | (x, gty) :: bd, Some (v, args) ->
-     let _ : ty = EcFol.as_gtty gty in
+     let _ : ty = EcFol.gty_as_ty gty in
      let s = Subst.bind_local s x v in
      betared st s bd f args
 
@@ -473,6 +458,15 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
       | _ -> f_proj (norm_lambda st f1) i f.f_ty in
     app_red st f1 args
 
+  | Fcost c -> f_cost_r (norm_cost st s c)
+
+  | Fmodcost mc ->
+    f_mod_cost_r (Msym.map (norm_cost st s) mc)
+
+  | Fcost_proj (f,p) ->
+    let f = norm st s f in
+    f_cost_proj_simpl f p
+
   | FhoareF hf ->
     assert (Args.isempty args);
     assert (not (Subst.has_mem s mhr));
@@ -496,7 +490,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chf_pr = norm st s chf.chf_pr in
     let chf_po = norm st s chf.chf_po in
     let chf_f  = norm_xfun st s chf.chf_f in
-    let chf_c  = norm_cost st s chf.chf_co in
+
+    let chf_c  = cost_geq0_simplify (norm st s chf.chf_co) in
+
     f_cHoareF_r { chf_pr; chf_f; chf_po; chf_co = chf_c; }
 
   | FcHoareS chs ->
@@ -506,7 +502,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let chs_po = norm st s chs.chs_po in
     let chs_s  = norm_stmt s chs.chs_s in
     let chs_m  = norm_me s chs.chs_m in
-    let chs_c  = norm_cost st s chs.chs_co in
+
+    let chs_c  = cost_geq0_simplify (norm st s chs.chs_co) in
+
     f_cHoareS_r { chs_pr; chs_po; chs_s; chs_m; chs_co = chs_c; }
 
   | FbdHoareF hf ->
@@ -595,10 +593,10 @@ let norm_cbv (ri : reduction_info) hyps f =
     st_ri   = ri
   } in
 
-  let add_hyp s (x,k) =
-    match k with
-    | LD_var (_, Some e) when ri.delta_h x ->
-      let v = cbv_init st s e in Subst.bind_local s x v
+  let add_hyp s (hyp : l_local) =
+    match hyp.l_kind with
+    | LD_var (_, Some e) when ri.delta_h hyp.l_id ->
+      let v = cbv_init st s e in Subst.bind_local s hyp.l_id v
     | _ -> s in
 
   let s =

@@ -126,7 +126,9 @@ module TacInternal = struct
       wp ~uselet ~onesided:true ?c_pre env chs.chs_m s_wp chs.chs_po in
     check_wp_progress tc i chs.chs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
-    let cond, cost = EcCHoare.cost_sub_self chs.chs_co cost_wp in
+    let EcCHoare.{ cond; res = cost } =
+      EcCHoare.cost_sub_self ~c:chs.chs_co ~sub:cost_wp
+    in
     let concl = f_cHoareS_r { chs with chs_s = s;
                                        chs_po = post;
                                        chs_co = cost } in
@@ -208,6 +210,6 @@ let process_wp k cost_pre tc =
     | None -> None in
   let t_after =
     match (FApi.tc1_goal tc).f_node with
-    | FcHoareS _ -> [(fun x -> EcLowGoal.t_trivial x); EcLowGoal.t_id]
+    | FcHoareS _ -> [(fun x -> EcLowGoal.t_solve x); EcLowGoal.t_id]
     | _          -> [ EcLowGoal.t_id] in
   FApi.t_seqsub (t_wp ?cost_pre k) t_after tc

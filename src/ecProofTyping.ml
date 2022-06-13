@@ -34,16 +34,6 @@ let process_form ?mv hyps pf ty =
 let process_formula ?mv hyps pf =
   process_form hyps ?mv pf tbool
 
-let process_cost ?mv hyps (EcParsetree.PC_costs (self, calls)) tys =
-  let env = LDecl.toenv hyps in
-  let self = process_form_opt ?mv hyps self (Some (toarrow tys txint)) in
-  let calls = List.map (fun (m,f,c) ->
-      let f, self = EcTyping.trans_oracle env (m,f) in
-      let f_c = process_form_opt ?mv hyps c (Some (toarrow tys tint)) in
-      f, call_bound_r self f_c
-    ) calls in
-  cost_r self (EcPath.Mx.of_list calls)
-
 let process_exp hyps mode oty e =
   let env = LDecl.toenv hyps in
   let ue  = unienv_of_hyps hyps in
@@ -63,9 +53,6 @@ let pf_process_form_opt pe ?mv hyps oty pf =
 let pf_process_form pe ?mv hyps ty pf =
   Exn.recast_pe pe hyps (fun () -> process_form ?mv hyps pf ty)
 
-let pf_process_cost pe ?mv hyps tys pcost =
-  Exn.recast_pe pe hyps (fun () -> process_cost ?mv hyps pcost tys)
-
 let pf_process_formula pe ?mv hyps pf =
   Exn.recast_pe pe hyps (fun () -> process_formula ?mv hyps pf)
 
@@ -81,9 +68,6 @@ let tc1_process_form_opt ?mv tc oty pf =
 
 let tc1_process_form ?mv tc ty pf =
   Exn.recast_tc1 tc (fun hyps -> process_form ?mv hyps pf ty)
-
-let tc1_process_cost ?mv tc tys pcost =
-  Exn.recast_tc1 tc (fun hyps -> process_cost ?mv hyps pcost tys)
 
 let tc1_process_formula ?mv tc pf =
   Exn.recast_tc1 tc (fun hyps -> process_formula ?mv hyps pf)
@@ -185,44 +169,3 @@ let pf_check_tvi (pe : proofenv) typ tvi =
           if not (List.mem x typnames) then
             tc_error pe "unknown type variable: %s" x)
         tyargs
-
-(* -------------------------------------------------------------------- *)
-exception NoMatch
-
-(* -------------------------------------------------------------------- *)
-let rec lazy_destruct ?(reduce = true) hyps tx fp =
-  try  Some (tx fp)
-  with
-  | NoMatch when not reduce -> None
-  | NoMatch ->
-      match EcReduction.h_red_opt EcReduction.full_red hyps fp with
-      | None    -> None
-      | Some fp -> lazy_destruct ~reduce hyps tx fp
-
-(* -------------------------------------------------------------------- *)
-type dproduct = [
-  | `Imp    of form * form
-  | `Forall of EcIdent.t * gty * form
-]
-
-let destruct_product ?(reduce = true) hyps fp : dproduct option =
-  let doit fp =
-    match EcFol.sform_of_form fp with
-    | SFquant (Lforall, (x, t), lazy f) -> `Forall (x, t, f)
-    | SFimp (f1, f2) -> `Imp (f1, f2)
-    | _ -> raise NoMatch
-  in
-    lazy_destruct ~reduce hyps doit fp
-
-(* -------------------------------------------------------------------- *)
-type dexists = [
-  | `Exists of EcIdent.t * gty * form
-]
-
-let destruct_exists ?(reduce = true) hyps fp : dexists option =
-  let doit fp =
-    match EcFol.sform_of_form fp with
-    | SFquant (Lexists, (x, t), lazy f) -> `Exists (x, t, f)
-    | _ -> raise NoMatch
-  in
-    lazy_destruct ~reduce hyps doit fp

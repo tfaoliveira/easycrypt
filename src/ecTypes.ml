@@ -3,6 +3,7 @@ open EcUtils
 open EcIdent
 open EcPath
 open EcUid
+open EcSymbols
 
 module BI = EcBigInt
 
@@ -23,12 +24,17 @@ type ty = {
 }
 
 and ty_node =
-  | Tglob   of EcPath.mpath (* The tuple of global variable of the module *)
-  | Tunivar of EcUid.uid
-  | Tvar    of EcIdent.t
-  | Ttuple  of ty list
-  | Tconstr of EcPath.path * ty list
-  | Tfun    of ty * ty
+  | Tglob    of EcPath.mpath (* The tuple of global variable of the module *)
+  | Tunivar  of EcUid.uid
+  | Tvar     of EcIdent.t
+  | Ttuple   of ty list
+  | Tconstr  of EcPath.path * ty list
+  | Tfun     of ty * ty
+  | Tmodcost of {
+      procs   : bool Msym.t;        (* procedures (bool: is the proc cost open) *)
+      oracles : Ssym.t Msym.t;      (* oracles to their procedures *)
+      name    : EcPath.path option; (* optional name, for printing *)
+    }
 
 type dom = ty list
 
@@ -58,6 +64,12 @@ module Hsty = Why3.Hashcons.Make (struct
     | Tfun (d1, c1), Tfun (d2, c2)->
         ty_equal d1 d2 && ty_equal c1 c2
 
+    | Tmodcost { procs = procs1; oracles = params1; name = name1; },
+      Tmodcost { procs = procs2; oracles = params2; name = name2; } ->
+      Msym.equal (=) procs1 procs2
+      && Msym.equal Ssym.equal params1 params2
+      && opt_equal EcPath.p_equal name1 name2
+
     | _, _ -> false
 
   let hash ty =
@@ -68,6 +80,11 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
     | Tconstr (p, tl)  -> Why3.Hashcons.combine_list ty_hash p.p_tag tl
     | Tfun    (t1, t2) -> Why3.Hashcons.combine (ty_hash t1) (ty_hash t2)
+    | Tmodcost { procs; oracles; name; } ->
+      Why3.Hashcons.combine2
+        (Msym.hash Hashtbl.hash Hashtbl.hash procs)
+        (Msym.hash Hashtbl.hash Hashtbl.hash oracles)
+        (Why3.Hashcons.combine_option EcPath.p_hash name)
 
   let fv ty =
     let union ex =
@@ -80,6 +97,7 @@ module Hsty = Why3.Hashcons.Make (struct
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
+    | Tmodcost _       -> Mid.empty
 
   let tag n ty = { ty with ty_tag = n; ty_fv = fv ty.ty_node; }
 end)
@@ -109,14 +127,34 @@ let rec dump_ty ty =
       EcIdent.tostring id
 
   | Ttuple tys ->
-      Printf.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
+      Format.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
 
   | Tconstr (p, tys) ->
-      Printf.sprintf "%s[%s]" (EcPath.tostring p)
+      Format.sprintf "%s[%s]" (EcPath.tostring p)
         (String.concat ", " (List.map dump_ty tys))
 
   | Tfun (t1, t2) ->
-      Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+      Format.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+
+  | Tmodcost { procs; oracles; name; } ->
+    let pp_set =
+      Ssym.print (fun fmt s -> Format.fprintf fmt "%s" s)
+    in
+    Format.asprintf "@[<hv>%s@[%a@];@ @[%a@];]@]"
+      (match name with
+       | None -> ""
+       | Some name -> EcPath.tostring name ^ " : ")
+      (Format.pp_print_list
+         (fun fmt (s, b) ->
+            Format.fprintf fmt "%s %a" s Format.pp_print_bool b))
+      (Msym.bindings procs)
+      (Format.pp_print_list
+         (fun fmt (id, idparams) ->
+            Format.fprintf fmt "[%s: %a]"
+              id
+              pp_set idparams))
+      (Msym.bindings oracles)
+
 
 (* -------------------------------------------------------------------- *)
 let tuni uid     = mk_ty (Tunivar uid)
@@ -125,12 +163,14 @@ let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
 
+let tmodcost ?name procs oracles = mk_ty (Tmodcost { procs; oracles; name; })
+
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
 let tbool      = tconstr EcCoreLib.CI_Bool .p_bool    []
 let tint       = tconstr EcCoreLib.CI_Int  .p_int     []
-let txint      = tconstr EcCoreLib.CI_xint .p_xint    []
-
+let tcost      = tconstr EcCoreLib.CI_Cost .p_cost    []
+let txint      = tconstr EcCoreLib.CI_Xint .p_xint    []
 let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr   [ty]
 let toption ty = tconstr EcCoreLib.CI_Option.p_option [ty]
 let treal      = tconstr EcCoreLib.CI_Real .p_real    []
@@ -187,7 +227,7 @@ end
 (* -------------------------------------------------------------------- *)
 let ty_map f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> t
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> t
 
   | Ttuple lty ->
       TySmart.ttuple (t, lty) (List.Smart.map f lty)
@@ -201,21 +241,21 @@ let ty_map f t =
 
 let ty_fold f s ty =
   match ty.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> s
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> s
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
   | Tfun(t1,t2) -> f (f s t1) t2
 
 let ty_sub_exists f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> false
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> false
   | Ttuple lty -> List.exists f lty
   | Tconstr (_, lty) -> List.exists f lty
   | Tfun (t1, t2) -> f t1 || f t2
 
 let ty_iter f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> ()
+  | Tglob _ | Tunivar _ | Tvar _ | Tmodcost _ -> ()
   | Ttuple lty -> List.iter f lty
   | Tconstr (_, lty) -> List.iter f lty
   | Tfun (t1,t2) -> f t1; f t2
@@ -245,6 +285,9 @@ let symbol_of_ty (ty : ty) =
              | _ -> doit (i+1)
       in
         doit 0
+
+  | Tmodcost _ -> "c"
+
 
 let fresh_id_of_ty (ty : ty) =
   EcIdent.create (symbol_of_ty ty)
@@ -296,7 +339,10 @@ let rec ty_subst s =
               with Failure _ -> assert false
             in
               ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ s; } body
-      end)
+      end
+
+      | Tmodcost { procs; oracles; name } ->
+        tmodcost ?name:(omap s.ts_p name) procs oracles)
 
 (* -------------------------------------------------------------------- *)
 module Tuni = struct
@@ -959,7 +1005,11 @@ let is_e_subst_id s =
     s.es_xp == identity && Mid.is_empty s.es_loc
 
 (* -------------------------------------------------------------------- *)
-let e_subst_init freshen on_path on_ty opdef on_mpath esloc =
+let e_subst_init
+    freshen on_path on_ty opdef
+    (on_mpath : (EcPath.mpath * 'info) EcIdent.Mid.t)
+    esloc
+  =
   let on_mp =
     let f = EcPath.m_subst on_path on_mpath in
     if f == identity then f else EcPath.Hm.memo 107 f in

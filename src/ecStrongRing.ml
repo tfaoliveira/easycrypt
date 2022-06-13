@@ -127,7 +127,7 @@ let t_field_neq r g =
   | Some (f1,f2) ->
     let ty = f1.f_ty in
     let h = EcEnv.LDecl.fresh_id hyps "_" in
-    let can_app (id,lk) =
+    let can_app EcBaseLogic.{ l_id = id; l_kind = lk; } =
       match lk with
       | EcBaseLogic.LD_hyp f ->
         begin match destr_neq f with

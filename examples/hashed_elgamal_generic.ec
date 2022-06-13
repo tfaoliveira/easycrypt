@@ -12,7 +12,7 @@ proof gt0_n by exact/gt0_k
 rename
   "word" as "bits"
   "dunifin" as "dbits".
-import DWord.
+import DWord. 
 
 op cdbits : { int | 0 <= cdbits } as ge0_cdbits.
 
@@ -22,14 +22,14 @@ hint simplify cost_cdbits.
 
 (* Upper bound on complexity of the adversary *)
 type adv_cost = {
-  cchoose : int; (* cost *)
+  cchoose : cost; (* cost *)
   ochoose : int; (* number of call to o *)
-  cguess  : int; (* cost *)
+  cguess  : cost; (* cost *)
   oguess  : int; (* number of call to o *)
 }.
 
 op cA : adv_cost.
-axiom cA_pos : 0 <= cA.`cchoose /\ 0 <= cA.`ochoose /\ 0 <= cA.`cguess /\ 0 <= cA.`oguess /\ 0 < cA.`ochoose + cA.`oguess.
+axiom cA_pos : zero <= cA.`cchoose /\ 0 <= cA.`ochoose /\ zero <= cA.`cguess /\ 0 <= cA.`oguess /\ 0 < cA.`ochoose + cA.`oguess.
 
 op qH = cA.`ochoose + cA.`oguess.
 lemma gt0_qH :  0 < qH by smt (cA_pos).
@@ -44,7 +44,7 @@ clone import LCDHT.Cost as C1.
 
 clone include AllCore.Cost.
 clone include Bool.Cost.
-clone include Bits.Cost.
+clone include Bits.Cost. 
 clone include DBool.Cost.
 clone include List.Cost.
 clone include G.Cost.
@@ -130,8 +130,8 @@ module S = Hashed_ElGamal(H).
    the probability of B = CDH_from_CPA(SCDH_from_CPA(A,RO)) winning CDH(B) *)
 
 section.
-  declare module A <: Adversary [choose : `{N cA.`cchoose, #O.o : cA.`ochoose},
-                                 guess  : `{N cA.`cguess,  #O.o : cA.`oguess}] {-H}.
+  declare module A<: Adversary [choose : [cA.`cchoose, #O.o : N cA.`ochoose],
+                                guess  : [cA.`cguess,  #O.o : N cA.`oguess]] {-H}.
 
   declare axiom guess_ll (O <: POracle {-A}) : islossless O.o => islossless A(O).guess.
 
@@ -203,27 +203,30 @@ section.
 
   local lemma cost_ALCDH : 
     choare [ALCDH.solve : true ==> 0 < size res <= cA.`ochoose + cA.`oguess] 
-    time [N (6 + cdbits + (3 + cdbits + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)].
+    time `[         : N (6 + cdbits + 
+                      (3 + cdbits + cget qH + cset qH + cin qH) * 
+                      (cA.`oguess + cA.`ochoose)), 
+           A.guess  : '1,
+           A.choose : '1].
   proof.
     proc; wp.
-    call (_: size H.qs- cA.`ochoose <= k /\ bounded LRO.m (size H.qs);
-           time
-           [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
-    + move=> zo hzo; proc; inline *.
+    call (_: size H.qs- cA.`ochoose <= k /\ bounded LRO.m (size H.qs) :
+           [H.o k : `[:N(3 + cdbits + cget qH + cset qH + cin qH)]]).
+    + move=> zo /= hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       rnd; auto => &hr />; rewrite dbits_ll /=.
       progress; 1,2,4,6,7,8,9: smt (cset_pos bounded_set).
       * have -> : (qH = qH - 1 + 1) by smt ().
         apply bounded_set. 
         smt ().
-
       * rewrite addzC.
         apply bounded_set. 
         smt ().
 
-    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs);
-           time [H.o k : [N(3 + cdbits + cget qH + cset qH + cin qH)]]).
-    + move=> zo hzo; proc; inline *.
+    move => /=.
+    wp; rnd; call (_: size H.qs = k /\ bounded LRO.m (size H.qs) :
+            [H.o k : `[: N(3 + cdbits + cget qH + cset qH + cin qH)]]).
+    + move=> zo /= hzo; proc; inline *.
       wp := (bounded LRO.m qH).
       rnd;auto => &hr />; rewrite dbits_ll /=.
       progress; 1,2,4,6,7,8,9: 
@@ -235,10 +238,11 @@ section.
       * rewrite addzC.
         apply bounded_set. 
         smt ().
-    inline *; auto => />.
+
+    inline *; auto => // />. 
     split => *.
     + smt (bounded_empty dbits_ll size_ge0 size_eq0 cA_pos).
-    rewrite !bigi_constz /=; smt(cA_pos).
+    rewrite !bigi_constz /=; smt(cA_pos).     
   qed.
 
   local lemma Pr_G0_LCDHPr_G0_res &m: 
@@ -257,20 +261,33 @@ section.
   qed.
 
   lemma ex_reduction &m : 
-    exists (B<:CDH.Adversary 
-      [solve : `{ N(C1.cduniform_n + 
-                  6 + cdbits + 
-                  (3 + cdbits + cget qH + cset qH + cin qH) * (cA.`oguess + cA.`ochoose) + cA.`cguess + cA.`cchoose)}]
+    exists (B<: CDH.Adversary 
+      [open
+       solve : [ `[        : N (C1.cduniform_n +
+                                6 + cdbits +
+                                (3 + cdbits + cget qH + cset qH + cin qH) *
+                                (cA.`oguess + cA.`ochoose)),
+                  A.choose : '1,
+                  A.guess  : '1]]]
                {+A, +H}),
     Pr[CPA(S,A(LRO)).main() @ &m: res] - 1%r/2%r <= 
     qH%r * Pr[CDH.CDH(B).main() @ &m: res].
-  proof.
-    have [B hB]:= C1.ex_reduction _ ALCDH &m cost_ALCDH.
-    exists B; split.
-    + proc true : time [] => // /#.
+  proof. print C1.ex_reduction. 
+    have [B hB]:= 
+      C1.ex_reduction 
+       `[         : N (6 + cdbits + 
+                    (3 + cdbits + cget qH + cset qH + cin qH) * 
+                    (cA.`oguess + cA.`ochoose)), 
+         A.guess  : '1,
+         A.choose : '1] 
+      ALCDH _ &m _. 
+    by conseq cost_ALCDH.
+    by move=>/=; conseq cost_ALCDH.
+    exists B; split => /=.
+    + proc*; call(: true) => /=. 
+      by skip => /=; smt (cA_pos).
+
     move: (Pr_CPA_G0 &m) (Pr_G0_res &m) (Pr_G0_LCDHPr_G0_res) => /#.
   qed.
 
 end section.
-
-print ex_reduction.

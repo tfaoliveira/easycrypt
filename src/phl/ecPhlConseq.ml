@@ -15,13 +15,11 @@ module PT  = EcProofTerm
 module TTC = EcProofTyping
 
 (* -------------------------------------------------------------------- *)
-let conseq_cond pre post spre spost =
+let conseq_cond pre post spre spost : form * form =
   f_imp pre spre, f_imp spost post
 
-let conseq_cost cost scost =
-  let cflat  = EcCHoare.cost_flatten cost
-  and scflat =  EcCHoare.cost_flatten scost in
-  f_xle scflat cflat
+(* proof obligation showing that [scost] is smaller than [cost] *)
+let conseq_cost (cost : form) (scost : form) : form = f_cost_le scost cost
 
 let bd_goal_r fcmp fbd cmp bd =
   match fcmp, cmp with
@@ -38,8 +36,8 @@ let bd_goal tc fcmp fbd cmp bd =
     let ppe = EcPrinting.PPEnv.ofenv (FApi.tc1_env tc) in
     tc_error !!tc
       "do not know how to change phoare[...]%s %a into phoare[...]%s %a"
-      (EcPrinting.string_of_hcmp fcmp) (EcPrinting.pp_form ppe) fbd
-      (EcPrinting.string_of_hcmp cmp) (EcPrinting.pp_form ppe) bd
+      (string_of_hcmp fcmp) (EcPrinting.pp_form ppe) fbd
+      (string_of_hcmp cmp) (EcPrinting.pp_form ppe) bd
   | Some fp -> fp
 
 (* -------------------------------------------------------------------- *)
@@ -1190,11 +1188,11 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
 (* -------------------------------------------------------------------- *)
 type processed_conseq_info =
   | PCI_bd of hoarecmp option * form
-  | PCI_c  of cost
+  | PCI_c  of form
 
 let process_info pe hyps = function
   | CQI_bd (cmp, bd) -> PCI_bd (cmp, TTC.pf_process_form pe hyps treal bd)
-  | CQI_c c -> PCI_c (TTC.pf_process_cost pe hyps [] c)
+  | CQI_c         c  -> PCI_c  (     TTC.pf_process_form pe hyps tcost c )
 
 let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) tc =
   let hyps, concl = FApi.tc1_flat tc in

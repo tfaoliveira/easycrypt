@@ -493,46 +493,92 @@ let generalize_mod env m modi f =
   res
 
 (* -------------------------------------------------------------------- *)
-let abstract_info env f1 =
+
+type abstract_info = {
+  top       : EcPath.mpath;     (* top functor (args stripped) *)
+  f         : EcPath.xpath;     (* procedure (normalized) *)
+  oi_param  : oi_param;         (* oracle parameters of [f] *)
+
+  opacity   : mod_opacity;      (* the opacity of the functor *)
+
+  cost_info : form;
+  (* Cost information of the functor [top].
+     Of type [Tmodsig t], where [t] contains an entry for [f.x_sub]. *)
+
+  args_map : (EcPath.mpath * EcIdent.t) list;
+  (* Mapping between [f]'s arguments and [top]'s abstract argument names.
+     E.g. if [top] is [F(H : O)], and [M] is a module of type [O], then
+     [args_map] contains the entry [(M, O)]. *)
+
+  fsig : funsig;                (* signature of [f] *)
+}
+
+
+let abstract_info_err env f1 f =
+  let ppe = EcPrinting.PPEnv.ofenv env in
+  if EcPath.x_equal f1 f then
+    EcCoreGoal.tacuerror
+      "The function %a should be abstract"
+      (EcPrinting.pp_funname ppe) f1
+  else
+    EcCoreGoal.tacuerror
+      "The function %a, which reduces to %a, should be abstract"
+      (EcPrinting.pp_funname ppe) f1
+      (EcPrinting.pp_funname ppe) f
+
+let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let f   = EcEnv.NormMp.norm_xfun env f1 in
   let top = EcPath.m_functor f.EcPath.x_top in
-  let def = EcEnv.Fun.by_xpath f env in
 
-  let oi  =
-    match def.f_def with
-    | FBabs oi -> oi
-    | _ ->
-      let ppe = EcPrinting.PPEnv.ofenv env in
-        if EcPath.x_equal f1 f then
-          EcCoreGoal.tacuerror
-            "The function %a should be abstract"
-            (EcPrinting.pp_funname ppe) f1
-        else
-          EcCoreGoal.tacuerror
-            "The function %a, which reduces to %a, should be abstract"
-            (EcPrinting.pp_funname ppe) f1
-            (EcPrinting.pp_funname ppe) f
+  let me, _ = EcEnv.Mod.by_mpath top env in
+  let cost_info = (EcEnv.NormMp.get_restr_me env me top).mr_cost in
+  let args_map =
+    List.map2 (fun x (y,_) -> x,y) f.x_top.EcPath.m_args me.me_params
   in
-    (top, f, oi, def.f_sig)
+
+  let opacity = match me.me_body with
+    | ME_Decl mt -> mt.mt_opacity
+    | _ -> abstract_info_err env f1 f
+  in
+
+  let def = EcEnv.Fun.by_xpath f env in
+  let oi_param =
+    match def.f_def with
+    | FBabs (oi_param, _) -> oi_param
+    | _ -> abstract_info_err env f1 f
+
+  in
+
+  (* Format.eprintf "@.@.oi_cost:@.%a@.oi_cost':@.%a@.params: %s@. params': %s"
+   *   (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env)) cost_info
+   *   (EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env)) cost_info'
+   *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param))
+   *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param')); *)
+
+  { top; f; oi_param; args_map; opacity; cost_info; fsig = def.f_sig }
 
 (* -------------------------------------------------------------------- *)
-let abstract_info2 env fl' fr' =
-  let (topl, fl, oil, sigl) = abstract_info env fl' in
-  let (topr, fr, oir, sigr) = abstract_info env fr' in
-  let fl1 = EcPath.xpath topl fl.EcPath.x_sub in
-  let fr1 = EcPath.xpath topr fr.EcPath.x_sub in
-    if not (EcPath.x_equal fl1 fr1) then begin
-      let ppe = EcPrinting.PPEnv.ofenv env in
-        EcCoreGoal.tacuerror
-          "function %a reduces to %a and %a reduces to %a, %a and %a should be equal"
-          (EcPrinting.pp_funname ppe) fl'
-          (EcPrinting.pp_funname ppe) fl1
-          (EcPrinting.pp_funname ppe) fr'
-          (EcPrinting.pp_funname ppe) fr1
-          (EcPrinting.pp_funname ppe) fl1
-          (EcPrinting.pp_funname ppe) fr1
-    end;
-    ((topl, fl, oil, sigl), (topr, fr, oir, sigr))
+let abstract_info2
+    (env : EcEnv.env)
+    (fl' : EcPath.xpath)
+    (fr' : EcPath.xpath) : abstract_info * abstract_info
+  =
+  let il = abstract_info env fl' in
+  let ir = abstract_info env fr' in
+  let fl1 = EcPath.xpath il.top il.f.EcPath.x_sub in
+  let fr1 = EcPath.xpath ir.top ir.f.EcPath.x_sub in
+  if not (EcPath.x_equal fl1 fr1) then begin
+    let ppe = EcPrinting.PPEnv.ofenv env in
+    EcCoreGoal.tacuerror
+      "function %a reduces to %a and %a reduces to %a, %a and %a should be equal"
+      (EcPrinting.pp_funname ppe) fl'
+      (EcPrinting.pp_funname ppe) fl1
+      (EcPrinting.pp_funname ppe) fr'
+      (EcPrinting.pp_funname ppe) fr1
+      (EcPrinting.pp_funname ppe) fl1
+      (EcPrinting.pp_funname ppe) fr1
+  end;
+  il, ir
 
 (* -------------------------------------------------------------------- *)
 type code_txenv = proofenv * LDecl.hyps
@@ -580,11 +626,13 @@ let t_code_transform
         let pr, po = chs.chs_pr, chs.chs_po in
         let (me, stmt, cs) =
           tx (pf, hyps) cpos (pr, po) (chs.chs_m, chs.chs_s) in
-        let cond, cost = EcCHoare.cost_sub_self chs.chs_co c in
+        let EcCHoare.{ cond; res = cost } =
+          EcCHoare.cost_sub_self ~c:chs.chs_co ~sub:c
+        in
         let concl = f_cHoareS_r { chs with chs_m = me;
                                            chs_s = stmt;
                                            chs_co = cost; } in
-        FApi.xmutate1 tc (tr None) (cs @ [concl; cond])
+        FApi.xmutate1 tc (tr None) (cs @ [cond; concl])
 
       | FbdHoareS bhs, _ when bdhoare ->
           let pr, po = bhs.bhs_pr, bhs.bhs_po in

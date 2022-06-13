@@ -81,6 +81,7 @@ type tenv = {
   (*---*) te_gen        : WTerm.term Hf.t;
   (*---*) te_xpath      : WTerm.lsymbol Hx.t;  (* proc and global var *)
   (*---*) te_absmod     : w3absmod Hid.t;      (* abstract module     *)
+  mutable te_cost       : WTy.ty option;       (* cost *)
 }
 
 let empty_tenv env task (kwty, kw, kwk) =
@@ -96,6 +97,7 @@ let empty_tenv env task (kwty, kw, kwk) =
     te_gen        = Hf.create 0;
     te_xpath      = Hx.create 0;
     te_absmod     = Hid.create 0;
+    te_cost       = None;
   }
 
 (* -------------------------------------------------------------------- *)
@@ -366,13 +368,33 @@ let mk_tglob genv mp =
     Hid.add genv.te_absmod id { w3am_ty = ty };
     ty
 
+let mk_tmodcost procs oracles genv =
+  (* TODO A: reuse SMT types as much as possible *)
+  let pid = WIdent.id_fresh "cost" in
+  let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+  genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+  let ty = WTy.ty_app ts [] in
+  genv.te_cost <- Some ty;
+  ty
+  (* match genv.te_cost with
+   * | Some w3_ty -> w3_ty
+   * | None ->
+   *   (\* create the type symbol *\)
+   *   let pid = WIdent.id_fresh "cost" in
+   *   let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+   *   genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+   *   let ty = WTy.ty_app ts [] in
+   *   genv.te_cost <- Some ty;
+   *   ty *)
+
 (* -------------------------------------------------------------------- *)
-let rec trans_ty ((genv, lenv) as env) ty =
+let rec trans_ty ((genv, lenv) as env) (ty : EcTypes.ty) : WTy.ty =
   match ty.ty_node with
   | Tglob   mp ->
     trans_tglob env mp
   | Tunivar _ -> assert false
   | Tvar    x -> trans_tv lenv x
+  | Tmodcost { procs; oracles; } -> mk_tmodcost procs oracles genv
 
   | Ttuple  ts-> wty_tuple genv (trans_tys env ts)
 
@@ -698,12 +720,14 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
 
   | Fpr pr        -> trans_pr env pr
 
-  | Fcoe _
-  | FeagerF _
-  | FhoareF  _  | FhoareS   _
-  | FcHoareF  _ | FcHoareS   _
-  | FbdHoareF _ | FbdHoareS _
-  | FequivF   _ | FequivS   _
+  | Fcoe       _
+  | Fcost      _ | Fmodcost  _
+  | Fcost_proj _
+  | FeagerF    _
+  | FhoareF    _ | FhoareS   _
+  | FcHoareF   _ | FcHoareS  _
+  | FbdHoareF  _ | FbdHoareS _
+  | FequivF    _ | FequivS   _
     -> trans_gen env fp
 
 and trans_form_b env f = Cast.force_bool (trans_form env f)
@@ -1108,7 +1132,7 @@ let add_axiom ((genv, _) as env) preid form =
   genv.te_task <- WTask.add_decl genv.te_task decl
 
 (* -------------------------------------------------------------------- *)
-let trans_hyp ((genv, lenv) as env) (x, ty) =
+let trans_hyp ((genv, lenv) as env) { l_id = x; l_kind = ty; } =
   match ty with
   | LD_var (ty, body) ->
     let dom, codom = EcEnv.Ty.signature genv.te_env ty in
@@ -1382,12 +1406,14 @@ module Frequency = struct
       | Ftuple   es           -> List.iter doit es
       | Fproj    (e, _)       -> doit e
 
-      | FhoareF _   | FhoareS _
-      | FcHoareF _  | FcHoareS _
-      | FbdHoareF _ | FbdHoareS _
-      | FequivF _   | FequivS _
-      | FeagerF _
-      | Fcoe _ -> ()
+      | Fmodcost  _ | Fcost_proj _
+      | FhoareF   _ | FhoareS    _
+      | FcHoareF  _ | FcHoareS   _
+      | FbdHoareF _ | FbdHoareS  _
+      | FequivF   _ | FequivS    _
+      | FeagerF   _
+      | Fcoe      _
+      | Fcost     _ -> ()
 
       | Fpr pr ->
         sf := Sx.add pr.pr_fun !sf;
@@ -1397,7 +1423,7 @@ module Frequency = struct
     !sp, !sf
 
 
-  let f_ops_hyp unwanted_op rs (_,ld) =
+  let f_ops_hyp unwanted_op rs { l_kind = ld } =
     match ld with
     | LD_var(_ty, b) ->
       begin match b with
@@ -1411,7 +1437,7 @@ module Frequency = struct
 
   let f_ops_hyps unwanted_op = List.fold_left (f_ops_hyp unwanted_op)
 
-  let f_ops_goal unwanted_op hyps concl =
+  let f_ops_goal unwanted_op (hyps : l_locals) concl =
     f_ops_hyps unwanted_op (f_ops unwanted_op concl) hyps
 
   let f_ops_oper unwanted_op env p rs =
@@ -1616,7 +1642,7 @@ let check ?notify (pi : P.prover_infos) (hyps : LDecl.hyps) (concl : form) =
       let fmt    = Format.formatter_of_buffer buffer in
       let ppe    = EcPrinting.PPEnv.ofenv env in
       let l      = List.map fst toadd in
-      let pp fmt = EcPrinting.pp_list "@ " (EcPrinting.pp_axname ppe) fmt in
+      let pp fmt = EcUtils.pp_list "@ " (EcPrinting.pp_axname ppe) fmt in
       Format.fprintf fmt "selected lemmas: @[%a@]@." pp l;
       notify |> oiter (fun notify -> notify `Warning
         (lazy (Buffer.contents buffer)))

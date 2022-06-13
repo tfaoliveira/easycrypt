@@ -166,6 +166,11 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
                 Queue.push (`TyUni (t1, t1')) pb;
                 Queue.push (`TyUni (t2, t2')) pb
 
+            | Tmodcost { procs = p ; oracles = o ; name = _ },
+              Tmodcost { procs = p'; oracles = o'; name = _ } ->
+              if not (Msym.equal (=) p p' && Msym.equal Ssym.equal o o') then
+                failure ()
+
             | Tconstr (p1, lt1), Tconstr (p2, lt2) when EcPath.p_equal p1 p2 ->
                 if List.length lt1 <> List.length lt2 then failure ();
                 List.iter2 (fun t1 t2 -> Queue.push (`TyUni (t1, t2)) pb) lt1 lt2

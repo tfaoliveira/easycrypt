@@ -43,6 +43,7 @@ type apperror =
   | AE_CannotInfer
   | AE_CannotInferMod
   | AE_NotFunctional
+  | AE_InvalidModNameSpace
   | AE_InvalidArgForm     of invalid_arg_form
   | AE_InvalidArgMod      of EcTyping.tymod_cnv_failure
   | AE_InvalidArgProof    of (form * form)
@@ -218,7 +219,7 @@ let pt_of_uglobal pf hyps p =
 (* -------------------------------------------------------------------- *)
 let get_implicits (hyps : LDecl.hyps) (f : form) : bool list =
   let rec doit acc f =
-    match PT.destruct_product hyps f with
+    match EcReduction.destruct_product hyps f with
     | Some (`Forall (x, GTty _, f)) ->
         doit (`Var x :: acc) f
     | Some (`Forall (_, _, f)) ->
@@ -734,7 +735,7 @@ and trans_pterm_arg_mem pe ?name { pl_desc = arg; pl_loc = loc; } =
 and process_pterm_arg
     ?implicits ({ ptev_env = pe } as pt) ({ pl_loc = loc; } as arg)
 =
-  match PT.destruct_product pe.pte_hy (get_head_symbol pe pt.ptev_ax) with
+  match EcReduction.destruct_product pe.pte_hy (get_head_symbol pe pt.ptev_ax) with
   | None -> tc_pterm_apperror ~loc pe AE_NotFunctional
 
   | Some (`Imp (f, _)) -> begin
@@ -781,7 +782,7 @@ and dfl_arg_for_value pe   arg = ofdfl (fun () -> (hole_for_value pe  ).ptea_arg
 
 (* -------------------------------------------------------------------- *)
 and check_pterm_oarg ?loc pe (x, xty) f arg =
-  let env = LDecl.toenv (pe.pte_hy) in
+  let env  = LDecl.toenv (pe.pte_hy) in
 
   match xty with
   | GTty xty -> begin
@@ -807,14 +808,19 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
-  | GTmodty emt -> begin
+  | GTmodty (ns,emt) -> begin
       match dfl_arg_for_mod pe arg with
       | PVAModule (mp, mt) -> begin
           try
-            let obl = EcTyping.check_modtype env mp mt emt in
+            let obl = EcTyping.check_modtype pe.pte_hy mp mt emt in
             EcPV.check_module_in env mp emt;
 
-            let f = Fsubst.f_subst_mod x mp f in
+            (* for now, we forbid to instantiate any quantification
+               with a [Fresh] module namespace. *)
+            if ns <> Any then
+              tc_pterm_apperror ?loc pe (AE_InvalidModNameSpace);
+
+            let f = Fsubst.f_subst_mod x emt mp f in
             let f = match obl with
               | `Ok ->  f
               | `ProofObligation obl -> f_imps obl f in
@@ -842,7 +848,7 @@ and apply_pterm_to_oarg ?loc ({ ptev_env = pe; ptev_pt = rawpt; } as pt) oarg =
   let oarg = oarg |> omap (fun arg -> arg.ptea_arg) in
 
 
-  match PT.destruct_product pe.pte_hy (get_head_symbol pe pt.ptev_ax) with
+  match EcReduction.destruct_product pe.pte_hy (get_head_symbol pe pt.ptev_ax) with
   | None   -> tc_pterm_apperror ?loc pe AE_NotFunctional
   | Some t ->
       let (newax, newarg) =
@@ -887,11 +893,14 @@ and apply_pterm_to_holes ?loc n pt =
 
 (* -------------------------------------------------------------------- *)
 and apply_pterm_to_local ?loc pt id =
-  match LDecl.by_id id pt.ptev_env.pte_hy with
+  match LDecl.lk_by_id id pt.ptev_env.pte_hy with
   | LD_var (ty, _) ->
       apply_pterm_to_arg_r ?loc pt (PVAFormula (f_local id ty))
 
-  | LD_modty mty ->
+  | LD_modty (_ns,mty) ->
+      (* Ignore module namespace. This is soundness because a
+         [Fresh] module is just an arbitrary module with an additional
+         freshness assumption on its name. *)
       let env  = LDecl.toenv pt.ptev_env.pte_hy in
       let msig = EcEnv.ModTy.sig_of_mt env mty in
       apply_pterm_to_arg_r ?loc pt (PVAModule (EcPath.mident id, msig))
@@ -911,7 +920,7 @@ and process_implicits ip ({ ptev_pt = pt; ptev_env = env; } as pe) =
   | [] -> ([], pe)
   | b :: ip ->
       if not b then ((b :: ip), pe) else
-        match PT.destruct_product ~reduce:false env.pte_hy pe.ptev_ax with
+        match EcReduction.destruct_product ~reduce:false env.pte_hy pe.ptev_ax with
         | Some (`Forall (x, xty, f)) ->
             let (newax, newarg) = check_pterm_oarg env (x, xty) f None in
             let pt = { pt with pt_args = pt.pt_args @ [newarg] } in

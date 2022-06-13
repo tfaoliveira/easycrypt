@@ -475,8 +475,11 @@ module LDecl : sig
   val ld_subst  : f_subst -> local_kind -> local_kind
   val add_local : EcIdent.t -> local_kind -> hyps -> hyps
 
-  val by_name : symbol    -> hyps -> l_local
-  val by_id   : EcIdent.t -> hyps -> local_kind
+  val by_name  : symbol    -> hyps -> l_local
+  val by_id    : EcIdent.t -> hyps -> l_local
+  val lk_by_id : EcIdent.t -> hyps -> local_kind
+
+  val get_id : symbol -> hyps -> EcIdent.t
 
   val has_name : symbol    -> hyps -> bool
   val has_id   : EcIdent.t -> hyps -> bool

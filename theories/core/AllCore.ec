@@ -1,6 +1,6 @@
 (* -------------------------------------------------------------------- *)
 require (*--*) Ring.
-require export Core Int Real Xint.
+require export Core Int Real Xint CoreCost.
 (*---*) export Ring.IntID.
 
 (* -------------------------------------------------------------------- *)
@@ -11,6 +11,7 @@ abstract theory Cost.
     cost [P : oget o] = cost [P:o] + N 1.
   hint simplify cost_oget.
 
+  (* -------------------------------------------------------------------- *)
   (* integer cost *)
   op cincr : int -> int.
   op ceqint : int -> int.

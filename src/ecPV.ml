@@ -203,14 +203,6 @@ module PVM = struct
 
       | _ -> EcFol.f_map (fun ty -> ty) aux f)
 
-  let subst_cost env s c =
-    let cb_subst cb =
-      call_bound_r (subst env s cb.cb_cost) (subst env s cb.cb_called) in
-
-    let c_self  = subst env s c.c_self
-    and c_calls = Mx.map cb_subst c.c_calls in
-    cost_r c_self c_calls
-
   let subst1 env pv m f =
     let s = add env pv m f empty in
     subst env s
@@ -305,7 +297,7 @@ module PV = struct
         | _ -> fv in
       List.fold_left do1 fv b in
 
-    let rec aux env fv f =
+    let rec aux (env : env) (fv : t) (f : form) : t =
       match f.f_node with
       | Fquant (_, b, f1) ->
         let env = Mod.add_mod_binding b env in
@@ -343,6 +335,15 @@ module PV = struct
       | Fproj (e, _) ->
           aux env fv e
 
+      | Fcost c -> cost_fold (fun t fv -> aux env fv t) c fv
+
+      | Fmodcost mc ->
+        EcSymbols.Msym.fold (fun _ t fv ->
+            proc_cost_fold (fun t fv -> aux env fv t) t fv
+          ) mc fv
+
+      | Fcost_proj (f, _) -> aux env fv f
+
       | FhoareF hf ->
           in_mem_scope env fv [mhr] [hf.hf_pr; hf.hf_po]
 
@@ -351,11 +352,11 @@ module PV = struct
 
       | FcHoareF chf ->
           let fv = in_mem_scope env fv [mhr] [chf.chf_pr; chf.chf_po] in
-          fv_cost env fv chf.chf_co
+          aux env fv chf.chf_co
 
       | FcHoareS chs ->
           let fv = in_mem_scope env fv [fst chs.chs_m] [chs.chs_pr; chs.chs_po] in
-          fv_cost env fv chs.chs_co
+          aux env fv chs.chs_co
 
       | FbdHoareF bhf ->
           in_mem_scope env fv [mhr] [bhf.bhf_pr; bhf.bhf_po; bhf.bhf_bd]
@@ -387,12 +388,6 @@ module PV = struct
       then fv
       else List.fold_left (aux env) fv fs
 
-    and fv_cost env fv cost =
-      Mx.fold (fun _ cb fv ->
-          let fv = aux env fv cb.cb_cost in
-          aux env fv cb.cb_called)
-        cost.c_calls (aux env fv cost.c_self)
-
     in aux env empty f
 
   let pp env fmt fv =
@@ -406,12 +401,12 @@ module PV = struct
     begin
       if vs = [] || gs = [] then
         Format.fprintf fmt "@[%a%a@]"
-          (EcPrinting.pp_list ",@ " pp_vs) vs
-          (EcPrinting.pp_list ",@ " pp_gl) gs
+          (EcUtils.pp_list ",@ " pp_vs) vs
+          (EcUtils.pp_list ",@ " pp_gl) gs
       else
         Format.fprintf fmt "@[%a,@ %a@]"
-          (EcPrinting.pp_list ",@ " pp_vs) vs
-          (EcPrinting.pp_list ",@ " pp_gl) gs
+          (EcUtils.pp_list ",@ " pp_vs) vs
+          (EcUtils.pp_list ",@ " pp_gl) gs
     end
 
   let check_depend env fv mp =
@@ -515,9 +510,9 @@ let rec f_write_r ?(except=Sx.empty) env w f =
       (* [f] is in normal-form *)
       assert false
 
-  | FBabs oi ->
+  | FBabs (oi_param, _) ->
     let mp = get_abs_functor f in
-    List.fold_left folder (PV.add_glob env mp w) (OI.allowed oi)
+    List.fold_left folder (PV.add_glob env mp w) (allowed oi_param)
 
   | FBdef fdef ->
       let add x w =
@@ -569,10 +564,10 @@ let rec f_read_r env r f =
       (* [f] is in normal form *)
       assert false
 
-  | FBabs oi ->
+  | FBabs (oi_param, _) ->
     let mp = get_abs_functor f in
-    let r = if OI.is_in oi then (PV.add_glob env mp r) else r in
-    List.fold_left (f_read_r env) r (OI.allowed oi)
+    let r = if is_in oi_param then (PV.add_glob env mp r) else r in
+    List.fold_left (f_read_r env) r (allowed oi_param)
 
   | FBdef fdef ->
       let add x r =
@@ -1100,14 +1095,14 @@ and eqobs_inF_refl env f' eqo =
       EcCoreGoal.tacuerror "In function %a, %a are used before being initialized"
         (EcPrinting.pp_funname ppe) f' (PV.pp env) diff
 
-  | FBabs oi ->
+  | FBabs (oi_param, _) ->
     let do1 eqo o = PV.union (eqobs_inF_refl env o eqo) eqo in
     let top = EcPath.m_functor f.x_top in
     let rec aux eqo =
-      let eqi = List.fold_left do1 eqo (OI.allowed oi) in
+      let eqi = List.fold_left do1 eqo (allowed oi_param) in
       if PV.subset eqi eqo then eqo
       else aux eqi in
-    if OI.is_in oi then aux (PV.add_glob env top eqo)
+    if is_in oi_param then aux (PV.add_glob env top eqo)
     else
       let eqi = aux (PV.remove_glob top eqo) in
       if PV.mem_glob env top eqi then begin
@@ -1118,7 +1113,7 @@ and eqobs_inF_refl env f' eqo =
       eqi
 
 (* -------------------------------------------------------------------- *)
-let check_module_in env mp mt =
+let check_module_in env mp mt : unit =
   let sig_ = ModTy.sig_of_mt env mt in
   let params = sig_.mis_params in
   let global = PV.fv env mhr (NormMp.norm_glob env mhr mp) in
@@ -1132,13 +1127,13 @@ let check_module_in env mp mt =
       let f = EcPath.xpath mp fs.fs_name in
       let eqi = eqobs_inF_refl env f global in
 
-      let oinfos = (NormMp.get_restr env mp).mr_oinfos in
-      let oi = EcSymbols.Msym.find fs.fs_name oinfos in
+      let oinfos = (NormMp.get_restr env mp).mr_params in
+      let oi_param = EcSymbols.Msym.find fs.fs_name oinfos in
 
       (* We remove the paramater not take into account *)
       let eqi =
         List.fold_left (fun eqi mp -> PV.remove_glob mp eqi) eqi extra in
-      if not (OI.is_in oi) && not (PV.is_empty eqi) then
+      if not (is_in oi_param) && not (PV.is_empty eqi) then
         let ppe = EcPrinting.PPEnv.ofenv env in
         EcCoreGoal.tacuerror "The function %a should initialize %a"
           (EcPrinting.pp_funname ppe) f (PV.pp env) eqi in

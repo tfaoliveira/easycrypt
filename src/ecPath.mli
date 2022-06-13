@@ -77,6 +77,9 @@ val m_fv          : int EcIdent.Mid.t -> mpath -> int EcIdent.Mid.t
 
 val m_functor : mpath -> mpath
 
+val m_is_local    : mpath -> bool
+val m_is_concrete : mpath -> bool
+
 val mget_ident : mpath -> ident
 
 val pp_m : Format.formatter -> mpath -> unit
@@ -105,6 +108,8 @@ val x_fv : int EcIdent.Mid.t -> xpath -> int EcIdent.Mid.t
 
 val xbasename   : xpath -> symbol
 
+val pp_x : Format.formatter -> xpath -> unit
+
 (* -------------------------------------------------------------------- *)
 val m_tostring : mpath -> string
 val x_tostring : xpath -> string
@@ -132,6 +137,6 @@ end
 (* -------------------------------------------------------------------- *)
 val p_subst : path Mp.t -> path -> path
 
-val m_subst : (path -> path) -> mpath Mid.t -> mpath -> mpath
+val m_subst : (path -> path) -> (mpath * 'info) Mid.t -> mpath -> mpath
 val x_subst : (mpath -> mpath) -> xpath -> xpath
-val x_substm : (path -> path) -> mpath Mid.t -> xpath -> xpath
+val x_substm : (path -> path) -> (mpath * 'info) Mid.t -> xpath -> xpath

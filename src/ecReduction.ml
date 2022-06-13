@@ -1,5 +1,6 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
+open EcSymbols
 open EcIdent
 open EcPath
 open EcTypes
@@ -257,7 +258,7 @@ end) = struct
   (* -------------------------------------------------------------------- *)
   let add_modules p1 p2 : EcSubst.subst =
     List.fold_left2 (fun s (id1,_) (id2,_) ->
-        EcSubst.add_module s id1 (EcPath.mident id2)) (EcSubst.empty ()) p1 p2
+        EcSubst.refresh_module s id1 (EcPath.mident id2)) (EcSubst.empty ()) p1 p2
 
   (* ------------------------------------------------------------------ *)
   let rec for_module_type env ~norm mt1 mt2 =
@@ -416,12 +417,13 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
   | GTty ty1, GTty ty2 ->
     add_local (env, subst) (x1,ty1) (x2,ty2)
 
-  | GTmodty p1, GTmodty p2 ->
+  | GTmodty (ns1,p1), GTmodty (ns2,p2) ->
     let test f1 f2 = test env subst f1 f2 in
+    ensure (ns1 = ns2);
     ensure (ModTy.mod_type_equiv test env p1 p2);
     Mod.bind_local x1 p1 env,
     if id_equal x1 x2 then subst
-    else Fsubst.f_bind_mod subst x2 (EcPath.mident x1)
+    else Fsubst.f_refresh_mod subst x2 (EcPath.mident x1)
 
   | GTmem me1, GTmem me2  ->
     check_memtype env me1 me2;
@@ -433,35 +435,67 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
 let check_bindings test env subst bd1 bd2 =
     List.fold_left2 (check_binding test) (env,subst) bd1 bd2
 
-let check_cost_l env subst co1 co2 =
-    let calls1 =
-      EcPath.Mx.fold (fun f c calls ->
-          let f' = NormMp.norm_xfun env f in
-          EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
-        ) co1.c_calls EcPath.Mx.empty
-    and calls2 =
-      EcPath.Mx.fold (fun f c calls ->
-          let f' = EcPath.x_substm subst.fs_sty.ts_p subst.fs_mp f in
-          let f' = NormMp.norm_xfun env f' in
-          EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
-        ) co2.c_calls EcPath.Mx.empty in
 
-    let aco, aca =
-      EcPath.Mx.fold2_union (fun _ a1 a2 (aco, aca) ->
-          match a1,a2 with
-          | None, None -> assert false
-          | None, Some _ | Some _, None -> raise NotConv
-          | Some cb1, Some cb2 ->
-              ((cb1.cb_cost  , cb2.cb_cost  ) :: aco,
-               (cb1.cb_called, cb2.cb_called) :: aca)
-        ) calls1 calls2 ([], []) in
+(* eats [List.length calls] elements from [c_calls] to build back the list
+   of call costs.
+   Also return all elements of [c_calls] that have not been used. *)
+let zapp_cost_l
+    (calls : xpath list)
+    (c_calls : form list) : form Mx.t * form list
+  =
+  let rec aux calls c_calls cost =
+    match calls, c_calls with
+    | [], _ -> cost, c_calls
+    | _, [] -> assert false
 
-    (co1.c_self, co2.c_self) :: aco @ aca
+    | xb :: calls, cb :: c_calls ->
+      aux calls c_calls (Mx.add xb cb cost)
+  in
+  aux calls c_calls Mx.empty
 
-let check_cost test env subst co1 co2 =
+let check_crecord_l
+    subst
+    (co1 : cost)
+    (co2 : cost) : xpath list * (form * form) list
+  =
+  if co1.c_full <> co2.c_full then raise NotConv;
+
+  let calls1 =
+    EcPath.Mx.fold (fun f c calls ->
+        (* we do not normalize [f], as it is not a proper [xpath] *)
+        EcPath.Mx.change (fun old -> assert (old = None); Some c) f calls
+      ) co1.c_calls EcPath.Mx.empty
+  and calls2 =
+    EcPath.Mx.fold (fun f c calls ->
+        let f' = EcPath.x_substm subst.fs_sty.ts_p subst.fs_mp f in
+        (* we do not normalize [f'], as it is not a proper [xpath] *)
+        EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
+      ) co2.c_calls EcPath.Mx.empty in
+
+  let f_calls, pforms =
+    EcPath.Mx.fold2_union (fun f a1 a2 (f_calls, pforms) ->
+        let a1 = EcFol.oget_c_bnd a1 co1.c_full
+        and a2 = EcFol.oget_c_bnd a2 co2.c_full in
+        f :: f_calls, (a1, a2) :: pforms
+      ) calls1 calls2 ([], [])
+  in
+
+  let check_self = co1.c_self, co2.c_self in
+  f_calls, check_self :: pforms
+
+let check_crecord test env subst co1 co2 : unit =
+  let  _, pforms = check_crecord_l subst co1 co2 in
   List.iter
     (fun (a1,a2) -> test env subst a1 a2)
-    (check_cost_l env subst co1 co2)
+    pforms
+
+let check_mod_cost test env subst mc1 mc2 : unit =
+  let _ : proc_cost EcSymbols.Msym.t =
+    EcSymbols.Msym.merge (fun _ p1 p2 ->
+        let p1, p2 = oget p1, oget p2 in
+        check_crecord test env subst p1 p2; None
+      ) mc1 mc2
+  in ()
 
 let check_e env s e1 e2 =
   let es = e_subst_init s.fs_freshen s.fs_sty.ts_p
@@ -587,14 +621,24 @@ let is_alpha_eq hyps f1 f2 =
       check_xp env subst chf1.chf_f chf2.chf_f;
       aux env subst chf1.chf_pr chf2.chf_pr;
       aux env subst chf1.chf_po chf2.chf_po;
-      check_cost aux env subst chf1.chf_co chf2.chf_co
+      aux env subst chf1.chf_co chf2.chf_co
 
     | FcHoareS chs1, FcHoareS chs2 ->
       check_s env subst chs1.chs_s chs2.chs_s;
       (* FIXME should check the memenv *)
       aux env subst chs1.chs_pr chs2.chs_pr;
       aux env subst chs1.chs_po chs2.chs_po;
-      check_cost aux env subst chs1.chs_co chs2.chs_co
+      aux env subst chs1.chs_co chs2.chs_co
+
+    | Fcost c1, Fcost c2 ->
+      check_crecord aux env subst c1 c2
+
+    | Fmodcost mc1, Fmodcost mc2 ->
+      check_mod_cost aux env subst mc1 mc2
+
+    | Fcost_proj (c1,p1), Fcost_proj (c2,p2) ->
+      aux env subst c1 c2;
+      ensure (cost_proj_equal p1 p2)
 
     | FequivF ef1, FequivF ef2 ->
       check_xp env subst ef1.ef_fl ef2.ef_fl;
@@ -989,7 +1033,18 @@ let reduce_logic ri env hyps f p args =
     | Some (`Int_add  ), [f1;f2] -> f_int_add_simpl f1 f2
     | Some (`Int_opp  ), [f]     -> f_int_opp_simpl f
     | Some (`Int_mul  ), [f1;f2] -> f_int_mul_simpl f1 f2
+    | Some (`Int_max  ), [f1;f2] -> f_int_max_simpl f1 f2
     | Some (`Int_edivz), [f1;f2] -> f_int_edivz_simpl f1 f2
+
+    | Some (`Cost_le    ), [f1;f2]    -> f_cost_le_simpl hyps f1 f2
+    | Some (`Cost_lt    ), [f1;f2]    -> f_cost_lt_simpl hyps f1 f2
+    | Some (`Cost_add   ), [f1;f2]    -> f_cost_add_simpl f1 f2
+    | Some (`Cost_opp   ), [f]        -> f_cost_opp_simpl f
+    | Some (`Cost_scale ), [f1;f2]    -> f_cost_scale_simpl f1 f2
+    | Some (`Cost_xscale), [f1;f2]    -> f_cost_xscale_simpl f1 f2
+    | Some (`Cost_big   ), [f1;f2;f3] -> f_bigcost_simpl f1 f2 f3
+    | Some (`Cost_is_int), [f1]       -> f_cost_is_int_simpl f1
+
     | Some (`Real_add ), [f1;f2] -> f_real_add_simpl f1 f2
     | Some (`Real_opp ), [f]     -> f_real_opp_simpl f
     | Some (`Real_mul ), [f1;f2] -> f_real_mul_simpl f1 f2
@@ -1066,6 +1121,35 @@ let reduce_cost ri env coe =
       f_xadd f_x1 (EcCHoare.cost_of_expr coe.coe_pre coe.coe_mem e)
 
     | _ -> raise nohead
+
+(* remove useless entries in the cost record *)
+let _reduce_crecord (c : crecord) =
+  let has_red, c_calls =
+    Mx.mapi_filter_fold (fun _ f has_red ->
+        match destr_xint f with
+        | `Inf when not c.c_full ->
+          true, None
+        | `Int fi when c.c_full && f_equal fi f_x0 ->
+          true, None
+        | _ -> has_red, Some f
+      ) c.c_calls false
+  in
+  has_red, cost_r c.c_self c_calls c.c_full
+
+let reduce_crecord (c : crecord) =
+  let has_red, c = _reduce_crecord c in
+  if not has_red then raise nohead;
+  c
+
+let reduce_modcost (mc : mod_cost) =
+  let has_red, mc =
+    EcSymbols.Msym.mapi_fold (fun _ pc has_red ->
+        let has_red', pc = _reduce_crecord pc in
+        has_red || has_red', pc
+      ) mc false
+  in
+  if not has_red then raise nohead;
+  mc
 
 
 
@@ -1245,6 +1329,13 @@ let reduce_head simplify ri env hyps f =
       | NotRed _ -> reduce_user_gen simplify ri env hyps f
     end
 
+  | Fcost     c when ri.cost -> f_cost_r (reduce_crecord c)
+  | Fmodcost mc when ri.cost -> f_mod_cost_r (reduce_modcost mc)
+
+  | Fcost_proj (c,p) when ri.cost ->
+    let f' = f_cost_proj_simpl c p in
+    if f_equal f f' then raise needsubterm else f'
+
   | _ -> raise nohead
 
 let rec eta_norm f =
@@ -1372,6 +1463,10 @@ and reduce_head_sub ri env f =
       let coe_pre = as_seq1 (reduce_head_args ri env [coe.coe_pre]) in
       f_coe_r { coe with coe_pre }
 
+    | Fcost_proj (c,p) ->
+      let c = as_seq1 (reduce_head_args ri env [c]) in
+      f_cost_proj_r c p
+
     | _ -> assert false
 
   in RedTbl.set_sub ri.redtbl f f'; f'
@@ -1430,6 +1525,7 @@ let simplify ri hyps f =
   let ri, env = init_redinfo ri hyps in
   simplify ri env f
 
+
 (* ----------------------------------------------------------------- *)
 (* Checking convertibility                                           *)
 
@@ -1439,14 +1535,22 @@ let check_memenv env (x1,mt1) (x2,mt2) =
 
 (* -------------------------------------------------------------------- *)
 type head_sub =
-  | Zquant of quantif * bindings (* in reversed order *)
+  | Zquant   of quantif * bindings (* in reversed order *)
   | Zif
-  | Zmatch of EcTypes.ty
-  | Zlet   of lpattern
+  | Zmatch   of EcTypes.ty
+  | Zlet     of lpattern
   | Zapp
   | Ztuple
-  | Zproj  of int
-  | Zhl    of form (* program logic predicates *)
+  | Zproj    of int
+  | Zhl      of form (* program logic predicates *)
+
+    (* program logic cost record *)
+  | Zcrecord of { full : bool; calls : xpath list; }
+
+    (* module cost *)
+  | Zmodcost of (EcSymbols.symbol * bool * xpath list) list
+
+  | Zmod_cost_proj of cost_proj
 
 type stk_elem = {
     se_h      : head_sub;
@@ -1472,9 +1576,18 @@ let zapp args1 args2 ty stk =
     zpush Zapp [] (args1 @ se.se_args1) (args2 @ se.se_args2) se.se_ty stk
   | _ -> zpush Zapp [] args1 args2 ty stk
 
-let ztuple args1 args2 ty stk = zpush Ztuple [] args1 args2 ty stk
-let zproj i ty stk = zpush (Zproj i) [] [] [] ty stk
-let zhl f fs1 fs2 stk = zpush (Zhl f) [] fs1 fs2 f.f_ty stk
+let ztuple args1 args2 ty stk = zpush    Ztuple [] args1 args2     ty stk
+let zproj i ty stk            = zpush (Zproj i) []    []    []     ty stk
+let zhl f fs1 fs2 stk         = zpush   (Zhl f) []   fs1   fs2 f.f_ty stk
+
+let zcrecord full calls fs1 fs2 ty stk : stk_elem list =
+  zpush (Zcrecord { full; calls; }) [] fs1 fs2 ty stk
+
+let zmod_cost_proj proj ty stk : stk_elem list =
+  zpush (Zmod_cost_proj proj) [] [] [] ty stk
+
+let zmod_cost procs fs1 fs2 ty stk : stk_elem list =
+  zpush (Zmodcost procs) [] fs1 fs2 ty stk
 
 let zpop ri side f hd =
   let args =
@@ -1500,6 +1613,10 @@ let zpop ri side f hd =
     f_bdHoareF_r {hf with bhf_pr = pr; bhf_po = po; bhf_bd = bd}
   | Zhl {f_node = FbdHoareS hs}, [pr;po;bd] ->
     f_bdHoareS_r {hs with bhs_pr = pr; bhs_po = po; bhs_bd = bd}
+  | Zhl {f_node = FcHoareF chf}, [pr;po;c] ->
+    f_cHoareF_r {chf with chf_pr = pr; chf_po = po; chf_co = c}
+  | Zhl {f_node = FcHoareS chs}, [pr;po;c] ->
+    f_cHoareS_r {chs with chs_pr = pr; chs_po = po; chs_co = c}
   | Zhl {f_node = FequivF hf}, [pr;po] ->
     f_equivF_r {hf with ef_pr = pr; ef_po = po }
   | Zhl {f_node = FequivS hs}, [pr;po] ->
@@ -1510,24 +1627,30 @@ let zpop ri side f hd =
     f_pr_r {hs with pr_args = a; pr_event = ev }
   | Zhl {f_node = Fcoe hcoe}, [pre] ->
     f_coe_r {hcoe with coe_pre = pre}
-  | Zhl {f_node = FcHoareF hfc}, chf_pr::chf_po::self_::pcalls -> (* FIXME *)
-    let co, ca = List.split_at (List.length pcalls / 2) pcalls in
-    let calls =
-      List.map2
-        (fun (xp, _) (cb_cost, cb_called) -> (xp, call_bound_r cb_cost cb_called))
-        (Mx.bindings hfc.chf_co.c_calls) (List.combine co ca) in
-    f_cHoareF_r { hfc with chf_pr; chf_po; chf_co = cost_r self_ (Mx.of_list calls) }
-  | Zhl {f_node = FcHoareS hfs}, chs_pr::chs_po::self_::pcalls -> (* FIXME *)
-    let co, ca = List.split_at (List.length pcalls / 2) pcalls in
-    let calls =
-      List.map2
-        (fun (xp, _) (cb_cost, cb_called) -> (xp, call_bound_r cb_cost cb_called))
-        (Mx.bindings hfs.chs_co.c_calls) (List.combine co ca) in
-    f_cHoareS_r { hfs with chs_pr; chs_po; chs_co = cost_r self_ (Mx.of_list calls) }
+
+  | Zcrecord {full; calls}, self :: pcalls ->
+    let calls, pcalls = zapp_cost_l calls pcalls in
+    assert (pcalls = []);
+    f_cost_r (cost_r self calls full)
+
+  | Zmodcost crecs, fs -> begin
+      let state, fs =
+        List.fold_left (fun (state, fs) (name, full, calls) ->
+            let self, fs = oget (List.oconsd fs) in
+            let calls, fs = zapp_cost_l calls fs in
+            (Msym.add name (cost_r self calls full) state, fs)
+          ) (Msym.empty, fs) crecs
+      in
+      assert (List.is_empty fs);
+      f_mod_cost_r state
+    end
+
+  | Zmod_cost_proj proj, [c] -> f_cost_proj_r c proj
+
   | _, _ -> assert false
 
 (* -------------------------------------------------------------------- *)
-let rec conv ri env f1 f2 stk =
+let rec conv ri env f1 f2 stk : bool =
   if f_equal f1 f2 then conv_next ri env f1 stk else
   match f1.f_node, f2.f_node with
   | Fquant (q1, bd1, f1'), Fquant(q2,bd2,f2') ->
@@ -1623,24 +1746,25 @@ let rec conv ri env f1 f2 stk =
       (zhl f1 [hs1.bhs_po;hs1.bhs_bd] [hs2.bhs_po; hs2.bhs_bd] stk)
 
   | FcHoareF chf1, FcHoareF chf2
-     when EqTest_i.for_xp env chf1.chf_f chf2.chf_f ->
-     begin match check_cost_l env Fsubst.f_subst_id chf1.chf_co chf2.chf_co with
-       | fs ->
-         let fs1, fs2 = List.split fs in
-         conv ri env chf1.chf_pr chf2.chf_pr
-           (zhl f1 (chf1.chf_po :: fs1) (chf2.chf_po :: fs2) stk)
-       | exception NotConv -> force_head ri env f1 f2 stk
-     end
+    when EqTest_i.for_xp env chf1.chf_f chf2.chf_f ->
+    conv ri env chf1.chf_pr chf2.chf_pr
+      (zhl f1 [chf1.chf_po;chf1.chf_co] [chf2.chf_po;chf2.chf_co] stk)
 
   | FcHoareS chs1, FcHoareS chs2
-     when EqTest_i.for_stmt env chs1.chs_s chs2.chs_s ->
-     begin match check_cost_l env Fsubst.f_subst_id chs1.chs_co chs2.chs_co with
-       | fs ->
-         let fs1, fs2 = List.split fs in
-         conv ri env chs1.chs_pr chs2.chs_pr
-           (zhl f1 (chs1.chs_po :: fs1) (chs2.chs_po :: fs2) stk)
-       | exception NotConv -> force_head ri env f1 f2 stk
-     end
+    when EqTest_i.for_stmt env chs1.chs_s chs2.chs_s ->
+    conv ri env chs1.chs_pr chs2.chs_pr
+      (zhl f1 [chs1.chs_po;chs1.chs_co] [chs2.chs_po;chs2.chs_co] stk)
+
+  | Fcost c1, Fcost c2 ->
+    conv_crecord ri env c1 c2 f1.f_ty stk
+
+  | Fmodcost mc1, Fmodcost mc2 ->
+    conv_mod_cost ri env mc1 mc2 f1 stk
+
+  | Fcost_proj (c1, proj1), Fcost_proj (c2, proj2)
+      when cost_proj_equal proj1 proj2
+    ->
+      conv ri env c1 c2 (zmod_cost_proj proj1 f1.f_ty stk)
 
   | FequivF ef1, FequivF ef2
       when EqTest_i.for_xp env ef1.ef_fl ef2.ef_fl
@@ -1696,6 +1820,44 @@ and check_bindings_conv ri env q bd1 bd2 f1 f2 =
     | _, _ -> es, bd, bd1, bd2 in
   let (env, subst), bd, bd1, bd2 = aux (env, Fsubst.f_subst_id) [] bd1 bd2 in
   env, bd, f_quant q bd1 f1, Fsubst.f_subst subst (f_quant q bd2 f2)
+
+(* Note: can be called with a dummy type [ty], when checking
+   convertion of module procedure cost record. *)
+and conv_crecord ri env c1 c2 ty stk : bool =
+  match check_crecord_l Fsubst.f_subst_id c1 c2 with
+  | calls, (self1, self2) :: fs ->
+    let fs1, fs2 = List.split fs in
+    conv ri env self1 self2
+      (zcrecord c1.c_full calls fs1 fs2 ty stk)
+  | _ -> assert false
+
+  | exception NotConv -> false
+
+and _conv_mod_cost ri env mc1 mc2 f1 stk : bool =
+  let procs, fs =
+    let mc =
+      Msym.merge (fun _ p1 p2 ->
+          match p1, p2 with
+          | Some p1, Some p2 -> Some (p1, p2)
+          | _, _ -> raise NotConv
+        ) mc1 mc2 in
+
+    Msym.fold (fun f (p1, p2) (procs, fs) ->
+        let procs1, fs1 = check_crecord_l Fsubst.f_subst_id p1 p2 in
+        (f, p1.c_full, procs1) :: procs, fs1 @ fs
+      ) mc ([], [])
+  in
+
+  match fs with
+  | [] -> conv_next ri env f1 stk
+  | (g1, g2) :: fs ->
+    let fs1, fs2 = List.split fs in
+    conv ri env g1 g2 (zmod_cost procs fs1 fs2 f1.f_ty stk)
+
+(* warp [_conv_mod_cost] in a [try find] catching [NotConv] exceptions *)
+and conv_mod_cost ri env mc1 mc2 f1 stk : bool =
+  try _conv_mod_cost ri env mc1 mc2 f1 stk
+  with NotConv -> false
 
 (* -------------------------------------------------------------------- *)
 and conv_next ri env f stk =
@@ -1771,6 +1933,51 @@ let is_conv ?(ri = full_red) hyps f1 f2 =
 let check_conv ?ri hyps f1 f2 =
   if is_conv ?ri hyps f1 f2 then ()
   else raise (IncompatibleForm ((LDecl.toenv hyps), (f1, f2)))
+
+(* -------------------------------------------------------------------- *)
+(* Check whether two module procedure cost record are convertiable.
+   Because [mod_cost] are not formulas per se, this is done in an
+   ad-hoc fashion. *)
+let is_conv_cproc
+    ?(ri   = full_red)
+    ~(mode:[`Eq | `Sub])
+    ~(proc : symbol)
+    (hyps  : LDecl.hyps)
+    (f1    : form)
+    (f2    : form) : bool
+  =
+  let ri, env = init_redinfo ri hyps in
+  if conv ri env f1 f2 [] then true
+  else
+    let exception Failed in
+    try
+      let f1, f2 = whnf ri env f1, whnf ri env f2 in
+      match f1.f_node, f2.f_node with
+      | Fmodcost m1, Fmodcost m2 ->
+        let a1, a2 = Msym.find proc m1, Msym.find proc m2 in
+
+        if not a1.c_full && a2.c_full then raise Failed;
+
+        EcPath.Mx.fold2_union (fun _ c1 c2 () ->
+            let c1 = EcFol.oget_c_bnd c1 a1.c_full
+            and c2 = EcFol.oget_c_bnd c2 a2.c_full in
+            let f = match mode with
+              | `Eq  -> EcFol.f_eq  c1 c2
+              | `Sub -> EcFol.f_xle c1 c2
+            in
+            if not (conv ri env f f_true []) then raise Failed
+          ) a1.c_calls a2.c_calls ();
+
+        let self1, self2 = a1.c_self, a2.c_self in
+        let self_eq = match mode with
+          | `Eq  -> EcFol.f_eq  self1 self2
+          | `Sub -> EcFol.f_cost_le self1 self2
+        in
+        if not (conv ri env self_eq f_true []) then raise Failed;
+        true
+
+      | _ -> false
+    with Failed -> false
 
 (* -------------------------------------------------------------------- *)
 let h_red ri hyps f =
@@ -2018,14 +2225,11 @@ let check_bindings exn tparams env s bd1 bd2 =
 let rec conv_oper env ob1 ob2 =
   match ob1, ob2 with
   | OP_Plain(e1,_), OP_Plain(e2,_)  ->
-    Format.eprintf "[W]: ICI1@.";
     conv_expr env Fsubst.f_subst_id e1 e2
   | OP_Plain({e_node = Eop(p,tys)},_), _ ->
-    Format.eprintf "[W]: ICI2@.";
     let ob1 = get_open_oper env p tys  in
     conv_oper env ob1 ob2
   | _, OP_Plain({e_node = Eop(p,tys)}, _) ->
-    Format.eprintf "[W]: ICI3@.";
     let ob2 = get_open_oper env p tys in
     conv_oper env ob1 ob2
   | OP_Constr(p1,i1), OP_Constr(p2,i2) ->
@@ -2162,3 +2366,62 @@ module EqTest = struct
   let for_msig  = fun env ?(norm = true) -> for_module_sig  env ~norm
   let for_mexpr = fun env ?(norm = true) -> for_module_expr env ~norm
 end
+
+(* -------------------------------------------------------------------- *)
+exception NoMatch
+
+(* -------------------------------------------------------------------- *)
+let rec lazy_destruct ?(reduce = true) hyps tx fp =
+  try  Some (tx fp)
+  with
+  | NoMatch when not reduce -> None
+  | NoMatch ->
+      match h_red_opt full_red hyps fp with
+      | None    -> None
+      | Some fp -> lazy_destruct ~reduce hyps tx fp
+
+(* -------------------------------------------------------------------- *)
+type dproduct = [
+  | `Imp    of form * form
+  | `Forall of EcIdent.t * gty * form
+]
+
+let destruct_product ?(reduce = true) hyps fp : dproduct option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFquant (Lforall, (x, t), lazy f) -> `Forall (x, t, f)
+    | SFimp (f1, f2) -> `Imp (f1, f2)
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+type dexists = [
+  | `Exists of EcIdent.t * gty * form
+]
+
+let destruct_exists ?(reduce = true) hyps fp : dexists option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFquant (Lexists, (x, t), lazy f) -> `Exists (x, t, f)
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+let destruct_modcost ?(reduce = true) hyps fp : mod_cost option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFmodcost mc -> mc
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp
+
+(* -------------------------------------------------------------------- *)
+let destruct_cost ?(reduce = true) hyps fp : cost option =
+  let doit fp =
+    match EcFol.sform_of_form fp with
+    | SFcost c -> c
+    | _ -> raise NoMatch
+  in
+    lazy_destruct ~reduce hyps doit fp

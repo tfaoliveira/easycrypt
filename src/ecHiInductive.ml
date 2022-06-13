@@ -115,9 +115,10 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
 
     and isempty (ty : ty) =
       match ty.ty_node with
-      | Tglob   _ -> false
-      | Tvar    _ -> false
-      | Tunivar _ -> false
+      | Tglob    _ -> false
+      | Tvar     _ -> false
+      | Tunivar  _ -> false
+      | Tmodcost _ -> false
 
       | Ttuple tys      -> List.exists isempty tys
       | Tfun   (t1, t2) -> List.exists isempty [t1; t2]

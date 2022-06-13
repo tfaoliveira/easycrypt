@@ -1,6 +1,6 @@
 (* -------------------------------------------------------------------- *)
 require import AllCore List FSet SmtMap.
-require import Distr DBool.
+require import Distr DBool CHoareTactic.
 require (*--*) BitWord OW ROM.
 
 (* ---------------- Sane Default Behaviours --------------------------- *)
@@ -673,6 +673,149 @@ apply/(Reduction (A_CPA(A)) _ _ &m).
 + by move=> O O_o_ll; exact/(A_a1_ll O O_o_ll).
 by move=> O O_o_ll; proc; call (A_a2_ll O O_o_ll).
 qed.
+end section.
 
+(* -------------------------------------------------------------------- *)
+(*                          Complexity analysis                         *)
+(* -------------------------------------------------------------------- *)
+
+(* Complexity of sampling in dptxt *)
+op cdptxt : int.
+schema cost_dptxt `{P} : cost [P: dptxt] = N cdptxt.
+hint simplify cost_dptxt.
+
+(* Complexity of testing equality on rand *)
+op ceqrand : int.
+schema cost_eqrand `{P} {r1 r2:rand} : 
+  cost[P: r1 = r2] = cost[P:r1] + cost[P:r2] + N ceqrand.
+hint simplify cost_eqrand.
+
+schema cost_witness_rand `{P} : cost [P: witness<:rand>] = '0. 
+hint simplify cost_witness_rand.
+
+(* Complexity of f *)
+op cf : int.
+schema cost_f `{P} {pk:pkey, r:rand} : 
+  cost [P: f pk r] = cost[P:pk] + cost[P:r] + N cf.
+hint simplify cost_f.
+
+clone import FMapCost with
+ type from <- rand. 
+
+clone include AllCore.Cost.
+clone include Bool.Cost.
+clone include Ciphertext.Cost.
+clone include DBool.Cost.
+clone include List.Cost.
+
+(* -------------------------------------------------------------------------- *)
+section.
+local op cA1 : cost.
+local op cA2 : cost.
+
+local op k1 : int.
+local op k2 : int.
+
+declare module A <: Adv [a1 : [cA1, #ARO.o : N k1],
+                         a2 : [cA2, #ARO.o : N k2]] { -LRO, -I }.
+
+declare axiom A_a1_ll (O <: POracle {-A}): islossless O.o => islossless A(O).a1.
+declare axiom A_a2_ll (O <: POracle {-A}): islossless O.o => islossless A(O).a2.
+
+local clone import BR93 as Instance with
+  type pkey  <- pkey,
+  type skey  <- skey,
+  op   dkeys <- dkeys,
+  op   f     <- f,
+  op   fi    <- fi,
+  type ptxt  <- ptxt,
+  op   (+^)  <- Plaintext.(+^),
+  op   dptxt <- dptxt,
+  type rand  <- rand,
+  op   drand <- drand
+proof *.
+realize addA          by move=> p1 p2 p3; algebra.
+realize addC          by move=> p1 p2; algebra.
+realize addKp         by move=> p1 p2; algebra.
+realize dptxt_llfuuni by smt(@Plaintext.DWord).
+realize drand_lluni   by smt(@Randomness.DWord).
+realize dkeys_llfuni  by exact/dkeys_llfuni.
+realize fK            by exact/fK.
+
+lemma ex_Reduction &m :
+  (0 <= k1 /\ 0 <= k2) =>
+  (forall (O <: POracle{-A}), islossless O.o => islossless A(O).a2) =>
+  let qH = k1 + k2 in
+  let cB = 
+    4 + (4 + cf + ceqrand) * (k1 + k2) + cdptxt + 
+    (3 + cdptxt + cget qH + cset qH + cin qH) * (k1 + k2) in
+  exists (B <: Inverter [open invert : [`[: N cB, A.a2 : '1, A.a1 : '1]]]),
+       Pr[CPA(LRO, BR, A).main() @ &m : res] - 1%r/2%r 
+    <= Pr[Exp_OW(B).main() @ &m: res].
+proof.
+  move=> cA_pos A_choose_ll qH.
+  exists (Self.I(A, LRO)); split. 
+
+  (* Proof of the complexity *)
+  + proc.
+    seq 5 : (size Log.qs <= k1 + k2) 
+      time `[:N((4 + cf + ceqrand) * (k1 + k2) + 2)] => //=.
+    + wp. 
+      call (_: size Log.qs- k1 <= k /\ bounded LRO.m (size Log.qs) :
+           [Top.I(A, LRO).QRO.o k : `[:N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
+      + move=> zo hzo; proc; inline *.
+        wp := (bounded LRO.m qH). 
+        rnd; auto => &hr />; rewrite dptxt_ll /=; smt (cset_pos bounded_set).
+      rnd; call (_: size Log.qs = k /\ bounded LRO.m (size Log.qs) :
+            [Log(LRO).o k : [:N(3 + cdptxt + cget qH + cset qH + cin qH)]]).
+      + move=> zo hzo; proc; inline *.
+        wp := (bounded LRO.m qH).
+        by rnd;auto => &hr />; rewrite dptxt_ll /=; smt(cset_pos bounded_set).
+      inline *; auto => />; split => *.
+      + smt (bounded_empty dptxt_ll size_ge0 size_eq0).
+      rewrite !bigi_constz /= /#.
+    while (true) (size Log.qs) (k1 + k2) time [:fun _ => N(2 + cf + ceqrand)].
+    + move => z /=; auto => &hr H /=; smt (size_ge0).
+    + move => &hr; smt (size_ge0 size_eq0).
+    + done.
+    by auto => /> &hr; rewrite bigi_constz /#.
+
+  (* Proof of the bound *) 
+  have := Reduction A A_choose_ll &m.
+  have -> //: Pr[OW(I(A)).main() @ &m : res] = Pr[OW(Ifind(A)).main() @ &m : res].
+  + byequiv => //; proc; inline *; wp.
+  while{2}  
+   (if Log.qs{2} = [] then 
+       x0{2} = nth witness Log.qs{1} (find (fun r => f pk0{2} r = y{2}) Log.qs{1})
+    else 
+     exists i, x0{2} = witness /\ 0 <= i < size Log.qs{1} /\ Log.qs{2} = drop i Log.qs{1} /\ 
+               !has (fun r => f pk0{2} r = y{2}) (take i Log.qs{1}))
+   (size Log.qs{2}).  
+  + move=> &1 z; auto => &2 />.
+    case: (Log.qs{2}) => //= hd qs0 [i />] h0i hi hdr hhas.
+    have heq : Log.qs{1} = take i Log.qs{1} ++ hd :: qs0.
+    + by rewrite hdr cat_take_drop.
+    rewrite heq; move: hhas; (pose tk := take i Log.qs{1}) => hhas.
+    have heq1 : 
+     nth witness (tk ++ hd :: qs0) (find (fun (p0 : rand) => f pk0{2} p0 = y{2}) (tk ++ hd :: qs0)) =
+     nth witness (hd :: qs0) (find (fun (p0 : rand) => f pk0{2} p0 = y{2}) (hd :: qs0)).
+    + by rewrite find_cat hhas /= nth_cat; smt (find_ge0).
+    split. 
+    + move=> heq2;rewrite heq2 heq1 /= heq2 /=; smt (size_ge0).  
+    rewrite heq1 drop0 => hy; split;2:smt().
+    split.
+    + by move=> />;rewrite hy.
+    move=> hqs; exists (i + 1).
+    rewrite size_cat /= -cat_rcons.
+    have -> : i + 1 = size (rcons tk hd).
+    + by rewrite size_rcons size_take // hi.
+    rewrite drop_size_cat // take_size_cat // size_rcons -cats1 has_cat /=.
+    smt (size_ge0).
+  wp.
+  conseq (: ={Log.qs, pk0, x, y}).
+  + move=> /> *; split; last by smt (size_eq0 size_ge0).
+    by move=> *; exists 0; rewrite drop0 take0 /=; smt (size_eq0 size_ge0).
+  by sim.
+qed.
 end section.
 

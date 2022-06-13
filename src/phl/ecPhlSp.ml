@@ -7,6 +7,7 @@ open EcParsetree
 open EcEnv
 open EcCoreGoal
 open EcLowPhlGoal
+open EcCHoare
 
 (*
  * SP carries four elements,
@@ -261,7 +262,7 @@ let t_sp_side pos tc =
     let stmt1, chs_pr, sp_cost =
       LI.sp_stmt chs.chs_m env stmt1 chs.chs_pr in
     check_sp_progress pos stmt1;
-    let cond, cost = EcCHoare.cost_sub_self chs.chs_co sp_cost in
+    let {cond; res = cost} = cost_sub_self ~c:chs.chs_co ~sub:sp_cost in
     let subgoal = f_cHoareS_r {chs with chs_s = stmt (stmt1@stmt2);
                                         chs_pr;
                                         chs_co = cost } in

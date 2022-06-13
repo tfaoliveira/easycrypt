@@ -85,27 +85,56 @@ module CI_Int = struct
 end
 
 (* -------------------------------------------------------------------- *)
-module CI_xint = struct
+module CI_Cost = struct
+  let i_Cost = "CoreCost"
+  let p_Cost = EcPath.pqname p_top i_Cost
+  let p_cost = _Pervasive "cost"
+
+  let _Cost    = fun x -> EcPath.pqname p_Cost x
+
+  let p_cost_inf     = _Pervasive "inf"
+  let p_cost_opp     = _Cost "opp"
+  let p_cost_add     = _Cost "add"
+  let p_cost_scale   = _Cost "scale"
+  let p_cost_xscale  = _Cost "xscale"
+  let p_cost_le      = _Cost "le"
+  let p_cost_lt      = _Cost "lt"
+  let p_cost_subcond = _Cost "subcond"
+  let p_cost_is_int  = _Cost "is_int"
+end
+
+(* -------------------------------------------------------------------- *)
+module CI_Xint = struct
+  let i_CoreXint  = "CoreXint"
+  let p_CoreXint  = EcPath.pqname p_top i_CoreXint
+  let _CoreXint   = fun x -> EcPath.pqname p_CoreXint x
+
   let i_Xint  = "Xint"
   let p_Xint  = EcPath.pqname p_top i_Xint
   let _Xint   = fun x -> EcPath.pqname p_Xint x
   let mk_Xint = _Xint
 
-  let p_xint   = mk_Xint "xint"
-  let p_N      = mk_Xint "N"
-  let p_inf    = mk_Xint "Inf"
+  let p_xint   = _CoreXint "xint"
+  let p_N      = _CoreXint "N"
+  let p_inf    = _CoreXint "Inf"
   let p_xopp   = mk_Xint "xopp"
   let p_xadd   = mk_Xint "xadd"
   let p_xmul   = mk_Xint "xmul"
+  let p_xmuli  = mk_Xint "xmuli"
   let p_is_inf = mk_Xint "is_inf"
   let p_is_int = mk_Xint "is_int"
+  let p_xoget  = mk_Xint "xoget"
+
+  let p_xle     = mk_Xint "xle"
+  let p_xlt     = mk_Xint "xlt"
+  let p_xmax    = mk_Xint "xmax"
 
   let p_choaretac = EcPath.pqname p_top "CHoareTactic"
 
-  let p_xle     = EcPath.pqname p_choaretac "xle"
-  let p_xmax    = EcPath.pqname p_choaretac "xmax"
-  let p_bigxint = EcPath.pqname p_choaretac "Bigxint"
-  let p_big     = EcPath.pqname p_bigxint "big"
+  let p_Bigxint = EcPath.pqname p_choaretac "Bigxint"
+  let p_Bigcost = EcPath.pqname p_choaretac "Bigcost"
+  let p_bigx    = EcPath.pqname p_Bigxint "big"
+  let p_bigcost = EcPath.pqname p_Bigcost "big"
 end
 
 (* -------------------------------------------------------------------- *)

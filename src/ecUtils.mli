@@ -142,6 +142,31 @@ module OSmart : sig
 end
 
 (* -------------------------------------------------------------------- *)
+type 'a pp = Format.formatter -> 'a -> unit
+
+val pp_id    : 'a pp -> 'a pp
+val pp_if    : bool -> 'a pp -> 'a pp -> 'a pp
+val pp_maybe : bool -> ('a pp -> 'a pp) -> 'a pp -> 'a pp
+val pp_opt   : 'a pp -> 'a option pp
+
+val pp_enclose:
+       pre:('a, 'b, 'c, 'd, 'd, 'a) format6
+   -> post:('a, 'b, 'c, 'd, 'd, 'a) format6
+   -> 'a pp -> 'a pp
+
+val pp_paren : 'a pp -> 'a pp
+
+val pp_list : ('a, 'b, 'c, 'd, 'd, 'a) format6 -> 'a pp -> 'a list pp
+
+val pp_null : 'a pp
+
+val pp_option : 'a pp -> 'a option pp
+
+val pp_maybe_paren : bool -> 'a pp -> 'a pp
+
+val pp_string : string pp
+
+(* -------------------------------------------------------------------- *)
 type ('a, 'b) tagged = Tagged of ('a * 'b option)
 
 val tg_val : ('a, 'b) tagged -> 'a
@@ -249,6 +274,7 @@ module List : sig
   val opick   : ('a -> 'b option) -> 'a list -> 'b option
   val oindex  : ('a -> bool) -> 'a list -> int option
   val orindex : ('a -> bool) -> 'a list -> int option
+  val oconsd  : 'a list -> ('a * 'a list) option
 
   (* Functions working on 2 lists in parallel *)
   module Parallel : sig
@@ -276,6 +302,7 @@ module List : sig
   val fpick      : (unit -> 'a option) list -> 'a option
   val pivot_at   : int -> 'a list -> 'a list * 'a * 'a list
   val find_pivot : ('a -> bool) -> 'a list -> 'a list * 'a * 'a list
+  val concat_map : ('a -> 'b list) -> 'a t -> 'b list
   val map_fold   : ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val mapi_fold  : (int -> 'a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
   val pmapi      : (int -> 'a -> 'b option) -> 'a list -> 'b list
