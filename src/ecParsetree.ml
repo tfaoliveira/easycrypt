@@ -53,14 +53,15 @@ type ptyannot_r =
 and ptyannot  = ptyannot_r  located
 
 type plpattern_r =
+  | LPWild   of EcLocation.t
   | LPSymbol of psymbol
-  | LPTuple  of osymbol list
-  | LPRecord of (pqsymbol * psymbol) list
+  | LPTuple  of plpattern list
+  | LPRecord of (pqsymbol * plpattern) list
 
 and plpattern = plpattern_r located
 
 type ppattern =
-| PPApp of (pqsymbol * ptyannot option) * osymbol list
+  | PPApp of (pqsymbol * ptyannot option) * plpattern list
 
 type ptybinding  = osymbol list * pty
 and  ptybindings = ptybinding list
