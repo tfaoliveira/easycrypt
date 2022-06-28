@@ -490,31 +490,39 @@ let pv_subst m_subst px = match px with
 
 (* -------------------------------------------------------------------- *)
 type lpattern =
+  | LWild   of ty
   | LSymbol of (EcIdent.t * ty)
-  | LTuple  of (EcIdent.t * ty) list
-  | LRecord of EcPath.path * (EcIdent.t option * ty) list
+  | LTuple  of (lpattern * ty) list
+  | LRecord of EcPath.path * (lpattern * ty) list
 
 let idty_equal (x1,t1) (x2,t2) =
   EcIdent.id_equal x1 x2 && ty_equal t1 t2
 
-let lp_equal p1 p2 =
-  match p1, p2 with
+let rec lp_equal lp1 lp2 =
+  match lp1, lp2 with
+  | LWild t1, LWild t2 -> ty_equal t1 t2
   | LSymbol xt1, LSymbol xt2 -> idty_equal xt1 xt2
-  | LTuple lx1, LTuple lx2 -> List.all2 idty_equal lx1 lx2
+  | LTuple lpts1, LTuple lpts2 -> List.all2 lpt_equal lpts1 lpts2
+  | LRecord (p1, lpts1), LRecord (p2, lpts2) ->
+      p_equal p1 p2 && List.all2 lpt_equal lpts1 lpts2
   | _ -> false
+
+and lpt_equal (lp1,t1) (lp2,t2) =
+  lp_equal lp1 lp2 && ty_equal t1 t2
 
 let idty_hash (x,t) = Why3.Hashcons.combine (EcIdent.id_hash x) (ty_hash t)
 
-let lp_hash = function
-  | LSymbol  x -> idty_hash x
-  | LTuple  lx -> Why3.Hashcons.combine_list idty_hash 0 lx
-
-  | LRecord (p, lx) ->
-      let for1 (x, ty) =
-        Why3.Hashcons.combine (ty_hash ty)
-          (Why3.Hashcons.combine_option EcIdent.id_hash x)
+let rec lp_hash = function
+  | LWild t -> ty_hash t
+  | LSymbol xt -> idty_hash xt
+  | LTuple lpts -> Why3.Hashcons.combine_list lpt_hash 0 lpts
+  | LRecord (p, lpts) ->
+      let for1 (lp, t) =
+        Why3.Hashcons.combine (lp_hash lp) (ty_hash t)
       in
-        Why3.Hashcons.combine_list for1 (p_hash p) lx
+        Why3.Hashcons.combine_list for1 (p_hash p) lpts
+
+and lpt_hash (lp, t) = Why3.Hashcons.combine (lp_hash lp) (ty_hash t)
 
 let lp_ids = function
   | LSymbol (id,_)  -> [id]

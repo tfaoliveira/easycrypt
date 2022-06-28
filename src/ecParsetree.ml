@@ -69,7 +69,7 @@ and  ptybindings = ptybinding list
 and pexpr_r =
   | PEcast   of pexpr * pty                       (* type cast          *)
   | PEint    of zint                              (* int. literal       *)
-  | PEdecimal of (zint * (int * zint))             (* dec. literal       *)
+  | PEdecimal of (zint * (int * zint))            (* dec. literal       *)
   | PEident  of pqsymbol * ptyannot option        (* symbol             *)
   | PEapp    of pexpr * pexpr list                (* op. application    *)
   | PElet    of plpattern * pexpr_wty * pexpr     (* let binding        *)
