@@ -535,6 +535,18 @@ let lp_bind = function
   | LRecord (_,b) ->
       List.pmap (fun (x, ty) -> omap (fun x -> (x, ty)) x) b
 
+let lp_fv = function
+  | LSymbol (id, _) ->
+      Sid.singleton id
+
+  | LTuple ids ->
+      List.fold_left (fun s (id, _) -> Sid.add id s) Sid.empty ids
+
+  | LRecord (_, ids) ->
+      List.fold_left
+        (fun s (id, _) -> ofold Sid.add s id)
+        Sid.empty ids
+
 (* -------------------------------------------------------------------- *)
 type expr = {
   e_node : expr_node;
@@ -570,18 +582,6 @@ let e_fv e    = e.e_fv
 let e_ty e    = e.e_ty
 
 (* -------------------------------------------------------------------- *)
-let lp_fv = function
-  | LSymbol (id, _) ->
-      Sid.singleton id
-
-  | LTuple ids ->
-      List.fold_left (fun s (id, _) -> Sid.add id s) Sid.empty ids
-
-  | LRecord (_, ids) ->
-      List.fold_left
-        (fun s (id, _) -> ofold Sid.add s id)
-        Sid.empty ids
-
 let pv_fv = function
   | PVglob x -> EcPath.x_fv Mid.empty x
   | PVloc _ -> Mid.empty
