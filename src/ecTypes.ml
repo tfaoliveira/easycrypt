@@ -524,28 +524,25 @@ let rec lp_hash = function
 
 and lpt_hash (lp, t) = Why3.Hashcons.combine (lp_hash lp) (ty_hash t)
 
-let lp_ids = function
-  | LSymbol (id,_)  -> [id]
-  | LTuple  ids     -> List.map fst ids
-  | LRecord (_,ids) -> List.pmap fst ids
+(*
+let rec lp_bind = function
+  | LWild _       -> []
+  | LSymbol xt    -> [xt]
+  | LTuple  lpts  -> List.concat(List.map lp_bind lpts)
+  | LRecord (_, lpts) -> List.concat(List.map lp_bind lpts)
+*)
 
-let lp_bind = function
-  | LSymbol b     -> [b]
-  | LTuple  b     -> b
-  | LRecord (_,b) ->
-      List.pmap (fun (x, ty) -> omap (fun x -> (x, ty)) x) b
-
-let lp_fv = function
-  | LSymbol (id, _) ->
-      Sid.singleton id
-
-  | LTuple ids ->
-      List.fold_left (fun s (id, _) -> Sid.add id s) Sid.empty ids
-
-  | LRecord (_, ids) ->
+let rec lp_fv = function
+  | LWild _ -> Sid.empty
+  | LSymbol (id, _) -> Sid.singleton id
+  | LTuple lpts ->
       List.fold_left
-        (fun s (id, _) -> ofold Sid.add s id)
-        Sid.empty ids
+      (fun s (lp, _) -> Sid.union (lp_fv lp) s)
+      Sid.empty lpts
+  | LRecord (_, lpts) ->
+      List.fold_left
+      (fun s (lp, _) -> Sid.union (lp_fv lp) s)
+      Sid.empty lpts
 
 (* -------------------------------------------------------------------- *)
 type expr = {

@@ -130,7 +130,10 @@ type lpattern =
 val lp_equal : lpattern -> lpattern -> bool
 val lp_hash  : lpattern -> int
 val lp_bind  : lpattern -> (EcIdent.t * ty) list
+(* Alley: I don't think this is useful for deep patterns, but it will
+   have to be replaced with something else
 val lp_ids   : lpattern -> EcIdent.t list
+*)
 val lp_fv    : lpattern -> EcIdent.Sid.t
 
 (* -------------------------------------------------------------------- *)
