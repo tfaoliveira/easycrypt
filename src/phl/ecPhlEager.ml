@@ -503,14 +503,6 @@ let eager pf env s s' inv eqIs eqXs c c' eqO =
         (* (h) is assumed *)
         (fhyps, eqi)
 
-    | Sassert el, Sassert er ->
-        check_args [el];
-        let eqnm = Mpv2.split_nmod env modi modi' eqo in
-        let eqm  = Mpv2.split_mod  env modi modi' eqo in
-        if not (Mpv2.subset eqm eqXs) then raise EqObsInError;
-        let eqi = Mpv2.union eqIs eqnm in
-        (fhyps, Mpv2.add_eqs env el er eqi)
-
     | Sabstract _, Sabstract _ -> assert false (* FIXME *)
 
     | _, _ -> raise EqObsInError

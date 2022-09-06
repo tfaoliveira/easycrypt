@@ -79,11 +79,6 @@ module LowInternal = struct
         (([],post), c)
       end
 
-    | Sassert e when onesided ->
-        let phi = form_of_expr (EcMemory.memory memenv) e in
-        let lets,f = letsf in
-        (lets, EcFol.f_and_simpl phi f), cost_of_expr_w_pre memenv e c_pre
-
     | _ -> raise No_wp
 end
 

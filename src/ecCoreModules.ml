@@ -77,7 +77,6 @@ and instr_node =
   | Sif       of EcTypes.expr * stmt * stmt
   | Swhile    of EcTypes.expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
-  | Sassert   of EcTypes.expr
   | Sabstract of EcIdent.t
 
 and stmt = {
@@ -132,9 +131,6 @@ module Hinstr = Why3.Hashcons.Make (struct
           in List.all2 forbs bs1 bs2 && s_equal s1 s2
         in EcTypes.e_equal e1 e2 && List.all2 forb b1 b2
 
-    | Sassert e1, Sassert e2 ->
-        (EcTypes.e_equal e1 e2)
-
     | Sabstract id1, Sabstract id2 -> EcIdent.id_equal id1 id2
 
     | _, _ -> false
@@ -171,8 +167,6 @@ module Hinstr = Why3.Hashcons.Make (struct
           in Why3.Hashcons.combine_list forbs (s_hash s) bds
         in Why3.Hashcons.combine_list forb (EcTypes.e_hash e) b
 
-    | Sassert e -> EcTypes.e_hash e
-
     | Sabstract id -> EcIdent.id_hash id
 
   let i_fv   = function
@@ -204,9 +198,6 @@ module Hinstr = Why3.Hashcons.Make (struct
         in List.fold_left
              (fun s b -> EcIdent.fv_union s (forb b))
              (EcTypes.e_fv e) b
-
-    | Sassert e    ->
-        EcTypes.e_fv e
 
     | Sabstract id ->
         EcIdent.fv_singleton id
@@ -256,7 +247,6 @@ let i_call     (lv, m, tys) = mk_instr (Scall (lv, m, tys))
 let i_if       (c, s1, s2)  = mk_instr (Sif (c, s1, s2))
 let i_while    (c, s)       = mk_instr (Swhile (c, s))
 let i_match    (e, b)       = mk_instr (Smatch (e, b))
-let i_assert   e            = mk_instr (Sassert e)
 let i_abstract id           = mk_instr (Sabstract id)
 
 let s_seq      s1 s2        = stmt (s1.s_node @ s2.s_node)
@@ -268,7 +258,6 @@ let s_call     arg = stmt [i_call arg]
 let s_if       arg = stmt [i_if arg]
 let s_while    arg = stmt [i_while arg]
 let s_match    arg = stmt [i_match arg]
-let s_assert   arg = stmt [i_assert arg]
 let s_abstract arg = stmt [i_abstract arg]
 
 (* -------------------------------------------------------------------- *)
@@ -296,10 +285,6 @@ let get_match = function
   | { i_node = Smatch (e, b) } -> Some (e, b)
   | _ -> None
 
-let get_assert = function
-  | { i_node = Sassert e } -> Some e
-  | _ -> raise Not_found
-
 (* -------------------------------------------------------------------- *)
 let _destr_of_get (get : instr -> 'a option) (i : instr) =
   match get i with Some x -> x | None -> raise Not_found
@@ -310,7 +295,6 @@ let destr_call   = _destr_of_get get_call
 let destr_if     = _destr_of_get get_if
 let destr_while  = _destr_of_get get_while
 let destr_match  = _destr_of_get get_match
-let destr_assert = _destr_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
 let _is_of_get (get : instr -> 'a option) (i : instr) =
@@ -322,7 +306,6 @@ let is_call   = _is_of_get get_call
 let is_if     = _is_of_get get_if
 let is_while  = _is_of_get get_while
 let is_match  = _is_of_get get_match
-let is_assert = _is_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
 module ISmart : sig
@@ -338,7 +321,6 @@ module ISmart : sig
   type i_if       = EcTypes.expr * stmt * stmt
   type i_while    = EcTypes.expr * stmt
   type i_match    = EcTypes.expr * ((EcIdent.t * ty) list * stmt) list
-  type i_assert   = EcTypes.expr
   type i_abstract = EcIdent.t
 
   val i_asgn     : (instr * i_asgn    ) -> i_asgn     -> instr
@@ -347,7 +329,6 @@ module ISmart : sig
   val i_if       : (instr * i_if      ) -> i_if       -> instr
   val i_while    : (instr * i_while   ) -> i_while    -> instr
   val i_match    : (instr * i_match   ) -> i_match    -> instr
-  val i_assert   : (instr * i_assert  ) -> i_assert   -> instr
   val i_abstract : (instr * i_abstract) -> i_abstract -> instr
 
   val s_stmt : stmt -> instr list -> stmt
@@ -361,7 +342,6 @@ end = struct
   type i_if       = EcTypes.expr * stmt * stmt
   type i_while    = EcTypes.expr * stmt
   type i_match    = EcTypes.expr * ((EcIdent.t * ty) list * stmt) list
-  type i_assert   = EcTypes.expr
   type i_abstract = EcIdent.t
 
   let lv_var (lv, pvt) pvt' =
@@ -389,9 +369,6 @@ end = struct
 
   let i_match (i, (e, b)) (e', b') =
     if e == e' && b == b' then i else i_match (e', b')
-
-  let i_assert (i, e) e' =
-    if e == e' then i else i_assert e'
 
   let i_abstract (i, x) x' =
     if x == x' then i else i_abstract x
@@ -453,9 +430,6 @@ let rec s_subst_top (s : EcTypes.e_subst) =
         in
 
         ISmart.i_match (i, (e, b)) (e_subst e, List.Smart.map forb b)
-
-    | Sassert e ->
-        ISmart.i_assert (i, e) (e_subst e)
 
     | Sabstract _ ->
         i
@@ -528,9 +502,6 @@ and i_get_uninit_read (w : Ssym.t) (i : instr) =
       let wrs = List.map (fun (_, b) -> s_get_uninit_read w b) bs in
       let ws, rs = List.split wrs in
       (Ssym.union w (Ssym.big_inter ws), Ssym.big_union (r :: rs))
-
-  | Sassert e ->
-      (w, Ssym.diff (Uninit.e_pv e) w)
 
   | Sabstract (_ : EcIdent.t) ->
       (w, Ssym.empty)

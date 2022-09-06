@@ -108,7 +108,6 @@ type pinstr_r =
   | PSif     of pscond * pscond list * pstmt
   | PSwhile  of pscond
   | PSmatch  of pexpr * psmatch
-  | PSassert of pexpr
 
 and psmatch = [
   | `Full of (ppattern * pstmt) list

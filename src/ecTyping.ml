@@ -280,9 +280,6 @@ let (_i_inuse, s_inuse, se_inuse) =
       let map = List.fold_left (fun map -> s_inuse map |- snd) map bs in
         map
 
-    | Sassert e ->
-      se_inuse map e
-
     | Sabstract _ ->
       assert false (* FIXME *)
 
@@ -2944,11 +2941,6 @@ and transinstr
 
       [ i_match (e, branches) ]
     end
-
-  | PSassert pe ->
-      let e, ety = transexp env `InProc ue pe in
-      unify_or_fail env ue pe.pl_loc ~expct:tbool ety;
-      [ i_assert e ]
 
 (* -------------------------------------------------------------------- *)
 and trans_pv env { pl_desc = x; pl_loc = loc } =

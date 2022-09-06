@@ -1334,10 +1334,6 @@ and pp_instr_for_form (ppe : PPEnv.t) fmt i =
         (pp_funname ppe) xp
         (pp_list ",@ " (pp_expr ppe)) args
 
-  | Sassert e ->
-      Format.fprintf fmt "assert %a;"
-        (pp_expr ppe) e
-
   | Swhile (e, _) ->
       Format.fprintf fmt "while (%a) {...}"
         (pp_expr ppe) e
@@ -2405,7 +2401,6 @@ let pp_schema ?(long=false) (ppe : PPEnv.t) fmt (x, sc) =
 (* -------------------------------------------------------------------- *)
 type ppnode1 = [
   | `Asgn     of (EcModules.lvalue * EcTypes.expr)
-  | `Assert   of (EcTypes.expr)
   | `Call     of (EcModules.lvalue option * P.xpath * EcTypes.expr list)
   | `Rnd      of (EcModules.lvalue * EcTypes.expr)
   | `Abstract of EcIdent.t
@@ -2428,7 +2423,6 @@ let at (ppe : PPEnv.t) n i =
   | Sasgn (lv, e)    , 0 -> Some (`Asgn (lv, e)    , `P, [])
   | Srnd  (lv, e)    , 0 -> Some (`Rnd  (lv, e)    , `P, [])
   | Scall (lv, f, es), 0 -> Some (`Call (lv, f, es), `P, [])
-  | Sassert e        , 0 -> Some (`Assert e        , `P, [])
   | Sabstract id     , 0 -> Some (`Abstract id     , `P, [])
   | Swhile (e, s), 0 -> Some (`While e, `P, s.s_node)
   | Swhile _     , 1 -> Some (`EBlk   , `B, [])
@@ -2563,7 +2557,6 @@ let pp_i_abstract (_ppe : PPEnv.t) fmt id =
 let c_ppnode1 ~width ppe (pp1 : ppnode1) =
   match pp1 with
   | `Asgn     x -> c_split ~width (pp_i_asgn     ppe) x
-  | `Assert   x -> c_split ~width (pp_i_assert   ppe) x
   | `Call     x -> c_split ~width (pp_i_call     ppe) x
   | `Rnd      x -> c_split ~width (pp_i_rnd      ppe) x
   | `Abstract x -> c_split ~width (pp_i_abstract ppe) x
@@ -3124,10 +3117,6 @@ let rec pp_instr_r (ppe : PPEnv.t) fmt i =
       (pp_lvalue ppe) lv
       (pp_funname ppe) xp
       (pp_list ",@ " (pp_expr ppe)) args
-
-  | Sassert e ->
-    Format.fprintf fmt "@[<hov 2>assert %a@];"
-      (pp_expr ppe) e
 
   | Swhile (e, s) ->
     Format.fprintf fmt "@[<v>while (@[%a@])%a@]"

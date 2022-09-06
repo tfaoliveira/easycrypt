@@ -158,9 +158,6 @@ let rec on_instr (cb : cb) (i : instr)=
       on_lv cb lv;
       on_expr cb e
 
-  | Sassert e ->
-      on_expr cb e
-
   | Scall (lv, f, args) ->
       lv |> oiter (on_lv cb);
       on_xp cb f;

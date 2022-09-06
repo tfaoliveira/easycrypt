@@ -241,9 +241,6 @@ end) = struct
         with E.NotConv -> false
       end
 
-    | Sassert a1, Sassert a2 ->
-        for_expr env alpha ~norm a1 a2
-
     | Sabstract id1, Sabstract id2 ->
         EcIdent.id_equal id1 id2
 

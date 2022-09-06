@@ -389,7 +389,6 @@
 %token AMP
 %token APPLY
 %token AS
-%token ASSERT
 %token ASSUMPTION
 %token ASYNC
 %token AT
@@ -1481,9 +1480,6 @@ base_instr:
 
 | f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
     { PScall (None, f, es) }
-
-| ASSERT LPAREN c=expr RPAREN
-    { PSassert c }
 
 instr:
 | bi=base_instr SEMICOLON
