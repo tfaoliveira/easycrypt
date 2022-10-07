@@ -245,6 +245,15 @@ module FunAbsLow = struct
     (inv, inv, sg)
 
   (* ------------------------------------------------------------------ *)
+  let ehoareF_abs_spec _pf env f (inv,einv) =
+    let (top, _, oi, _) = EcLowPhlGoal.abstract_info env f in
+    let fv = PV.union (PV.fv env mhr inv) (PV.fv env mhr einv) in
+    PV.check_depend env fv top;
+    let ospec o = f_eHoareF inv einv o inv einv in
+    let sg = List.map ospec (OI.allowed oi) in
+    ((inv,einv), (inv, einv), sg)
+
+  (* ------------------------------------------------------------------ *)
   let choareF_abs_spec pf_ env f inv (xc : abs_inv_inf) =
     let (top, _, oi, _) = EcLowPhlGoal.abstract_info env f in
     let ppe = EcPrinting.PPEnv.ofenv env in
@@ -431,6 +440,14 @@ let t_hoareF_abs_r inv tc =
   let tactic tc = FApi.xmutate1 tc `FunAbs sg in
   FApi.t_last tactic (EcPhlConseq.t_hoareF_conseq pre post tc)
 
+let t_ehoareF_abs_r inv einv tc =
+  let env = FApi.tc1_env tc in
+  let hf = tc1_as_ehoareF tc in
+  let (pre,epre), (post,epost), sg = FunAbsLow.ehoareF_abs_spec !!tc env hf.ehf_f (inv, einv) in
+
+  let tactic tc = FApi.xmutate1 tc `FunAbs sg in
+  FApi.t_last tactic (EcPhlConseq.t_ehoareF_conseq pre epre post epost tc)
+
 (* ------------------------------------------------------------------ *)
 let t_choareF_abs_r inv inv_inf tc =
   let env = FApi.tc1_env tc in
@@ -470,6 +487,7 @@ let t_equivF_abs_r inv tc =
 
 (* -------------------------------------------------------------------- *)
 let t_hoareF_abs   = FApi.t_low1 "hoare-fun-abs"   t_hoareF_abs_r
+let t_ehoareF_abs  = FApi.t_low2 "ehoare-fun-abs"  t_ehoareF_abs_r
 let t_choareF_abs  = FApi.t_low2 "choare-fun-abs"  t_choareF_abs_r
 let t_bdhoareF_abs = FApi.t_low1 "bdhoare-fun-abs" t_bdhoareF_abs_r
 let t_equivF_abs   = FApi.t_low1 "equiv-fun-abs"   t_equivF_abs_r
@@ -745,7 +763,7 @@ let t_fun_r inv inv_inf tc =
       else t_hoareF_fun_def tc
 
   and teh tc =
-    t_hoareF_fun_def tc
+    t_ehoareF_fun_def tc
 
   and tch tc =
     let env = FApi.tc1_env tc in
@@ -807,6 +825,13 @@ let process_fun_upto_info (bad, p, q) tc =
 let process_fun_upto info g =
   let (bad, p, q) = process_fun_upto_info info g in
     t_equivF_abs_upto bad p q g
+
+(* -------------------------------------------------------------------- *)
+let process_fun_ehoare_abs (inv, einv) tc =
+  let hyps = FApi.tc1_hyps tc in
+  let env' = LDecl.inv_memenv1 hyps in
+  let inv, einv = get_double tc (TTC.pf_process_dformula !!tc env' (Double(inv, einv))) in
+  t_ehoareF_abs inv einv tc
 
 (* -------------------------------------------------------------------- *)
 let ensure_none tc = function

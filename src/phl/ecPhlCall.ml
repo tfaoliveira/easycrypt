@@ -78,6 +78,35 @@ let t_hoare_call fpre fpost tc =
 
   FApi.xmutate1 tc `HlCall [f_concl; concl]
 
+
+let t_ehoare_call fpre fepre fpost fepost tc =
+  let env = FApi.tc1_env tc in
+  let hs = tc1_as_ehoareS tc in
+  let (lp,f,args),s = tc1_last_call tc hs.ehs_s in
+  let m = EcMemory.memory hs.ehs_m in
+  let fsig = (Fun.by_xpath f env).f_sig in
+  (* The function satisfies the specification *)
+  let f_concl = f_eHoareF fpre fepre f fpost fepost in
+  (* The wp *)
+  let pvres = pv_res in
+  let vres = EcIdent.create "result" in
+  let fres = f_local vres fsig.fs_ret in
+  let post = wp_asgn_call env m lp fres hs.ehs_po in
+  let epost = wp_asgn_call env m lp fres hs.ehs_epo in
+  let fpost = PVM.subst1 env pvres m fres fpost in
+  let fepost = PVM.subst1 env pvres m fres fepost in
+  let modi = f_write env f in
+  let post = generalize_mod env m modi
+               (f_xreal_le (f_interp_ehoare_form post epost)
+                           (f_interp_ehoare_form fpost fepost)) in
+  let post = f_forall_simpl [(vres, GTty fsig.fs_ret)] post in
+  let spre = subst_args_call env m (e_tuple args) PVM.empty in
+  let post = f_anda_simpl (PVM.subst env spre fpre) post in
+  let epost = PVM.subst env spre fepre in
+  let concl = f_eHoareS_r { hs with ehs_s = s; ehs_po = post; ehs_epo=epost} in
+
+  FApi.xmutate1 tc `HlCall [f_concl; concl]
+
 (* -------------------------------------------------------------------- *)
 let t_choare_call fpre fpost fcost tc =
   let env = FApi.tc1_env tc in
@@ -268,6 +297,12 @@ let t_call side ax tc =
       if not (EcEnv.NormMp.x_equal env hf.hf_f f) then
         call_error env tc hf.hf_f f;
       t_hoare_call hf.hf_pr hf.hf_po tc
+
+  | FeHoareF hf, FeHoareS hs ->
+      let (_, f, _), _ = tc1_last_call tc hs.ehs_s in
+      if not (EcEnv.NormMp.x_equal env hf.ehf_f f) then
+        call_error env tc hf.ehf_f f;
+      t_ehoare_call hf.ehf_pr hf.ehf_epr hf.ehf_po hf.ehf_epo tc
 
   | FcHoareF chf, FcHoareS chs ->
       let (_, f, _), _ = tc1_last_call tc chs.chs_s in
@@ -516,6 +551,10 @@ let process_call side info tc =
       subtactic := (fun tc ->
         FApi.t_firsts t_tr 3 (EcPhlFun.t_equivF_abs_upto bad p q tc));
       form
+
+    | CI_ehoare (_pre, _epre) ->
+        assert false
+
   in
 
   let pt = PT.tc1_process_full_pterm_cut ~prcut:(process_cut tc) tc info

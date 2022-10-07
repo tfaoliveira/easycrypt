@@ -425,8 +425,8 @@ end Lift. export Lift.
 
 clone import Bigop as BXA with
   type t <= xreal,
-  op Support.idm <- '0,
-  op Support.(+) <- xadd,
+  op Support.idm <- Rpbar.('0),
+  op Support.(+) <- Rpbar.xadd,
   theory Support.Axioms <- Rpbar.Axioms.
 
 lemma is_real_bigRX ['a] (f : 'a -> xreal) l: 
@@ -527,7 +527,6 @@ proof.
   + by apply fun_ext => x; apply RField.mulrC.
   have /summableZ /= -> /= := summable_mu1 d.
   rewrite sumZ /= of_realM // 1: ge0_sum //= weightE; do 3! congr.
-  by apply fun_ext => x; rewrite massE.
 qed.
 
 lemma EpZ ['a] (d: 'a distr) (c:realp) (f: 'a -> xreal) :
@@ -537,7 +536,7 @@ proof.
   move=> hc; rewrite /Ep /= (is_realMd f); 1: by move=> x _ /=; rewrite is_realM. 
   case: (is_real (d ** f)) => // hr; rewrite /psuminf.
   rewrite mdCA /= to_realM /=.
-  rewrite -summableZ_iff 1:[smt (@Rp)] /to_real.
+  rewrite -summableZ_iff 1:#smt:(@Rp); rewrite /to_real.
   case: (summable (fun (x : 'a) => to_real (of_real (mu1 d x) ** f x))) => // ?.
   rewrite sumZ /= of_realM // ge0_sum => /= ?; apply to_realP.
 qed.
@@ -577,7 +576,7 @@ proof.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma Ep_dnull ['a] f : Ep dnull<:'a> f = '0.
+lemma Ep_dnull ['a] f : Ep dnull<:'a> f = Rpbar.('0).
 proof. by rewrite (Ep_fin []) // => x; rewrite dnull1E. qed.
 
 (* -------------------------------------------------------------------- *)

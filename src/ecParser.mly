@@ -2709,6 +2709,7 @@ call_info:
                                        CI_inv  (f, Some info) }
 | bad=form COMMA p=form              { CI_upto (bad,p,None) }
 | bad=form COMMA p=form COMMA q=form { CI_upto (bad,p,Some q) }
+| pre=form PIPE epre=form            { CI_ehoare(pre, epre) }
 
 tac_dir:
 | BACKS { Backs }
@@ -3108,6 +3109,9 @@ phltactic:
 
 | PROC bad=sform p=sform q=sform?
    { Pfun (`Upto (bad, p, q)) }
+
+| PROC LPAREN inv=form PIPE einv=form RPAREN
+   { Pfun (`Ehoare (inv, einv)) }
 
 | PROC STAR
    { Pfun `Code }

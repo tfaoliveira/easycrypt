@@ -540,6 +540,7 @@ type call_info =
   | CI_spec of (pformula * pformula * pcost option)
   | CI_inv of pformula * p_call_inv_info option
   | CI_upto of (pformula * pformula * pformula option)
+  | CI_ehoare of pformula * pformula
 
 type p_app_xt_info =
   | PAppNone
@@ -619,6 +620,7 @@ type fun_info = [
   | `Code
   | `Abs  of pformula * p_abs_inv_inf option
   | `Upto of pformula * pformula * pformula option
+  | `Ehoare of pformula * pformula
 ]
 
 (* -------------------------------------------------------------------- *)
