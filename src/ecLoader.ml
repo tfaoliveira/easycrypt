@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 
@@ -95,8 +87,8 @@ let norm_name (mode : [`Lower | `Upper]) name =
   String.init
     (String.length name)
     (function
-     | 0 when mode = `Lower -> Char.lowercase name.[0]
-     | 0 when mode = `Upper -> Char.uppercase name.[0]
+     | 0 when mode = `Lower -> Char.lowercase_ascii name.[0]
+     | 0 when mode = `Upper -> Char.uppercase_ascii name.[0]
      | i -> name.[i])
 
 (* -------------------------------------------------------------------- *)

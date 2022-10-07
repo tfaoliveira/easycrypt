@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcMaps
@@ -16,7 +8,7 @@ type command = [
 | `Cli     of cli_option
 | `Config
 | `Why3Config
-]
+  ]
 
 and options = {
   o_options : glb_options;
@@ -29,6 +21,7 @@ and cmp_option = {
   cmpo_gcstats : bool;
   cmpo_tstats  : string option;
   cmpo_noeco   : bool;
+  cmpo_script  : bool;
 }
 
 and cli_option = {
@@ -37,15 +30,16 @@ and cli_option = {
 }
 
 and prv_options = {
-  prvo_maxjobs   : int;
-  prvo_timeout   : int;
-  prvo_cpufactor : int;
-  prvo_provers   : string list option;
-  prvo_pragmas   : string list;
-  prvo_ppwidth   : int option;
-  prvo_checkall  : bool;
-  prvo_profile   : bool;
-  prvo_iterate   : bool;
+  prvo_maxjobs    : int;
+  prvo_timeout    : int;
+  prvo_cpufactor  : int;
+  prvo_provers    : string list option;
+  prvo_pragmas    : string list;
+  prvo_ppwidth    : int option;
+  prvo_checkall   : bool;
+  prvo_profile    : bool;
+  prvo_iterate    : bool;
+  prvo_why3server : string option;
 }
 
 and ldr_options = {
@@ -67,6 +61,7 @@ type ini_options = {
   ini_ovrevict : string list;
   ini_provers  : string list;
   ini_idirs    : (string option * string) list;
+  ini_rdirs    : (string option * string) list;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -83,13 +78,11 @@ and xspec = [
 
 and xkind = [ `Flag | `Int | `String ]
 
-type xvalue = [ `Bool of bool | `Int of int | `String of string ]
-
 (* -------------------------------------------------------------------- *)
 let print_usage ?progname ?(out = stderr) ?msg specs =
   let progname = odfl Sys.argv.(0) progname in
 
-  let rec ccspecs hashelp specs =
+  let ccspecs hashelp specs =
     let for1 = function
       | `Spec (name, kind, help) ->
         let kind =
@@ -234,9 +227,10 @@ let specs = {
     ("compile", "Check an EasyCrypt file", [
       `Group "loader";
       `Group "provers";
-      `Spec  ("gcstats", `Flag, "Display GC statistics");
-      `Spec  ("tstats", `String, "Save timing statistics to <file>");
-      `Spec  ("no-eco", `Flag, "Do not cache verification results")]);
+      `Spec  ("gcstats", `Flag  , "Display GC statistics");
+      `Spec  ("tstats" , `String, "Save timing statistics to <file>");
+      `Spec  ("script" , `Flag  , "Computer-friendly output");
+      `Spec  ("no-eco" , `Flag  , "Do not cache verification results")]);
 
     ("cli", "Run EasyCrypt top-level", [
       `Group "loader";
@@ -259,6 +253,7 @@ let specs = {
       `Spec ("pp-width"   , `Int   , "pretty-printing width");
       `Spec ("profile"    , `Flag  , "Collect some profiling informations");
       `Spec ("iterate"    , `Flag  , "Force to iterate smt call");
+      `Spec ("server"     , `String, "Connect to an external Why3 server");
     ]);
 
 
@@ -278,7 +273,7 @@ let get_string name values =
 
 let get_string_list name values : string list =
   let split x =
-    let aout = List.map String.trim (String.nsplit x ",") in
+    let aout = List.map String.trim (String.split_on_string x ~by:",") in
     List.filter ((<>) "") aout
   in
 
@@ -324,9 +319,11 @@ let ldr_options_of_values ?ini values =
     let idirs   = omap_dfl (fun x -> x.ini_idirs) [] ini in
     let idirs   = List.map (add_rec false) idirs in
     let idirs_I = List.map (add_rec false) (List.map parse_idir (get_strings "I" values)) in
+    let rdirs   = omap_dfl (fun x -> x.ini_rdirs) [] ini in
+    let rdirs   = List.map (add_rec true) rdirs in
     let idirs_R = List.map (add_rec true)  (List.map parse_idir (get_strings "R" values)) in
 
-    { ldro_idirs = idirs @ idirs_I @ idirs_R;
+    { ldro_idirs = idirs @ idirs_I @ rdirs @ idirs_R;
       ldro_boot  = false; }
 
 let glb_options_of_values ?ini values =
@@ -359,9 +356,10 @@ let prv_options_of_values ?ini values =
         | None -> obind (fun x -> x.ini_ppwidth) ini
         | Some i -> Some i
       end;
-      prvo_checkall  = get_flag "check-all" values;
-      prvo_profile   = get_flag "profile" values;
-      prvo_iterate   = get_flag "iterate" values;
+      prvo_checkall   = get_flag "check-all" values;
+      prvo_profile    = get_flag "profile" values;
+      prvo_iterate    = get_flag "iterate" values;
+      prvo_why3server = get_string "why3server" values;
     }
 
 let cli_options_of_values ?ini values =
@@ -373,7 +371,8 @@ let cmp_options_of_values ?ini values input =
     cmpo_provers = prv_options_of_values ?ini values;
     cmpo_gcstats = get_flag "gcstats" values;
     cmpo_tstats  = get_string "tstats" values;
-    cmpo_noeco   = get_flag "no-eco" values; }
+    cmpo_noeco   = get_flag "no-eco" values;
+    cmpo_script  = get_flag "script" values; }
 
 (* -------------------------------------------------------------------- *)
 let parse ?ini argv =
@@ -477,10 +476,12 @@ let read_ini_file (filename : string) =
       ini_why3     = tryget  "why3conf";
       ini_ovrevict = trylist "no-evict";
       ini_provers  = trylist "provers" ;
-      ini_idirs    = List.map parse_idir (trylist "idirs"); } in
+      ini_idirs    = List.map parse_idir (trylist "idirs");
+      ini_rdirs    = List.map parse_idir (trylist "rdirs"); } in
 
   { ini_ppwidth  = ini.ini_ppwidth;
     ini_why3     = omap expand ini.ini_why3;
     ini_ovrevict = ini.ini_ovrevict;
     ini_provers  = ini.ini_provers;
-    ini_idirs    = ini.ini_idirs; }
+    ini_idirs    = ini.ini_idirs;
+    ini_rdirs    = ini.ini_rdirs; }

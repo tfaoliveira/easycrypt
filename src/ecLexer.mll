@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 {
   open EcUtils
@@ -53,9 +45,12 @@
     "var"         , VAR        ;        (* KW: prog *)
     "proc"        , PROC       ;        (* KW: prog *)
     "if"          , IF         ;        (* KW: prog *)
+    "is"          , IS         ;        (* KW: prog *)
+    "match"       , MATCH      ;        (* KW: prog *)
     "then"        , THEN       ;        (* KW: prog *)
     "else"        , ELSE       ;        (* KW: prog *)
     "elif"        , ELIF       ;        (* KW: prog *)
+    "match"       , MATCH      ;        (* KW: prog *)
     "for"         , FOR        ;        (* KW: prog *)
     "while"       , WHILE      ;        (* KW: prog *)
     "assert"      , ASSERT     ;        (* KW: prog *)
@@ -64,6 +59,8 @@
     "equiv"       , EQUIV      ;        (* KW: prog *)
     "hoare"       , HOARE      ;        (* KW: prog *)
     "ehoare"      , EHOARE     ;        (* KW: prog *)
+    "choare"      , CHOARE     ;        (* KW: prog *)
+    "cost"        , COST       ;        (* KW: prog *)
     "phoare"      , PHOARE     ;        (* KW: prog *)
     "islossless"  , LOSSLESS   ;        (* KW: prog *)
     "async"       , ASYNC      ;        (* KW: prog *)
@@ -94,6 +91,7 @@
     "case"        , CASE       ;        (* KW: tactic *)
 
     "pose"        , POSE       ;        (* KW: tactic *)
+    "gen"         , GEN        ;        (* KW: tactic *)
     "have"        , HAVE       ;        (* KW: tactic *)
     "suff"        , SUFF       ;        (* KW: tactic *)
     "elim"        , ELIM       ;        (* KW: tactic *)
@@ -144,6 +142,7 @@
     "swap"        , SWAP       ;        (* KW: tactic *)
     "cfold"       , CFOLD      ;        (* KW: tactic *)
     "rnd"         , RND        ;        (* KW: tactic *)
+    "rndsem"      , RNDSEM     ;        (* KW: tactic *)
     "pr_bounded"  , PRBOUNDED  ;        (* KW: tactic *)
     "bypr"        , BYPR       ;        (* KW: tactic *)
     "byphoare"    , BYPHOARE   ;        (* KW: tactic *)
@@ -163,6 +162,7 @@
     "eager"       , EAGER      ;        (* KW: tactic *)
 
     "axiom"       , AXIOM      ;        (* KW: global *)
+    "schema"      , SCHEMA     ;        (* KW: global *)
     "axiomatized" , AXIOMATIZED;        (* KW: global *)
     "lemma"       , LEMMA      ;        (* KW: global *)
     "realize"     , REALIZE    ;        (* KW: global *)
@@ -194,8 +194,10 @@
     "type"        , TYPE       ;        (* KW: global *)
     "class"       , CLASS      ;        (* KW: global *)
     "instance"    , INSTANCE   ;        (* KW: global *)
+    "instantiate" , INSTANTIATE;        (* KW: global *)
     "print"       , PRINT      ;        (* KW: global *)
     "search"      , SEARCH     ;        (* KW: global *)
+    "locate"      , LOCATE     ;        (* KW: global *)
     "as"          , AS         ;        (* KW: global *)
     "Pr"          , PR         ;        (* KW: global *)
     "clone"       , CLONE      ;        (* KW: global *)
@@ -206,6 +208,7 @@
     "why3"        , WHY3       ;        (* KW: global *)
     "dump"        , DUMP       ;        (* KW: global *)
     "remove"      , REMOVE     ;        (* KW: global *)
+    "exit"        , EXIT       ;        (* KW: global *)
 
     "time"        , TIME       ;        (* KW: internal *)
     "undo"        , UNDO       ;        (* KW: internal *)
@@ -397,6 +400,8 @@ rule main = parse
   | "{|"  { [LPBRACE   ] }
   | "|}"  { [RPBRACE   ] }
   | "`|"  { [TICKPIPE  ] }
+  | "`{"  { [TICKBRACE ] }
+  | "`("  { [TICKPAREN ] }
   | "<$"  { [LESAMPLE  ] }
   | "<@"  { [LEAT      ] }
   | ":~"  { [COLONTILD ] }
@@ -424,7 +429,9 @@ rule main = parse
   | '.' (eof | blank | newline as r) {
       if r = "\n" then
         Lexing.new_line lexbuf;
-      [FINAL]
+      let lc = Lexing.lexeme_start_p lexbuf in
+      let lc = { lc with pos_cnum = lc.pos_cnum + 1; } in
+      [FINAL lc]
     }
 
   | "." { [DOT] }

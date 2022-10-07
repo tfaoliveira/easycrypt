@@ -1,21 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
-(* Copyright The Coq Development Team, 1999-2010
- * Copyright INRIA - CNRS - LIX - LRI - PPS, 1999-2010
- *
- * This file is distributed under the terms of the:
- *   GNU Lesser General Public License Version 2.1
- *
- * This file originates from the `Coq Proof Assistant'
- * It has been modified for the needs of EasyCrypt
- *)
-
 (* -------------------------------------------------------------------- *)
 open EcMaps
 open EcUtils
@@ -349,7 +331,7 @@ module Make (C : Coef) : Rnorm = struct
         | c when c > 0 -> cm2 :: add p1 p2'
         | _ -> cons (C.cadd c1 c2) m1 (add p1' p2')
 
-    let rec opp (p : t) : t =
+    let opp (p : t) : t =
       List.map (fst_map C.copp) p
 
     let rec sub (p1 : t) (p2 : t) : t =

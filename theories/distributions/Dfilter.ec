@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 require import AllCore Distr FSet StdRing StdOrder StdBigop.
 (*---*) import RField RealOrder Bigreal BRA.
 
@@ -31,7 +23,7 @@ op dfilter (d : 'a distr) (P : 'a -> bool) = mk (mfilter (mu1 d) P).
 (* -------------------------------------------------------------------- *)
 lemma dfilter1E d (P:'a -> bool) (x:'a):
   mu1 (dfilter d P) x = if P x then 0%r else mu1 d x.
-proof. by rewrite -massE muK 1:isdistr_mfilter 1:isdistr_mu1. qed.
+proof. by rewrite muK 1:isdistr_mfilter 1:isdistr_mu1. qed.
 
 lemma nosmt dfilter1E_notin (d : 'a distr) P x:
   !P x => mu1 (dfilter d P) x = mu1 d x.
@@ -46,7 +38,7 @@ lemma nosmt dfilterE (d : 'a distr) P E:
   mu (dfilter d P) E = mu d (predI E (predC (P))).
 proof.
 rewrite !muE; apply/RealSeries.eq_sum=> x /=.
-by rewrite !massE dfilter1E /predI /predC; case: (P x).
+by rewrite dfilter1E /predI /predC; case: (P x).
 qed.
 
 lemma nosmt dfilterE_subset (d : 'a distr) P E:
@@ -70,7 +62,7 @@ qed.
 lemma supp_dfilter ['a] (d : 'a distr) P x:
   x \in (dfilter d P) <=> (x \in d /\ !P x).
 proof.
-by rewrite /support /in_supp dfilter1E; case: (P x).
+by rewrite /support dfilter1E; case: (P x).
 qed.
 
 (* -------------------------------------------------------------------- *)

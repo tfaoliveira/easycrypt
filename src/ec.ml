@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcOptions
@@ -39,6 +31,7 @@ let why3dflconf = Filename.concat XDG.home "why3.conf"
 (* -------------------------------------------------------------------- *)
 type pconfig = {
   pc_why3     : string option;
+  pc_ini      : string option;
   pc_loadpath : (EcLoader.namespace option * string) list;
 }
 
@@ -55,7 +48,7 @@ let print_config config =
     Format.eprintf "load-path:@\n%!";
     List.iter
       (fun (nm, dir) ->
-         Format.eprintf "  %.10s@@%s@\n%!" (string_of_namespace nm) dir)
+         Format.eprintf "  %s@@%s@\n%!" (string_of_namespace nm) dir)
       (EcCommands.loadpath ());
   end;
 
@@ -63,6 +56,12 @@ let print_config config =
   Format.eprintf "why3 configuration file@\n%!";
   begin match config.pc_why3 with
   | None   -> Format.eprintf "  <why3 default>@\n%!"
+  | Some f -> Format.eprintf "  %s@\n%!" f end;
+
+  (* Print EC configuration file location *)
+  Format.eprintf "EasyCrypt configuration file@\n%!";
+  begin match config.pc_ini with
+  | None   -> Format.eprintf "  <none>@\n%!"
   | Some f -> Format.eprintf "  %s@\n%!" f end;
 
   (* Print list of known provers *)
@@ -100,53 +99,54 @@ let print_config config =
 
 (* -------------------------------------------------------------------- *)
 let main () =
-  let myname  = Filename.basename Sys.executable_name
-  and mydir   = Filename.dirname  Sys.executable_name in
+  (* When started from Emacs28 on Apple M1, the set of blocks signals *
+   * disallows Why3 server to detect external provers completion      *)
+  let _ : int list = Unix.sigprocmask Unix.SIG_SETMASK [] in
 
-  let eclocal =
-    let rex = EcRegexp.regexp "^ec\\.(?:native|byte)(?:\\.exe)?$" in
-    EcRegexp.match_ (`C rex) myname
-  in
-
-  let resource name =
-    match eclocal with
-    | true ->
-        if Filename.basename (Filename.dirname mydir) = "_build" then
-          List.fold_left Filename.concat mydir
-            ([Filename.parent_dir_name;
-              Filename.parent_dir_name] @ name)
-        else
-          List.fold_left Filename.concat mydir name
-
-    | false ->
-        List.fold_left Filename.concat mydir
-          ([Filename.parent_dir_name; "lib"; "easycrypt"] @ name)
-  in
+  let theories = EcRelocate.Sites.theories in
 
   (* Parse command line arguments *)
-  let options =
-    let ini =
+  let conffile, options =
+    let conffile =
       let xdgini =
-        XDG.Config.file ~exists:true ~mode:`All ~appname:EcVersion.app
-          confname
-      in List.hd (List.append xdgini [resource ["etc"; "easycrypt.conf"]]) in
+        XDG.Config.file
+          ~exists:true ~mode:`All ~appname:EcVersion.app
+          confname in
+      let localini =
+        Option.bind
+          EcRelocate.sourceroot
+          (fun src ->
+            let conffile = List.fold_left Filename.concat src ["etc"; confname] in
+            if Sys.file_exists conffile then Some conffile else None) in
+      List.Exceptionless.hd (Option.to_list localini @ xdgini) in
 
     let ini =
-      try  Some (EcOptions.read_ini_file ini)
-      with
-      | Sys_error _ -> None
-      | EcOptions.InvalidIniFile (lineno, file) ->
-          Format.eprintf "%s:%l: cannot read INI file@." file lineno;
-          exit 1
+      Option.bind conffile (fun ini ->
+        try  Some (EcOptions.read_ini_file ini)
+        with
+        | Sys_error _ -> None
+        | EcOptions.InvalidIniFile (lineno, file) ->
+            Format.eprintf "%s:%l: cannot read INI file@." file lineno;
+            exit 1
+      )
 
-    in EcOptions.parse_cmdline ?ini Sys.argv in
+    in (conffile, EcOptions.parse_cmdline ?ini Sys.argv) in
 
   (* chrdir_$PATH if in reloc mode (FIXME / HACK) *)
   let relocdir =
     match options.o_options.o_reloc with
+    | true when Option.is_none EcRelocate.sourceroot ->
+        let pwd = Sys.getcwd () in
+        Sys.chdir (
+          List.fold_left Filename.concat
+            (List.hd EcRelocate.Sites.theories)
+            (List.init 3 (fun _ -> ".."))
+        ); Some pwd
+
     | true ->
-      let pwd = Sys.getcwd () in
-        Sys.chdir (resource [".."; ".."]); Some pwd
+        Format.eprintf "cannot relocate a local installation@.";
+        exit 1
+
     | false ->
         None
   in
@@ -179,11 +179,11 @@ let main () =
   let ldropts = options.o_options.o_loader in
 
   begin
-    let theories = resource ["theories"] in
-
-    EcCommands.addidir ~namespace:`System (Filename.concat theories "prelude");
-    if not ldropts.ldro_boot then
-      EcCommands.addidir ~namespace:`System ~recursive:true theories;
+    List.iter (fun theory ->
+      EcCommands.addidir ~namespace:`System (Filename.concat theory "prelude");
+      if not ldropts.ldro_boot then
+        EcCommands.addidir ~namespace:`System ~recursive:true theory
+    ) theories;
     List.iter (fun (onm, name, isrec) ->
         EcCommands.addidir
           ?namespace:(omap (fun nm -> `Named nm) onm)
@@ -200,6 +200,7 @@ let main () =
     | `Config ->
         let config = {
           pc_why3     = why3conf;
+          pc_ini      = conffile;
           pc_loadpath = EcCommands.loadpath ();
         } in
 
@@ -207,6 +208,9 @@ let main () =
 
     | `Why3Config -> begin
         let conf = cp_why3conf ~exists:false ~mode:`User in
+
+        conf |> Option.iter (fun conf ->
+          EcUtils.makedirs (Filename.dirname conf));
 
         let () =
           let ulnk = conf |> odfl why3dflconf in
@@ -251,13 +255,14 @@ let main () =
 
 
         let gcstats  = cmpopts.cmpo_gcstats in
+        let progress = if cmpopts.cmpo_script then `Script else `Human in
         let terminal =
-          lazy (EcTerminal.from_channel ~name ~gcstats (open_in name))
+          lazy (EcTerminal.from_channel ~name ~gcstats ~progress (open_in name))
         in
           ({cmpopts.cmpo_provers with prvo_iterate = true},
            Some name, terminal, false, cmpopts.cmpo_noeco)
 
-    end
+      end
   in
 
   (match input with
@@ -293,7 +298,7 @@ let main () =
                    let ecr = EcEco.{
                      eco_digest = x.rqd_digest;
                      eco_kind   = x.rqd_kind;
-                   } in (x.rqd_name, ecr))
+                   } in (x.rqd_name, (ecr, x.rqd_direct)))
                 (EcScope.Theory.required scope));
         } in
 
@@ -325,8 +330,13 @@ let main () =
   (* Initialize PRNG *)
   Random.self_init ();
 
-  (* Initialize fortune *)
-  EcFortune.init ();
+  (* Connect to external Why3 server if requested *)
+  prvopts.prvo_why3server |> oiter (fun server ->
+    try
+      Why3.Prove_client.connect_external server
+    with Why3.Prove_client.ConnectionError e ->
+      Format.eprintf "cannot connect to Why3 server `%s': %s" server e;
+      exit 1);
 
   (* Display Copyright *)
   if EcTerminal.interactive terminal then
@@ -390,9 +400,11 @@ let main () =
               List.iter
                 (fun p ->
                    let loc = p.EP.gl_action.EcLocation.pl_loc in
+                   let timed = p.EP.gl_debug = Some `Timed in
+                   let break = p.EP.gl_debug = Some `Break in
                      try
                        let tdelta =
-                         EcCommands.process ~timed:p.EP.gl_timed p.EP.gl_action
+                         EcCommands.process ~timed ~break p.EP.gl_action
                        in tstats loc tdelta
                      with
                      | EcCommands.Restart ->
@@ -408,6 +420,8 @@ let main () =
 
           | EP.P_Undo i ->
               EcCommands.undo i
+          | EP.P_Exit ->
+              terminate := true
         end;
         EcTerminal.finish `ST_Ok terminal;
         if !terminate then begin

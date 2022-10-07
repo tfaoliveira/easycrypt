@@ -54,9 +54,9 @@ theory DDH_ex.
 
   section PROOFS.
 
-  declare module A:Adversary.  
+  declare module A <: Adversary.  
 
-  axiom A_ll : islossless A.guess.
+  declare axiom A_ll : islossless A.guess.
 
   local module Addh0 : Ad1.ADV = {
     proc a1 () = { return ((), F.zero); }
@@ -204,14 +204,14 @@ module B_DDH (A:CCA_ADV) = {
     CCA.cstar <- None;
     pk <- (k, g, g_, g^x1 * g_^x2, g^y1 * g_^y2, g^z1 * g_^z2);
     CCA.sk <- (k, g, g_, x1, x2, y1, y2, z1, z2);
-    (m0,m1) <- CCA.A.choose(pk);
+    (m0,m1) <@ CCA.A.choose(pk);
     b <$ {0,1};
     c <- a^z1 * a_^z2 * (b ? m1 : m0);
     v <- H k (a,a_,c);
     d <- a^(x1 + v*y1) * a_^(x2+v*y2);
     c' <- (a,a_,c,d);
     CCA.cstar <- Some c';
-    b' <- CCA.A.guess(c');
+    b' <@ CCA.A.guess(c');
     return (b = b');
   }
     
@@ -277,9 +277,9 @@ proof. islossless. qed.
 
 section Security_Aux.
 
-  declare module A : CCA_ADV {CCA, B_TCR}.
-  axiom guess_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).guess.
-  axiom choose_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).choose.
+  declare module A <: CCA_ADV {-CCA, -B_TCR}.
+  declare axiom guess_ll : forall (O <: CCA_ORC{-A}), islossless O.dec => islossless A(O).guess.
+  declare axiom choose_ll : forall (O <: CCA_ORC{-A}), islossless O.dec => islossless A(O).choose.
 
   equiv CCA_DDH0 : CCA(CramerShoup, A).main ~ DDH0_ex(B_DDH(A)).main : ={glob A} ==> ={res}.
   proof.   
@@ -453,7 +453,7 @@ section Security_Aux.
     have H2 : forall x1L x2L, x1L + xL * x2L = x1L + xL * x2L - xL * x2L + xL * x2L.
     +  by move=> ??;ring.
     rewrite -!H2 /=;split=> [ | _].
-    + by split ;ring.
+    + by split => *;ring.
     move=> ??????? Hbad ? ? /=.
     have <- /= : g ^ zL = g ^ xL ^ (zL / xL).
     + by rewrite log_bij !(log_g, log_pow, log_mul);field.
@@ -690,12 +690,12 @@ section Security_Aux.
        G1.x2 = G2.alpha - G2.v * G1.y2){2} /\
       (G1.bad{1} => G1.y2{2} \in G3.y2log{2})).
   proof.
-    proc;auto => &m1 &m2 />.
+    proc; auto => &m1 &m2 />.
     case: (ci{m2}) => a a_ c d /=.
     pose v := H _ _. rewrite !negb_or => [[]] Hg3 Hcilog Hstareq.
     rewrite Hg3 /=. 
     case: (G1.bad{m1}) => [_ -> | ] //=. 
-    move=> Hbad Hsize Hstar;rewrite !negb_and /= 2!negb_or /= -!andaE.
+    move=> Hbad Hsize Hstar; rewrite !negb_and /= 2!negb_or /= -!andaE.
     case (v = G2.v{m2}) => />.
     + by case: (G1.cstar{m2}) Hstareq Hstar => />.
     move=> Hv Ha _;left.
@@ -969,9 +969,9 @@ end section Security_Aux.
 
 section Security.
 
-  declare module A : CCA_ADV {CCA, B_TCR}.
-  axiom guess_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).guess.
-  axiom choose_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).choose.
+  declare module A <: CCA_ADV {-CCA, -B_TCR}.
+  declare axiom guess_ll : forall (O <: CCA_ORC{-A}), islossless O.dec => islossless A(O).guess.
+  declare axiom choose_ll : forall (O <: CCA_ORC{-A}), islossless O.dec => islossless A(O).choose.
 
   local module NA (O:CCA_ORC) = {
     module A = A(O)

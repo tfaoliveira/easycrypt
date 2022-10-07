@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 require import AllCore List Distr Ring Number.
 require import StdRing StdOrder StdBigop RealSeq RealSeries.
@@ -19,6 +11,7 @@ clone include Distr.MFinite with
   op Support.card <- 2
   rename "dunifinE" as "dboolE_count"
   rename "dunifin" as "dbool"
+  rename "cunifin" as "cdbool"
 proof Support.enum_spec by case.
 
 lemma dboolE (E : bool -> bool):
@@ -60,7 +53,7 @@ op dbiased (p : real) = Distr.mk (mbiased p).
 lemma dbiased1E (p : real) (b : bool) :
   mu1 (dbiased p) b =
    if b then clamp p else 1%r - clamp p.
-proof. by rewrite -massE muK  // isdistr_mbiased. qed.
+proof. by rewrite muK  // isdistr_mbiased. qed.
 
 lemma dbiasedE (p : real) (E : bool -> bool) :
   mu (dbiased p) E =
@@ -68,13 +61,13 @@ lemma dbiasedE (p : real) (E : bool -> bool) :
     + (if E false then 1%r - clamp p else 0%r).
 proof.
 rewrite muE (@sumE_fin _ [true; false]) => [|[]|] //.
-by rewrite 2!big_cons big_nil => @/predT /=; rewrite !massE !dbiased1E.
+by rewrite 2!big_cons big_nil => @/predT /=; rewrite !dbiased1E.
 qed.
 
 lemma supp_dbiased (p : real) b :
   0%r < p < 1%r => b \in (dbiased p).
 proof.
-case=> gt0_p lt1_p; rewrite /support /in_supp dbiased1E /#.
+case=> gt0_p lt1_p; rewrite /support dbiased1E /#.
 qed.
 
 lemma dbiased_ll (p : real) : is_lossless (dbiased p).
@@ -84,6 +77,15 @@ lemma dbiased_fu (p : real) :
   0%r < p < 1%r => is_full (dbiased p).
 proof.
 by move=> ??;rewrite supp_dbiased.
+qed.
+
+lemma dmap_pred (d: 'a distr) (p: 'a -> bool) :
+  is_lossless d =>
+  dmap d p = dbiased (mu d p).
+proof.
+move => d_ll; apply eq_distr => x.
+rewrite dbiased1E clamp_id; first by smt(ge0_mu le1_mu).
+rewrite dmap1E /(\o) /pred1; smt(mu_not).
 qed.
 
 end Biased.
@@ -114,9 +116,7 @@ lemma dbiased_ll : is_lossless dbiased.
 proof. by apply dbiased_ll;apply in01_p. qed.
 
 lemma dbiased_fu : is_full (dbiased p).
-proof.
-by move=> ?;rewrite /is_full supp_dbiased.
-qed.
+proof. by move=> ?;rewrite supp_dbiased. qed.
 
 end FixedBiased.
 
@@ -191,3 +191,12 @@ apply; rewrite -(dbfunE_mem_uniq _ (undup _)) // ?undup_uniq.
 qed.
 
 end MUniFinFunBiased.
+
+
+(* -------------------------------------------------------------------- *)
+abstract theory Cost.
+  op cdbool : { int | 0 <= cdbool } as ge0_cdbool.
+  
+  schema cost_dbool `{P} : cost [P: dbool] = N cdbool.
+  hint simplify cost_dbool.
+end Cost.

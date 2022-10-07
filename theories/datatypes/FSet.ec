@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 require import Core Int List StdRing StdOrder.
 (*---*) import IntOrder.
@@ -62,7 +54,8 @@ op card ['a] (s : 'a fset) = size (elems s) axiomatized by cardE.
 op mem ['a] (s : 'a fset) (x : 'a) = mem (elems s) x
   axiomatized by memE.
 
-abbrev (\in) (z : 'a) (s : 'a fset) = mem s z.
+abbrev (\in)    (z : 'a) (s : 'a fset) =  mem s z.
+abbrev (\notin) (z : 'a) (s : 'a fset) = !mem s z.
 
 lemma mem_oflist (s : 'a list):
   forall x, mem (oflist s) x <=> mem s x.
@@ -178,6 +171,22 @@ proof. by move=> x'; rewrite in_fsetI in_fset1. qed.
 lemma in_fsetD1 (s : 'a fset) x:
   forall x', mem (s `\` fset1 x) x' <=> mem s x' /\ x' <> x.
 proof. by move=> x'; rewrite in_fsetD in_fset1. qed.
+
+(* -------------------------------------------------------------------- *)
+abbrev disjoint (xs ys : 'a fset) = xs `&` ys = fset0.
+
+lemma disjointP (xs ys : 'a fset):
+  disjoint xs ys <=> forall (x : 'a), x \in xs => ! x \in ys.
+proof.
+split=> [disj_xs_ys x x_in_xs | all_xs_not_in_ys].
+case (x \in ys)=> [x_in_ys | //].
+have x_in_inter_xs_ys: x \in (xs `&` ys) by rewrite in_fsetI.
+by rewrite /= -(in_fset0 x) -disj_xs_ys in_fsetI.
+rewrite fsetP=> x.
+rewrite in_fsetI in_fset0 /= negb_and.
+case (x \in xs)=> [x_in_xs | //].
+right; by rewrite all_xs_not_in_ys.
+qed.
 
 (* -------------------------------------------------------------------- *)
 op pick ['a] (A : 'a fset) = head witness (elems A)
@@ -498,16 +507,32 @@ lemma nosmt fcardD (A B : 'a fset) :
 proof. by rewrite -(fcardID A B) addzAC subzz. qed.
 
 (* -------------------------------------------------------------------- *)
+
+lemma fcardI1 (A : 'a fset) x : 
+  card (A `&` fset1 x) = b2i (x \in A).
+proof.
+by rewrite fsetI1; case: (x \in A) => _; rewrite ?fcard1 ?fcards0.
+qed.
+
+lemma fcardU1 (A : 'a fset) x : 
+  card (A `|` fset1 x) = b2i (x \notin A) + card A.
+proof. by rewrite fcardU fcard1 fcardI1 /#. qed.
+
 lemma nosmt fcardD1 (A : 'a fset) (x : 'a) :
   card A = card (A `\` fset1 x) + (if mem A x then 1 else 0).
-proof.
-(* FIXME: This feels like it wasn't thought about very deeply... *)
-case: (mem A x) => Ax //=; last first.
-+ congr; apply/fsetP=> y; rewrite !inE.
-  by move: Ax; case: (mem A y); case: (y = x).
-rewrite -(fcard1 x) -fcardUI addzC eq_sym eq_fcards0 /=.
-+ by apply/fsetP=> y; rewrite !inE; case: (y = x).
-by congr; apply/fsetP=> y; rewrite !inE; case: (y = x).
+proof. by rewrite fcardD fcardI1; ring. qed.
+
+(* -------------------------------------------------------------------- *)
+
+lemma fcard_oflist (s : 'a list) : card (oflist s) <= size s.
+proof. by rewrite /card -(perm_eq_size _ _ (oflistK s)) size_undup. qed.
+
+lemma uniq_card_oflist (s : 'a list) : uniq s => card (oflist s) = size s.
+proof. by rewrite /card => /oflist_uniq/perm_eq_size => <-. qed.
+
+lemma card_iota (n : int) : 0 <= n => card (oflist (iota_ 1 n)) = n.
+proof. 
+by move=> n_ge0; rewrite uniq_card_oflist ?iota_uniq size_iota /#. 
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -626,6 +651,15 @@ proof.
   by rewrite ler_add2r.
 qed.
 
+lemma inj_fcard_image (f : 'a -> 'b) (A : 'a fset) :
+    injective f => card (image f A) = card A.
+proof.
+move => inj_f.
+have/oflist_uniq uniq_f : uniq (map f (elems A)).
+  apply map_inj_in_uniq => *; [exact inj_f|exact uniq_elems].
+by rewrite /image /card -(perm_eq_size _ _ uniq_f) size_map.
+qed.
+
 (* -------------------------------------------------------------------- *)
 op product (A : 'a fset) (B : 'b fset): ('a * 'b) fset =
   oflist (flatten (map (fun a => map (fun b => (a,b)) (elems B)) (elems A)))
@@ -667,3 +701,13 @@ proof.
   rewrite -{1}(undup_id (filter (predC1 a) (elems A))) 2:oflistK//.
   by apply/filter_uniq/uniq_elems.
 qed.
+
+(* -------------------------------------------------------------------- *)
+
+op rangeset (m n : int) = oflist (range m n).
+
+lemma card_rangeset m n : card (rangeset m n) = max 0 (n - m).
+proof. by rewrite uniq_card_oflist ?range_uniq size_range. qed.
+
+lemma mem_rangeset m n i : i \in rangeset m n <=> m <= i && i < n.
+proof. by rewrite mem_oflist mem_range. qed.

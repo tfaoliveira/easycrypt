@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 pragma +implicits.
 
 (* -------------------------------------------------------------------- *)
@@ -47,6 +39,16 @@ module MainD (D : RO_Distinguisher) (RO : RO) = {
 }.
 
 (* -------------------------------------------------------------------- *)
+module type ROmap = {
+  proc init  ()                    : unit
+  proc get   (x : in_t)            : out_t
+  proc set   (x : in_t, y : out_t) : unit
+  proc rem   (x : in_t)            : unit
+  proc sample(x : in_t)            : unit
+  proc restrK()                    : (in_t, out_t) fmap
+}.
+
+(* -------------------------------------------------------------------- *)
 module type FRO = {
   proc init    ()                    : unit
   proc get     (x : in_t)            : out_t
@@ -64,7 +66,8 @@ module type FRO_Distinguisher (G : FRO) = {
 
 (* -------------------------------------------------------------------- *)
 abstract theory MkRO.
-module RO : RO = {
+
+module RO : RO, ROmap = {
   var m : (in_t, out_t) fmap
 
   proc init () = {
@@ -97,6 +100,19 @@ module RO : RO = {
     return m;
   }
 }.
+
+module LRO : RO = {
+  proc init = RO.init
+
+  proc get = RO.get
+
+  proc set = RO.set 
+
+  proc rem = RO.rem
+
+  proc sample(x : in_t) = { }
+}.
+
 end MkRO.
 
 clone include MkRO.
@@ -180,7 +196,7 @@ proof.
 by proc; inline *; auto=> /> &2 r _; rewrite mem_map /noflags map_set.
 qed.
 
-equiv RO_FRO_D (D <: RO_Distinguisher { RO, FRO }) :
+equiv RO_FRO_D (D <: RO_Distinguisher { -RO, -FRO }) :
   D(RO).distinguish ~ D(FRO).distinguish : 
     ={arg, glob D} /\ RO.m{1} = noflags FRO.m{2}
     ==> ={res, glob D} /\ RO.m{1} = noflags FRO.m{2}.
@@ -213,7 +229,7 @@ lemma FRO_set_ll : islossless FRO.set.
 proof. by proc; auto. qed.
 
 section ConditionalLL.
-axiom dout_ll x: is_lossless (dout x).
+declare axiom dout_ll x: is_lossless (dout x).
 
 lemma RO_get_ll : islossless RO.get.
 proof. by proc; auto=> />; rewrite dout_ll. qed.
@@ -233,18 +249,6 @@ end section LL.
 theory FullEager.
 require import List FSet.
 require (*--*) IterProc.
-
-module LRO : RO = {
-  proc init = RO.init
-
-  proc get = RO.get
-
-  proc set = RO.set 
-
-  proc rem = RO.rem
-
-  proc sample(x : in_t) = { }
-}.
 
 (* -------------------------------------------------------------------- *)
 (** Hides internals in normal usage while allowing use where needed    **)
@@ -347,7 +351,7 @@ lemma eager_get :
 proof.
 eager proc.
 wp; case ((x \in FRO.m /\ FRO.m.[x] \is Known){1}).
-+ rnd{1}; rcondf{2} 2; first by auto=> /> _ @/(\is) -> _ _ /#.
++ rnd{1}; rcondf{2} 2; first by auto=> /> _ -> _ _ /#.
   exists* x{1}, ((oget FRO.m.[x{2}]){1}); elim * => x1 mx; inline RRO.resample.
   call (iter_inv RRO.I (fun z=> x1<>z)
                        (fun o1 o2 => o1 = o2 /\ o1.[x1]= Some mx) _)=> /=.
@@ -478,7 +482,7 @@ move=> _ _ _ <- m_L m_R eq_exc m_L_x2_eq m_R_x2_eq.
 rewrite get_set_sameE in m_R_x2_eq.
 rewrite -fmap_eqP=> z; rewrite get_setE; case (z = x1)=> [-> |].
 + by rewrite -m_R_x2_eq.
-by move=> ne_z_x2; rewrite eq_exceptP in eq_exc; rewrite eq_exc /pred1.
+by move=> ne_z_x2; rewrite eq_exceptP in eq_exc; rewrite eq_exc.
 qed.
 
 lemma eager_rem :
@@ -501,7 +505,7 @@ eager proc; case ((x \in FRO.m /\ FRO.m.[x] \is Unknown){1}).
             l{1} = (elems (fdom (restr Unknown FRO.m))){2} /\ !mem l{1} x{1} /\
             (FRO.m.[x] = None){2}).
   + inline *; auto=> |> &2 x_in_m2 x_is_U2; rewrite dout_ll=> //= c _.
-    rewrite (@eq_except_remr (pred1 x{2}) _ FRO.m{2} x{2}) /pred1 //=.
+    rewrite (@eq_except_remr (pred1 x{2}) _ FRO.m{2} x{2}) //=.
     + exact/eq_except_setl.
     rewrite remE -memE in_fsetD1 negb_and /=.
     rewrite -fdom_rem; congr; congr; apply/fmap_eqP=> z.
@@ -608,7 +612,7 @@ while (   ={l, FRO.m}
        /\ (forall z, mem l z => in_dom_with FRO.m z Unknown){1}
        /\ restr Known FRO.m{1} = result{2}).
 + auto=> /> &2 inv l2_neq_nil c _; split=>[z /mem_drop z_in_l|].
-  + rewrite /in_dom_with mem_set get_setE; case: (z = head witness l{2})=> />.
+  + rewrite mem_set get_setE; case: (z = head witness l{2})=> />.
     by move: (inv _ z_in_l)=> @/in_dom_with.
   rewrite restr_set rem_id ?dom_restr //.
   move: (inv (head witness l{2}) _).
@@ -619,7 +623,7 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 section.
-declare module D : FRO_Distinguisher {FRO}.
+declare module D <: FRO_Distinguisher {-FRO}.
 
 lemma eager_D :
   eager [RRO.resample();, D(FRO).distinguish ~ 
@@ -660,7 +664,7 @@ module Eager (D : FRO_Distinguisher) = {
 
 (* -------------------------------------------------------------------- *)
 section.
-declare module D : FRO_Distinguisher {FRO}.
+declare module D <: FRO_Distinguisher {-FRO}.
 
 equiv Eager_1_2 : Eager(D).main1 ~ Eager(D).main2 :
   ={glob D, arg} ==> ={res, glob FRO, glob D}.
@@ -711,7 +715,7 @@ rewrite restr_set=> //= Hnd.
 by rewrite rem_id // dom_restr /in_dom_with Hnd.
 qed.
 
-equiv LRO_RRO_D (D <: RO_Distinguisher{RO, FRO}) :
+equiv LRO_RRO_D (D <: RO_Distinguisher{-RO, -FRO}) :
   D(LRO).distinguish ~ D(RRO).distinguish : 
     ={glob D, arg} /\ RO.m{1} = restr Known FRO.m{2}
     ==> ={res, glob D} /\ RO.m{1} = restr Known FRO.m{2}.
@@ -727,8 +731,8 @@ end EagerCore.
 
 (* -------------------------------------------------------------------- *)
 section.
-declare module D : RO_Distinguisher { RO, FRO }.
-axiom dout_ll x: is_lossless (dout x).
+declare module D <: RO_Distinguisher { -RO, -FRO }.
+declare axiom dout_ll x: is_lossless (dout x).
 
 local clone import EagerCore as InnerProof
 proof dout_ll by exact/dout_ll.
@@ -765,7 +769,7 @@ transitivity M.main1
   rcondf{2} 3.
   + auto=> />; apply/mem_eq0=> z; rewrite -memE mem_fdom dom_restr.
     by rewrite /in_dom_with domE mapE //=; case: (RO.m.[z]{m}).
-+ by auto=> /> &1; rewrite /noflags map_comp /fst /= map_id.
++ by auto=> /> &1; rewrite /noflags map_comp /= map_id.
 transitivity M.main2
    (={glob D, FRO.m, arg} ==> ={res, glob D})
    (={glob D, arg} /\ FRO.m{1} = map (fun _ c => (c, Known)) RO.m{2} ==>
@@ -777,6 +781,10 @@ proc*; inline M.main2; wp; call{1} RRO_resample_ll.
 symmetry; call (LRO_RRO_D D); auto=> /> &1.
 by apply/fmap_eqP=> x; rewrite restrP mapE; case: (RO.m.[x]{1}).
 qed.
+
+equiv RO_LRO : MainD(D,RO).distinguish ~ MainD(D,LRO).distinguish :
+  ={glob D, arg} ==> ={res, glob D}.
+proof. by proc; call RO_LRO_D; inline*; auto. qed.
 
 end section.
 end FullEager.
@@ -811,13 +819,13 @@ module FinRO : RO = {
 }.
 
 module type FinRO_Distinguisher(G : RO) = {
-  proc distinguish(_ : d_in_t): d_out_t { G.init G.get G.set G.sample }
+  proc distinguish(_ : d_in_t): d_out_t { G.init, G.get, G.set, G.sample }
 }.
 
 section PROOFS.
-axiom dout_ll x: is_lossless (dout x).
+declare axiom dout_ll x: is_lossless (dout x).
 
-declare module D : FinRO_Distinguisher{RO, FRO}.
+declare module D <: FinRO_Distinguisher{-RO, -FRO}.
 
 local module GenFinRO (RO:RO) = {
   include RO [set, rem, get]
@@ -837,7 +845,7 @@ local module GenFinRO (RO:RO) = {
   }
 }.
 
-local module D' (RO:RO) = MainD (D, GenFinRO(RO)).
+local module D' (RO:RO) = MainD(D, GenFinRO(RO)).
 
 local equiv RO_LFinRO_init : RO.init ~ GenFinRO(LRO).init : ={glob RO} ==> ={res, glob RO}.
 proof.
@@ -847,8 +855,7 @@ qed.
 
 local equiv GFinRO_RO_init : 
    GenFinRO(RO).init ~ FinRO.init : 
-     ={RO.m} ==>
-     ={RO.m} /\ forall (x : in_t), x \in RO.m{1}.
+     true ==> ={RO.m} /\ forall (x : in_t), x \in RO.m{1}.
 proof.
   proc; inline *.
   while ( ={l, RO.m} /\ (forall x, x \in RO.m \/ x \in l){1}); auto => />;1: smt (head_behead mem_set).
@@ -856,7 +863,7 @@ proof.
 qed.
 
 equiv RO_FinRO_D : MainD(D,RO).distinguish ~ MainD(D,FinRO).distinguish :
-  ={glob D, RO.m, arg} ==> ={res, glob D}.
+  ={glob D, arg} ==> ={res, glob D}.
 proof.
   proc *.
   transitivity*{1} {r <@ MainD(D, GenFinRO(LRO)).distinguish(x); } => //;1:smt().

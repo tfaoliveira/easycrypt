@@ -1,9 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2016--2017 - Roberto Metere (r.metere2@ncl.ac.uk)
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 (*
  * A formal verification of the Schnorr proof of knowledge
  *)
@@ -118,7 +112,7 @@ section SchnorrPKSecurity.
     rewrite /R /R_DL; move => sigmarel.
     byphoare (_: h = x /\ w' = w ==> _) => //; rewrite sigmarel.
     proc; inline*; swap 3 -2; swap 8 -7.
-    wp; rewrite /snd /=; auto => &hr />.
+    wp; auto => &hr />.
     rewrite FDistr.dt_ll => /> *; algebra.
   qed.
 

@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcSymbols
@@ -22,6 +14,7 @@ type ty_pctor  = [ `Int of int | `Named of ty_params ]
 type tydecl = {
   tyd_params  : ty_params;
   tyd_type    : ty_body;
+  tyd_loca    : locality;
   tyd_resolve : bool;
 }
 
@@ -38,12 +31,12 @@ and ty_dtype = {
   tydt_schcase : form;
 }
 
-val tydecl_as_concrete : tydecl -> EcTypes.ty
-val tydecl_as_abstract : tydecl -> Sp.t
-val tydecl_as_datatype : tydecl -> ty_dtype
-val tydecl_as_record   : tydecl -> form * (EcSymbols.symbol * EcTypes.ty) list
+val tydecl_as_concrete : tydecl -> EcTypes.ty option
+val tydecl_as_abstract : tydecl -> Sp.t option
+val tydecl_as_datatype : tydecl -> ty_dtype option
+val tydecl_as_record   : tydecl -> (form * (EcSymbols.symbol * EcTypes.ty) list) option
 
-val abs_tydecl : ?resolve:bool -> ?tc:Sp.t -> ?params:ty_pctor -> unit -> tydecl
+val abs_tydecl : ?resolve:bool -> ?tc:Sp.t -> ?params:ty_pctor -> locality -> tydecl
 
 val ty_instanciate : ty_params -> ty list -> ty -> ty
 
@@ -106,6 +99,7 @@ type operator = {
   op_tparams  : ty_params;
   op_ty       : EcTypes.ty;
   op_kind     : operator_kind;
+  op_loca     : locality;
   op_opaque   : bool;
   op_clinline : bool;
 }
@@ -120,12 +114,12 @@ val is_fix    : operator -> bool
 val is_abbrev : operator -> bool
 val is_prind  : operator -> bool
 
-val mk_op   : ?clinline:bool -> opaque:bool -> ty_params -> ty -> opbody option -> operator
-val mk_pred : ?clinline:bool -> opaque:bool -> ty_params -> ty list -> prbody option -> operator
+val mk_op   : ?clinline:bool -> opaque:bool -> ty_params -> ty -> opbody option -> locality -> operator
+val mk_pred : ?clinline:bool -> opaque:bool -> ty_params -> ty list -> prbody option -> locality -> operator
 
 val mk_abbrev :
      ?ponly:bool -> ty_params -> (EcIdent.ident * ty) list
-  -> ty * expr -> operator
+  -> ty * expr -> locality -> operator
 
 val operator_as_ctor  : operator -> EcPath.path * int
 val operator_as_rcrd  : operator -> EcPath.path
@@ -140,14 +134,35 @@ type axiom = {
   ax_tparams    : ty_params;
   ax_spec       : form;
   ax_kind       : axiom_kind;
+  ax_loca       : locality;
   ax_visibility : ax_visibility;
 }
 
 and ax_visibility = [`Visible | `NoSmt | `Hidden]
 
 (* -------------------------------------------------------------------- *)
-val is_axiom : axiom_kind -> bool
-val is_lemma : axiom_kind -> bool
+val is_axiom  : axiom_kind -> bool
+val is_lemma  : axiom_kind -> bool
+
+(* -------------------------------------------------------------------- *)
+type sc_params = (EcIdent.t * ty) list
+
+type pr_params = EcIdent.t list (* type bool *)
+
+(* [axs_params] are the free variables in [as_spec] expressions, i.e. in
+   [EcTypes.expr]. *)
+type ax_schema = {
+  axs_tparams : ty_params;
+  axs_pparams : pr_params;
+  axs_params  : sc_params;
+  axs_loca    : locality;
+  axs_spec    : EcCoreFol.form;
+}
+
+val sc_instantiate :
+  ty_params -> pr_params -> sc_params ->
+  ty list -> EcMemory.memtype -> mem_pr list -> expr list ->
+  EcCoreFol.form -> EcCoreFol.form
 
 (* -------------------------------------------------------------------- *)
 val axiomatized_op :
@@ -155,6 +170,7 @@ val axiomatized_op :
   -> ?nosmt:bool
   -> EcPath.path
   -> (ty_params * expr)
+  -> locality
   -> axiom
 
 (* -------------------------------------------------------------------- *)
@@ -162,6 +178,7 @@ type typeclass = {
   tc_prt : EcPath.path option;
   tc_ops : (EcIdent.t * EcTypes.ty) list;
   tc_axs : (EcSymbols.symbol * form) list;
+  tc_loca: is_local;
 }
 
 (* -------------------------------------------------------------------- *)

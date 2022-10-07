@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 pragma +implicits.
 
 (* -------------------------------------------------------------------- *)
@@ -243,6 +235,9 @@ abstract theory ComRing.
   lemma nosmt mulrACA: interchange ( * ) ( * ).
   proof. by move=> x y z t; rewrite -!mulrA (mulrCA y). qed.
 
+  lemma nosmt mulrSl x y : (x + oner) * y = x * y + y.
+  proof. by rewrite mulrDl mul1r. qed.
+
   lemma nosmt mulrDr: right_distributive ( * ) (+).
   proof. by move=> x y z; rewrite mulrC mulrDl !(@mulrC _ x). qed.
 
@@ -467,6 +462,9 @@ abstract theory ComRing.
     move=> ge0i; rewrite /exp !ltzNge ge0i addz_ge0 //=.
     by rewrite !MulMonoid.iteropE iterS.
   qed.
+
+  lemma expr_pred (x : t) i : 0 < i => exp x i = x * (exp x (i - 1)).
+  proof. smt(exprS). qed.
 
   lemma exprSr (x : t) i: 0 <= i => exp x (i+1) = (exp x i) * x.
   proof. by move=> ge0_i; rewrite exprS // mulrC. qed.

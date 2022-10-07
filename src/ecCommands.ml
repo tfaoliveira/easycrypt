@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcLocation
@@ -201,6 +193,10 @@ let process_search scope qs =
   EcScope.Search.search scope qs
 
 (* -------------------------------------------------------------------- *)
+let process_locate scope x =
+  EcScope.Search.locate scope x
+
+(* -------------------------------------------------------------------- *)
 module HiPrinting = struct
   let pr_glob fmt env pm =
     let ppe = EcPrinting.PPEnv.ofenv env in
@@ -222,7 +218,7 @@ module HiPrinting = struct
       let ty = EcEnv.Var.by_xpath xp env in
       Format.fprintf fmt "  @[%a : %a@]@."
         (EcPrinting.pp_pv ppe) pv
-        (EcPrinting.pp_type ppe) ty.EcEnv.vb_type)
+        (EcPrinting.pp_type ppe) ty)
       (List.rev (Mx.bindings us.EcEnv.us_pv))
 
 
@@ -267,6 +263,7 @@ let process_pr fmt scope p =
   | Pr_pr   qs -> EcPrinting.ObjectInfo.pr_op   fmt env   (unloc qs)
   | Pr_th   qs -> EcPrinting.ObjectInfo.pr_th   fmt env   (unloc qs)
   | Pr_ax   qs -> EcPrinting.ObjectInfo.pr_ax   fmt env   (unloc qs)
+  | Pr_sc   qs -> EcPrinting.ObjectInfo.pr_sc   fmt env   (unloc qs)
   | Pr_mod  qs -> EcPrinting.ObjectInfo.pr_mod  fmt env   (unloc qs)
   | Pr_mty  qs -> EcPrinting.ObjectInfo.pr_mty  fmt env   (unloc qs)
   | Pr_any  qs -> EcPrinting.ObjectInfo.pr_any  fmt env   (unloc qs)
@@ -299,17 +296,9 @@ exception Pragma of [`Reset | `Restart]
 (* -------------------------------------------------------------------- *)
 let rec process_type (scope : EcScope.scope) (tyd : ptydecl located) =
   EcScope.check_state `InTop "type" scope;
-
-  let tyname = (tyd.pl_desc.pty_tyvars, tyd.pl_desc.pty_name) in
-  let scope =
-    match tyd.pl_desc.pty_body with
-    | PTYD_Abstract bd -> EcScope.Ty.add          scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Alias    bd -> EcScope.Ty.define       scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Datatype bd -> EcScope.Ty.add_datatype scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Record   bd -> EcScope.Ty.add_record   scope (mk_loc tyd.pl_loc tyname) bd
-  in
-    EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
-    scope
+  let scope  =  EcScope.Ty.add scope tyd in
+  EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
+  scope
 
 (* -------------------------------------------------------------------- *)
 and process_types (scope : EcScope.scope) tyds =
@@ -333,17 +322,9 @@ and process_module (scope : EcScope.scope) m =
   EcScope.Mod.add scope m
 
 (* -------------------------------------------------------------------- *)
-and process_declare (scope : EcScope.scope) x =
-  match x with
-  | PDCL_Module m -> begin
-      EcScope.check_state `InTop "module" scope;
-      EcScope.Mod.declare scope m
-  end
-
-(* -------------------------------------------------------------------- *)
-and process_interface (scope : EcScope.scope) (x, i) =
+and process_interface (scope : EcScope.scope) intf =
   EcScope.check_state `InTop "interface" scope;
-  EcScope.ModType.add scope x.pl_desc i
+  EcScope.ModType.add scope intf
 
 (* -------------------------------------------------------------------- *)
 and process_operator (scope : EcScope.scope) (pop : poperator located) =
@@ -388,18 +369,20 @@ and process_abbrev (scope : EcScope.scope) (a : pabbrev located) =
 (* -------------------------------------------------------------------- *)
 and process_axiom (scope : EcScope.scope) (ax : paxiom located) =
   EcScope.check_state `InTop "axiom" scope;
+  (* TODO: A: aybe rename, as this now also adds schemata. *)
   let (name, scope) = EcScope.Ax.add scope (Pragma.get ()).pm_check ax in
     name |> EcUtils.oiter
       (fun x ->
          match (unloc ax).pa_kind with
          | PAxiom _ -> EcScope.notify scope `Info "added axiom: `%s'" x
-         | _        -> EcScope.notify scope `Info "added lemma: `%s'" x);
+         | PLemma _ -> EcScope.notify scope `Info "added lemma: `%s'" x
+         | PSchema  -> EcScope.notify scope `Info "added schema: `%s'" x);
     scope
 
 (* -------------------------------------------------------------------- *)
-and process_th_open (scope : EcScope.scope) (abs, name) =
+and process_th_open (scope : EcScope.scope) (loca, abs, name) =
   EcScope.check_state `InTop "theory" scope;
-  EcScope.Theory.enter scope (if abs then `Abstract else `Concrete) name
+  EcScope.Theory.enter scope (if abs then `Abstract else `Concrete) (unloc name) loca
 
 (* -------------------------------------------------------------------- *)
 and process_th_close (scope : EcScope.scope) (clears, name) =
@@ -448,6 +431,7 @@ and process_th_require1 ld scope (nm, (sysname, thname), io) =
         rqd_kind      = kind;
         rqd_namespace = fnm;
         rqd_digest    = Digest.file filename;
+        rqd_direct    = List.is_empty (Loader.context ld);
       } in
 
       let loader iscope =
@@ -465,8 +449,8 @@ and process_th_require1 ld scope (nm, (sysname, thname), io) =
       let scope = EcScope.Theory.require scope (name, kind) loader in
           match io with
           | None         -> scope
-          | Some `Export -> EcScope.Theory.export scope ([], name.rqd_name)
-          | Some `Import -> EcScope.Theory.import scope ([], name.rqd_name)
+          | Some `Export -> EcScope.Theory.export scope ([], name.EcScope.rqd_name)
+          | Some `Import -> EcScope.Theory.import scope ([], name.EcScope.rqd_name)
 
 (* -------------------------------------------------------------------- *)
 and process_th_require ld scope (nm, xs, io) =
@@ -563,15 +547,19 @@ and process_pragma (scope : EcScope.scope) opt =
 (* -------------------------------------------------------------------- *)
 and process_option (scope : EcScope.scope) (name, value) =
   match value with
+  | `Bool value when EcLocation.unloc name = EcGState.old_mem_restr ->
+    let gs = EcEnv.gstate (EcScope.env scope) in
+    EcGState.setflag (unloc name) value gs; scope
+
+  | (`Int _) as value ->
+      let gs = EcEnv.gstate (EcScope.env scope) in
+      EcGState.setvalue (unloc name) value gs; scope
+
   | `Bool value -> begin
       try  EcScope.Options.set scope (unloc name) value
       with EcScope.UnknownFlag _ ->
         EcScope.hierror "unknown option: %s" (unloc name)
     end
-
-  | (`Int _) as value ->
-      let gs = EcEnv.gstate (EcScope.env scope) in
-      EcGState.setvalue (unloc name) value gs; scope
 
 (* -------------------------------------------------------------------- *)
 and process_addrw scope (local, base, names) =
@@ -652,14 +640,13 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gtypeclass   t    -> `Fct   (fun scope -> process_typeclass  scope  (mk_loc loc t))
       | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
       | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
-      | Gdeclare     m    -> `Fct   (fun scope -> process_declare    scope  m)
       | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
       | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  (mk_loc loc o))
       | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
       | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
       | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
       | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      scope  (mk_loc loc a))
-      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  (snd_map unloc name))
+      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  name)
       | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
       | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
       | GthRequire   name -> `Fct   (fun scope -> process_th_require ld scope name)
@@ -671,6 +658,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | GsctClose    name -> `Fct   (fun scope -> process_sct_close  scope  name)
       | Gprint       p    -> `Fct   (fun scope -> process_print      scope  p; scope)
       | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
+      | Glocate      x    -> `Fct   (fun scope -> process_locate     scope  x; scope)
       | Gtactics     t    -> `Fct   (fun scope -> process_tactics    scope  t)
       | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
       | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
@@ -807,7 +795,7 @@ let mode () : string =
 (* -------------------------------------------------------------------- *)
 let undo (olduuid : int) =
   if olduuid < (uuid ()) then
-    for i = (uuid ()) - 1 downto olduuid do
+    for _ = (uuid ()) - 1 downto olduuid do
       context := Some (pop_context (oget !context))
     done
 
@@ -816,7 +804,9 @@ let reset () =
   context := Some (rootctxt (oget !context).ct_root)
 
 (* -------------------------------------------------------------------- *)
-let process ?(timed = false) (g : global_action located) : float option =
+let process ?(timed = false) ?(break = false) (g : global_action located) : float option =
+  ignore break;
+
   let current = oget !context in
   let scope   = current.ct_current in
 
@@ -848,7 +838,7 @@ let pp_current_goal ?(all = false) stream =
       Format.fprintf stream "Remaining lemmas to prove:@\n%!";
       List.iter
         (fun ((_, ax), p, env) ->
-           let ppe = EcPrinting.PPEnv.ofenv env in
+           let ppe = EcPrinting.PPEnv.ofenv (EcSection.env env)in
            Format.fprintf stream " %s: %a@\n%!"
              (EcPath.tostring p)
              (EcPrinting.pp_form ppe) ax.EcDecl.ax_spec)

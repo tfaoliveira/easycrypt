@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUid
 open EcSymbols
@@ -50,5 +42,11 @@ val tfun_expected : unienv -> EcTypes.ty list -> EcTypes.ty
 type sbody = ((EcIdent.t * ty) list * expr) Lazy.t
 
 val select_op :
-     ?hidden:bool -> ?filter:(operator -> bool) -> tvi -> EcEnv.env -> qsymbol -> unienv
-  -> dom -> ((EcPath.path * ty list) * ty * unienv * sbody option) list
+     ?hidden:bool
+  -> ?filter:(path -> operator -> bool)
+  -> tvi
+  -> EcEnv.env
+  -> qsymbol
+  -> unienv
+  -> dom
+  -> ((EcPath.path * ty list) * ty * unienv * sbody option) list

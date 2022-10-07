@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcSymbols
@@ -39,7 +31,7 @@ let close_pr_body (uni : EcUnify.uidmap) (body : prbody) =
   | PR_Ind pri ->
      let for1 ctor =
        { prc_ctor = ctor.prc_ctor;
-         prc_bds  = List.map (snd_map (Fsubst.gty_subst fsubst)) ctor.prc_bds;
+         prc_bds  = List.map (snd_map (Fsubst.subst_gty fsubst)) ctor.prc_bds;
          prc_spec = List.map (Fsubst.f_subst fsubst) ctor.prc_spec; } in
      PR_Ind
        { pri_args  = List.map (snd_map tsubst) pri.pri_args;
@@ -90,7 +82,7 @@ let trans_preddecl_r (env : EcEnv.env) (pr : ppredicate located) =
   let body    = body |> omap (close_pr_body uni) in
   let dom     = List.map (Tuni.offun uni) dom in
 
-  EcDecl.mk_pred ~opaque:false tparams dom body
+  EcDecl.mk_pred ~opaque:false tparams dom body pr.pp_locality
 
 (* -------------------------------------------------------------------- *)
 let trans_preddecl (env : EcEnv.env) (pr : ppredicate located) =

@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcIdent
@@ -13,6 +5,15 @@ open EcPath
 open EcUid
 
 module BI = EcBigInt
+
+(* -------------------------------------------------------------------- *)
+type locality  = [`Local | `Declare | `Global]
+type is_local  = [`Local | `Global]
+
+let local_of_locality = function
+  | `Local   -> `Local
+  | `Global  -> `Global
+  | `Declare -> `Local
 
 (* -------------------------------------------------------------------- *)
 type ty = {
@@ -75,7 +76,7 @@ module Hsty = Why3.Hashcons.Make (struct
     match ty with
     | Tglob m          -> EcPath.m_fv Mid.empty m
     | Tunivar _        -> Mid.empty
-    | Tvar    _        -> Mid.empty
+    | Tvar    _        -> Mid.empty (* FIXME: section *)
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
@@ -125,11 +126,14 @@ let tfun t1 t2   = mk_ty (Tfun (t1, t2))
 let tglob m      = mk_ty (Tglob m)
 
 (* -------------------------------------------------------------------- *)
-let tunit      = tconstr EcCoreLib.CI_Unit .p_unit  []
-let tbool      = tconstr EcCoreLib.CI_Bool .p_bool  []
-let tint       = tconstr EcCoreLib.CI_Int  .p_int   []
-let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr [ty]
-let treal      = tconstr EcCoreLib.CI_Real .p_real  []
+let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
+let tbool      = tconstr EcCoreLib.CI_Bool .p_bool    []
+let tint       = tconstr EcCoreLib.CI_Int  .p_int     []
+let txint      = tconstr EcCoreLib.CI_xint .p_xint    []
+
+let tdistr ty  = tconstr EcCoreLib.CI_Distr.p_distr   [ty]
+let toption ty = tconstr EcCoreLib.CI_Option.p_option [ty]
+let treal      = tconstr EcCoreLib.CI_Real .p_real    []
 let tcpred ty  = tfun ty tbool
 
 let txreal    = tconstr EcCoreLib.CI_Xreal.p_xreal []
@@ -238,7 +242,7 @@ let symbol_of_ty (ty : ty) =
       let rec doit i =
         if   i >= String.length x
         then "x"
-        else match Char.lowercase x.[i] with
+        else match Char.lowercase_ascii x.[i] with
              | 'a' .. 'z' -> String.make 1 x.[i]
              | _ -> doit (i+1)
       in
@@ -250,7 +254,7 @@ let fresh_id_of_ty (ty : ty) =
 (* -------------------------------------------------------------------- *)
 type ty_subst = {
   ts_p   : EcPath.path -> EcPath.path;
-  ts_mp  : EcPath.mpath -> EcPath.mpath;
+  ts_mp  : EcPath.smsubst;
   ts_def : (EcIdent.t list * ty) EcPath.Mp.t;
   ts_u   : EcUid.uid -> ty option;
   ts_v   : EcIdent.t -> ty option;
@@ -258,14 +262,14 @@ type ty_subst = {
 
 let ty_subst_id =
   { ts_p   = identity;
-    ts_mp  = identity;
+    ts_mp  = EcPath.sms_identity;
     ts_def = Mp.empty;
     ts_u   = funnone ;
     ts_v   = funnone ; }
 
 let is_ty_subst_id s =
      s.ts_p  == identity
-  && s.ts_mp == identity
+  && EcPath.sms_is_identity s.ts_mp
   && s.ts_u  == funnone
   && s.ts_v  == funnone
   && Mp.is_empty s.ts_def
@@ -275,7 +279,7 @@ let rec ty_subst s =
   else
     Hty.memo_rec 107 (fun aux ty ->
       match ty.ty_node with
-      | Tglob m       -> TySmart.tglob (ty, m) (s.ts_mp m)
+      | Tglob m       -> TySmart.tglob (ty, m) (EcPath.m_subst s.ts_mp m)
       | Tunivar id    -> odfl ty (s.ts_u id)
       | Tvar id       -> odfl ty (s.ts_v id)
       | Ttuple lty    -> TySmart.ttuple (ty, lty) (List.Smart.map aux lty)
@@ -357,60 +361,124 @@ module Tvar = struct
 end
 
 (* -------------------------------------------------------------------- *)
-type pvar_kind =
-  | PVglob
-  | PVloc
-
-type prog_var = {
-  pv_name : EcPath.xpath;
-  pv_kind : pvar_kind;
+type ovariable = {
+  ov_name : EcSymbols.symbol option;
+  ov_type : ty;
 }
 
-let pv_equal v1 v2 =
-  EcPath.x_equal v1.pv_name v2.pv_name && v1.pv_kind = v2.pv_kind
+let ov_name { ov_name = x } = x
+let ov_type { ov_type = x } = x
+
+let ov_hash v =
+  Why3.Hashcons.combine
+    (Hashtbl.hash v.ov_name)
+    (ty_hash v.ov_type)
+
+let ov_equal vd1 vd2 =
+  EcUtils.opt_equal (=) vd1.ov_name vd2.ov_name &&
+  ty_equal vd1.ov_type vd2.ov_type
+
+type variable = {
+  v_name : EcSymbols.symbol;   (* can be "_" *)
+  v_type : ty;
+}
+
+let v_name { v_name = x } = x
+let v_type { v_type = x } = x
+
+let v_hash v =
+  Why3.Hashcons.combine
+    (Hashtbl.hash v.v_name)
+    (ty_hash v.v_type)
+
+let v_equal vd1 vd2 =
+  vd1.v_name = vd2.v_name &&
+  ty_equal vd1.v_type vd2.v_type
+
+let ovar_of_var { v_name = n; v_type = t } =
+  { ov_name = Some n; ov_type = t }
+
+let ty_fv_and_tvar (ty : ty) =
+  EcIdent.fv_union ty.ty_fv (Mid.map (fun () -> 1) (Tvar.fv ty))
+
+(* -------------------------------------------------------------------- *)
+type pvar_kind =
+  | PVKglob
+  | PVKloc
+
+type prog_var =
+  | PVglob of EcPath.xpath
+  | PVloc of EcSymbols.symbol
+
+let pv_equal v1 v2 = match v1, v2 with
+  | PVglob x1, PVglob x2 ->
+    EcPath.x_equal x1 x2
+  | PVloc i1, PVloc i2 -> EcSymbols.sym_equal i1 i2
+  | PVloc _, PVglob _ | PVglob _, PVloc _ -> false
+
+let pv_kind = function
+  | PVglob _ -> PVKglob
+  | PVloc _ -> PVKloc
 
 let pv_hash v =
-  Why3.Hashcons.combine (EcPath.x_hash v.pv_name)
-    (if v.pv_kind = PVglob then 1 else 0)
+  let h = match v with
+    | PVglob x -> EcPath.x_hash x
+    | PVloc i -> Hashtbl.hash i in
+
+  Why3.Hashcons.combine
+    h (if pv_kind v = PVKglob then 1 else 0)
 
 let pv_compare v1 v2 =
-  match EcPath.x_compare v1.pv_name v2.pv_name with
-  | 0 -> Pervasives.compare v1.pv_kind v2.pv_kind
-  | r -> r
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_compare x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
 
 let pv_compare_p v1 v2 =
-  match EcPath.x_compare_na v1.pv_name v2.pv_name with
-  | 0 -> Pervasives.compare v1.pv_kind v2.pv_kind
-  | r -> r
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_compare_na x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
 
 let pv_ntr_compare v1 v2 =
-  match Pervasives.compare v1.pv_kind v2.pv_kind with
-  | 0 -> EcPath.x_ntr_compare v1.pv_name v2.pv_name
-  | r -> r
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_ntr_compare x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
 
-let is_loc  v = match v.pv_kind with PVloc  -> true | _ -> false
-let is_glob v = match v.pv_kind with PVglob -> true | _ -> false
+let is_loc  = function PVloc _ -> true  | PVglob _ -> false
+let is_glob = function PVloc _ -> false | PVglob _ -> true
 
-let symbol_of_pv pv =
-  EcPath.basename pv.pv_name.EcPath.x_sub
+let get_loc = function PVloc id -> id | PVglob _ -> assert false
+let get_glob = function PVloc _ -> assert false | PVglob xp -> xp
+
+let symbol_of_pv = function
+  | PVglob x -> x.EcPath.x_sub
+  | PVloc id -> id
 
 let string_of_pvar_kind = function
-  | PVglob -> "PVglob"
-  | PVloc  -> "PVloc"
+  | PVKglob -> "PVKglob"
+  | PVKloc  -> "PVKloc"
 
 let string_of_pvar (p : prog_var) =
+  let sp = match p with
+    | PVglob x -> EcPath.x_tostring x
+    | PVloc id -> id in
+
   Printf.sprintf "%s[%s]"
-    (EcPath.x_tostring p.pv_name)
-    (string_of_pvar_kind p.pv_kind)
+    sp (string_of_pvar_kind (pv_kind p))
 
-(* Notice: global variables are never suspended, local are since they
- * contain the path of the function. *)
+let name_of_pvar pv =
+  match pv with
+  | PVloc x -> x
+  | PVglob xp -> EcPath.xbasename xp
 
-let pv_loc f s =
-  { pv_name = EcPath.xqname f s; pv_kind = PVloc }
+let pv_loc id = PVloc id
 
-let pv_arg (f : EcPath.xpath) = pv_loc f "arg"
-let pv_res (f : EcPath.xpath) = pv_loc f "res"
+let arg_symbol = "arg"
+let res_symbol = "res"
+let pv_arg = PVloc arg_symbol
+let pv_res =  PVloc res_symbol
 
 let xp_glob x =
   let top = x.EcPath.x_top in
@@ -419,17 +487,13 @@ let xp_glob x =
     let ntop = EcPath.mpath top.m_top [] in
     EcPath.xpath ntop x.EcPath.x_sub
 
-let pv_glob x =
-  { pv_name = xp_glob x; pv_kind = PVglob }
+let pv_glob x = PVglob (xp_glob x)
 
-let pv x k =
-  match k with
-  | PVglob -> pv_glob x
-  | PVloc  -> { pv_name = x; pv_kind = k }
-
-let pv_subst m_subst px =
-  let mp' = m_subst px.pv_name in
-  if px.pv_name == mp' then px else pv mp' px.pv_kind
+let pv_subst m_subst px = match px with
+  | PVglob x ->
+    let mp' = m_subst x in
+    if x == mp' then px else pv_glob mp'
+  | PVloc _ -> px
 
 (* -------------------------------------------------------------------- *)
 type lpattern =
@@ -517,7 +581,9 @@ let lp_fv = function
         (fun s (id, _) -> ofold Sid.add s id)
         Sid.empty ids
 
-let pv_fv pv = EcPath.x_fv Mid.empty pv.pv_name
+let pv_fv = function
+  | PVglob x -> EcPath.x_fv Mid.empty x
+  | PVloc _ -> Mid.empty
 
 let fv_node e =
   let union ex =
@@ -728,6 +794,18 @@ let e_decimal (n, (l, f)) =
   else Reals.add (Reals.of_lit n) fct
 
 (* -------------------------------------------------------------------- *)
+let e_none (ty : ty) : expr =
+  e_op EcCoreLib.CI_Option.p_none [ty] (toption ty)
+
+let e_some ({ e_ty = ty } as e : expr) : expr =
+  let op = e_op EcCoreLib.CI_Option.p_some [ty] (tfun ty (toption ty)) in
+  e_app op [e] (toption ty)
+
+let e_oget (e : expr) (ty : ty) : expr =
+  let op = e_op EcCoreLib.CI_Option.p_oget [ty] (tfun (toption ty) ty) in
+  e_app op [e] ty
+
+(* -------------------------------------------------------------------- *)
 module ExprSmart = struct
   let l_symbol (lp, x) x' =
     if x == x' then lp else LSymbol x'
@@ -779,7 +857,7 @@ module ExprSmart = struct
   let e_match (e, (b, es, ty)) (b', es', ty') =
     if   b == b' && es == es' && ty == ty'
     then e
-    else e_match b es ty
+    else e_match b' es' ty'
 
   let e_lam (e, (b, body)) (b', body') =
     if   b == b' && body == body'
@@ -841,7 +919,7 @@ let e_map fty fe e =
       let bd' = fe bd in
       ExprSmart.e_quant (e, (q, b, bd)) (q, b', bd')
 
-let rec e_fold fe state e =
+let e_fold fe state e =
   match e.e_node with
   | Eint _                -> state
   | Elocal _              -> state
@@ -866,8 +944,7 @@ type e_subst = {
     es_p       : EcPath.path -> EcPath.path;
     es_ty      : ty -> ty;
     es_opdef   : (EcIdent.t list * expr) EcPath.Mp.t;
-    es_mp      : EcPath.mpath -> EcPath.mpath;
-    es_xp      : EcPath.xpath -> EcPath.xpath;
+    es_mp      : smsubst;
     es_loc     : expr Mid.t;
 }
 
@@ -876,32 +953,25 @@ let e_subst_id = {
     es_p       = identity;
     es_ty      = identity;
     es_opdef   = Mp.empty;
-    es_mp      = identity;
-    es_xp      = identity;
+    es_mp      = sms_identity;
     es_loc     = Mid.empty;
 }
 
 (* -------------------------------------------------------------------- *)
 let is_e_subst_id s =
-  not s.es_freshen && s.es_p == identity &&
-    s.es_ty == identity && s.es_mp == identity &&
-    s.es_xp == identity && Mid.is_empty s.es_loc
+     not s.es_freshen
+  && s.es_p  == identity
+  && s.es_ty == identity
+  && sms_is_identity s.es_mp
+  && Mid.is_empty s.es_loc
 
 (* -------------------------------------------------------------------- *)
 let e_subst_init freshen on_path on_ty opdef on_mpath esloc =
-  let on_mp =
-    let f = EcPath.m_subst on_path on_mpath in
-    if f == identity then f else EcPath.Hm.memo 107 f in
-  let on_xp =
-    let f = EcPath.x_subst on_mp in
-    if f == identity then f else EcPath.Hx.memo 107 f in
-
   { es_freshen = freshen;
     es_p       = on_path;
     es_ty      = on_ty;
     es_opdef   = opdef;
-    es_mp      = on_mp;
-    es_xp      = on_xp;
+    es_mp      = on_mpath;
     es_loc     = esloc; }
 
 (* -------------------------------------------------------------------- *)
@@ -953,12 +1023,13 @@ let rec e_subst (s: e_subst) e =
       match Mid.find_opt id s.es_loc with
       | Some e' -> e'
       | None    ->
-        assert (not s.es_freshen);
+(* FIXME schema *)
+(*        assert (not s.es_freshen); *)
         ExprSmart.e_local (e, (id, e.e_ty)) (id, s.es_ty e.e_ty)
   end
 
   | Evar pv ->
-      let pv' = pv_subst s.es_xp pv in
+      let pv' = pv_subst (x_subst s.es_mp) pv in
       let ty' = s.es_ty e.e_ty in
         ExprSmart.e_var (e, (pv, e.e_ty)) (pv', ty')
 
@@ -966,13 +1037,13 @@ let rec e_subst (s: e_subst) e =
       let tys  = List.Smart.map s.es_ty tys in
       let ty   = s.es_ty e.e_ty in
       let body = oget (Mp.find_opt p s.es_opdef) in
-        e_subst_op ty tys (List.map (e_subst s) args) body
+        e_subst_op ~freshen:s.es_freshen ty tys (List.map (e_subst s) args) body
 
   | Eop (p, tys) when Mp.mem p s.es_opdef ->
       let tys  = List.Smart.map s.es_ty tys in
       let ty   = s.es_ty e.e_ty in
       let body = oget (Mp.find_opt p s.es_opdef) in
-        e_subst_op ty tys [] body
+        e_subst_op ~freshen:s.es_freshen ty tys [] body
 
   | Eop (p, tys) ->
       let p'   = s.es_p p in
@@ -993,7 +1064,7 @@ let rec e_subst (s: e_subst) e =
 
   | _ -> e_map s.es_ty (e_subst s) e
 
-and e_subst_op ety tys args (tyids, e) =
+and e_subst_op ~freshen ety tys args (tyids, e) =
   (* FIXME: factor this out *)
   (* FIXME: is es_freshen value correct? *)
 
@@ -1001,7 +1072,7 @@ and e_subst_op ety tys args (tyids, e) =
     let sty = Tvar.init tyids tys in
     let sty = ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ sty; } in
     let sty = { e_subst_id with
-                  es_freshen = true;
+                  es_freshen = freshen;
                   es_ty      = sty } in
       e_subst sty e
   in
@@ -1075,6 +1146,10 @@ let destr_tuple_var e =
    match e.e_node with
   | Etuple es -> List.map destr_var es
   | _ -> assert false
+
+(* -------------------------------------------------------------------- *)
+let destr_app = function
+    { e_node = Eapp (e, es) } -> (e, es) | e -> (e, [])
 
 (* -------------------------------------------------------------------- *)
 let split_args e =

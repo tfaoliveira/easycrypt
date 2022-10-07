@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcLocation
 open EcSymbols
@@ -23,7 +15,7 @@ type apperror =
   | AE_CannotInferMod
   | AE_NotFunctional
   | AE_InvalidArgForm     of invalid_arg_form
-  | AE_InvalidArgMod
+  | AE_InvalidArgMod      of EcTyping.tymod_cnv_failure
   | AE_InvalidArgProof    of (form * form)
   | AE_InvalidArgModRestr of EcTyping.restriction_error
 
@@ -72,8 +64,6 @@ val process_pterm_cut
   : prcut:('a -> form) -> pt_env -> 'a ppt_head -> pt_ev
 val process_pterm
   : pt_env -> (pformula option) ppt_head -> pt_ev
-val process_pterm_arg
-   : ?implicits:bool -> pt_ev  -> ppt_arg located -> pt_ev_arg
 val process_pterm_args_app
   :  ?implicits:bool -> ?ip:(bool list) -> pt_ev  -> ppt_arg located list
   -> pt_ev * bool list
@@ -98,7 +88,9 @@ val tc1_process_full_pterm
 val tc1_process_full_closed_pterm_cut
  : prcut:('a -> form) -> tcenv1 -> 'a gppterm -> proofterm * form
 val tc1_process_full_closed_pterm
- : tcenv1 -> ppterm -> proofterm * form
+  : tcenv1 -> ppterm -> proofterm * form
+val tc1_process_sc_instantiation
+ : tcenv1 -> pcutdef_schema -> proofterm * form
 
 (* Proof-terms manipulation *)
 val check_pterm_arg :
@@ -111,6 +103,7 @@ val check_pterm_arg :
 
 val apply_pterm_to_arg   : ?loc:EcLocation.t -> pt_ev -> pt_ev_arg -> pt_ev
 val apply_pterm_to_arg_r : ?loc:EcLocation.t -> pt_ev -> pt_ev_arg_r -> pt_ev
+val apply_pterm_to_local : ?loc:EcLocation.t -> pt_ev -> EcIdent.t -> pt_ev
 val apply_pterm_to_hole  : ?loc:EcLocation.t -> pt_ev -> pt_ev
 val apply_pterm_to_holes : ?loc:EcLocation.t -> int -> pt_ev -> pt_ev
 
@@ -129,10 +122,12 @@ type occmode = {
 val om_rigid : occmode
 
 val pf_find_occurence :
-  pt_env -> ?occmode:occmode -> ptn:form -> form -> form * occmode
+  pt_env -> ?full:bool -> ?rooted:bool -> ?occmode:occmode
+    -> ptn:form -> form -> form * occmode
 
 val pf_find_occurence_lazy :
-  pt_env -> ?modes:occmode list -> ptn:form -> form -> form * occmode
+  pt_env -> ?full:bool -> ?rooted:bool -> ?modes:occmode list
+    -> ptn:form -> form -> form * occmode
 
 (* -------------------------------------------------------------------- *)
 val pattern_form :
@@ -155,11 +150,12 @@ val ptenv : proofenv -> LDecl.hyps -> (EcUnify.unienv * mevmap) -> pt_env
 val copy  : pt_env -> pt_env
 
 (* Proof-terms construction from components *)
-val pt_of_hyp    : proofenv -> LDecl.hyps -> EcIdent.t -> pt_ev
-val pt_of_global : proofenv -> LDecl.hyps -> EcPath.path -> ty list -> pt_ev
-val pt_of_uglobal: proofenv -> LDecl.hyps -> EcPath.path -> pt_ev
+val pt_of_hyp       : proofenv -> LDecl.hyps -> EcIdent.t -> pt_ev
+val pt_of_global_r  : pt_env -> EcPath.path -> ty list -> pt_ev
+val pt_of_global    : proofenv -> LDecl.hyps -> EcPath.path -> ty list -> pt_ev
+val pt_of_uglobal_r : pt_env -> EcPath.path -> pt_ev
+val pt_of_uglobal   : proofenv -> LDecl.hyps -> EcPath.path -> pt_ev
 
-val pt_of_global_r : pt_env -> EcPath.path -> ty list -> pt_ev
 
 (* -------------------------------------------------------------------- *)
 val ffpattern_of_genpattern : LDecl.hyps -> genpattern -> ppterm option

@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 
@@ -97,6 +89,10 @@ let finalize (ecreader : 'a ecreader_g) =
 let lexer = fun ecreader ->
   let lexbuf = ecreader.ecr_lexbuf in
 
+  let isfinal = function
+    | EcParser.FINAL _ -> true
+    | _ -> false in
+
   if ecreader.ecr_tokens = [] then
     ecreader.ecr_tokens <- EcLexer.main lexbuf;
 
@@ -106,7 +102,7 @@ let lexer = fun ecreader ->
 
   | token :: queue -> begin
       ecreader.ecr_tokens  <- queue;
-      ecreader.ecr_atstart <- (token = EcParser.FINAL);
+      ecreader.ecr_atstart <- (isfinal token);
       (token, Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
   end
 
@@ -116,7 +112,7 @@ let drain (ecreader : 'a ecreader_g) =
   let rec drain () =
     try
       match lexer ecreader with
-      | (EcParser.FINAL, _, _) -> ()
+      | (EcParser.FINAL _, _, _) -> ()
       | _ -> drain ()
     with EcLexer.LexicalError _ -> drain ()
   in
@@ -135,7 +131,7 @@ let parseall (ecreader : 'a ecreader_g) =
     | EcParsetree.P_Prog (commands, terminate) ->
         let acc = List.rev_append commands acc in
           if terminate then List.rev acc else aux acc
-    | EcParsetree.P_Undo _ ->
+    | EcParsetree.P_Undo _ | EcParsetree.P_Exit ->
         assert false                    (* FIXME *)
   in
     aux []

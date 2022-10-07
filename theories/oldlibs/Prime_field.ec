@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 (* prime fields GF(q) for q prime *)
 require Int.
 
@@ -100,7 +92,7 @@ qed.
 
 lemma nosmt gf_q_minus_minus (x:gf_q):
   -(-x) = x
-by [].
+by smt.
 
 lemma gf_q_minus_distr (x y z:gf_q):
   x * (y - z) = x * y - x * z.

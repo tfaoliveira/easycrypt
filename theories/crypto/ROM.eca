@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 pragma +implicits.
 
 require import AllCore Distr.
@@ -172,16 +164,17 @@ clone include FiniteEager with
 proof * by exact/enum_spec.
 
 section.
-declare module D : Distinguisher { LRO, ERO }.
+declare module D <: Distinguisher { -LRO, -ERO }.
 
-axiom dout_ll x : is_lossless (dout x).
+declare axiom dout_ll x : is_lossless (dout x).
 
 local clone import PROM.FullRO as H with
   type in_t    <- in_t,
   type out_t   <- out_t,
   type d_in_t  <- d_in_t,
   type d_out_t <- d_out_t,
-  op   dout    <- dout.
+  op   dout    <- dout
+  proof *.
 
 local module Wrap (O : RO) : Oracle = {
   proc init() = {
@@ -219,12 +212,14 @@ local module Exp' (O : RO) = {
   }
 }.
 
+
+
 local equiv eq_LRO_RO:
-  Exp(LRO, D).main ~ Exp'(FullEager.LRO).main:
+  Exp(Lazy.LRO, D).main ~ Exp'(H.LRO).main:
     ={glob D, arg} ==> ={res}.
 proof.
 proc; inline *; wp.
-call (: LRO.m{1} = RO.m{2})=> />; first by sim.
+call (: Lazy.LRO.m{1} = RO.m{2})=> />; first by sim.
 while{2} true (size w{2}).
 + by auto=> &m />; case: (w{m})=> //#.
 by auto=> /> w; rewrite -size_eq0 Int.eqz_leq size_ge0.
@@ -263,9 +258,9 @@ by call eq_ERO_RO_init; inline *; auto.
 qed.
 
 equiv eq_eager_sampling:
-  Exp(LRO, D).main ~ Exp(ERO, D).main: ={glob D, arg} ==> ={res}.
+  Exp(Lazy.LRO, D).main ~ Exp(ERO, D).main: ={glob D, arg} ==> ={res}.
 proof.
-transitivity Exp'(FullEager.LRO).main
+transitivity Exp'(H.LRO).main
              (={glob D, arg} ==> ={res})
              (={glob D, arg} ==> ={res})=> />.
 + by move=> &2; exists (glob D){2} (x{2}).
@@ -300,7 +295,7 @@ module Bound (O : Oracle) = {
     var r <- witness;
 
     if (c < qH) {
-      r <- O.o(x);
+      r <@ O.o(x);
       c <- c + 1;
     }
     return r;
@@ -343,7 +338,7 @@ proof. by move=> O_init_ll; proc; wp; call O_init_ll. qed.
 lemma Log_o_ll (O <: Oracle): islossless O.o => islossless Log(O).o.
 proof. by move=> O_oL; proc; call O_oL; wp. qed.
 
-lemma Log_o_stable (O <: Oracle {Log}) q:
+lemma Log_o_stable (O <: Oracle {-Log}) q:
   islossless O.o => phoare[Log(O).o: mem Log.qs q ==> mem Log.qs q] = 1%r.
 proof. by move=> O_o_ll; proc; call O_o_ll; auto=> />. qed.
 
@@ -390,7 +385,7 @@ proof. by move=> O_init_ll; proc; wp; call O_init_ll. qed.
 lemma Log_o_ll (O <: Oracle): islossless O.o => islossless Log(O).o.
 proof. by move=> O_o_ll; proc; wp; call O_o_ll; wp. qed.
 
-hoare Log_o_stable (O <: Oracle {Log}) x: Log(O).o: x \in Log.qs ==> x \in Log.qs.
+hoare Log_o_stable (O <: Oracle {-Log}) x: Log(O).o: x \in Log.qs ==> x \in Log.qs.
 proof. by proc; wp; call (_: true); skip=> &m; rewrite in_fsetU in_fset1=> ->. qed.
 
 module Bound (O : Oracle) = {
@@ -409,13 +404,13 @@ module Bound (O : Oracle) = {
 lemma Bound_init_ll (O <: Oracle): islossless O.init => islossless Bound(O).init.
 proof. by move=> O_init_ll; proc; wp; call O_init_ll. qed.
 
-lemma Bound_o_ll (O <: Oracle {Log}): islossless O.o => islossless Bound(O).o.
+lemma Bound_o_ll (O <: Oracle {-Log}): islossless O.o => islossless Bound(O).o.
 proof. by move=> O_o_ll; proc; sp; if=> //; wp; call (Log_o_ll O _). qed.
 
-hoare Bound_o_stable (O <: Oracle {Log}) x: Bound(O).o: mem Log.qs x ==> mem Log.qs x.
+hoare Bound_o_stable (O <: Oracle {-Log}) x: Bound(O).o: mem Log.qs x ==> mem Log.qs x.
 proof. by proc; sp; if=> //; wp; call (Log_o_stable O x). qed.
 
-equiv Log_Bound (O <: Oracle {Log}) (D <: Distinguisher { O, Log }):
+equiv Log_Bound (O <: Oracle {-Log}) (D <: Distinguisher { -O, -Log }):
   Exp(Bound(O),D).main ~ Exp(Log(Bound(O)),D).main: ={glob O, glob D, x} ==> ={res}.
 proof.
 proc.
@@ -494,11 +489,11 @@ module G_bad (D : Dist) (H : Oracle) = {
 }.
 
 section.
-declare module D : Dist { Log, LRO }.
-axiom D_a1_ll (H <: POracle { D }): islossless H.o => islossless D(H).a1.
-axiom D_a2_ll (H <: POracle { D }): islossless H.o => islossless D(H).a2.
+declare module D <: Dist { -Log, -LRO }.
+declare axiom D_a1_ll (H <: POracle { -D }): islossless H.o => islossless D(H).a1.
+declare axiom D_a2_ll (H <: POracle { -D }): islossless H.o => islossless D(H).a2.
 
-axiom dout_ll x : is_lossless (dout x).
+declare axiom dout_ll x : is_lossless (dout x).
 
 local module G1' (D : Dist) (H : Oracle) = {
   var x : in_t
@@ -602,11 +597,11 @@ module G_bad (D : Dist) (H : Oracle) = {
 }.
 
 section.
-declare module D : Dist { Log, LRO }.
-axiom D_a1_ll (H <: POracle { D }): islossless H.o => islossless D(H).a1.
-axiom D_a2_ll (H <: POracle { D }): islossless H.o => islossless D(H).a2.
+declare module D <: Dist { -Log, -LRO }.
+declare axiom D_a1_ll (H <: POracle { -D }): islossless H.o => islossless D(H).a1.
+declare axiom D_a2_ll (H <: POracle { -D }): islossless H.o => islossless D(H).a2.
 
-axiom dout_ll x : is_lossless (dout x).
+declare axiom dout_ll x : is_lossless (dout x).
 
 local module G1' (D : Dist) (H : Oracle) = {
   var x : in_t

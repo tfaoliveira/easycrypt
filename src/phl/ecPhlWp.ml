@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-C-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcModules
@@ -18,62 +10,103 @@ open EcLowPhlGoal
 module LowInternal = struct
   exception No_wp
 
-  let wp_asgn_aux m lv e (lets, f) =
-    let let1 = lv_subst m lv (form_of_expr m e) in
+  let cost_of_expr_w_pre menv e c_pre = match c_pre with
+    | None -> EcCHoare.cost_of_expr_any menv e
+    | Some pre -> EcCHoare.cost_of_expr pre menv e
+
+  let wp_asgn_aux c_pre memenv lv e (lets, f) =
+    let m = EcMemory.memory memenv in
+    let let1 = lv_subst ?c_pre m lv (form_of_expr m e) in
       (let1::lets, f)
 
-  let rec wp_stmt onesided env m (stmt: EcModules.instr list) letsf =
+  let rec wp_stmt
+      onesided c_pre env memenv (stmt: EcModules.instr list) letsf cost =
     match stmt with
-    | [] -> stmt, letsf
+    | [] -> (stmt, letsf), cost
     | i :: stmt' ->
         try
-          let letsf = wp_instr onesided env m i letsf in
-          wp_stmt onesided env m stmt' letsf
-        with No_wp -> (stmt, letsf)
+          let letsf, i_cost = wp_instr onesided c_pre env memenv i letsf in
+          wp_stmt
+            onesided c_pre env memenv stmt' letsf (f_xadd cost i_cost)
+        with No_wp -> (stmt, letsf), cost
 
-  and wp_instr onesided env m i letsf =
+  and wp_instr onesided c_pre env memenv i letsf =
     match i.i_node with
     | Sasgn (lv,e) ->
-        wp_asgn_aux m lv e letsf
+      wp_asgn_aux c_pre memenv lv e letsf, cost_of_expr_w_pre memenv e c_pre
 
     | Sif (e,s1,s2) ->
-        let r1,letsf1 = wp_stmt onesided env m (List.rev s1.s_node) letsf in
-        let r2,letsf2 = wp_stmt onesided env m (List.rev s2.s_node) letsf in
+        let (r1,letsf1),cost_1 =
+          wp_stmt onesided c_pre env memenv (List.rev s1.s_node) letsf f_x0 in
+        let (r2,letsf2),cost_2 =
+          wp_stmt onesided c_pre env memenv (List.rev s2.s_node) letsf f_x0 in
         if List.is_empty r1 && List.is_empty r2 then begin
           let post1 = mk_let_of_lv_substs env letsf1 in
           let post2 = mk_let_of_lv_substs env letsf2 in
+          let m = EcMemory.memory memenv in
           let post  = f_if (form_of_expr m e) post1 post2 in
-            ([], post)
+          let post  = f_and_simpl (odfl f_true c_pre) post in
+          ([], post),
+          f_xadd
+            (f_xmax cost_1 cost_2)
+            (cost_of_expr_w_pre memenv e c_pre)
         end else raise No_wp
 
+    | Smatch (e, bs) -> begin
+        let wps =
+          let do1 (_, s) =
+            wp_stmt onesided c_pre env memenv (List.rev s.s_node) letsf f_x0 in
+          List.map do1 bs in
+
+        if not (List.for_all (fun ((r, _), _) -> List.is_empty r) wps) then
+          raise No_wp;
+        let pbs =
+          List.map2
+            (fun (bds, _) ((_, letsf), _) ->
+              let post = mk_let_of_lv_substs env letsf in
+              f_lambda (List.map (snd_map gtty) bds) post)
+            bs wps
+        in
+        let c =
+          match wps with
+          | [] -> f_x0
+          | (_,c1) :: cs -> List.fold_left (fun c (_, c1) -> f_xmax c c1) c1 cs in
+        let c = f_xadd c (cost_of_expr_w_pre memenv e c_pre) in
+        let m = EcMemory.memory memenv in
+        let post =
+          f_and_simpl (odfl f_true c_pre) (f_match (form_of_expr m e) pbs EcTypes.tbool) in
+        (([],post), c)
+      end
+
     | Sassert e when onesided ->
-        let phi = form_of_expr m e in
+        let phi = form_of_expr (EcMemory.memory memenv) e in
         let lets,f = letsf in
-        (lets, EcFol.f_and_simpl phi f)
+        (lets, EcFol.f_and_simpl phi f), cost_of_expr_w_pre memenv e c_pre
 
     | _ -> raise No_wp
 
-  let rec ewp_stmt env m (stmt: EcModules.instr list) letspf =
+  let rec ewp_stmt env (memenv:EcMemory.memenv) (stmt: EcModules.instr list) letspf =
     match stmt with
     | [] -> stmt, letspf
     | i :: stmt' ->
         try
-          let letspf = ewp_instr env m i letspf in
-          ewp_stmt env m stmt' letspf
+          let letspf = ewp_instr env memenv i letspf in
+          ewp_stmt env memenv stmt' letspf
         with No_wp -> (stmt, letspf)
 
-    and ewp_instr env m i letspf =
+    and ewp_instr env (memenv:EcMemory.memenv) i letspf =
       match i.i_node with
       | Sasgn (lv, e) ->
-        wp_asgn_aux m lv e letspf
+        wp_asgn_aux None memenv lv e letspf
 
       | Srnd(lv, distr) ->
         let (lets,(p,f)) = letspf in
         let ty_distr = proj_distr_ty env (EcTypes.e_ty distr) in
         let x_id = EcIdent.create (symbol_of_lv lv) in
         let x = f_local x_id ty_distr in
+        let m = EcMemory.memory memenv in
         let distr = EcFol.form_of_expr m distr in
-        let let1 = lv_subst m lv x in
+        let let1 = lv_subst ?c_pre:None m lv x in
         let lets = let1 :: lets in
         let p = mk_let_of_lv_substs env (lets,p) in
         let f = mk_let_of_lv_substs env (lets,f) in
@@ -82,13 +115,14 @@ module LowInternal = struct
         ([], (p, f))
 
       | Sif(e, s1, s2) ->
-        let r1,(lets1,(p1,f1)) = ewp_stmt env m (List.rev s1.s_node) letspf in
-        let r2,(lets2,(p2,f2)) = ewp_stmt env m (List.rev s2.s_node) letspf in
+        let r1,(lets1,(p1,f1)) = ewp_stmt env memenv (List.rev s1.s_node) letspf in
+        let r2,(lets2,(p2,f2)) = ewp_stmt env memenv (List.rev s2.s_node) letspf in
         if List.is_empty r1 && List.is_empty r2 then begin
           let p1 = mk_let_of_lv_substs env (lets1,p1) in
           let f1 = mk_let_of_lv_substs env (lets1,f1) in
           let p2 = mk_let_of_lv_substs env (lets2,p2) in
           let f2 = mk_let_of_lv_substs env (lets2,f2) in
+          let m = EcMemory.memory memenv in
           let e = form_of_expr m e in
           let p = f_if e p1 p2 in
           let f = f_if e f1 f2 in
@@ -99,12 +133,14 @@ module LowInternal = struct
 
 end
 
-let wp ?(uselet=true) ?(onesided=false) env m s post =
-  let r,letsf =
-    LowInternal.wp_stmt onesided env m (List.rev s.s_node) ([],post)
+let wp ?(uselet=true) ?(onesided=false) ?c_pre env m s post =
+  let (r,letsf), cost =
+    LowInternal.wp_stmt
+      onesided c_pre env m (List.rev s.s_node)
+      ([],post) f_x0
   in
   let pre = mk_let_of_lv_substs ~uselet env letsf in
-  (List.rev r, pre)
+  List.rev r, pre, cost
 
 let ewp ?(uselet=true) env m s post epost =
   let r,(lets,(p,f)) =
@@ -124,9 +160,9 @@ module TacInternal = struct
     let env = FApi.tc1_env tc in
     let hs = tc1_as_hoareS tc in
     let (s_hd, s_wp) = o_split i hs.hs_s in
-    let m = EcMemory.memory hs.hs_m in
     let s_wp = EcModules.stmt s_wp in
-    let (s_wp, post) = wp ~uselet ~onesided:true env m s_wp hs.hs_po in
+    let s_wp, post, _ =
+      wp ~uselet ~onesided:true env hs.hs_m s_wp hs.hs_po in
     check_wp_progress tc i hs.hs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
     let concl = f_hoareS_r { hs with hs_s = s; hs_po = post} in
@@ -136,21 +172,37 @@ module TacInternal = struct
     let env = FApi.tc1_env tc in
     let hs = tc1_as_ehoareS tc in
     let (s_hd, s_wp) = o_split i hs.ehs_s in
-    let m = EcMemory.memory hs.ehs_m in
     let s_wp = EcModules.stmt s_wp in
-    let (s_wp, (post, epost)) = ewp ~uselet env m s_wp hs.ehs_po hs.ehs_epo in
+    let (s_wp, (post, epost)) = ewp ~uselet env hs.ehs_m s_wp hs.ehs_po hs.ehs_epo in
     check_wp_progress tc i hs.ehs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
     let concl = f_eHoareS_r { hs with ehs_s = s; ehs_po = post; ehs_epo = epost} in
     FApi.xmutate1 tc `Wp [concl]
+
+  let t_choare_wp ?(uselet=true) i c_pre tc =
+    let env = FApi.tc1_env tc in
+    EcCHoare.check_loaded env;
+    let chs = tc1_as_choareS tc in
+
+    let (s_hd, s_wp) = o_split i chs.chs_s in
+    let s_wp = EcModules.stmt s_wp in
+
+    let s_wp, post, cost_wp =
+      wp ~uselet ~onesided:true ?c_pre env chs.chs_m s_wp chs.chs_po in
+    check_wp_progress tc i chs.chs_s s_wp;
+    let s = EcModules.stmt (s_hd @ s_wp) in
+    let cond, cost = EcCHoare.cost_sub_self chs.chs_co cost_wp in
+    let concl = f_cHoareS_r { chs with chs_s = s;
+                                       chs_po = post;
+                                       chs_co = cost } in
+    FApi.xmutate1 tc `Wp [cond; concl]
 
   let t_bdhoare_wp ?(uselet=true) i tc =
     let env = FApi.tc1_env tc in
     let bhs = tc1_as_bdhoareS tc in
     let (s_hd, s_wp) = o_split i bhs.bhs_s in
     let s_wp = EcModules.stmt s_wp in
-    let m = EcMemory.memory bhs.bhs_m in
-    let s_wp,post = wp ~uselet env m s_wp bhs.bhs_po in
+    let s_wp,post,_ = wp ~uselet env bhs.bhs_m s_wp bhs.bhs_po in
     check_wp_progress tc i bhs.bhs_s s_wp;
     let s = EcModules.stmt (s_hd @ s_wp) in
     let concl = f_bdHoareS_r { bhs with bhs_s = s; bhs_po = post} in
@@ -162,11 +214,11 @@ module TacInternal = struct
     let i = omap fst ij and j = omap snd ij in
     let s_hdl,s_wpl = o_split i es.es_sl in
     let s_hdr,s_wpr = o_split j es.es_sr in
-    let meml, s_wpl = EcMemory.memory es.es_ml, EcModules.stmt s_wpl in
-    let memr, s_wpr = EcMemory.memory es.es_mr, EcModules.stmt s_wpr in
+    let meml, s_wpl = es.es_ml, EcModules.stmt s_wpl in
+    let memr, s_wpr = es.es_mr, EcModules.stmt s_wpr in
     let post = es.es_po in
-    let s_wpl, post = wp ~uselet env meml s_wpl post in
-    let s_wpr, post = wp ~uselet env memr s_wpr post in
+    let s_wpl, post, _ = wp ~uselet env meml s_wpl post in
+    let s_wpr, post, _ = wp ~uselet env memr s_wpr post in
     check_wp_progress tc i es.es_sl s_wpl;
     check_wp_progress tc j es.es_sr s_wpr;
     let sl = EcModules.stmt (s_hdl @ s_wpl) in
@@ -176,25 +228,53 @@ module TacInternal = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let t_wp_r ?(uselet=true) k g =
+let t_wp_r ?(uselet=true) ?cost_pre k g =
   let module T = TacInternal in
 
-  let (th, teh, tbh, te) =
+  let (th, teh, tch, tbh, te) =
     match k with
-    | None -> (Some (T.t_hoare_wp   ~uselet None),
+    | None -> (Some (T.t_hoare_wp ~uselet None),
                Some (T.t_ehoare_wp  ~uselet None),
+               Some (T.t_choare_wp  ~uselet None cost_pre),
                Some (T.t_bdhoare_wp ~uselet None),
                Some (T.t_equiv_wp   ~uselet None))
 
     | Some (Single i) -> (Some (T.t_hoare_wp   ~uselet (Some i)),
                           Some (T.t_ehoare_wp  ~uselet (Some i)),
+                          Some (T.t_choare_wp  ~uselet (Some i) cost_pre),
                           Some (T.t_bdhoare_wp ~uselet (Some i)),
                           None (* ------------------- *))
 
     | Some (Double (i, j)) ->
-        (None, None, None, Some (T.t_equiv_wp ~uselet (Some (i, j))))
+        (None, None, None, None, Some (T.t_equiv_wp ~uselet (Some (i, j)))) in
 
-  in
-    t_hS_or_bhS_or_eS ?th ?teh ?tbh ?te g
+  let (th, teh, tch, tbh, te) =
+    match cost_pre with
+    | None -> th, teh, tch, tbh, te
+    | Some _ ->
+      let err tc =
+        tc_error !!tc "cost precondition are only for choare judgement" in
 
-let t_wp ?(uselet=true) = FApi.t_low1 "wp" (t_wp_r ~uselet)
+      Some err, Some err, tch, Some err, Some err in
+
+  t_hS_or_chS_or_bhS_or_eS ?th ?teh ?tch ?tbh ?te g
+
+let t_wp ?(uselet=true) ?cost_pre = FApi.t_low1 "wp" (t_wp_r ~uselet ?cost_pre)
+
+(* -------------------------------------------------------------------- *)
+let typing_wp env m s f =
+  match wp ~onesided:true env m s f with
+  | [], f, _ -> Some f | _, _, _ -> None
+
+let () = EcTyping.wp := Some typing_wp
+
+(* -------------------------------------------------------------------- *)
+let process_wp k cost_pre tc =
+  let cost_pre  = match cost_pre with
+    | Some pre -> Some (EcProofTyping.tc1_process_Xhl_formula tc pre)
+    | None -> None in
+  let t_after =
+    match (FApi.tc1_goal tc).f_node with
+    | FcHoareS _ -> [(fun x -> EcLowGoal.t_trivial x); EcLowGoal.t_id]
+    | _          -> [ EcLowGoal.t_id] in
+  FApi.t_seqsub (t_wp ?cost_pre k) t_after tc

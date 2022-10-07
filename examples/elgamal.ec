@@ -51,7 +51,7 @@ module ElGamal : Scheme = {
 module DDHAdv (A:Adversary) = {
   proc guess (gx, gy, gz) : bool = {
     var m0, m1, b, b';
-    (m0, m1) <- A.choose(gx);
+    (m0, m1) <@ A.choose(gx);
     b        <$ {0,1};
     b'       <@ A.guess(gy, gz * (b?m1:m0));
     return b' = b;
@@ -63,9 +63,9 @@ module DDHAdv (A:Adversary) = {
       = `| Pr[DDH0(DDHAdv(A)).main() @ &m : res]
            - Pr[DDH1(DDHAdv(A)).main() @ &m : res] |.        **)
 section Security.
-  declare module A:Adversary.
-  axiom Ac_ll: islossless A.choose.
-  axiom Ag_ll: islossless A.guess.
+  declare module A <: Adversary.
+  declare axiom Ac_ll: islossless A.choose.
+  declare axiom Ag_ll: islossless A.guess.
 
   local lemma cpa_ddh0 &m:
       Pr[CPA(ElGamal,A).main() @ &m : res] =

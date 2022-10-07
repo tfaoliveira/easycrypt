@@ -1,11 +1,3 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 (* -------------------------------------------------------------------- *)
 require import AllCore StdRing StdOrder.
 (*---*) import RField RealOrder.
@@ -95,11 +87,11 @@ qed.
 
 lemma nosmt mu_or_le (d:'a distr) (p q:'a -> bool) r1 r2:
   mu d p <= r1 => mu d q <= r2 =>
-  mu d (predU p q) <= r1 + r2 by [].
+  mu d (predU p q) <= r1 + r2 by smt.
 
 lemma nosmt mu_and  (d:'a distr) (p q:'a -> bool):
   mu d (predI p q) = mu d p + mu d q - mu d (predU p q)
-by [].
+by smt.
 
 lemma nosmt mu_and_le_l (d:'a distr) (p q:'a -> bool) r:
   mu d p <= r =>
@@ -193,7 +185,7 @@ qed.
 
 lemma weight_0_mu (d:'a distr):
   weight d = 0%r => forall p, mu d p = 0%r
-by [].
+by smt.
 
 lemma mu_one (P:'a -> bool) (d:'a distr):
   P == predT =>

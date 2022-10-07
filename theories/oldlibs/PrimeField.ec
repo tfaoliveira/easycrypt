@@ -1,12 +1,5 @@
-(* --------------------------------------------------------------------
- * Copyright (c) - 2012--2016 - IMDEA Software Institute
- * Copyright (c) - 2012--2018 - Inria
- * Copyright (c) - 2012--2018 - Ecole Polytechnique
- *
- * Distributed under the terms of the CeCILL-B-V1 license
- * -------------------------------------------------------------------- *)
-
 require Int IntDiv.
+require import Xint.
 
 
   (* prime fields GF(q) for q prime *)
@@ -163,13 +156,13 @@ by ringeq.
 
 import Int.
 lemma nosmt toint_pos (x:t): 0 <= toint x
-by [].
+by smt.
 
 lemma nosmt toint_lt (x:t): toint x < q
-by [].
+by smt.
 
 lemma nosmt toint_le (x:t): toint x <= q - 1
-by [].
+by smt.
 
 lemma nosmt toofint (x:int): 0 <= x => x < q => toint (ofint x) = x.
 proof.
@@ -177,13 +170,14 @@ proof.
 qed.
 
 lemma nosmt ofint1_: ofint 1 = F.one
-by [].
+by smt.
 
 theory FDistr.
 
   require import Distr.
   require import Real.
-  (* distrinution *)
+
+  (* distribution *)
   op dt: t distr.
 
   axiom dt_fu: is_full dt.
@@ -197,5 +191,39 @@ theory FDistr.
 
   hint exact random : dt_fu dt_ll dt_funi.
 
+  abstract theory Cost.
+    op cdt : {int | 0 <= cdt } as ge0_cdt.
+    schema cost_dt `{P}: cost [P: dt] = N cdt.
+    hint simplify cost_dt.
+  end Cost.
 end FDistr.
 
+(* ------------------------------------------------------------------------- *)
+abstract theory Cost.
+  op cfeq  : int.
+  op cfadd : int.
+  op cfsub : int.
+  op cfmul : int.
+  op cfdiv : int.
+  
+  axiom ge0_cf : 0 <= cfeq /\ 0 <= cfadd /\ 0 <= cfsub /\ 0 <= cfmul /\ 0 <= cfdiv.
+  
+  schema cost_F0 `{P} : cost[P:F.zero] = '0.
+  
+  schema cost_feq `{P} {x y : t} : 
+    cost [P: x = y] = cost[P:x] + cost[P:y] + N cfeq.
+  
+  schema cost_fadd `{P} {x1 x2:t} : 
+    cost[P:x1 + x2] = cost[P:x1] + cost[P:x2] + N cfadd.
+  
+  schema cost_fsub `{P} {x y: t} : 
+    cost [P:x - y] = cost[P:x] + cost[P:y] + N cfsub.
+  
+  schema cost_fmul `{P} {x1 x2:t} : 
+    cost[P:x1 * x2] = cost[P:x1] + cost[P:x2] + N cfmul.
+  
+  schema cost_fdiv `{P} {x y: t} : cost [P:x / y] = 
+    cost[P:x] + cost[P:y] + N cfdiv.
+  
+  hint simplify cost_F0, cost_feq, cost_fadd, cost_fsub, cost_fmul, cost_fdiv.
+end Cost.
