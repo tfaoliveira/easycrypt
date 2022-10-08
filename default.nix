@@ -16,16 +16,15 @@ let why3_local =
 ; in
 let why3 = why3_local; in
 
-let merlin_local = 
+let merlin = 
     ocamlPackages.merlin.overrideAttrs (o: {
     doCheck = false;
     }); in
-let merlin = merlin_local; in
 
   stdenv.mkDerivation {
     name = "easycrypt-1.0";
     src = ./.;
-    buildInputs = [ why3 ] ++ [merlin] ++ (with ocamlPackages; [
+    buildInputs = [ why3 merlin] ++ (with ocamlPackages; [
       ocaml
       findlib
       batteries
