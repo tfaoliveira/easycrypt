@@ -70,25 +70,25 @@ clone include Subtype
    rename "insubd" as "of_real"
    rename "val" as "to_real".
 
-lemma to_realK_simpl x : of_real (to_real x) = x by apply: to_realKd.
+abbrev (%r) = to_real.
+abbrev (%rp) = of_real.
+
+lemma to_realK_simpl (x:realp) : x%r%rp = x by apply: to_realKd.
 hint simplify to_realK_simpl, of_realK.
 
-lemma to_realP_simpl x : (0.0 <= to_real x) = true by rewrite to_realP. 
+lemma to_realP_simpl x : (0.0 <= x%r) = true by rewrite to_realP. 
 hint simplify to_realP_simpl.
 
-op ( + ) (x y : realp) = 
-  of_real (to_real x + to_real y).
+op ( + ) (x y : realp) = (x%r + y%r)%rp.
 
-op ( * ) (x y : realp) = 
-  of_real (to_real x * to_real y).
+op ( * ) (x y : realp) = (x%r * y%r)%rp.
 
-op inv (x : realp) = 
-  of_real (inv (to_real x)).
+op inv (x : realp) = (inv x%r)%rp.
 
 abbrev (/) (x y : realp) : realp = x * inv y.
 
-abbrev (<=) (x y : realp) = to_real x <= to_real y.
-abbrev (<) (x y : realp)  = to_real x < to_real y.
+abbrev (<=) (x y : realp) = x%r <= y%r.
+abbrev (<) (x y : realp)  = x%r < y%r.
 
 clone include MonoidDI with
    type t  <- realp,
@@ -98,27 +98,27 @@ clone include MonoidDI with
    op ( * ) <- Rp.( * )
 proof * by smt(of_realK to_realP to_real_inj).
 
-lemma to_realD x y : to_real (x + y) = to_real x + to_real y.
+lemma to_realD (x y:realp) : (x + y)%r = x%r + y%r.
 proof. smt (of_realK to_realP). qed.
 
-lemma to_realM x y : to_real (x * y) = to_real x * to_real y.
+lemma to_realM (x y:realp) : (x * y)%r = x%r * y%r.
 proof. smt (of_realK to_realP). qed.
 
-lemma to_realI x : to_real(inv x) = inv (to_real x).
+lemma to_realI x : (inv x)%r = inv x%r.
 proof. smt (of_realK to_realP Real.invr0). qed.
 
 hint simplify to_realD, to_realM, to_realI.
 
 lemma of_realD x y : 0.0 <= x => 0.0 <= y => 
-   of_real (x + y) = of_real x + of_real y.
+   (x + y)%rp = x%rp + y%rp.
 proof. smt (of_realK to_realP). qed.
 
 lemma of_realM x y : 0.0 <= x => 0.0 <= y => 
-   of_real (x * y) = of_real x * of_real y.
+   (x * y)%rp = x%rp * y%rp.
 proof. smt (of_realK to_realP). qed.
 
 lemma to_realK_d ['a] (d : 'a distr) (e: 'a -> bool) : 
-  to_real (of_real (mu d e)) = mu d e.
+  (mu d e)%rp%r = mu d e.
 proof. rewrite of_realK //. qed.
 
 hint simplify to_realK_d.
@@ -131,29 +131,36 @@ export Rp.
 
 theory Rpbar.
 
-type xreal = [rp of realp | inf].
-abbrev r (x:real) = rp (of_real x).
-abbrev ri (i:int) = rp (of_real i%r).
+type xreal = [rp of realp | oo].
+abbrev (%xr) (x:real) = rp (of_real x).
+
+theory IntNotation.
+abbrev (%xr) (i:int)  = i%r%xr.
+end IntNotation. export IntNotation.
+
+theory BoolNotation.
+abbrev (%xr) (b:bool)  = (b2r b)%xr.
+end BoolNotation. export BoolNotation.
 
 (* -------------------------------------------------------------------- *)
-abbrev ('0) = r 0.0.
-abbrev ('1) = r 1.0.
+abbrev ('0) = 0.0%xr.
+abbrev ('1) = 1.0%xr.
 
 op xadd (x y : xreal) =
   with x = rp x, y = rp y => rp (x + y)
-  with x = rp _, y = inf  => inf
-  with x = inf , y = rp _ => inf
-  with x = inf , y = inf  => inf.
+  with x = rp _, y = oo  => oo
+  with x = oo , y = rp _ => oo
+  with x = oo , y = oo  => oo.
 
 op xmul (x y : xreal) =
   with x = rp x, y = rp y => rp (x * y)
-  with x = rp _, y = inf  => inf
-  with x = inf , y = rp _ => inf
-  with x = inf , y = inf  => inf.
+  with x = rp _, y = oo  => oo
+  with x = oo , y = rp _ => oo
+  with x = oo , y = oo  => oo.
 
 op xinv (x : xreal) = 
   with x = rp x => rp (inv x)
-  with x = inf  => inf.  (* Does this make sense *)
+  with x = oo  => oo.  (* Does this make sense *)
 
 abbrev ( + ) = xadd.
 abbrev ( * ) = xmul.
@@ -161,35 +168,35 @@ abbrev ( * ) = xmul.
 abbrev (/) (x y : xreal) : xreal = x * xinv y.
 
 op ( ** ) c x =
-  if c = of_real 0.0 then '0 else rp c * x. 
+  if c = 0.0%rp then '0 else rp c * x. 
 
 theory Notation.
 abbrev ( ** ) (x:real) (z:xreal) = of_real x ** z.
 end Notation. export Notation.
 
 op to_real (x:xreal) = 
-  with x = rp y  => Rp.to_real y
-  with x = inf => 0.0.
+  with x = rp y => y%r
+  with x = oo => 0.0.
 
 op is_real (x:xreal) = 
   with x = rp _  => true
-  with x = inf => false.
+  with x = oo => false.
 
-op is_inf (x:xreal) = 
+op is_oo (x:xreal) = 
   with x = rp _ => false
-  with x = inf => true.
+  with x = oo => true.
 
 op xle (x y : xreal) = 
   with x = rp x, y = rp y => x <= y
-  with x = rp _, y = inf  => true 
-  with x = inf , y = rp _ => false
-  with x = inf , y = inf  => true.
+  with x = rp _, y = oo  => true 
+  with x = oo , y = rp _ => false
+  with x = oo , y = oo  => true.
 
 op xlt (x y : xreal) = 
   with x = rp x, y = rp y => x < y
-  with x = rp _, y = inf  => true 
-  with x = inf , y = rp _ => false
-  with x = inf , y = inf  => false.
+  with x = rp _, y = oo  => true 
+  with x = oo , y = rp _ => false
+  with x = oo , y = oo  => false.
 
 abbrev (<=) = xle.
 abbrev (<) = xlt.
@@ -197,8 +204,8 @@ abbrev (<) = xlt.
 (* -------------------------------------------------------------- *)
 clone include MonoidD with 
   type t <- xreal,
-  op zero <- r 0.0,
-  op MulMonoid.one  <- r 1.0,
+  op zero <- 0.0%xr,
+  op MulMonoid.one  <- 1.0%xr,
   op ( + ) <- xadd,
   op ( * ) <- xmul
   proof *.
@@ -212,19 +219,19 @@ realize one_neq0 by apply/negP => /(congr1 to_real).
 realize mulmDl by move=> [x|] [y|] [z|] //=; apply Rp.mulmDl.
 
 (* -------------------------------------------------------------- *)
-lemma xaddxinf x : x + inf = inf.
+lemma xaddxoo x : x + oo = oo.
 proof. by case: x. qed.
 
-lemma xaddinfx x : inf + x = inf.
+lemma xaddoox x : oo + x = oo.
 proof. by case: x. qed.
 
-lemma xmulxinf x : x * inf = inf.
+lemma xmulxoo x : x * oo = oo.
 proof. by case: x. qed.
 
-lemma xmulinfx x : inf * x = inf.
+lemma xmuloox x : oo * x = oo.
 proof. by case: x. qed.
 
-hint simplify xaddxinf, xaddinfx, xmulxinf, xmulinfx.
+hint simplify xaddxoo, xaddoox, xmulxoo, xmuloox.
 
 (* -------------------------------------------------------------- *)
 
@@ -256,16 +263,16 @@ hint simplify smulrp.
 lemma xlexx x : x <= x.
 proof. by case: x. qed.
 
-lemma xlexinf x : x <= inf.
+lemma xlexoo x : x <= oo.
 proof. by case: x. qed.
 
 lemma xlexx_simpl x y : x = y => x <= y = true.
 proof. by move=> ->; rewrite xlexx. qed.
 
-lemma xlexinf_simpl x : x <= inf = true.
+lemma xlexoo_simpl x : x <= oo = true.
 proof. by case: x. qed.
 
-hint simplify xlexx_simpl, xlexinf_simpl.
+hint simplify xlexx_simpl, xlexoo_simpl.
 
 lemma xltxx x : !x < x.
 proof. by case: x. qed.
@@ -446,7 +453,7 @@ clone import Bigop as BXA with
 
 lemma is_real_bigRX ['a] (f : 'a -> xreal) l: 
   is_real f => 
-  r (BRA.big predT (to_real f) l) = big predT f l.
+  (BRA.big predT (to_real f) l)%xr = big predT f l.
 proof.
   move=> hf; elim: l => //= x l hrec.
   rewrite big_cons BRA.big_cons /predT /= -hrec /to_real.
@@ -456,34 +463,34 @@ qed.
 
 lemma bigR_to_real ['a] (f : 'a -> real) (l : 'a list) : 
   (forall a, a \in l => 0%r <= f a) =>
-   BRA.big predT (to_real (fun a => r (f a))) l = BRA.big predT f l.
+   BRA.big predT (to_real (fun a => (f a)%xr)) l = BRA.big predT f l.
 proof.
   move=> hpos; apply BRA.eq_big_seq; rewrite /to_real => x /hpos; smt(@Rp).
 qed.
 
 lemma bigXR ['a] (f : 'a -> real) (l : 'a list) : 
   (forall a, a \in l => 0%r <= f a) =>
-  big predT (fun x => r (f x)) l = r (BRA.big predT f l).
+  big predT (fun x => (f x)%xr) l = (BRA.big predT f l)%xr.
 proof. by move=> hpos; rewrite -is_real_bigRX 1:// bigR_to_real. qed.
 
 lemma bigXI ['a] (f : 'a -> int) (l : 'a list) : 
   (forall a, a \in l => 0 <= f a) =>
-  big predT (fun x => r (f x)%r) l = r (BIA.big predT f l)%r.
+  big predT (fun x => (f x)%xr) l = (BIA.big predT f l)%xr.
 proof. by move=> h; rewrite bigXR 1:/# sumr_ofint. qed.
 
 lemma bigiXR (f : int -> real) (m n : int) : 
   (forall i, m <= i < n => 0%r <= f i) =>
-  bigi predT (fun x => r (f x)) m n = r (BRA.bigi predT f m n).
+  bigi predT (fun x => (f x)%xr) m n = (BRA.bigi predT f m n)%xr.
 proof. move=> hpos; apply bigXR => i /mem_range; apply hpos. qed.
 
 lemma bigiXI (f : int -> int) (m n : int) : 
   (forall i, m <= i < n => 0 <= f i) =>
-  bigi predT (fun x => r (f x)%r) m n = r (BIA.bigi predT f m n)%r.
+  bigi predT (fun x => (f x)%xr) m n = (BIA.bigi predT f m n)%xr.
 proof. move=> hpos; apply bigXI => i /mem_range; apply hpos. qed.
 
-lemma big_inf ['a] (J : 'a list) (f : 'a -> xreal) : 
-  (exists (x : 'a), (x \in J) /\ f x = inf) => 
-  big predT f J = inf.
+lemma big_oo ['a] (J : 'a list) (f : 'a -> xreal) : 
+  (exists (x : 'a), (x \in J) /\ f x = oo) => 
+  big predT f J = oo.
 proof.
   move=> [x [hj hf]]; rewrite (bigID _ _ (pred1 x)) -big_filter predTI filter_pred1.
   have [n [hn ->]]: exists n, 0 <= n /\ count (pred1 x) J = n + 1.
@@ -499,11 +506,11 @@ proof. apply (big_comp (fun y => x ** y)) => //=; apply smulmDr. qed.
 (* -------------------------------------------------------------------- *)
 
 op psuminf ['a] (f : 'a -> xreal) =
-  if summable (to_real f) then r (sum (to_real f)) else inf.
+  if summable (to_real f) then (sum (to_real f))%xr else oo.
 
 op Ep ['a] (d : 'a distr) (f : 'a -> xreal) =
   let g = d ** f in
-  if is_real g then psuminf g else inf.
+  if is_real g then psuminf g else oo.
 
 lemma psuminfZ ['a] (c:realp) (f: 'a -> xreal) :
   is_real f => c <> of_real 0.0 =>
@@ -584,7 +591,7 @@ proof.
   + have hJ' : forall (x : 'a), to_real (d ** f) x <> 0%r => x \in J.
     + by rewrite /to_real /( ** )=> x; case: (of_real (mu1 d x) = of_real 0.0) => //; smt(@Rp).
     by rewrite  /psuminf (summable_fin _ J hJ') /= (sumE_fin _ J hu hJ') is_real_bigRX.
-  rewrite big_inf //.
+  rewrite big_oo //.
   move/negb_forall: his => /> x hx; exists x.
   move: hx; case _: (mu1 d x ** f x) => //=.
   rewrite /( ** ); case: (of_real (mu1 d x) = of_real 0.0) => //=; smt(@Rp).
@@ -639,7 +646,7 @@ proof. by move=> h; rewrite Ep_dinterval h. qed.
 
 (* -------------------------------------------------------------------- *)
 op (`|`) (b:bool) (x : xreal) = 
-   if b then x else inf.
+   if b then x else oo.
 
 lemma xle_interp_form b1 b2 (f1 f2 : xreal): 
   (b2 => (b1 /\ f1 <= f2)) => 
@@ -668,7 +675,7 @@ proof.
   rewrite /Ep /(`|`) /=. 
   case: (forall (x : 'a), x \in d => b x) => hb; last first. 
   + have /> x xin xb: exists x, x \in d /\ !b x by smt().
-    have -> // : !is_real (fun (x0 : 'a) => mu1 d x0 ** if b x0 then f x0 else inf). 
+    have -> // : !is_real (fun (x0 : 'a) => mu1 d x0 ** if b x0 then f x0 else oo). 
     rewrite /is_real; apply /negP => h.
     by have := h x; rewrite xb /= /( ** ) /= Rp_to_real_eq /= /#.
   rewrite (eq_is_real_md _ _ f).
