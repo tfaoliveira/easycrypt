@@ -1036,10 +1036,10 @@ module FPosition = struct
               f_hoareF_r { hf with hf_pr; hf_po; }
 
           | FeHoareF hf ->
-              let (ehf_pr, ehf_epr, ehf_po, ehf_epo) =
-                as_seq4 (doit p [hf.ehf_pr; hf.ehf_epr; hf.ehf_po; hf.ehf_epo])
+              let (ehf_pr, ehf_po) =
+                as_seq2 (doit p [hf.ehf_pr; hf.ehf_po;])
               in
-              f_eHoareF_r { hf with ehf_pr; ehf_epr; ehf_po; ehf_epo; }
+              f_eHoareF_r { hf with ehf_pr; ehf_po; }
 
           | FcHoareF chf ->
             let fkeys, calls = EcPath.Mx.bindings chf.chf_co.c_calls

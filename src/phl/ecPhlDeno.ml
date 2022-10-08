@@ -520,21 +520,7 @@ let process_equiv_deno_bad2 info eq bad1 tc =
 (* -------------------------------------------------------------------- *)
 type denoff = deno_ppterm * bool * pformula option
 
-let ppterm_of_deno_ppterm tc dpp =
-  let fp_head =
-    match dpp.fp_head with
-    | FPNamed (x,y) -> FPNamed(x,y)
-    | FPCut(dpre, dpost) ->
-      let get_single = function
-        | Single f -> f
-        | Double _ -> tc_error !!tc "a single formula is expected here, can't use \"p | f\"" in
-      FPCut(omap get_single dpre, omap get_single dpost) in
-  { fp_mode = dpp.fp_mode;
-    fp_head;
-    fp_args = dpp.fp_args }
-
 let process_deno mode (info, eq, bad1) g =
-  let info = ppterm_of_deno_ppterm g info in
   match mode with
   | `PHoare -> process_phoare_deno info g
   | `Equiv  ->

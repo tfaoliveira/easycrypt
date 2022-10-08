@@ -97,10 +97,8 @@ let t_ehoareF_fun_def_r tc =
   let m = EcMemory.memory memenv in
   let fres  = odfl f_tt (omap (form_of_expr m) fdef.f_ret) in
   let post  = PVM.subst1 env pv_res m fres hf.ehf_po in
-  let epost = PVM.subst1 env pv_res m fres hf.ehf_epo in
   let pre   = PVM.subst env (subst_pre env fsig m PVM.empty) hf.ehf_pr in
-  let epre  = PVM.subst env (subst_pre env fsig m PVM.empty) hf.ehf_epr in
-  let concl' = f_eHoareS memenv pre epre fdef.f_body post epost in
+  let concl' = f_eHoareS memenv pre fdef.f_body post in
   FApi.xmutate1 tc `FunDef [concl']
 
 (* ------------------------------------------------------------------ *)
@@ -245,13 +243,13 @@ module FunAbsLow = struct
     (inv, inv, sg)
 
   (* ------------------------------------------------------------------ *)
-  let ehoareF_abs_spec _pf env f (inv,einv) =
+  let ehoareF_abs_spec _pf env f inv =
     let (top, _, oi, _) = EcLowPhlGoal.abstract_info env f in
-    let fv = PV.union (PV.fv env mhr inv) (PV.fv env mhr einv) in
+    let fv = PV.fv env mhr inv in
     PV.check_depend env fv top;
-    let ospec o = f_eHoareF inv einv o inv einv in
+    let ospec o = f_eHoareF inv o inv in
     let sg = List.map ospec (OI.allowed oi) in
-    ((inv,einv), (inv, einv), sg)
+    (inv, inv, sg)
 
   (* ------------------------------------------------------------------ *)
   let choareF_abs_spec pf_ env f inv (xc : abs_inv_inf) =
@@ -440,13 +438,13 @@ let t_hoareF_abs_r inv tc =
   let tactic tc = FApi.xmutate1 tc `FunAbs sg in
   FApi.t_last tactic (EcPhlConseq.t_hoareF_conseq pre post tc)
 
-let t_ehoareF_abs_r inv einv tc =
+let t_ehoareF_abs_r inv tc =
   let env = FApi.tc1_env tc in
   let hf = tc1_as_ehoareF tc in
-  let (pre,epre), (post,epost), sg = FunAbsLow.ehoareF_abs_spec !!tc env hf.ehf_f (inv, einv) in
+  let pre, post, sg = FunAbsLow.ehoareF_abs_spec !!tc env hf.ehf_f inv in
 
   let tactic tc = FApi.xmutate1 tc `FunAbs sg in
-  FApi.t_last tactic (EcPhlConseq.t_ehoareF_conseq pre epre post epost tc)
+  FApi.t_last tactic (EcPhlConseq.t_ehoareF_conseq pre post tc)
 
 (* ------------------------------------------------------------------ *)
 let t_choareF_abs_r inv inv_inf tc =
@@ -487,7 +485,7 @@ let t_equivF_abs_r inv tc =
 
 (* -------------------------------------------------------------------- *)
 let t_hoareF_abs   = FApi.t_low1 "hoare-fun-abs"   t_hoareF_abs_r
-let t_ehoareF_abs  = FApi.t_low2 "ehoare-fun-abs"  t_ehoareF_abs_r
+let t_ehoareF_abs  = FApi.t_low1 "ehoare-fun-abs"  t_ehoareF_abs_r
 let t_choareF_abs  = FApi.t_low2 "choare-fun-abs"  t_choareF_abs_r
 let t_bdhoareF_abs = FApi.t_low1 "bdhoare-fun-abs" t_bdhoareF_abs_r
 let t_equivF_abs   = FApi.t_low1 "equiv-fun-abs"   t_equivF_abs_r
@@ -655,12 +653,10 @@ let t_fun_to_code_ehoare_r tc =
   let spo = ToCodeLow.add_var env pv_res mhr r m PVM.empty in
 
   let pre = PVM.subst env spr hf.ehf_pr in
-  let epre = PVM.subst env spr hf.ehf_epr in
 
   let post = PVM.subst env spo hf.ehf_po in
-  let epost = PVM.subst env spo hf.ehf_epo in
 
-  let concl = f_eHoareS m pre epre st post epost in
+  let concl = f_eHoareS m pre st post in
 
   FApi.xmutate1 tc `FunToCode [concl]
 
@@ -827,13 +823,6 @@ let process_fun_upto info g =
     t_equivF_abs_upto bad p q g
 
 (* -------------------------------------------------------------------- *)
-let process_fun_ehoare_abs (inv, einv) tc =
-  let hyps = FApi.tc1_hyps tc in
-  let env' = LDecl.inv_memenv1 hyps in
-  let inv, einv = get_double tc (TTC.pf_process_dformula !!tc env' (Double(inv, einv))) in
-  t_ehoareF_abs inv einv tc
-
-(* -------------------------------------------------------------------- *)
 let ensure_none tc = function
   | None -> ()
   | Some _ ->
@@ -859,6 +848,13 @@ let process_fun_abs inv p_abs_inv_inf tc =
     let inv  = TTC.pf_process_form !!tc env' tbool inv in
     t_hoareF_abs inv tc
 
+  and t_ehoare tc =
+    ensure_none tc p_abs_inv_inf;
+    let hyps = FApi.tc1_hyps tc in
+    let env' = LDecl.inv_memenv1 hyps in
+    let inv  = TTC.pf_process_xreal !!tc env' inv in
+    t_ehoareF_abs inv tc
+
   and t_choare tc =
     if p_abs_inv_inf = None then
       tc_error !!tc "for calls to abstract procedures in choare judgements, \
@@ -883,4 +879,4 @@ let process_fun_abs inv p_abs_inv_inf tc =
 
   in
   t_hF_or_chF_or_bhF_or_eF
-    ~th:t_hoare ~tch:t_choare ~tbh:t_bdhoare ~te:t_equiv tc
+    ~th:t_hoare ~teh:t_ehoare ~tch:t_choare ~tbh:t_bdhoare ~te:t_equiv tc

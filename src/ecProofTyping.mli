@@ -32,7 +32,7 @@ val pf_process_form_opt : proofenv -> ?mv:metavs -> LDecl.hyps -> ty option -> p
 val pf_process_form     : proofenv -> ?mv:metavs -> LDecl.hyps -> ty -> pformula -> form
 val pf_process_cost     : proofenv -> ?mv:metavs -> LDecl.hyps -> ty list -> pcost -> cost
 val pf_process_formula  : proofenv -> ?mv:metavs -> LDecl.hyps -> pformula -> form
-val pf_process_dformula : proofenv -> ?mv:metavs -> LDecl.hyps -> pformula EcUtils.doption -> form EcUtils.doption
+val pf_process_xreal    : proofenv -> ?mv:metavs -> LDecl.hyps -> pformula -> form
 
 val pf_process_exp      : proofenv -> LDecl.hyps -> [`InProc|`InOp] -> ty option -> pexpr -> expr
 val pf_process_pattern  : proofenv -> LDecl.hyps -> pformula -> ptnenv * form
@@ -49,7 +49,7 @@ val tc1_process_pattern  : tcenv1 -> pformula -> ptnenv * form
 (* Same as previous functions, but for *HL contexts *)
 val tc1_process_Xhl_form     : ?side:side -> tcenv1 -> ty -> pformula -> form
 val tc1_process_Xhl_formula  : ?side:side -> tcenv1 -> pformula -> form
-val tc1_process_Xhl_formula_xreal : tcenv1 -> pformula * pformula -> form * form
+val tc1_process_Xhl_formula_xreal : tcenv1 -> pformula -> form
 
 val tc1_process_Xhl_exp      : tcenv1 -> oside -> ty option -> pexpr -> expr
 

@@ -199,7 +199,7 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFhoareF   of pformula * pgamepath * pformula
-  | PFehoareF  of pformula * pformula * pgamepath * pformula * pformula
+  | PFehoareF  of pformula * pgamepath * pformula
   | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
@@ -620,7 +620,6 @@ type fun_info = [
   | `Code
   | `Abs  of pformula * p_abs_inv_inf option
   | `Upto of pformula * pformula * pformula option
-  | `Ehoare of pformula * pformula
 ]
 
 (* -------------------------------------------------------------------- *)
@@ -636,7 +635,7 @@ type pcond_info = [
 
 (* -------------------------------------------------------------------- *)
 type while_info = {
-  wh_inv  : pformula doption;
+  wh_inv  : pformula;
   wh_vrnt : pformula option;
   wh_bds  : [`Bd of pformula pair | `Cost of pformula * pcost ] option;
 }
@@ -668,12 +667,12 @@ type fel_info = {
 }
 
 (* -------------------------------------------------------------------- *)
-type deno_ppterm   = (pformula doption option pair) gppterm
+type deno_ppterm   = (pformula option pair) gppterm
 type conseq_info =
   | CQI_bd of phoarecmp option * pformula
   | CQI_c  of pcost
 
-type conseq_ppterm = ((pformula doption option pair) * (conseq_info) option) gppterm
+type conseq_ppterm = ((pformula option pair) * (conseq_info) option) gppterm
 
 (* -------------------------------------------------------------------- *)
 type sim_info = {

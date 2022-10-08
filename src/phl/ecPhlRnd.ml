@@ -47,11 +47,8 @@ module Core = struct
     let mem = EcMemory.memory hs.ehs_m in
     let distr = EcFol.form_of_expr mem distr in
     let post = subst_form_lv env mem lv x hs.ehs_po in
-    let post = f_imp (f_in_supp x distr) post in
-    let post = f_forall_simpl [(x_id,GTty ty_distr)] post in
-    let epost = subst_form_lv env mem lv x hs.ehs_epo in
-    let epost = f_Ep ty_distr distr (f_lambda [(x_id,GTty ty_distr)] epost) in
-    let concl = f_eHoareS_r {hs with ehs_s=s; ehs_po=post; ehs_epo = epost} in
+    let post = f_Ep ty_distr distr (f_lambda [(x_id,GTty ty_distr)] post) in
+    let concl = f_eHoareS_r {hs with ehs_s=s; ehs_po=post } in
     FApi.xmutate1 tc `Rnd [concl]
 
   (* -------------------------------------------------------------------- *)

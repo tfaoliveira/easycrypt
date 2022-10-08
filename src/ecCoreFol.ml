@@ -112,19 +112,16 @@ and sHoareS = {
 
 and eHoareF = {
   ehf_pr  : form;
-  ehf_epr : form;
   ehf_f   : EcPath.xpath;
   ehf_po  : form;
-  ehf_epo : form;
 }
 
 and eHoareS = {
   ehs_m   : EcMemory.memenv;
   ehs_pr  : form;
-  ehs_epr : form;
   ehs_s   : stmt;
   ehs_po  : form;
-  ehs_epo : form; }
+}
 
 and cHoareF = {
   chf_pr : form;
@@ -322,15 +319,11 @@ let hs_equal hs1 hs2 =
 let ehf_equal hf1 hf2 =
      f_equal hf1.ehf_pr  hf2.ehf_pr
   && f_equal hf1.ehf_po  hf2.ehf_po
-  && f_equal hf1.ehf_epr hf2.ehf_epr
-  && f_equal hf1.ehf_epo hf2.ehf_epo
   && EcPath.x_equal hf1.ehf_f hf2.ehf_f
 
 let ehs_equal hs1 hs2 =
      f_equal hs1.ehs_pr  hs2.ehs_pr
   && f_equal hs1.ehs_po  hs2.ehs_po
-  && f_equal hs1.ehs_epr hs2.ehs_epr
-  && f_equal hs1.ehs_epo hs2.ehs_epo
   && s_equal hs1.ehs_s hs2.ehs_s
   && EcMemory.me_equal hs1.ehs_m hs2.ehs_m
 
@@ -443,18 +436,17 @@ let chs_hash chs =
        (EcCoreModules.s_hash chs.chs_s)
        (EcMemory.mem_hash chs.chs_m))
 
-let combine_2form f1 f2 =
-  Why3.Hashcons.combine (f_hash f1) (f_hash f2)
 
 let ehf_hash hf =
   Why3.Hashcons.combine2
-    (combine_2form hf.ehf_pr hf.ehf_epr) (combine_2form hf.ehf_po hf.ehf_epo)
+    (f_hash hf.ehf_pr) (f_hash hf.ehf_po)
     (EcPath.x_hash hf.ehf_f)
 
 let ehs_hash hs =
-  Why3.Hashcons.combine2
-    (combine_2form hs.ehs_pr hs.ehs_epr) (combine_2form hs.ehs_po hs.ehs_epo)
+  Why3.Hashcons.combine3
+    (f_hash hs.ehs_pr) (f_hash hs.ehs_po)
     (EcCoreModules.s_hash hs.ehs_s)
+    (EcMemory.mem_hash hs.ehs_m)
 
 let bhf_hash bhf =
   Why3.Hashcons.combine_list f_hash
@@ -668,11 +660,11 @@ module Hsform = Why3.Hashcons.Make (struct
       fv_union (EcCoreModules.s_fv chs.chs_s) (Mid.remove (fst chs.chs_m) fv)
 
     | FeHoareF hf ->
-      let fv = union f_fv [hf.ehf_pr; hf.ehf_epr; hf.ehf_po; hf.ehf_epo] in
+      let fv = fv_union (f_fv hf.ehf_pr) (f_fv hf.ehf_po) in
       EcPath.x_fv (Mid.remove mhr fv) hf.ehf_f
 
     | FeHoareS hs ->
-      let fv = union f_fv [hs.ehs_pr; hs.ehs_epr; hs.ehs_po; hs.ehs_epo] in
+      let fv = fv_union (f_fv hs.ehs_pr) (f_fv hs.ehs_po) in
       fv_union (EcCoreModules.s_fv hs.ehs_s) (Mid.remove (fst hs.ehs_m) fv)
 
     | FbdHoareF bhf ->
@@ -881,11 +873,11 @@ let f_hoareF hf_pr hf_f hf_po =
 let f_eHoareS_r hs = mk_form (FeHoareS hs) tbool
 let f_eHoareF_r hf = mk_form (FeHoareF hf) tbool
 
-let f_eHoareS ehs_m ehs_pr ehs_epr ehs_s ehs_po ehs_epo  =
-  f_eHoareS_r { ehs_m; ehs_pr; ehs_epr; ehs_s; ehs_po; ehs_epo }
+let f_eHoareS ehs_m ehs_pr ehs_s ehs_po =
+  f_eHoareS_r { ehs_m; ehs_pr; ehs_s; ehs_po; }
 
-let f_eHoareF ehf_pr ehf_epr ehf_f ehf_po ehf_epo =
-  f_eHoareF_r { ehf_pr; ehf_epr; ehf_f; ehf_po; ehf_epo; }
+let f_eHoareF ehf_pr ehf_f ehf_po =
+  f_eHoareF_r { ehf_pr; ehf_f; ehf_po; }
 
 (* -------------------------------------------------------------------- *)
 let call_bound_r cb_cost cb_called =
@@ -1209,20 +1201,16 @@ let f_map gt g fp =
           { hs with hs_pr = pr'; hs_po = po'; }
 
   | FeHoareF hf ->
-      let pr'  = g hf.ehf_pr  in
-      let epr' = g hf.ehf_epr in
-      let po'  = g hf.ehf_po  in
-      let epo' = g hf.ehf_epo in
+      let ehf_pr = g hf.ehf_pr  in
+      let ehf_po = g hf.ehf_po  in
         FSmart.f_eHoareF (fp, hf)
-          { hf with ehf_pr = pr'; ehf_epr = epr'; ehf_po = po'; ehf_epo = epo' }
+          { hf with ehf_pr; ehf_po }
 
   | FeHoareS hs ->
-      let pr'  = g hs.ehs_pr  in
-      let epr' = g hs.ehs_epr in
-      let po'  = g hs.ehs_po  in
-      let epo' = g hs.ehs_epo in
+      let ehs_pr = g hs.ehs_pr  in
+      let ehs_po = g hs.ehs_po  in
         FSmart.f_eHoareS (fp, hs)
-          { hs with ehs_pr = pr'; ehs_epr = epr'; ehs_po = po'; ehs_epo = epo' }
+          { hs with ehs_pr; ehs_po; }
 
   | FcHoareF chf ->
       let pr' = g chf.chf_pr in
@@ -1302,8 +1290,8 @@ let f_iter g f =
   | FhoareS  hs   -> g hs.hs_pr; g hs.hs_po
   | FcHoareF  chf -> g chf.chf_pr; g chf.chf_po; cost_iter g chf.chf_co
   | FcHoareS  chs -> g chs.chs_pr; g chs.chs_po; cost_iter g chs.chs_co
-  | FeHoareF  hf  -> g hf.ehf_pr; g hf.ehf_epr; g hf.ehf_po; g hf.ehf_epo
-  | FeHoareS  hs  -> g hs.ehs_pr; g hs.ehs_epr; g hs.ehs_po; g hs.ehs_epo
+  | FeHoareF  hf  -> g hf.ehf_pr; g hf.ehf_po
+  | FeHoareS  hs  -> g hs.ehs_pr; g hs.ehs_po
   | FbdHoareF bhf -> g bhf.bhf_pr; g bhf.bhf_po; g bhf.bhf_bd
   | FbdHoareS bhs -> g bhs.bhs_pr; g bhs.bhs_po; g bhs.bhs_bd
   | FequivF   ef  -> g ef.ef_pr; g ef.ef_po
@@ -1334,8 +1322,8 @@ let form_exists g f =
   | FhoareS   hs -> g hs.hs_pr   || g hs.hs_po
   | FcHoareF  chf -> g chf.chf_pr  || g chf.chf_po
   | FcHoareS  chs -> g chs.chs_pr  || g chs.chs_po
-  | FeHoareF  hf  -> g hf.ehf_pr || g hf.ehf_epr || g hf.ehf_po || g hf.ehf_epo
-  | FeHoareS  hs  -> g hs.ehs_pr || g hs.ehs_epr || g hs.ehs_po || g hs.ehs_epo
+  | FeHoareF  hf  -> g hf.ehf_pr || g hf.ehf_po
+  | FeHoareS  hs  -> g hs.ehs_pr || g hs.ehs_po
   | FbdHoareF bhf -> g bhf.bhf_pr  || g bhf.bhf_po
   | FbdHoareS bhs -> g bhs.bhs_pr  || g bhs.bhs_po
   | FequivF   ef  -> g ef.ef_pr    || g ef.ef_po
@@ -1372,8 +1360,8 @@ let form_forall g f =
   | FeagerF   eg  -> g eg.eg_pr   && g eg.eg_po
   | Fcoe      coe -> g coe.coe_pre
   | Fpr       pr  -> g pr.pr_args && g pr.pr_event
-  | FeHoareF  hf  -> g hf.ehf_pr && g hf.ehf_epr && g hf.ehf_po && g hf.ehf_epo
-  | FeHoareS  hs  -> g hs.ehs_pr && g hs.ehs_epr && g hs.ehs_po && g hs.ehs_epo
+  | FeHoareF  hf  -> g hf.ehf_pr && g hf.ehf_po
+  | FeHoareS  hs  -> g hs.ehs_pr && g hs.ehs_po
 
 
 (* -------------------------------------------------------------------- *)
@@ -2014,28 +2002,22 @@ module Fsubst = struct
 
     | FeHoareF hf ->
         assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
-        let pr'  = f_subst ~tx s hf.ehf_pr in
-        let epr' = f_subst ~tx s hf.ehf_epr in
-        let po'  = f_subst ~tx s hf.ehf_po in
-        let epo' = f_subst ~tx s hf.ehf_epo in
-        let mp'  = subst_xpath s hf.ehf_f in
+        let ehf_pr  = f_subst ~tx s hf.ehf_pr in
+        let ehf_po  = f_subst ~tx s hf.ehf_po in
+        let ehf_f  = subst_xpath s hf.ehf_f in
         FSmart.f_eHoareF (fp, hf)
-          { ehf_pr = pr'; ehf_epr = epr'; ehf_po = po'; ehf_epo = epo'; ehf_f = mp'; }
+          { ehf_pr; ehf_f; ehf_po }
 
     | FeHoareS hs ->
         assert (not (Mid.mem (fst hs.ehs_m) s.fs_mem));
         let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
                                s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
-        let pr'  = f_subst ~tx s hs.ehs_pr in
-        let epr' = f_subst ~tx s hs.ehs_epr in
-        let po'  = f_subst ~tx s hs.ehs_po in
-        let epo' = f_subst ~tx s hs.ehs_epo in
-        let st'  = EcCoreModules.s_subst es hs.ehs_s in
-        let me' = EcMemory.me_subst s.fs_mem s.fs_ty hs.ehs_m in
+        let ehs_pr  = f_subst ~tx s hs.ehs_pr in
+        let ehs_po  = f_subst ~tx s hs.ehs_po in
+        let ehs_s  = EcCoreModules.s_subst es hs.ehs_s in
+        let ehs_m = EcMemory.me_subst s.fs_mem s.fs_ty hs.ehs_m in
         FSmart.f_eHoareS (fp, hs)
-          { ehs_pr = pr'; ehs_epr = epr';
-            ehs_po = po'; ehs_epo = epo';
-            ehs_s = st'; ehs_m = me'; }
+          { ehs_m; ehs_pr; ehs_s; ehs_po; }
 
     | FcHoareF chf ->
       assert (not (Mid.mem mhr s.fs_mem));

@@ -270,16 +270,12 @@ let rec on_form (cb : cb) (f : EcFol.form) =
 
   and on_ehf cb hf =
     on_form cb hf.EcFol.ehf_pr;
-    on_form cb hf.EcFol.ehf_epr;
     on_form cb hf.EcFol.ehf_po;
-    on_form cb hf.EcFol.ehf_epo;
     on_xp cb hf.EcFol.ehf_f
 
   and on_ehs cb hs =
     on_form cb hs.EcFol.ehs_pr;
-    on_form cb hs.EcFol.ehs_epr;
     on_form cb hs.EcFol.ehs_po;
-    on_form cb hs.EcFol.ehs_epo;
     on_stmt cb hs.EcFol.ehs_s;
     on_memenv cb hs.EcFol.ehs_m
 

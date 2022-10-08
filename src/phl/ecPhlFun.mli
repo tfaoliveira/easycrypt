@@ -43,7 +43,6 @@ val process_fun_abs       : pformula -> p_abs_inv_inf option -> FApi.backward
 val process_fun_upto_info : p_upto_info -> tcenv1 -> form tuple3
 val process_fun_upto      : p_upto_info -> FApi.backward
 val process_fun_to_code   : FApi.backward
-val process_fun_ehoare_abs: pformula * pformula -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
 module FunAbsLow : sig

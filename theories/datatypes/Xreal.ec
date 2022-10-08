@@ -638,27 +638,61 @@ lemma Ep_dinterval_le (f : int -> xreal) (i j : int) :
 proof. by move=> h; rewrite Ep_dinterval h. qed.
 
 (* -------------------------------------------------------------------- *)
-op interp_form (b:bool) (x : xreal) = 
+op (`|`) (b:bool) (x : xreal) = 
    if b then x else inf.
 
 lemma xle_interp_form b1 b2 (f1 f2 : xreal): 
   (b2 => (b1 /\ f1 <= f2)) => 
-  xle (interp_form b1 f1) (interp_form b2 f2).
-proof. by rewrite /interp_form; case: b2 => />. qed.
+  xle (b1 `|` f1) (b2 `|` f2).
+proof. by rewrite /(`|`); case: b2 => />. qed.
 
 lemma xle_interp_form_b b1 b2 f : 
    (b1 => b2) =>
-   interp_form b2 f <= interp_form b1 f.
+   b2 `|` f <= b1 `|` f.
 proof. by move=> h; apply xle_interp_form. qed.
 
 lemma xle_interp_form_f b (f1 f2 : xreal) : 
    (b => f1 <= f2) =>
-   interp_form b f1 <= interp_form b f2.
+   b `|` f1 <= b `|` f2.
 proof. by move=> h;apply xle_interp_form => />. qed.
 
+(* TODO: move this *)
+lemma Rp_to_real_eq (x y : realp) : (x = y) <=> (to_real x = to_real y).
+proof. smt(to_realKd). qed.
 
+(* -------------------------------------------------------------------- *)
+lemma Ep_interp_form (d:'a distr) (b:'a -> bool) (f:'a -> xreal) : 
+  Ep d (fun x => b x `|` f x) = 
+  (forall x, x \in d => b x) `|` Ep d f. 
+proof.
+  rewrite /Ep /(`|`) /=. 
+  case: (forall (x : 'a), x \in d => b x) => hb; last first. 
+  + have /> x xin xb: exists x, x \in d /\ !b x by smt().
+    have -> // : !is_real (fun (x0 : 'a) => mu1 d x0 ** if b x0 then f x0 else inf). 
+    rewrite /is_real; apply /negP => h.
+    by have := h x; rewrite xb /= /( ** ) /= Rp_to_real_eq /= /#.
+  rewrite (eq_is_real_md _ _ f).
+  + by move=> x /hb /= ->.
+  case: (is_real (d ** f)) => // _; congr; apply fun_ext => x.
+  rewrite /( **) Rp_to_real_eq /=; smt(ge0_mu1).
+qed.
 
+lemma if_interp_form (b b1 b2:bool) (f1 f2: xreal) : 
+  (if b then (b1 `|` f1) else (b2 `|` f2)) = 
+  (if b then b1 else b2) `|` if b then f1 else f2.
+proof. smt(). qed.
 
+lemma if_interp_forml (b b1:bool) (f1 f2: xreal) : 
+  (if b then (b1 `|` f1) else f2) = 
+  (b => b1) `|` if b then f1 else f2
+by smt().
 
+lemma if_interp_formr (b b2:bool) (f1 f2: xreal) : 
+  (if b then f1 else (b2 `|` f2) ) = 
+  (!b => b2) `|` if b then f1 else f2
+by smt().
+
+lemma intern_form_true x : true `|` x = x
+by done.
 
 

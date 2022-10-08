@@ -80,6 +80,9 @@ let pf_process_cost pe ?mv hyps tys pcost =
 let pf_process_formula pe ?mv hyps pf =
   Exn.recast_pe pe hyps (fun () -> process_formula ?mv hyps pf)
 
+let pf_process_xreal pe ?mv hyps pf =
+  Exn.recast_pe pe hyps (fun () -> process_xreal ?mv hyps pf)
+
 let pf_process_dformula pe ?mv hyps pf =
   Exn.recast_pe pe hyps (fun () -> process_dformula ?mv hyps pf)
 
@@ -180,10 +183,8 @@ let tc1_process_Xhl_formula ?side tc pf =
   tc1_process_Xhl_form ?side tc tbool pf
 
 (* ------------------------------------------------------------------ *)
-let tc1_process_Xhl_formula_xreal tc (pp, pf) =
-  let p = tc1_process_Xhl_form tc tbool pp in
-  let f = tc1_process_Xhl_form tc txreal pf in
-  p, f
+let tc1_process_Xhl_formula_xreal tc pf =
+  tc1_process_Xhl_form tc txreal pf
 
 (* ------------------------------------------------------------------ *)
 (* FIXME: factor out to typing module                                 *)

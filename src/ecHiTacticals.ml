@@ -171,7 +171,6 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pfun (`Abs (f,p_inv_inf)) -> EcPhlFun.process_fun_abs f p_inv_inf
     | Pfun (`Upto info)         -> EcPhlFun.process_fun_upto info
     | Pfun `Code                -> EcPhlFun.process_fun_to_code
-    | Pfun (`Ehoare info)       -> EcPhlFun.process_fun_ehoare_abs info
     | Pskip                     -> EcPhlSkip.t_skip
     | Papp info                 -> EcPhlApp.process_app info
     | Pwp (wp,cost_pre)         -> EcPhlWp.process_wp wp cost_pre

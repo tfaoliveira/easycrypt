@@ -24,14 +24,14 @@ let t_hoare_app = FApi.t_low2 "hoare-app" t_hoare_app_r
 
 (* -------------------------------------------------------------------- *)
 
-let t_ehoare_app_r i phi f tc =
+let t_ehoare_app_r i f tc =
   let hs = tc1_as_ehoareS tc in
   let s1, s2 = s_split i hs.ehs_s in
-  let a = f_eHoareS_r { hs with ehs_s = stmt s1; ehs_po = phi; ehs_epo = f }  in
-  let b = f_eHoareS_r { hs with ehs_pr = phi; ehs_epr = f; ehs_s = stmt s2 } in
+  let a = f_eHoareS_r { hs with ehs_s = stmt s1; ehs_po = f }  in
+  let b = f_eHoareS_r { hs with ehs_pr = f; ehs_s = stmt s2 } in
   FApi.xmutate1 tc `HlApp [a; b]
 
-let t_ehoare_app = FApi.t_low3 "hoare-app" t_ehoare_app_r
+let t_ehoare_app = FApi.t_low2 "hoare-app" t_ehoare_app_r
 
 let t_choare_app_r i phi cost tc =
   let chs = tc1_as_choareS tc in
@@ -243,12 +243,8 @@ let process_app (side, dir, k, phi, bd_info) tc =
 
   | Single i, PAppNone when is_eHoareS concl ->
     check_side side;
-    let ppf =
-      match phi with
-      | Single _ -> tc_error !!tc "seq ehoare : a pre and a bound is expected"
-      | Double (pp, pf) -> pp, pf in
-    let phi,f = TTC.tc1_process_Xhl_formula_xreal tc ppf in
-    t_ehoare_app i phi f tc
+    let phi = TTC.tc1_process_Xhl_formula_xreal tc (get_single phi) in
+    t_ehoare_app i phi tc
 
   | Single i, PAppNone when is_equivS concl ->
     let pre, post =

@@ -46,9 +46,7 @@ module LowInternal = struct
     if not (List.is_empty hs.ehs_s.s_node) then
       tc_error !!tc "instruction list is not empty";
 
-    let concl =
-      f_xreal_le (f_interp_ehoare_form hs.ehs_po hs.ehs_epo)
-                 (f_interp_ehoare_form hs.ehs_pr hs.ehs_epr) in
+    let concl = f_xreal_le hs.ehs_po hs.ehs_pr in
     let concl = f_forall_mems [hs.ehs_m] concl in
 
     FApi.xmutate1 tc `Skip [concl]

@@ -124,18 +124,15 @@ and cHoareS = {
 
 and eHoareF = {
   ehf_pr  : form;
-  ehf_epr : form;
   ehf_f   : EcPath.xpath;
   ehf_po  : form;
-  ehf_epo : form;
 }
 and eHoareS = {
   ehs_m   : EcMemory.memenv;
   ehs_pr  : form;
-  ehs_epr : form;
   ehs_s   : stmt;
   ehs_po  : form;
-  ehs_epo : form; }
+}
 
 and bdHoareF = {
   bhf_pr  : form;
@@ -281,8 +278,8 @@ val f_cHoareS : memenv -> form -> stmt -> form -> cost -> form
 val f_eHoareF_r : eHoareF -> form
 val f_eHoareS_r : eHoareS -> form
 
-val f_eHoareF : form -> form -> xpath -> form -> form -> form
-val f_eHoareS : memenv -> form -> form -> EcCoreModules.stmt -> form -> form -> form
+val f_eHoareF : form -> xpath -> form -> form
+val f_eHoareS : memenv -> form -> EcCoreModules.stmt -> form -> form
 
 (* soft-constructors - bd hoare *)
 val hoarecmp_opp : hoarecmp -> hoarecmp

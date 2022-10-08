@@ -79,7 +79,10 @@ let t_hoare_call fpre fpost tc =
   FApi.xmutate1 tc `HlCall [f_concl; concl]
 
 
-let t_ehoare_call fpre fepre fpost fepost tc =
+(* -------------------------------------------------------------------- *)
+let t_ehoare_call _fpre _fpost _tc =
+  assert false
+  (*
   let env = FApi.tc1_env tc in
   let hs = tc1_as_ehoareS tc in
   let (lp,f,args),s = tc1_last_call tc hs.ehs_s in
@@ -105,7 +108,7 @@ let t_ehoare_call fpre fepre fpost fepost tc =
   let epost = PVM.subst env spre fepre in
   let concl = f_eHoareS_r { hs with ehs_s = s; ehs_po = post; ehs_epo=epost} in
 
-  FApi.xmutate1 tc `HlCall [f_concl; concl]
+  FApi.xmutate1 tc `HlCall [f_concl; concl] *)
 
 (* -------------------------------------------------------------------- *)
 let t_choare_call fpre fpost fcost tc =
@@ -302,7 +305,7 @@ let t_call side ax tc =
       let (_, f, _), _ = tc1_last_call tc hs.ehs_s in
       if not (EcEnv.NormMp.x_equal env hf.ehf_f f) then
         call_error env tc hf.ehf_f f;
-      t_ehoare_call hf.ehf_pr hf.ehf_epr hf.ehf_po hf.ehf_epo tc
+      t_ehoare_call hf.ehf_pr hf.ehf_po tc
 
   | FcHoareF chf, FcHoareS chs ->
       let (_, f, _), _ = tc1_last_call tc chs.chs_s in

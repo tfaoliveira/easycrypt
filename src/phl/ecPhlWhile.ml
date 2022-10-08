@@ -148,24 +148,22 @@ let t_ehoare_while_core tc =
   check_single_stmt tc s;
   let m = EcMemory.memory hs.ehs_m in
   let e = form_of_expr m e in
-  if not (EcReduction.is_conv hyps hs.ehs_epr hs.ehs_epo) then
-    tc_error !!tc "ehoare while rule: wrong eform";
-  if not (EcReduction.is_conv hyps hs.ehs_po (f_and hs.ehs_pr (f_not e))) then
+  if not (EcReduction.is_conv hyps hs.ehs_po (f_interp_ehoare_form (f_not e) hs.ehs_pr)) then
     tc_error !!tc "ehoare while rule: wrong post-condition";
   (* the body preserves the invariant *)
-  let b_pre  = f_and_simpl hs.ehs_pr e in
-  let b_concl = f_eHoareS hs.ehs_m b_pre hs.ehs_epr c hs.ehs_pr hs.ehs_epr in
+  let b_pre  = f_interp_ehoare_form e hs.ehs_pr in
+  let b_concl = f_eHoareS hs.ehs_m b_pre c hs.ehs_pr in
   FApi.xmutate1 tc `While [b_concl]
 
-let t_ehoare_while inv einv tc =
+let t_ehoare_while inv tc =
   let hs = tc1_as_ehoareS tc in
   let (e,_), _ = tc1_last_while tc hs.ehs_s in
   let m = EcMemory.memory hs.ehs_m in
   let e = form_of_expr m e in
   let tc =
-    FApi.t_rotate `Left 1 (EcPhlApp.t_ehoare_app (0, `ByPos (List.length hs.ehs_s.s_node - 1)) inv einv tc) in
+    FApi.t_rotate `Left 1 (EcPhlApp.t_ehoare_app (0, `ByPos (List.length hs.ehs_s.s_node - 1)) inv tc) in
   FApi.t_sub
-    [(EcPhlConseq.t_ehoareS_conseq inv einv (f_and inv (f_not e)) einv) @+
+    [(EcPhlConseq.t_ehoareS_conseq inv (f_interp_ehoare_form (f_not e) inv)) @+
        [t_trivial;
         t_id;
         t_ehoare_while_core ];
@@ -445,20 +443,20 @@ let process_while side winfos tc =
       match vrnt with
       | None ->
         t_hoare_while
-          (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
+          (TTC.tc1_process_Xhl_formula tc phi)
           tc
       | _    -> tc_error !!tc "invalid arguments"
     end
 
   | FeHoareS _ ->
-      let inv, einv = TTC.tc1_process_Xhl_formula_xreal tc (get_double tc phi) in
-      t_ehoare_while inv einv tc
+      let inv = TTC.tc1_process_Xhl_formula_xreal tc phi in
+      t_ehoare_while inv tc
 
   | FcHoareS _ -> begin
       match vrnt, bds with
       | Some vrnt, Some (`Cost (n, cost)) ->
         t_choare_while
-          (TTC.tc1_process_Xhl_formula tc         (get_single tc phi))
+          (TTC.tc1_process_Xhl_formula tc         phi)
           (TTC.tc1_process_Xhl_form    tc tint    vrnt)
           (TTC.tc1_process_Xhl_form    tc tint    n)
           (TTC.tc1_process_cost        tc [tint]  cost)
@@ -475,20 +473,20 @@ let process_while side winfos tc =
       match vrnt, bds with
       | Some vrnt, None ->
           t_bdhoare_while
-            (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
+            (TTC.tc1_process_Xhl_formula tc phi)
             (TTC.tc1_process_Xhl_form tc tint vrnt)
             tc
 
       | Some vrnt, Some (`Bd (k, eps)) ->
         t_bdhoare_while_rev_geq
-          (TTC.tc1_process_Xhl_formula tc (get_single tc phi))
+          (TTC.tc1_process_Xhl_formula tc phi)
           (TTC.tc1_process_Xhl_form    tc tint vrnt)
           (TTC.tc1_process_Xhl_form    tc tint k)
           (TTC.tc1_process_Xhl_form    tc treal eps)
           tc
 
       | None, None ->
-          t_bdhoare_while_rev (TTC.tc1_process_Xhl_formula tc (get_single tc phi)) tc
+          t_bdhoare_while_rev (TTC.tc1_process_Xhl_formula tc phi) tc
 
       | Some _, Some (`Cost _) | None, Some _ ->
         tc_error !!tc "invalid arguments"
@@ -497,12 +495,12 @@ let process_while side winfos tc =
   | FequivS _ -> begin
       match side, vrnt with
       | None, None ->
-          t_equiv_while (TTC.tc1_process_prhl_formula tc (get_single tc phi)) tc
+          t_equiv_while (TTC.tc1_process_prhl_formula tc phi) tc
 
       | Some side, Some vrnt ->
           t_equiv_while_disj side
             (TTC.tc1_process_prhl_form    tc tint vrnt)
-            (TTC.tc1_process_prhl_formula tc (get_single tc phi))
+            (TTC.tc1_process_prhl_formula tc phi)
             tc
 
       | _ -> tc_error !!tc "invalid arguments"
