@@ -82,8 +82,13 @@ op ( + ) (x y : realp) =
 op ( * ) (x y : realp) = 
   of_real (to_real x * to_real y).
 
-op (<=) (x y : realp) = to_real x <= to_real y.
-op (<) (x y : realp) = to_real x < to_real y.
+op inv (x : realp) = 
+  of_real (inv (to_real x)).
+
+abbrev (/) (x y : realp) : realp = x * inv y.
+
+abbrev (<=) (x y : realp) = to_real x <= to_real y.
+abbrev (<) (x y : realp)  = to_real x < to_real y.
 
 clone include MonoidDI with
    type t  <- realp,
@@ -99,7 +104,10 @@ proof. smt (of_realK to_realP). qed.
 lemma to_realM x y : to_real (x * y) = to_real x * to_real y.
 proof. smt (of_realK to_realP). qed.
 
-hint simplify to_realD, to_realM.
+lemma to_realI x : to_real(inv x) = inv (to_real x).
+proof. smt (of_realK to_realP Real.invr0). qed.
+
+hint simplify to_realD, to_realM, to_realI.
 
 lemma of_realD x y : 0.0 <= x => 0.0 <= y => 
    of_real (x + y) = of_real x + of_real y.
@@ -125,6 +133,7 @@ theory Rpbar.
 
 type xreal = [rp of realp | inf].
 abbrev r (x:real) = rp (of_real x).
+abbrev ri (i:int) = rp (of_real i%r).
 
 (* -------------------------------------------------------------------- *)
 abbrev ('0) = r 0.0.
@@ -142,8 +151,14 @@ op xmul (x y : xreal) =
   with x = inf , y = rp _ => inf
   with x = inf , y = inf  => inf.
 
+op xinv (x : xreal) = 
+  with x = rp x => rp (inv x)
+  with x = inf  => inf.  (* Does this make sense *)
+
 abbrev ( + ) = xadd.
 abbrev ( * ) = xmul.
+
+abbrev (/) (x y : xreal) : xreal = x * xinv y.
 
 op ( ** ) c x =
   if c = of_real 0.0 then '0 else rp c * x. 
