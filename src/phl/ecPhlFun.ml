@@ -759,7 +759,12 @@ let t_fun_r inv inv_inf tc =
       else t_hoareF_fun_def tc
 
   and teh tc =
-    t_ehoareF_fun_def tc
+    assert (inv_inf = None);
+    let env = FApi.tc1_env tc in
+    let h   = destr_eHoareF (FApi.tc1_goal tc) in
+      if   NormMp.is_abstract_fun h.ehf_f env
+      then t_ehoareF_abs inv tc
+      else t_ehoareF_fun_def tc
 
   and tch tc =
     let env = FApi.tc1_env tc in
