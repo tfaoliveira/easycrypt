@@ -540,7 +540,6 @@ type call_info =
   | CI_spec of (pformula * pformula * pcost option)
   | CI_inv of pformula * p_call_inv_info option
   | CI_upto of (pformula * pformula * pformula option)
-  | CI_ehoare of pformula * pformula
 
 type p_app_xt_info =
   | PAppNone
@@ -709,6 +708,7 @@ type phltactic =
   | Punroll        of (oside * codepos * bool)
   | Psplitwhile    of (pexpr * oside * codepos)
   | Pcall          of oside * call_info gppterm
+  | Pcallconcave   of (pformula * call_info gppterm)
   | Prcond         of (oside * bool * codepos1 * pformula option)
   | Prmatch        of (oside * symbol * codepos1)
   | Pcond          of pcond_info
@@ -724,6 +724,7 @@ type phltactic =
   | Pset           of (oside * codepos * bool * psymbol * pexpr)
   | Pconseq        of (pcqoptions * (conseq_ppterm option tuple3))
   | Pconseqauto    of crushmode
+  | Pconcave       of (pformula option tuple2 gppterm * pformula)
   | Phrex_elim
   | Phrex_intro    of (pformula list * bool)
   | Phecall        of (oside * (pqsymbol * ptyannot option * pformula list))

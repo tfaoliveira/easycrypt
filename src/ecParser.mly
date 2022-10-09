@@ -2697,7 +2697,6 @@ call_info:
                                        CI_inv  (f, Some info) }
 | bad=form COMMA p=form              { CI_upto (bad,p,None) }
 | bad=form COMMA p=form COMMA q=form { CI_upto (bad,p,Some q) }
-| pre=form PIPE epre=form            { CI_ehoare(pre, epre) }
 
 tac_dir:
 | BACKS { Backs }
@@ -3122,6 +3121,9 @@ phltactic:
 | CALL s=side? info=gpterm(call_info)
     { Pcall (s, info) }
 
+| CALL SLASH fc=sform info=gpterm(call_info)
+    { Pcallconcave (fc,info) }
+
 | RCONDT s=side? i=codepos1 cost=option(if_cost_option)
     { Prcond (s, true, i, cost) }
 
@@ -3213,6 +3215,9 @@ phltactic:
 
 | BYEQUIV eq=bracket(byequivopt)? info=gpterm(conseq)? COLON bad1=sform
     { Pbydeno (`Equiv, (mk_rel_pterm info, odfl true eq, Some bad1)) }
+
+| CONSEQ SLASH fc=sform info=gpterm(conseq)
+    { Pconcave (info, fc) }
 
 | CONSEQ cq=cqoptions?
     { Pconseq (odfl [] cq, (None, None, None)) }

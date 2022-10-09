@@ -73,6 +73,15 @@ clone include Subtype
 abbrev (%r) = to_real.
 abbrev (%rp) = of_real.
 
+theory IntNotation.
+  abbrev (%rp) (n:int) = n%r%rp.
+end IntNotation. export IntNotation.
+
+axiom witness_0 : witness = 0%rp.
+
+lemma of_real_neg x : x < 0.0 =>  x%rp = 0%rp.
+proof. smt(to_realK val_of_real witness_0). qed.
+
 lemma to_realK_simpl (x:realp) : x%r%rp = x by apply: to_realKd.
 hint simplify to_realK_simpl, of_realK.
 
@@ -117,11 +126,25 @@ lemma of_realM x y : 0.0 <= x => 0.0 <= y =>
    (x * y)%rp = x%rp * y%rp.
 proof. smt (of_realK to_realP). qed.
 
-lemma to_realK_d ['a] (d : 'a distr) (e: 'a -> bool) : 
-  (mu d e)%rp%r = mu d e.
-proof. rewrite of_realK //. qed.
+lemma of_realI (x:real) : (inv x)%rp = inv x%rp.
+proof. smt (of_realK to_realP  of_real_neg divr0). qed.
+hint simplify of_realI.
 
-hint simplify to_realK_d.
+op (%pos) (x:real) = if 0.0 <= x then x else 0.0.
+
+lemma to_pos_pos (x:real) : 0.0 <= x => x%pos = x.
+proof. by rewrite /(%pos) => ->. qed.
+hint simplify to_pos_pos @10.
+
+lemma to_real_of_real (x:real) : x%rp%r = x%pos.
+proof. by rewrite val_of_real witness_0. qed.
+hint simplify to_real_of_real.
+
+lemma to_pos_mu ['a] (d : 'a distr) (e: 'a -> bool) : 
+  (mu d e)%pos = mu d e.
+proof. by rewrite /(%pos) ge0_mu. qed.
+
+hint simplify to_pos_mu.
 
 end Rp.
 export Rp.
@@ -132,7 +155,12 @@ export Rp.
 theory Rpbar.
 
 type xreal = [rp of realp | oo].
-abbrev (%xr) (x:real) = rp (of_real x).
+
+abbrev (%xr) = rp.
+
+theory RealNotation.
+abbrev (%xr) (x:real) = x%rp%xr.
+end RealNotation. export RealNotation.
 
 theory IntNotation.
 abbrev (%xr) (i:int)  = i%r%xr.
@@ -147,19 +175,19 @@ abbrev ('0) = 0.0%xr.
 abbrev ('1) = 1.0%xr.
 
 op xadd (x y : xreal) =
-  with x = rp x, y = rp y => rp (x + y)
+  with x = rp x, y = rp y => (x + y)%xr
   with x = rp _, y = oo  => oo
   with x = oo , y = rp _ => oo
   with x = oo , y = oo  => oo.
 
 op xmul (x y : xreal) =
-  with x = rp x, y = rp y => rp (x * y)
+  with x = rp x, y = rp y => (x * y)%xr
   with x = rp _, y = oo  => oo
   with x = oo , y = rp _ => oo
   with x = oo , y = oo  => oo.
 
 op xinv (x : xreal) = 
-  with x = rp x => rp (inv x)
+  with x = rp x => (inv x)%xr
   with x = oo  => oo.  (* Does this make sense *)
 
 abbrev ( + ) = xadd.
@@ -168,10 +196,10 @@ abbrev ( * ) = xmul.
 abbrev (/) (x y : xreal) : xreal = x * xinv y.
 
 op ( ** ) c x =
-  if c = 0.0%rp then '0 else rp c * x. 
+  if c = 0.0%rp then '0 else c%xr * x. 
 
 theory Notation.
-abbrev ( ** ) (x:real) (z:xreal) = of_real x ** z.
+abbrev ( ** ) (x:real) (z:xreal) = x%rp ** z.
 end Notation. export Notation.
 
 op to_real (x:xreal) = 
@@ -204,8 +232,8 @@ abbrev (<) = xlt.
 (* -------------------------------------------------------------- *)
 clone include MonoidD with 
   type t <- xreal,
-  op zero <- 0.0%xr,
-  op MulMonoid.one  <- 1.0%xr,
+  op zero <- 0%xr,
+  op MulMonoid.one  <- 1%xr,
   op ( + ) <- xadd,
   op ( * ) <- xmul
   proof *.
@@ -282,31 +310,58 @@ proof. by move=> ->; rewrite xltxx. qed.
 
 hint simplify xltxx_simpl.
 
+lemma xle_trans (y x z : xreal) : x <= y => y <= z => x <= z.
+proof.
+  case: z => // z; case: y => // y; case: x => //=; smt(@Rp).
+qed.
+
 lemma xle_add_r x y : x <= x + y.
 proof. case: x y => [x|] [y|] //=; smt(@Rp). qed.
 
 lemma xle_add_l x y : x <= y + x.
 proof. rewrite addmC xle_add_r. qed.
 
-lemma ler_add2r (x:realp) (y z : xreal) : y + rp x <= z + rp x <=> y <= z.
+lemma xler_add2r (x:realp) (y z : xreal) : y + x%xr <= z + x%xr <=> y <= z.
 proof. case: z => // z; case: y => //= y; smt(@Rp). qed.
 
-lemma ler_add2l (x:realp) (y z : xreal) : rp x + y <= rp x + z <=> y <= z.
-proof. rewrite !(addmC (rp x)); apply ler_add2r. qed.
+lemma xler_add2l (x:realp) (y z : xreal) : rp x + y <= x%xr + z <=> y <= z.
+proof. rewrite !(addmC (rp x)); apply xler_add2r. qed.
 
-lemma ler_addr (x y z : xreal) : y <= z => y + x <= z + x.
-proof. case x => // x /ler_add2r; apply. qed.
+lemma xler_addr (x y z : xreal) : y <= z => y + x <= z + x.
+proof. case x => // x /xler_add2r; apply. qed.
 
-lemma ler_addl (x y z : xreal) : y <= z => x + y <= x + z.
-proof. case x => // x /ler_add2l; apply. qed.
+lemma xler_addl (x y z : xreal) : y <= z => x + y <= x + z.
+proof. case x => // x /xler_add2l; apply. qed.
 
-lemma le_trans (y x z : xreal) : x <= y => y <= z => x <= z.
-proof.
-  case: z => // z; case: y => // y; case: x => //=; smt(@Rp).
-qed.
+lemma xler_add (x y z t : xreal) : x <= y => z <= t => x + z <= y + t.
+proof. by move=> /(xler_addr z) h1 /(xler_addl y); apply xle_trans. qed.
 
-lemma ler_add (x y z t : xreal) : x <= y => z <= t => x + z <= y + t.
-proof. by move=> /(ler_addr z) h1 /(ler_addl y); apply le_trans. qed.
+lemma xler_pmul2l (x:realp) : 0%rp < x => 
+  forall (y z : xreal),
+  rp x * y <= rp x * z <=> y <= z.
+proof. move=> hx y z; case: z => // z; case: y => // y; smt(to_realP). qed.
+
+lemma nosmt xler_wpmul2l (x : realp) (y z : xreal) :
+  y <= z => x%xr * y <= x%xr * z.
+proof. case: z => // z; case: y => // y; smt(to_realP). qed.
+
+lemma xler_pmul2r (x:realp) : 0%rp < x => 
+  forall (y z : xreal),
+  y * rp x <= z * rp x <=> y <= z.
+proof. move=> hx y z; case: z => // z; case: y => // y; smt(to_realP). qed.
+
+lemma nosmt xler_wpmul2r (x : realp) (y z : xreal) :
+  y <= z => y * x%xr <= z * x%xr.
+proof. case: z => // z; case: y => // y; smt(to_realP). qed.
+
+lemma xler_mulr (x y z : xreal) : y <= z => y * x <= z * x.
+proof. case x => // x /xler_wpmul2r; apply. qed.
+
+lemma xler_mull (x y z : xreal) : y <= z => x * y <= x * z.
+proof. case x => // x /xler_wpmul2l; apply. qed.
+
+lemma xler_mul (x y z t : xreal) : x <= y => z <= t => x * z <= y * t.
+proof. by move=> /(xler_mulr z) h1 /(xler_mull y); apply xle_trans. qed.
 
 (* -------------------------------------------------------------- *)
 
@@ -701,5 +756,112 @@ by smt().
 
 lemma intern_form_true x : true `|` x = x
 by done.
+
+(* -------------------------------------------------------------------- *)
+(* Concavity                                                            *)
+
+op concave (f:xreal -> xreal) = 
+  forall t, 0%r <= t <= 1%r =>
+  forall x y, 
+    t%xr * f x + (1.0 - t)%xr * f y <= f (t%xr * x + (1.0 - t)%xr * y).
+   
+lemma concave_cst (c:xreal) : concave (fun x => c).
+proof. rewrite /concave /=; case: c => //= /#. qed.
+
+lemma concave_id : concave (fun x => x).
+proof. by rewrite /concave. qed.
+
+lemma concaveD f1 f2 : 
+  concave f1 => concave f2 => concave (fun x => f1 x + f2 x).
+proof.
+  rewrite /concave => h1 h2 t ht x y.
+  apply: (Rpbar.xle_trans ((t%xr * f1 x + (1%r - t)%xr * f1 y)
+                         + (t%xr * f2 x + (1%r - t)%xr * f2 y))).
+  + rewrite !mulmDr -!addmA xler_addl (addmC (_ * f1 y) (Rpbar.(+) _ _)).
+    by rewrite -!addmA xler_addl addmC.
+  by apply xler_add;[ apply h1 | apply h2].
+qed.
+
+lemma concaveMr f c : 
+  concave f => concave (fun x => f x * c).
+proof.
+  rewrite /concave => h t ht x y.
+  rewrite !mulmA -mulmDl; apply/xler_mulr/h/ht.
+qed.
+
+lemma concaveMl f c : 
+  concave f => concave (fun x => c * f x).
+proof.
+  rewrite /concave => h t ht x y.
+  by rewrite !(mulmC c); apply (concaveMr f c h).
+qed.
+
+hint solve 0 concave : concave_cst concave_id concaveD concaveMr concaveMl.
+
+(* -------------------------------------------------------------------- *)
+(* Increasing                                                           *)
+
+op increasing (f:xreal -> xreal) = 
+  forall (x y: xreal), x <= y => f x <= f y.
+
+lemma increasing_cst (c:xreal) : increasing (fun x => c).
+proof. rewrite /increasing /=; case: c => //= /#. qed.
+
+lemma increasing_id : increasing (fun x => x).
+proof. by rewrite /increasing. qed.
+
+lemma increasingD f1 f2 : 
+  increasing f1 => increasing f2 => increasing (fun x => f1 x + f2 x).
+proof.
+  rewrite /increasing => h1 h2; smt(xle_trans xler_add).
+qed.
+
+lemma increasingM f1 f2 : 
+  increasing f1 => increasing f2 => increasing (fun x => f1 x * f2 x).
+proof.
+  rewrite /increasing => h1 h2; smt(xle_trans xler_mul).
+qed.
+
+hint solve 0 increasing : increasing_cst increasing_id increasingD increasingM.
+
+(* -------------------------------------------------------------------- *)
+(* Concave + Increasing                                                 *)
+
+op concave_incr (f:xreal -> xreal) = 
+  concave f /\ increasing f.
+
+lemma concave_incr_cst (c:xreal) : concave_incr (fun x => c).
+proof. split; [apply concave_cst | apply increasing_cst]. qed.
+
+lemma concave_incr_id : concave_incr (fun x => x).
+proof. split; [apply concave_id | apply increasing_id]. qed.
+
+lemma concave_incrD f1 f2 : 
+  concave_incr f1 => concave_incr f2 => concave_incr (fun x => f1 x + f2 x).
+proof.
+  by move=> [h1c h1i] [h2c h2i]; split; [apply concaveD | apply increasingD].
+qed.
+
+lemma concave_incrMr f c : 
+  concave_incr f => concave_incr (fun x => f x * c).
+proof.
+  move=> [hc hi]; split; [apply concaveMr | apply increasingM] => //.
+  apply increasing_cst.
+qed.
+
+lemma concave_incrMl f c : 
+  concave_incr f => concave_incr (fun x => c * f x).
+proof.
+  move=> [hc hi]; split; [apply concaveMl | apply increasingM] => //.
+  apply increasing_cst.
+qed.
+
+hint solve 0 concave_incr : concave_incr_cst concave_incr_id concave_incrD concave_incrMr concave_incrMl.
+
+
+
+ 
+
+
 
 

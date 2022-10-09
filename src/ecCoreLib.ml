@@ -127,9 +127,11 @@ module CI_Xreal = struct
   let p_is_real = mk_Rpbar "is_real"
 
   let p_xle     = mk_Rpbar "xle"
-  let p_interp_form = mk_Xreal "interp_form"
+  let p_interp_form = mk_Xreal "`|`"
   let p_Ep      = mk_Xreal "Ep"
+  let p_concave_incr = mk_Xreal "concave_incr"
 end
+
 (* -------------------------------------------------------------------- *)
 module CI_Real = struct
   let i_Real = "CoreReal"

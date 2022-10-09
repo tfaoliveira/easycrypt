@@ -127,17 +127,18 @@ end
 
 (* -------------------------------------------------------------------- *)
 module CI_Xreal : sig
-  val p_Xreal       : path
-  val p_xreal       : path
-  val p_rp          : path
-  val p_inf         : path
-  val p_xadd        : path
-  val p_xmul        : path
-  val p_xle         : path
-  val p_is_real     : path
-  val p_is_inf      : path
-  val p_interp_form : path
-  val p_Ep          : path
+  val p_Xreal        : path
+  val p_xreal        : path
+  val p_rp           : path
+  val p_inf          : path
+  val p_xadd         : path
+  val p_xmul         : path
+  val p_xle          : path
+  val p_is_real      : path
+  val p_is_inf       : path
+  val p_interp_form  : path
+  val p_Ep           : path
+  val p_concave_incr : path
 end
 
 (* -------------------------------------------------------------------- *)

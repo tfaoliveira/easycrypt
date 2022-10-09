@@ -520,6 +520,138 @@ let t_cHoareS_conseq_nm  = gen_conseq_nm t_cHoareS_notmod  t_cHoareS_conseq
 let t_bdHoareF_conseq_nm = gen_conseq_nm t_bdHoareF_notmod t_bdHoareF_conseq
 let t_bdHoareS_conseq_nm = gen_conseq_nm t_bdHoareS_notmod t_bdHoareS_conseq
 
+
+(* -------------------------------------------------------------------- *)
+(* concavity (jenhsen) : E(f g2) <= f (E g2)
+   {g1} c { g2} : E g2 <= g1
+   increasing :f (E g2) <= f g1
+   -----------------------------
+   {f g1} c { f g2 }
+*)
+
+let t_ehoareF_concave fc pre post tc =
+  let env = FApi.tc1_env tc in
+  let hf = tc1_as_ehoareF tc in
+  let f = hf.ehf_f in
+  let mpr,mpo = Fun.hoareF_memenv f env in
+  let fsig = (Fun.by_xpath f env).f_sig in
+  let m = fst mpo in
+  assert (fst mpr = m && fst mpo = m);
+  (* ensure that f only depend of notmod *)
+  let modi = f_write env f in
+  let modi = PV.add env pv_res fsig.fs_ret modi in
+  let fv = PV.fv env m fc in
+  let inter = PV.interdep env fv modi in
+  if not (PV.is_empty inter) then
+    tc_error !!tc "the function should not depend on modified elements: %a"
+       (PV.pp env) inter;
+
+  let g0 =
+    f_forall_mems [EcMemory.empty_local ~witharg:false m] (f_concave_incr fc) in
+
+  let g1 =
+    let cond = f_xreal_le (f_app fc [pre] txreal) hf.ehf_pr in
+    f_forall_mems [mpr] cond in
+
+  let g2 =
+    let cond = f_xreal_le hf.ehf_po (f_app fc [post] txreal) in
+    f_forall_mems [mpo] cond in
+
+  let g3 =
+    f_eHoareF pre f post in
+
+  FApi.xmutate1 tc `HlConseq [g0; g1; g2; g3]
+
+(* -------------------------------------------------------------------- *)
+let t_ehoareS_concave fc (* xreal -> xreal *) pre post tc =
+  let env = FApi.tc1_env tc in
+  let hs = tc1_as_ehoareS tc in
+  let s = hs.ehs_s in
+  let m = fst hs.ehs_m in
+  (* ensure that f only depend of notmod *)
+  let modi = s_write env s in
+  let fv = PV.fv env m fc in
+  let inter = PV.interdep env fv modi in
+  if not (PV.is_empty inter) then
+    tc_error !!tc "the function should not depend on modified elements: %a"
+       (PV.pp env) inter;
+
+  let g0 =
+    f_forall_mems [hs.ehs_m] (f_concave_incr fc) in
+
+  let g1 =
+    let cond = f_xreal_le (f_app_simpl fc [pre] txreal) hs.ehs_pr in
+    f_forall_mems [hs.ehs_m] cond in
+
+  let g2 =
+    let cond = f_xreal_le hs.ehs_po (f_app_simpl fc [post] txreal) in
+    f_forall_mems [hs.ehs_m] cond in
+
+  let g3 =
+    f_eHoareS hs.ehs_m pre s post in
+
+  FApi.xmutate1 tc `HlConseq [g0; g1; g2; g3]
+
+let t_concave_incr =
+  FApi.t_seq (t_intro_s `Fresh) (t_solve ~bases:["concave_incr"] ~canfail:true ~depth:2)
+
+let process_concave ((info, fc) : pformula option tuple2 gppterm * pformula) tc =
+  let hyps, concl = FApi.tc1_flat tc in
+
+  let fc =
+    match concl.f_node with
+    | FeHoareS hs ->
+      let env = LDecl.push_active hs.ehs_m hyps in
+      TTC.pf_process_form !!tc env (tfun txreal txreal) fc
+
+    | FeHoareF hf ->
+      let _, env = LDecl.hoareF hf.ehf_f hyps in
+      TTC.pf_process_form !!tc env (tfun txreal txreal) fc
+
+    | _ -> tc_error !!tc "conseq concave: not a ehoare judgement"
+  in
+
+  let process_cut1 (pre, post) =
+    let penv, qenv, gpre, gpost, fmake =
+      match concl.f_node with
+      | FeHoareS hs ->
+        let env = LDecl.push_active hs.ehs_m hyps in
+        let fmake pre post = f_eHoareS_r { hs with ehs_pr = pre; ehs_po = post; } in
+        (env, env, hs.ehs_pr, hs.ehs_po, fmake)
+
+      | FeHoareF hf ->
+        let penv, qenv = LDecl.hoareF hf.ehf_f hyps in
+        let fmake pre post =
+          f_eHoareF_r { hf with ehf_pr = pre; ehf_po = post } in
+        (penv, qenv, hf.ehf_pr, hf.ehf_po, fmake)
+
+      | _ -> tc_error !!tc "conseq concave: not a ehoare judgement"
+    in
+
+    let pre   = pre  |> omap (TTC.pf_process_form !!tc penv txreal) |> odfl gpre  in
+    let post  = post |> omap (TTC.pf_process_form !!tc qenv txreal) |> odfl gpost in
+    fmake pre post
+
+  in
+
+  let f1 = PT.tc1_process_full_closed_pterm_cut
+                              ~prcut:(process_cut1) tc info in
+
+  let t_apply_r tc =
+    EcLowGoal.Apply.t_apply_bwd_hi ~dpe:true (fst f1) tc in
+
+  match (snd f1).f_node with
+  | FeHoareS hs ->
+    FApi.t_first t_concave_incr
+        (FApi.t_on1seq 3 (t_ehoareS_concave fc hs.ehs_pr hs.ehs_po) t_apply_r tc)
+
+  | FeHoareF hf ->
+     FApi.t_first t_concave_incr
+       (FApi.t_on1seq 3 (t_ehoareF_concave fc hf.ehf_pr hf.ehf_po) t_apply_r tc)
+
+  | _ -> tc_error !!tc "conseq concave: not a ehoare judgement"
+
+
 (* -------------------------------------------------------------------- *)
 (*                   Relation between logics                            *)
 (* -------------------------------------------------------------------- *)

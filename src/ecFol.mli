@@ -53,6 +53,7 @@ val f_decimal  : zint * (int * zint) -> form
 val f_xreal_le : form -> form -> form
 val f_interp_ehoare_form : form -> form -> form
 val f_Ep : EcTypes.ty -> form -> form -> form
+val f_concave_incr : form -> form
 (* soft-constructor - map *)
 val f_map_cst : EcTypes.ty -> form -> form
 val f_map_get : form -> form -> EcTypes.ty -> form

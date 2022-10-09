@@ -186,6 +186,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Punroll info              -> EcPhlLoopTx.process_unroll info
     | Psplitwhile info          -> EcPhlLoopTx.process_splitwhile info
     | Pcall (side, info)        -> EcPhlCall.process_call side info
+    | Pcallconcave info         -> EcPhlCall.process_call_concave info
     | Pswap sw                  -> EcPhlSwap.process_swap sw
     | Pinline info              -> EcPhlInline.process_inline info
     | Pinterleave info          -> EcPhlSwap.process_interleave info
@@ -197,6 +198,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Prndsem (side, pos)       -> EcPhlRnd.process_rndsem side pos
     | Pconseq (opt, info)       -> EcPhlConseq.process_conseq_opt opt info
     | Pconseqauto cm            -> process_conseqauto cm
+    | Pconcave info             -> EcPhlConseq.process_concave info
     | Phrex_elim                -> EcPhlExists.t_hr_exists_elim
     | Phrex_intro (fs, b)       -> EcPhlExists.process_exists_intro ~elim:b fs
     | Phecall (oside, x)        -> EcPhlExists.process_ecall oside x

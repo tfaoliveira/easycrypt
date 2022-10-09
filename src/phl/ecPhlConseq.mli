@@ -37,6 +37,10 @@ val t_cHoareF_conseq_nm   : form -> form -> FApi.backward
 val t_cHoareS_conseq_nm   : form -> form -> FApi.backward
 val t_bdHoareF_conseq_nm  : form -> form -> FApi.backward
 val t_bdHoareS_conseq_nm  : form -> form -> FApi.backward
+(* -------------------------------------------------------------------- *)
+val t_ehoareS_concave : form -> form -> form -> FApi.backward
+val t_ehoareF_concave : form -> form -> form -> FApi.backward
+val t_concave_incr : FApi.backward
 
 (* -------------------------------------------------------------------- *)
 val t_equivS_conseq_bd : side -> EcFol.form -> EcFol.form ->FApi.backward
@@ -54,3 +58,5 @@ val process_conseq_opt :
 
 (* -------------------------------------------------------------------- *)
 val t_conseqauto : ?delta:bool -> ?tsolve:FApi.backward -> FApi.backward
+
+val process_concave : pformula option tuple2 gppterm * pformula -> FApi.backward
