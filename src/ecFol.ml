@@ -103,6 +103,9 @@ let f_decimal (n, (l, f)) =
 let fop_xreal_le = f_op CI.CI_Xreal.p_xle [] (toarrow [txreal; txreal] tbool)
 let fop_interp_ehoare_form =
   f_op CI.CI_Xreal.p_interp_form [] (toarrow [tbool; txreal] txreal)
+
+let is_interp_ehoare_form_op (p, tys) = EcPath.p_equal p CI.CI_Xreal.p_interp_form && tys = []
+
 let fop_Ep ty =
   f_op CI.CI_Xreal.p_Ep [ty] (toarrow [tdistr ty; toarrow [ty] txreal] txreal)
 
@@ -976,42 +979,38 @@ let f_dlet_simpl tya tyb d f =
  * - E x p1 => p2 -> [] (E x p1 => p2)
  *)
 let destr_exists_prenex f =
-  let disjoint bds1 bds2 =
-    List.for_all
-      (fun (id1, _) -> List.for_all (fun (id2, _) -> id1 <> id2) bds2)
-      bds1
-  in
-
   let rec prenex_exists bds p =
     match sform_of_form p with
     | SFand (`Sym, (f1, f2)) ->
-        let (bds1, f1) = prenex_exists [] f1 in
-        let (bds2, f2) = prenex_exists [] f2 in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_and f1 f2)
-          else (bds, p)
+      let (bds, f2) = prenex_exists bds f2 in
+      let (bds, f1) = prenex_exists bds f1 in
+      (bds, f_and f1 f2)
 
     | SFor (`Sym, (f1, f2)) ->
-        let (bds1, f1) = prenex_exists [] f1 in
-        let (bds2, f2) = prenex_exists [] f2 in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_or f1 f2)
-          else (bds, p)
+      let (bds, f2) = prenex_exists bds f2 in
+      let (bds, f1) = prenex_exists bds f1 in
+      (bds, f_or f1 f2)
 
     | SFimp (f1, f2) ->
-        let (bds2, f2) = prenex_exists bds f2 in
-          (bds2@bds, f_imp f1 f2)
+      let (bds, f2) = prenex_exists bds f2 in
+      (bds, f_imp f1 f2)
 
     | SFquant (Lexists, bd, lazy p) ->
-        let (bds, p) = prenex_exists bds p in
-          (bd::bds, p)
+      let bd, p   =
+        let s = Fsubst.f_subst_init ~freshen:true () in
+        let s, bd = Fsubst.add_binding s bd in
+        bd, Fsubst.f_subst s p in
+      let bds = bd::bds in
+      prenex_exists bds p
 
-    | SFif (f, ft, fe) ->
-        let (bds1, f1) = prenex_exists [] ft in
-        let (bds2, f2) = prenex_exists [] fe in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_if f f1 f2)
-          else (bds, p)
+    | SFif (f, f1, f2) ->
+      let (bds, f2) = prenex_exists bds f2 in
+      let (bds, f1) = prenex_exists bds f1 in
+      (bds, f_if f f1 f2)
+
+    | SFop (op, [f1; f2]) when is_interp_ehoare_form_op op ->
+      let (bds, f1) = prenex_exists bds f1 in
+      (bds, f_interp_ehoare_form f1 f2)
 
     | _ -> (bds, p)
   in

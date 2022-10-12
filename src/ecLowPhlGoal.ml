@@ -195,10 +195,12 @@ let tc1_get_stmt side tc =
 (* -------------------------------------------------------------------- *)
 let get_pre f =
   match f.f_node with
-  | FhoareF hf  -> Some (hf.hf_pr)
-  | FhoareS hs  -> Some (hs.hs_pr)
+  | FhoareF hf   -> Some (hf.hf_pr )
+  | FhoareS hs   -> Some (hs.hs_pr )
   | FcHoareF hf  -> Some (hf.chf_pr)
   | FcHoareS hs  -> Some (hs.chs_pr)
+  | FeHoareF hf  -> Some (hf.ehf_pr)
+  | FeHoareS hs  -> Some (hs.ehs_pr)
   | FbdHoareF hf -> Some (hf.bhf_pr)
   | FbdHoareS hs -> Some (hs.bhs_pr)
   | FequivF ef   -> Some (ef.ef_pr )
@@ -213,10 +215,12 @@ let tc1_get_pre tc =
 (* -------------------------------------------------------------------- *)
 let get_post f =
   match f.f_node with
-  | FhoareF hf  -> Some (hf.hf_po )
-  | FhoareS hs  -> Some (hs.hs_po )
-  | FcHoareF hf  -> Some (hf.chf_po )
-  | FcHoareS hs  -> Some (hs.chs_po )
+  | FhoareF hf   -> Some (hf.hf_po )
+  | FhoareS hs   -> Some (hs.hs_po )
+  | FcHoareF hf  -> Some (hf.chf_po)
+  | FcHoareS hs  -> Some (hs.chs_po)
+  | FeHoareF hf  -> Some (hf.ehf_po)
+  | FeHoareS hs  -> Some (hs.ehs_po)
   | FbdHoareF hf -> Some (hf.bhf_po)
   | FbdHoareS hs -> Some (hs.bhs_po)
   | FequivF ef   -> Some (ef.ef_po )
@@ -231,8 +235,10 @@ let tc1_get_post tc =
 (* -------------------------------------------------------------------- *)
 let set_pre ~pre f =
   match f.f_node with
- | FhoareF hf  -> f_hoareF pre hf.hf_f hf.hf_po
- | FhoareS hs  -> f_hoareS_r { hs with hs_pr = pre }
+ | FhoareF hf   -> f_hoareF pre hf.hf_f hf.hf_po
+ | FhoareS hs   -> f_hoareS_r { hs with hs_pr = pre }
+ | FeHoareF hf  -> f_eHoareF_r { hf with ehf_pr = pre }
+ | FeHoareS hs  -> f_eHoareS_r { hs with ehs_pr = pre }
  | FcHoareF hf  -> f_cHoareF pre hf.chf_f hf.chf_po hf.chf_co
  | FcHoareS hs  -> f_cHoareS_r { hs with chs_pr = pre }
  | FbdHoareF hf -> f_bdHoareF pre hf.bhf_f hf.bhf_po hf.bhf_cmp hf.bhf_bd
