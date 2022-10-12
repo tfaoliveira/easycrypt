@@ -363,6 +363,15 @@ proof. case x => // x /xler_wpmul2l; apply. qed.
 lemma xler_mul (x y z t : xreal) : x <= y => z <= t => x * z <= y * t.
 proof. by move=> /(xler_mulr z) h1 /(xler_mull y); apply xle_trans. qed.
 
+lemma xler_md x y c : ((0%r < c) => x <= y) => c ** x <= c ** y.
+proof.
+  move=> h; rewrite /( **).
+  case: (0%r < c ) => hc.
+  + have -> /=: (c%rp <> 0%rp) by smt(to_realP of_realK to_realK_simpl).
+    by apply/xler_mull/h.
+  by have -> : (c%rp = 0%rp) by smt(of_real_neg).
+qed.
+
 (* -------------------------------------------------------------- *)
 
 lemma is_real_le x y : x <= y => is_real y => is_real x.
@@ -444,6 +453,15 @@ theory Lift.
 
   lemma mdAC ['a] (d : 'a distr) f y : d ** (fun z => f z * rp y) = fun z => rp y * (d ** f) z.
   proof. by apply fun_ext => z; rewrite smulmAC. qed.
+
+  lemma is_real_le (f g : 'a -> xreal) : (forall (x : 'a), f x <= g x) =>
+     is_real g => is_real f.
+  proof. move=> hfg hg x; apply/(is_real_le _ (g x)); [apply/hfg | apply/hg]. qed.
+
+  lemma is_real_le_md (d:'a distr) (f g : 'a -> xreal) : 
+    (forall (x : 'a), x \in d => f x <= g x) =>
+    is_real (d ** g) => is_real (d ** f).
+  proof. move=> h; apply is_real_le => //= x; apply/xler_md/h. qed.
 
   lemma is_realZ ['a] c (f : 'a -> xreal) : is_real (fun x => rp c * f x) <=> is_real f.
   proof. by split => h x; have := h x; rewrite is_realZ. qed.
@@ -590,20 +608,54 @@ proof.
   by case: (summable (to_real f1)); case (summable (to_real f2)) => // hs1 hs2 /=; apply/hs/summableD.
 qed.
 
+lemma le_psuminf (f g : 'a -> xreal) :
+  (forall (x : 'a), f x <= g x) => 
+  is_real g => 
+  psuminf f <= psuminf g.
+proof.
+  rewrite /psuminf => h hg.
+  case: (summable (to_real g)) => // hgs.
+  have h1 : forall (x : 'a), 0%r <= to_real f x && to_real f x <= to_real g x by smt(Rp.to_realP).
+  have -> /= := summable_le_pos (to_real f) (to_real g) hgs h1. 
+  have /# := ler_sum_pos (to_real f) (to_real g) h1 hgs.
+qed.
+
 lemma eq_Ep ['a] (d : 'a distr) (f g : 'a -> xreal) :
   (forall (x : 'a), x \in d => f x = g x) => 
   Ep d f = Ep d g.
 proof. by rewrite /Ep /= => /eq_md ->. qed.
 
-lemma EpC ['a] (d : 'a distr) (c : realp):
-   Ep d (fun (_ : 'a) => rp c) = rp (c * of_real (weight d)).
+lemma le_Ep ['a] (d: 'a distr) (f g : 'a -> xreal) : 
+   (forall (x : 'a), x \in d => f x <= g x) => 
+  Ep d f <= Ep d g.
 proof.
-  rewrite /Ep /= is_real_rp /=. 
-  rewrite /psuminf /= to_real_rp /=.
-  have -> : (fun (x : 'a) => mu1 d x * to_real c) = (fun (x : 'a) => to_real c * mu1 d x ).
-  + by apply fun_ext => x; apply RField.mulrC.
-  have /summableZ /= -> /= := summable_mu1 d.
-  rewrite sumZ /= of_realM // 1: ge0_sum //= weightE; do 3! congr.
+  rewrite /Ep /= => h; case: (is_real (d ** g)) => //.
+  move=> h1; rewrite (is_real_le_md _ _ _ h h1) /=.
+  apply le_psuminf => //= x; apply/xler_md/h.
+qed.
+
+lemma EpC ['a] (d : 'a distr) (c : xreal):
+   Ep d (fun (_ : 'a) => c) = (weight d) ** c.
+proof.
+  case: c => [c | ].
+  + rewrite /Ep /= is_real_rp /=. 
+    rewrite /psuminf /= to_real_rp /=.
+    have -> : (fun (x : 'a) => mu1 d x * to_real c) = (fun (x : 'a) => to_real c * mu1 d x ).
+    + by apply fun_ext => x; apply RField.mulrC.
+    have /summableZ /= -> /= := summable_mu1 d.
+    by rewrite mulmC sumZ /= of_realM // 1: ge0_sum //= weightE; do 3! congr.
+  rewrite /Ep /=; case: (weight d = 0%r) => hw.
+  + have hx : forall x, mu1 d x = 0%r.
+    + move=> x; have := mu_le_weight d (pred1 x); smt(mu_bounded).
+    have -> : (fun (x : 'a) => mu1 d x ** oo) = (fun (x:'a) => 0%xr). 
+    + by apply fun_ext => x; rewrite hx.
+    by rewrite is_real_rp /= /psuminf /= to_real_rp /= summable0 /= sum0 hw.
+  rewrite /( **) /=. 
+  have -> : !is_real (fun (x : 'a) => if (mu1 d x)%rp = 0%rp then 0%xr else oo).
+  + apply/negP => his.
+    move/neq0_mu : hw => -[x [hx _]].
+    by have := his x; smt(of_realK to_realP ge0_weight).
+  by have -> : (weight d)%rp <> 0%rp by smt(of_realK to_realP ge0_weight).
 qed.
 
 lemma EpZ ['a] (d: 'a distr) (c:realp) (f: 'a -> xreal) :
@@ -670,7 +722,7 @@ lemma Ep_duniform ['a] (s : 'a list) (f : 'a -> xreal) :
 proof.
   rewrite (Ep_fin (undup s)) 1:undup_uniq.
   + move=> x hx; rewrite mem_undup -supp_duniform; smt(ge0_mu).
-  rewrite mulr_sumr; apply eq_big_seq => //= x; rewrite mem_undup => hx.
+  rewrite mulr_sumr; apply eq_big_seq => /= x; rewrite mem_undup => hx.
   by rewrite duniform1E hx.
 qed.
 
@@ -678,7 +730,7 @@ qed.
 lemma Ep_dbool (f : bool -> xreal) :
   Ep {0,1} f = of_real 0.5 ** f true + of_real 0.5 ** f false.
 proof.
-  rewrite (Ep_fin [true; false]) //; 1: smt(supp_dbool).
+  rewrite (Ep_fin [true; false]) 1://; 1: smt(supp_dbool).
   by rewrite big_consT big_seq1 /= !dbool1E.
 qed.
 
@@ -703,27 +755,41 @@ proof. by move=> h; rewrite Ep_dinterval h. qed.
 op (`|`) (b:bool) (x : xreal) = 
    if b then x else oo.
 
-lemma xle_interp_form b1 b2 (f1 f2 : xreal): 
+lemma cxr_true (x:xreal) : true `|` x = x
+by [].
+hint simplify cxr_true.
+
+lemma cxrA (b1 b2 : bool) (f : xreal) : b1 `|` (b2 `|` f) = (b1 /\ b2) `|` f.
+proof. rewrite /(`|`) /#. qed.
+hint simplify cxrA.
+
+lemma xle_cxr_l b (f1 f2 : xreal) : (b => f1 <= f2) => f1 <= (b `|` f2).
+proof. by rewrite /(`|`); case:b. qed.
+
+lemma xle_cxr_r b (f1 f2 : xreal) : b => f1 <= f2 => (b `|` f1) <= f2.
+proof. move=> />. qed.
+
+lemma xle_cxr b1 b2 (f1 f2 : xreal): 
   (b2 => (b1 /\ f1 <= f2)) => 
   xle (b1 `|` f1) (b2 `|` f2).
-proof. by rewrite /(`|`); case: b2 => />. qed.
+proof. move=> h; apply xle_cxr_l => /h />. qed.
 
-lemma xle_interp_form_b b1 b2 f : 
+lemma xle_cxr_b b1 b2 f : 
    (b1 => b2) =>
    b2 `|` f <= b1 `|` f.
-proof. by move=> h; apply xle_interp_form. qed.
+proof. move=> h; apply xle_cxr_l => /h />. qed.
 
-lemma xle_interp_form_f b (f1 f2 : xreal) : 
+lemma xle_cxr_f b (f1 f2 : xreal) : 
    (b => f1 <= f2) =>
    b `|` f1 <= b `|` f2.
-proof. by move=> h;apply xle_interp_form => />. qed.
+proof. by move=> h;apply xle_cxr => />. qed.
 
 (* TODO: move this *)
 lemma Rp_to_real_eq (x y : realp) : (x = y) <=> (to_real x = to_real y).
 proof. smt(to_realKd). qed.
 
 (* -------------------------------------------------------------------- *)
-lemma Ep_interp_form (d:'a distr) (b:'a -> bool) (f:'a -> xreal) : 
+lemma Ep_cxr (d:'a distr) (b:'a -> bool) (f:'a -> xreal) : 
   Ep d (fun x => b x `|` f x) = 
   (forall x, x \in d => b x) `|` Ep d f. 
 proof.
@@ -739,23 +805,30 @@ proof.
   rewrite /( **) Rp_to_real_eq /=; smt(ge0_mu1).
 qed.
 
-lemma if_interp_form (b b1 b2:bool) (f1 f2: xreal) : 
+lemma if_cxr (b b1 b2:bool) (f1 f2: xreal) : 
   (if b then (b1 `|` f1) else (b2 `|` f2)) = 
   (if b then b1 else b2) `|` if b then f1 else f2.
 proof. smt(). qed.
 
-lemma if_interp_forml (b b1:bool) (f1 f2: xreal) : 
+lemma if_cxr_l (b b1:bool) (f1 f2: xreal) : 
   (if b then (b1 `|` f1) else f2) = 
   (b => b1) `|` if b then f1 else f2
 by smt().
 
-lemma if_interp_formr (b b2:bool) (f1 f2: xreal) : 
+lemma if_cxr_r (b b2:bool) (f1 f2: xreal) : 
   (if b then f1 else (b2 `|` f2) ) = 
   (!b => b2) `|` if b then f1 else f2
 by smt().
 
-lemma intern_form_true x : true `|` x = x
-by done.
+lemma cxrDl b (f1 f2:xreal) : b `|` f1 + f2 = b `|` (f1 + f2).
+proof. by rewrite /(`|`); case: b. qed.
+
+lemma cxrDr b (f1 f2:xreal) : f1 + (b `|` f2)  = b `|` (f1 + f2).
+proof. by rewrite /(`|`); case: b. qed.
+hint simplify cxrDl, cxrDr.
+(* FIXME: be able to add this 
+ if_cxr, if_cxr_l, if_cxr_r.
+*)
 
 (* -------------------------------------------------------------------- *)
 (* Concavity                                                            *)
@@ -856,12 +929,18 @@ proof.
   apply increasing_cst.
 qed.
 
-hint solve 0 concave_incr : concave_incr_cst concave_incr_id concave_incrD concave_incrMr concave_incrMl.
+hint solve 0 concave_incr : 
+  concave_incr_cst concave_incr_id.
 
+hint solve 1 concave_incr :
+  concave_incrD concave_incrMr concave_incrMl.
 
+lemma concave_incr_cxr (b:bool) (f : xreal -> xreal) : 
+  concave_incr f => concave_incr (fun x => b `|` f x).
+proof. by case b. qed.
 
- 
+lemma concave_incr_if (b:bool) (f1 f2: xreal -> xreal) : 
+  concave_incr f1 => concave_incr f2 => concave_incr (fun x => if b then f1 x else f2 x).
+proof. by case b. qed.
 
-
-
-
+hint solve 2 concave_incr : concave_incr_cxr concave_incr_if.

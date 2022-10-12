@@ -402,6 +402,7 @@
 %token BY
 %token BYEQUIV
 %token BYPHOARE
+%token BYEHOARE
 %token BYPR
 %token CALL
 %token CASE
@@ -3209,6 +3210,9 @@ phltactic:
 
 | BYPHOARE info=gpterm(conseq)?
     { Pbydeno (`PHoare, (mk_rel_pterm info, true, None)) }
+
+| BYEHOARE info=gpterm(conseq)?
+    { Pbydeno (`EHoare, (mk_rel_pterm info, true, None)) }
 
 | BYEQUIV eq=bracket(byequivopt)? info=gpterm(conseq)?
     { Pbydeno (`Equiv, (mk_rel_pterm info, odfl true eq, None)) }

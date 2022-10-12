@@ -109,12 +109,20 @@ module CI_xint = struct
 end
 
 module CI_Xreal = struct
+
   let i_Xreal  = "Xreal"
   let p_Xreal  = EcPath.pqname p_top i_Xreal
   let _Xreal   = fun x -> EcPath.pqname p_Xreal x
   let mk_Xreal = _Xreal
+
+  let p_Rp     = _Xreal "Rp"
+  let mk_Rp    = fun x -> EcPath.pqname p_Rp x
+
   let p_Rpbar  = _Xreal "Rpbar"
   let mk_Rpbar = fun x -> EcPath.pqname p_Rpbar x
+
+  let p_realp   = mk_Rp "realp"
+  let p_of_real = mk_Rp "of_real"
 
   let p_xreal   = mk_Rpbar "xreal"
   let p_rp      = mk_Rpbar "rp"

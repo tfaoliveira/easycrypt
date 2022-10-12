@@ -10,4 +10,4 @@ val t_equiv_deno  : form -> form -> backward
 (* -------------------------------------------------------------------- *)
 type denoff = deno_ppterm * bool * pformula option
 
-val process_deno : [`PHoare | `Equiv] -> denoff -> backward
+val process_deno : [`PHoare | `EHoare | `Equiv] -> denoff -> backward

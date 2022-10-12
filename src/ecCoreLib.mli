@@ -128,6 +128,10 @@ end
 (* -------------------------------------------------------------------- *)
 module CI_Xreal : sig
   val p_Xreal        : path
+
+  val p_realp        : path
+  val p_of_real      : path
+
   val p_xreal        : path
   val p_rp           : path
   val p_inf          : path

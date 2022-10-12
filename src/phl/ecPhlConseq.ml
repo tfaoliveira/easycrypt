@@ -593,7 +593,8 @@ let t_ehoareS_concave fc (* xreal -> xreal *) pre post tc =
   FApi.xmutate1 tc `HlConseq [g0; g1; g2; g3]
 
 let t_concave_incr =
-  FApi.t_seq (t_intro_s `Fresh) (t_solve ~bases:["concave_incr"] ~canfail:true ~depth:2)
+  FApi.t_seq (t_intro_s `Fresh)
+    (t_solve ~bases:["concave_incr"] ~mode:EcMatching.fmrigid ~canfail:true ~depth:20)
 
 let process_concave ((info, fc) : pformula option tuple2 gppterm * pformula) tc =
   let hyps, concl = FApi.tc1_flat tc in

@@ -44,7 +44,12 @@ module Low = struct
     let hs = tc1_as_ehoareS tc in
     let m  = EcMemory.memory hs.ehs_m in
     let hd,_,e,s = gen_rcond !!tc b m at_pos hs.ehs_s in
-    let concl1  = f_hoareS hs.ehs_m hs.ehs_pr hd e in
+    let pre =
+      match destr_app hs.ehs_pr with
+      | o, pre :: _ when f_equal o fop_interp_ehoare_form -> pre
+      | _ -> tc_error !!tc "the pre should have the form \"_ `|` _\"" in
+
+    let concl1  = f_hoareS hs.ehs_m pre hd e in
     let concl2  = f_eHoareS_r { hs with ehs_s = s } in
     FApi.xmutate1 tc `RCond [concl1; concl2]
 
@@ -96,7 +101,7 @@ module Low = struct
 
   (* ------------------------------------------------------------------ *)
   let t_hoare_rcond   = FApi.t_low2 "hoare-rcond"   t_hoare_rcond_r
-  let t_ehoare_rcond  = FApi.t_low2 "ehoare-rcond" t_ehoare_rcond_r
+  let t_ehoare_rcond  = FApi.t_low2 "ehoare-rcond"  t_ehoare_rcond_r
   let t_choare_rcond  = FApi.t_low3 "choare-rcond"  t_choare_rcond_r
   let t_bdhoare_rcond = FApi.t_low2 "bdhoare-rcond" t_bdhoare_rcond_r
   let t_equiv_rcond   = FApi.t_low3 "equiv-rcond"   t_equiv_rcond_r
@@ -113,8 +118,11 @@ let t_rcond side b at_pos c tc =
   | None when is_bdHoareS concl ->
     check_none (); Low.t_bdhoare_rcond b at_pos tc
   | None when is_cHoareS concl  -> Low.t_choare_rcond b at_pos c tc
-  | None ->
+  | None when is_hoareS concl ->
     check_none (); Low.t_hoare_rcond b at_pos tc
+  | None ->
+    check_none (); Low.t_ehoare_rcond b at_pos tc
+
   | Some side ->
     check_none (); Low.t_equiv_rcond side b at_pos tc
 

@@ -729,7 +729,7 @@ type phltactic =
   | Phrex_intro    of (pformula list * bool)
   | Phecall        of (oside * (pqsymbol * ptyannot option * pformula list))
   | Pexfalso
-  | Pbydeno        of ([`PHoare | `Equiv ] * (deno_ppterm * bool * pformula option))
+  | Pbydeno        of ([`PHoare | `Equiv | `EHoare ] * (deno_ppterm * bool * pformula option))
   | PPr            of (pformula * pformula) option
   | Pfel           of (codepos1 * fel_info)
   | Phoare

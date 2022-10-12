@@ -14,10 +14,10 @@ let t_hoare_case_r ?(simplify = true) f tc =
 (* --------------------------------------------------------------------- *)
 
 let t_ehoare_case_r ?(simplify = true) f tc =
-  let fand = if simplify then f_and_simpl else f_and in
+  let _ = simplify in
   let hs = tc1_as_ehoareS tc in
-  let concl1 = f_eHoareS_r { hs with ehs_pr = fand hs.ehs_pr f } in
-  let concl2 = f_eHoareS_r { hs with ehs_pr = fand hs.ehs_pr (f_not f) } in
+  let concl1 = f_eHoareS_r { hs with ehs_pr = f_interp_ehoare_form f hs.ehs_pr } in
+  let concl2 = f_eHoareS_r { hs with ehs_pr = f_interp_ehoare_form (f_not f) hs.ehs_pr} in
   FApi.xmutate1 tc (`HlCase f) [concl1; concl2]
 
 let t_choare_case_r ?(simplify = true) f tc =
