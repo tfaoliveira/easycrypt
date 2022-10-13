@@ -136,6 +136,12 @@ lemma to_pos_pos (x:real) : 0.0 <= x => x%pos = x.
 proof. by rewrite /(%pos) => ->. qed.
 hint simplify to_pos_pos @10.
 
+lemma le_pos (x y : real) : x <= y => x%pos <= y%pos
+by smt(). 
+
+lemma inv_pos x : inv x%pos = (inv x)%pos
+by smt(divr0).
+
 lemma to_real_of_real (x:real) : x%rp%r = x%pos.
 proof. by rewrite val_of_real witness_0. qed.
 hint simplify to_real_of_real.
@@ -288,6 +294,10 @@ proof. by rewrite /( ** ); case: (x = of_real 0.0). qed.
 hint simplify smulrp.
 
 (* -------------------------------------------------------------- *)
+
+lemma xle0x x : 0%xr <= x.
+proof. by case: x. qed.
+
 lemma xlexx x : x <= x.
 proof. by case: x. qed.
 
@@ -763,21 +773,21 @@ lemma cxrA (b1 b2 : bool) (f : xreal) : b1 `|` (b2 `|` f) = (b1 /\ b2) `|` f.
 proof. rewrite /(`|`) /#. qed.
 hint simplify cxrA.
 
-lemma xle_cxr_l b (f1 f2 : xreal) : (b => f1 <= f2) => f1 <= (b `|` f2).
+lemma xle_cxr_r b (f1 f2 : xreal) : (b => f1 <= f2) => f1 <= (b `|` f2).
 proof. by rewrite /(`|`); case:b. qed.
 
-lemma xle_cxr_r b (f1 f2 : xreal) : b => f1 <= f2 => (b `|` f1) <= f2.
+lemma xle_cxr_l b (f1 f2 : xreal) : b => f1 <= f2 => (b `|` f1) <= f2.
 proof. move=> />. qed.
 
 lemma xle_cxr b1 b2 (f1 f2 : xreal): 
   (b2 => (b1 /\ f1 <= f2)) => 
-  xle (b1 `|` f1) (b2 `|` f2).
-proof. move=> h; apply xle_cxr_l => /h />. qed.
+  (b1 `|` f1) <= (b2 `|` f2).
+proof. move=> h; apply xle_cxr_r => /h />. qed.
 
 lemma xle_cxr_b b1 b2 f : 
    (b1 => b2) =>
    b2 `|` f <= b1 `|` f.
-proof. move=> h; apply xle_cxr_l => /h />. qed.
+proof. move=> h; apply xle_cxr_r => /h />. qed.
 
 lemma xle_cxr_f b (f1 f2 : xreal) : 
    (b => f1 <= f2) =>
@@ -870,6 +880,8 @@ proof.
 qed.
 
 hint solve 0 concave : concave_cst concave_id concaveD concaveMr concaveMl.
+
+(* TODO: add Jenshen inequality lemma *)
 
 (* -------------------------------------------------------------------- *)
 (* Increasing                                                           *)

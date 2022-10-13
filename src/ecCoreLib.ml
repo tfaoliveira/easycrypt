@@ -139,6 +139,7 @@ module CI_Xreal = struct
   let p_Ep      = mk_Xreal "Ep"
   let p_concave_incr = mk_Xreal "concave_incr"
 
+  let p_xle_cxr_l = mk_Xreal "xle_cxr_l"
   let p_xle_cxr_r = mk_Xreal "xle_cxr_r"
 end
 

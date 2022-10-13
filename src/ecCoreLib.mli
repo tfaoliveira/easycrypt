@@ -144,6 +144,7 @@ module CI_Xreal : sig
   val p_Ep           : path
   val p_concave_incr : path
 
+  val p_xle_cxr_l : path
   val p_xle_cxr_r : path
 end
 

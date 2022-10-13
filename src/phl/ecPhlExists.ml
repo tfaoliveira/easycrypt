@@ -56,11 +56,10 @@ let t_hr_exists_intro_r fs tc =
     match concl.f_node with
     | FeHoareF _ | FeHoareS _ -> true
     | _ -> false in
-  let ex, pre   =
+  let pre   =
     if is_ehoare then
-      let ex = (f_exists bd (f_ands eqs)) in
-      ex, f_interp_ehoare_form ex pre1
-    else f_true, f_exists bd (f_and (f_ands eqs) pre1) in
+      f_interp_ehoare_form (f_exists bd (f_ands eqs)) pre1
+    else f_exists bd (f_and (f_ands eqs) pre1) in
 
   let h = LDecl.fresh_id hyps "h" in
   let ms, subst =
@@ -86,23 +85,15 @@ let t_hr_exists_intro_r fs tc =
 
   let t_exists =
     if is_ehoare then
-
-       FApi.t_seq (t_intros_i ms)
-        (FApi.t_seqsub
-          (EcHiGoal.t_apply_prept (PT.Prept.uglob EcCoreLib.CI_Xreal.p_xle_cxr_r))
-          [ FApi.t_seq (t_exists_intro_s args) t_trivial;
-            t_trivial])
- (*        (EcHiGoal.t_apply_prept
-           PT.Prept.(glob EcCoreLib.CI_Xreal.p_xle_cxr_r [] @ List.map aform [ex; pre1; pre1]))
-*)
-(*         (t_apply_s EcCoreLib.CI_Xreal.p_xle_cxr_r [] ~args:[ex;pre1;pre1] ~sk:0) *)
-(*         [ FApi.t_seq (t_exists_intro_s args) t_trivial;
-           t_trivial]) *)
+       t_intros_i ms @!
+       EcHiGoal.t_apply_prept (PT.Prept.uglob EcCoreLib.CI_Xreal.p_xle_cxr_l) @+
+       [ t_exists_intro_s args @! t_trivial;
+         t_trivial]
     else FApi.t_seqs  [t_intros_i (ms@[h]); t_exists_intro_s args; t_apply_hyp h]
   in
 
   let tactic =
-    FApi.t_seqsub (EcPhlConseq.t_conseq pre post)
+    (EcPhlConseq.t_conseq pre post) @+
       [ t_exists;
         t_trivial;
         t_id]

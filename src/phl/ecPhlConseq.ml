@@ -550,11 +550,11 @@ let t_ehoareF_concave fc pre post tc =
     f_forall_mems [EcMemory.empty_local ~witharg:false m] (f_concave_incr fc) in
 
   let g1 =
-    let cond = f_xreal_le (f_app fc [pre] txreal) hf.ehf_pr in
+    let cond = f_xreal_le (f_app_simpl fc [pre] txreal) hf.ehf_pr in
     f_forall_mems [mpr] cond in
 
   let g2 =
-    let cond = f_xreal_le hf.ehf_po (f_app fc [post] txreal) in
+    let cond = f_xreal_le hf.ehf_po (f_app_simpl fc [post] txreal) in
     f_forall_mems [mpo] cond in
 
   let g3 =
@@ -592,9 +592,71 @@ let t_ehoareS_concave fc (* xreal -> xreal *) pre post tc =
 
   FApi.xmutate1 tc `HlConseq [g0; g1; g2; g3]
 
+(* -------------------------------------------------------------------- *)
 let t_concave_incr =
-  FApi.t_seq (t_intro_s `Fresh)
-    (t_solve ~bases:["concave_incr"] ~mode:EcMatching.fmrigid ~canfail:true ~depth:20)
+  FApi.t_try
+    (FApi.t_seq (t_intro_s `Fresh)
+       (t_solve ~bases:["concave_incr"] ~mode:EcMatching.fmrigid ~canfail:true ~depth:20))
+
+(* -------------------------------------------------------------------- *)
+let t_ehoare_conseq_nm_end hyps =
+  let t_apply_prept pt tc =
+    EcLowGoal.Apply.t_apply_bwd_r (PT.pt_of_prept tc pt) tc in
+
+  let (m, h) = as_seq2 (LDecl.fresh_ids hyps ["&m"; "h"]) in
+  [ t_concave_incr;
+    t_id;
+    t_id (*FApi.t_seqs [
+      t_intro_s (`Ident m);
+      t_apply_prept (PT.Prept.uglob EcCoreLib.CI_Xreal.p_xle_cxr_r);
+      t_intro_s (`Ident h);
+      t_apply_prept (PT.Prept.hyp h) ] *);
+    t_id ]
+
+(* -------------------------------------------------------------------- *)
+let t_ehoareF_conseq_nm pre post tc =
+  let (env, hyps, _) = FApi.tc1_eflat tc in
+  let hf = tc1_as_ehoareF tc in
+  let f = hf.ehf_f in
+  let _mpr,mpo = Fun.hoareF_memenv f env in
+  let fsig = (Fun.by_xpath f env).f_sig in
+  let _cond1, cond2 = conseq_econd hf.ehf_pr hf.ehf_po pre post in
+
+  let pvres = pv_res in
+  let vres = LDecl.fresh_id hyps "result" in
+  let fres = f_local vres fsig.fs_ret in
+  let m    = fst mpo in
+  let s = PVM.add env pvres m fres PVM.empty in
+  let cond = PVM.subst env s cond2 in
+
+  let modi = f_write env f in
+  let cond,_,_ = generalize_mod_ env m modi cond in
+  let cond = f_forall_simpl [(vres, GTty fsig.fs_ret)] cond in
+
+  let fc =
+    let x = EcIdent.create "x" in
+    f_lambda [x,GTty txreal] (f_interp_ehoare_form cond (f_local x txreal)) in
+
+  (t_ehoareF_concave fc pre post @+ t_ehoare_conseq_nm_end hyps) tc
+
+(* -------------------------------------------------------------------- *)
+let t_ehoareS_conseq_nm pre post tc =
+  let (env, hyps, _) = FApi.tc1_eflat tc in
+  let hs = tc1_as_ehoareS tc in
+  let s = hs.ehs_s in
+  let m = fst hs.ehs_m in
+  let modi = s_write env s in
+  let _cond1, cond2 = conseq_econd hs.ehs_pr hs.ehs_po pre post in
+  let cond, _bdg, _bde = generalize_mod_ env m modi cond2 in
+
+  let fc =
+    let x = EcIdent.create "x" in
+    f_lambda [x,GTty txreal] (f_interp_ehoare_form cond (f_local x txreal)) in
+
+  (t_ehoareS_concave fc pre post @+ t_ehoare_conseq_nm_end hyps) tc
+
+
+(* -------------------------------------------------------------------- *)
 
 let process_concave ((info, fc) : pformula option tuple2 gppterm * pformula) tc =
   let hyps, concl = FApi.tc1_flat tc in
@@ -651,6 +713,10 @@ let process_concave ((info, fc) : pformula option tuple2 gppterm * pformula) tc 
        (FApi.t_on1seq 3 (t_ehoareF_concave fc hf.ehf_pr hf.ehf_po) t_apply_r tc)
 
   | _ -> tc_error !!tc "conseq concave: not a ehoare judgement"
+
+
+
+
 
 
 (* -------------------------------------------------------------------- *)
@@ -1042,12 +1108,14 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   (* ------------------------------------------------------------------ *)
   (* ehoareS / ehoareS / ⊥ / ⊥                                            *)
   | FeHoareS _, Some ((_, {f_node = FeHoareS hs}) as nf1), None, None ->
-    t_on1 2 (t_apply_r nf1) (t_ehoareS_conseq hs.ehs_pr hs.ehs_po tc)
+    let tac = if notmod then t_ehoareS_conseq_nm else t_ehoareS_conseq in
+    FApi.t_last (t_apply_r nf1) (tac hs.ehs_pr hs.ehs_po tc)
 
   (* ------------------------------------------------------------------ *)
   (* ehoareF / ehoareF / ⊥ / ⊥                                            *)
   | FeHoareF _, Some ((_, {f_node = FeHoareF hf}) as nf1), None, None ->
-    t_on1 2 (t_apply_r nf1) (t_ehoareF_conseq hf.ehf_pr hf.ehf_po tc)
+    let tac = if notmod then t_ehoareF_conseq_nm else t_ehoareF_conseq in
+    FApi.t_last (t_apply_r nf1) (tac hf.ehf_pr hf.ehf_po tc)
 
   (* ------------------------------------------------------------------ *)
   (* bdhoareS / bdhoareS / ⊥ / ⊥                                        *)
