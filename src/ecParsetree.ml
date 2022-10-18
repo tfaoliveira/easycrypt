@@ -731,6 +731,7 @@ type phltactic =
   | Pexfalso
   | Pbydeno        of ([`PHoare | `Equiv | `EHoare ] * (deno_ppterm * bool * pformula option))
   | PPr            of (pformula * pformula) option
+  | Pbyupto
   | Pfel           of (codepos1 * fel_info)
   | Phoare
   | Pprbounded

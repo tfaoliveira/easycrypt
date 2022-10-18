@@ -404,6 +404,7 @@
 %token BYPHOARE
 %token BYEHOARE
 %token BYPR
+%token BYUPTO
 %token CALL
 %token CASE
 %token CBV
@@ -3219,6 +3220,9 @@ phltactic:
 
 | BYEQUIV eq=bracket(byequivopt)? info=gpterm(conseq)? COLON bad1=sform
     { Pbydeno (`Equiv, (mk_rel_pterm info, odfl true eq, Some bad1)) }
+
+| BYUPTO
+    { Pbyupto }
 
 | CONSEQ SLASH fc=sform info=gpterm(conseq)
     { Pconcave (info, fc) }

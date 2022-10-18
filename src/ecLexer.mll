@@ -148,6 +148,7 @@
     "byphoare"    , BYPHOARE   ;        (* KW: tactic *)
     "byehoare"    , BYEHOARE   ;        (* KW: tactic *)
     "byequiv"     , BYEQUIV    ;        (* KW: tactic *)
+    "byupto"      , BYUPTO     ;        (* KW: tactic *)
     "fel"         , FEL        ;        (* KW: tactic *)
 
     "conseq"      , CONSEQ     ;        (* KW: tactic *)
