@@ -697,6 +697,26 @@ proof.
   by case: (is_real (d ** f1)) => />.
 qed.
 
+lemma Ep_mu (d:'a distr) (p:'a -> bool): 
+  Ep d (fun a => (p a)%xr) = (mu d p)%xr.
+proof.
+  rewrite /Ep /=.
+  rewrite (: (fun (x : 'a) => ((mu1 d x)%rp * (b2r (p x))%rp)%xr) = (d ** (fun x => (p x)%xr))) 1://.
+  have -> /= : is_real (d ** fun (x : 'a) => (p x)%xr) by apply is_real_sM.
+  rewrite /psuminf /to_real /= summable_mu1_wght /= 1:/# muE.
+  by congr; apply eq_sum => x /=; case: (p x).
+qed.
+
+lemma Ep_dlet (d:'a distr) (F: 'a -> 'b distr) f : 
+  Ep (dlet d F) f = Ep d (fun x => Ep (F x) f).
+proof.
+  admit.
+qed.
+
+lemma Ep_dmap (d:'a distr) (F: 'a -> 'b) (f: 'b -> xreal) : 
+  Ep (dmap d F) f = Ep d (fun x => f (F x)).
+proof. rewrite /dmap Ep_dlet; apply eq_Ep => x _ /=; apply Ep_dunit. qed.
+
 (* -------------------------------------------------------------------- *)
 lemma Ep_fin ['a] J (d : 'a distr) f : 
   uniq J => 
@@ -956,3 +976,5 @@ lemma concave_incr_if (b:bool) (f1 f2: xreal -> xreal) :
 proof. by case b. qed.
 
 hint solve 2 concave_incr : concave_incr_cxr concave_incr_if.
+
+
