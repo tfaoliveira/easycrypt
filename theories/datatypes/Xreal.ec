@@ -707,16 +707,6 @@ proof.
   by congr; apply eq_sum => x /=; case: (p x).
 qed.
 
-lemma Ep_dlet (d:'a distr) (F: 'a -> 'b distr) f : 
-  Ep (dlet d F) f = Ep d (fun x => Ep (F x) f).
-proof.
-  admit.
-qed.
-
-lemma Ep_dmap (d:'a distr) (F: 'a -> 'b) (f: 'b -> xreal) : 
-  Ep (dmap d F) f = Ep d (fun x => f (F x)).
-proof. rewrite /dmap Ep_dlet; apply eq_Ep => x _ /=; apply Ep_dunit. qed.
-
 (* -------------------------------------------------------------------- *)
 lemma Ep_fin ['a] J (d : 'a distr) f : 
   uniq J => 
@@ -744,6 +734,16 @@ proof.
   rewrite (Ep_fin [x]) //; 1: by move=> x'; rewrite dunit1E /#.
   by rewrite big_seq1 /( ** ) /= dunit1E /= one_neq0.
 qed.
+
+lemma Ep_dlet (d:'a distr) (F: 'a -> 'b distr) f : 
+  Ep (dlet d F) f = Ep d (fun x => Ep (F x) f).
+proof.
+  admit.
+qed.
+
+lemma Ep_dmap (d:'a distr) (F: 'a -> 'b) (f: 'b -> xreal) : 
+  Ep (dmap d F) f = Ep d (fun x => f (F x)).
+proof. rewrite /dmap Ep_dlet; apply eq_Ep => x _ /=; apply Ep_dunit. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma Ep_duniform ['a] (s : 'a list) (f : 'a -> xreal) :
