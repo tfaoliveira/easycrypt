@@ -569,6 +569,17 @@ let is_alpha_eq hyps f1 f2 =
       aux env subst hs1.hs_pr hs2.hs_pr;
       aux env subst hs1.hs_po hs2.hs_po
 
+    | FeHoareF hf1, FeHoareF hf2 ->
+      check_xp env subst hf1.ehf_f hf2.ehf_f;
+      aux env subst hf1.ehf_pr hf2.ehf_pr;
+      aux env subst hf1.ehf_po hf2.ehf_po
+
+    | FeHoareS hs1, FeHoareS hs2 ->
+      check_s env subst hs1.ehs_s hs2.ehs_s;
+      (* FIXME should check the memenv *)
+      aux env subst hs1.ehs_pr hs2.ehs_pr;
+      aux env subst hs1.ehs_po hs2.ehs_po
+
     | FbdHoareF hf1, FbdHoareF hf2 ->
       ensure (hf1.bhf_cmp = hf2.bhf_cmp);
       check_xp env subst hf1.bhf_f hf2.bhf_f;
@@ -1398,6 +1409,10 @@ let rec simplify ri env f =
       let hf_f = EcEnv.NormMp.norm_xfun env hf.hf_f in
       f_map (fun ty -> ty) (simplify ri env) (f_hoareF_r { hf with hf_f })
 
+  | FeHoareF hf when ri.ri.modpath ->
+      let ehf_f = EcEnv.NormMp.norm_xfun env hf.ehf_f in
+      f_map (fun ty -> ty) (simplify ri env) (f_eHoareF_r { hf with ehf_f })
+
   | FbdHoareF hf when ri.ri.modpath ->
       let bhf_f = EcEnv.NormMp.norm_xfun env hf.bhf_f in
       f_map (fun ty -> ty) (simplify ri env) (f_bdHoareF_r { hf with bhf_f })
@@ -1497,6 +1512,10 @@ let zpop ri side f hd =
     f_hoareF_r {hf with hf_pr = pr; hf_po = po }
   | Zhl {f_node = FhoareS hs}, [pr;po] ->
     f_hoareS_r {hs with hs_pr = pr; hs_po = po }
+  | Zhl {f_node = FeHoareF hf}, [pr;po] ->
+    f_eHoareF_r {hf with ehf_pr = pr; ehf_po = po }
+  | Zhl {f_node = FeHoareS hs}, [pr;po] ->
+    f_eHoareS_r {hs with ehs_pr = pr; ehs_po = po }
   | Zhl {f_node = FbdHoareF hf}, [pr;po;bd] ->
     f_bdHoareF_r {hf with bhf_pr = pr; bhf_po = po; bhf_bd = bd}
   | Zhl {f_node = FbdHoareS hs}, [pr;po;bd] ->
@@ -1623,6 +1642,13 @@ let rec conv ri env f1 f2 stk =
   | FhoareS hs1, FhoareS hs2
       when EqTest_i.for_stmt env hs1.hs_s hs2.hs_s ->
     conv ri env hs1.hs_pr hs2.hs_pr (zhl f1 [hs1.hs_po] [hs2.hs_po] stk)
+
+  | FeHoareF hf1, FeHoareF hf2 when EqTest_i.for_xp env hf1.ehf_f hf2.ehf_f ->
+    conv ri env hf1.ehf_pr hf2.ehf_pr (zhl f1 [hf1.ehf_po] [hf2.ehf_po] stk)
+
+  | FeHoareS hs1, FeHoareS hs2
+      when EqTest_i.for_stmt env hs1.ehs_s hs2.ehs_s ->
+    conv ri env hs1.ehs_pr hs2.ehs_pr (zhl f1 [hs1.ehs_po] [hs2.ehs_po] stk)
 
   | FbdHoareF hf1, FbdHoareF hf2
       when EqTest_i.for_xp env hf1.bhf_f hf2.bhf_f && hf1.bhf_cmp = hf2.bhf_cmp  ->
