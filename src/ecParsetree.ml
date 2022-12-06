@@ -100,6 +100,8 @@ type plvalue_r =
 
 and plvalue = plvalue_r located
 
+and plabel = psymbol
+
 type pinstr_r =
   | PSident  of psymbol
   | PSasgn   of plvalue * pexpr
@@ -108,6 +110,7 @@ type pinstr_r =
   | PSif     of pscond * pscond list * pstmt
   | PSwhile  of pscond
   | PSmatch  of pexpr * psmatch
+  | PSlabel  of plabel
 
 and psmatch = [
   | `Full of (ppattern * pstmt) list
@@ -198,7 +201,9 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFhoareF   of pformula * pgamepath * pformula
-  | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
+  | PFequivF   of pformula * (pgamepath * pgamepath) * pformula *
+                  ((plabel * plabel * pformula) list) *
+                  ((plabel * plabel * pformula) list)
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
   | PFBDhoareF of pformula * pgamepath * pformula * phoarecmp * pformula

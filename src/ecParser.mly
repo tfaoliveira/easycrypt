@@ -494,6 +494,7 @@
 %token LOCATE
 %token LOGIC
 %token LONGARROW
+%token LONGARROWSLIM
 %token LOSSLESS
 %token LPAREN
 %token LPBRACE
@@ -1378,10 +1379,17 @@ coe_body(P):
   COLON e=expr ty=coe_ty? RBRACKET
     { PFCoe (m, Some mt, f, e, ty) }
 
+%inline annotation(P):
+  LPAREN l1=lident COMMA l2=lident RPAREN LONGARROWSLIM a=form_r(P) { (l1, l2, a) }
+
+%inline annotations(P): asrts=plist1(annotation(P), COMMA) { asrts }
+
 equiv_body(P):
   mp1=loc(fident) TILD mp2=loc(fident)
-  COLON pre=form_r(P) LONGARROW post=form_r(P)
-    { PFequivF (pre, (mp1, mp2), post) }
+  COLON pre=form_r(P) LONGARROW post=form_r(P) PIPE
+  assumptions=annotations(P) LONGARROW
+  assertions=annotations(P)
+    { PFequivF (pre, (mp1, mp2), post, assumptions, assertions) }
 
 eager_body(P):
 | s1=stmt COMMA  mp1=loc(fident) TILD mp2=loc(fident) COMMA s2=stmt
@@ -1480,6 +1488,8 @@ base_instr:
 
 | f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
     { PScall (None, f, es) }
+| AT f=lident
+    { PSlabel (f) }
 
 instr:
 | bi=base_instr SEMICOLON
