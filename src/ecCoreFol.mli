@@ -79,18 +79,22 @@ and eagerF = {
 
 and equivF = {
   ef_pr : form;
-  ef_fl : xpath;
-  ef_fr : xpath;
+  ef_fl : EcPath.xpath;
+  ef_fr : EcPath.xpath;
   ef_po : form;
+  ef_am : (EcIdent.t * EcIdent.t * form) list;
+  ef_as : (EcIdent.t * EcIdent.t * form) list;
 }
 
 and equivS = {
-  es_ml : EcMemory.memenv;
-  es_mr : EcMemory.memenv;
-  es_pr : form;
-  es_sl : stmt;
-  es_sr : stmt;
-  es_po : form;
+  es_ml  : EcMemory.memenv;
+  es_mr  : EcMemory.memenv;
+  es_pr  : form;
+  es_sl  : stmt;
+  es_sr  : stmt;
+  es_po  : form;
+  es_am : (EcIdent.t * EcIdent.t * form) list;
+  es_as : (EcIdent.t * EcIdent.t * form) list;
 }
 
 and sHoareF = {
@@ -269,8 +273,8 @@ val f_bdHoareF : form -> xpath -> form -> hoarecmp -> form -> form
 val f_bdHoareS : memenv -> form -> stmt -> form -> hoarecmp -> form -> form
 
 (* soft-constructors - equiv *)
-val f_equivS : memenv -> memenv -> form -> stmt -> stmt -> form -> form
-val f_equivF : form -> xpath -> xpath -> form -> form
+val f_equivS : memenv -> memenv -> form -> stmt -> stmt -> form -> (t * t * form) list -> (t * t * form) list -> form
+val f_equivF : form -> xpath -> xpath -> form -> (t * t * form) list -> (t * t * form) list -> form
 
 val f_equivS_r : equivS -> form
 val f_equivF_r : equivF -> form

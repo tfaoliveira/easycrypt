@@ -15,7 +15,7 @@ let build_sym ml mr pr po =
 let t_equivF_sym tc =
   let ef    = tc1_as_equivF tc in
   let pr,po = build_sym mleft mright ef.ef_pr ef.ef_po in
-  let cond  = f_equivF pr ef.ef_fr ef.ef_fl po in
+  let cond  = f_equivF pr ef.ef_fr ef.ef_fl po [] [] in (*TODO: annotations*)
   FApi.xmutate1 tc `EquivSym [cond]
 
 (*-------------------------------------------------------------------- *)
@@ -28,7 +28,9 @@ let t_equivS_sym tc =
     es_sl = es.es_sr;
     es_sr = es.es_sl;
     es_pr = pr;
-    es_po = po; } in
+    es_po = po;
+    es_am = es.es_am;
+    es_as = es.es_as; } in
 
   FApi.xmutate1 tc `EquivSym [cond]
 

@@ -30,6 +30,7 @@ and instr_node =
   | Swhile    of expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
   | Sabstract of EcIdent.t
+  | Slabel    of EcIdent.t
 
 and stmt = private {
   s_node : instr list;

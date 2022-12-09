@@ -47,6 +47,9 @@ let while_info env e s =
         let c = List.fold_left (fun c f -> Sx.add f c) c us.EcModules.aus_calls in
         (w, r, c)
 
+    | Slabel _ ->
+        assert false (*TODO: annotations*)
+
   and s_info info s = List.fold_left i_info info s.s_node in
 
   let (w,r,c) = s_info (PV.empty, EcPV.e_read env e, Sx.empty) s in
@@ -374,7 +377,7 @@ let t_equiv_while_r inv tc =
   (* 1. The body preserves the invariant *)
   let b_pre  = f_ands_simpl [inv; el] er in
   let b_post = f_and_simpl inv sync_cond in
-  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post in
+  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post [] [] in (*TODO: annotations*)
 
   (* 2. WP of the while *)
   let post = f_imps_simpl [f_not_simpl el;f_not_simpl er; inv] es.es_po in
@@ -383,7 +386,7 @@ let t_equiv_while_r inv tc =
   let post = generalize_mod env mr modir post in
   let post = generalize_mod env ml modil post in
   let post = f_and_simpl b_post post in
-  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; } in
+  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; es_am = []; es_as = []; } in (*TODO: annotations*)
 
   FApi.xmutate1 tc `While [b_concl; concl]
 
@@ -591,7 +594,7 @@ let process_async_while (winfos : EP.async_while_info) tc =
     let wl = s_while (e_and el (e_app t1 [ev1] tbool), cl) in
     let wr = s_while (e_and er (e_app t2 [ev2] tbool), cr) in
     EcFol.f_forall [(v1, GTty f1.f_ty); (v2, GTty f2.f_ty)]
-      (f_equivS evs.es_ml evs.es_mr pr wl wr po)
+      (f_equivS evs.es_ml evs.es_mr pr wl wr po [] [])
   in
 
   let hr1, hr2 =

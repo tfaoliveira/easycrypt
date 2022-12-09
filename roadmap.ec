@@ -38,7 +38,7 @@ equiv [M.f ~ M.g : pre ==> post | {
       - ecCoreModule.ml
         - instructions: instr
         - hash-consing + constructeurs / destructeurs
-        - substitutions (no-op)
+        - substitutions (no-op) ?
       - ecCoreFol.ml
         - equivF[proc] / equivS[stmt]
 

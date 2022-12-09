@@ -48,6 +48,7 @@ module LowSubst = struct
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, bs)     -> i_match  (esubst e, List.Smart.map (snd_map ssubst) bs)
     | Sabstract _        -> i
+    | Slabel _           -> i (*TODO: annotations*)
 
   and issubst m (is : instr list) =
     List.Smart.map (isubst m) is

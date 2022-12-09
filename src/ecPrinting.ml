@@ -1349,6 +1349,9 @@ and pp_instr_for_form (ppe : PPEnv.t) fmt i =
   | Sabstract id -> (* FIXME *)
       Format.fprintf fmt "%s" (EcIdent.name id)
 
+  | Slabel id ->
+      Format.fprintf fmt "@%s" (EcIdent.name id)
+
 (* -------------------------------------------------------------------- *)
 and pp_stmt_for_form (ppe : PPEnv.t) fmt (s : stmt) =
   match s.s_node with
@@ -3151,6 +3154,9 @@ let rec pp_instr_r (ppe : PPEnv.t) fmt i =
 
   | Sabstract id ->
     Format.fprintf fmt "%s" (EcIdent.name id)
+
+  | Slabel id ->
+    Format.fprintf fmt "@%s" (EcIdent.name id)
 
 and pp_instr ppe fmt i =
   Format.fprintf fmt "%a" (pp_instr_r ppe) i

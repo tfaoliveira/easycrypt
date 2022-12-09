@@ -120,6 +120,7 @@ module Mpv = struct
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, b)      -> i_match  (esubst e, List.Smart.map (snd_map ssubst) b)
     | Sabstract _        -> i
+    | Slabel _ -> assert false; (*TODO: annotations*)
 
   and issubst env (s : esubst) (is : instr list) =
     List.Smart.map (isubst env s) is
@@ -557,6 +558,8 @@ and i_write_r ?(except=Sx.empty) env w i =
       let w = List.fold_left add_pv w us.EcModules.aus_writes in
       List.fold_left (f_write_r ~except env) w us.EcModules.aus_calls
 
+  | Slabel _ -> assert false (*TODO: annotations*)
+
 (* -------------------------------------------------------------------- *)
 let rec f_read_r env r f =
   let f    = NormMp.norm_xfun env f in
@@ -614,6 +617,8 @@ and i_read_r env r i =
       let add_pv r (pv,ty) = PV.add env pv ty r in
       let r = List.fold_left add_pv r us.EcModules.aus_reads in
       List.fold_left (f_read_r env) r us.EcModules.aus_calls
+
+  | Slabel _ -> assert false (*TODO: annotations*)
 
 (* -------------------------------------------------------------------- *)
 type 'a pvaccess0 = env -> 'a -> PV.t
@@ -1066,6 +1071,8 @@ and i_eqobs_in_refl env i eqo =
     add_eqs_refl env eqs e
 
   | Sabstract _ -> assert false
+
+  | Slabel _ -> assert false (*TODO: annotations*)
 
 and eqobs_inF_refl env f' eqo =
   let f = NormMp.norm_xfun env f' in

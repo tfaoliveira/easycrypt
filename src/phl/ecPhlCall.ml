@@ -193,7 +193,9 @@ let t_equiv_call fpre fpost tc =
   let ml = EcMemory.memory es.es_ml in
   let mr = EcMemory.memory es.es_mr in
   (* The functions satisfy their specification *)
-  let f_concl = f_equivF fpre fl fr fpost in
+  let es_am = es.es_am in (*TODO: annotations*)
+  let es_as = es.es_as in
+  let f_concl = f_equivF fpre fl fr fpost es_am es_as in
   let modil = f_write env fl in
   let modir = f_write env fr in
   (* The wp *)
@@ -203,7 +205,7 @@ let t_equiv_call fpre fpost tc =
       ml mr es.es_po hyps
   in
   let concl =
-    f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; } in
+    f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; es_am = es_am; es_as = es_as; } in
 
   FApi.xmutate1 tc `HlCall [f_concl; concl]
 
@@ -383,7 +385,9 @@ let process_call side info tc =
           let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
           let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
           let penv, qenv = LDecl.equivF fl fr hyps in
-          (penv, qenv, fun pre post -> f_equivF pre fl fr post)
+          let es_am = es.es_am in (*TODO: annotations*)
+          let es_as = es.es_as in
+          (penv, qenv, fun pre post -> f_equivF pre fl fr post es_am es_as)
 
       | FequivS es, Some side, None ->
           let fstmt = sideif side es.es_sl es.es_sr in
@@ -450,9 +454,11 @@ let process_call side info tc =
       let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
       let penv = LDecl.inv_memenv hyps in
       let env  = LDecl.toenv hyps in
+      let es_am = es.es_am in (*TODO: annotations*)
+      let es_as = es.es_as in
       (penv, fun inv inv_info ->
           check_none inv_info;
-          mk_inv_spec !!tc env inv fl fr)
+          mk_inv_spec !!tc env inv fl fr es_am es_as)
 
     | _ -> tc_error !!tc "the conclusion is not a hoare or an equiv" in
 
@@ -477,7 +483,9 @@ let process_call side info tc =
         let eq_res = f_eqres sigl.fs_ret mleft sigr.fs_ret mright in
         let pre    = f_if_simpl bad2 invQ (f_ands (eq_params::lpre)) in
         let post   = f_if_simpl bad2 invQ (f_ands [eq_res;eqglob;invP]) in
-        (bad,invP,invQ, f_equivF pre fl fr post)
+        let es_am = es.es_am in (*TODO: annotations*)
+        let es_as = es.es_as in
+        (bad,invP,invQ, f_equivF pre fl fr post es_am es_as)
 
     | _ -> tc_error !!tc "the conclusion is not an equiv" in
 

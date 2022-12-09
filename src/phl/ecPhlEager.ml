@@ -166,13 +166,13 @@ let t_eager_if_r tc =
     let pre = f_and es.es_pr (f_eq fel f_true) in
     let st  = stmt (s.s_node @ c1.s_node) in
     let st' = stmt (c1'.s_node @ s'.s_node) in
-    f_equivS es.es_ml es.es_mr pre st st' es.es_po in
+    f_equivS es.es_ml es.es_mr pre st st' es.es_po es.es_am es.es_as in (*TODO: annotations*)
 
   let dT =
     let pre = f_and es.es_pr (f_eq fel f_false) in
     let st  = stmt (s.s_node @ c2.s_node) in
     let st' = stmt (c2'.s_node @ s'.s_node) in
-    f_equivS es.es_ml es.es_mr pre st st' es.es_po in
+    f_equivS es.es_ml es.es_mr pre st st' es.es_po es.es_am es.es_as in (*TODO: annotations*)
 
   FApi.xmutate1 tc `EagerIf [aT; bT; cT; dT]
 
@@ -288,6 +288,8 @@ let t_eager_fun_def_r tc =
     es_sr = s_seq sfr eg.eg_sr;
     es_pr = pre;
     es_po = post;
+    es_am = [];
+    es_as = []; (*TODO: annotations*)
   } in
 
   FApi.xmutate1 tc `EagerFunDef [cond]
@@ -314,7 +316,7 @@ let t_eager_fun_abs_r eqI h tc =
         f_true
     in
          f_eagerF ef.ef_pr s ef.ef_fl ef.ef_fr s' ef.ef_po
-      :: f_equivF (torefl ef.ef_pr) ef.ef_fr ef.ef_fr (torefl ef.ef_po)
+      :: f_equivF (torefl ef.ef_pr) ef.ef_fr ef.ef_fr (torefl ef.ef_po) ef.ef_am ef.ef_as (*TODO: annotations*)
       :: sg
   in
 
@@ -596,7 +598,7 @@ let process_info info tc =
     let eqXs  = process_formula eqXs in
     let s1    = TTC.tc1_process_stmt tc (snd ml) s1 in
     let s2    = TTC.tc1_process_stmt tc (snd mr) s2 in
-    let f     = f_equivS ml mr eqIs s1 s2 eqXs in
+    let f     = f_equivS ml mr eqIs s1 s2 eqXs [] [] in (*TODO: annotations*)
     let h     = LDecl.fresh_id hyps (unloc h) in
     (FApi.t_last (t_intros_i [h]) (t_cut f tc), h)
 

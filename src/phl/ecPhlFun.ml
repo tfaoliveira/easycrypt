@@ -147,7 +147,7 @@ let t_equivF_fun_def_r tc =
   let s = subst_pre env fsigl ml PVM.empty in
   let s = subst_pre env fsigr mr s in
   let pre = PVM.subst env s ef.ef_pr in
-  let concl' = f_equivS menvl menvr pre fdefl.f_body fdefr.f_body post in
+  let concl' = f_equivS menvl menvr pre fdefl.f_body fdefr.f_body post [] [] in (*TODO: annotations*)
   FApi.xmutate1 tc `FunDef [concl']
 
 (* -------------------------------------------------------------------- *)
@@ -386,7 +386,7 @@ module FunAbsLow = struct
       let invs = if use then [eqglob; inv] else [inv] in
       let pre  = EcFol.f_ands (eq_params :: invs) in
       let post = EcFol.f_ands (eq_res :: invs) in
-      f_equivF pre o_l o_r post
+      f_equivF pre o_l o_r post [] [] (*TODO: annotations*)
     in
 
     let sg = List.map2 ospec (OI.allowed oil) (OI.allowed oir) in
@@ -493,7 +493,7 @@ module UpToLow = struct
 
       let pre   = EcFol.f_ands [EcFol.f_not bad2; eq_params; invP] in
       let post  = EcFol.f_if_simpl bad2 invQ (f_and eq_res invP) in
-      let cond1 = f_equivF pre o_l o_r post in
+      let cond1 = f_equivF pre o_l o_r post [] [] in  (*TODO: annotations*)
       let cond2 =
         let q = Fsubst.f_subst_mem ml EcFol.mhr invQ in
           f_forall[(mr, GTmem abstract_mt)]
@@ -642,7 +642,7 @@ let t_fun_to_code_equiv_r tc =
     s in
   let pre   = PVM.subst env spr ef.ef_pr in
   let post  = PVM.subst env spo ef.ef_po in
-  let concl = f_equivS ml mr pre sl sr post in
+  let concl = f_equivS ml mr pre sl sr post [] [] in (*TODO: annotations*)
 
   FApi.xmutate1 tc `FunToCode [concl]
 
@@ -665,7 +665,7 @@ let t_fun_to_code_eager_r tc =
   let pre   = PVM.subst env spr eg.eg_pr in
   let post  = PVM.subst env spo eg.eg_po in
   let concl =
-    f_equivS ml mr pre (s_seq eg.eg_sl sl) (s_seq sr eg.eg_sr) post in
+    f_equivS ml mr pre (s_seq eg.eg_sl sl) (s_seq sr eg.eg_sr) post [] [] in (*TODO: annotations*)
   FApi.xmutate1 tc `FunToCode [concl]
 
 (* -------------------------------------------------------------------- *)

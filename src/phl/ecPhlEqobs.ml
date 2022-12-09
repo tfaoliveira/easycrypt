@@ -341,7 +341,7 @@ let mk_inv_spec2 env inv (fl, fr, eqi, eqo) =
 
 (* -------------------------------------------------------------------- *)
 let mk_inv_spec env inv (fl, fr, eqg) =
-  mk_inv_spec2 env inv (fl, fr, eqg, eqg)
+  mk_inv_spec2 env inv (fl, fr, eqg, eqg) [] [] (*TODO: annotations*)
 
 (* -------------------------------------------------------------------- *)
 let t_eqobs_inS_r sim eqo tc =
@@ -362,7 +362,7 @@ let t_eqobs_inS_r sim eqo tc =
     tc_error !!tc "cannot apply sim";
 
   let sg = List.map (mk_inv_spec env inv) sim.needed_spec in
-  let concl = f_equivS es.es_ml es.es_mr es.es_pr sl sr pre in
+  let concl = f_equivS es.es_ml es.es_mr es.es_pr sl sr pre [] [] in (*TODO: annotations*)
 
   FApi.xmutate1 tc `EqobsIn (sg @ [concl])
 
@@ -379,7 +379,7 @@ let t_eqobs_inF_r sim eqo tc =
     with EqObsInError -> tc_error !!tc "cannot apply sim ..." in
   let inv = sim.sim_inv in
   let sg = List.map (mk_inv_spec env inv) sim.needed_spec in
-  let concl' = mk_inv_spec2 env inv (ef.ef_fl, ef.ef_fr, eqi, eqo) in
+  let concl' = mk_inv_spec2 env inv (ef.ef_fl, ef.ef_fr, eqi, eqo) [] [] in  (*TODO: annotations*)
   if not (EcReduction.is_alpha_eq hyps concl concl') then
     tc_error !!tc "cannot apply sim for fun";
   FApi.xmutate1 tc `EqobsIn sg
@@ -471,7 +471,7 @@ let process_eqobs_inF info tc =
   let _, eqi =
     try f_eqobs_in fl fr sim eqo
     with EqObsInError -> tc_error !!tc "not able to process" in
-  let ef' = destr_equivF (mk_inv_spec2 env inv (fl, fr, eqi, eqo)) in
+  let ef' = destr_equivF (mk_inv_spec2 env inv (fl, fr, eqi, eqo) [] []) in (*TODO: annotations*)
   (EcPhlConseq.t_equivF_conseq ef'.ef_pr ef'.ef_po @+ [
     t_trivial;
     t_trivial;

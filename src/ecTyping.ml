@@ -283,6 +283,9 @@ let (_i_inuse, s_inuse, se_inuse) =
     | Sabstract _ ->
       assert false (* FIXME *)
 
+    | Slabel _ ->
+      assert false (* TODO: annotations *)
+
   and s_inuse (map : uses) (s : stmt) =
     List.fold_left i_inuse map s.s_node
 
@@ -2942,6 +2945,8 @@ and transinstr
       [ i_match (e, branches) ]
     end
 
+   | PSlabel _ -> assert false (*TODO: annotations*)
+
 (* -------------------------------------------------------------------- *)
 and trans_pv env { pl_desc = x; pl_loc = loc } =
   let side = EcEnv.Memory.get_active env in
@@ -3647,15 +3652,18 @@ and trans_form_or_pattern
         let fpath = trans_gamepath env gp in
           f_losslessF fpath
 
-    | PFequivF (pre, (gp1, gp2), post) ->
+    (*TODO: annotations*)
+    | PFequivF (pre, (gp1, gp2), post, asum, asrt) ->
         let fpath1 = trans_gamepath env gp1 in
         let fpath2 = trans_gamepath env gp2 in
         let penv, qenv = EcEnv.Fun.equivF fpath1 fpath2 env in
         let pre'  = transf penv pre in
         let post' = transf qenv post in
+        let asum' = List.map (fun (l1, l2, a) -> (EcIdent.create (unloc l1), EcIdent.create (unloc l2), transf qenv a)) asum in
+        let asrt' = List.map (fun (l1, l2, a) -> (EcIdent.create (unloc l1), EcIdent.create (unloc l2), transf qenv a)) asrt in
           unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
-          f_equivF pre' fpath1 fpath2 post'
+          f_equivF pre' fpath1 fpath2 post' asum' asrt' (*TODO: annotations*)
 
     | PFeagerF (pre, (s1,gp1,gp2,s2), post) ->
         let fpath1 = trans_gamepath env gp1 in

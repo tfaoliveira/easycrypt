@@ -84,6 +84,8 @@ and equivF = {
   ef_fl : EcPath.xpath;
   ef_fr : EcPath.xpath;
   ef_po : form;
+  ef_am : (EcIdent.t * EcIdent.t * form) list;
+  ef_as : (EcIdent.t * EcIdent.t * form) list;
 }
 
 and equivS = {
@@ -92,7 +94,10 @@ and equivS = {
   es_pr  : form;
   es_sl  : stmt;
   es_sr  : stmt;
-  es_po  : form; }
+  es_po  : form;
+  es_am : (EcIdent.t * EcIdent.t * form) list;
+  es_as : (EcIdent.t * EcIdent.t * form) list;
+}
 
 and sHoareF = {
   hf_pr : form;
@@ -856,11 +861,11 @@ let f_bdHoareF bhf_pr bhf_f bhf_po bhf_cmp bhf_bd =
 let f_equivS_r es = mk_form (FequivS es) tbool
 let f_equivF_r ef = mk_form (FequivF ef) tbool
 
-let f_equivS es_ml es_mr es_pr es_sl es_sr es_po =
-   f_equivS_r { es_ml; es_mr; es_pr; es_sl; es_sr; es_po; }
+let f_equivS es_ml es_mr es_pr es_sl es_sr es_po es_am es_as =
+   f_equivS_r { es_ml; es_mr; es_pr; es_sl; es_sr; es_po; es_am; es_as }
 
-let f_equivF ef_pr ef_fl ef_fr ef_po =
-  f_equivF_r{ ef_pr; ef_fl; ef_fr; ef_po; }
+let f_equivF ef_pr ef_fl ef_fr ef_po ef_am ef_as =
+  f_equivF_r{ ef_pr; ef_fl; ef_fr; ef_po; ef_am; ef_as; }
 
 (* -------------------------------------------------------------------- *)
 let f_eagerF_r eg = mk_form (FeagerF eg) tbool
@@ -1955,7 +1960,7 @@ module Fsubst = struct
       let fl' = subst_xpath s ef.ef_fl in
       let fr' = subst_xpath s ef.ef_fr in
       FSmart.f_equivF (fp, ef)
-        { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; }
+        { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; ef_am = ef.ef_am; ef_as = ef.ef_as; }
 
     | FequivS eqs ->
       assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
@@ -1973,7 +1978,8 @@ module Fsubst = struct
       FSmart.f_equivS (fp, eqs)
         { es_ml = ml'; es_mr = mr';
           es_pr = pr'; es_po = po';
-          es_sl = sl'; es_sr = sr'; }
+          es_sl = sl'; es_sr = sr';
+          es_am = eqs.es_am; es_as = eqs.es_as; }
 
     | FeagerF eg ->
       let pr', po' =

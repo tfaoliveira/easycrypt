@@ -190,7 +190,7 @@ let t_equivF_conseq pre post tc =
   let cond1, cond2 = conseq_cond ef.ef_pr ef.ef_po pre post in
   let concl1 = f_forall_mems [mprl;mprr] cond1 in
   let concl2 = f_forall_mems [mpol;mpor] cond2 in
-  let concl3 = f_equivF pre ef.ef_fl ef.ef_fr post in
+  let concl3 = f_equivF pre ef.ef_fl ef.ef_fr post ef.ef_am ef.ef_as in (*TODO: annotations*)
   FApi.xmutate1 tc `HlConseq [concl1; concl2; concl3]
 
 (* -------------------------------------------------------------------- *)
@@ -634,7 +634,7 @@ let t_equivF_conseq_conj pre1 post1 pre2 post2 pre' post' tc =
     tc_error !!tc "invalid post-condition";
   let concl1 = f_hoareF pre1 ef.ef_fl post1 in
   let concl2 = f_hoareF pre2 ef.ef_fr post2 in
-  let concl3 = f_equivF pre' ef.ef_fl ef.ef_fr post' in
+  let concl3 = f_equivF pre' ef.ef_fl ef.ef_fr post' ef.ef_am ef.ef_as in (*TODO: annotations*)
   FApi.xmutate1 tc `HlConseqConj [concl1; concl2; concl3]
 
 (* -------------------------------------------------------------------- *)
@@ -688,7 +688,7 @@ let transitivity_side_cond hyps prml poml pomr p q p2 q2 p1 q1 =
 let t_hoareF_conseq_equiv f2 p q p2 q2 tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let hf1 = tc1_as_hoareF tc in
-  let ef  = f_equivF p hf1.hf_f f2 q in
+  let ef  = f_equivF p hf1.hf_f f2 q [] [] in (*TODO: annotations*)
   let hf2 = f_hoareF p2 f2 q2 in
   let (prml, _prmr), (poml, pomr) = Fun.equivF_memenv hf1.hf_f f2 env in
   let (cond1, cond2) =
@@ -698,7 +698,7 @@ let t_hoareF_conseq_equiv f2 p q p2 q2 tc =
 let t_bdHoareF_conseq_equiv f2 p q p2 q2 tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let hf1 = tc1_as_bdhoareF tc in
-  let ef  = f_equivF p hf1.bhf_f f2 q in
+  let ef  = f_equivF p hf1.bhf_f f2 q [] [] in (*TODO: annotations*)
   let hf2 = f_bdHoareF p2 f2 q2 hf1.bhf_cmp hf1.bhf_bd in
   let (prml, _prmr), (poml, pomr) = Fun.equivF_memenv hf1.bhf_f f2 env in
   let (cond1, cond2) =
@@ -1294,7 +1294,7 @@ let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) 
         let penv, qenv = LDecl.equivF ef.ef_fl ef.ef_fr hyps in
         let fmake pre post c_or_bd =
           ensure_none c_or_bd;
-          f_equivF pre ef.ef_fl ef.ef_fr post
+          f_equivF pre ef.ef_fl ef.ef_fr post [] [] (*TODO: annotations*)
         in (penv, qenv, ef.ef_pr, ef.ef_po, fmake)
 
       | FequivS es ->

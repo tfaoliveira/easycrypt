@@ -223,7 +223,7 @@ let set_pre ~pre f =
  | FcHoareS hs  -> f_cHoareS_r { hs with chs_pr = pre }
  | FbdHoareF hf -> f_bdHoareF pre hf.bhf_f hf.bhf_po hf.bhf_cmp hf.bhf_bd
  | FbdHoareS hs -> f_bdHoareS_r { hs with bhs_pr = pre }
- | FequivF ef   -> f_equivF pre ef.ef_fl ef.ef_fr ef.ef_po
+ | FequivF ef   -> f_equivF pre ef.ef_fl ef.ef_fr ef.ef_po ef.ef_am ef.ef_as
  | FequivS es   -> f_equivS_r { es with es_pr = pre }
  | _            -> assert false
 

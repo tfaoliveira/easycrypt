@@ -536,7 +536,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let ef_po = norm st s ef.ef_po in
     let ef_fl = norm_xfun st s ef.ef_fl in
     let ef_fr = norm_xfun st s ef.ef_fr in
-    f_equivF_r {ef_pr; ef_fl; ef_fr; ef_po }
+    let ef_am = List.map (fun (l1, l2, a) -> (l1, l2, norm st s a)) ef.ef_am in
+    let ef_as = List.map (fun (l1, l2, a) -> (l1, l2, norm st s a)) ef.ef_as in
+    f_equivF_r {ef_pr; ef_fl; ef_fr; ef_po; ef_am; ef_as }
 
   | FequivS es ->
     assert (Args.isempty args);
@@ -548,7 +550,9 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let es_sr = norm_stmt s es.es_sr in
     let es_ml  = norm_me s es.es_ml in
     let es_mr  = norm_me s es.es_mr in
-    f_equivS_r {es_ml; es_mr; es_pr; es_sl; es_sr; es_po }
+    let es_am = List.map (fun (l1, l2, a) -> (l1, l2, norm st s a)) es.es_am in
+    let es_as = List.map (fun (l1, l2, a) -> (l1, l2, norm st s a)) es.es_as in
+    f_equivS_r {es_ml; es_mr; es_pr; es_sl; es_sr; es_po; es_am; es_as }
 
   | FeagerF eg ->
     assert (Args.isempty args);

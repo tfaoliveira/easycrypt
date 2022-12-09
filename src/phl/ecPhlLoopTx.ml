@@ -69,6 +69,8 @@ let check_dslc pf =
     | Srnd _ | Scall _ | Swhile _ | Sabstract _ ->
        error ()
 
+    | Slabel _ -> error() (*TODO: annotations, might just be (), unsure.*)
+
   and doit_s c =
     List.iter doit_i c.s_node
 

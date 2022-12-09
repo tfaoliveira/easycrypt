@@ -78,6 +78,7 @@ and instr_node =
   | Swhile    of EcTypes.expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
   | Sabstract of EcIdent.t
+  | Slabel    of EcIdent.t
 
 and stmt = {
   s_node : instr list;
@@ -144,8 +145,8 @@ module Hinstr = Why3.Hashcons.Make (struct
           (Hashtbl.hash lv) (EcTypes.e_hash e)
 
     | Srnd (lv, e) ->
-        Why3.Hashcons.combine
-          (Hashtbl.hash lv) (EcTypes.e_hash e)
+        Why3.Hashcons.combine2
+          (Hashtbl.hash lv) (EcTypes.e_hash e) 0
 
     | Scall (lv, f, tys) ->
         Why3.Hashcons.combine_list EcTypes.e_hash
@@ -168,6 +169,8 @@ module Hinstr = Why3.Hashcons.Make (struct
         in Why3.Hashcons.combine_list forb (EcTypes.e_hash e) b
 
     | Sabstract id -> EcIdent.id_hash id
+
+    | Slabel id -> Why3.Hashcons.combine (EcIdent.id_hash id) 0
 
   let i_fv   = function
     | Sasgn (lv, e) ->
@@ -200,6 +203,9 @@ module Hinstr = Why3.Hashcons.Make (struct
              (EcTypes.e_fv e) b
 
     | Sabstract id ->
+        EcIdent.fv_singleton id
+
+    | Slabel id ->
         EcIdent.fv_singleton id
 
   let tag n p = { p with i_tag = n; i_fv = i_fv p.i_node }
@@ -434,6 +440,9 @@ let rec s_subst_top (s : EcTypes.e_subst) =
     | Sabstract _ ->
         i
 
+    | Slabel _ ->
+        i
+
   and s_subst s =
     ISmart.s_stmt s (List.Smart.map i_subst s.s_node)
 
@@ -504,6 +513,9 @@ and i_get_uninit_read (w : Ssym.t) (i : instr) =
       (Ssym.union w (Ssym.big_inter ws), Ssym.big_union (r :: rs))
 
   | Sabstract (_ : EcIdent.t) ->
+      (w, Ssym.empty)
+
+  | Slabel (_ : EcIdent.t) ->
       (w, Ssym.empty)
 
 let get_uninit_read (s : stmt) =

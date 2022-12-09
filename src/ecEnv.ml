@@ -2544,10 +2544,11 @@ module NormMp = struct
 
         | FequivF ef ->
           let pre' = aux ef.ef_pr and l' = norm_xfun env ef.ef_fl
-          and r' = norm_xfun env ef.ef_fr and post' = aux ef.ef_po in
+          and r' = norm_xfun env ef.ef_fr and post' = aux ef.ef_po
+          and ef_am = ef.ef_am and ef_as = ef.ef_as in
           if ef.ef_pr == pre' && ef.ef_fl == l' &&
             ef.ef_fr == r' && ef.ef_po == post' then f else
-          f_equivF pre' l' r' post'
+          f_equivF pre' l' r' post' ef_am ef_as
 
         | Fcoe coe ->
           let coe' = {

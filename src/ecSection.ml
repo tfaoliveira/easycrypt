@@ -179,6 +179,8 @@ let rec on_instr (cb : cb) (i : instr)=
 
   | Sabstract _ -> ()
 
+  | Slabel _ -> assert false; (*TODO: annotations*)
+
 and on_stmt (cb : cb) (s : stmt) =
   List.iter (on_instr cb) s.s_node
 
