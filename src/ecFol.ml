@@ -1017,7 +1017,7 @@ let destr_exists_prenex f =
     (* Make it fail as with destr_exists *)
     match prenex_exists [] f with
     | [] , _ -> destr_error "exists"
-    | bds, f -> (bds, f)
+    | bds, f -> (List.rev bds, f)
 
 (* -------------------------------------------------------------------- *)
 let destr_ands ~deep =
