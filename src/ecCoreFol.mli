@@ -514,6 +514,7 @@ type f_subst = private {
   fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
   fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
                                  only substituted in Fcoe *)
+  fs_label    : EcIdent.t Mid.t;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -530,12 +531,15 @@ module Fsubst : sig
     -> ?esloc:expr Mid.t
     -> ?mt:EcMemory.memtype
     -> ?mempred:(mem_pr Mid.t)
+    -> ?label:memory EcIdent.Mid.t
     -> unit -> f_subst
 
-  val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> mpath -> f_subst
-  val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+  val f_bind_local   : f_subst -> EcIdent.t -> form -> f_subst
+  val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_mod     : f_subst -> EcIdent.t -> mpath -> f_subst
+  val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+  val f_bind_label   : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_rebind_label : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
@@ -562,6 +566,7 @@ module Fsubst : sig
   val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
+  val subst_label    : f_subst -> EcIdent.t -> EcIdent.t
   val subst_mty      : f_subst -> module_type -> module_type
   val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t
   val subst_gty      : f_subst -> gty -> gty

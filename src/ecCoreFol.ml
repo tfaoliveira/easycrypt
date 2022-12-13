@@ -1678,6 +1678,7 @@ type f_subst = {
   fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
   fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
                                  only substituted in Fcoe *)
+  fs_label    : EcIdent.t Mid.t;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -1694,6 +1695,7 @@ module Fsubst = struct
     fs_esloc    = Mid.empty;
     fs_memtype  = None;
     fs_mempred  = Mid.empty;
+    fs_label    = Mid.empty;
   }
 
   let is_subst_id s =
@@ -1705,9 +1707,10 @@ module Fsubst = struct
     && Mp.is_empty    s.fs_pddef
     && Mp.is_empty    s.fs_modtydef
     && Mid.is_empty   s.fs_esloc
+    && Mid.is_empty   s.fs_label
     && s.fs_memtype = None
 
-  let f_subst_init ?freshen ?sty ?opdef ?prdef ?modtydef ?esloc ?mt ?mempred () =
+  let f_subst_init ?freshen ?sty ?opdef ?prdef ?modtydef ?esloc ?mt ?mempred ?label () =
     let sty = odfl ty_subst_id sty in
     { f_subst_id
         with fs_freshen  = odfl false freshen;
@@ -1718,6 +1721,7 @@ module Fsubst = struct
              fs_modtydef = odfl Mp.empty modtydef;
              fs_esloc    = odfl Mid.empty esloc;
              fs_mempred  = odfl Mid.empty mempred;
+             fs_label    = odfl Mid.empty label;
              fs_memtype  = mt; }
 
   (* ------------------------------------------------------------------ *)
@@ -1747,6 +1751,14 @@ module Fsubst = struct
     let merger o = assert (o = None); Some xe in
     { s with fs_esloc = Mid.change merger xfrom s.fs_esloc }
 
+  let f_bind_label s l1 l2 =
+    let merger o = assert (o = None); Some l2 in
+      { s with fs_label = Mid.change merger l1 s.fs_label }
+
+  let f_rebind_label s l1 l2 =
+    let merger _ = Some l2 in
+    { s with fs_label = Mid.change merger l1 s.fs_label }
+
   (* ------------------------------------------------------------------ *)
   let f_rem_local s x =
     { s with fs_loc = Mid.remove x s.fs_loc;
@@ -1761,6 +1773,9 @@ module Fsubst = struct
       { subst with sms_id = Mid.remove x subst.sms_id } in
     let sty = { s.fs_sty with ts_mp = sms } in
     { s with fs_sty = sty; fs_ty = ty_subst sty }
+
+  let f_rem_label s l =
+    { s with fs_label = Mid.remove l s.fs_label }
 
   (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
@@ -1820,6 +1835,8 @@ module Fsubst = struct
   let subst_m s m = Mid.find_def m m s.fs_mem
 
   let subst_ty s ty = s.fs_ty ty
+
+  let subst_label s l = Mid.find_def l l s.fs_label
 
   (* ------------------------------------------------------------------ *)
   let rec f_subst ~tx s fp =
@@ -1959,8 +1976,10 @@ module Fsubst = struct
         (pr', po') in
       let fl' = subst_xpath s ef.ef_fl in
       let fr' = subst_xpath s ef.ef_fr in
+      let ef_am' = f_subst_anno ~tx s ef.ef_am in
+      let ef_as' = f_subst_anno ~tx s ef.ef_as in
       FSmart.f_equivF (fp, ef)
-        { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; ef_am = ef.ef_am; ef_as = ef.ef_as; }
+        { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; ef_am = ef_am'; ef_as = ef_as'; }
 
     | FequivS eqs ->
       assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
@@ -1974,12 +1993,14 @@ module Fsubst = struct
       let sr' = s_subst eqs.es_sr in
       let ml' = EcMemory.me_subst s.fs_mem s.fs_ty eqs.es_ml in
       let mr' = EcMemory.me_subst s.fs_mem s.fs_ty eqs.es_mr in
+      let es_am' = f_subst_anno ~tx s eqs.es_am in
+      let es_as' = f_subst_anno ~tx s eqs.es_as in
 
       FSmart.f_equivS (fp, eqs)
         { es_ml = ml'; es_mr = mr';
           es_pr = pr'; es_po = po';
           es_sl = sl'; es_sr = sr';
-          es_am = eqs.es_am; es_as = eqs.es_as; }
+          es_am = es_am'; es_as = es_as'; }
 
     | FeagerF eg ->
       let pr', po' =
@@ -2043,6 +2064,9 @@ module Fsubst = struct
 
     | _ ->
       f_map s.fs_ty (f_subst ~tx s) fp)
+
+  and f_subst_anno ~tx s =
+    List.map (fun (l1, l2, (a : form) ) -> (subst_label s l1, subst_label s l2, f_subst ~tx s a))
 
   and f_subst_op ~tx freshen fty tys args (tyids, e) =
     (* FIXME: factor this out *)
