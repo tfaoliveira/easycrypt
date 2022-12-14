@@ -193,6 +193,8 @@ type preenv = {
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
+  (*TODO: annotations: check.*)
+  env_labels   : EcIdent.t Ssym.M.t;
 }
 
 and escope = {
@@ -310,7 +312,8 @@ let empty gstate =
     env_ntbase   = [];
     env_modlcs   = Sid.empty;
     env_item     = [];
-    env_norm     = ref empty_norm_cache; }
+    env_norm     = ref empty_norm_cache;
+    env_labels   = Ssym.M.empty }
 
 (* -------------------------------------------------------------------- *)
 let copy (env : env) =
@@ -1474,6 +1477,14 @@ module BaseRw = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module Label = struct
+  let add    l env = {env with env_labels = Ssym.M.add l (EcIdent.create l) env.env_labels }
+  (*TODO: annotations: what happens when not found?
+          We should raise a specific error.*)
+  let lookup l env = Ssym.M.find l env.env_labels
+end
+
+(* -------------------------------------------------------------------- *)
 module Reduction = struct
   type rule   = EcTheory.rule
   type topsym = red_topsym
@@ -1711,12 +1722,17 @@ module Fun = struct
     let pre2 = actmem_pre EcCoreFol.mright fun2 in
     let post1 = actmem_post EcCoreFol.mleft fun1 in
     let post2 = actmem_post EcCoreFol.mright fun2 in
-    (pre1,pre2), (post1,post2)
+    (*TODO: annotations: is one memenv common to all labels, or should there be one per label?*)
+    let _, anno1 = actmem_body EcCoreFol.mleft fun1 in
+    let _, anno2 = actmem_body EcCoreFol.mright fun2 in
+    (pre1,pre2), (post1,post2), (anno1, anno2)
 
+  (*TODO: annotations: check.*)
   let equivF path1 path2 env =
-    let (pre1,pre2),(post1,post2) = equivF_memenv path1 path2 env in
+    let (pre1,pre2),(post1,post2), (anno1, anno2)  = equivF_memenv path1 path2 env in
     Memory.push_all [pre1; pre2] env,
-    Memory.push_all [post1; post2] env
+    Memory.push_all [post1; post2] env,
+    Memory.push_all [anno1; anno2] env
 
   let equivS path1 path2 env =
     let fun1 = by_xpath path1 env in
@@ -3785,8 +3801,8 @@ module LDecl = struct
     { lenv with le_env = env1}, {lenv with le_env = env2 }
 
   let equivF xp1 xp2 lenv =
-    let env1, env2 = Fun.equivF xp1 xp2 lenv.le_env in
-    { lenv with le_env = env1}, {lenv with le_env = env2 }
+    let env1, env2, env3 = Fun.equivF xp1 xp2 lenv.le_env in
+    { lenv with le_env = env1}, {lenv with le_env = env2 }, {lenv with le_env = env3}
 
   let inv_memenv lenv =
     { lenv with le_env = Fun.inv_memenv lenv.le_env }

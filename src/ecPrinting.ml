@@ -1674,10 +1674,12 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_form ppe) hs.hs_po
 
   | FequivF eqv ->
-      let (meprl, meprr), (mepol,mepor) =
+      let (meprl, meprr), (mepol,mepor), (mepal,mepar) =
         EcEnv.Fun.equivF_memenv eqv.ef_fl eqv.ef_fr ppe.PPEnv.ppe_env in
       let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
       let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
+      (*TODO: annotations: correct printing.*)
+      let _ = PPEnv.create_and_push_mems ppe [mepal; mepar] in
       Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_funname ppe) eqv.ef_fl
         (pp_funname ppe) eqv.ef_fr
@@ -1695,10 +1697,12 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_form ppef) es.es_po
 
   | FeagerF eg ->
-      let (meprl, meprr), (mepol,mepor) =
+      let (meprl, meprr), (mepol,mepor), (mepal,mepar) =
         EcEnv.Fun.equivF_memenv eg.eg_fl eg.eg_fr ppe.PPEnv.ppe_env in
       let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
       let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
+      (*TODO: annotations: correct printing.*)
+      let _ = PPEnv.create_and_push_mems ppe [mepal; mepar] in
       Format.fprintf fmt "eager[@[<hov 2>@ %a,@ %a ~@ %a,@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_stmt_for_form ppe) eg.eg_sl
         (pp_funname ppe) eg.eg_fl
@@ -2813,10 +2817,12 @@ let pp_bdhoareS (ppe : PPEnv.t) ?prpo fmt hs =
 
 (* -------------------------------------------------------------------- *)
 let pp_equivF (ppe : PPEnv.t) ?prpo fmt ef =
-  let (meprl, meprr), (mepol,mepor) =
+  let (meprl, meprr), (mepol, mepor), (mepal, mepar) =
     EcEnv.Fun.equivF_memenv ef.ef_fl ef.ef_fr ppe.PPEnv.ppe_env in
   let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
   let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
+  (*TODO: annotations: correct printing.*)
+  let _ = PPEnv.create_and_push_mems ppe [mepal; mepar] in
   Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) ef.ef_pr;
   Format.fprintf fmt "    %a ~ %a@\n%!"
     (pp_funname ppe) ef.ef_fl

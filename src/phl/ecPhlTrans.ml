@@ -66,14 +66,15 @@ module Low = struct
   let t_equivF_trans_r f (p1, q1) (p2, q2) tc =
     let env, hyps, _ = FApi.tc1_eflat tc in
     let ef = tc1_as_equivF tc in
-    let (prml, prmr), (poml, pomr) = Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
+    (*TODO: annotations*)
+    let (prml, prmr), (poml, pomr), _ = Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
     let (_, pomt) = snd (Fun.hoareF_memenv f env) in
     let cond1, cond2 =
       transitivity_side_cond
         hyps prml prmr poml pomr
         ef.ef_pr ef.ef_po p1 q1 pomt p2 q2 in
-    let cond3 = f_equivF p1 ef.ef_fl f q1 [] [] in (*TODO: annotations*)
-    let cond4 = f_equivF p2 f ef.ef_fr q2 [] [] in (*TODO: annotations*)
+    let cond3 = f_equivF p1 ef.ef_fl f q1 [] [] in
+    let cond4 = f_equivF p2 f ef.ef_fr q2 [] [] in
 
     FApi.xmutate1 tc `Trans [cond1; cond2; cond3; cond4]
 end
@@ -121,7 +122,8 @@ let process_equiv_trans (tk, tf) tc =
         let ef = tc1_as_equivF tc in
         let f = EcTyping.trans_gamepath env f in
         let (_, prmt), (_, pomt) = Fun.hoareF_memenv f env in
-        let (prml, prmr), (poml, pomr) = Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
+        (*TODO: annotations*)
+        let (prml, prmr), (poml, pomr), _ = Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
         let process ml mr fo =
           TTC.pf_process_form !!tc (LDecl.push_all [ml; mr] hyps) tbool fo in
         let p1 = process prml (mright, prmt) p1 in

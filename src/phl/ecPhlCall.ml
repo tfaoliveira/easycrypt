@@ -384,8 +384,9 @@ let process_call side info tc =
       | FequivS es, None, None ->
           let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
           let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
-          let penv, qenv = LDecl.equivF fl fr hyps in
-          let es_am = es.es_am in (*TODO: annotations*)
+          (*TODO: annotations: must use everything.*)
+          let penv, qenv, _ = LDecl.equivF fl fr hyps in
+          let es_am = es.es_am in
           let es_as = es.es_as in
           (penv, qenv, fun pre post -> f_equivF pre fl fr post es_am es_as)
 

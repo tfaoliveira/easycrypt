@@ -643,7 +643,8 @@ let process_call info tc =
         check_only_global !!tc env sl;
         check_only_global !!tc env sr;
 
-        let penv, qenv = LDecl.equivF fl fr hyps in
+        (*TODO: annotations*)
+        let penv, qenv, _ = LDecl.equivF fl fr hyps in
         let fpre  = TTC.pf_process_form !!tc penv tbool fpre  in
         let fpost = TTC.pf_process_form !!tc qenv tbool fpost in
         f_eagerF fpre sl fl fr sr fpost

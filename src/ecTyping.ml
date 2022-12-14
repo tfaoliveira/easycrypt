@@ -284,7 +284,7 @@ let (_i_inuse, s_inuse, se_inuse) =
       assert false (* FIXME *)
 
     | Slabel _ ->
-      assert false (* TODO: annotations *)
+      assert false (* TODO: annotations: I think this sould ba assert false, but check. *)
 
   and s_inuse (map : uses) (s : stmt) =
     List.fold_left i_inuse map s.s_node
@@ -2945,7 +2945,7 @@ and transinstr
       [ i_match (e, branches) ]
     end
 
-   | PSlabel _ -> assert false (*TODO: annotations*)
+   | PSlabel _ -> assert false (*TODO: annotations: should update the env to lake the label into account.*)
 
 (* -------------------------------------------------------------------- *)
 and trans_pv env { pl_desc = x; pl_loc = loc } =
@@ -3048,6 +3048,16 @@ and trans_form_or_pattern
 
   let rec transf_r opsc incost env f =
     let transf = transf_r opsc incost in
+    (*TODO: annotations: check.*)
+    let transa env =
+      let translf (l1, l2, a) =
+        let i1 = EcEnv.Label.lookup (unloc l1) env in
+        let i2 = EcEnv.Label.lookup (unloc l2) env in
+        let a' = transf env a in
+        (i1, i2, a')
+      in
+      List.map translf
+    in
 
     (* If we are below a cost statement, are typing a memory binder, and
        have memory predicates, we return an error to avoid shadowing issues
@@ -3652,23 +3662,27 @@ and trans_form_or_pattern
         let fpath = trans_gamepath env gp in
           f_losslessF fpath
 
-    (*TODO: annotations*)
     | PFequivF (pre, (gp1, gp2), post, asum, asrt) ->
         let fpath1 = trans_gamepath env gp1 in
         let fpath2 = trans_gamepath env gp2 in
-        let penv, qenv = EcEnv.Fun.equivF fpath1 fpath2 env in
+        let penv, qenv, aenv = EcEnv.Fun.equivF fpath1 fpath2 env in
         let pre'  = transf penv pre in
         let post' = transf qenv post in
-        let asum' = List.map (fun (l1, l2, a) -> (EcIdent.create (unloc l1), EcIdent.create (unloc l2), transf qenv a)) asum in
-        let asrt' = List.map (fun (l1, l2, a) -> (EcIdent.create (unloc l1), EcIdent.create (unloc l2), transf qenv a)) asrt in
-          unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
+       (*TODO: annotations: check.*)
+        let asum' = transa aenv asum in
+        let asrt' = transa aenv asrt in
+          (*TODO: annotations: check.*)
+          unify_or_fail penv ue pre .pl_loc ~expct:tbool pre'.f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
-          f_equivF pre' fpath1 fpath2 post' asum' asrt' (*TODO: annotations*)
+          List.iter (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asum';
+          List.iter (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asrt';
+          f_equivF pre' fpath1 fpath2 post' asum' asrt'
 
     | PFeagerF (pre, (s1,gp1,gp2,s2), post) ->
         let fpath1 = trans_gamepath env gp1 in
         let fpath2 = trans_gamepath env gp2 in
-        let penv, qenv = EcEnv.Fun.equivF fpath1 fpath2 env in
+        (*TODO: annotations: should this also use the third env?*)
+        let penv, qenv, _ = EcEnv.Fun.equivF fpath1 fpath2 env in
         let pre'  = transf penv pre in
         let post' = transf qenv post in
         let s1    = transstmt env ue s1 in

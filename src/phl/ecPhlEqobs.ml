@@ -460,7 +460,8 @@ let process_eqobs_inF info tc =
   let eqo =
     match info.EcParsetree.sim_eqs with
     | Some pf ->
-      let _,(ml,mr) = Fun.equivF_memenv fl fr env in
+      (*TODO: annotations*)
+      let _,(ml,mr),_ = Fun.equivF_memenv fl fr env in
       let hyps = LDecl.push_all [ml;mr] hyps in
       process_eqs env tc (TTC.pf_process_form !!tc hyps tbool pf)
     | None ->

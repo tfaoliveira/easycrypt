@@ -185,19 +185,21 @@ let t_bdHoareS_conseq_bd cmp bd tc =
 let t_equivF_conseq pre post tc =
   let env = FApi.tc1_env tc in
   let ef  = tc1_as_equivF tc in
-  let (mprl,mprr), (mpol,mpor) =
+  (*TODO: annotations*)
+  let (mprl,mprr), (mpol,mpor), (_, _) =
     EcEnv.Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
   let cond1, cond2 = conseq_cond ef.ef_pr ef.ef_po pre post in
   let concl1 = f_forall_mems [mprl;mprr] cond1 in
   let concl2 = f_forall_mems [mpol;mpor] cond2 in
-  let concl3 = f_equivF pre ef.ef_fl ef.ef_fr post ef.ef_am ef.ef_as in (*TODO: annotations*)
+  let concl3 = f_equivF pre ef.ef_fl ef.ef_fr post ef.ef_am ef.ef_as in
   FApi.xmutate1 tc `HlConseq [concl1; concl2; concl3]
 
 (* -------------------------------------------------------------------- *)
 let t_eagerF_conseq pre post tc =
   let env = FApi.tc1_env tc in
   let eg = tc1_as_eagerF tc in
-  let (mprl,mprr), (mpol,mpor) =
+  (*TODO: annotations*)
+  let (mprl,mprr), (mpol,mpor), (_, _) =
     EcEnv.Fun.equivF_memenv eg.eg_fl eg.eg_fr env in
   let cond1, cond2 = conseq_cond eg.eg_pr eg.eg_po pre post in
   let concl1 = f_forall_mems [mprl;mprr] cond1 in
@@ -238,7 +240,8 @@ let cond_equivF_notmod ?(mk_other=false) tc cond =
   let (env, hyps, _) = FApi.tc1_eflat tc in
   let ef = tc1_as_equivF tc in
   let fl, fr = ef.ef_fl, ef.ef_fr in
-  let (mprl,mprr),(mpol,mpor) = Fun.equivF_memenv fl fr env in
+  (*TODO: annotations*)
+  let (mprl,mprr),(mpol,mpor), (_, _) = Fun.equivF_memenv fl fr env in
   let fsigl = (Fun.by_xpath fl env).f_sig in
   let fsigr = (Fun.by_xpath fr env).f_sig in
   let pvresl = pv_res and pvresr = pv_res in
@@ -688,9 +691,10 @@ let transitivity_side_cond hyps prml poml pomr p q p2 q2 p1 q1 =
 let t_hoareF_conseq_equiv f2 p q p2 q2 tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let hf1 = tc1_as_hoareF tc in
-  let ef  = f_equivF p hf1.hf_f f2 q [] [] in (*TODO: annotations*)
+  (*TODO: annotations*)
+  let ef  = f_equivF p hf1.hf_f f2 q [] [] in
   let hf2 = f_hoareF p2 f2 q2 in
-  let (prml, _prmr), (poml, pomr) = Fun.equivF_memenv hf1.hf_f f2 env in
+  let (prml, _prmr), (poml, pomr), (_, _) = Fun.equivF_memenv hf1.hf_f f2 env in
   let (cond1, cond2) =
     transitivity_side_cond hyps prml poml pomr p q p2 q2 hf1.hf_pr hf1.hf_po in
   FApi.xmutate1 tc `HoareFConseqEquiv [cond1; cond2; ef; hf2]
@@ -698,9 +702,10 @@ let t_hoareF_conseq_equiv f2 p q p2 q2 tc =
 let t_bdHoareF_conseq_equiv f2 p q p2 q2 tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let hf1 = tc1_as_bdhoareF tc in
-  let ef  = f_equivF p hf1.bhf_f f2 q [] [] in (*TODO: annotations*)
+  (*TODO: annotations*)
+  let ef  = f_equivF p hf1.bhf_f f2 q [] [] in
   let hf2 = f_bdHoareF p2 f2 q2 hf1.bhf_cmp hf1.bhf_bd in
-  let (prml, _prmr), (poml, pomr) = Fun.equivF_memenv hf1.bhf_f f2 env in
+  let (prml, _prmr), (poml, pomr), (_, _) = Fun.equivF_memenv hf1.bhf_f f2 env in
   let (cond1, cond2) =
     transitivity_side_cond hyps prml poml pomr p q p2 q2 hf1.bhf_pr hf1.bhf_po in
   FApi.xmutate1 tc `BdHoareFConseqEquiv [cond1; cond2; ef; hf2]
@@ -1291,10 +1296,11 @@ let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) 
         (penv, qenv, hf.bhf_pr, hf.bhf_po, fmake)
 
       | FequivF ef ->
-        let penv, qenv = LDecl.equivF ef.ef_fl ef.ef_fr hyps in
+        (*TODO: annotations*)
+        let penv, qenv, _ = LDecl.equivF ef.ef_fl ef.ef_fr hyps in
         let fmake pre post c_or_bd =
           ensure_none c_or_bd;
-          f_equivF pre ef.ef_fl ef.ef_fr post [] [] (*TODO: annotations*)
+          f_equivF pre ef.ef_fl ef.ef_fr post [] []
         in (penv, qenv, ef.ef_pr, ef.ef_po, fmake)
 
       | FequivS es ->

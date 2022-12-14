@@ -112,7 +112,8 @@ let t_equiv_deno_r pre post tc =
  in
 
   let (prl, prr) = (destr_pr f1, destr_pr f2) in
-  let es_am = assert false in (*TODO: annotations*)
+  (*TODO: annotations*)
+  let es_am = assert false in
   let es_as = assert false in
   let concl_e = f_equivF pre prl.pr_fun prr.pr_fun post es_am es_as in
   let funl = EcEnv.Fun.by_xpath prl.pr_fun env in
@@ -334,7 +335,8 @@ let process_pre tc hyps prl prr pre post =
   let fl = prl.pr_fun and fr = prr.pr_fun in
   match pre with
   | Some p ->
-    let penv, _ = LDecl.equivF fl fr hyps in
+    (*TODO: annotations*)
+    let penv, _, _ = LDecl.equivF fl fr hyps in
     TTC.pf_process_formula !!tc penv p
   | None ->
     let al = prl.pr_args and ar = prr.pr_args in
@@ -386,7 +388,8 @@ let process_equiv_deno1 info eq tc =
     let post =
       match post with
       | Some p ->
-        let _, qenv = LDecl.equivF fl fr hyps in
+        (*TODO: annotations*)
+        let _, qenv, _= LDecl.equivF fl fr hyps in
         TTC.pf_process_formula !!tc qenv p
       | None ->
         let evl = Fsubst.f_subst_mem mhr mleft evl in
@@ -401,7 +404,8 @@ let process_equiv_deno1 info eq tc =
 
     let pre = process_pre tc hyps prl prr pre post in
 
-    let es_am = assert false in (*TODO: annotations*)
+    (*TODO: annotations*)
+    let es_am = assert false in
     let es_as = assert false in
 
     f_equivF pre fl fr post es_am es_as
@@ -430,7 +434,8 @@ let process_equiv_deno_bad info tc =
     let post =
       match post with
       | Some p ->
-        let _, qenv = LDecl.equivF fl fr hyps in
+        (*TODO: annotations*)
+        let _, qenv, _ = LDecl.equivF fl fr hyps in
         TTC.pf_process_formula !!tc qenv p
       | None ->
         let evl = Fsubst.f_subst_mem mhr mleft evl in
@@ -440,7 +445,8 @@ let process_equiv_deno_bad info tc =
         f_imps [f_not bad;evl] evr in
     let pre = process_pre tc hyps prl prr pre post in
 
-    let es_am = assert false in (*TODO: annotations*)
+    (*TODO: annotations*)
+    let es_am = assert false in
     let es_as = assert false in
 
     f_equivF pre fl fr post es_am es_as
@@ -488,7 +494,8 @@ let process_equiv_deno_bad2 info eq bad1 tc =
     let post =
       match post with
       | Some p ->
-        let _, qenv = LDecl.equivF fl fr hyps in
+        (*TODO: annotations*)
+        let _, qenv, _ = LDecl.equivF fl fr hyps in
         TTC.pf_process_formula !!tc qenv p
       | None ->
         let evl = Fsubst.f_subst_mem mhr mleft evl in
@@ -501,7 +508,8 @@ let process_equiv_deno_bad2 info eq bad1 tc =
 
     let pre = process_pre tc hyps prl prr pre post in
 
-    let es_am = assert false in (*TODO: annotations*)
+    (*TODO: annotations*)
+    let es_am = assert false in
     let es_as = assert false in
 
     f_equivF pre fl fr post es_am es_as

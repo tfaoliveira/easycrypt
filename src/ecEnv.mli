@@ -107,9 +107,9 @@ module Fun : sig
   val inv_memenv : env -> env
 
   val equivF_memenv : xpath -> xpath -> env ->
-    (memenv * memenv) * (memenv * memenv)
+    (memenv * memenv) * (memenv * memenv) * (memenv * memenv)
 
-  val equivF : xpath -> xpath -> env -> env * env
+  val equivF : xpath -> xpath -> env -> env * env * env
 
   val equivS : xpath -> xpath -> env ->
     memenv * (funsig * function_def) * memenv * (funsig * function_def) * env
@@ -412,6 +412,12 @@ module BaseRw : sig
 end
 
 (* -------------------------------------------------------------------- *)
+module Label : sig
+  val add    : symbol -> env -> env
+  val lookup : symbol -> env -> EcIdent.t
+end
+
+(* -------------------------------------------------------------------- *)
 module Reduction : sig
   type rule   = EcTheory.rule
   type topsym = [
@@ -512,7 +518,7 @@ module LDecl : sig
   val push_active : memenv -> hyps -> hyps
 
   val hoareF : xpath -> hyps -> hyps * hyps
-  val equivF : xpath -> xpath -> hyps -> hyps * hyps
+  val equivF : xpath -> xpath -> hyps -> hyps * hyps * hyps
 
   val inv_memenv  : hyps -> hyps
   val inv_memenv1 : hyps -> hyps
