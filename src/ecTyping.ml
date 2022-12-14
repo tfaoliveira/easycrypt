@@ -2945,7 +2945,11 @@ and transinstr
       [ i_match (e, branches) ]
     end
 
-   | PSlabel _ -> assert false (*TODO: annotations: should update the env to lake the label into account.*)
+   | PSlabel l ->
+     (*TODO: annotations: check and find out what is missing.*)
+     let env = EcEnv.Label.add (unloc l) env in
+     let i = EcEnv.Label.lookup (unloc l) env in
+     [ i_label i ]
 
 (* -------------------------------------------------------------------- *)
 and trans_pv env { pl_desc = x; pl_loc = loc } =

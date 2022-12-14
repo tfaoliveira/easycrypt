@@ -18,7 +18,7 @@ module M = {
       i += 1;
     }
   }
-}
+}.
 
 (*Relational assertions can be used in lockstep.*)
 equiv [M.f ~ M.g : n{1} = 10 /\ x{1} + x{2} = 42 ==> x{1} + x{2} = 42 |

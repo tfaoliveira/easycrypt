@@ -22,7 +22,7 @@ module M = {
     }
     @Le;
   }
-}
+}.
 
 (*Or not be.*)
 equiv [M.f ~ M.g : true ==> true |

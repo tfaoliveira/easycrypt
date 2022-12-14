@@ -59,6 +59,7 @@ val i_if       : expr * stmt * stmt -> instr
 val i_while    : expr * stmt -> instr
 val i_match    : expr * ((EcIdent.t * ty) list * stmt) list -> instr
 val i_abstract : EcIdent.t -> instr
+val i_label    : EcIdent.t -> instr
 
 val s_asgn     : lvalue * expr -> stmt
 val s_rnd      : lvalue * expr -> stmt
@@ -67,6 +68,7 @@ val s_if       : expr * stmt * stmt -> stmt
 val s_while    : expr * stmt -> stmt
 val s_match    : expr * ((EcIdent.t * ty) list * stmt) list -> stmt
 val s_abstract : EcIdent.t -> stmt
+val s_label    : EcIdent.t -> stmt
 val s_seq      : stmt -> stmt -> stmt
 val s_empty    : stmt
 
