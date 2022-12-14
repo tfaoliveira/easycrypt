@@ -2435,7 +2435,7 @@ let t_smt ~(mode:smtmode) pi tc =
   else error ()
 
 (* -------------------------------------------------------------------- *)
-let t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(mode=fmdelta) ?(depth = 1) (tc : tcenv1) =
+let t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(mode = fmdelta) ?(depth = 1) (tc : tcenv1) =
   let bases = EcEnv.Auto.getall bases (FApi.tc1_env tc) in
 
   let t_apply1 p tc =
