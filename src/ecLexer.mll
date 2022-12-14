@@ -331,16 +331,16 @@ let letter  = upper | lower
 let digit   = ['0'-'9']
 let uint    = digit+
 
+let opchar = ['=' '<' '>' '+' '-' '*' '/' '\\' '%' '&' '^' '|' ':' '#' '$']
+
 let ichar  = (letter | digit | '_' | '\'')
-let lident = (lower ichar*) | ('_' ichar+)
+let lident = (lower ichar*) | ('_' ichar+) | ('#' (opchar | ichar)* ichar)
 let uident = upper ichar*
 let tident = '\'' lident
 let mident = '&'  (lident | uint)
 
-let opchar = ['=' '<' '>' '+' '-' '*' '/' '\\' '%' '&' '^' '|' ':' '#' '$']
-
 let sop = opchar+ | '`' opchar+ '`'
-let nop = '\\' ichar+
+let nop = '\\' (opchar | ichar)* ichar+
 
 let uniop = nop | ['-' '+']+ | '!'
 let binop = sop | nop
