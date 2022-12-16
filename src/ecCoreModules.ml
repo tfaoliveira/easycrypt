@@ -6,6 +6,7 @@ open EcPath
 
 module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
+module Sstr = EcMaps.Sstr
 
 (* -------------------------------------------------------------------- *)
 type lvalue =
@@ -788,6 +789,7 @@ type function_def = {
   f_body   : stmt;
   f_ret    : EcTypes.expr option;
   f_uses   : uses;
+  f_labels : Sstr.t;
 }
 
 let fd_equal f1 f2 =
@@ -946,3 +948,21 @@ let get_uninit_read_of_module (p : path) (me : _ p_module_expr) =
     in EcPath.mpath_crt (EcPath.pqname p me.me_name) margs None
 
   in List.rev (doit_me [] (mp, me))
+
+
+(* -------------------------------------------------------------------- *)
+let rec _s_labels (ls : Sstr.t) (s : stmt) : Sstr.t =
+  List.fold_left _i_labels ls s.s_node
+
+and _i_labels (ls : EcMaps.Sstr.t) (i : instr) : Sstr.t =
+  match i.i_node with
+  | Sasgn _ | Srnd _ | Scall _ | Sabstract _ -> ls
+  | Sif (_, s1, s2) ->
+      let ls = _s_labels ls s1 in
+      _s_labels ls s2
+  | Swhile (_, s) ->
+      _s_labels ls s
+  | Smatch (_, ms) -> List.fold_left _s_labels ls (List.map snd ms)
+  | Slabel l -> Sstr.M.add l.id_symb () ls
+
+let s_labels s = _s_labels Sstr.M.empty s

@@ -193,8 +193,6 @@ type preenv = {
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
-  (*TODO: annotations: check.*)
-  env_labels   : EcIdent.t Ssym.M.t;
 }
 
 and escope = {
@@ -312,8 +310,7 @@ let empty gstate =
     env_ntbase   = [];
     env_modlcs   = Sid.empty;
     env_item     = [];
-    env_norm     = ref empty_norm_cache;
-    env_labels   = Ssym.M.empty }
+    env_norm     = ref empty_norm_cache; }
 
 (* -------------------------------------------------------------------- *)
 let copy (env : env) =
@@ -1474,14 +1471,6 @@ module BaseRw = struct
             (omap (fun s -> List.fold_left (fun s r -> Sp.add r s) s l))
             (IPPath p) env.env_rwbase;
         env_item = mkitem import (Th_addrw (p, l, lc)) :: env.env_item; }
-end
-
-(* -------------------------------------------------------------------- *)
-module Label = struct
-  let add    l env = {env with env_labels = Ssym.M.add l (EcIdent.create l) env.env_labels }
-  (*TODO: annotations: what happens when not found?
-          We should raise a specific error.*)
-  let lookup l env = Ssym.M.find l env.env_labels
 end
 
 (* -------------------------------------------------------------------- *)

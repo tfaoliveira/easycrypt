@@ -571,6 +571,13 @@ end = struct
              if you meant to call procedure `%a', assign its result using `<@' rather than `<-'"
             pp_qsymbol q
 
+    (*TODO: annotations: correct error messages.*)
+    | LabelNotFound _ ->
+        msg "The label _ was not found in the procedure."
+
+    | NonAnnotablePair (_, _) ->
+        msg "One of the two procedures can't be annoted because it is not concrete."
+
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
 

@@ -236,7 +236,9 @@ let subst_function_def (s : _subst) (def : function_def) =
   { f_locals = List.map (subst_variable s) def.f_locals;
     f_body   = s_subst es def.f_body;
     f_ret    =  def.f_ret |> omap (e_subst es);
-    f_uses   = subst_fun_uses s def.f_uses; }
+    f_uses   = subst_fun_uses s def.f_uses;
+    (*TODO: annotations: label substitution.*)
+    f_labels = def.f_labels; }
 
 (* -------------------------------------------------------------------- *)
 let subst_function (s : _subst) (f : function_) =

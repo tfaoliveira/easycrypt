@@ -168,6 +168,8 @@ type tyerror =
 | LvMapOnNonAssign
 | NoDefaultMemRestr
 | ProcAssign             of qsymbol
+| LabelNotFound          of EcIdent.t
+| NonAnnotablePair       of form p_function_body * form p_function_body
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror
@@ -216,7 +218,7 @@ val transexpcast_opt :
 type ismap = (instr list) EcMaps.Mstr.t
 
 val transstmt :
-  ?map:ismap -> env -> EcUnify.unienv -> pstmt -> stmt * EcEnv.env
+  ?map:ismap -> env -> EcUnify.unienv -> pstmt -> stmt
 
 (* -------------------------------------------------------------------- *)
 type ptnmap = ty EcIdent.Mid.t ref

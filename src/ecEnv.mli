@@ -412,12 +412,6 @@ module BaseRw : sig
 end
 
 (* -------------------------------------------------------------------- *)
-module Label : sig
-  val add    : symbol -> env -> env
-  val lookup : symbol -> env -> EcIdent.t
-end
-
-(* -------------------------------------------------------------------- *)
 module Reduction : sig
   type rule   = EcTheory.rule
   type topsym = [

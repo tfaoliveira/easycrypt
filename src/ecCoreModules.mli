@@ -215,6 +215,7 @@ type function_def = {
   f_body   : stmt;
   f_ret    : EcTypes.expr option;
   f_uses   : uses;
+  f_labels : EcMaps.Sstr.t;
 }
 
 val fd_equal : function_def -> function_def -> bool
@@ -287,3 +288,6 @@ val p_mty_hash : ('a -> int) -> 'a p_module_type -> int
 val get_uninit_read : stmt -> Ssym.t
 val get_uninit_read_of_fun : _ p_function_ -> Ssym.t
 val get_uninit_read_of_module : path -> _ p_module_expr -> (xpath * Ssym.t) list
+
+(* -------------------------------------------------------------------- *)
+val s_labels : stmt -> EcMaps.Sstr.t

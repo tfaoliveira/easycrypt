@@ -119,7 +119,7 @@ let tc1_process_stmt  ?map tc mt c =
   let hyps = LDecl.push_active (mhr,mt) hyps in
   let env  = LDecl.toenv hyps in
   let ue   = unienv_of_hyps hyps in
-  let c, _ = Exn.recast_pe !!tc hyps (fun () -> EcTyping.transstmt ?map env ue c) in
+  let c    = Exn.recast_pe !!tc hyps (fun () -> EcTyping.transstmt ?map env ue c) in
   let esub = Exn.recast_pe !!tc hyps (fun () -> Tuni.offun (EcUnify.UniEnv.close ue)) in
   let esub = { e_subst_id with es_ty = esub; } in
   EcModules.s_subst esub c
