@@ -1722,7 +1722,8 @@ module Fun = struct
     let pre2 = actmem_pre EcCoreFol.mright fun2 in
     let post1 = actmem_post EcCoreFol.mleft fun1 in
     let post2 = actmem_post EcCoreFol.mright fun2 in
-    (*TODO: annotations: is one memenv common to all labels, or should there be one per label?*)
+    (*TODO: annotations: is one memenv common to all labels?
+      Or should there be one per label?*)
     let _, anno1 = actmem_body EcCoreFol.mleft fun1 in
     let _, anno2 = actmem_body EcCoreFol.mright fun2 in
     (pre1,pre2), (post1,post2), (anno1, anno2)

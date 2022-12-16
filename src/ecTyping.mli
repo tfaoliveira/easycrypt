@@ -215,7 +215,8 @@ val transexpcast_opt :
 (* -------------------------------------------------------------------- *)
 type ismap = (instr list) EcMaps.Mstr.t
 
-val transstmt : ?map:ismap -> env -> EcUnify.unienv -> pstmt -> stmt
+val transstmt :
+  ?map:ismap -> env -> EcUnify.unienv -> pstmt -> stmt * EcEnv.env
 
 (* -------------------------------------------------------------------- *)
 type ptnmap = ty EcIdent.Mid.t ref

@@ -257,6 +257,7 @@
     (">>"  , (FWDS             , false));
     ("<:"  , (LTCOLON          , false));
     ("==>" , (LONGARROW        , false));
+    ("-->" , (LONGARROWSLIM    , false));
     ("="   , (EQ               , false));
     ("<>"  , (NE               , false));
     (">"   , (GT               , false));

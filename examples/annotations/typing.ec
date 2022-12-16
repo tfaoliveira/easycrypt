@@ -1,3 +1,13 @@
+require import AllCore List.
+
+module Mmatch = {
+  var l : int list
+  var x : int
+  proc foo() = {
+    match l with | [] => x <- 0; | h :: t => x <- h end;
+  }
+}.
+
 module M1 = {
   var x : int
 

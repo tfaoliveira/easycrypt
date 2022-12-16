@@ -283,8 +283,7 @@ let (_i_inuse, s_inuse, se_inuse) =
     | Sabstract _ ->
       assert false (* FIXME *)
 
-    | Slabel _ ->
-      assert false (* TODO: annotations: I think this sould ba assert false, but check. *)
+    | Slabel _ -> map
 
   and s_inuse (map : uses) (s : stmt) =
     List.fold_left i_inuse map s.s_node
@@ -2759,7 +2758,7 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
   let memenv = List.fold_left add_local memenv pbody.pfb_locals in
   let env = EcEnv.Memory.push_active memenv env in
 
-  let body   = transstmt env ue pbody.pfb_body in
+  let body, env = transstmt env ue pbody.pfb_body in
   let result =
     match pbody.pfb_return with
     | None ->
@@ -2822,16 +2821,25 @@ and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
 
 (* -------------------------------------------------------------------- *)
 and transstmt
-  ?(map : ismap = Mstr.empty) (env : EcEnv.env) ue (stmt : pstmt) : stmt
+  ?(map : ismap = Mstr.empty) (env : EcEnv.env) ue (stmt : pstmt) :
+  stmt * EcEnv.env
 =
   let l_start =
     Mstr.find_def [] EcTransMatching.default_start_name map in
   let l_end =
     Mstr.find_def [] EcTransMatching.default_end_name   map in
-  let instr_list_list = List.map (transinstr ~map env ue) stmt in
+  let rec aux acc env stmt =
+    match stmt with
+    | [] -> acc, env
+    | i :: stmt ->
+        let i, env = transinstr ~map env ue i in
+        aux (i :: acc) env stmt
+  in
+  let instr_list_list, env = aux [] env stmt in
+  let instr_list_list = List.rev instr_list_list in
   let instr_list_list = instr_list_list @ [l_end] in
   let instr_list_list = l_start :: instr_list_list in
-  EcModules.stmt (List.flatten instr_list_list)
+  EcModules.stmt (List.flatten instr_list_list), env
 
 (* -------------------------------------------------------------------- *)
 and transinstr
@@ -2849,7 +2857,7 @@ and transinstr
   match i.pl_desc with
   | PSident x -> begin
       match Mstr.find_opt (unloc x) map with
-      | Some x -> x
+      | Some x -> x, env
       | None ->
           tyerror (loc x) env (UnknownInstrMetaVar (unloc x))
     end
@@ -2870,44 +2878,49 @@ and transinstr
             tyerror l e exn
       in
       unify_or_fail env ue prvalue.pl_loc ~expct:lty rty;
-      [ i_asgn_lv i.pl_loc env lvalue rvalue ]
+      [ i_asgn_lv i.pl_loc env lvalue rvalue ], env
     end
 
   | PSrnd (plvalue, prvalue) ->
       let lvalue, lty = translvalue ue env plvalue in
       let rvalue, rty = transexp env `InProc ue prvalue in
       unify_or_fail env ue prvalue.pl_loc ~expct:(tdistr lty) rty;
-      [ i_rnd_lv i.pl_loc env lvalue rvalue ]
+      [ i_rnd_lv i.pl_loc env lvalue rvalue ], env
 
   | PScall (None, name, args) ->
       let (fpath, args, _rty) = transcall name (unloc args) in
-      [ i_call (None, fpath, args) ]
+      [ i_call (None, fpath, args) ], env
 
   | PScall (Some lvalue, name, args) ->
       let lvalue, lty = translvalue ue env lvalue in
       let (fpath, args, rty) = transcall name (unloc args) in
       unify_or_fail env ue name.pl_loc ~expct:lty rty;
-      [ i_call_lv i.pl_loc env lvalue fpath args ]
+      [ i_call_lv i.pl_loc env lvalue fpath args ], env
 
   | PSif ((pe, s), cs, sel) -> begin
-      let rec for1_i (pe, s) sel =
+      let rec for1_i (pe, s) (sel, env) =
         let e, ety = transexp env `InProc ue pe in
-        let s = transstmt env ue s in
+        let s, env = transstmt env ue s in
         unify_or_fail env ue pe.pl_loc ~expct:tbool ety;
-        i_if (e, s, sel)
+        i_if (e, s, sel), env
 
-      and for1_s (pe, s) sel = stmt [for1_i (pe, s) sel] in
+      and for1_s (pe, s) (sel, env) =
+        let is, env = for1_i (pe, s) (sel, env) in
+        stmt [is], env
+      in
 
-      [ for1_i (pe, s)
-        (List.fold_right for1_s cs (transstmt env ue sel)) ]
+      let i, env =
+        for1_i (pe, s) (List.fold_right for1_s cs (transstmt env ue sel)) in
+      [ i ], env
   end
 
   | PSwhile (pe, pbody) ->
       let e, ety = transexp env `InProc ue pe in
-      let body = transstmt env ue pbody in
+      let body, env = transstmt env ue pbody in
       unify_or_fail env ue pe.pl_loc ~expct:tbool ety;
-      [ i_while (e, body) ]
+      [ i_while (e, body) ], env
 
+  (*TODO: annotations: what is this supposed to do to the env?*)
   | PSmatch (pe, pbranches) -> begin
       let e, ety = transexp env `InProc ue pe in
       let ety = Tuni.offun (EcUnify.UniEnv.assubst ue) ety in
@@ -2940,16 +2953,16 @@ and transinstr
 
       let branches = List.map (fun (lcs, s) ->
         let env = EcEnv.Var.bind_locals lcs env in
-        (lcs, omap (transstmt env ue) s |> odfl (stmt []))) branches in
+        (lcs, omap (fun pst -> fst (transstmt env ue pst)) s |> odfl (stmt []))) branches in
 
-      [ i_match (e, branches) ]
+      [ i_match (e, branches) ], env
     end
 
    | PSlabel l ->
      (*TODO: annotations: check and find out what is missing.*)
      let env = EcEnv.Label.add (unloc l) env in
      let i = EcEnv.Label.lookup (unloc l) env in
-     [ i_label i ]
+     [ i_label i ], env
 
 (* -------------------------------------------------------------------- *)
 and trans_pv env { pl_desc = x; pl_loc = loc } =
@@ -3678,8 +3691,10 @@ and trans_form_or_pattern
           (*TODO: annotations: check.*)
           unify_or_fail penv ue pre .pl_loc ~expct:tbool pre'.f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
-          List.iter (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asum';
-          List.iter (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asrt';
+          List.iter
+            (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asum';
+          List.iter
+            (fun (_, _, a) -> unify_or_fail aenv ue post.pl_loc ~expct:tbool a.f_ty) asrt';
           f_equivF pre' fpath1 fpath2 post' asum' asrt'
 
     | PFeagerF (pre, (s1,gp1,gp2,s2), post) ->
@@ -3687,10 +3702,10 @@ and trans_form_or_pattern
         let fpath2 = trans_gamepath env gp2 in
         (*TODO: annotations: should this also use the third env?*)
         let penv, qenv, _ = EcEnv.Fun.equivF fpath1 fpath2 env in
-        let pre'  = transf penv pre in
-        let post' = transf qenv post in
-        let s1    = transstmt env ue s1 in
-        let s2    = transstmt env ue s2 in
+        let pre'    = transf penv pre in
+        let post'   = transf qenv post in
+        let s1, _   = transstmt env ue s1 in
+        let s2, _   = transstmt env ue s2 in
         unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
         unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
         f_eagerF pre' s1 fpath1 fpath2 s2 post'

@@ -1380,15 +1380,16 @@ coe_body(P):
     { PFCoe (m, Some mt, f, e, ty) }
 
 %inline annotation(P):
-  LPAREN l1=lident COMMA l2=lident RPAREN LONGARROWSLIM a=form_r(P) { (l1, l2, a) }
+  LPAREN l1=lident COMMA l2=lident LONGARROWSLIM a=form_r(P) RPAREN { (l1, l2, a) }
 
-%inline annotations(P): asrts=plist1(annotation(P), COMMA) { asrts }
+%inline annotations(P): asrts=plist0(annotation(P), COMMA) { asrts }
+
 
 equiv_body(P):
   mp1=loc(fident) TILD mp2=loc(fident)
   COLON pre=form_r(P) LONGARROW post=form_r(P) PIPE
-  assumptions=annotations(P) LONGARROW
-  assertions=annotations(P)
+  LBRACE assumptions=annotations(P) RBRACE LONGARROW
+  LBRACE assertions=annotations(P) RBRACE
     { PFequivF (pre, (mp1, mp2), post, assumptions, assertions) }
 
 eager_body(P):
