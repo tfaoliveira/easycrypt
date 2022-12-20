@@ -8,6 +8,16 @@ open EcProvers
 val check : ?notify:notify -> prover_infos -> LDecl.hyps -> form -> bool
 val dump_why3 : env -> string -> unit
 
+type tenv
+
+val tenv_task : tenv -> Why3.Task.task
+
+val init : EcEnv.LDecl.hyps ->
+  EcFol.form ->
+  EcEnv.env * EcBaseLogic.hyps * tenv * Why3.Decl.decl
+
+val trans_axiom : tenv -> EcPath.path * EcDecl.axiom -> unit
+
 module Frequency : sig
 
   (* -------------------------------------------------------------------- *)

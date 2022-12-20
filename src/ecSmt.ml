@@ -100,6 +100,8 @@ let empty_tenv env task (kwty, kw, kwk) =
     te_absmod     = Hid.create 0;
   }
 
+let tenv_task tenv = tenv.te_task
+
 (* -------------------------------------------------------------------- *)
 type lenv = {
   le_lv : WTerm.vsymbol Mid.t;
@@ -1603,6 +1605,20 @@ let dump_why3 (env : EcEnv.env) (filename : string) =
   List.iter (trans_axiom tenv) (EcEnv.Ax.all env);
   dump_tasks tenv.te_task filename
 
+let init hyps concl =
+  let env   = LDecl.toenv hyps in
+  let hyps  = LDecl.tohyps hyps in
+  let task  = create_global_task () in
+  let known = Lazy.force core_theories in
+  let tenv  = empty_tenv env task known in
+  let ()    = add_core_bindings tenv in
+  let lenv  = lenv_of_hyps tenv hyps in
+  let wterm = Cast.force_prop (trans_form (tenv, lenv) concl) in
+  let pr    = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
+  let decl  = WDecl.create_prop_decl WDecl.Pgoal pr wterm in
+  env,hyps,tenv,decl
+
+
 (* -------------------------------------------------------------------- *)
 let cnt = Counter.create ()
 
@@ -1615,16 +1631,7 @@ let check ?notify (pi : P.prover_infos) (hyps : LDecl.hyps) (concl : form) =
         "%a@." Why3.Pretty.print_task task)
       (fun () -> close_out stream) in
 
-  let env   = LDecl.toenv hyps in
-  let hyps  = LDecl.tohyps hyps in
-  let task  = create_global_task () in
-  let known = Lazy.force core_theories in
-  let tenv  = empty_tenv env task known in
-  let ()    = add_core_bindings tenv in
-  let lenv  = lenv_of_hyps tenv hyps in
-  let wterm = Cast.force_prop (trans_form (tenv, lenv) concl) in
-  let pr    = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
-  let decl  = WDecl.create_prop_decl WDecl.Pgoal pr wterm in
+  let env,hyps,tenv,decl = init hyps concl in
 
   let execute_task toadd =
     if pi.P.pr_selected then begin

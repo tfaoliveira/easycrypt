@@ -149,6 +149,19 @@ let process_smt ?loc (ttenv : ttenv) pi (tc : tcenv1) =
       t_seq (t_simplify ~delta:`No) (t_smt ~mode:(`Report loc) pi) tc
 
 (* -------------------------------------------------------------------- *)
+
+let process_coq ~loc (ttenv : ttenv) (tc : tcenv1) =
+  match ttenv.tt_smtmode with
+  | `Admit ->
+    t_admit tc
+
+  | (`Standard | `Strict) as mode ->
+    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~mode) tc
+
+  | `Report ->
+    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~mode:(`Report (Some loc))) tc
+
+(* -------------------------------------------------------------------- *)
 let process_clear symbols tc =
   let hyps = FApi.tc1_hyps tc in
 

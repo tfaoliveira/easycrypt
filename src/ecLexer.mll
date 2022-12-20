@@ -108,6 +108,8 @@
     "progress"    , PROGRESS   ;        (* KW: tactic *)
     "trivial"     , TRIVIAL    ;        (* KW: tactic *)
     "auto"        , AUTO       ;        (* KW: tactic *)
+    "coq"         , COQ        ;        (* KW: tactic *)
+
 
     (* Other tactics *)
     "idtac"       , IDTAC      ;        (* KW: tactic *)

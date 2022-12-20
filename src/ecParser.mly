@@ -309,7 +309,7 @@
         let pr =
           match k with
           | `Only ->
-	            ok_use_only r p; { r with pp_use_only = p :: r.pp_use_only }
+            ok_use_only r p; { r with pp_use_only = p :: r.pp_use_only }
           | `Include -> { r with pp_add_rm = (`Include, p) :: r.pp_add_rm }
           | `Exclude -> { r with pp_add_rm = (`Exclude, p) :: r.pp_add_rm }
 
@@ -421,6 +421,7 @@
 %token CONGR
 %token CONSEQ
 %token CONST
+%token COQ
 %token COST
 %token DEBUG
 %token DECLARE
@@ -2935,6 +2936,9 @@ logtactic:
 
 | SMT LPAREN dbmap=dbmap1* RPAREN
    { Psmt (SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
+
+| COQ
+    { Pcoq }
 
 | SPLIT
     { Psplit }
