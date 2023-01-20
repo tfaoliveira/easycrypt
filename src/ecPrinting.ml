@@ -1350,7 +1350,7 @@ and pp_instr_for_form (ppe : PPEnv.t) fmt i =
       Format.fprintf fmt "%s" (EcIdent.name id)
 
   | Slabel id ->
-      Format.fprintf fmt "@%s" (EcIdent.name id)
+      Format.fprintf fmt "@@%s" (EcIdent.name id)
 
 (* -------------------------------------------------------------------- *)
 and pp_stmt_for_form (ppe : PPEnv.t) fmt (s : stmt) =
@@ -2411,6 +2411,7 @@ type ppnode1 = [
   | `Call     of (EcModules.lvalue option * P.xpath * EcTypes.expr list)
   | `Rnd      of (EcModules.lvalue * EcTypes.expr)
   | `Abstract of EcIdent.t
+  | `Label    of EcIdent.ident
   | `If       of EcTypes.expr
   | `Else
   | `While    of EcTypes.expr
@@ -2433,6 +2434,7 @@ let at (ppe : PPEnv.t) n i =
   | Sabstract id     , 0 -> Some (`Abstract id     , `P, [])
   | Swhile (e, s), 0 -> Some (`While e, `P, s.s_node)
   | Swhile _     , 1 -> Some (`EBlk   , `B, [])
+  | Slabel l, 0 -> Some (`Label l, `P, [])
 
   | Sif (e, s, _ ), 0 -> Some (`If e, `P, s.s_node)
   | Sif (_, _, s ), 1 -> begin
@@ -2560,6 +2562,9 @@ let pp_i_blk (_ppe : PPEnv.t) fmt _ =
 let pp_i_abstract (_ppe : PPEnv.t) fmt id =
   Format.fprintf fmt "%s" (EcIdent.name id)
 
+let pp_i_label (_ppe : PPEnv.t) fmt id =
+  Format.fprintf fmt "@@%s" (EcIdent.name id)
+
 (* -------------------------------------------------------------------- *)
 let c_ppnode1 ~width ppe (pp1 : ppnode1) =
   match pp1 with
@@ -2567,6 +2572,7 @@ let c_ppnode1 ~width ppe (pp1 : ppnode1) =
   | `Call     x -> c_split ~width (pp_i_call     ppe) x
   | `Rnd      x -> c_split ~width (pp_i_rnd      ppe) x
   | `Abstract x -> c_split ~width (pp_i_abstract ppe) x
+  | `Label    x -> c_split ~width (pp_i_label    ppe) x
   | `If       x -> c_split ~width (pp_i_if       ppe) x
   | `Else       -> c_split ~width (pp_i_else     ppe) ()
   | `While    x -> c_split ~width (pp_i_while    ppe) x
@@ -2715,6 +2721,25 @@ let rec pp_prpo (ppe : PPEnv.t) tag mode fmt f =
     Format.fprintf fmt "@[<hov 2>%s =@ %a@]\n%!" tag (pp_form ppe) f
 
 (* -------------------------------------------------------------------- *)
+let pp_anno (ppe : PPEnv.t) fmt (l1, l2, f) =
+  Format.fprintf fmt "(%s, %s --> %a)"
+    (EcIdent.name l1) (EcIdent.name l2) (pp_form ppe) f
+
+(* -------------------------------------------------------------------- *)
+let pp_annos (ppe : PPEnv.t) fmt fs =
+  Format.fprintf fmt "@[%a@]\n%!" (pp_list ",\n%!" (pp_anno ppe)) fs
+
+(* -------------------------------------------------------------------- *)
+let pp_prpos (ppe : PPEnv.t) tag mode fmt fs =
+  (*TODO: annotations: prettier printing and support for that option.*)
+  if mode then
+    assert false
+  else
+    if List.is_empty fs
+    then Format.fprintf fmt "@[<hov 2>no %s@]\n%!" tag
+    else Format.fprintf fmt "@[<hov 2>%s =@ %a@]\n%!" tag (pp_annos ppe) fs
+
+(* -------------------------------------------------------------------- *)
 let pp_pre (ppe : PPEnv.t) ?prpo fmt pre =
   pp_prpo ppe "pre"
     (omap (fun x -> x.prpo_pr) prpo |> odfl false)
@@ -2725,6 +2750,18 @@ let pp_post (ppe : PPEnv.t) ?prpo fmt post =
   pp_prpo ppe "post"
     (omap (fun x -> x.prpo_po) prpo |> odfl false)
     fmt post
+
+(* -------------------------------------------------------------------- *)
+let pp_asum (ppe : PPEnv.t) ?prpo fmt asum =
+  pp_prpos ppe "assumptions"
+    (omap (fun x -> x.prpo_pr) prpo |> odfl false)
+    fmt asum
+
+(* -------------------------------------------------------------------- *)
+let pp_asrt (ppe : PPEnv.t) ?prpo fmt asrt =
+  pp_prpos ppe "assertions"
+    (omap (fun x -> x.prpo_po) prpo |> odfl false)
+    fmt asrt
 
 (* -------------------------------------------------------------------- *)
 let pp_hoareF (ppe : PPEnv.t) ?prpo fmt hf =
@@ -2823,11 +2860,13 @@ let pp_equivF (ppe : PPEnv.t) ?prpo fmt ef =
   let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
   (*TODO: annotations: correct printing.*)
   let _ = PPEnv.create_and_push_mems ppe [mepal; mepar] in
-  Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) ef.ef_pr;
+  Format.fprintf fmt "%a@\n%!" (pp_pre  ppepr ?prpo) ef.ef_pr;
+  Format.fprintf fmt "%a@\n%!" (pp_asum ppe   ?prpo) ef.ef_am;
   Format.fprintf fmt "    %a ~ %a@\n%!"
     (pp_funname ppe) ef.ef_fl
     (pp_funname ppe) ef.ef_fr;
-  Format.fprintf fmt "@\n%a%!" (pp_post ppepo ?prpo) ef.ef_po
+  Format.fprintf fmt "@\n%a%!" (pp_asrt ppe   ?prpo) ef.ef_as;
+  Format.fprintf fmt "%a%!"    (pp_post ppepo ?prpo) ef.ef_po
 
 (* -------------------------------------------------------------------- *)
 let pp_equivS (ppe : PPEnv.t) ?prpo fmt es =
@@ -2863,7 +2902,11 @@ let pp_equivS (ppe : PPEnv.t) ?prpo fmt es =
   Format.fprintf fmt "@\n%!";
   Format.fprintf fmt "%a%!" (pp_pre ppef ?prpo) es.es_pr;
   Format.fprintf fmt "@\n%!";
+  Format.fprintf fmt "%a%!" (pp_asum ppe   ?prpo) es.es_am;
+  Format.fprintf fmt "@\n%!";
   Format.fprintf fmt "%t" ppnode;
+  Format.fprintf fmt "@\n%!";
+  Format.fprintf fmt "%a%!" (pp_asrt ppe   ?prpo) es.es_as;
   Format.fprintf fmt "@\n%!";
   Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) es.es_po
 
@@ -3162,7 +3205,7 @@ let rec pp_instr_r (ppe : PPEnv.t) fmt i =
     Format.fprintf fmt "%s" (EcIdent.name id)
 
   | Slabel id ->
-    Format.fprintf fmt "@%s" (EcIdent.name id)
+    Format.fprintf fmt "@@%s" (EcIdent.name id)
 
 and pp_instr ppe fmt i =
   Format.fprintf fmt "%a" (pp_instr_r ppe) i

@@ -120,7 +120,7 @@ module Mpv = struct
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, b)      -> i_match  (esubst e, List.Smart.map (snd_map ssubst) b)
     | Sabstract _        -> i
-    | Slabel l           -> i_label l; (*TODO: annotations*)
+    | Slabel l           -> i_label  l; (*TODO: annotations*)
 
   and issubst env (s : esubst) (is : instr list) =
     List.Smart.map (isubst env s) is
@@ -618,7 +618,7 @@ and i_read_r env r i =
       let r = List.fold_left add_pv r us.EcModules.aus_reads in
       List.fold_left (f_read_r env) r us.EcModules.aus_calls
 
-  | Slabel _ -> assert false (*TODO: annotations*)
+  | Slabel _ -> r (*TODO: annotations*)
 
 (* -------------------------------------------------------------------- *)
 type 'a pvaccess0 = env -> 'a -> PV.t

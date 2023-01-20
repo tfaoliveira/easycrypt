@@ -18,7 +18,6 @@ module M = {
   proc bar() : unit = {}
 
   proc if_() : unit = {
-    @l;
     if (b_low low) {
       @l_if;
       if (b_high_a high)
@@ -42,6 +41,9 @@ lemma if_ct :
      { (l_if,   l_if   --> b_high_a M.low{1} = b_high_a M.low{2}),
        (l_else, l_else --> b_high_b M.low{1} = b_high_b M.low{2}) } ].
 proof.
+(*TODO: annotations: the proc tactic uses eagerF statements internally.*)
+(*Thus eagerF statements should be given two fields to store annotations.*)
+(**)
 proc.
 if.
 + by trivial.
