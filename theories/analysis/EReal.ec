@@ -236,6 +236,24 @@ proof. by rewrite muleC mulNe muleC. qed.
 lemma mule_eq0 x y : x * y = 0%e <=> x = 0%e \/ y = 0%e.
 proof. smt(). qed.
 
+lemma leee (x : ereal) : x <= x.
+proof. by case: x. qed.
+hint simplify leee. hint exact : leee.
+
+lemma nosmt lee_asym (x y : ereal): x <= y <= x => x = y.
+proof. case: x y => [ | | x] [ | | y] //=; apply ler_asym. qed.
+
+lemma eqe_le (x y : ereal): x = y <=> x <= y <= x.
+proof. split=> [-> // | ]; apply lee_asym. qed.
+
+lemma lee_bot x : #-oo <= x.
+proof. by case x. qed.
+hint simplify lee_bot.
+
+lemma lee_top x : x <= #+oo.
+proof. by case x. qed.
+hint simplify lee_top.
+
 lemma lteNge (x y : ereal) : (x < y) = !(y <= x).
 proof. case x; case y => //= /#. qed.
 

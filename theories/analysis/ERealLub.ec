@@ -5,26 +5,17 @@ require import AllCore Real StdOrder EReal RealLub.
 op ub (E:ereal -> bool) (x:ereal) = 
   forall y, E y => y <= x.
 
-lemma ub_empty : ub pred0 = predT.
-proof. done. qed.
-
 op is_lub (E:ereal -> bool) x =
   ub E x /\ forall y, ub E y => x <= y.
 
+op lub (E:ereal -> bool) =
+  choiceb (is_lub E) #-oo.
 
-(* TODO Move to EReal. *)
-lemma eqe_le (x y : ereal): x = y <=> x <= y <= x.
-proof.
-  split=> [-> // | ].
-admitted.
+(* -------------------------------------------------------------------- *)
+(* Basic lemmas                                                         *)
 
-lemma lee_bot x : #-oo <= x.
-proof. by case x. qed.
-hint simplify lee_bot.
-
-lemma lee_top x : x <= #+oo.
-proof. by case x. qed.
-hint simplify lee_top.
+lemma ub_empty : ub pred0 = predT.
+proof. done. qed.
 
 lemma ub_top E : ub E #+oo.
 (* TODO : why done does not work *)
@@ -56,9 +47,6 @@ case=> //=; last first.
 - by move=> z ubEz; apply: lub_le_ub => // y /ubEz.
 by case: nzF => x Fx; apply/negP => /(_ x%e Fx).
 qed.
-
-op lub (E:ereal -> bool) =
-  choiceb (is_lub E) #-oo.
 
 lemma lub_empty : lub pred0 = #-oo.
 proof. by apply choiceb_uniq; 1: by apply is_lub_uniq. qed.
