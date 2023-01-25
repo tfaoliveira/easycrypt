@@ -11,6 +11,9 @@ op is_lub (E:ereal -> bool) x =
 op lub (E:ereal -> bool) =
   choiceb (is_lub E) #-oo.
 
+op etrunc (E : ereal -> 'a) (x : real) : 'a = 
+  E x%e.
+
 (* -------------------------------------------------------------------- *)
 (* Basic lemmas                                                         *)
 
@@ -23,27 +26,22 @@ proof. by rewrite /ub. qed.
 
 hint simplify ub_top.
 
-(* Move this *)
-op is_real (x: ereal) = exists z:real, x = z%e.
-
-lemma is_real_notinf x : is_real x => x <> #+oo /\ x <> #-oo.
-proof. by move=> [? ->]. qed.
-
-print is_empty.
+lemma is_lub_uniq E x y : 
+  is_lub E x => is_lub E y => x = y.
+proof. by move=> [u1 le1] [u2 le2]; rewrite eqe_le le1 2:le2. qed.
 
 lemma is_lubP E :
   is_lub E ( 
    if ! E #+oo then
-     let F = fun (x:real) => E x%e in
-     if nonempty F then 
-       if has_ub F then (lub F)%e
+     if nonempty (etrunc E) then 
+       if has_ub (etrunc E) then (lub (etrunc E))%e
        else #+oo
      else #-oo     
    else #+oo).
 proof.
 case: (E #+oo) => [Eoo | NEoo] /=.
 - by split => //; move=> y /(_ #+oo Eoo).
-pose F (x : real) := E x%e; case: (nonempty F); last first.
+pose F := etrunc E; case: (nonempty F); last first.
 - move=> zF; split => //.
   by case=> //= y; apply: contra zF => Ey; exists y.
 move=> nzF; case: (has_ub F); last first.
@@ -55,16 +53,11 @@ case=> //=; last first.
 by case: nzF => x Fx; apply/negP => /(_ x%e Fx).
 qed.
 
-lemma is_lub_uniq E x y : 
-  is_lub E x => is_lub E y => x = y.
-proof. by move=> [u1 le1] [u2 le2]; rewrite eqe_le le1 2:le2. qed.
-
 lemma lubE E : 
   lub E = 
    if ! E #+oo then
-     let F = fun (x:real) => E x%e in
-     if nonempty F then 
-       if has_ub F then (lub F)%e
+     if nonempty (etrunc E) then 
+       if has_ub (etrunc E) then (lub (etrunc E))%e
        else #+oo
      else #-oo     
    else #+oo.
@@ -74,17 +67,16 @@ apply is_lubP.
 qed.
 
 lemma lub_ind E (P: ereal -> bool) : 
-  let F = fun (x:real) => E x%e in
-  (!E #+oo => has_lub F => P (lub F)%e) =>
-  (!E #+oo => nonempty F => !has_ub F => P #+oo) => 
-  (!E #+oo => !nonempty F => P #-oo) => 
+  (!E #+oo => has_lub (etrunc E) => P (lub (etrunc E))%e) =>
+  (!E #+oo => nonempty (etrunc E) => !has_ub (etrunc E) => P #+oo) => 
+  (!E #+oo => !nonempty (etrunc E) => P #-oo) => 
   (E #+oo => P #+oo) =>
   P (lub E).
 proof.
-move=> F h1 h2 h3 h4; rewrite lubE.
-case: (E #+oo) => //= hE; rewrite -/F.
-case: (nonempty F) => hne; 2: by apply h3.  
-by case: (has_ub F) => hhas; [apply h1|apply h2].
+move=> h1 h2 h3 h4; rewrite lubE.
+case: (E #+oo) => //= hE.
+case: (nonempty (etrunc E)) => hne; 2: by apply h3.  
+by case: (has_ub (etrunc E)) => hhas; [apply h1|apply h2].
 qed.
 
 lemma nonempty_is_lub E : exists x, is_lub E x.
