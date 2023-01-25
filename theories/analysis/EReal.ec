@@ -238,7 +238,7 @@ proof. smt(). qed.
 
 lemma leee (x : ereal) : x <= x.
 proof. by case: x. qed.
-hint simplify leee. hint exact : leee.
+hint simplify leee. 
 
 lemma nosmt lee_asym (x y : ereal): x <= y <= x => x = y.
 proof. case: x y => [ | | x] [ | | y] //=; apply ler_asym. qed.
