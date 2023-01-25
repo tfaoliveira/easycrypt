@@ -275,6 +275,20 @@ proof. by rewrite -lte_opp2 oppeK. qed.
 lemma lee_r_x x c: c%e <= x => (exists r, c <= r /\ x = r%e ) \/ x = #+oo.
 proof. by case: x => // /#. qed.
 
+lemma lte_neqAle x y :
+  (x < y) <=> (x <> y) /\ (x <= y).
+proof. case: x y => [ | |x] [ | |y] //=; apply ltr_neqAle. qed.
+
+lemma lee_eqVlt x y :
+  (x <= y) <=> (x = y) \/ (x < y).
+proof. by rewrite lte_neqAle; case: (x = y)=> // ->. qed.
+
+lemma lte_trans y x z : x < y => y < z => x < z.
+proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ltr_trans. qed.
+
+lemma lee_trans y x z: x <= y => y <= z => x <= z.
+proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ler_trans. qed.
+
 lemma normeN x : `|-x| = `|x|.
 proof. case: x => //; apply normrN. qed.
 
@@ -309,9 +323,6 @@ proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ler_lt_trans. qed.
 
 lemma nosmt lte_le_trans y x z : x < y => y <= z => x < z.
 proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ltr_le_trans. qed.
-
-lemma lte_trans y x z : x < y => y < z => x < z.
-proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ltr_trans. qed.
 
 lemma lee_add2lW x y z : y <= z => x + y <= x + z.
 proof. case: x y z => [ | |x] [ | |y] [ | |z] //=; apply ler_add2l. qed.
@@ -353,22 +364,6 @@ proof. smt(). qed.
 
 lemma norme_ge0 x : 0%e <= `|x|.
 proof. smt(). qed.
-
-(* -------------------------------------------------------------------- *)
-(* elub E returns -oo if E is empty                                     *)
-op elub : (ereal -> bool) -> ereal.
-
-axiom elub_ub (E : ereal -> bool) (x : ereal) :
-  E x => (x <= elub E).
-
-axiom elub_lub (E : ereal -> bool) (M : ereal) :
-  (forall x, E x => x <= M) => elub E <= M.
-
-lemma elub_empty (E: ereal -> bool) : elub (fun _ => false) = #-oo.
-proof. by apply/leeNinf_eq/elub_lub. qed.
-
-lemma elub_eq (p q: ereal -> bool) : p == q => elub p = elub q.
-proof. by move=> /fun_ext ->. qed.
 
 (* -------------------------------------------------------------------- *)
 op nbh (l : ereal) (p : ereal -> bool) =
