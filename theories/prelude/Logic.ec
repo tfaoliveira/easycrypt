@@ -641,6 +641,15 @@ axiom nosmt eq_choice ['a] (P Q : 'a -> bool) (x0 : 'a):
 axiom nosmt choice_dfl_irrelevant ['a] (P : 'a -> bool) (x0 x1 : 'a):
   (exists x, P x) => choiceb P x0 = choiceb P x1.
 
+lemma nosmt choiceb_uniq ['a] x (P : 'a -> bool) (x0 : 'a) :
+     (forall z1 z2, P z1 => P z2 => z1 = z2)
+  => P x
+  => choiceb P x0 = x.
+proof.
+move=> hu hx; have /hu /(_ _ hx) // := choicebP P dfl _.
+by exists x.
+qed.
+
 (* -------------------------------------------------------------------- *)
 axiom nosmt funchoice ['a 'b] (P : 'a -> 'b -> bool):
      (forall x, exists y, P x y)
