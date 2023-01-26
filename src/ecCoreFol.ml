@@ -2323,3 +2323,19 @@ let core_ops =
 
 let core_op_kind (p : EcPath.path) =
   EcPath.Hp.find_opt core_ops p
+
+(* -------------------------------------------------------------------- *)
+let a_labels_l (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.fold_left (fun ls (l, _, _) -> EcMaps.Sstr.M.add l.id_symb () ls) EcMaps.Sstr.M.empty a
+
+let a_labels_l (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.fold_left (fun ls (l, _, _) -> EcMaps.Sstr.M.add l.id_symb () ls) EcMaps.Sstr.M.empty a
+
+let a_labels_clean (ls_l : unit EcMaps.Mstr.t) (ls_r : unit EcMaps.Mstr.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.filter (fun (l_l, l_r, _) -> EcMaps.Sstr.M.mem l_l.id_symb ls_l && EcMaps.Sstr.M.mem l_r.id_symb ls_r) a
+
+let a_labels_full (ls_l : unit EcMaps.Mstr.t) (ls_r : unit EcMaps.Mstr.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.for_all (fun (l_l, l_r, _) -> EcMaps.Sstr.M.mem l_l.id_symb ls_l && EcMaps.Sstr.M.mem l_r.id_symb ls_r) a
+
+let a_labels_empty (ls_l : unit EcMaps.Mstr.t) (ls_r : unit EcMaps.Mstr.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.for_all (fun (l_l, l_r, _) -> (not (EcMaps.Sstr.M.mem l_l.id_symb ls_l)) || (not (EcMaps.Sstr.M.mem l_r.id_symb ls_r))) a

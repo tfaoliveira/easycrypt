@@ -147,7 +147,7 @@ let t_equivF_fun_def_r tc =
   let s = subst_pre env fsigl ml PVM.empty in
   let s = subst_pre env fsigr mr s in
   let pre = PVM.subst env s ef.ef_pr in
-  let concl' = f_equivS menvl menvr pre fdefl.f_body fdefr.f_body post [] [] in (*TODO: annotations*)
+  let concl' = f_equivS menvl menvr pre fdefl.f_body fdefr.f_body post ef.ef_am ef.ef_as in
   FApi.xmutate1 tc `FunDef [concl']
 
 (* -------------------------------------------------------------------- *)

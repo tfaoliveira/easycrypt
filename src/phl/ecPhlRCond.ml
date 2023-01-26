@@ -81,7 +81,11 @@ module Low = struct
       f_forall_mems [mo', EcMemory.memtype mo]
         (f_hoareS (EcFol.mhr, EcMemory.memtype m) pre1 hd e) in
     let sl,sr = match side with `Left -> s, es.es_sr | `Right -> es.es_sl, s in
-    let concl2 = f_equivS_r { es with es_sl = sl; es_sr = sr } in
+    (*TODO: annotations: somehow does not clean, also how to make the check?*)
+    let ls_l = s_labels sl in
+    let ls_r = s_labels sr in
+    let concl2 = f_equivS_r { es with es_sl = sl; es_sr = sr;
+                                      es_am = a_labels_clean ls_l ls_r es.es_am } in
     FApi.xmutate1 tc `RCond [concl1; concl2]
 
   (* ------------------------------------------------------------------ *)
