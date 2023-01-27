@@ -126,7 +126,7 @@ module CI_Xreal = struct
 
   let p_xreal   = mk_Rpbar "xreal"
   let p_rp      = mk_Rpbar "rp"
-  let p_inf     = mk_Rpbar "inf"
+  let p_inf     = mk_Rpbar "oo"
   let p_xadd    = mk_Rpbar "xadd"
   let p_xmul    = mk_Rpbar "xmul"
   let p_xsmul   = mk_Rpbar "(**)"
@@ -141,6 +141,8 @@ module CI_Xreal = struct
 
   let p_xle_cxr_l = mk_Xreal "xle_cxr_l"
   let p_xle_cxr_r = mk_Xreal "xle_cxr_r"
+
+
 end
 
 (* -------------------------------------------------------------------- *)

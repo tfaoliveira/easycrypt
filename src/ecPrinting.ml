@@ -1686,7 +1686,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
 
   | FeHoareS hs ->
       let ppe = PPEnv.push_mem ppe ~active:true hs.ehs_m in
-      Format.fprintf fmt "hoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]]"
+      Format.fprintf fmt "ehoare[@[<hov 2>@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_stmt_for_form ppe) hs.ehs_s
         (pp_form ppe) hs.ehs_pr
         (pp_form ppe) hs.ehs_po

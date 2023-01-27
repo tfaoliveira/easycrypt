@@ -127,8 +127,7 @@ let f_b2r   b = f_if b f_r1 f_r0
 let f_b2xr  b = f_r2xr (f_b2r b)
 
 
-
-
+let f_xreal_inf = f_op CI.CI_Xreal.p_inf [] txreal
 
 (* -------------------------------------------------------------------- *)
 let tmap aty bty =

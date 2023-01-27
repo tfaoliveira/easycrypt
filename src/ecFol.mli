@@ -61,6 +61,7 @@ val f_r2rp  : form -> form
 val f_r2xr  : form -> form
 val f_b2r   : form -> form
 val f_b2xr  : form -> form
+val f_xreal_inf : form
 
 (* soft-constructor - map *)
 val f_map_cst : EcTypes.ty -> form -> form
