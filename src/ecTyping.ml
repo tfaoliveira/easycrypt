@@ -1216,7 +1216,6 @@ let transpattern1 env ue (p : EcParsetree.plpattern) =
       let ty = UE.fresh ue in
       let x  = EcIdent.create x in
       (LSymbol (x,ty), ty)
-
   | LPTuple xs ->
       let xs = unlocs xs in
       if not (List.is_unique xs) then
@@ -1473,42 +1472,80 @@ let trans_branch ~loc env ue gindty ((pb, body) : ppattern * _) =
       tyerror cname.pl_loc env (InvalidMatch FXE_CtorAmbiguous)
 
   | [(cp, tvi), opty, subue, _] ->
+      (* Get the constructor and type decl associated with it *)
       let ctor = oget (EcEnv.Op.by_path_opt cp env) in
       let (indp, ctoridx) = EcDecl.operator_as_ctor ctor in
       let indty = oget (EcEnv.Ty.by_path_opt indp env) in
       let ind = (oget (EcDecl.tydecl_as_datatype indty)).tydt_ctors in
       let ctorsym, ctorty = List.nth ind ctoridx in
 
+      (* Check we have the correct number of constructor args *)
       let args_exp = List.length ctorty in
       let args_got = List.length cargs in
-
       if args_exp <> args_got then begin
         tyerror cname.pl_loc env (InvalidMatch
           (FXE_CtorInvalidArity (snd (unloc cname), args_exp, args_got)))
       end;
 
-      let cargs_lin = List.pmap (fun o -> omap unloc (unloc o)) cargs in
+      (* Check we haven't used the same variable name anywhere *)
+      let rec cp_unique_ids ids = function
+        | PCpSymbol x -> 
+            let xu = unloc x in
+            if String.equal xu "_" then 
+              (ids, true)
+            else 
+              (if List.mem xu ids then
+                ([], false)
+              else
+                (xu :: ids, true))
+        | PCpTuple xs -> 
+            List.fold_right 
+              (fun xs (ids, b) ->
+                if b then
+                  cp_unique_ids ids (unloc xs)
+                else
+                  (ids, b)
+              ) 
+              xs 
+              (ids, true)
+      in
 
-      if not (List.is_unique cargs_lin) then
-        tyerror cname.pl_loc env (InvalidMatch FXE_MatchNonLinear);
+      let (_, uniq) = cp_unique_ids [] (PCpTuple cargs) in
+      if not uniq then begin
+        tyerror cname.pl_loc env (InvalidMatch FXE_MatchNonLinear)
+      end;
 
+      (* Unify the constructor type *)
       EcUnify.UniEnv.restore ~src:subue ~dst:ue;
-
       let ctorty =
         let tvi = Some (EcUnify.TVIunamed tvi) in
           fst (EcUnify.UniEnv.opentys ue indty.tyd_params tvi ctorty) in
       let pty = EcUnify.UniEnv.fresh ue in
-
       (try  EcUnify.unify env ue (toarrow ctorty pty) opty
        with EcUnify.UnificationFailure _ -> assert false);
 
       unify_or_fail env ue loc ~expct:pty gindty;
 
-      let create o = EcIdent.create (omap_dfl unloc "_" o) in
-      let pvars = List.map (create |- unloc) cargs in
-      let pvars = List.combine pvars ctorty in
-
-      (ctorsym, (pvars, body))
+      (* Create variables for each constructor pattern *)
+      let rec trans_cptn cp ty = 
+        match cp with
+        | PCpSymbol x -> CpSymbol (EcIdent.create (unloc x), ty)
+        | PCpTuple xs -> 
+          (match ty.ty_node with
+          | Ttuple tys -> 
+              CpTuple (
+                List.map 
+                (fun (x, t) -> (trans_cptn (unloc x) t, t))
+                (List.combine xs tys)
+              )
+          | _ -> assert false
+          )
+      in 
+      
+      let cpts = List.map 
+                (fun (x, t) -> (trans_cptn (unloc x) t, t))
+                (List.combine cargs ctorty) in
+      (ctorsym, (cpts, body))
 
 (* -------------------------------------------------------------------- *)
 let trans_match ~loc env ue (gindty, gind) pbs =
@@ -1540,13 +1577,9 @@ let trans_if_match ~loc env ue (gindty, gind) (c, b1, b2) =
         (cargs, Some b1)
       else 
         (* Create a pattern C _ _ ... for each constructor *)
-        let wilds = List.map (fun _ -> EcLocation.mk_loc loc None) xargs in 
-        let pat = PPApp ((EcLocation.mk_loc loc ([], x), None), wilds) in
-        let b2 = 
-          (match b2 with
-          | None -> []
-          | Some b2 -> b2
-        ) in
+        let wilds = List.map (fun _ -> mk_loc loc (PCpSymbol (mk_loc loc "_"))) xargs in 
+        let pat = PPApp ((mk_loc loc ([], x), None), wilds) in
+        let b2 = odfl [] b2 in
         let (_, (xargs, b2)) = trans_branch ~loc env ue gindty (pat, b2) in
         (xargs, Some b2)
     )
@@ -1709,6 +1742,8 @@ let transexp (env : EcEnv.env) mode ue e =
 
         let branches =
           trans_match ~loc:e.pl_loc env ue (ety, inddecl) pb in
+
+        let branches = List.map (fst_map cpts_binds) branches in
 
         let branches, bty = List.split (List.map (fun (lcs, s) ->
           let env  = EcEnv.Var.bind_locals lcs env in
@@ -2949,9 +2984,9 @@ and transinstr
 
       in
 
-      let branches = List.map (fun (lcs, s) ->
-        let env = EcEnv.Var.bind_locals lcs env in
-        (lcs, omap (transstmt env ue) s |> odfl (stmt []))) branches in
+      let branches = List.map (fun (cpts, s) ->
+        let env = EcEnv.Var.bind_locals (cpts_binds cpts) env in
+        (cpts, omap (transstmt env ue) s |> odfl (stmt []))) branches in
 
       [ i_match (e, branches) ]
     end
@@ -3487,6 +3522,8 @@ and trans_form_or_pattern
 
         let branches =
           trans_match ~loc:f.pl_loc env ue (cf.f_ty, inddecl) pb in
+
+        let branches = List.map (fst_map cpts_binds) branches in
 
         let branches, bty = List.split (List.map (fun (lcs, s) ->
           let env  = EcEnv.Var.bind_locals lcs env in

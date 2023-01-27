@@ -305,7 +305,12 @@ let trans_matchfix
                 fxerror cname.pl_loc env
                   (TT.FXE_CtorInvalidArity (snd (unloc cname), args_exp, args_got));
 
-              let cargs_lin = List.pmap (fun o -> omap unloc (unloc o)) cargs in
+              let rec cp_ovars = function
+                | PCpSymbol x -> [Some x]
+                | PCpTuple xs -> List.concat_map (cp_ovars |- unloc) xs
+              in
+              let cargs_ovars = cp_ovars (PCpTuple cargs) in
+              let cargs_lin = List.filter_map identity cargs_ovars in
 
               if not (List.is_unique cargs_lin) then
                 fxerror cname.pl_loc env (TT.FXE_MatchNonLinear);
@@ -323,7 +328,7 @@ let trans_matchfix
 
               let create o =
                 EcIdent.create (omap_dfl unloc "_" o) in
-              let pvars = List.map (create |- unloc) cargs in
+              let pvars = List.map create cargs_ovars in
               let pvars = List.combine pvars ctorty in
 
               (pb, (indp, ind, (ctorsym, ctoridx)), pvars)

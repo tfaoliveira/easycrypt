@@ -16,6 +16,15 @@ val lv_to_list   : lvalue -> prog_var list
 val name_of_lv   : lvalue -> string
 
 (* --------------------------------------------------------------------- *)
+type cpattern =
+  | CpSymbol of (EcIdent.t * ty)
+  | CpTuple of (cpattern * ty) list
+
+val cp_binds : cpattern -> (EcIdent.t * ty) list
+val cpts_binds : (cpattern * ty) list -> (EcIdent.t * ty) list
+val cpts_add_locals : e_subst -> (cpattern * ty) list -> e_subst * (cpattern * ty) list
+
+(* --------------------------------------------------------------------- *)
 type instr = private {
   i_node : instr_node;
   i_fv   : int EcIdent.Mid.t;
@@ -28,7 +37,7 @@ and instr_node =
   | Scall     of lvalue option * xpath * expr list
   | Sif       of expr * stmt * stmt
   | Swhile    of expr * stmt
-  | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
+  | Smatch    of expr * ((cpattern * EcTypes.ty) list * stmt) list
   | Sassert   of expr
   | Sabstract of EcIdent.t
 
@@ -57,7 +66,7 @@ val i_rnd      : lvalue * expr -> instr
 val i_call     : lvalue option * xpath * expr list -> instr
 val i_if       : expr * stmt * stmt -> instr
 val i_while    : expr * stmt -> instr
-val i_match    : expr * ((EcIdent.t * ty) list * stmt) list -> instr
+val i_match    : expr * ((cpattern * EcTypes.ty) list * stmt) list -> instr
 val i_assert   : expr -> instr
 val i_abstract : EcIdent.t -> instr
 
@@ -66,7 +75,7 @@ val s_rnd      : lvalue * expr -> stmt
 val s_call     : lvalue option * xpath * expr list -> stmt
 val s_if       : expr * stmt * stmt -> stmt
 val s_while    : expr * stmt -> stmt
-val s_match    : expr * ((EcIdent.t * ty) list * stmt) list -> stmt
+val s_match    : expr * ((cpattern * EcTypes.ty) list * stmt) list -> stmt
 val s_assert   : expr -> stmt
 val s_abstract : EcIdent.t -> stmt
 val s_seq      : stmt -> stmt -> stmt
@@ -81,7 +90,7 @@ val destr_rnd    : instr -> lvalue * expr
 val destr_call   : instr -> lvalue option * xpath * expr list
 val destr_if     : instr -> expr * stmt * stmt
 val destr_while  : instr -> expr * stmt
-val destr_match  : instr -> expr * ((EcIdent.t * ty) list * stmt) list
+val destr_match  : instr -> expr * ((cpattern * EcTypes.ty) list * stmt) list
 val destr_assert : instr -> expr
 
 val is_asgn   : instr -> bool

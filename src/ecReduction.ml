@@ -224,15 +224,30 @@ end) = struct
       -> begin
         let module E = struct exception NotConv end in
 
-        let check_branch (xs1, s1) (xs2, s2) =
-          if List.length xs1 <> List.length xs2 then
+        let check_branch (cpts1, s1) (cpts2, s2) =
+          if List.length cpts1 <> List.length cpts2 then
             raise E.NotConv;
           let alpha =
-            let do1 alpha (id1, ty1) (id2, ty2) =
-              if not (for_type env ty1 ty2) then
-                raise E.NotConv;
-              Mid.add id1 (id2, ty2) alpha in
-            List.fold_left2 do1 alpha xs1 xs2
+            let rec do1 alpha cp1 cp2 = 
+              (match cp1, cp2 with
+              | CpSymbol (id1, ty1), CpSymbol (id2, ty2) ->
+                if not (for_type env ty1 ty2) then
+                  raise E.NotConv;
+                Mid.add id1 (id2, ty2) alpha
+              | CpTuple cpts1, CpTuple cpts2 ->
+                let (cps1, tys1) = List.split cpts1 in
+                let (cps2, tys2) = List.split cpts2 in
+                if not (List.all2 (for_type env) tys1 tys2) then
+                  raise E.NotConv;
+                List.fold_left2 do1 alpha cps1 cps2
+              | _, _ -> raise E.NotConv
+              )
+            in
+            let (cps1, tys1) = List.split cpts1 in
+            let (cps2, tys2) = List.split cpts2 in
+            if not (List.all2 (for_type env) tys1 tys2) then
+              raise E.NotConv;
+            List.fold_left2 do1 alpha cps1 cps2
           in for_stmt env alpha ~norm s1 s2 in
 
         try

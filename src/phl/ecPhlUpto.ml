@@ -74,16 +74,29 @@ and i_upto env alpha bad i1 i2 =
   | Smatch(e1,bs1), Smatch(e2,bs2) when List.length bs1 = List.length bs2 -> begin
     let module E = struct exception NotConv end in
 
-    let check_branch (xs1, s1) (xs2, s2) =
-      if List.length xs1 <> List.length xs2 then false
-      else
-        let alpha =
-          let do1 alpha (id1, ty1) (id2, ty2) =
-            if not (EqTest.for_type env ty1 ty2) then raise E.NotConv;
-            EcIdent.Mid.add id1 (id2, ty2) alpha in
-          List.fold_left2 do1 alpha xs1 xs2 in
-        s_upto env alpha bad s1 s2 in
-
+    let check_branch (cpts1, s1) (cpts2, s2) =
+      let alpha =
+        let rec do1 alpha cp1 cp2 = 
+          (match cp1, cp2 with
+          | CpSymbol (id1, ty1), CpSymbol (id2, ty2) ->
+            if not (EqTest.for_type env ty1 ty2) then
+              raise E.NotConv;
+            EcIdent.Mid.add id1 (id2, ty2) alpha
+          | CpTuple cpts1, CpTuple cpts2 ->
+            let (cps1, tys1) = List.split cpts1 in
+            let (cps2, tys2) = List.split cpts2 in
+            if not (List.all2 (EqTest.for_type env) tys1 tys2) then
+              raise E.NotConv;
+            List.fold_left2 do1 alpha cps1 cps2
+          | _, _ -> raise E.NotConv
+          )
+        in
+        let (cps1, tys1) = List.split cpts1 in
+        let (cps2, tys2) = List.split cpts2 in
+        if not (List.all2 (EqTest.for_type env) tys1 tys2) then
+          raise E.NotConv;
+        List.fold_left2 do1 alpha cps1 cps2
+      in s_upto env alpha bad s1 s2 in
     try
          EqTest.for_expr env ~alpha e1 e2
       && List.all2 (check_branch) bs1 bs2

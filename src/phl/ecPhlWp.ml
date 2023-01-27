@@ -63,9 +63,33 @@ module LowInternal = struct
           raise No_wp;
         let pbs =
           List.map2
-            (fun (bds, _) ((_, letsf), _) ->
+            (fun (cpts, _) ((_, letsf), _) ->
               let post = mk_let_of_lv_substs env letsf in
-              f_lambda (List.map (snd_map gtty) bds) post)
+
+              (* Create a formula from a constructor pattern *)
+              let rec f_cp = function
+                | CpSymbol idty -> (curry f_local) idty
+                | CpTuple cpts -> f_tuple (List.map (f_cp |- fst) cpts)
+              in
+
+              (*Hack until we deal with nested patterns in the constructor logic *)
+              (*Extract/create an outermost constructor variable *)
+              let toplevel (cp, ty) = 
+                match cp with
+                | CpSymbol (id, ty) ->  ((id, gtty ty), None)
+                | CpTuple cpts -> 
+                    let id = EcIdent.create "?" in
+                    ((id, gtty ty), 
+                     Some ((List.map (snd_map gtty) (cpts_binds cpts)),
+                           (f_eq (f_local id ty) (f_cp cp))))
+                in
+
+              let (binds, lets) = List.split (List.map toplevel cpts) in
+              let lets = List.filter_map identity lets in
+              let (vars, eqs) = List.split lets in
+              let post = List.fold_right f_imp eqs post in
+              let post = f_forall (List.concat vars) post in
+              f_lambda binds post)
             bs wps
         in
         let c =

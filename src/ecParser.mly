@@ -1974,7 +1974,7 @@ opbr:
     { p }
 
 mcptn(BOP):
-| c=qoident tvi=tvars_app? ps=bdident*
+| c=qoident tvi=tvars_app? ps=cptn*
     { PPApp ((c, tvi), ps) }
 
 | LBRACKET tvi=tvars_app? RBRACKET {
@@ -1985,14 +1985,27 @@ mcptn(BOP):
 | op=loc(uniop) tvi=tvars_app?
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), []) }
 
-| op=loc(uniop) tvi=tvars_app? x=bdident
+| op=loc(uniop) tvi=tvars_app? x=cptn
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x]) }
 
-| x1=bdident op=loc(BOP) tvi=tvars_app? x2=bdident
+| x1=cptn op=loc(BOP) tvi=tvars_app? x2=cptn
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x1; x2]) }
 
-| x1=bdident op=loc(ordering_op) tvi=tvars_app? x2=bdident
+| x1=cptn op=loc(ordering_op) tvi=tvars_app? x2=cptn
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x1; x2]) }
+
+cptn_:
+| x=bdident { 
+  let xu = unloc x in
+  if is_none xu then 
+    PCpSymbol (mk_loc x.pl_loc "_") 
+  else
+    PCpSymbol (oget xu)
+}
+| LPAREN cps=plist2(cptn, COMMA) RPAREN {PCpTuple cps}
+
+%inline cptn:
+| x=loc(cptn_) { x }
 
 (* -------------------------------------------------------------------- *)
 (* Predicate definitions                                                *)

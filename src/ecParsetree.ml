@@ -52,6 +52,12 @@ type ptyannot_r =
 
 and ptyannot  = ptyannot_r  located
 
+type pcpattern_r =
+  | PCpSymbol of psymbol
+  | PCpTuple of pcpattern list
+
+and pcpattern = pcpattern_r located
+
 type plpattern_r =
   | LPSymbol of psymbol
   | LPTuple  of osymbol list
@@ -60,7 +66,7 @@ type plpattern_r =
 and plpattern = plpattern_r located
 
 type ppattern =
-| PPApp of (pqsymbol * ptyannot option) * osymbol list
+  | PPApp of (pqsymbol * ptyannot option) * pcpattern list
 
 type ptybinding  = osymbol list * pty
 and  ptybindings = ptybinding list

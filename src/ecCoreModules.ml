@@ -64,6 +64,52 @@ let name_of_lv lv =
      String.concat "_" (List.map (EcTypes.name_of_pvar |- fst) pvs)
 
 (* -------------------------------------------------------------------- *)
+(* Constructor patterns *)
+
+type cpattern =
+  | CpSymbol of (EcIdent.t * ty)
+  | CpTuple of (cpattern * ty) list
+
+let rec cp_equal cp1 cp2 =
+  match cp1, cp2 with
+  | CpSymbol (x, ty1), CpSymbol (y, ty2) -> ty_equal ty1 ty2 && EcIdent.id_equal x y
+  | CpTuple cpts1, CpTuple cpts2 -> List.all2 cpt_equal cpts1 cpts2
+  | _, _ -> false
+
+and cpt_equal (cp1, ty1) (cp2, ty2) = cp_equal cp1 cp2 && ty_equal ty1 ty2
+
+let rec cp_hash = function
+  | CpSymbol (x, ty) -> Why3.Hashcons.combine (EcIdent.id_hash x) (ty_hash ty)
+  | CpTuple cpts -> Why3.Hashcons.combine_list cpt_hash 0 cpts
+
+and cpt_hash (cp, ty) = Why3.Hashcons.combine (cp_hash cp) (ty_hash ty)
+
+let rec cp_fv = function
+  | CpSymbol (id, _) -> EcIdent.fv_singleton id
+  | CpTuple cpts ->
+      List.fold_left
+      (fun s (cp, _) -> EcIdent.fv_union (cp_fv cp) s)
+      Mid.empty cpts
+
+let rec cp_binds = function
+  | CpSymbol (id, ty) -> [(id, ty)]
+  | CpTuple cpts -> cpts_binds cpts
+
+and cpts_binds cpts = List.concat_map cp_binds (List.fst cpts) 
+
+let rec cp_add_locals s = function
+  | CpSymbol idty ->
+      let (s', idty') = add_local s idty in
+      (s', CpSymbol idty')
+  | CpTuple cpts -> snd_map (fun x -> CpTuple x) (cpts_add_locals s cpts)
+
+and cpts_add_locals s cpts =
+      let cps, tys = List.split cpts in
+      let tys' = List.map s.es_ty tys in
+      let (s', cps') = List.Smart.map_fold cp_add_locals s cps in
+      (s', List.combine cps' tys')
+
+(* -------------------------------------------------------------------- *)
 type instr = {
   i_node : instr_node;
   i_fv : int Mid.t;
@@ -76,7 +122,7 @@ and instr_node =
   | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list
   | Sif       of EcTypes.expr * stmt * stmt
   | Swhile    of EcTypes.expr * stmt
-  | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
+  | Smatch    of expr * ((cpattern * EcTypes.ty) list * stmt) list
   | Sassert   of EcTypes.expr
   | Sabstract of EcIdent.t
 
@@ -125,11 +171,8 @@ module Hinstr = Why3.Hashcons.Make (struct
         && (s_equal s1 s2)
 
     | Smatch (e1, b1), Smatch (e2, b2) when List.length b1 = List.length b2 ->
-        let forb (bs1, s1) (bs2, s2) =
-          let forbs (x1, ty1) (x2, ty2) =
-               EcIdent.id_equal x1  x2
-            && EcTypes.ty_equal ty1 ty2
-          in List.all2 forbs bs1 bs2 && s_equal s1 s2
+        let forb (cps1, s1) (cps2, s2) =
+          List.all2 cpt_equal cps1 cps2 && s_equal s1 s2
         in EcTypes.e_equal e1 e2 && List.all2 forb b1 b2
 
     | Sassert e1, Sassert e2 ->
@@ -165,10 +208,8 @@ module Hinstr = Why3.Hashcons.Make (struct
         Why3.Hashcons.combine (EcTypes.e_hash c) (s_hash s)
 
     | Smatch (e, b) ->
-        let forb (bds, s) =
-          let forbs (x, ty) =
-            Why3.Hashcons.combine (EcIdent.id_hash x) (EcTypes.ty_hash ty)
-          in Why3.Hashcons.combine_list forbs (s_hash s) bds
+        let forb (cps, s) =
+          Why3.Hashcons.combine_list cpt_hash (s_hash s) cps
         in Why3.Hashcons.combine_list forb (EcTypes.e_hash e) b
 
     | Sassert e -> EcTypes.e_hash e
@@ -196,14 +237,18 @@ module Hinstr = Why3.Hashcons.Make (struct
     | Swhile (e, s)  ->
         EcIdent.fv_union (EcTypes.e_fv e) (s_fv s)
 
-    | Smatch (e, b) ->
-        let forb (bs, s) =
-          let bs = Sid.of_list (List.map fst bs) in
-          EcIdent.fv_diff (s_fv s) bs
+    | Smatch (e, bs) ->
+        let forb (cpts, st) =
+          let (cps, tys) = List.split cpts in
+          let tys_fv = List.fold_left (fun s t -> EcIdent.fv_union s t.ty_fv) Mid.empty tys in
+          List.fold_left
+            (fun s cp -> EcIdent.fv_union s (cp_fv cp))
+            (EcIdent.fv_union tys_fv (s_fv st))
+            cps
 
         in List.fold_left
              (fun s b -> EcIdent.fv_union s (forb b))
-             (EcTypes.e_fv e) b
+             (EcTypes.e_fv e) bs
 
     | Sassert e    ->
         EcTypes.e_fv e
@@ -331,13 +376,13 @@ module ISmart : sig
 
   val lv_var   : lvalue * lv_var   -> lv_var   -> lvalue
   val lv_tuple : lvalue * lv_tuple -> lv_tuple -> lvalue
-
+  
   type i_asgn     = lvalue * EcTypes.expr
   type i_rnd      = lvalue * EcTypes.expr
   type i_call     = lvalue option * EcPath.xpath * EcTypes.expr list
   type i_if       = EcTypes.expr * stmt * stmt
   type i_while    = EcTypes.expr * stmt
-  type i_match    = EcTypes.expr * ((EcIdent.t * ty) list * stmt) list
+  type i_match    = EcTypes.expr * ((cpattern * EcTypes.ty) list * stmt) list
   type i_assert   = EcTypes.expr
   type i_abstract = EcIdent.t
 
@@ -360,7 +405,7 @@ end = struct
   type i_call     = lvalue option * EcPath.xpath * EcTypes.expr list
   type i_if       = EcTypes.expr * stmt * stmt
   type i_while    = EcTypes.expr * stmt
-  type i_match    = EcTypes.expr * ((EcIdent.t * ty) list * stmt) list
+  type i_match    = EcTypes.expr * ((cpattern * EcTypes.ty) list * stmt) list
   type i_assert   = EcTypes.expr
   type i_abstract = EcIdent.t
 
@@ -420,7 +465,6 @@ let rec s_subst_top (s : EcTypes.e_subst) =
     | LvTuple pvs ->
         let pvs' = List.Smart.map pvt_subst pvs in
         ISmart.lv_tuple (lv, pvs) pvs'
-
   in
 
   let rec i_subst i =
@@ -446,10 +490,10 @@ let rec s_subst_top (s : EcTypes.e_subst) =
         ISmart.i_while (i, (e, b)) (e_subst e, s_subst b)
 
     | Smatch (e, b) ->
-        let forb ((xs, subs) as b1) =
-          let s, xs' = EcTypes.add_locals s xs in
-          let subs'  = s_subst_top s subs in
-          if xs == xs' && subs == subs' then b1 else (xs', subs')
+        let forb ((cpts, subs) as b1) =
+          let (s', cpts') = cpts_add_locals s cpts in
+          let subs'  = s_subst_top s' subs in
+          if cpts == cpts' && subs == subs' then b1 else (cpts', subs')
         in
 
         ISmart.i_match (i, (e, b)) (e_subst e, List.Smart.map forb b)

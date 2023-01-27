@@ -234,8 +234,8 @@ and i_eqobs_in il ir sim local (eqo:Mpv2.t) =
         List.for_all2 (EcReduction.EqTest.for_type env) tyinstl tyinstr in
     if not test then raise EqObsInError;
     let rsim = ref sim in
-    let doit eqs1 (argsl,sl) (argsr, sr) =
-      let local = Mpv2.enter_local env local argsl argsr in
+    let doit eqs1 (cptsl,sl) (cptsr, sr) =
+      let local = Mpv2.enter_local env local (cpts_binds cptsl) (cpts_binds cptsr) in
       let sim, eqs2 = s_eqobs_in_full sl sr !rsim local eqo in
       rsim := sim;
       Mpv2.union eqs1 eqs2 in
