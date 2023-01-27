@@ -137,6 +137,10 @@ let rec t_equiv_cond side tc =
           tc
 
 (* -------------------------------------------------------------------- *)
+let rec f_cp = function
+  | CpSymbol idty -> (curry f_local) idty
+  | CpTuple cpts -> f_tuple (List.map (f_cp |- fst) cpts)
+
 let t_hoare_match tc =
   let hyps = FApi.tc1_hyps tc in
   let env  = LDecl.toenv hyps in
@@ -160,11 +164,6 @@ let t_hoare_match tc =
   let do1 ((cpts, b), (cname, _)) =
     let subst, cpts = cpts_add_locals e_subst_id cpts in 
 
-    let rec f_cp = function
-      | CpSymbol idty -> (curry f_local) idty
-      | CpTuple cpts -> f_tuple (List.map (f_cp |- fst) cpts)
-    in
-
     let cop = EcPath.pqoname (EcPath.prefix indp) cname in
     let cop = f_op cop tyinst (toarrow (List.snd cpts) f.f_ty) in
     let cop =
@@ -187,7 +186,6 @@ let t_hoare_match tc =
 
 (* -------------------------------------------------------------------- *)
 let t_equiv_match s tc =
-  assert false (*
   let hyps = FApi.tc1_hyps tc in
   let env  = LDecl.toenv hyps in
   let es   = tc1_as_equivS tc in
@@ -207,33 +205,29 @@ let t_equiv_match s tc =
   let indt = oget (EcDecl.tydecl_as_datatype indt) in
   let f = form_of_expr (EcMemory.memory me) e in
 
-  let do1 ((ids, b), (cname, _)) =
-    let subst, lvars =
-      add_locals e_subst_id ids in
+  let do1 ((cpts, b), (cname, _)) =
+    let subst, cpts = cpts_add_locals e_subst_id cpts in 
 
     let cop = EcPath.pqoname (EcPath.prefix indp) cname in
-    let cop = f_op cop tyinst (toarrow (List.snd ids) f.f_ty) in
+    let cop = f_op cop tyinst (toarrow (List.snd cpts) f.f_ty) in
     let cop =
-      let args = List.map (curry f_local) lvars in
+      let args = List.map (f_cp |- fst) cpts in
       f_app cop args f.f_ty in
     let cop = f_eq f cop in
-
+  
     f_forall
-      (List.map (snd_map gtty) lvars)
+      (List.map (snd_map gtty) (cpts_binds cpts))
       (f_equivS_r
          { (sets (stmt ((s_subst subst b).s_node @ tl.s_node)))
              with es_pr = f_and_simpl cop es.es_pr })
-
   in
 
   let concl = List.map do1 (List.combine bs indt.EcDecl.tydt_ctors) in
 
   FApi.xmutate1 tc (`Match s) concl
-  *)
 
 (* -------------------------------------------------------------------- *)
 let t_equiv_match_same_constr tc =
-  assert false (*
   let hyps = FApi.tc1_hyps tc in
   let env  = LDecl.toenv hyps in
   let es   = tc1_as_equivS tc in
@@ -250,37 +244,61 @@ let t_equiv_match_same_constr tc =
   let dt = oget (EcDecl.tydecl_as_datatype dt) in
   let fl = form_of_expr (EcMemory.memory es.es_ml) el in
   let fr = form_of_expr (EcMemory.memory es.es_mr) er in
+  
+  let get_eqv_cond ((c, _), ((cptsl, _), (cptsr, _))) =
 
-  let get_eqv_cond ((c, _), ((cl, _), (cr, _))) =
-    let bhl  = List.map (fst_map EcIdent.fresh) cl in
-    let bhr  = List.map (fst_map EcIdent.fresh) cr in
+    (*Hack until we deal with nested patterns in the constructor logic *)
+    (*Extract/create an outermost constructor variable *)
+    let toplevel (cp, ty) = 
+      match cp with
+      | CpSymbol (id, ty) ->  ((EcIdent.fresh id, ty), None)
+      | CpTuple cpts -> 
+          let id = EcIdent.create "?" in
+          ((id, ty), 
+           Some ((List.map (snd_map gtty) (cpts_binds cpts)),
+                 (f_eq (f_local id ty) (f_cp cp))))
+      in
+
     let cop  = EcPath.pqoname (EcPath.prefix pl) c in
-    let copl = f_op cop tyl (toarrow (List.snd cl) fl.f_ty) in
-    let copr = f_op cop tyr (toarrow (List.snd cr) fr.f_ty) in
+    let copl = f_op cop tyl (toarrow (List.snd cptsl) fl.f_ty) in
+    let copr = f_op cop tyr (toarrow (List.snd cptsr) fr.f_ty) in
+
+    let (bhl, letsl) = List.split (List.map toplevel cptsl) in
+    let letsl = List.filter_map identity letsl in
+    let (varsl, eqsl) = List.split letsl in
+
+    let (bhr, letsr) = List.split (List.map toplevel cptsr) in
+    let letsr = List.filter_map identity letsr in
+    let (varsr, eqsr) = List.split letsr in
 
     let lhs = f_eq fl (f_app copl (List.map (curry f_local) bhl) fl.f_ty) in
+    let lhs = List.fold_right f_and eqsl lhs in
+    let lhs = f_exists (List.concat varsl) lhs in
     let lhs = f_exists (List.map (snd_map gtty) bhl) lhs in
 
     let rhs = f_eq fr (f_app copr (List.map (curry f_local) bhr) fr.f_ty) in
+    let rhs = List.fold_right f_and eqsr rhs in
+    let rhs = f_exists (List.concat varsr) rhs in
     let rhs = f_exists (List.map (snd_map gtty) bhr) rhs in
 
     f_forall_mems [es.es_ml; es.es_mr] (f_imp_simpl es.es_pr (f_iff lhs rhs)) in
 
-  let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
+  let get_eqv_goal ((c, _), ((cptsl, bl), (cptsr, br))) =
     let sb      = EcTypes.e_subst_id in
-    let sb, bhl = EcTypes.add_locals sb cl in
-    let sb, bhr = EcTypes.add_locals sb cr in
+    let sb, cptsl = cpts_add_locals sb cptsl in 
+    let sb, cptsr = cpts_add_locals sb cptsr in 
     let cop     = EcPath.pqoname (EcPath.prefix pl) c in
-    let copl    = f_op cop tyl (toarrow (List.snd cl) fl.f_ty) in
-    let copr    = f_op cop tyr (toarrow (List.snd cr) fr.f_ty) in
+    let copl    = f_op cop tyl (toarrow (List.snd cptsl) fl.f_ty) in
+    let copr    = f_op cop tyr (toarrow (List.snd cptsr) fr.f_ty) in
+    
     let pre     = f_ands_simpl
-      [ f_eq fl (f_app copl (List.map (curry f_local) bhl) fl.f_ty);
-        f_eq fr (f_app copr (List.map (curry f_local) bhr) fr.f_ty) ]
+      [ f_eq fl (f_app copl (List.map (f_cp |- fst) cptsl) fl.f_ty);
+        f_eq fr (f_app copr (List.map (f_cp |- fst) cptsr) fr.f_ty) ]
       es.es_pr in
 
     f_forall
-      ( (List.map (snd_map gtty) bhl) @
-        (List.map (snd_map gtty) bhr) )
+      ( (List.map (snd_map gtty) (cpts_binds cptsl)) @
+        (List.map (snd_map gtty) (cpts_binds cptsr)) )
       ( f_equivS_r
           { es with
               es_sl = EcModules.stmt ((s_subst sb bl).s_node @ sl.s_node);
@@ -296,11 +314,9 @@ let t_equiv_match_same_constr tc =
   let concl2 = List.map get_eqv_goal infos in
 
   FApi.xmutate1 tc `Match (concl1 @ concl2)
-  *)
 
 (* -------------------------------------------------------------------- *)
 let t_equiv_match_eq tc =
-  assert false (*
   let hyps = FApi.tc1_hyps tc in
   let env  = LDecl.toenv hyps in
   let es   = tc1_as_equivS tc in
@@ -327,25 +343,25 @@ let t_equiv_match_eq tc =
 
   let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
     let sb     = { EcTypes.e_subst_id with es_freshen = true; } in
-    let sb, bh = EcTypes.add_locals sb cl in
+    let sb, bh = cpts_add_locals sb cl in
 
     let sb =
       List.fold_left2
         (fun sb (x, _) (y, _) ->
           { sb with es_loc =
               Mid.add y (oget (Mid.find_opt x sb.es_loc)) sb.es_loc })
-        sb cl cr in
+        sb (cpts_binds cl) (cpts_binds cr) in
 
     let cop    = EcPath.pqoname (EcPath.prefix pl) c in
     let copl   = f_op cop tyl (toarrow (List.snd cl) fl.f_ty) in
     let copr   = f_op cop tyr (toarrow (List.snd cr) fr.f_ty) in
     let pre    = f_ands_simpl
-      [ f_eq fl (f_app copl (List.map (curry f_local) bh) fl.f_ty);
-        f_eq fr (f_app copr (List.map (curry f_local) bh) fr.f_ty) ]
+      [ f_eq fl (f_app copl (List.map (f_cp |- fst) bh) fl.f_ty);
+        f_eq fr (f_app copr (List.map (f_cp |- fst) bh) fr.f_ty) ]
       es.es_pr in
 
     f_forall
-      (List.map (snd_map gtty) bh)
+      (List.map (snd_map gtty) (cpts_binds bh))
       (f_equivS_r
          { es with
              es_sl = EcModules.stmt ((s_subst sb bl).s_node @ sl.s_node);
@@ -360,7 +376,6 @@ let t_equiv_match_eq tc =
   let concl2 = List.map get_eqv_goal infos in
 
   FApi.xmutate1 tc `Match ([eqv_cond] @ concl2)
-  *)
 
 (* -------------------------------------------------------------------- *)
 let t_equiv_match infos tc =

@@ -1527,18 +1527,20 @@ let trans_branch ~loc env ue gindty ((pb, body) : ppattern * _) =
       unify_or_fail env ue loc ~expct:pty gindty;
 
       (* Create variables for each constructor pattern *)
+
       let rec trans_cptn cp ty = 
         match cp with
         | PCpSymbol x -> CpSymbol (EcIdent.create (unloc x), ty)
         | PCpTuple xs -> 
-          (match ty.ty_node with
+          (match (EcUnify.UniEnv.repr ue ty).ty_node with
           | Ttuple tys -> 
               CpTuple (
                 List.map 
                 (fun (x, t) -> (trans_cptn (unloc x) t, t))
                 (List.combine xs tys)
               )
-          | _ -> assert false
+          | _ -> 
+              assert false
           )
       in 
       
