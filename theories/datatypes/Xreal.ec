@@ -977,4 +977,6 @@ proof. by case b. qed.
 
 hint solve 2 concave_incr : concave_incr_cxr concave_incr_if.
 
-
+(* -------------------------------------------------------------------- *)
+lemma trans_help P Q f : (P => Q) => (P `|` f) = oo \/ Q.
+proof. case P => />. qed.
