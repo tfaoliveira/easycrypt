@@ -2545,7 +2545,7 @@ pose F x := fun n : int => mass (df n) x.
 split=> @/mdlim /= [x|s uq_s].
 - case: (converge (F x))%RealSeq => [|/lim_Ncnv ->//].
   apply: (geC_lim_from 0) => n _.
-  by rewrite /s /F massE ge0_mu1.
+  by rewrite /F massE ge0_mu1.
 rewrite (@bigID _ _ (fun x => RealSeq.converge (F x))).
 rewrite addrC big1 -1:add0r.
 - by move=> x [_ @/predC] /lim_Ncnv /=; apply.

@@ -242,7 +242,7 @@ module KnownFlags = struct
     (implicits, false);
     (oldip    , false);
     (redlogic , true );
-    (und_delta, false);
+    (und_delta, true );
   ]
 end
 

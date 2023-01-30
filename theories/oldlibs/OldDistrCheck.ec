@@ -50,7 +50,7 @@ lemma ew_eq (d d':'a distr):
   (forall p, mu d p = mu d' p) => d = d'.
 proof.
 move=> ew_eq; rewrite -pw_eq=> x.
-by rewrite /mu1 ew_eq.
+by rewrite ew_eq.
 qed.
 
 lemma nosmt mu_or_le (d:'a distr) (p q:'a -> bool) r1 r2:
@@ -160,7 +160,6 @@ lemma mu_one (P:'a -> bool) (d:'a distr):
   mu d P = 1%r.
 proof.
 move=> heq <-.
-rewrite /weight.
 congr=> //.
 by apply fun_ext.
 qed.
