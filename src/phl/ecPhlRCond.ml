@@ -155,14 +155,16 @@ module LowMatch = struct
     let (hd, s, tl), (e, f), ((typ, _tyd, tyinst), cname), cvars =
       gen_rcond (pf,env) c m at_pos s in
 
-    let names =
-      let rec get_binds = function
-        | CpSymbol (id, ty) -> [(EcIdent.fresh id, ty)]
-        | CpTuple cpts -> List.concat_map get_binds (List.fst cpts)
-      in
-      List.concat_map get_binds (List.fst cvars) in   
+    let cvars = cpts_binds cvars in 
 
     let po1 =
+      let names = List.map (
+        fun (x, xty) ->
+          let x =
+            if   EcIdent.name x = "_"
+            then EcIdent.create (symbol_of_ty xty)
+            else EcIdent.fresh x
+          in (x, xty)) cvars in
       let vars = List.map (curry f_local) names in
       let po = f_op cname (List.snd tyinst) f.f_ty in
       let po = f_app po vars f.f_ty in
@@ -172,7 +174,7 @@ module LowMatch = struct
       let cvars =
         List.map
           (fun (x, xty) -> { ov_name = Some (EcIdent.name x); ov_type = xty; })
-          names in
+          cvars in
       EcMemory.bindall_fresh cvars me0 in
 
     let subst, pvs =
@@ -181,7 +183,7 @@ module LowMatch = struct
             let pv = pv_loc (oget name.ov_name) in
             let s  = Mid.add x (e_var pv xty) s in
             (s, (pv, xty)))
-          Mid.empty (List.combine names pvs) in
+          Mid.empty (List.combine cvars pvs) in
       ({ e_subst_id with es_loc = s; }, pvs) in
 
     let frame =
