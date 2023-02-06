@@ -84,8 +84,11 @@ module Low = struct
     (*TODO: annotations: somehow does not clean, also how to make the check?*)
     let ls_l = s_labels sl in
     let ls_r = s_labels sr in
+    (*TODO: annotations: debug*)
+    (*EcMaps.Sstr.print Format.pp_print_string Format.std_formatter ls_l;*)
     let concl2 = f_equivS_r { es with es_sl = sl; es_sr = sr;
-                                      es_am = a_labels_clean ls_l ls_r es.es_am } in
+                                      es_am = a_labels_clean ls_l ls_r es.es_am;
+                                      es_as = a_labels_clean ls_l ls_r es.es_as } in
     FApi.xmutate1 tc `RCond [concl1; concl2]
 
   (* ------------------------------------------------------------------ *)
