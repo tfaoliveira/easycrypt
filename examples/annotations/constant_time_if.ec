@@ -45,7 +45,11 @@ proc.
 (*TODO: annotations: seq rule.*)
 if.
 + by trivial.
-+ admit.
++ seq 1 1 : (={M.low} /\ b_low M.low{1}).
+  - admit.
+  if.
+  - admit.
+  - admit.
 admit.
 qed.
 

@@ -594,10 +594,7 @@ val a_labels_clean : unit EcMaps.Mstr.t -> unit EcMaps.Mstr.t ->
                      (EcIdent.t * EcIdent.t * form) list ->
                      (EcIdent.t * EcIdent.t * form) list
 
-val a_labels_full  : unit EcMaps.Mstr.t -> unit EcMaps.Mstr.t ->
-                     (EcIdent.t * EcIdent.t * form) list ->
-                     bool
+val a_labels_is_disjoint : unit EcMaps.Mstr.t -> unit EcMaps.Mstr.t ->
+                           (EcIdent.t * EcIdent.t * form) list ->
+                           bool
 
-val a_labels_empty : unit EcMaps.Mstr.t -> unit EcMaps.Mstr.t ->
-                     (EcIdent.t * EcIdent.t * form) list ->
-                     bool

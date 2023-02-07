@@ -98,17 +98,8 @@ let rec t_equiv_cond side tc =
       in LowInternal.t_gen_cond side e None tc
 
   | None ->
-      let el,sil,sel = fst (tc1_first_if tc es.es_sl) in
-      let er,sir,ser = fst (tc1_first_if tc es.es_sr) in
-      (*TODO: annotations: check, maybe relax a little, and add proper error message.*)
-      let lil = s_labels sil in
-      let lel = s_labels sel in
-      let lir = s_labels sir in
-      let ler = s_labels ser in
-      assert (a_labels_empty lil ler es.es_am && 
-              a_labels_empty lir lel es.es_am &&
-              a_labels_empty lil ler es.es_as && 
-              a_labels_empty lir lel es.es_as);
+      let el,_,_ = fst (tc1_first_if tc es.es_sl) in
+      let er,_,_ = fst (tc1_first_if tc es.es_sr) in
 
       let el     = form_of_expr (EcMemory.memory es.es_ml) el in
       let er     = form_of_expr (EcMemory.memory es.es_mr) er in
