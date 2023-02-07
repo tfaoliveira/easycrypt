@@ -825,6 +825,10 @@ end = struct
 
     | AE_InvalidArgModRestr e ->
        msg "%a" (pp_restr_error (LDecl.toenv hyps)) e
+
+    (*TODO: annotations: correct error messages.*)
+    | AE_AnnotationPreventsTactic (_, _, _, _) ->
+        msg "The annotation _ prevents the use of the tactic _."
 end
 
 (* -------------------------------------------------------------------- *)

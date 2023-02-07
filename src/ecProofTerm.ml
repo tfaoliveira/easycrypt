@@ -47,6 +47,8 @@ type apperror =
   | AE_InvalidArgMod      of EcTyping.tymod_cnv_failure
   | AE_InvalidArgProof    of (form * form)
   | AE_InvalidArgModRestr of EcTyping.restriction_error
+  (*TODO: annotations: this should be an annotation and a tactic.*)
+  | AE_AnnotationPreventsTactic of EcIdent.t * EcIdent.t * form * unit
 
 and argkind = [`Form | `Mem | `Mod | `PTerm]
 
