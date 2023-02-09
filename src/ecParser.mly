@@ -480,6 +480,7 @@
 %token IOTA
 %token IS
 %token KILL
+%token LABEL
 %token LARROW
 %token LAST
 %token LBRACE
@@ -3310,6 +3311,9 @@ phltactic:
 
 | LOSSLESS
     { Plossless }
+
+| LABEL s=side?
+    { Plabel s}
 
 bdhoare_split:
 | b1=sform b2=sform b3=sform?

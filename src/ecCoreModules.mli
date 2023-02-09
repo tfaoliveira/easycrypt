@@ -82,6 +82,7 @@ val destr_call   : instr -> lvalue option * xpath * expr list
 val destr_if     : instr -> expr * stmt * stmt
 val destr_while  : instr -> expr * stmt
 val destr_match  : instr -> expr * ((EcIdent.t * ty) list * stmt) list
+val destr_label  : instr -> EcIdent.t
 
 val is_asgn   : instr -> bool
 val is_rnd    : instr -> bool
@@ -89,6 +90,7 @@ val is_call   : instr -> bool
 val is_if     : instr -> bool
 val is_while  : instr -> bool
 val is_match  : instr -> bool
+val is_label  : instr -> bool
 
 (* -------------------------------------------------------------------- *)
 val get_uninit_read : stmt -> Sx.t

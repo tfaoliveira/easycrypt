@@ -762,6 +762,9 @@ type phltactic =
     (* Automation *)
   | Pauto
   | Plossless
+  
+    (* Label management *)
+  | Plabel of side option
 
 (* -------------------------------------------------------------------- *)
 type include_exclude = [ `Include | `Exclude ]

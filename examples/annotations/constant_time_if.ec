@@ -42,11 +42,13 @@ lemma if_ct :
        (l_else, l_else --> b_high_b M.low{1} = b_high_b M.low{2}) } ].
 proof.
 proc.
-(*TODO: annotations: seq rule.*)
 if.
 + by trivial.
 + seq 1 1 : (={M.low} /\ b_low M.low{1}).
-  - admit.
+  (*TODO: annotations: clean and enhance the label tactic.*)
+  - label.
+    skip.
+    admit.
   if.
   - admit.
   - admit.

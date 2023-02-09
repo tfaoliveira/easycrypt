@@ -2325,6 +2325,18 @@ let core_op_kind (p : EcPath.path) =
   EcPath.Hp.find_opt core_ops p
 
 (* -------------------------------------------------------------------- *)
+let a_labels_is_not_left (l : EcIdent.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.for_all (fun (l', _, _) -> (not (EcIdent.name l = EcIdent.name l'))) a
+
+let a_labels_is_not_right (l : EcIdent.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.for_all (fun (_, l', _) -> (not (EcIdent.name l = EcIdent.name l'))) a
+
+let a_labels_partition_left (l : EcIdent.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.partition (fun (l', _, _) -> (EcIdent.name l = EcIdent.name l')) a
+
+let a_labels_partition_right (l : EcIdent.t) (a : (EcIdent.t * EcIdent.t * form) list) =
+  List.partition (fun (_, l', _) -> (EcIdent.name l = EcIdent.name l')) a
+
 let a_labels_clean (ls_l : unit EcMaps.Mstr.t) (ls_r : unit EcMaps.Mstr.t) (a : (EcIdent.t * EcIdent.t * form) list) =
   List.filter (fun (l_l, l_r, _) -> EcMaps.Sstr.M.mem l_l.id_symb ls_l && EcMaps.Sstr.M.mem l_r.id_symb ls_r) a
 

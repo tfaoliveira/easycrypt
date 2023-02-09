@@ -222,6 +222,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pauto                     -> EcPhlAuto.t_auto ~conv:`Conv
     | Plossless                 -> EcPhlHiAuto.t_lossless
     | Prepl_stmt infos          -> EcPhlTrans.process_equiv_trans infos
+    | Plabel s                  -> EcPhlLabel.t_label s
   in
 
   try  tx tc

@@ -93,6 +93,7 @@ let pf_first_call   pe st = pf_first_gen  "call"   destr_call   pe st
 let pf_first_if     pe st = pf_first_gen  "if"     destr_if     pe st
 let pf_first_match  pe st = pf_first_gen  "match"  destr_match  pe st
 let pf_first_while  pe st = pf_first_gen  "while"  destr_while  pe st
+let pf_first_label  pe st = pf_first_gen  "label"  destr_label  pe st
 
 (* -------------------------------------------------------------------- *)
 let pf_last_asgn   pe st = pf_last_gen  "asgn"   destr_asgn   pe st
@@ -101,6 +102,7 @@ let pf_last_call   pe st = pf_last_gen  "call"   destr_call   pe st
 let pf_last_if     pe st = pf_last_gen  "if"     destr_if     pe st
 let pf_last_match  pe st = pf_last_gen  "match"  destr_match  pe st
 let pf_last_while  pe st = pf_last_gen  "while"  destr_while  pe st
+let pf_last_label  pe st = pf_last_gen  "label"  destr_label  pe st
 
 (* -------------------------------------------------------------------- *)
 let tc1_first_asgn   tc st = pf_first_asgn   !!tc st
@@ -109,6 +111,7 @@ let tc1_first_call   tc st = pf_first_call   !!tc st
 let tc1_first_if     tc st = pf_first_if     !!tc st
 let tc1_first_match  tc st = pf_first_match  !!tc st
 let tc1_first_while  tc st = pf_first_while  !!tc st
+let tc1_first_label  tc st = pf_first_label  !!tc st
 
 (* -------------------------------------------------------------------- *)
 let tc1_last_asgn   tc st = pf_last_asgn   !!tc st
@@ -117,6 +120,7 @@ let tc1_last_call   tc st = pf_last_call   !!tc st
 let tc1_last_if     tc st = pf_last_if     !!tc st
 let tc1_last_match  tc st = pf_last_match  !!tc st
 let tc1_last_while  tc st = pf_last_while  !!tc st
+let tc1_last_label  tc st = pf_last_label  !!tc st
 
 (* -------------------------------------------------------------------- *)
 (* TODO: use in change pos *)
@@ -132,6 +136,7 @@ let pf_pos_last_call   pe s = pf_pos_last_gen "call"   is_call   pe s
 let pf_pos_last_if     pe s = pf_pos_last_gen "if"     is_if     pe s
 let pf_pos_last_match  pe s = pf_pos_last_gen "match"  is_match  pe s
 let pf_pos_last_while  pe s = pf_pos_last_gen "while"  is_while  pe s
+let pf_pos_last_label  pe s = pf_pos_last_gen "label"  is_label  pe s
 
 let tc1_pos_last_asgn   tc s = pf_pos_last_asgn   !!tc s
 let tc1_pos_last_rnd    tc s = pf_pos_last_rnd    !!tc s
@@ -139,6 +144,7 @@ let tc1_pos_last_call   tc s = pf_pos_last_call   !!tc s
 let tc1_pos_last_if     tc s = pf_pos_last_if     !!tc s
 let tc1_pos_last_match  tc s = pf_pos_last_match  !!tc s
 let tc1_pos_last_while  tc s = pf_pos_last_while  !!tc s
+let tc1_pos_last_label  tc s = pf_pos_last_label  !!tc s
 
 (* -------------------------------------------------------------------- *)
 let pf_as_hoareF   pe c = as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe

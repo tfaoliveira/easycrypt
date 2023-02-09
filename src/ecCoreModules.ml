@@ -294,6 +294,10 @@ let get_match = function
   | { i_node = Smatch (e, b) } -> Some (e, b)
   | _ -> None
 
+let get_label = function
+  | { i_node = Slabel l } -> Some l
+  | _ -> None
+
 (* -------------------------------------------------------------------- *)
 let _destr_of_get (get : instr -> 'a option) (i : instr) =
   match get i with Some x -> x | None -> raise Not_found
@@ -304,6 +308,7 @@ let destr_call   = _destr_of_get get_call
 let destr_if     = _destr_of_get get_if
 let destr_while  = _destr_of_get get_while
 let destr_match  = _destr_of_get get_match
+let destr_label  = _destr_of_get get_label
 
 (* -------------------------------------------------------------------- *)
 let _is_of_get (get : instr -> 'a option) (i : instr) =
@@ -315,6 +320,7 @@ let is_call   = _is_of_get get_call
 let is_if     = _is_of_get get_if
 let is_while  = _is_of_get get_while
 let is_match  = _is_of_get get_match
+let is_label  = _is_of_get get_label
 
 (* -------------------------------------------------------------------- *)
 module ISmart : sig
