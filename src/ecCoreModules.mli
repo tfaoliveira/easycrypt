@@ -293,3 +293,6 @@ val get_uninit_read_of_module : path -> _ p_module_expr -> (xpath * Ssym.t) list
 
 (* -------------------------------------------------------------------- *)
 val s_labels : stmt -> EcMaps.Sstr.t
+
+(* -------------------------------------------------------------------- *)
+val s_labels_clean : (EcIdent.t -> bool) -> stmt -> stmt

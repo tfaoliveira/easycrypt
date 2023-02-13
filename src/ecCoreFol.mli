@@ -590,23 +590,26 @@ type core_op = [
 val core_op_kind : path -> core_op option
 
 (* -------------------------------------------------------------------- *)
-val a_labels_is_not_left  : EcIdent.t ->
-                            (EcIdent.t * EcIdent.t * form) list ->
-                            bool
+val a_labels_is_left  : (EcIdent.t * EcIdent.t * form) list ->
+                        EcIdent.t -> bool
 
-val a_labels_is_not_right : EcIdent.t ->
-                            (EcIdent.t * EcIdent.t * form) list ->
-                            bool
+val a_labels_is_right : (EcIdent.t * EcIdent.t * form) list ->
+                        EcIdent.t -> bool
 
-val a_labels_partition_left  : EcIdent.t ->
+val a_labels_partition_left  : (EcIdent.t -> bool) ->
                                (EcIdent.t * EcIdent.t * form) list ->
                                ((EcIdent.t * EcIdent.t * form) list *
                                 (EcIdent.t * EcIdent.t * form) list)
 
-val a_labels_partition_right : EcIdent.t ->
+val a_labels_partition_right : (EcIdent.t -> bool) ->
                                (EcIdent.t * EcIdent.t * form) list ->
                                ((EcIdent.t * EcIdent.t * form) list *
                                 (EcIdent.t * EcIdent.t * form) list)
+
+val a_labels_partition : (EcIdent.t -> EcIdent.t -> bool) ->
+                         (EcIdent.t * EcIdent.t * form) list ->
+                         ((EcIdent.t * EcIdent.t * form) list *
+                          (EcIdent.t * EcIdent.t * form) list)
 
 val a_labels_clean : unit EcMaps.Mstr.t -> unit EcMaps.Mstr.t ->
                      (EcIdent.t * EcIdent.t * form) list ->

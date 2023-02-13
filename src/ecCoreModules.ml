@@ -957,10 +957,7 @@ let get_uninit_read_of_module (p : path) (me : _ p_module_expr) =
 
 
 (* -------------------------------------------------------------------- *)
-let rec _s_labels (ls : Sstr.t) (s : stmt) : Sstr.t =
-  List.fold_left _i_labels ls s.s_node
-
-and _i_labels (ls : EcMaps.Sstr.t) (i : instr) : Sstr.t =
+let rec _i_labels (ls : EcMaps.Sstr.t) (i : instr) : Sstr.t =
   match i.i_node with
   | Sasgn _ | Srnd _ | Scall _ | Sabstract _ -> ls
   | Sif (_, s1, s2) ->
@@ -971,4 +968,22 @@ and _i_labels (ls : EcMaps.Sstr.t) (i : instr) : Sstr.t =
   | Smatch (_, ms) -> List.fold_left _s_labels ls (List.map snd ms)
   | Slabel l -> Sstr.M.add l.id_symb () ls
 
+and _s_labels (ls : Sstr.t) (s : stmt) : Sstr.t =
+  List.fold_left _i_labels ls s.s_node
+
 let s_labels s = _s_labels Sstr.M.empty s
+
+
+(* -------------------------------------------------------------------- *)
+let rec i_labels_clean (b : EcIdent.t -> bool) (i : instr) : instr option =
+  match i.i_node with
+  | Sasgn _ | Srnd _ | Scall _ | Sabstract _ -> Some i
+  | Sif (e, s1, s2) ->
+      Some (i_if (e, (s_labels_clean b s1), (s_labels_clean b s2)))
+  | Swhile (e, s) ->
+      Some (i_while (e, (s_labels_clean b s)))
+  | Smatch (e, ms) -> Some (i_match (e, List.map (fun (tys, s) -> (tys, s_labels_clean b s)) ms))
+  | Slabel l -> if b l then Some i else None
+
+and s_labels_clean (b : EcIdent.t -> bool) (s : stmt) : stmt =
+  stmt (List.filter_map (i_labels_clean b) s.s_node)

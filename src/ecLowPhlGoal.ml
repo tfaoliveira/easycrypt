@@ -76,6 +76,23 @@ let s_last proj s =
       with Not_found -> None
 
 (* -------------------------------------------------------------------- *)
+let rec s_node_firsts proj node acc =
+  match node with
+  | []     -> (List.rev acc, [])
+  | i :: r ->
+      try let i = proj i in
+          s_node_firsts proj r (i :: acc)
+      with Not_found -> (List.rev acc, node)
+
+let s_firsts proj s =
+  let (ls, node) = s_node_firsts proj s.s_node [] in
+  (ls, stmt node)
+
+let s_lasts proj s =
+  let (ls, node) = s_node_firsts proj (List.rev s.s_node) [] in
+  (List.rev ls, stmt (List.rev node))
+
+(* -------------------------------------------------------------------- *)
 let pf_first_gen _kind proj pe s =
   match s_first proj s with
   | None   -> tc_error pe "invalid first instruction"
@@ -121,6 +138,12 @@ let tc1_last_if     tc st = pf_last_if     !!tc st
 let tc1_last_match  tc st = pf_last_match  !!tc st
 let tc1_last_while  tc st = pf_last_while  !!tc st
 let tc1_last_label  tc st = pf_last_label  !!tc st
+
+(* -------------------------------------------------------------------- *)
+let tc1_firsts_label (_ : tcenv1) st = s_firsts destr_label st
+
+(* -------------------------------------------------------------------- *)
+let tc1_lasts_label (_ : tcenv1) st = s_lasts destr_label st
 
 (* -------------------------------------------------------------------- *)
 (* TODO: use in change pos *)

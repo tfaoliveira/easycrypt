@@ -45,13 +45,12 @@ proc.
 if.
 + by trivial.
 + seq 1 1 : (={M.low} /\ b_low M.low{1}).
-  (*TODO: annotations: clean and enhance the label tactic.*)
   - label.
     skip.
-    admit.
+    by trivial.
   if.
   - admit.
   - admit.
-admit.
+  admit.
 qed.
 
