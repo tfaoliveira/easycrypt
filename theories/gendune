@@ -1,0 +1,40 @@
+#! /usr/bin/env python3
+
+# --------------------------------------------------------------------
+import os
+import sys
+
+# --------------------------------------------------------------------
+ROOT = os.path.dirname(__file__)
+ROOT = os.path.realpath(ROOT)
+
+
+TEMPLATE = r'''
+(install
+  (section (site (easycrypt theories)))
+  (files
+{files}
+  )
+)
+'''.lstrip()
+
+# --------------------------------------------------------------------
+def _main():
+    libraries = set()
+
+    for root, _dirs, files in os.walk(ROOT):
+        for filename in files:
+            if os.path.splitext(filename)[1] not in {'.ec', '.eca'}:
+                continue
+            fullpath = os.path.join(root, filename)
+            fullpath = os.path.relpath(fullpath, ROOT)
+            libraries.add(fullpath)
+
+    dune = [f'      ({file:<31} as {file})' for file in sorted(libraries)]
+    dune = '\n'.join(dune)
+
+    sys.stdout.write(TEMPLATE.format(files = dune))
+
+# --------------------------------------------------------------------
+if __name__ == '__main__':
+    _main()
