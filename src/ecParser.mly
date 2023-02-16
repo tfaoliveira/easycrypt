@@ -499,6 +499,7 @@
 %token LOSSLESS
 %token LPAREN
 %token LPBRACE
+%token LWHILE
 %token MATCH
 %token MINUS
 %token MODPATH
@@ -2769,6 +2770,10 @@ while_tac_info:
 | inv=sform vrnt=sform k=sform TIME co=costs(none)
     { { wh_inv = inv; wh_vrnt = Some vrnt; wh_bds = Some (`Cost (k, co)); } }
 
+lwhile_tac_info:
+| inv=sform vrnt1=sform vrnt2=sform
+    { { lwh_inv = inv; lwh_vrnt1 = vrnt1; lwh_vrnt2 = vrnt2; } }
+
 async_while_tac_info:
 | LBRACKET t1=expr COMMA f1=form RBRACKET
   LBRACKET t2=expr COMMA f2=form RBRACKET p0=sform p1=sform COLON inv=sform
@@ -3114,6 +3119,9 @@ phltactic:
 
 | WHILE s=side? info=while_tac_info
     { Pwhile (s, info) }
+
+| LWHILE info=lwhile_tac_info
+    { Plwhile info }
 
 | ASYNC WHILE info=async_while_tac_info
     { Pasyncwhile info }

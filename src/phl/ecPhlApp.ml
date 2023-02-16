@@ -115,11 +115,11 @@ let t_equiv_app (i, j) phi tc =
   let ls_sl2 = s_labels sl2 in
   let ls_sr1 = s_labels sr1 in
   let ls_sr2 = s_labels sr2 in
-  (*TODO: annotations: add proper error message.*)
-  assert (a_labels_is_disjoint ls_sl1 ls_sr2 es.es_am && 
-          a_labels_is_disjoint ls_sl2 ls_sr1 es.es_am &&
-          a_labels_is_disjoint ls_sl1 ls_sr2 es.es_as && 
-          a_labels_is_disjoint ls_sl2 ls_sr1 es.es_as);
+  if (not ( a_labels_is_disjoint ls_sl1 ls_sr2 es.es_am && 
+            a_labels_is_disjoint ls_sl2 ls_sr1 es.es_am &&
+            a_labels_is_disjoint ls_sl1 ls_sr2 es.es_as && 
+            a_labels_is_disjoint ls_sl2 ls_sr1 es.es_as ) )
+  then tc_error !!tc "seq equiv: annotations can't go through the cut";
   let a = f_equivS_r {es with es_sl=sl1; es_sr=sr1; es_po=phi;
                               es_am = a_labels_clean ls_sl1 ls_sr1 es.es_am;
                               es_as = a_labels_clean ls_sl1 ls_sr1 es.es_as } in

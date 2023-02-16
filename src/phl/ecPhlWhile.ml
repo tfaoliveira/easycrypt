@@ -374,10 +374,30 @@ let t_equiv_while_r inv tc =
   let er = form_of_expr mr er in
   let sync_cond = f_iff_simpl el er in
 
+  (* 0. Annotations sanity checks *)
+  let ls_cl = s_labels cl in
+  let ls_sl = s_labels sl in
+  let ls_cr = s_labels cr in
+  let ls_sr = s_labels sr in
+  if (not ( a_labels_is_disjoint ls_cl ls_sr es.es_am && 
+            a_labels_is_disjoint ls_sl ls_cr es.es_am &&
+            a_labels_is_disjoint ls_cl ls_sr es.es_as && 
+            a_labels_is_disjoint ls_sl ls_cr es.es_as ) )
+  then tc_error !!tc "annotations can't go through the cut";
+
+  let cam = a_labels_clean ls_cl ls_cr es.es_am in
+  let sam = a_labels_clean ls_sl ls_sr es.es_am in
+  let cas = a_labels_clean ls_cl ls_cr es.es_as in
+  let sas = a_labels_clean ls_sl ls_sr es.es_as in
+  if (not (cas = []))
+  then
+    tc_error !!tc
+      "cannot be used when assertions are present between the bodies of the loop";
+
   (* 1. The body preserves the invariant *)
   let b_pre  = f_ands_simpl [inv; el] er in
   let b_post = f_and_simpl inv sync_cond in
-  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post [] [] in (*TODO: annotations*)
+  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post cam cas in
 
   (* 2. WP of the while *)
   let post = f_imps_simpl [f_not_simpl el;f_not_simpl er; inv] es.es_po in
@@ -386,9 +406,82 @@ let t_equiv_while_r inv tc =
   let post = generalize_mod env mr modir post in
   let post = generalize_mod env ml modil post in
   let post = f_and_simpl b_post post in
-  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; es_am = []; es_as = []; } in (*TODO: annotations*)
+  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post;
+                                   es_am = sam; es_as = sas } in
 
   FApi.xmutate1 tc `While [b_concl; concl]
+
+(* -------------------------------------------------------------------- *)
+let t_equiv_lwhile_r inv vrntl vrntr tc =
+  let env = FApi.tc1_env tc in
+  let es = tc1_as_equivS tc in
+  let (el, cl), sl = tc1_last_while tc es.es_sl in
+  let (er, cr), sr = tc1_last_while tc es.es_sr in
+  let ml = EcMemory.memory es.es_ml in
+  let mr = EcMemory.memory es.es_mr in
+  let el = form_of_expr ml el in
+  let er = form_of_expr mr er in
+  let sync_cond = f_iff_simpl el er in
+  let vrnt_eq_lr = f_eq vrntl vrntr in
+  let k_id = EcIdent.create "z" in
+  let k    = f_local k_id tint in
+
+  (*TODO: annotations: this should not be an equiv, but a HL or pHL statement.*)
+  let v_concl side =
+    let e, vrnt =
+      match side with
+      | `Left  -> el, vrntl
+      | `Right -> er, vrntr in
+    let vrnt_eq_k = f_eq vrnt k in
+    let vrnt_lt_k = f_int_lt vrnt k in
+
+    let v_pre   = f_and_simpl vrnt_eq_k e in
+    f_equivS es.es_ml es.es_mr v_pre cl cr vrnt_lt_k [] []
+  in
+
+  (* 0. Annotations sanity checks *)
+  let ls_cl = s_labels cl in
+  let ls_sl = s_labels sl in
+  let ls_cr = s_labels cr in
+  let ls_sr = s_labels sr in
+  if (not ( a_labels_is_disjoint ls_cl ls_sr es.es_am && 
+            a_labels_is_disjoint ls_sl ls_cr es.es_am &&
+            a_labels_is_disjoint ls_cl ls_sr es.es_as && 
+            a_labels_is_disjoint ls_sl ls_cr es.es_as ) )
+  then tc_error !!tc "annotations can't go through the cut";
+
+  let cam = a_labels_clean ls_cl ls_cr es.es_am in
+  let sam = a_labels_clean ls_sl ls_sr es.es_am in
+  let cas = a_labels_clean ls_cl ls_cr es.es_as in
+  let sas = a_labels_clean ls_sl ls_sr es.es_as in
+
+  (* 1. The left command increases the left variant *)
+  let vl_concl = v_concl `Left in
+
+  (* 2. The right command increases the right variant *)
+  let vr_concl = v_concl `Right in
+
+  (* 3. The assertions can be proven when the loops are not synced *)
+  let v_pre  = f_ands_simpl [(f_not vrnt_eq_lr); el] er in
+  let v_post = f_true in
+  let v_concl = f_equivS es.es_ml es.es_mr v_pre cl cr v_post cam cas in
+
+  (* 4. The body preserves the invariant *)
+  let b_pre  = f_ands_simpl [inv; vrnt_eq_lr; el] er in
+  let b_post = f_ands_simpl [inv; vrnt_eq_lr] sync_cond in
+  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post cam cas in
+
+  (* 5. WP of the while *)
+  let post = f_imps_simpl [f_not_simpl el;f_not_simpl er; inv; vrnt_eq_lr] es.es_po in
+  let modil = s_write env cl in
+  let modir = s_write env cr in
+  let post = generalize_mod env mr modir post in
+  let post = generalize_mod env ml modil post in
+  let post = f_and_simpl b_post post in
+  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post;
+                                   es_am = sam; es_as = sas } in
+
+  FApi.xmutate1 tc `LWhile [vl_concl; vr_concl; v_concl ;b_concl; concl]
 
 (* -------------------------------------------------------------------- *)
 let t_hoare_while           = FApi.t_low1 "hoare-while"   t_hoare_while_r
@@ -398,6 +491,7 @@ let t_bdhoare_while_rev_geq = FApi.t_low4 "bdhoare-while" t_bdhoare_while_rev_ge
 let t_bdhoare_while_rev     = FApi.t_low1 "bdhoare-while" t_bdhoare_while_rev_r
 let t_equiv_while           = FApi.t_low1 "equiv-while"   t_equiv_while_r
 let t_equiv_while_disj      = FApi.t_low3 "equiv-while"   t_equiv_while_disj_r
+let t_equiv_lwhile          = FApi.t_low3 "equiv-while"   t_equiv_lwhile_r
 
 (* -------------------------------------------------------------------- *)
 let process_while side winfos tc =
@@ -467,6 +561,23 @@ let process_while side winfos tc =
   end
 
   | _ -> tc_error !!tc "expecting a hoare[...]/equiv[...]"
+
+(* -------------------------------------------------------------------- *)
+let process_lwhile winfos tc =
+  let { EP.lwh_inv  = phi ;
+        EP.lwh_vrnt1 = vrnt1;
+        EP.lwh_vrnt2 = vrnt2 ; } = winfos in
+
+  match (FApi.tc1_goal tc).f_node with
+
+  | FequivS _ ->
+      t_equiv_lwhile
+        (TTC.tc1_process_prhl_formula tc phi)
+        (TTC.tc1_process_prhl_form    tc tint vrnt1)
+        (TTC.tc1_process_prhl_form    tc tint vrnt2)
+        tc
+
+  | _ -> tc_error !!tc "expecting an equiv[...]"
 
 (* -------------------------------------------------------------------- *)
 module ASyncWhile = struct

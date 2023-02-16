@@ -31,7 +31,7 @@ lemma declassify :
      ={M.l, M.n} ==>
      ={M.l, M.n} /\ b (M.k{1} < M.h{1}) = b (M.k{2} < M.h{2}) |
      { (l, l -->    b (M.k{1} < M.h{1}) = b (M.k{2} < M.h{2}) ) } ==>
-     {} ].
+     { } ].
 proof.
 proc.
 admit.

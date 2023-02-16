@@ -53,6 +53,7 @@
     "match"       , MATCH      ;        (* KW: prog *)
     "for"         , FOR        ;        (* KW: prog *)
     "while"       , WHILE      ;        (* KW: prog *)
+    "lwhile"      , LWHILE     ;        (* KW: prog *)
     "return"      , RETURN     ;        (* KW: prog *)
     "res"         , RES        ;        (* KW: prog *)
     "equiv"       , EQUIV      ;        (* KW: prog *)

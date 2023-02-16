@@ -649,6 +649,13 @@ type while_info = {
 }
 
 (* -------------------------------------------------------------------- *)
+type lwhile_info = {
+  lwh_inv   : pformula;
+  lwh_vrnt1 : pformula;
+  lwh_vrnt2 : pformula;
+}
+
+(* -------------------------------------------------------------------- *)
 type async_while_info = {
   asw_test : (pexpr * pformula) pair;
   asw_pred : pformula * pformula;
@@ -711,6 +718,7 @@ type phltactic =
   | Pwp            of docodepos1 * pformula option
   | Psp            of docodepos1
   | Pwhile         of (oside * while_info)
+  | Plwhile        of lwhile_info
   | Pasyncwhile    of async_while_info
   | Pfission       of (oside * codepos * (int * (int * int)))
   | Pfusion        of (oside * codepos * (int * (int * int)))
