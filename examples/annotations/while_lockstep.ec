@@ -1,4 +1,5 @@
-require import Int List IntDiv.
+require import Int IntDiv List Ring.
+import IntID.
 
 module M = {
   var i, n, x : int
@@ -24,20 +25,23 @@ module M = {
 
 (*Relational assertions can be used in lockstep.*)
 lemma foobar :
-  equiv [M.foo ~ M.bar : ={M.n} /\ M.n{1} = 10 /\ M.x{1} + M.x{2} = 42 ==> M.x{1} + M.x{2} = 42 |
+  equiv [M.foo ~ M.bar : M.n{1} = 10 /\ M.x{1} + M.x{2} = 42 ==> M.x{1} + M.x{2} = 42 |
          { } ==> { (l, l --> ={M.i} => M.x{1} + M.x{2} = 42) }].
 proof.
 proc.
-sp.
-lwhile (={M.n} /\ M.n{1} = 10 /\ M.x{1} + M.x{2} = 42) (-M.i{1}) (-M.i{2}).
-+ wp.
+lwhile (M.n{1} = 10 /\ M.x{1} + M.x{2} = 42) (-M.i{1}) (-M.i{2}).
++ move=> z.
+  wp.
   label.
   skip.
-  admit.
-+ wp.
+  move=> &1 _ /= [<<- _].
+  by rewrite opprD ltzE.
++ move=> z.
+  wp.
   label.
   skip.
-  admit.
+  move=> _  &2 /= [<<- _].
+  by rewrite opprD ltzE.
 + wp.
   label.
   skip.
@@ -45,10 +49,10 @@ lwhile (={M.n} /\ M.n{1} = 10 /\ M.x{1} + M.x{2} = 42) (-M.i{1}) (-M.i{2}).
 + wp.
   label.
   skip.
-  move=> &1 &2 [_] [] [<<-] [->>] eq_ [].
-  rewrite Ring.IntID.eqr_opp => <<- [le1 le2] /=.
-  rewrite eq_ /=.
+  move=> &1 &2 |> eq_.
+  rewrite Ring.IntID.eqr_opp => <<- le1 le2 /=.
   by rewrite -eq_; ring.
+sp.
 skip.
 by move=> &1 &2 |>.
 qed.

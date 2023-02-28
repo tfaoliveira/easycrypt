@@ -436,7 +436,8 @@ let t_equiv_lwhile_r inv vrntl vrntr tc =
     let vrnt_lt_k = f_int_lt vrnt k in
 
     let v_pre   = f_and_simpl vrnt_eq_k e in
-    f_equivS es.es_ml es.es_mr v_pre cl cr vrnt_lt_k [] []
+    let v_concl = f_equivS es.es_ml es.es_mr v_pre cl cr vrnt_lt_k [] [] in
+    f_forall_simpl [(k_id,GTty tint)] v_concl
   in
 
   (* 0. Annotations sanity checks *)

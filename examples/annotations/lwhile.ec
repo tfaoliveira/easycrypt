@@ -37,8 +37,7 @@ proc.
 lwhile
   (0 <= M.n{1} /\ ={M.n} /\ exists a, 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 3 ^ a)
   (-M.k{1}) (-M.k{2}).
-+ (*TODO: annotations: need to split the invariant in two parts: synced and not.*)
-  (*TODO: annotations: there should be only the left command.*)
++ (*TODO: annotations: there should be only the left command.*)
   wp.
   label.
   skip.
