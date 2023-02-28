@@ -36,12 +36,9 @@ pred A = b.
 lemma foobar : equiv[M.foo ~ M.bar : true ==> true | { } ==> { (l, l --> true) , (l, l --> true) } ].
 proof.
 proc.
-conseq (_ : A ==> A).
-admitted.
-
-(*
-equiv [M.f ~ M.g : y{2} = 0 ==> x{1} = x{2} |
-       {} ==> { (l, l) --> ={x, y} }].
-proof.
-admitted.
-*)
+sp.
+wp.
+label.
+skip.
+by trivial.
+qed.

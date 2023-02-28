@@ -31,11 +31,24 @@ module M = {
   }
 }.
 
+axiom foo_ct :
+  equiv
+    [M.foo ~ M.foo :
+     ={M.t} ==>
+     ={M.t} |
+     { } ==> { }].
+
+axiom bar_ct :
+  equiv
+    [M.bar ~ M.bar :
+     ={M.t} ==>
+     ={M.t} |
+     { } ==> { }].
 
 lemma if_ct :
   equiv
     [M.if_ ~ M.if_ :
-     ={M.low} ==>
+     ={M.t, M.low} ==>
      ={M.t} |
      { } ==>
      { (l_if,   l_if   --> b_high_a M.low{1} = b_high_a M.low{2}),
@@ -44,7 +57,7 @@ proof.
 proc.
 if.
 + by trivial.
-+ seq 1 1 : (={M.low} /\ b_low M.low{1}).
++ seq 1 1 : (={M.t, M.low} /\ b_low M.low{1}).
   - label.
     skip.
     by trivial.
