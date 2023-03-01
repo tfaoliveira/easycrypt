@@ -621,27 +621,18 @@ type mem_pr = EcMemory.memory * form
 
 
 (* -------------------------------------------------------------------- *)
-(* Module substitution info.
-   The formula must be of type [tmodcost _], and contains the cost
-   information associated to a module being instantiated. *)
-type ms_info = Refresh | Cost of form
-
-(* -------------------------------------------------------------------- *)
-type f_subst = {
-  fs_freshen : bool; (* true means freshen locals *)
-
-  fs_mp      : (EcPath.mpath * ms_info) Mid.t;
-
-  fs_loc     : form Mid.t;
-  fs_mem     : EcIdent.t Mid.t;
-  fs_sty     : ty_subst;
-  fs_ty      : ty -> ty;
-  fs_opdef   : (EcIdent.t list * expr) Mp.t;
-  fs_pddef   : (EcIdent.t list * form) Mp.t;
-  fs_esloc   : expr Mid.t;
-  fs_memtype : EcMemory.memtype option; (* Only substituted in Fcoe *)
-
-  fs_mempred : mem_pr Mid.t;
+type f_subst = private {
+  fs_freshen  : bool; (* true means freshen locals *)
+  fs_loc      : form Mid.t;
+  fs_mem      : EcIdent.t Mid.t;
+  fs_sty      : ty_subst;
+  fs_ty       : ty -> ty;
+  fs_opdef    : (EcIdent.t list * expr) Mp.t;
+  fs_pddef    : (EcIdent.t list * form) Mp.t;
+  fs_modtydef : EcPath.path Mp.t;
+  fs_esloc    : expr Mid.t;
+  fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
+  fs_mempred  : mem_pr Mid.t;
   (* For predicates over memories, only substituted in Fcoe *)
 }
 
@@ -652,10 +643,10 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
-    -> ?mods:((EcPath.mpath * ms_info) Mid.t)
     -> ?sty:ty_subst
     -> ?opdef:(EcIdent.t list * expr) Mp.t
     -> ?prdef:(EcIdent.t list * form) Mp.t
+    -> ?modtydef:path Mp.t
     -> ?esloc:expr Mid.t
     -> ?mt:EcMemory.memtype
     -> ?mempred:(mem_pr Mid.t)
@@ -665,16 +656,13 @@ module Fsubst : sig
   val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
 
-  val f_bind_mod : f_subst -> EcIdent.t -> module_type -> mpath -> f_subst
-
-  (* when refreshing a local module, no need for cost information *)
-  val f_refresh_mod : f_subst -> EcIdent.t -> mpath -> f_subst
+  val f_bind_mod : f_subst -> EcIdent.t -> mpath -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-  val f_subst_mod   : EcIdent.t -> module_type -> mpath -> form -> form
+  val f_subst_mod   : EcIdent.t -> mpath -> form -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
   val uni : (EcUid.uid -> ty option) -> form -> form

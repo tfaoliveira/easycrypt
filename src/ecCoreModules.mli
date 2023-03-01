@@ -12,6 +12,8 @@ val lv_equal     : lvalue -> lvalue -> bool
 val symbol_of_lv : lvalue -> symbol
 val ty_of_lv     : lvalue -> EcTypes.ty
 val lv_of_list   : (prog_var * ty) list -> lvalue option
+val lv_to_list   : lvalue -> prog_var list
+val name_of_lv   : lvalue -> string
 
 (* --------------------------------------------------------------------- *)
 type instr = private {
@@ -122,12 +124,9 @@ val ur_union :
   'a use_restr -> 'a use_restr -> 'a use_restr
 
 (* -------------------------------------------------------------------- *)
-(* - [oi_allowed] : list of functor parameters that can be called by [M.f].
-   - [oi_in]      : true if equality of globals is required to ensure
-     equality of result and globals (in the post). *)
+(* - [oi_allowed] : list of functor parameters that can be called by [M.f]. *)
 type oi_param = {
   oi_allowed : xpath list;
-  oi_in      : bool;
 }
 
 (* map from a functor `M` procedures to the procedure information *)
@@ -135,11 +134,10 @@ type oi_params = oi_param Msym.t
 
 val params_fv : oi_params -> int EcIdent.Mid.t -> int EcIdent.Mid.t
 
-val is_in : oi_param -> bool
-
 val allowed   : oi_param -> xpath list
 val allowed_s : oi_param -> Sx.t
 
+val param_equal  : oi_param  -> oi_param  -> bool
 val params_equal : oi_params -> oi_params -> bool
 
 val filter_param : (xpath -> bool) -> oi_param -> oi_param

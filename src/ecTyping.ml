@@ -112,6 +112,7 @@ type fxerror =
 | FXE_CtorUnk
 | FXE_CtorAmbiguous
 | FXE_CtorInvalidArity of (symbol * int * int)
+| FXE_SynCheckFailure
 
 type filter_error =
 | FE_InvalidIndex of int
@@ -813,7 +814,7 @@ let rec check_sig_cnv
              tymod_cnv_failure
                (E_TyModCnv_SubTypeArg(xin, tyout, tyin, err))
          end;
-         EcSubst.refresh_module subst xout (EcPath.mident xin))
+         EcSubst.add_module subst xout (EcPath.mident xin))
       (EcSubst.empty ()) sin.mis_params sout.mis_params
   in
   let bout = EcSubst.subst_modsig_body bsubst sout.mis_body
@@ -1583,9 +1584,20 @@ let trans_if_match ~loc env ue (gindty, gind) (c, b1, b2) =
 
   List.map
     (fun (x, xargs) ->
-      if   sym_equal c x
-      then (cargs, Some b1)
-      else (List.map (fun ty -> (EcIdent.create "_", ty)) xargs), b2)
+      if sym_equal c x then
+        (cargs, Some b1)
+      else
+        (* Create a pattern C _ _ ... for each constructor *)
+        let wilds = List.map (fun _ -> EcLocation.mk_loc loc None) xargs in
+        let pat = PPApp ((EcLocation.mk_loc loc ([], x), None), wilds) in
+        let b2 =
+          (match b2 with
+          | None -> []
+          | Some b2 -> b2
+        ) in
+        let (_, (xargs, b2)) = trans_branch ~loc env ue gindty (pat, b2) in
+        (xargs, Some b2)
+    )
     gind.tydt_ctors
 
 (*-------------------------------------------------------------------- *)
@@ -2072,7 +2084,6 @@ let top_is_mem_binding pf = match pf with
         match bd with PGTY_Mem _ -> true | _ -> false
       ) bds
 
-  | PFWP       _
   | PFhoareF   _
   | PFequivF   _
   | PFeagerF   _
@@ -3475,60 +3486,6 @@ and trans_form_or_pattern
         let ty = transty tp_relax env ue pty in
         let aout = transf env pf in
         unify_or_fail env ue pf.pl_loc ~expct:ty aout.f_ty; aout
-
-    | PFWP (fn, args, phi) ->
-        let fpath   = EcEnv.NormMp.norm_xfun env (trans_gamepath env fn) in
-        let fun_    = EcEnv.Fun.by_xpath fpath env in
-        let args, _argsty =
-          transcall (transexp env `InProc ue)
-            env ue f.pl_loc fun_.f_sig args in
-
-        let body, ret =
-          let init =
-            List.map2 (fun x e ->
-                (* only called on concrete procedures *)
-                assert (is_some x.ov_name);
-                i_asgn (LvVar (pv_loc (oget x.ov_name), e.e_ty), e))
-              fun_.f_sig.fs_anames args
-          in
-
-          let def =
-            match fun_.f_def with
-            | FBdef def -> def
-            | _ -> tyerror f.pl_loc env NoWP in
-
-          (stmt (init @ def.f_body.s_node), def.f_ret) in
-
-        let mem = EcIdent.create "wp" in
-        let ret = form_of_expr mem (odfl e_tt ret) in
-        let menv = EcEnv.Fun.prF_memenv mem fpath env in
-        let env = EcEnv.Memory.push_active menv env in
-        let phi = transf env phi in
-        let phi =
-          let rec subst f =
-            match f.f_node with
-            | Fpvar (pv, m) when
-                   EcMemory.mem_equal m mem
-                && pv_equal pv_res (EcEnv.NormMp.norm_pvar env pv)
-              -> ret
-
-            | _ -> EcFol.f_map (fun ty -> ty) subst f
-          in subst phi in
-
-        let phi =
-          match oget !wp env menv body phi with
-          | None -> tyerror f.pl_loc env NoWP
-          | Some phi -> phi in
-
-        let () =
-          let rec check subf =
-            match subf.f_node with
-            | Fpvar (_, m) when EcMemory.mem_equal mem m ->
-                tyerror f.pl_loc env NoWP
-            | _ -> EcFol.f_iter check subf
-          in check phi in
-
-        phi
 
     | PFmem _ -> tyerror f.pl_loc env MemNotAllowed
 

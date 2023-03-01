@@ -566,7 +566,7 @@ let rec f_read_r env r f =
 
   | FBabs (oi_param, _) ->
     let mp = get_abs_functor f in
-    let r = if is_in oi_param then (PV.add_glob env mp r) else r in
+    let r = PV.add_glob env mp r in
     List.fold_left (f_read_r env) r (allowed oi_param)
 
   | FBdef fdef ->
@@ -1102,40 +1102,4 @@ and eqobs_inF_refl env f' eqo =
       let eqi = List.fold_left do1 eqo (allowed oi_param) in
       if PV.subset eqi eqo then eqo
       else aux eqi in
-    if is_in oi_param then aux (PV.add_glob env top eqo)
-    else
-      let eqi = aux (PV.remove_glob top eqo) in
-      if PV.mem_glob env top eqi then begin
-        let ppe = EcPrinting.PPEnv.ofenv env in
-        EcCoreGoal.tacuerror "Function %a may use oracles that need equality on glob %a."
-        (EcPrinting.pp_funname ppe) f' (EcPrinting.pp_topmod ppe) top
-      end;
-      eqi
-
-(* -------------------------------------------------------------------- *)
-let check_module_in env mp mt : unit =
-  let sig_ = ModTy.sig_of_mt env mt in
-  let params = sig_.mis_params in
-  let global = PV.fv env mhr (NormMp.norm_glob env mhr mp) in
-  let env = List.fold_left
-    (fun env (id,mt) ->
-      Mod.bind_local id mt env) env params in
-  let extra = List.map (fun (id,_) -> EcPath.mident id) params in
-  let mp = EcPath.mpath mp.m_top (mp.m_args @ extra) in
-  let check = function
-    | Tys_function fs ->
-      let f = EcPath.xpath mp fs.fs_name in
-      let eqi = eqobs_inF_refl env f global in
-
-      let oinfos = (NormMp.get_restr env mp).mr_params in
-      let oi_param = EcSymbols.Msym.find fs.fs_name oinfos in
-
-      (* We remove the paramater not take into account *)
-      let eqi =
-        List.fold_left (fun eqi mp -> PV.remove_glob mp eqi) eqi extra in
-      if not (is_in oi_param) && not (PV.is_empty eqi) then
-        let ppe = EcPrinting.PPEnv.ofenv env in
-        EcCoreGoal.tacuerror "The function %a should initialize %a"
-          (EcPrinting.pp_funname ppe) f (PV.pp env) eqi in
-
-  List.iter check sig_.mis_body
+    aux (PV.add_glob env top eqo)

@@ -319,7 +319,7 @@ module MEV = struct
     let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
-    let subst = EV.fold (fun x (m,mt) s -> Fsubst.f_bind_mod s x mt m) ev.evm_mod subst in
+    let subst = EV.fold (fun x (m,_) s -> Fsubst.f_bind_mod s x m) ev.evm_mod subst in
     let seen  = ref Sid.empty in
 
     let rec for_ident x binding subst =
@@ -616,10 +616,9 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           if not (EcReduction.EqTest.for_xp env pr1.pr_fun pr2.pr_fun) then
             failure ();
           doit_mem env mxs pr1.pr_mem pr2.pr_mem;
+          doit env (subst, mxs) pr1.pr_args pr2.pr_args;
           let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
-          List.iter2
-            (doit env (subst, mxs))
-            [pr1.pr_args; pr1.pr_event] [pr2.pr_args; pr2.pr_event]
+          doit env (subst, mxs) pr1.pr_event pr2.pr_event;
       end
 
       | _, _ -> default ()
@@ -756,7 +755,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             let subst =
               if   id_equal x1 x2
               then subst
-              else Fsubst.f_refresh_mod subst x2 (EcPath.mident x1)
+              else Fsubst.f_bind_mod subst x2 (EcPath.mident x1)
 
             and env = EcEnv.Mod.bind_local x1 p1 env in
 

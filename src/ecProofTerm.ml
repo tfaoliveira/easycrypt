@@ -813,14 +813,13 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
       | PVAModule (mp, mt) -> begin
           try
             let obl = EcTyping.check_modtype pe.pte_hy mp mt emt in
-            EcPV.check_module_in env mp emt;
 
             (* for now, we forbid to instantiate any quantification
                with a [Fresh] module namespace. *)
             if ns <> Any then
               tc_pterm_apperror ?loc pe (AE_InvalidModNameSpace);
 
-            let f = Fsubst.f_subst_mod x emt mp f in
+            let f = Fsubst.f_subst_mod x mp f in
             let f = match obl with
               | `Ok ->  f
               | `ProofObligation obl -> f_imps obl f in

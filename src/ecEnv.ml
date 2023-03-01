@@ -1600,7 +1600,7 @@ module Fun = struct
            else
              let s =
                List.fold_left2
-                 (fun s (x, mt) a -> EcSubst.add_module s x mt a)
+                 (fun s (x, _) a -> EcSubst.add_module s x a)
                  (EcSubst.empty ()) params args
              in
              EcSubst.subst_function s o
@@ -1839,8 +1839,8 @@ module Mod = struct
     let params = List.take (List.length args) params in
 
     let s =
-      List.fold_left2 (fun s (x, mt) a ->
-          EcSubst.add_module s x mt a
+      List.fold_left2 (fun s (x, _) a ->
+          EcSubst.add_module s x a
         )
         (EcSubst.empty ()) params args
     in
@@ -2131,7 +2131,7 @@ module NormMp = struct
           let params = List.take arity me.me_params in
           let s =
             List.fold_left2
-              (fun s (x, mt) a -> EcSubst.add_module s x mt a)
+              (fun s (x, _) a -> EcSubst.add_module s x a)
               (EcSubst.empty ()) params args in
           let mp = EcSubst.subst_mpath s mp in
           let args' = mp.EcPath.m_args in
@@ -2415,7 +2415,7 @@ module NormMp = struct
           in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in
 
-          Msym.add f.f_name { oi_in = true; oi_allowed = calls; } oi
+          Msym.add f.f_name { oi_allowed = calls; } oi
       in
 
       let oi = List.fold_left comp_oi Msym.empty me.me_comps in
@@ -2674,7 +2674,7 @@ module ModTy = struct
           let p1 = EcSubst.subst_modtype subst p1 in
           let p2 = EcSubst.subst_modtype subst p2 in
           mod_type_equiv f_equiv env p1 p2;
-          EcSubst.refresh_module subst x1 (EcPath.mident x2))
+          EcSubst.add_module subst x1 (EcPath.mident x2))
         (EcSubst.empty ()) mty1.mt_params mty2.mt_params
     in
 
@@ -2706,8 +2706,8 @@ module ModTy = struct
   let sig_of_mt env (mt : module_type) : module_sig =
     let { tms_sig = sig_ } = by_path mt.mt_name env in
     let subst =
-      List.fold_left2 (fun s (x1,mt1) a ->
-          EcSubst.add_module s x1 mt1 a
+      List.fold_left2 (fun s (x1,_) a ->
+          EcSubst.add_module s x1 a
         ) (EcSubst.empty ()) sig_.mis_params mt.mt_args
     in
     let items =

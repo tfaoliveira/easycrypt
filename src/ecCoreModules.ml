@@ -52,6 +52,17 @@ let lv_of_list = function
   | [(pv, ty)] -> Some (LvVar (pv, ty))
   | pvs -> Some (LvTuple pvs)
 
+let lv_to_list = function
+  | LvVar (pv, _) -> [pv]
+  | LvTuple pvs -> List.fst pvs
+
+let name_of_lv lv =
+  match lv with
+  | LvVar (pv, _) ->
+     EcTypes.name_of_pvar pv
+  | LvTuple pvs ->
+     String.concat "_" (List.map (EcTypes.name_of_pvar |- fst) pvs)
+
 (* -------------------------------------------------------------------- *)
 type instr = {
   i_node : instr_node;
@@ -396,7 +407,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
   if e_subst == identity then identity else
 
   let pvt_subst (pv,ty as p) =
-    let pv' = EcTypes.pv_subst s.EcTypes.es_xp pv in
+    let pv' = EcTypes.pv_subst (EcPath.x_subst s.es_mp) pv in
     let ty' = s.EcTypes.es_ty ty in
 
     if pv == pv' && ty == ty' then p else (pv', ty') in
@@ -422,7 +433,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
 
     | Scall (olv, mp, args) ->
         let olv'  = olv |> OSmart.omap lv_subst in
-        let mp'   = s.EcTypes.es_xp mp in
+        let mp'   = EcPath.x_subst s.es_mp mp in
         let args' = List.Smart.map e_subst args in
 
         ISmart.i_call (i, (olv, mp, args)) (olv', mp', args')
@@ -573,15 +584,10 @@ let ur_inter union inter ur1 ur2 =
     ur_neg = inter ur1.ur_neg ur2.ur_neg; }
 
 (* -------------------------------------------------------------------- *)
-(* - [oi_allowed] : list of functor parameters that can be called by [M.f].
-   - [oi_in]      : true if equality of globals is required to ensure
-     equality of result and globals (in the post). *)
+(* - [oi_allowed] : list of functor parameters that can be called by [M.f]. *)
 type oi_param = {
   oi_allowed : xpath list;
-  oi_in      : bool;
 }
-
-let is_in (oi : oi_param) : bool = oi.oi_in
 
 let allowed   (oi : oi_param) : xpath list = oi.oi_allowed
 let allowed_s (oi : oi_param) : Sx.t       = Sx.of_list (oi.oi_allowed)
@@ -590,14 +596,11 @@ let param_fv fv (oi : oi_param) : int Mid.t =
   List.fold_left EcPath.x_fv fv oi.oi_allowed
 
 let param_equal (oi1 : oi_param) (oi2 : oi_param) : bool =
-  oi1.oi_in = oi2.oi_in
-  && List.all2 EcPath.x_equal oi1.oi_allowed oi1.oi_allowed
+  List.all2 EcPath.x_equal oi1.oi_allowed oi1.oi_allowed
 
 let param_hash (oi : oi_param) : int =
-  Why3.Hashcons.combine
-    (if oi.oi_in then 0 else 1)
-    (Why3.Hashcons.combine_list EcPath.x_hash 0
-       (List.sort EcPath.x_compare oi.oi_allowed))
+  Why3.Hashcons.combine_list EcPath.x_hash 0
+    (List.sort EcPath.x_compare oi.oi_allowed)
 
 (* -------------------------------------------------------------------- *)
 (* map from a functor `M` procedures to the procedure information *)
@@ -617,8 +620,7 @@ let params_hash (p : oi_params) : int =
     0 l
 
 let filter_param (f : xpath -> bool) (oi : oi_param) : oi_param =
-  { oi_in      = oi.oi_in;
-    oi_allowed = List.filter f oi.oi_allowed; }
+  { oi_allowed = List.filter f oi.oi_allowed; }
 
 (* -------------------------------------------------------------------- *)
 (* ['a] will be instantiated by [EcCoreFol.form] *)

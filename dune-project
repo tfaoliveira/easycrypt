@@ -1,4 +1,4 @@
-(lang dune 2.8)
+(lang dune 3.6)
 (using menhir 2.0)
 (using dune_site 0.1)
 
@@ -10,11 +10,13 @@
 
 (package
  (name easycrypt)
- (sites (lib theories))
+ (sites (lib theories) (libexec commands))
  (depends
   (ocaml (>= 4.08.0))
   (batteries (>= 3))
+  (camlp-streams (>= 5))
   camlzip
+  (dune (>= 3.6))
   dune-build-info
   dune-site
   (ocaml-inifiles (>= 1.2))

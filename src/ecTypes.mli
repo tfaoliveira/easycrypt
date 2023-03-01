@@ -82,7 +82,7 @@ val ty_check_uni : ty -> unit
 (* -------------------------------------------------------------------- *)
 type ty_subst = {
   ts_p   : EcPath.path -> EcPath.path;
-  ts_mp  : EcPath.mpath -> EcPath.mpath;
+  ts_mp  : EcPath.smsubst;
   ts_def : (EcIdent.t list * ty) EcPath.Mp.t;
   ts_u   : EcUid.uid -> ty option;
   ts_v   : EcIdent.t -> ty option;
@@ -187,6 +187,7 @@ val get_glob    : prog_var -> EcPath.xpath
 
 val symbol_of_pv   : prog_var -> symbol
 val string_of_pvar : prog_var -> string
+val name_of_pvar   : prog_var -> string
 
 val pv_subst : (EcPath.xpath -> EcPath.xpath) -> prog_var -> prog_var
 
@@ -282,14 +283,15 @@ val e_map :
 val e_fold :
   ('state -> expr -> 'state) -> 'state -> expr -> 'state
 
+val e_iter : (expr -> unit) -> expr -> unit
+
 (* -------------------------------------------------------------------- *)
 type e_subst = {
   es_freshen : bool; (* true means realloc local *)
   es_p       : EcPath.path -> EcPath.path;
   es_ty      : ty -> ty;
   es_opdef   : (EcIdent.t list * expr) EcPath.Mp.t;
-  es_mp      : EcPath.mpath -> EcPath.mpath;
-  es_xp      : EcPath.xpath -> EcPath.xpath;
+  es_mp      : EcPath.smsubst;
   es_loc     : expr Mid.t;
 }
 
@@ -302,7 +304,7 @@ val e_subst_init :
   -> (EcPath.path -> EcPath.path)
   -> (ty -> ty)
   -> (EcIdent.t list * expr) EcPath.Mp.t
-  -> (EcPath.mpath * 'info) EcIdent.Mid.t
+  -> EcPath.smsubst
   -> expr Mid.t
   -> e_subst
 

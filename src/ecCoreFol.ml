@@ -194,7 +194,7 @@ and cost = crecord
    - the number of calls [c_calls] to the parameters of `F` *)
 and proc_cost = crecord
 
-(* A module or cost. *)
+(* A module cost. *)
 and mod_cost = proc_cost EcSymbols.Msym.t
 
 and module_type = form p_module_type
@@ -2007,44 +2007,35 @@ let expr_of_form mh f =
 type mem_pr = EcMemory.memory * form
 
 (* -------------------------------------------------------------------- *)
-(* Module substitution info.
-   The formula must be of type [tmodcost _], and contains the cost
-   information associated to a module being instantiated. *)
-type ms_info = Refresh | Cost of form
-
-(* -------------------------------------------------------------------- *)
 type f_subst = {
-  fs_freshen : bool; (* true means freshen locals *)
-
-  fs_mp      : (EcPath.mpath * ms_info) Mid.t;
-
-  fs_loc     : form Mid.t;
-  fs_mem     : EcIdent.t Mid.t;
-  fs_sty     : ty_subst;
-  fs_ty      : ty -> ty;
-  fs_opdef   : (EcIdent.t list * expr) Mp.t;
-  fs_pddef   : (EcIdent.t list * form) Mp.t;
-  fs_esloc   : expr Mid.t;
-  fs_memtype : EcMemory.memtype option; (* Only substituted in Fcoe *)
-
-  fs_mempred : mem_pr Mid.t;
+  fs_freshen  : bool; (* true means freshen locals *)
+  fs_loc      : form Mid.t;
+  fs_mem      : EcIdent.t Mid.t;
+  fs_sty      : ty_subst;
+  fs_ty       : ty -> ty;
+  fs_opdef    : (EcIdent.t list * expr) Mp.t;
+  fs_pddef    : (EcIdent.t list * form) Mp.t;
+  fs_modtydef : EcPath.path Mp.t;
+  fs_esloc    : expr Mid.t;
+  fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
+  fs_mempred  : mem_pr Mid.t;
   (* For predicates over memories, only substituted in Fcoe *)
 }
 
 (* -------------------------------------------------------------------- *)
 module Fsubst = struct
   let f_subst_id = {
-    fs_freshen = false;
-    fs_mp      = Mid.empty;
-    fs_loc     = Mid.empty;
-    fs_mem     = Mid.empty;
-    fs_sty     = ty_subst_id;
-    fs_ty      = ty_subst ty_subst_id;
-    fs_opdef   = Mp.empty;
-    fs_pddef   = Mp.empty;
-    fs_esloc   = Mid.empty;
-    fs_memtype = None;
-    fs_mempred = Mid.empty;
+    fs_freshen  = false;
+    fs_loc      = Mid.empty;
+    fs_mem      = Mid.empty;
+    fs_sty      = ty_subst_id;
+    fs_ty       = ty_subst ty_subst_id;
+    fs_opdef    = Mp.empty;
+    fs_pddef    = Mp.empty;
+    fs_modtydef = Mp.empty;
+    fs_esloc    = Mid.empty;
+    fs_memtype  = None;
+    fs_mempred  = Mid.empty;
   }
 
   let is_subst_id s =
@@ -2054,21 +2045,22 @@ module Fsubst = struct
     && Mid.is_empty   s.fs_mem
     && Mp.is_empty    s.fs_opdef
     && Mp.is_empty    s.fs_pddef
+    && Mp.is_empty    s.fs_modtydef
     && Mid.is_empty   s.fs_esloc
     && s.fs_memtype = None
 
-  let f_subst_init ?freshen ?mods ?sty ?opdef ?prdef ?esloc ?mt ?mempred () =
+  let f_subst_init ?freshen ?sty ?opdef ?prdef ?modtydef ?esloc ?mt ?mempred () =
     let sty = odfl ty_subst_id sty in
     { f_subst_id
-        with fs_freshen = odfl false freshen;
-             fs_mp      = odfl Mid.empty mods;
-             fs_sty     = sty;
-             fs_ty      = ty_subst sty;
-             fs_opdef   = odfl Mp.empty opdef;
-             fs_pddef   = odfl Mp.empty prdef;
-             fs_esloc   = odfl Mid.empty esloc;
-             fs_mempred = odfl Mid.empty mempred;
-             fs_memtype = mt; }
+        with fs_freshen  = odfl false freshen;
+             fs_sty      = sty;
+             fs_ty       = ty_subst sty;
+             fs_opdef    = odfl Mp.empty opdef;
+             fs_pddef    = odfl Mp.empty prdef;
+             fs_modtydef = odfl Mp.empty modtydef;
+             fs_esloc    = odfl Mid.empty esloc;
+             fs_mempred  = odfl Mid.empty mempred;
+             fs_memtype  = mt; }
 
   (* ------------------------------------------------------------------ *)
   let f_bind_local s x t =
@@ -2083,32 +2075,11 @@ module Fsubst = struct
     let merger _ = Some m2 in
     { s with fs_mem = Mid.change merger m1 s.fs_mem }
 
-
-  (* ------------------------------------------------------------------ *)
-  let _f_bind_mod s x mp ms_info =
-    let merger o = assert (o = None); Some (mp, ms_info) in
-    let smp = Mid.change merger x s.fs_mp in
-    let sty = s.fs_sty in
-    let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
-    { s with fs_mp = smp; fs_sty = sty; fs_ty = ty_subst sty }
-
-  (* [f_bind_mod subst id m oinfo]: the formula [oinfo] contains the
-     cost informations used to correctly substiture formulas of
-     type [tcost].  *)
-  let f_bind_mod
-      (s  : f_subst)
-      (x  : EcIdent.t)
-      (mt : module_type)
-      (mp : EcPath.mpath)
-    : f_subst
-    =
-    let cost = mt.mt_restr.mr_cost in
-    _f_bind_mod s x mp (Cost cost)
-
-  (* when refreshing a local module, no need for cost information *)
-  let f_refresh_mod (s : f_subst) (x : EcIdent.t) (mp : EcPath.mpath): f_subst =
-    assert (EcPath.m_is_local mp);
-    _f_bind_mod s x mp Refresh
+  let f_bind_mod s x mp =
+    assert (not (Mid.mem x s.fs_sty.ts_mp.sms_id));
+    let sms = EcPath.sms_bind_abs x mp s.fs_sty.ts_mp in
+    let sty = { s.fs_sty with ts_mp = sms } in
+    { s with fs_sty = sty; fs_ty = ty_subst sty }
 
   (* ------------------------------------------------------------------ *)
   let f_bind_rename s xfrom xto ty =
@@ -2127,12 +2098,12 @@ module Fsubst = struct
   let f_rem_mem s m =
     { s with fs_mem = Mid.remove m s.fs_mem }
 
-  let f_rem_mod (s : f_subst) (m : EcIdent.t) : f_subst =
-    let smp = Mid.remove m s.fs_mp in
-    let sty = s.fs_sty in
-    let sty = { sty with ts_mp = EcPath.m_subst sty.ts_p smp } in
-
-    { s with fs_mp = smp; fs_sty = sty; fs_ty = ty_subst sty }
+  let f_rem_mod s x =
+    let sms =
+      let subst = s.fs_sty.ts_mp in
+      { subst with sms_id = Mid.remove x subst.sms_id } in
+    let sty = { s.fs_sty with ts_mp = sms } in
+    { s with fs_sty = sty; fs_ty = ty_subst sty }
 
   (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
@@ -2172,18 +2143,18 @@ module Fsubst = struct
           if xs == xs' then (s, lp) else (s, LRecord (p, xs'))
 
   (* ------------------------------------------------------------------ *)
-  let subst_xpath (s : f_subst) (f : EcPath.xpath) : EcPath.xpath =
-    let m_subst = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
-    m_subst f
+  let subst_xpath s f =
+    EcPath.x_subst s.fs_sty.ts_mp f
 
   let subst_stmt s c =
-    let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
-                s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
-    EcCoreModules.s_subst es c
+    let es =
+      e_subst_init s.fs_freshen s.fs_sty.ts_p
+        s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc
+    in EcCoreModules.s_subst es c
 
   let subst_e s e =
     let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
-                s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
+                s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
     EcTypes.e_subst es e
 
   let subst_me s me =
@@ -2246,14 +2217,14 @@ module Fsubst = struct
         FSmart.f_op (fp, (p, tys, fp.f_ty)) (p', tys', ty')
 
     | Fpvar (pv, m) ->
-        let pv' = pv_subst (EcPath.x_substm s.fs_sty.ts_p s.fs_mp) pv in
+        let pv' = pv_subst (subst_xpath s) pv in
         let m'  = Mid.find_def m m s.fs_mem in
         let ty' = s.fs_ty fp.f_ty in
         FSmart.f_pvar (fp, (pv, fp.f_ty, m)) (pv', ty', m')
 
     | Fglob (mp, m) ->
         let m'  = Mid.find_def m m s.fs_mem in
-        let mp' = s.fs_sty.ts_mp mp in
+        let mp' = EcPath.m_subst s.fs_sty.ts_mp mp in
         FSmart.f_glob (fp, (mp, m)) (mp', m')
 
     | FhoareF hf ->
@@ -2262,13 +2233,13 @@ module Fsubst = struct
         let pr' = f_subst ~tx s hf.hf_pr in
         let po' = f_subst ~tx s hf.hf_po in
         (pr', po') in
-      let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp hf.hf_f in
+      let mp' = subst_xpath s hf.hf_f in
       FSmart.f_hoareF (fp, hf) { hf_pr = pr'; hf_po = po'; hf_f = mp'; }
 
     | FhoareS hs ->
         assert (not (Mid.mem (fst hs.hs_m) s.fs_mem));
         let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
-                               s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
+                               s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
         let pr' = f_subst ~tx s hs.hs_pr in
         let po' = f_subst ~tx s hs.hs_po in
         let st' = EcCoreModules.s_subst es hs.hs_s in
@@ -2280,7 +2251,7 @@ module Fsubst = struct
       assert (not (Mid.mem mhr s.fs_mem));
       let pr' = f_subst ~tx s chf.chf_pr in
       let po' = f_subst ~tx s chf.chf_po in
-      let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp chf.chf_f in
+      let mp' = subst_xpath s chf.chf_f  in
       let c'  = f_subst ~tx s chf.chf_co in
       FSmart.f_cHoareF (fp, chf)
         { chf_pr = pr'; chf_po = po'; chf_f = mp'; chf_co = c'; }
@@ -2288,7 +2259,7 @@ module Fsubst = struct
     | FcHoareS chs ->
       assert (not (Mid.mem (fst chs.chs_m) s.fs_mem));
       let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
-          s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
+          s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
       let pr' = f_subst ~tx s chs.chs_pr in
       let po' = f_subst ~tx s chs.chs_po in
       let st' = EcCoreModules.s_subst es chs.chs_s in
@@ -2304,7 +2275,7 @@ module Fsubst = struct
         let po' = f_subst ~tx s bhf.bhf_po in
         let bd' = f_subst ~tx s bhf.bhf_bd in
         (pr', po', bd') in
-      let mp' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp bhf.bhf_f in
+      let mp' = subst_xpath s bhf.bhf_f in
       FSmart.f_bdHoareF (fp, bhf)
         { bhf with bhf_pr = pr'; bhf_po = po';
                    bhf_f  = mp'; bhf_bd = bd'; }
@@ -2312,7 +2283,7 @@ module Fsubst = struct
     | FbdHoareS bhs ->
       assert (not (Mid.mem (fst bhs.bhs_m) s.fs_mem));
       let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p s.fs_ty
-                             s.fs_opdef s.fs_mp s.fs_esloc in
+                             s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
       let pr' = f_subst ~tx s bhs.bhs_pr in
       let po' = f_subst ~tx s bhs.bhs_po in
       let st' = EcCoreModules.s_subst es bhs.bhs_s in
@@ -2323,15 +2294,14 @@ module Fsubst = struct
                    bhs_bd = bd'; bhs_m  = me'; }
 
     | FequivF ef ->
-      let m_subst = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
       let pr', po' =
         let s = f_rem_mem s mleft in
         let s = f_rem_mem s mright in
         let pr' = f_subst ~tx s ef.ef_pr in
         let po' = f_subst ~tx s ef.ef_po in
         (pr', po') in
-      let fl' = m_subst ef.ef_fl in
-      let fr' = m_subst ef.ef_fr in
+      let fl' = subst_xpath s ef.ef_fl in
+      let fr' = subst_xpath s ef.ef_fr in
       FSmart.f_equivF (fp, ef)
         { ef_pr = pr'; ef_po = po'; ef_fl = fl'; ef_fr = fr'; }
 
@@ -2339,7 +2309,7 @@ module Fsubst = struct
       assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
                 not (Mid.mem (fst eqs.es_mr) s.fs_mem));
       let es = e_subst_init s.fs_freshen s.fs_sty.ts_p s.fs_ty
-                            s.fs_opdef s.fs_mp s.fs_esloc in
+                            s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
       let s_subst = EcCoreModules.s_subst es in
       let pr' = f_subst ~tx s eqs.es_pr in
       let po' = f_subst ~tx s eqs.es_po in
@@ -2354,18 +2324,17 @@ module Fsubst = struct
           es_sl = sl'; es_sr = sr'; }
 
     | FeagerF eg ->
-      let m_subst = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
       let pr', po' =
         let s = f_rem_mem s mleft in
         let s = f_rem_mem s mright in
         let pr' = f_subst ~tx s eg.eg_pr in
         let po' = f_subst ~tx s eg.eg_po in
         (pr', po') in
-      let fl' = m_subst eg.eg_fl in
-      let fr' = m_subst eg.eg_fr in
+      let fl' = subst_xpath s eg.eg_fl in
+      let fr' = subst_xpath s eg.eg_fr in
 
       let es = e_subst_init s.fs_freshen s.fs_sty.ts_p s.fs_ty
-                            s.fs_opdef s.fs_mp s.fs_esloc in
+                            s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
       let s_subst = EcCoreModules.s_subst es in
       let sl' = s_subst eg.eg_sl in
       let sr' = s_subst eg.eg_sr in
@@ -2391,7 +2360,7 @@ module Fsubst = struct
 
       (* Then we substitute *)
       let es  = e_subst_init s.fs_freshen s.fs_sty.ts_p
-          s.fs_ty s.fs_opdef s.fs_mp s.fs_esloc in
+          s.fs_ty s.fs_opdef s.fs_sty.ts_mp s.fs_esloc in
       let pr' = f_subst ~tx s coe.coe_pre in
       let me' = EcMemory.me_subst s.fs_mem s.fs_ty coe.coe_mem in
       let e' = EcTypes.e_subst es coe.coe_e in
@@ -2407,14 +2376,14 @@ module Fsubst = struct
 
     | Fpr pr ->
       let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
-      let pr_fun   = EcPath.x_substm s.fs_sty.ts_p s.fs_mp pr.pr_fun in
+      let pr_fun   = subst_xpath s pr.pr_fun in
       let pr_args  = f_subst ~tx s pr.pr_args in
       let s = f_rem_mem s mhr in
       let pr_event = f_subst ~tx s pr.pr_event in
 
       FSmart.f_pr (fp, pr) { pr_mem; pr_fun; pr_args; pr_event; }
 
-    | Fcost c -> cost_subst ~tx s c
+    | Fcost c -> f_cost_r (cost_subst ~tx s c)
 
     | Fmodcost mc -> f_mod_cost_r (Msym.map (proc_cost_subst ~tx s) mc)
 
@@ -2475,16 +2444,15 @@ module Fsubst = struct
 
   (* no [~tx] *)
   and subst_param (s : f_subst) (oi : oi_param) : oi_param =
-    let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
-    { oi with oi_allowed = List.map sx (allowed oi) }
+    { oi with oi_allowed = List.map (subst_xpath s) (allowed oi) }
 
   (* no [~tx] *)
   and subst_params (s : f_subst) (p : oi_params) : oi_params =
     EcSymbols.Msym.map (subst_param s) p
 
   and mr_subst ~tx s (mr : mod_restr) : mod_restr =
-    let sx = EcPath.x_substm s.fs_sty.ts_p s.fs_mp in
-    let sm = s.fs_sty.ts_mp in
+    let sx = subst_xpath s in
+    let sm = EcPath.m_subst s.fs_sty.ts_mp in
     { mr_xpaths = ur_app (fun s -> Sx.fold (fun m rx ->
           Sx.add (sx m) rx) s Sx.empty) mr.mr_xpaths;
       mr_mpaths = ur_app (fun s -> Sm.fold (fun m r ->
@@ -2494,10 +2462,13 @@ module Fsubst = struct
     }
 
   and subst_mty ~tx s mty =
-    let sm = s.fs_sty.ts_mp in
+    let sm = EcPath.m_subst s.fs_sty.ts_mp in
 
     let mt_params = List.map (snd_map (subst_mty ~tx s)) mty.mt_params in
-    let mt_name   = s.fs_sty.ts_p mty.mt_name in
+    let mt_name   =
+      ofdfl
+        (fun () -> s.fs_sty.ts_p mty.mt_name)
+        (Mp.find_opt mty.mt_name s.fs_modtydef) in
     let mt_args   = List.map sm mty.mt_args in
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
     mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity:mty.mt_opacity ~mt_restr
@@ -2511,7 +2482,7 @@ module Fsubst = struct
         if ty == ty' then gty else GTty ty'
 
     | GTmodty (ns,p) ->
-        let p'   = subst_mty ~tx s p in
+        let p' = subst_mty ~tx s p in
 
         if   p == p'
         then gty
@@ -2536,116 +2507,149 @@ module Fsubst = struct
     else
       let s = match gty' with
         | GTty   ty -> f_bind_rename s x x' ty
-        | GTmodty _ -> f_refresh_mod s x (EcPath.mident x')
+        | GTmodty _ -> f_bind_mod s x (EcPath.mident x')
         | GTmem   _ -> f_bind_mem s x x'
       in
         (s, (x', gty'))
 
   and add_bindings ~tx = List.map_fold (add_binding ~tx)
 
-  (* complicated, because when a local module is substituted, its
-     cost (time the number of times it is called) may need to be
-     moved (see instantiation rule):
-     - for [mode = `Cost], abstract module that are instantiated by
-     a concrete module need to be evicted, by adding the module
-     cost to the concrete cost;
-     - for [mode = `ProcCost], abstract module that appeared in the record
-     part of the cost (i.e. module paramters) and that are not refreshed
-     need to be evicted in the self cost.
+  (* TODO: cost: hold substitution code *)
+  (* (\* complicated, because when a local module is substituted, its
+   *    cost (time the number of times it is called) may need to be
+   *    moved (see instantiation rule):
+   *    - for [mode = `Cost], abstract module that are instantiated by
+   *    a concrete module need to be evicted, by adding the module
+   *    cost to the concrete cost;
+   *    - for [mode = `ProcCost], abstract module that appeared in the record
+   *    part of the cost (i.e. module paramters) and that are not refreshed
+   *    need to be evicted in the self cost.
+   *
+   *    Return: record after substitution, costs to be moved. *\)
+   * and crecord_subst
+   *     ~(mode     : [`Cost | `ProcCost])
+   *     ~(tx       : form -> form -> form)
+   *     (s         : f_subst)
+   *     (init_crec : crecord)
+   *   : crecord * form list
+   *   =
+   *   (\* check if a local [xpath] can stay in the cost record after
+   *      substitution:
+   *      - if [mode = `Cost], this is always true
+   *      - if [mode = `ProcCost], this is true for refreshed module. *\)
+   *   let keep (oldx : EcPath.xpath) (newx : EcPath.xpath) : bool =
+   *     assert (EcPath.m_is_local newx.x_top); (\* only for local xpaths *\)
+   *     if EcPath.x_equal oldx newx then true
+   *     else
+   *       let mid = (EcPath.mget_ident oldx.x_top) in
+   *       let _, minfo = EcIdent.Mid.find mid s.fs_mp in
+   *       match mode, minfo with
+   *       | `Cost, _ -> true
+   *       | `ProcCost, Refresh -> true
+   *       | `ProcCost, Cost _  -> false
+   *   in
+   *
+   *   let c_self = f_subst ~tx s init_crec.c_self
+   *   (\* - [mode = `Cost]: [evict] are the local modules that have been
+   *      substituted by concrete modules.
+   *      - [mode = `ProcCost]: [evict] are functor parameters that have been
+   *      instantiated (by abstract or concrete modules). *\)
+   *   and evict, c_calls = EcPath.Mx.fold (fun x cb (evict,calls) ->
+   *       let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
+   *       let cb' = f_subst ~tx s cb in
+   *       match x'.x_top.m_top with
+   *       (\* if [x'] is local, check if it can stays in the record *\)
+   *       | `Local _ when keep x x' ->
+   *         ( evict,
+   *           EcPath.Mx.change
+   *             (fun old -> assert (old  = None); Some cb')
+   *             x' calls )
+   *
+   *       (\* if [x'] cannot stay in the record, or if it is a concrete
+   *          module, move its cost. *\)
+   *       | _ ->
+   *         let m_conc = EcPath.mget_ident x.x_top in
+   *         EcIdent.Sid.add m_conc evict, calls
+   *     ) init_crec.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
+   *   in
+   *   let crec = { c_self; c_calls; c_full = init_crec.c_full } in
+   *
+   *   (\* intrinsic costs of modules that have been evicted from the record. *\)
+   *   let to_move : form list =
+   *     (\* for every module [mid] that must be evicted *\)
+   *     EcIdent.Sid.fold (fun mid to_move ->
+   *         let _, minfo = EcIdent.Mid.find mid s.fs_mp in
+   *         let mp = EcPath.mident mid in
+   *         match minfo with
+   *         | Refresh -> assert false
+   *         (\* refreshed module path cannot be evicted in either mode *\)
+   *
+   *         | Cost minfo ->
+   *           let mprocs = match minfo.f_ty.ty_node with
+   *             | Tmodcost { procs } -> procs
+   *             | _ -> assert false   (\* cannot happen, type must be reduced *\)
+   *           in
+   *
+   *           (\* for every procedure [f] of [mid] *\)
+   *           EcSymbols.Msym.fold (fun (f : symbol) _ to_move ->
+   *               let xf = EcPath.xpath mp f in
+   *
+   *               (\* the *intrinsic* cost of [f], of type [tcost] *\)
+   *               let f_cost : form = f_cost_proj_r minfo (Intr f) in
+   *
+   *               (\* times the number of times [f] has been called in [init_crec] *\)
+   *               let f_called : form = (\* of type `xint` *\)
+   *                 oget_c_bnd
+   *                   (EcPath.Mx.find_opt xf init_crec.c_calls)
+   *                   init_crec.c_full
+   *               in
+   *
+   *               (\* compute: [f_called * f_cost] *\)
+   *               f_cost_xscale f_called f_cost :: to_move
+   *             ) mprocs to_move
+   *       ) evict []
+   *   in
+   *   crec, to_move
+   *
+   * and cost_subst ~tx (s : f_subst) (c : cost) : form =
+   *   let cost, to_move = crecord_subst ~mode:`Cost ~tx s c in
+   *   List.fold_left f_cost_add (f_cost_r cost) to_move
+   *
+   * and proc_cost_subst ~tx (s : f_subst) (pc : proc_cost) : proc_cost =
+   *   let pc, to_move = crecord_subst ~mode:`ProcCost ~tx s pc in
+   *   { pc with c_self = List.fold_left f_cost_add pc.c_self to_move } *)
 
-     Return: record after substitution, costs to be moved. *)
   and crecord_subst
-      ~(mode     : [`Cost | `ProcCost])
       ~(tx       : form -> form -> form)
       (s         : f_subst)
       (init_crec : crecord)
-    : crecord * form list
+    : crecord
     =
-    (* check if a local [xpath] can stay in the cost record after
-       substitution:
-       - if [mode = `Cost], this is always true
-       - if [mode = `ProcCost], this is true for refreshed module. *)
-    let keep (oldx : EcPath.xpath) (newx : EcPath.xpath) : bool =
-      assert (EcPath.m_is_local newx.x_top); (* only for local xpaths *)
-      if EcPath.x_equal oldx newx then true
-      else
-        let mid = (EcPath.mget_ident oldx.x_top) in
-        let _, minfo = EcIdent.Mid.find mid s.fs_mp in
-        match mode, minfo with
-        | `Cost, _ -> true
-        | `ProcCost, Refresh -> true
-        | `ProcCost, Cost _  -> false
-    in
-
     let c_self = f_subst ~tx s init_crec.c_self
-    (* - [mode = `Cost]: [evict] are the local modules that have been
-       substituted by concrete modules.
-       - [mode = `ProcCost]: [evict] are functor parameters that have been
-       instantiated (by abstract or concrete modules). *)
-    and evict, c_calls = EcPath.Mx.fold (fun x cb (evict,calls) ->
-        let x' = EcPath.x_substm s.fs_sty.ts_p s.fs_mp x in
+    and c_calls = EcPath.Mx.fold (fun x cb calls ->
+        let x' = subst_xpath s x in
         let cb' = f_subst ~tx s cb in
+
+        (* TODO: cost: [crecord] must be instantiated by external agent names, which
+           are never concrectized. Update this *)
         match x'.x_top.m_top with
         (* if [x'] is local, check if it can stays in the record *)
-        | `Local _ when keep x x' ->
-          ( evict,
-            EcPath.Mx.change
-              (fun old -> assert (old  = None); Some cb')
-              x' calls )
+        | `Local _ ->
+          EcPath.Mx.change
+            (fun old -> assert (old  = None); Some cb')
+            x' calls
 
-        (* if [x'] cannot stay in the record, or if it is a concrete
-           module, move its cost. *)
-        | _ ->
-          let m_conc = EcPath.mget_ident x.x_top in
-          EcIdent.Sid.add m_conc evict, calls
-      ) init_crec.c_calls (EcIdent.Sid.empty, EcPath.Mx.empty)
+        (* TODO: cost: cannot happen with external agent names *)
+        | _ -> assert false
+      ) init_crec.c_calls EcPath.Mx.empty
     in
-    let crec = { c_self; c_calls; c_full = init_crec.c_full } in
+    { c_self; c_calls; c_full = init_crec.c_full }
 
-    (* intrinsic costs of modules that have been evicted from the record. *)
-    let to_move : form list =
-      (* for every module [mid] that must be evicted *)
-      EcIdent.Sid.fold (fun mid to_move ->
-          let _, minfo = EcIdent.Mid.find mid s.fs_mp in
-          let mp = EcPath.mident mid in
-          match minfo with
-          | Refresh -> assert false
-          (* refreshed module path cannot be evicted in either mode *)
-
-          | Cost minfo ->
-            let mprocs = match minfo.f_ty.ty_node with
-              | Tmodcost { procs } -> procs
-              | _ -> assert false   (* cannot happen, type must be reduced *)
-            in
-
-            (* for every procedure [f] of [mid] *)
-            EcSymbols.Msym.fold (fun (f : symbol) _ to_move ->
-                let xf = EcPath.xpath mp f in
-
-                (* the *intrinsic* cost of [f], of type [tcost] *)
-                let f_cost : form = f_cost_proj_r minfo (Intr f) in
-
-                (* times the number of times [f] has been called in [init_crec] *)
-                let f_called : form = (* of type `xint` *)
-                  oget_c_bnd
-                    (EcPath.Mx.find_opt xf init_crec.c_calls)
-                    init_crec.c_full
-                in
-
-                (* compute: [f_called * f_cost] *)
-                f_cost_xscale f_called f_cost :: to_move
-              ) mprocs to_move
-        ) evict []
-    in
-    crec, to_move
-
-  and cost_subst ~tx (s : f_subst) (c : cost) : form =
-    let cost, to_move = crecord_subst ~mode:`Cost ~tx s c in
-    List.fold_left f_cost_add (f_cost_r cost) to_move
+  and cost_subst ~tx (s : f_subst) (c : cost) : cost =
+    crecord_subst ~tx s c
 
   and proc_cost_subst ~tx (s : f_subst) (pc : proc_cost) : proc_cost =
-    let pc, to_move = crecord_subst ~mode:`ProcCost ~tx s pc in
-    { pc with c_self = List.fold_left f_cost_add pc.c_self to_move }
+    crecord_subst ~tx s pc
 
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)
@@ -2666,8 +2670,8 @@ module Fsubst = struct
     let s = f_bind_mem f_subst_id m1 m2 in
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
 
-  let f_subst_mod (x : EcIdent.t) (mt : module_type) mp f : form =
-    let s = f_bind_mod f_subst_id x mt mp in
+  let f_subst_mod (x : EcIdent.t) mp f : form =
+    let s = f_bind_mod f_subst_id x mp in
     if Mid.mem x f.f_fv then f_subst s f else f
 
   (* ------------------------------------------------------------------ *)

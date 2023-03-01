@@ -191,7 +191,6 @@ module LowApply = struct
             if ns <> Any then raise InvalidProofTerm; (* [Fresh] unsupported *)
 
             let obl = EcTyping.check_modtype hyps mp mt emt in
-            EcPV.check_module_in env mp emt;
 
             if mode = `Intro && emt.mt_opacity <> Open then
               raise InvalidProofTerm;
@@ -203,7 +202,7 @@ module LowApply = struct
                 else f_and (f_ands obl) f
             in
 
-            (Fsubst.f_bind_mod sbt x emt mp, f)
+            (Fsubst.f_bind_mod sbt x mp, f)
           with _ -> raise InvalidProofTerm
         end
 
@@ -501,7 +500,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
     | GTmodty (ns,i) ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty (ns,i), Fsubst.f_refresh_mod sbt x (EcPath.mident (tg_val id)))
+        (id, LD_modty (ns,i), Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)))
   in
 
   let add_ld id ld hyps =
@@ -515,25 +514,25 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     | SFquant (Lforall, (x, gty), lazy concl) ->
         let (id, ld, sbt) = add_local hyps id sbt x gty in
         let hyps = add_ld id ld hyps in
-        (hyps, concl), sbt
+        ((hyps, concl), sbt), id
 
     | SFimp (prem, concl) ->
         let prem = Fsubst.f_subst sbt prem in
-        let id   = tg_map (function
+        let id = tg_map (function
           | None    -> EcIdent.create "_"
           | Some id -> id) id in
         let hyps = add_ld id (LD_hyp prem) hyps in
-        (hyps, concl), sbt
+        ((hyps, concl), sbt), id
 
     | SFlet (LSymbol (x, xty), xe, concl) ->
-        let id   = tg_map (function
+        let id = tg_map (function
           | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)
           | Some id -> id) id in
         let xty  = sbt.fs_ty xty in
         let xe   = Fsubst.f_subst sbt xe in
         let sbt  = Fsubst.f_bind_rename sbt x (tg_val id) xty in
         let hyps = add_ld id (LD_var (xty, Some xe)) hyps in
-        (hyps, concl), sbt
+        ((hyps, concl), sbt), id
 
     | _ when sbt !=(*φ*) Fsubst.f_subst_id ->
         let concl = Fsubst.f_subst sbt concl in
@@ -547,18 +546,19 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
 
   let tc = FApi.tcenv_of_tcenv1 tc in
 
-  if List.is_empty ids then tc else begin
+  if List.is_empty ids then (tc, []) else begin
     let sbt = Fsubst.f_subst_id in
-    let (hyps, concl), sbt =
-      List.fold_left intro1 (FApi.tc_flat tc, sbt) ids in
+    let ((hyps, concl), sbt), ids =
+      List.fold_left_map intro1 (FApi.tc_flat tc, sbt) ids in
     let concl = Fsubst.f_subst sbt concl in
     let (tc, hd) = FApi.newgoal tc ~hyps concl in
-    FApi.close tc (VIntros (hd, List.map tg_val ids))
+    let ids = List.map tg_val ids in
+    (FApi.close tc (VIntros (hd, ids)), ids)
   end
 
 (* -------------------------------------------------------------------- *)
 let t_intros (ids : ident mloc list) (tc : tcenv1) =
-  t_intros_x (List.map (tg_map some) ids) tc
+  fst (t_intros_x (List.map (tg_map some) ids) tc)
 
 (* -------------------------------------------------------------------- *)
 type iname  = [
@@ -570,33 +570,46 @@ type iname  = [
 type inames = [`Symbol of symbol list | `Ident of EcIdent.t list]
 
 (* -------------------------------------------------------------------- *)
-let t_intros_n (n : int) (tc : tcenv1) =
-  t_intros_x (EcUtils.List.make n (notag None)) tc
+let t_intros_n ?(clear = false) (n : int) (tc : tcenv1) =
+  let tc, xs = t_intros_x (EcUtils.List.make n (notag None)) tc in
+  if clear then FApi.t_first (t_clears xs) tc else tc
 
 (* -------------------------------------------------------------------- *)
 let t_intro_i_x (id : EcIdent.t option) (tc : tcenv1) =
-  t_intros_x [notag id] tc
+  snd_map EcUtils.as_seq1 (t_intros_x [notag id] tc)
 
 (* -------------------------------------------------------------------- *)
 let t_intro_i (id : EcIdent.t) (tc : tcenv1) =
-  t_intro_i_x (Some id) tc
+  fst (t_intro_i_x (Some id) tc)
 
 (* -------------------------------------------------------------------- *)
-let t_intro_s (id : iname) (tc : tcenv1) =
+let t_intro_sx (id : iname) (tc : tcenv1) =
   match id with
   | `Symbol x -> t_intro_i_x (Some (EcIdent.create x)) tc
   | `Ident  x -> t_intro_i_x (Some x) tc
   | `Fresh    -> t_intro_i_x None tc
 
 (* -------------------------------------------------------------------- *)
-let t_intros_i (ids : EcIdent.t list) (tc : tcenv1) =
+let t_intro_s (id : iname) (tc : tcenv1) =
+  fst (t_intro_sx id tc)
+
+(* -------------------------------------------------------------------- *)
+let t_intros_i_x (ids : EcIdent.t list) (tc : tcenv1) =
   t_intros_x (List.map (notag |- some) ids) tc
 
 (* -------------------------------------------------------------------- *)
-let t_intros_s (ids : inames) (tc : tcenv1) =
+let t_intros_i (ids : EcIdent.t list) (tc : tcenv1) =
+  fst (t_intros_i_x ids tc)
+
+(* -------------------------------------------------------------------- *)
+let t_intros_sx (ids : inames) (tc : tcenv1) =
   match ids with
-  | `Symbol x -> t_intros_i (List.map EcIdent.create x) tc
-  | `Ident  x -> t_intros_i x tc
+  | `Symbol x -> t_intros_i_x (List.map EcIdent.create x) tc
+  | `Ident  x -> t_intros_i_x x tc
+
+(* -------------------------------------------------------------------- *)
+let t_intros_s (ids : inames) (tc : tcenv1) =
+  fst (t_intros_sx ids tc)
 
 (* -------------------------------------------------------------------- *)
 let t_intros_i_1 (ids : EcIdent.t list) (tc : tcenv1) =
@@ -610,6 +623,16 @@ let t_intros_i_seq ?(clear = false) ids tt tc =
 (* -------------------------------------------------------------------- *)
 let t_intros_s_seq ids tt tc =
   FApi.t_focus tt (t_intros_s ids tc)
+
+(* -------------------------------------------------------------------- *)
+let t_intros_sx_seq ids tt tc =
+  let tc, ids = t_intros_sx ids tc in
+  FApi.t_focus (tt ids) tc
+
+(* -------------------------------------------------------------------- *)
+let t_intro_sx_seq id tt tc =
+  let tc, id = t_intro_sx id tc in
+  FApi.t_focus (tt id) tc
 
 (* -------------------------------------------------------------------- *)
 let tt_apply (pt : proofterm) (tc : tcenv) =
@@ -816,7 +839,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
 
       | LD_modty (_ns,mt) ->
         let x    = fresh id in
-        let s    = Fsubst.f_refresh_mod s id (EcPath.mident x) in
+        let s    = Fsubst.f_f_bind_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
         (* TODO: precision improvement: we could replace [Any] by [Fresh]
@@ -2449,24 +2472,25 @@ let t_smt ~(mode:smtmode) pi tc =
   else error ()
 
 (* -------------------------------------------------------------------- *)
-let t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(depth = 1) (tc : tcenv1) =
+let t_solve ?(canfail = true) ?(bases = [EcEnv.Auto.dname]) ?(mode = fmdelta) ?(depth = 1) (tc : tcenv1) =
   let bases = EcEnv.Auto.getall bases (FApi.tc1_env tc) in
 
   let t_apply1 p tc =
+
     let pt = PT.pt_of_uglobal !!tc (FApi.tc1_hyps tc) p in
     try
-      Apply.t_apply_bwd_r ~mode:fmdelta ~canview:false pt tc
+      Apply.t_apply_bwd_r ~mode ~canview:false pt tc
     with Apply.NoInstance _ -> t_fail tc in
 
-  let rec t_apply ctn p  =
+  let rec t_apply ctn p tc =
     if   ctn > depth
-    then t_fail
-    else t_apply1 p @! t_trivial @! t_solve (ctn + 1) bases
+    then t_fail tc
+    else (t_apply1 p @! t_trivial @! t_solve (ctn + 1) bases) tc
 
-  and t_solve ctn bases =
+  and t_solve ctn bases tc =
     match bases with
-    | [] -> t_abort
-    | p::bases -> FApi.t_or (t_apply ctn p) (t_solve ctn bases) in
+    | [] -> t_abort tc
+    | p::bases -> (FApi.t_or (t_apply ctn p) (t_solve ctn bases)) tc in
 
   let t = t_solve 0 bases in
   let t = if canfail then FApi.t_try t else t in

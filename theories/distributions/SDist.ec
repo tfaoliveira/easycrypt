@@ -355,13 +355,12 @@ lemma distinguisher_ll (A <: Distinguisher) &m x :
   islossless A.guess => 
   is_lossless (mk (fun (z : bool) => Pr[A.guess(x) @ &m : res = z])).
 proof.
-move => A_ll; rewrite /F /is_lossless muE {1}/predT /=. 
+move => A_ll; rewrite /is_lossless muE {1}/predT /=. 
 have <- : Pr[A.guess(x) @ &m : res = true \/ res = false] = 1%r. 
   by byphoare => //; conseq (:_ ==> true) => // /#.  
 rewrite (eq_sum _ (fun (z : bool) => Pr[A.guess(x) @ &m : res = z])) => [z /=|].
   by rewrite muK; 1: exact: (adv_isdistr A).
-rewrite (sumE_fin _ [true; false]) // 1:/# !big_cons big_nil /predT/=.
-by rewrite Pr[mu_disjoint] 1:/#. 
+by rewrite sum_bool /= Pr[mu_disjoint] // /#.
 qed.
 
 lemma adv_sdist (A <: Distinguisher) &m d1 d2 : 

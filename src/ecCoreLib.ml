@@ -162,6 +162,13 @@ module CI_Real = struct
   let p_real_lt     = _Real "lt"
   let p_real_of_int = _Real "from_int"
   let p_real_abs    = EcPath.extend p_top ["Real"; "`|_|"]
+
+  let real_lemma name =
+    EcPath.pqname p_RealExtra name
+
+  let real_order_lemma name =
+    EcPath.pqname p_RealOrder name
+
 end
 
 (* -------------------------------------------------------------------- *)
@@ -184,6 +191,9 @@ module CI_Distr = struct
   let p_dbool      = EcPath.extend p_top ["DBool"; "dbool"]
   let p_dbitstring = EcPath.extend p_Distr ["Dbitstring"; "dbitstring"]
   let p_dinter     = EcPath.extend p_top ["DInterval"; "dinter"]
+  let p_dunit      = EcPath.extend p_Distr ["MUnit"; "dunit"]
+  let p_dmap       = EcPath.extend p_Distr ["dmap"]
+  let p_dlet       = EcPath.extend p_Distr ["dlet"]
 
   let p_support  = _Distr "support"
   let p_mu       = _Pervasive "mu"

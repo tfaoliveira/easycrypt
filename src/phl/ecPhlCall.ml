@@ -319,7 +319,7 @@ let mk_inv_spec (_pf : proofenv) env inv fl fr =
       EcLowPhlGoal.abstract_info2 env fl fr
     in
     let eqglob = f_eqglob topl mleft topr mright in
-    let lpre = if is_in oil then [eqglob;inv] else [inv] in
+    let lpre = [eqglob;inv] in
     let eq_params =
       f_eqparams
         sigl.fs_arg sigl.fs_anames mleft
@@ -479,7 +479,7 @@ let process_call side info tc =
         in
         let bad2 = Fsubst.f_subst_mem mhr mright bad in
         let eqglob = f_eqglob topl mleft topr mright in
-        let lpre = if is_in oil then [eqglob;invP] else [invP] in
+        let lpre = [eqglob;invP] in
         let eq_params =
           f_eqparams
             sigl.fs_arg sigl.fs_anames mleft
