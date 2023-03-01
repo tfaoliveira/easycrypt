@@ -1112,7 +1112,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
 
       let subst =
           List.fold_left2
-            (fun s (x,mt) a -> EcSubst.add_module s x mt a)
+            (fun s (x,_) a -> EcSubst.add_module s x a)
             (EcSubst.empty ()) params args
       in
 
@@ -2384,8 +2384,6 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
     trans_restr_oracle_calls env env_in params r_el.pmre_orcls
   in
 
-  let oi_in = r_el.pmre_in in
-
   (* check that [calls] only talks about oracle calls *)
   if not (EcPath.Mx.for_all (fun f _ -> Sm.mem f.x_top params) c_calls) then
    begin
@@ -2406,7 +2404,7 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
          if List.mem f oi_allowed then None else Some f))
   in
 
-  (name, { oi_in; oi_allowed; }, c_cost )
+  (name, { oi_allowed; }, c_cost )
 
 (* See [trans_restr_fun] for the requirements on [env], [env_in], [params].
    [procs] are the procedures names of the module sig the restriction will be
@@ -2610,7 +2608,7 @@ and transmodsig_body
       let update_params oi_params (Tys_function fs) : oi_params =
         names := mk_loc (loc i) fs.fs_name :: !names;
         Msym.change (function
-            | None -> Some { oi_in = true; oi_allowed = calls; }
+            | None -> Some { oi_allowed = calls; }
             | Some oi_param ->
               filter_param (fun x -> List.mem x calls) oi_param
               |> some

@@ -631,7 +631,7 @@ let generalize_type to_gen ty =
 let add_declared_mod to_gen id modty =
   { to_gen with
     tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Any modty);
-    tg_subst  = EcSubst.add_module to_gen.tg_subst id modty (mpath_abs id [])
+    tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
   }
 
 let add_declared_ty to_gen path tydecl =

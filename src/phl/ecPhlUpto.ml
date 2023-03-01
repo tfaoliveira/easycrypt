@@ -112,13 +112,13 @@ and f_upto env bad f1 f2 =
     oall2 (EqTest.for_expr env) fd1.f_ret fd2.f_ret &&
     s_upto env EcIdent.Mid.empty bad fd1.f_body fd2.f_body
 
-  | FBabs o1, FBabs o2 ->
+  | FBabs (o1,_), FBabs (o2,_) ->
     f1.x_sub = f2.x_sub &&
     EcPath.mt_equal f1.x_top.m_top f2.x_top.m_top &&
     omap_dfl (fun bad ->
       let fv = EcPV.PV.add env bad tbool EcPV.PV.empty in
       EcPV.PV.check_depend env fv (m_functor f1.x_top); true) true bad &&
-    List.all2 (f_upto env bad) (OI.allowed o1) (OI.allowed o2)
+    List.all2 (f_upto env bad) (allowed o1) (allowed o2)
 
   | _, _ -> false
 

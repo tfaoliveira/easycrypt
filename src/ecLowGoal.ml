@@ -839,7 +839,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
 
       | LD_modty (_ns,mt) ->
         let x    = fresh id in
-        let s    = Fsubst.f_f_bind_mod s id (EcPath.mident x) in
+        let s    = Fsubst.f_bind_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
         (* TODO: precision improvement: we could replace [Any] by [Fresh]

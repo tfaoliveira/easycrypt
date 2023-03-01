@@ -150,9 +150,9 @@ val pp_maybe : bool -> ('a pp -> 'a pp) -> 'a pp -> 'a pp
 val pp_opt   : 'a pp -> 'a option pp
 
 val pp_enclose:
-       pre:('a, 'b, 'c, 'd, 'd, 'a) format6
-   -> post:('a, 'b, 'c, 'd, 'd, 'a) format6
-   -> 'a pp -> 'a pp
+  pre:('a, 'b, 'c, 'd, 'd, 'a) format6
+  -> post:('a, 'b, 'c, 'd, 'd, 'a) format6
+  -> 'a pp -> 'a pp
 
 val pp_paren : 'a pp -> 'a pp
 
