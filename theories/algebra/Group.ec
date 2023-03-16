@@ -566,10 +566,10 @@ lemma nosmt inv_def (a : group) : inv a = g ^ (-loge a)
 lemma nosmt div_def (a b : group): g ^ (loge a - loge b) = a / b
   by rewrite log_bij logDrN loggK.
 
-lemma nosmt g_neq0 : g ^ zero <> g
+lemma nosmt g_neq0 : g ^ ZModE.zero <> g
   by rewrite -{2}exp1 -pow_bij; smt(ZModpField.unitr1).
 
-lemma mulN (x : group) : x * inv x = g ^ zero by rewrite mulcV -(exp0 g).
+lemma mulN (x : group) : x * inv x = g ^ ZModE.zero by rewrite mulcV -(exp0 g).
 
 hint rewrite Ring.inj_algebra : expgK'. (* reverse equality? *)
 hint rewrite Ring.rw_algebra : logg1 logrzM' logDr log_bij.

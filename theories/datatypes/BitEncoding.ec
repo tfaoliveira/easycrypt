@@ -198,7 +198,7 @@ proof.
   by rewrite int2bs0.
 qed.
 
-lemma int2bs_mulr_pow2 K N n :
+lemma int2bs_mulr_pow2 K N (n : int) :
   0 <= K <= N =>
   int2bs N (2 ^ K * n) = nseq K false ++ int2bs (N - K) n.
 proof.
@@ -376,7 +376,7 @@ proof.
   by rewrite size_nseq bs2int_nseq_false /b2i /= ler_maxr // subr_ge0; move/ltzE: lt0N.
 qed.
 
-lemma bsrev_mulr_pow2 K N n :
+lemma bsrev_mulr_pow2 K N (n : int) :
   0 <= K <= N =>
   bsrev N (2 ^ K * n) = bsrev N n %/ 2 ^ K.
 proof.
@@ -435,7 +435,7 @@ proof.
   by rewrite -mem_range normrX_nat ?subr_ge0 // bsrev_range.
 qed.
 
-lemma bsrev_add K N m n :
+lemma bsrev_add K N m (n : int) :
   0 <= K <= N =>
   m \in range 0 (2 ^ K) =>
   bsrev N (m + 2 ^ K * n) = bsrev N m + bsrev N n %/ 2 ^ K.
@@ -479,11 +479,11 @@ proof.
   by move: (mem_range_mod n (2 ^ N)); rewrite normrX_nat; [apply/(lez_trans N)|move => -> //; apply/gtr_eqF/expr_gt0].
 qed.
 
-lemma bsrev_range_pow2_perm_eq K N :
+lemma bsrev_range_pow2_perm_eq K N:
   0 <= K <= N =>
   perm_eq
     (map (bsrev N)             (range 0 (2 ^ K)))
-    (map (( * ) (2 ^ (N - K))) (range 0 (2 ^ K))).
+    (map (Int.( * ) (2 ^ (N - K))) (range 0 (2 ^ K))).
 proof.
   move => [le0K leKN]; rewrite perm_eqP_pred1 => x.
   rewrite !count_uniq_mem.
@@ -518,14 +518,14 @@ lemma bsrev_mul_range_pow2_perm_eq K M N :
   0 <= M =>
   K + M <= N =>
   perm_eq
-    (map (bsrev N \o (( * ) (2 ^ M))) (range 0 (2 ^ K)))
-    (map (( * ) (2 ^ (N - K - M)))    (range 0 (2 ^ K))).
+    (map (bsrev N \o (Int.( * ) (2 ^ M))) (range 0 (2 ^ K)))
+    (map (Int.( * ) (2 ^ (N - K - M)))    (range 0 (2 ^ K))).
 proof.
   move => le0K le0M le_N.
-  move: (eq_in_map (bsrev N \o ( * ) (2 ^ M)) (transpose (%/) (2 ^ M) \o (bsrev N)) (range 0 (2 ^ K))).
+  move: (eq_in_map (bsrev N \o Int.( * ) (2 ^ M)) (transpose (%/) (2 ^ M) \o (bsrev N)) (range 0 (2 ^ K))).
   move => [Heq_map _]; move: Heq_map => -> => [x Hx_range|]; last rewrite map_comp.
   + by rewrite /(\o) bsrev_mulr_pow2; first rewrite le0M /= (lez_trans (K + M)) // ler_addr.
-  move: (eq_in_map (( * ) (2 ^ (N - K - M))) ((transpose (fun (m d : int) => m %/ d) (2 ^ M)) \o (( * ) (2 ^ (N - K)))) (range 0 (2 ^ K))).
+  move: (eq_in_map (Int.( * ) (2 ^ (N - K - M))) ((transpose (fun (m d : int) => m %/ d) (2 ^ M)) \o (Int.( * ) (2 ^ (N - K)))) (range 0 (2 ^ K))).
   move => [Heq_map _]; move: Heq_map => -> => [x Hx_range|].
   + rewrite /(\o) /= -!(mulrC x) -divzpMr.
     - by rewrite dvdz_exp2l le0M /= ler_subr_addl.
