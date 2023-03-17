@@ -65,5 +65,6 @@ if.
   - admit.
   - admit.
   admit.
+admit.
 qed.
 

@@ -25,7 +25,9 @@ module M = {
 
 (*Relational assertions can be used in lockstep.*)
 lemma foobar :
-  equiv [M.foo ~ M.bar : M.n{1} = 10 /\ M.x{1} + M.x{2} = 42 ==> M.x{1} + M.x{2} = 42 |
+  equiv [M.foo ~ M.bar :
+         M.n{1} = 10 /\ M.x{1} + M.x{2} = 42 ==>
+         M.x{1} + M.x{2} = 42 |
          { } ==> { (l, l --> ={M.i} => M.x{1} + M.x{2} = 42) }].
 proof.
 proc.
