@@ -339,6 +339,7 @@ let lident = (lower ichar*) | ('_' ichar+)
 let uident = upper ichar*
 let tident = '\'' lident
 let mident = '&'  (lident | uint)
+let aident = '#'  (lident | uint) (* agent names for modules *)
 
 let opchar = ['=' '<' '>' '+' '-' '*' '/' '\\' '%' '&' '^' '|' ':' '#' '$']
 
@@ -358,6 +359,7 @@ rule main = parse
   | uident as id { try [Hashtbl.find keywords id] with Not_found -> [UIDENT id] }
   | tident       { [TIDENT (Lexing.lexeme lexbuf)] }
   | mident       { [MIDENT (Lexing.lexeme lexbuf)] }
+  | aident       { [AIDENT (Lexing.lexeme lexbuf)] }
   | uint         { [UINT (BI.of_string (Lexing.lexeme lexbuf))] }
 
   | (digit+ as n) '.' (digit+ as f) {

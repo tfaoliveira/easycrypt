@@ -33,16 +33,19 @@ type cost_proj =
 
 val cost_proj_equal : cost_proj -> cost_proj -> bool
 
-(** module namespace *)
-type mod_ns =
-  | Any                   (* any name *)
-  | Fresh                 (* fresh name w.r.t. the environment *)
+(** module info *)
+type mod_info =
+  | Std                (* standard module *)
+  | Wrap
+  (* external wrapped module: execution cost belongs to the implicit
+     agent associated to the module *)
 
 (* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty
-  | GTmodty of mod_ns * module_type
+  | GTmodty of mod_info * module_type
   | GTmem   of EcMemory.memtype
+  | GTagent                      (* agent name *)
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
@@ -208,7 +211,7 @@ type mod_restr = form p_mod_restr
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
-val gtmodty : mod_ns -> module_type -> gty
+val gtmodty : mod_info -> module_type -> gty
 val gtmem   : EcMemory.memtype -> gty
 
 (* -------------------------------------------------------------------- *)
@@ -256,8 +259,7 @@ val proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
 val gty_as_mem : gty -> EcMemory.memtype
-val gty_as_mod : gty -> mod_ns * module_type
-val kind_of_gty: gty -> [`Form | `Mem | `Mod]
+val gty_as_mod : gty -> mod_info * module_type
 
 (* soft-constructors - common leaves *)
 val f_local : EcIdent.t -> EcTypes.ty -> form
@@ -624,7 +626,8 @@ type mem_pr = EcMemory.memory * form
 type f_subst = private {
   fs_freshen  : bool; (* true means freshen locals *)
   fs_loc      : form Mid.t;
-  fs_mem      : EcIdent.t Mid.t;
+  fs_mem      : EcIdent.t Mid.t; (* memories *)
+  fs_agent    : EcIdent.t Mid.t; (* agent names *)
   fs_sty      : ty_subst;
   fs_ty       : ty -> ty;
   fs_opdef    : (EcIdent.t list * expr) Mp.t;
@@ -654,6 +657,7 @@ module Fsubst : sig
 
   val f_bind_local   : f_subst -> EcIdent.t -> form -> f_subst
   val f_bind_mem     : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_agent   : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_rename  : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
 
   val f_bind_mod : f_subst -> EcIdent.t -> mpath -> f_subst
@@ -662,6 +666,7 @@ module Fsubst : sig
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
+  val f_subst_agent : EcIdent.t -> EcIdent.t -> form -> form
   val f_subst_mod   : EcIdent.t -> mpath -> form -> form
 
   val uni_subst : (EcUid.uid -> ty option) -> f_subst
@@ -712,7 +717,7 @@ val string_of_quant : quantif -> string
 val string_of_hcmp  : hoarecmp -> string
 
 val pp_cost_proj : Format.formatter -> cost_proj -> unit
-val pp_mod_ns    : Format.formatter -> mod_ns    -> unit
+val pp_mod_info  : Format.formatter -> mod_info  -> unit
 
 (* -------------------------------------------------------------------- *)
 val dump_form      : Format.formatter -> form        -> unit

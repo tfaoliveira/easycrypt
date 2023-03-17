@@ -34,6 +34,7 @@ type pt_ev_arg = {
 and pt_ev_arg_r =
 | PVAFormula of EcFol.form
 | PVAMemory  of EcMemory.memory
+| PVAAgent   of EcIdent.t         (* external agent name *)
 | PVAModule  of (EcPath.mpath * EcModules.module_sig)
 | PVASub     of pt_ev
 
@@ -49,7 +50,7 @@ type apperror =
   | AE_InvalidArgProof    of (form * form)
   | AE_InvalidArgModRestr of EcTyping.restriction_error
 
-and argkind = [`Form | `Mem | `Mod | `PTerm]
+and argkind = [`Form | `Mem | `Agent | `Mod | `PTerm]
 
 and invalid_arg_form =
   | IAF_Mismatch of (ty * ty)
@@ -64,6 +65,7 @@ let argkind_of_parg arg : argkind option =
   match arg with
   | EA_mod   _ -> Some `Mod
   | EA_mem   _ -> Some `Mem
+  | EA_agent _ -> Some `Agent
   | EA_form  _ -> Some `Form
   | EA_proof _ -> Some `PTerm
   | EA_none    -> None
@@ -73,6 +75,7 @@ let argkind_of_ptarg arg : argkind =
   match arg with
   | PVAFormula _ -> `Form
   | PVAMemory  _ -> `Mem
+  | PVAAgent   _ -> `Agent
   | PVAModule  _ -> `Mod
   | PVASub     _ -> `PTerm
 
@@ -121,6 +124,7 @@ let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
   match arg with
   | PAFormula f        -> PAFormula (Fsubst.f_subst subst f)
   | PAMemory  m        -> PAMemory (Mid.find_def m m subst.fs_mem)
+  | PAAgent   m        -> PAAgent  (Mid.find_def m m subst.fs_agent)
   | PAModule  (mp, ms) -> PAModule (mp, ms)
   | PASub     pt       -> PASub (pt |> omap (concretize_e_pt cptenv))
 
@@ -651,7 +655,7 @@ and trans_pterm_arg_value pe ?name { pl_desc = arg; pl_loc = loc; } =
   let name = name |> omap (Printf.sprintf "?%s") in
 
   match arg with
-  | EA_mod _ | EA_mem _ | EA_proof _ ->
+  | EA_mod _ | EA_mem _ | EA_agent _ | EA_proof _ ->
       let ak = oget (argkind_of_parg arg) in
       tc_pterm_apperror ~loc pe (AE_WrongArgKind (ak, `Form))
 
@@ -686,7 +690,7 @@ and trans_pterm_arg_mod pe { pl_desc = arg; pl_loc = loc; } =
     | EA_none ->
        tc_pterm_apperror ~loc pe AE_CannotInferMod
 
-    | EA_mem _ | EA_proof _ ->
+    | EA_agent _ | EA_mem _ | EA_proof _ ->
        let ak = oget (argkind_of_parg arg) in
        tc_pterm_apperror ~loc pe (AE_WrongArgKind (ak, `Mod))
 
@@ -716,7 +720,7 @@ and trans_pterm_arg_mem pe ?name { pl_desc = arg; pl_loc = loc; } =
   | EA_form { pl_loc = lc; pl_desc = (PFmem m) } ->
       trans_pterm_arg_mem pe ?name (mk_loc lc (EA_mem m))
 
-  | EA_mod  _ | EA_proof _ | EA_form _ ->
+  | EA_agent _ | EA_mod  _ | EA_proof _ | EA_form _ ->
       let ak = oget (argkind_of_parg arg) in
       tc_pterm_apperror ~loc pe (AE_WrongArgKind (ak, `Mem))
 
@@ -730,6 +734,31 @@ and trans_pterm_arg_mem pe ?name { pl_desc = arg; pl_loc = loc; } =
       let mem = (fun () -> EcTyping.transmem env mem) in
       let mem = Exn.recast_pe pe.pte_pe pe.pte_hy mem in
       { ptea_env = pe; ptea_arg = PVAMemory mem; }
+
+(* ------------------------------------------------------------------ *)
+(* for external agent name *)
+and trans_pterm_arg_agent (pe : pt_env) ?name { pl_desc = arg; pl_loc = loc; } =
+  (* TODO: cost: agent name of the form `#n...` *)
+  let dfl () = Printf.sprintf "#n%d" (EcUid.unique ()) in
+
+  match arg with
+  | EA_form { pl_loc = lc; pl_desc = (PFagent m) } ->
+      trans_pterm_arg_agent pe ?name (mk_loc lc (EA_agent m))
+
+  | EA_mem _ | EA_mod  _ | EA_proof _ | EA_form _ ->
+      let ak = oget (argkind_of_parg arg) in
+      tc_pterm_apperror ~loc pe (AE_WrongArgKind (ak, `Agent))
+
+  | EA_none ->
+      let x = EcIdent.create (ofdfl dfl name) in
+      pe.pte_ev := EcMatching.MEV.add x `Agent !(pe.pte_ev);
+      { ptea_env = pe; ptea_arg = PVAAgent x; }
+
+  | EA_agent agent ->
+      let env = LDecl.toenv pe.pte_hy in
+      let agent = (fun () -> EcTyping.transagent env agent) in
+      let agent = Exn.recast_pe pe.pte_pe pe.pte_hy agent in
+      { ptea_env = pe; ptea_arg = PVAAgent agent; }
 
 (* ------------------------------------------------------------------ *)
 and process_pterm_arg
@@ -756,7 +785,7 @@ and process_pterm_arg
           { ptea_env = pe;
             ptea_arg = PVASub (process_full_pterm ?implicits pe fp); }
 
-      | EA_mem _ | EA_mod _ ->
+      | EA_agent _ | EA_mem _ | EA_mod _ ->
           let ak = oget (argkind_of_parg (unloc arg)) in
           tc_pterm_apperror ~loc pe (AE_WrongArgKind (ak, `PTerm))
   end
@@ -764,19 +793,22 @@ and process_pterm_arg
   | Some (`Forall (x, xty, _)) -> begin
       match xty with
       | GTty    _ -> trans_pterm_arg_value pe ~name:(EcIdent.name x) arg
-      | GTmodty _ -> trans_pterm_arg_mod pe arg
-      | GTmem   _ -> trans_pterm_arg_mem pe arg
+      | GTmodty _ -> trans_pterm_arg_mod   pe arg
+      | GTmem   _ -> trans_pterm_arg_mem   pe arg
+      | GTagent   -> trans_pterm_arg_agent pe arg
   end
 
 (* -------------------------------------------------------------------- *)
 and hole_for_impl  pe f = trans_pterm_arg_impl  pe f
 and hole_for_mem   pe   = trans_pterm_arg_mem   pe (L.mk_loc L._dummy EA_none)
+and hole_for_agent pe   = trans_pterm_arg_agent pe (L.mk_loc L._dummy EA_none)
 and hole_for_mod   pe   = trans_pterm_arg_mod   pe (L.mk_loc L._dummy EA_none)
 and hole_for_value pe   = trans_pterm_arg_value pe (L.mk_loc L._dummy EA_none)
 
 (* -------------------------------------------------------------------- *)
 and dfl_arg_for_impl  pe f arg = ofdfl (fun () -> (hole_for_impl  pe f).ptea_arg) arg
 and dfl_arg_for_mem   pe   arg = ofdfl (fun () -> (hole_for_mem   pe  ).ptea_arg) arg
+and dfl_arg_for_agent pe   arg = ofdfl (fun () -> (hole_for_agent pe  ).ptea_arg) arg
 and dfl_arg_for_mod   pe   arg = ofdfl (fun () -> (hole_for_mod   pe  ).ptea_arg) arg
 and dfl_arg_for_value pe   arg = ofdfl (fun () -> (hole_for_value pe  ).ptea_arg) arg
 
@@ -808,6 +840,15 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
+  (* TODO: cost: freshness of the application must be checked. *)
+  | GTagent -> begin
+      match dfl_arg_for_agent pe arg with
+      | PVAAgent arg -> (Fsubst.f_subst_agent x arg f, PAAgent arg)
+      | arg ->
+         let ak = argkind_of_ptarg arg in
+         tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Agent))
+  end
+
   | GTmodty (ns,emt) -> begin
       match dfl_arg_for_mod pe arg with
       | PVAModule (mp, mt) -> begin
@@ -815,8 +856,8 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
             let obl = EcTyping.check_modtype pe.pte_hy mp mt emt in
 
             (* for now, we forbid to instantiate any quantification
-               with a [Fresh] module namespace. *)
-            if ns <> Any then
+               with a [Wrap] module. *)
+            if ns <> Std then
               tc_pterm_apperror ?loc pe (AE_InvalidModNameSpace);
 
             let f = Fsubst.f_subst_mod x mp f in
@@ -897,8 +938,9 @@ and apply_pterm_to_local ?loc pt id =
       apply_pterm_to_arg_r ?loc pt (PVAFormula (f_local id ty))
 
   | LD_modty (_ns,mty) ->
+    (* TODO: cost: check this *)
       (* Ignore module namespace. This is soundness because a
-         [Fresh] module is just an arbitrary module with an additional
+         [Wrap] module is just an arbitrary module with an additional
          freshness assumption on its name. *)
       let env  = LDecl.toenv pt.ptev_env.pte_hy in
       let msig = EcEnv.ModTy.sig_of_mt env mty in
@@ -910,6 +952,9 @@ and apply_pterm_to_local ?loc pt id =
 
   | LD_mem _ ->
       apply_pterm_to_arg_r ?loc pt (PVAMemory id)
+
+  | LD_agent ->
+      apply_pterm_to_arg_r ?loc pt (PVAAgent id)
 
   | LD_abs_st _ -> assert false
 
@@ -1031,10 +1076,11 @@ type prept = [
 ]
 
 and prept_arg =  [
-  | `F   of form
-  | `Mem of EcMemory.memory
-  | `Mod of (EcPath.mpath * EcModules.module_sig)
-  | `Sub of prept
+  | `F     of form
+  | `Mem   of EcMemory.memory
+  | `Agent of EcIdent.t         (* agent name *)
+  | `Mod   of (EcPath.mpath * EcModules.module_sig)
+  | `Sub   of prept
   | `H_
 ]
 
@@ -1050,11 +1096,12 @@ let pt_of_prept tc (pt : prept) =
     | `App (pt, args) -> List.fold_left app_pt_ev (build_pt pt) args
 
   and app_pt_ev pt_ev = function
-    | `F f    -> apply_pterm_to_arg_r pt_ev (PVAFormula f)
-    | `Mem m  -> apply_pterm_to_arg_r pt_ev (PVAMemory m)
-    | `Mod m  -> apply_pterm_to_arg_r pt_ev (PVAModule m)
-    | `Sub pt -> apply_pterm_to_arg_r pt_ev (PVASub (build_pt pt))
-    | `H_     -> apply_pterm_to_hole pt_ev
+    | `F f     -> apply_pterm_to_arg_r pt_ev (PVAFormula f)
+    | `Mem m   -> apply_pterm_to_arg_r pt_ev (PVAMemory m)
+    | `Agent a -> apply_pterm_to_arg_r pt_ev (PVAAgent a)
+    | `Mod m   -> apply_pterm_to_arg_r pt_ev (PVAModule m)
+    | `Sub pt  -> apply_pterm_to_arg_r pt_ev (PVASub (build_pt pt))
+    | `H_      -> apply_pterm_to_hole pt_ev
 
   in build_pt pt
 
@@ -1067,8 +1114,9 @@ module Prept = struct
   let uglob g     = `UG g
   let hdl   h     = `HD h
 
-  let aform f   = `F f
-  let amem m    = `Mem m
+  let aform  f  = `F f
+  let amem   m  = `Mem m
+  let aagent a  = `Agent a
   let amod mp s = `Mod(mp,s)
   let asub pt   = `Sub pt
   let h_        = `H_

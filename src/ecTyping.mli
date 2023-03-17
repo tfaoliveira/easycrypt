@@ -228,6 +228,9 @@ type metavs = EcFol.form Msym.t
 
 val transmem       : env -> EcSymbols.symbol located -> EcIdent.t
 
+(* external agent name *)
+val transagent     : env -> EcSymbols.symbol located -> EcIdent.t
+
 val trans_form_opt :
   env -> ?mv:metavs ->
   ?schema_mpreds:(EcIdent.t list) ->

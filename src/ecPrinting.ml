@@ -1981,7 +1981,7 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
         Format.fprintf fmt "@[<hv>(%a%t <:@;<1 2>%a%a)@]"
           (pp_list pp_sep (pp_local tenv1)) xs
           pp_params
-          pp_mod_ns ns
+          pp_mod_info ns
           (pp_modtype ppe) mt
       in
         (tenv1, pp)
@@ -2964,7 +2964,7 @@ module PPGoal = struct
           let (ppe, pp) = pp_mod_params ppe p.mt_params in
           (Some pp, fun fmt ->
               Format.fprintf fmt "%a%a"
-                pp_mod_ns ns
+                pp_mod_info ns
                 (pp_modtype ppe) p)
 
         | EcBaseLogic.LD_hyp f ->
@@ -3076,7 +3076,7 @@ let pp_ovdecl ppe fmt ov =
 let pp_pvdecl ppe fmt v =
   Format.fprintf fmt "%s : %a" v.v_name (pp_type ppe) v.v_type
 
-let pp_funsig ppe fmt fs =
+let pp_funsig ppe fmt (fs : EcModules.funsig) =
   Format.fprintf fmt "@[<hov 2>proc %s(%a) :@ %a@]"
     fs.fs_name
     (pp_list ", " (pp_ovdecl ppe)) fs.fs_anames

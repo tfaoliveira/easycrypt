@@ -462,9 +462,10 @@ module LowIntro = struct
   let valid_name chk x =
     x = "_" || chk x || valid_anon_name chk x
 
-  let valid_value_name (x : symbol) = valid_name EcIo.is_sym_ident x
-  let valid_mod_name   (x : symbol) = valid_name EcIo.is_mod_ident x
-  let valid_mem_name   (x : symbol) = valid_name EcIo.is_mem_ident x
+  let valid_value_name (x : symbol) = valid_name EcIo.is_sym_ident   x
+  let valid_mod_name   (x : symbol) = valid_name EcIo.is_mod_ident   x
+  let valid_mem_name   (x : symbol) = valid_name EcIo.is_mem_ident   x
+  let valid_agent_name (x : symbol) = valid_name EcIo.is_agent_ident x
 
   let tc_no_product (pe : proofenv) ?loc () =
     tc_error pe ?loc "nothing to introduce"
@@ -475,6 +476,7 @@ module LowIntro = struct
       | `Value  -> valid_value_name (tg_val x)
       | `Module -> valid_mod_name   (tg_val x)
       | `Memory -> valid_mem_name   (tg_val x)
+      | `Agent  -> valid_agent_name (tg_val x)
     in
       if not ok then
         tc_error pe ?loc:(tg_tag x) "invalid name: %s" (tg_val x)
@@ -498,6 +500,9 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     | GTmem me ->
         LowIntro.check_name_validity !!tc `Memory name;
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
+    | GTagent ->
+        LowIntro.check_name_validity !!tc `Agent name;
+        (id, LD_agent, Fsubst.f_bind_agent sbt x (tg_val id))
     | GTmodty (ns,i) ->
         LowIntro.check_name_validity !!tc `Module name;
         (id, LD_modty (ns,i), Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)))

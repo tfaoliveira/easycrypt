@@ -56,6 +56,7 @@ and pt_head =
 and pt_arg =
 | PAFormula of EcFol.form
 | PAMemory  of EcMemory.memory
+| PAAgent   of EcIdent.t
 | PAModule  of (EcPath.mpath * EcModules.module_sig)
 | PASub     of proofterm option
 
@@ -68,12 +69,14 @@ let is_ptglobal = function PTGlobal _ -> true | _ -> false
 (* -------------------------------------------------------------------- *)
 let is_paformula = function PAFormula _ -> true | _ -> false
 let is_pamemory  = function PAMemory  _ -> true | _ -> false
+let is_paagent   = function PAAgent   _ -> true | _ -> false
 let is_pamodule  = function PAModule  _ -> true | _ -> false
 let is_pasub     = function PASub     _ -> true | _ -> false
 
 (* -------------------------------------------------------------------- *)
 let paformula = fun x -> PAFormula x
 let pamemory  = fun x -> PAMemory  x
+let paagent   = fun x -> PAMemory  x
 let pamodule  = fun x -> PAModule  x
 
 let paglobal p tys =

@@ -20,7 +20,7 @@ type apperror =
   | AE_InvalidArgProof    of (form * form)
   | AE_InvalidArgModRestr of EcTyping.restriction_error
 
-and argkind = [`Form | `Mem | `Mod | `PTerm]
+and argkind = [`Form | `Mem | `Agent | `Mod | `PTerm]
 
 and invalid_arg_form =
   | IAF_Mismatch of (ty * ty)
@@ -52,6 +52,7 @@ type pt_ev_arg = {
 and pt_ev_arg_r =
 | PVAFormula of EcFol.form
 | PVAMemory  of EcMemory.memory
+| PVAAgent   of EcIdent.t         (* external agent name *)
 | PVAModule  of (EcPath.mpath * EcModules.module_sig)
 | PVASub     of pt_ev
 
@@ -171,10 +172,11 @@ type prept = [
 ]
 
 and prept_arg =  [
-  | `F   of form
-  | `Mem of EcMemory.memory
-  | `Mod of (EcPath.mpath * EcModules.module_sig)
-  | `Sub of prept
+  | `F     of form
+  | `Mem   of EcMemory.memory
+  | `Agent of EcIdent.t         (* agent name *)
+  | `Mod   of (EcPath.mpath * EcModules.module_sig)
+  | `Sub   of prept
   | `H_
 ]
 
@@ -182,18 +184,19 @@ val pt_of_prept: tcenv1 -> prept -> pt_ev
 
 (* -------------------------------------------------------------------- *)
 module Prept : sig
-  val (@)   : prept -> prept_arg list -> prept
+  val (@)    : prept -> prept_arg list -> prept
 
-  val hyp   : EcIdent.t -> prept
-  val glob  : EcPath.path -> ty list -> prept
-  val uglob : EcPath.path -> prept
-  val hdl   : handle -> prept
+  val hyp    : EcIdent.t -> prept
+  val glob   : EcPath.path -> ty list -> prept
+  val uglob  : EcPath.path -> prept
+  val hdl    : handle -> prept
 
-  val aform : form -> prept_arg
-  val amem  : EcMemory.memory -> prept_arg
-  val amod  : EcPath.mpath -> EcModules.module_sig -> prept_arg
-  val asub  : prept -> prept_arg
-  val h_    : prept_arg
-  val ahyp  : EcIdent.t -> prept_arg
-  val ahdl  : handle -> prept_arg
+  val aform  : form -> prept_arg
+  val amem   : EcMemory.memory -> prept_arg
+  val aagent : EcIdent.t -> prept_arg
+  val amod   : EcPath.mpath -> EcModules.module_sig -> prept_arg
+  val asub   : prept -> prept_arg
+  val h_     : prept_arg
+  val ahyp   : EcIdent.t -> prept_arg
+  val ahdl   : handle -> prept_arg
 end

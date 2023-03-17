@@ -183,6 +183,8 @@ type pmod_restr_mem = pmod_restr_mem_el list
 (* -------------------------------------------------------------------- *)
 type pmemory   = psymbol
 
+type pagent    = psymbol        (* external agent name *)
+
 type phoarecmp = EcFol.hoarecmp
 
 type glob_or_var =
@@ -200,6 +202,7 @@ and pformula_r =
   | PFident   of pqsymbol * ptyannot option
   | PFref     of psymbol * pffilter list
   | PFmem     of psymbol
+  | PFagent   of psymbol
   | PFside    of pformula * symbol located
   | PFapp     of pformula * pformula list
   | PFif      of pformula * pformula * pformula
@@ -243,6 +246,7 @@ and pgty =
 | PGTY_Type  of pty
 | PGTY_ModTy of pmodule_type_restr
 | PGTY_Mem   of pmemtype option
+| PGTY_Agent
 
 and pffilter =
 | PFRange      of bool * pfrange list
@@ -494,6 +498,7 @@ type ppt_arg =
   | EA_none
   | EA_form  of pformula
   | EA_mem   of pmemory
+  | EA_agent of pagent
   | EA_mod   of pmsymbol located
   | EA_proof of (pformula option) gppterm
 

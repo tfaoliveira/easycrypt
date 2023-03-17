@@ -362,6 +362,7 @@
 %token <EcSymbols.symbol> UIDENT
 %token <EcSymbols.symbol> TIDENT
 %token <EcSymbols.symbol> MIDENT
+%token <EcSymbols.symbol> AIDENT
 %token <EcSymbols.symbol> PUNIOP
 %token <EcSymbols.symbol> PBINOP
 %token <EcSymbols.symbol> PNUMOP
@@ -692,10 +693,14 @@ _lident:
 %inline _mident:
 | x=MIDENT { x }
 
+%inline _aident:
+| x=AIDENT { x }
+
 %inline lident: x=loc(_lident) { x }
 %inline uident: x=loc(_uident) { x }
 %inline tident: x=loc(_tident) { x }
 %inline mident: x=loc(_mident) { x }
+%inline aident: x=loc(_aident) { x }
 
 %inline _ident:
 | x=_lident { x }
@@ -1237,6 +1242,9 @@ sform_u(P):
 | x=mident
    { PFmem x }
 
+| x=aident
+   { PFagent x }
+
 | se=sform_r(P) DLBRACKET ti=tvars_app? e=loc(plist1(form_r(P), COMMA)) RBRACKET
    { let e = List.reduce1 (fun _ -> lmap (fun x -> PFtuple x) e) (unloc e) in
      pfget (EcLocation.make $startpos $endpos) ti se e }
@@ -1433,6 +1441,7 @@ eager_body(P):
     COLON pre=form_r(P) LONGARROW post=form_r(P)
     { PFeagerF (pre, (s1, mp1, mp2,s2), post) }
 
+(* single generalized quantifier *)
 pgtybinding1:
 | x=ptybinding1
     { List.map (fun (xs, ty) -> (xs, PGTY_Type ty)) x }
@@ -1446,7 +1455,10 @@ pgtybinding1:
 | LPAREN pn=mident COLON mt=memtype RPAREN
     { [[mk_loc (loc pn) (Some pn)], PGTY_Mem (Some mt)] }
 
+| pn=aident                     (* external agent name *)
+    { [[mk_loc (loc pn) (Some pn)], PGTY_Agent] }
 
+(* list of generalized quantifiers *)
 pgtybindings:
 | x=pgtybinding1+ { List.flatten x }
 
@@ -2416,6 +2428,7 @@ ipcore_name:
 | s=_lident { s }
 | s=_uident { s }
 | s=_mident { s }
+| s=_aident { s }
 
 ipcore:
 | PLUS

@@ -339,6 +339,7 @@ and on_gbinding (cb : cb) (b : gty) =
       on_mdecl cb mty
   | EcFol.GTmem m ->
       on_memtype cb m
+  | EcFol.GTagent -> ()
 
 and on_gbindings (cb : cb) (b : (EcIdent.t * gty) list) =
   List.iter (fun (_, b) -> on_gbinding cb b) b
@@ -348,6 +349,7 @@ and on_module (cb : cb) (me : module_expr) =
   | ME_Alias (_, mp)  -> on_mp cb mp
   | ME_Structure st   -> on_mstruct cb st
   | ME_Decl mty       -> on_mdecl cb mty
+  | ME_Wrap (_,_,mty) -> on_mdecl cb mty
 
 and on_mstruct (cb : cb) (st : module_structure) =
   List.iter (on_mpath_mstruct1 cb) st.ms_body
@@ -630,7 +632,7 @@ let generalize_type to_gen ty =
 
 let add_declared_mod to_gen id modty =
   { to_gen with
-    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Any modty);
+    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Std modty);
     tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
   }
 
@@ -694,6 +696,8 @@ let rec gty_fv_and_tvar : gty -> int Mid.t = function
          (mr_mpaths_fv restr.mr_mpaths))
 
   | GTmem mt -> EcMemory.mt_fv mt
+
+  | GTagent -> Mid.empty
 
 and fv_and_tvar_f f =
   let fv = ref f.f_fv in
@@ -778,6 +782,7 @@ let rec generalize_extra_args binds fv =
       | GTty ty -> (id, ty) :: args
       | GTmodty  _ -> assert false
       | GTmem _    -> assert false
+      | GTagent     -> assert false
     else args
   | Imply _ :: binds -> generalize_extra_args binds fv
 

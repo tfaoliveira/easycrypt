@@ -908,7 +908,8 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
   let mbindings : (EcIdent.t * EcCoreFol.gty) list =
     List.map (fun (_, (fid, param_mt, _)) ->
         (* fresh module names for namespace proof obligation *)
-        fid, GTmodty (Fresh,param_mt)
+        (* TODO: cost: check this *)
+        fid, GTmodty (Wrap,param_mt)
       ) s_params
   in
 
@@ -1969,6 +1970,10 @@ let transmem env m =
 (*      if (EcMemory.memtype me) <> None then
         tyerror m.pl_loc env (InvalidMem (unloc m, MAE_IsConcrete)); *)
       (fst me)
+
+(* -------------------------------------------------------------------- *)
+let transagent (env : EcEnv.env) (m : symbol located) = assert false
+  (* TODO: cost *)
 
 (* -------------------------------------------------------------------- *)
 let transpvar env side p =
@@ -3235,8 +3240,9 @@ and trans_gbinding env ue decl =
         let mi = fst (transmodtype env mi) in
         let mi = trans_restr_for_modty env mi restr in
 
-        (* there is no user-level syntax to require a module to be fresh *)
-        let ty = GTmodty (Any,mi) in
+        (* there is no user-level syntax to require a module to be external
+           for now, so it must be a standard module. *)
+        let ty = GTmodty (Std,mi) in
 
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in

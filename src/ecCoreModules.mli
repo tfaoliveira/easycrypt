@@ -286,6 +286,19 @@ and 'a p_module_body =
   | ME_Alias       of int * EcPath.mpath
   | ME_Structure   of 'a p_module_structure    (* Concrete modules. *)
   | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
+  | ME_Wrap of EcIdent.t * [`Cb | `Ext] * 'a p_module_type
+  (* Wrapped module [(id, kind, mt)]:
+     - the ident [id] represents an agent name
+     - [kind = `Ext]: controls goes to [id]
+     - [kind = `Cb] : controls goes back to [id]'s caller
+     - [mt] is the module type of the wrapped module.
+
+     Take a functor [F(X)]. The module [Wrap_id(F)] wraps [F] with
+     agent name [id]:
+     - it has the same module type as [F] (e.g. if [A <: X] then
+       [(Wrap_id(F)) (X)] is a valid application)
+     - [F] execution cost goes to [id]
+     - [X] execution cost goes to [id]'s called. *)
 
 and 'a p_module_structure = {
   ms_body      : 'a p_module_item list;

@@ -783,6 +783,7 @@ end = struct
     match ak with
     | `Form  -> "formula"
     | `Mem   -> "memory"
+    | `Agent -> "agent"
     | `Mod   -> "module"
     | `PTerm -> "proof-term"
 

@@ -89,20 +89,22 @@ end
 
 (* -------------------------------------------------------------------- *)
 type mevmap = {
-  evm_form : form                         evmap;
-  evm_mem  : EcMemory.memory              evmap;
-  evm_mod  : (EcPath.mpath * module_type) evmap;
+  evm_form  : form                         evmap;
+  evm_mem   : EcMemory.memory              evmap;
+  evm_agent : EcIdent.t                    evmap;
+  evm_mod   : (EcPath.mpath * module_type) evmap;
 }
 
 (* -------------------------------------------------------------------- *)
 module MEV : sig
   type item = [
-    | `Form of form
-    | `Mem  of EcMemory.memory
-    | `Mod  of EcPath.mpath * module_type
+    | `Form  of form
+    | `Mem   of EcMemory.memory
+    | `Agent of EcIdent.t
+    | `Mod   of EcPath.mpath * module_type
   ]
 
-  type kind = [ `Form | `Mem | `Mod ]
+  type kind = [ `Form | `Mem | `Agent | `Mod ]
 
   val empty     : mevmap
   val of_idents : ident list -> kind -> mevmap

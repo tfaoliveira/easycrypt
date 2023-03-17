@@ -39,6 +39,7 @@ val eq_handle : handle -> handle -> bool
 (* pt-arg ::=                                                           *)
 (*   | formula                     (∀-elimination)                      *)
 (*   | memory                      (∀[mem]-elimination)                 *)
+(*   | agent                       (∀[agent]-elimination)               *)
 (*   | module-path                 (∀[mod]-elimination)                 *)
 (*   | pt                          (⇒-elimination)                      *)
 (* -------------------------------------------------------------------- *)
@@ -56,6 +57,7 @@ and pt_head =
 and pt_arg =
 | PAFormula of EcFol.form
 | PAMemory  of EcMemory.memory
+| PAAgent   of EcIdent.t
 | PAModule  of (EcPath.mpath * EcModules.module_sig)
 | PASub     of proofterm option
 
@@ -68,11 +70,13 @@ val is_ptglobal : pt_head -> bool
 (* -------------------------------------------------------------------- *)
 val is_paformula : pt_arg -> bool
 val is_pamemory  : pt_arg -> bool
+val is_paagent   : pt_arg -> bool
 val is_pamodule  : pt_arg -> bool
 val is_pasub     : pt_arg -> bool
 
 val paformula : EcFol.form -> pt_arg
 val pamemory  : EcMemory.memory -> pt_arg
+val paagent   : EcIdent.t -> pt_arg
 val pamodule  : EcPath.mpath * EcModules.module_sig -> pt_arg
 val paglobal  : EcPath.path -> ty list -> pt_arg
 val palocal   : EcIdent.t -> pt_arg

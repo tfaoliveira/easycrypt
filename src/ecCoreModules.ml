@@ -826,6 +826,8 @@ and 'a p_module_body =
   | ME_Alias     of int * EcPath.mpath
   | ME_Structure of 'a p_module_structure    (* Concrete modules. *)
   | ME_Decl      of 'a p_module_type         (* Abstract modules. *)
+  | ME_Wrap of EcIdent.t * [`Cb | `Ext] * 'a p_module_type
+  (* Wrapped module, see `.mli` *)
 
 and 'a p_module_structure = {
   ms_body      : 'a p_module_item list;
@@ -908,6 +910,7 @@ let get_uninit_read_of_module (p : path) (me : _ p_module_expr) =
     | ME_Alias     _  -> acc
     | ME_Decl      _  -> acc
     | ME_Structure mb -> doit_mb acc (mp, mb)
+    | ME_Wrap (_,_,mt) -> acc
 
   and doit_mb acc (mp, mb) =
     List.fold_left

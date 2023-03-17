@@ -15,10 +15,11 @@ val lexbuf   : ecreader -> Lexing.lexbuf
 
 (* -------------------------------------------------------------------- *)
 val lex_single_token : string -> EcParser.token option
-val is_sym_ident : string -> bool
-val is_op_ident  : string -> bool
-val is_mem_ident : string -> bool
-val is_mod_ident : string -> bool
+val is_sym_ident   : string -> bool
+val is_op_ident    : string -> bool
+val is_mem_ident   : string -> bool
+val is_mod_ident   : string -> bool
+val is_agent_ident : string -> bool
 
 (* -------------------------------------------------------------------- *)
 val is_binop     : string -> [`Yes | `No | `Invalid]

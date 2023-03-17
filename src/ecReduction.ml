@@ -251,7 +251,7 @@ end) = struct
     | _, _ -> false
 
   (* -------------------------------------------------------------------- *)
-  let for_funsig env fs1 fs2 =
+  let for_funsig env (fs1 : EcModules.funsig) (fs2 : EcModules.funsig) =
     fs1.fs_name = fs2.fs_name &&
     for_type env fs1.fs_arg fs2.fs_arg &&
     for_type env fs1.fs_ret fs2.fs_ret

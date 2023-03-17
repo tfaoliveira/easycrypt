@@ -245,80 +245,92 @@ end
 
 (* -------------------------------------------------------------------- *)
 type mevmap = {
-  evm_form : form                         evmap;
-  evm_mem  : EcMemory.memory              evmap;
-  evm_mod  : (EcPath.mpath * module_type) evmap;
+  evm_form  : form                         evmap;
+  evm_mem   : EcMemory.memory              evmap;
+  evm_agent : EcIdent.t                    evmap; (* external agent name *)
+  evm_mod   : (EcPath.mpath * module_type) evmap;
 }
 
 (* -------------------------------------------------------------------- *)
 module MEV = struct
   type item = [
-    | `Form of form
-    | `Mem  of EcMemory.memory
-    | `Mod  of EcPath.mpath * module_type
+    | `Form  of form
+    | `Mem   of EcMemory.memory
+    | `Agent of EcIdent.t
+    | `Mod   of EcPath.mpath * module_type
   ]
 
-  type kind = [ `Form | `Mem | `Mod ]
+  type kind = [ `Form | `Mem | `Agent | `Mod ]
 
   let empty : mevmap = {
-    evm_form = EV.empty;
-    evm_mem  = EV.empty;
-    evm_mod  = EV.empty;
+    evm_form  = EV.empty;
+    evm_mem   = EV.empty;
+    evm_agent = EV.empty;
+    evm_mod   = EV.empty;
   }
 
-  let of_idents ids k =
+  let of_idents ids (k : kind) =
     match k with
-    | `Form -> { empty with evm_form = EV.of_idents ids }
-    | `Mem  -> { empty with evm_mem  = EV.of_idents ids }
-    | `Mod  -> { empty with evm_mod  = EV.of_idents ids }
+    | `Form  -> { empty with evm_form  = EV.of_idents ids }
+    | `Mem   -> { empty with evm_mem   = EV.of_idents ids }
+    | `Agent -> { empty with evm_agent = EV.of_idents ids }
+    | `Mod   -> { empty with evm_mod   = EV.of_idents ids }
 
-  let add x k m =
+  let add x (k : kind) m =
     match k with
-    | `Form -> { m with evm_form = EV.add x m.evm_form }
-    | `Mem  -> { m with evm_mem  = EV.add x m.evm_mem  }
-    | `Mod  -> { m with evm_mod  = EV.add x m.evm_mod  }
+    | `Form  -> { m with evm_form  = EV.add x m.evm_form  }
+    | `Mem   -> { m with evm_mem   = EV.add x m.evm_mem   }
+    | `Agent -> { m with evm_agent = EV.add x m.evm_agent }
+    | `Mod   -> { m with evm_mod   = EV.add x m.evm_mod   }
 
-  let mem x k m =
+  let mem x (k : kind) m =
     match k with
-    | `Form -> EV.mem x m.evm_form
-    | `Mem  -> EV.mem x m.evm_mem
-    | `Mod  -> EV.mem x m.evm_mod
+    | `Form  -> EV.mem x m.evm_form
+    | `Mem   -> EV.mem x m.evm_mem
+    | `Agent -> EV.mem x m.evm_agent
+    | `Mod   -> EV.mem x m.evm_mod
 
   let set x v m =
     match v with
-    | `Form v -> { m with evm_form = EV.set x v m.evm_form }
-    | `Mem  v -> { m with evm_mem  = EV.set x v m.evm_mem  }
-    | `Mod  v -> { m with evm_mod  = EV.set x v m.evm_mod  }
+    | `Form  v -> { m with evm_form  = EV.set x v m.evm_form  }
+    | `Mem   v -> { m with evm_mem   = EV.set x v m.evm_mem   }
+    | `Agent v -> { m with evm_agent = EV.set x v m.evm_agent }
+    | `Mod   v -> { m with evm_mod   = EV.set x v m.evm_mod   }
 
-  let get x k m =
+  let get x (k : kind) m =
     let tx f = function `Unset -> `Unset | `Set x -> `Set (f x) in
 
     match k with
-    | `Form -> omap (tx (fun x -> `Form x)) (EV.get x m.evm_form)
-    | `Mem  -> omap (tx (fun x -> `Mem  x)) (EV.get x m.evm_mem )
-    | `Mod  -> omap (tx (fun x -> `Mod  x)) (EV.get x m.evm_mod )
+    | `Form  -> omap (tx (fun x -> `Form  x)) (EV.get x m.evm_form )
+    | `Mem   -> omap (tx (fun x -> `Mem   x)) (EV.get x m.evm_mem  )
+    | `Agent -> omap (tx (fun x -> `Agent x)) (EV.get x m.evm_agent)
+    | `Mod   -> omap (tx (fun x -> `Mod   x)) (EV.get x m.evm_mod  )
 
-  let isset x k m =
+  let isset x (k : kind) m =
     match k with
-    | `Form -> EV.isset x m.evm_form
-    | `Mem  -> EV.isset x m.evm_mem
-    | `Mod  -> EV.isset x m.evm_mod
+    | `Form  -> EV.isset x m.evm_form
+    | `Mem   -> EV.isset x m.evm_mem
+    | `Agent -> EV.isset x m.evm_agent
+    | `Mod   -> EV.isset x m.evm_mod
 
   let filled m =
        EV.filled m.evm_form
     && EV.filled m.evm_mem
+    && EV.filled m.evm_agent
     && EV.filled m.evm_mod
 
   let fold (f : _ -> item -> _ -> _) m v =
-    let v = EV.fold (fun x k v -> f x (`Form k) v) m.evm_form v in
-    let v = EV.fold (fun x k v -> f x (`Mem  k) v) m.evm_mem  v in
-    let v = EV.fold (fun x k v -> f x (`Mod  k) v) m.evm_mod  v in
+    let v = EV.fold (fun x k v -> f x (`Form  k) v) m.evm_form  v in
+    let v = EV.fold (fun x k v -> f x (`Mem   k) v) m.evm_mem   v in
+    let v = EV.fold (fun x k v -> f x (`Agent k) v) m.evm_agent v in
+    let v = EV.fold (fun x k v -> f x (`Mod   k) v) m.evm_mod   v in
     v
 
   let assubst ue ev =
     let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
+    let subst = EV.fold (fun x m s -> Fsubst.f_bind_agent s x m) ev.evm_agent subst in
     let subst = EV.fold (fun x (m,_) s -> Fsubst.f_bind_mod s x m) ev.evm_mod subst in
     let seen  = ref Sid.empty in
 
@@ -738,6 +750,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
               if   id_equal x1 x2
               then subst
               else Fsubst.f_bind_mem subst x2 x1
+            in (env, subst)
+
+        | GTagent, GTagent ->
+            let subst =
+              if   id_equal x1 x2
+              then subst
+              else Fsubst.f_bind_agent subst x2 x1
             in (env, subst)
 
         | GTmodty (ns1,p1), GTmodty (ns2,p2) ->

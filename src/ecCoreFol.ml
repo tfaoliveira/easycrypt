@@ -33,16 +33,19 @@ type cost_proj =
       param_p : symbol;           (* parameter procedure *)
     }
 
-(** module namespace *)
-type mod_ns =
-  | Any                   (* any name *)
-  | Fresh                 (* fresh name w.r.t. the environment *)
+(** module info *)
+type mod_info =
+  | Std                (* standard module *)
+  | Wrap
+  (* external wrapped module: execution cost belongs to the implicit
+     agent associated to the module *)
 
 (* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty
-  | GTmodty of mod_ns * module_type
+  | GTmodty of mod_info * module_type
   | GTmem   of EcMemory.memtype
+  | GTagent
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
@@ -50,7 +53,7 @@ and bindings = binding list
 and form = {
   f_node : f_node;
   f_ty   : ty;
-  f_fv   : int EcIdent.Mid.t; (* local, memory, module ident *)
+  f_fv   : int EcIdent.Mid.t; (* local, memory, module ident, agent names *)
   f_tag  : int;
 }
 
@@ -272,6 +275,7 @@ let gty_hash = function
   | GTty ty -> EcTypes.ty_hash ty
   | GTmodty (ns, p) -> Why3.Hashcons.combine (Hashtbl.hash ns) (mty_hash p)
   | GTmem _ -> 1
+  | GTagent  -> 0
 
 let mr_fv (mr : mod_restr) =
   let fv =
@@ -287,13 +291,13 @@ let gty_fv = function
   | GTty ty -> ty.ty_fv
   | GTmodty (_, mty) -> mr_fv mty.mt_restr
   | GTmem mt -> EcMemory.mt_fv mt
-
+  | GTagent   -> Mid.empty
 
 (* -------------------------------------------------------------------- *)
 let gtty (ty : EcTypes.ty) =
   GTty ty
 
-let gtmodty (ns : mod_ns) (mt : module_type) =
+let gtmodty (ns : mod_info) (mt : module_type) =
   GTmodty (ns, mt)
 
 let gtmem (mt : EcMemory.memtype) =
@@ -736,11 +740,6 @@ let gty_as_mem =
   function GTmem m -> m  | _ -> assert false
 
 let gty_as_mod = function GTmodty (ns,mt) -> ns, mt | _ -> assert false
-
-let kind_of_gty = function
-  | GTty    _ -> `Form
-  | GTmem   _ -> `Mem
-  | GTmodty _ -> `Mod
 
 (* -------------------------------------------------------------------- *)
 let hoarecmp_opp cmp =
@@ -2010,7 +2009,8 @@ type mem_pr = EcMemory.memory * form
 type f_subst = {
   fs_freshen  : bool; (* true means freshen locals *)
   fs_loc      : form Mid.t;
-  fs_mem      : EcIdent.t Mid.t;
+  fs_mem      : EcIdent.t Mid.t; (* memories *)
+  fs_agent    : EcIdent.t Mid.t; (* agent names *)
   fs_sty      : ty_subst;
   fs_ty       : ty -> ty;
   fs_opdef    : (EcIdent.t list * expr) Mp.t;
@@ -2028,6 +2028,7 @@ module Fsubst = struct
     fs_freshen  = false;
     fs_loc      = Mid.empty;
     fs_mem      = Mid.empty;
+    fs_agent    = Mid.empty;
     fs_sty      = ty_subst_id;
     fs_ty       = ty_subst ty_subst_id;
     fs_opdef    = Mp.empty;
@@ -2081,6 +2082,10 @@ module Fsubst = struct
     let sty = { s.fs_sty with ts_mp = sms } in
     { s with fs_sty = sty; fs_ty = ty_subst sty }
 
+  let f_bind_agent s m1 m2 =
+    let merger o = assert (o = None); Some m2 in
+    { s with fs_agent = Mid.change merger m1 s.fs_agent }
+
   (* ------------------------------------------------------------------ *)
   let f_bind_rename s xfrom xto ty =
     let xf = f_local xto ty in
@@ -2104,6 +2109,9 @@ module Fsubst = struct
       { subst with sms_id = Mid.remove x subst.sms_id } in
     let sty = { s.fs_sty with ts_mp = sms } in
     { s with fs_sty = sty; fs_ty = ty_subst sty }
+
+  let f_rem_agent s m =
+    { s with fs_agent = Mid.remove m s.fs_agent }
 
   (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
@@ -2492,6 +2500,8 @@ module Fsubst = struct
         let mt' = EcMemory.mt_subst s.fs_ty mt in
         if mt == mt' then gty else GTmem mt'
 
+    | GTagent -> GTagent
+
   and add_binding ~tx (s : f_subst) (x, gty as xt) : f_subst * binding =
     let gty' = subst_gty ~tx s gty in
     let x'   = if s.fs_freshen then EcIdent.fresh x else x in
@@ -2502,13 +2512,15 @@ module Fsubst = struct
         | GTty    _ -> f_rem_local s x
         | GTmodty _ -> f_rem_mod   s x
         | GTmem   _ -> f_rem_mem   s x
+        | GTagent    -> f_rem_agent s x
       in
         (s, xt)
     else
       let s = match gty' with
         | GTty   ty -> f_bind_rename s x x' ty
-        | GTmodty _ -> f_bind_mod s x (EcPath.mident x')
-        | GTmem   _ -> f_bind_mem s x x'
+        | GTmodty _ -> f_bind_mod   s x (EcPath.mident x')
+        | GTmem   _ -> f_bind_mem   s x x'
+        | GTagent    -> f_bind_agent s x x'
       in
         (s, (x', gty'))
 
@@ -2674,6 +2686,10 @@ module Fsubst = struct
     let s = f_bind_mod f_subst_id x mp in
     if Mid.mem x f.f_fv then f_subst s f else f
 
+  let f_subst_agent a1 a2 =
+    let s = f_bind_agent f_subst_id a1 a2 in
+    fun f -> if Mid.mem a1 f.f_fv then f_subst s f else f
+
   (* ------------------------------------------------------------------ *)
   let fty_subst sty =
     { f_subst_id with fs_sty = sty; fs_ty = ty_subst sty }
@@ -2770,10 +2786,10 @@ let pp_cost_proj fmt (p : cost_proj) =
   | Param p -> Format.fprintf fmt "%s:%s.%s" p.proc p.param_m p.param_p
 
 (* -------------------------------------------------------------------- *)
-let pp_mod_ns fmt (ns : mod_ns) =
+let pp_mod_info fmt (ns : mod_info) =
   match ns with
-  | Any -> ()
-  | Fresh -> Format.fprintf fmt "$"
+  | Std -> ()
+  | Wrap -> Format.fprintf fmt "Wrap "
 
 (* -------------------------------------------------------------------- *)
 let dump_todo fmt = Format.fprintf fmt "#?"
@@ -2902,8 +2918,12 @@ and dump_binding ~(long:bool) fmt (x,ty) : unit =
   | GTmodty (ns,mt) ->
     Format.fprintf fmt "(%s <: %a%a)"
       (ident_to_string x)
-      pp_mod_ns ns
+      pp_mod_info ns
       (dump_modty ~long) mt
+
+  | GTagent ->
+    Format.fprintf fmt "(%s : #name)"
+      (ident_to_string x)
 
 and dump_modty ~(long:bool) fmt (mty : module_type) : unit =
   Format.fprintf fmt "@[<hv 2>%s%a@]"

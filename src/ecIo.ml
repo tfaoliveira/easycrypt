@@ -172,6 +172,12 @@ let is_mem_ident x =
   | Some (EcParser.MIDENT _) -> true
   | _ -> false
 
+(* external agent identifiers *)
+let is_agent_ident x =
+  match lex_single_token x with
+  | Some (EcParser.AIDENT _) -> true
+  | _ -> false
+
 let is_mod_ident x =
   match lex_single_token x with
   | Some (EcParser.UIDENT _) -> true

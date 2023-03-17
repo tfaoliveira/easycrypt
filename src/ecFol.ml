@@ -1097,7 +1097,7 @@ module CostCompSimplify = struct
     let fresh_mts =
       List.filter_map (fun { l_id; l_kind; l_epoch = e } ->
           match l_kind with
-          | LD_modty (Fresh, mt) -> Some (l_id, mt, e)
+          | LD_modty (Wrap, mt) -> Some (l_id, mt, e)
           | _ -> None
         ) locals
     in
