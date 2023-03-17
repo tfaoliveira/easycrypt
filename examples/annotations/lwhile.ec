@@ -30,26 +30,26 @@ lemma index_equiv :
      0 <= M.n{1} /\ ={M.n} ==>
      true |
      { } ==>
-     { (l, l --> exists a , 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 4 ^ a)  } ].
+     { (l, l --> ={M.k} => exists a , 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 4 ^ a)  } ].
 proof.
 proc.
 (*TODO: annotations: the type of a is not well defined or not well displayed.*)
 lwhile
-  (0 <= M.n{1} /\ ={M.n} /\ exists a, 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 3 ^ a)
+  (0 <= M.n{1} /\ ={M.n} /\ exists a, 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 4 ^ a)
   (-M.k{1}) (-M.k{2}).
 + move=> z.
   (*TODO: annotations: this could be a hoare goal.*)
   wp.
   label.
   skip.
-  move=> &1 _ //.
+  move=> &1 _ //= [] <<- /StdOrder.IntOrder.ltr_opp2.
   admit.
 + admit.
 + wp.
   label.
   skip.
-  move=> &1 &2 //= neq_.
-  (*exists 0.*)
+  move=> &1 &2 //=.
+  exists 0; rewrite !expr0 /=.
   admit.
 + wp.
   label.

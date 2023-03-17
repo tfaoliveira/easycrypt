@@ -198,6 +198,24 @@ let mr_equal = EcCoreModules.p_mr_equal f_equal
 let mr_hash  = EcCoreModules.p_mr_hash f_hash
 
 (*-------------------------------------------------------------------- *)
+let anno_equal (l1, l2, f) (l1', l2', f') =
+  EcIdent.id_equal l1 l1' &&
+  EcIdent.id_equal l2 l2' &&
+  f_equal f f'
+
+let annos_equal =
+  List.for_all2 anno_equal
+
+let anno_hash (l1, l2, f) =
+  Why3.Hashcons.combine2
+    (EcIdent.id_hash l1)
+    (EcIdent.id_hash l2)
+    (f_hash f)
+
+let annos_hash =
+  Why3.Hashcons.combine_list anno_hash 0
+
+(*-------------------------------------------------------------------- *)
 let gty_equal ty1 ty2 =
   match ty1, ty2 with
   | GTty ty1, GTty ty2 ->
@@ -337,6 +355,8 @@ let eqf_equal ef1 ef2 =
   && f_equal ef1.ef_po ef2.ef_po
   && EcPath.x_equal ef1.ef_fl ef2.ef_fl
   && EcPath.x_equal ef1.ef_fr ef2.ef_fr
+  && annos_equal ef1.ef_am ef2.ef_am
+  && annos_equal ef1.ef_as ef2.ef_as
 
 let eqs_equal es1 es2 =
      f_equal es1.es_pr es2.es_pr
@@ -345,6 +365,8 @@ let eqs_equal es1 es2 =
   && s_equal es1.es_sr es2.es_sr
   && EcMemory.me_equal es1.es_ml es2.es_ml
   && EcMemory.me_equal es1.es_mr es2.es_mr
+  && annos_equal es1.es_am es2.es_am
+  && annos_equal es1.es_as es2.es_as
 
 let egf_equal eg1 eg2 =
      f_equal eg1.eg_pr eg2.eg_pr
@@ -427,18 +449,21 @@ let bhs_hash bhs =
     [bhs.bhs_pr;bhs.bhs_po;bhs.bhs_bd]
 
 let ef_hash ef =
-  Why3.Hashcons.combine3
+  Why3.Hashcons.combine2
     (f_hash ef.ef_pr) (f_hash ef.ef_po)
-    (EcPath.x_hash ef.ef_fl) (EcPath.x_hash ef.ef_fr)
+    (Why3.Hashcons.combine3
+       (EcPath.x_hash ef.ef_fl) (EcPath.x_hash ef.ef_fr)
+       (annos_hash ef.ef_am) (annos_hash ef.ef_as))
 
 let es_hash es =
   Why3.Hashcons.combine3
     (f_hash es.es_pr) (f_hash es.es_po)
     (EcCoreModules.s_hash es.es_sl)
-    (Why3.Hashcons.combine2
+    (Why3.Hashcons.combine3
        (EcMemory.mem_hash es.es_mr)
        (EcMemory.mem_hash es.es_ml)
-       (EcCoreModules.s_hash es.es_sr))
+       (EcCoreModules.s_hash es.es_sr)
+       (Why3.Hashcons.combine (annos_hash es.es_am) (annos_hash es.es_as)))
 
 let eg_hash eg =
   Why3.Hashcons.combine3

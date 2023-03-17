@@ -26,12 +26,8 @@ proc.
 wp.
 label.
 skip.
-move=> &1 &2 |> lt0n.
-pose A := (_ = _).
-pose B := (_ = _).
-(*TODO: annotations: somehow not instant win?*)
-admit.
-abort.
+by move=> &1 &2 |> lt0n.
+qed.
 
 
 module W = {
