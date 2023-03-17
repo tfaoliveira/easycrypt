@@ -27,9 +27,9 @@ wp.
 label.
 skip.
 move=> &1 &2 |> lt0n.
-pose x1 := big _ _ A.hs{1}.
-pose y1 := big _ _ A.hs{1}.
-(*TODO: somehow not instant win?*)
+pose A := (_ = _).
+pose B := (_ = _).
+(*TODO: annotations: somehow not instant win?*)
 admit.
 abort.
 
@@ -66,24 +66,9 @@ lemma delimited_release_wallet :
 proof.
 proc.
 sp.
-
-abort.
-
-
-lemma declassify :
-  equiv
-    [M.while_ ~ M.while_ :
-     ={M.l, M.n} /\ (b_low M.low{1} <=> b_low M.low{2}) ==>
-     ={M.l, M.n} /\ b (M.k{1} < M.h{1}) = b (M.k{2} < M.h{2}) |
-     { (l, l -->    b (M.k{1} < M.h{1}) = b (M.k{2} < M.h{2}) ) } ==>
-     { } ].
-proof.
-proc.
 lwhile
-  (={M.l, M.n, M.k} /\
-   (b_low M.low{1} <=> b_low M.low{2}) /\
-   (0 < M.c{1} => b (M.k{1} < M.h{1}) = b (M.k{2} < M.h{2})) )
-  (M.c{1}) (M.c{2}).
+  (={W.n, W.l})
+  (W.n{1}) (W.n{2}).
 + move=> z.
   sp.
   wp.
@@ -105,10 +90,10 @@ lwhile
   wp.
   label.
   skip.
-  move=> &1 &2 |>. ? ? -> _ _ _ ->.
+  move=> &1 &2 |>.
+  admit.
 wp.
 skip.
-move=> &1 &2 |> ->.
-admit.
+by move=> &1 &2 |> ->.
 qed.
 

@@ -37,12 +37,12 @@ proc.
 lwhile
   (0 <= M.n{1} /\ ={M.n} /\ exists a, 0 <= a /\ M.k{1} = 2 ^ a /\ M.k{2} = 3 ^ a)
   (-M.k{1}) (-M.k{2}).
-+ (*TODO: annotations: there should be only the left command.*)
++ move=> z.
+  (*TODO: annotations: this could be a hoare goal.*)
   wp.
   label.
   skip.
-  (*TODO: annotations: k has not been added to the memory.*)
-  move=> &1 _ (*//*).
+  move=> &1 _ //.
   admit.
 + admit.
 + wp.
@@ -50,7 +50,6 @@ lwhile
   skip.
   move=> &1 &2 //= neq_.
   (*exists 0.*)
-  (*TODO: annotations: the annotation should be modified to only be true in the synced case.*)
   admit.
 + wp.
   label.
