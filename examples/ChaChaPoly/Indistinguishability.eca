@@ -16,7 +16,7 @@ module type Distinguisher (O : Oracle) = {
 module Distinguish (D : Distinguisher) (O : Function) = {
   proc game () : bool = {
     var b;
-    
+
     O.init();
     b <@ D(O).guess();
     return b;

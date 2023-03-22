@@ -1,6 +1,6 @@
 (* -------------------------------------------------------------------- *)
-type error 
-type regexp 
+type error
+type regexp
 type subst
 type match_
 

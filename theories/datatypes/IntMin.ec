@@ -233,7 +233,7 @@ apply: contraR; rewrite negb_exists /= => h x.
 move: {-2}x (lerr x); elim/ge0ind: x.
 + by move=> n @/pcap lt0_n x /ler_lt_trans /(_ _ lt0_n) /ltrNge ->.
 + move=> x; rewrite ler_eqVlt => @/pcap -[->/=|/ltrNge ->//].
-  by have := h 0; apply: contra => @/pmin_spec @/pcap -> /= y [].  
+  by have := h 0; apply: contra => @/pmin_spec @/pcap -> /= y [].
 move=> n ge0_n ih x; rewrite ler_eqVlt => -[->|]; last first.
 + by rewrite ltzS; apply/ih.
 have := h (n + 1); apply: contra => @/pmin_spec @/pcap -[-> ->] /=.

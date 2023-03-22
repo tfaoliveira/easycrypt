@@ -124,10 +124,10 @@ case=> M leM; exists M => J /leM le; apply: (ler_trans _ _ le).
 by apply/lerr_eq/eq_bigr => x _ /=; rewrite normr_id.
 qed.
 
-lemma norm_summable (s : 'a -> real) : 
+lemma norm_summable (s : 'a -> real) :
   summable (fun x => `|s x|) => summable s.
-proof. 
-move => sum_s; apply (summable_le _ sum_s) => /= a. 
+proof.
+move => sum_s; apply (summable_le _ sum_s) => /= a.
 by rewrite (@ger0_norm `|s a|) ?normr_ge0.
 qed.
 
@@ -165,10 +165,10 @@ rewrite -(@eq_bigr _ (fun x => `|c| * `|s x|)) /=.
 by rewrite -mulr_sumr ler_wpmul2l 1:normr_ge0.
 qed.
 
-lemma nosmt summableN (s : 'a -> real) : 
+lemma nosmt summableN (s : 'a -> real) :
   summable s => summable (fun x => - s x).
-proof.  
-by move/summableZ/(_ (-1%r)); apply eq_summable => x; rewrite /= mulN1r. 
+proof.
+by move/summableZ/(_ (-1%r)); apply eq_summable => x; rewrite /= mulN1r.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -431,7 +431,7 @@ have: perm_eq (F1 ++ F2) (pmap J (range 0 N)).
     rewrite addrC ltzS (@BIA.bigD1 _ _ y) // ler_addl.
     by apply/Bigint.sumr_ge0=> z _; case: (fE z).
   * rewrite pmap_map => /mapP[v]; rewrite !mem_filter /predC1 => />.
-    case v yF2 => @/oget //= v' />. 
+    case v yF2 => @/oget //= v' />.
     rewrite mem_filter /P negb_and /= mem_filter => -[//|].
     move=> h1 h2; suff //: false; move: h2 h1 => /= h.
     rewrite pmap_map; apply/mapP; exists (Some v').
@@ -624,8 +624,8 @@ move=> sbl_s2 h; apply/(summable_le _ sbl_s2) => x.
 by have {h} [h1 h2] := h x; rewrite !ger0_norm // (ler_trans _ h1 h2).
 qed.
 
-lemma nosmt ler_sum_pos ['a] (s1 s2 : 'a -> real) : 
-  (forall (x : 'a), 0%r <= s1 x <= s2 x) => 
+lemma nosmt ler_sum_pos ['a] (s1 s2 : 'a -> real) :
+  (forall (x : 'a), 0%r <= s1 x <= s2 x) =>
   summable s2 => sum s1 <= sum s2.
 proof.
 move => sbl_s2 sum_s2; apply: ler_sum => //; 1: by move => x; case (sbl_s2 x).
@@ -708,9 +708,9 @@ lemma nosmt sumB (s1 s2 : 'a -> real) :
 proof. by move=> sm1 sm2; rewrite sumD // 1:&(summableN) // sumN. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma le0_sum (s : 'a -> real) : 
+lemma le0_sum (s : 'a -> real) :
   (forall x, s x <= 0%r) => sum s <= 0%r.
-proof. 
+proof.
 by move=> le0_s; rewrite -(add0r (sum s)) -ler_subr_addr /= -sumN &(ge0_sum) /#.
 qed.
 
@@ -733,9 +733,9 @@ by move=> @/pred1 x; case: (x = x0).
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt sum_split_norm (s : 'a -> real) : summable s => 
-    sum (fun x => `|s x|) = 
-    sum (fun x => if 0%r <= s x then s x else 0%r) - 
+lemma nosmt sum_split_norm (s : 'a -> real) : summable s =>
+    sum (fun x => `|s x|) =
+    sum (fun x => if 0%r <= s x then s x else 0%r) -
     sum (fun x => if ! 0%r <= s x then s x else 0%r).
 proof.
 move=> sum_s; rewrite (@sum_split _ (fun x => 0%r <= s x)) /=.
@@ -744,9 +744,9 @@ by congr; [|rewrite -sumN]; apply eq_sum => x /=; smt().
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma sum_split_dist (f g : 'a -> real) : summable f => summable g => 
-  sum (fun x => `|f x - g x|) = 
-  sum (fun x => if g x <= f x then f x - g x else 0%r) - 
+lemma sum_split_dist (f g : 'a -> real) : summable f => summable g =>
+  sum (fun x => `|f x - g x|) =
+  sum (fun x => if g x <= f x then f x - g x else 0%r) -
   sum (fun x => if ! g x <= f x then f x - g x else 0%r).
 proof.
 move=> sum_f sum_g; rewrite sum_split_norm /=.
@@ -807,13 +807,13 @@ move=> sms uqJ @/psum; apply: lub_upper_bound.
   by apply: summable_has_lub. by exists J.
 qed.
 
-lemma nosmt ler_big_sum (s : 'a -> real) (J : 'a list) : 
-  (forall x, 0%r <= s x) => uniq J => summable s => 
+lemma nosmt ler_big_sum (s : 'a -> real) (J : 'a list) :
+  (forall x, 0%r <= s x) => uniq J => summable s =>
   big predT s J <= sum s.
 proof.
 move => *; rewrite (@sum_split _ (mem J)) //.
-apply ler_paddr; 1: smt(ge0_sum). 
-by rewrite (@sumE_fin _ J) //= 1:/# -big_mkcond -big_seq. 
+apply ler_paddr; 1: smt(ge0_sum).
+by rewrite (@sumE_fin _ J) //= 1:/# -big_mkcond -big_seq.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -915,10 +915,10 @@ by apply/norm_sum/summable_cond.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma summable_inj (h : 'a -> 'b) (s : 'b -> real) : 
+lemma summable_inj (h : 'a -> 'b) (s : 'b -> real) :
   injective h => summable s => summable (s \o h).
 proof.
-move => inj_h [M] sum_s; exists M => J uniq_J. 
+move => inj_h [M] sum_s; exists M => J uniq_J.
 have R := sum_s (map h J) _; 1: rewrite map_inj_in_uniq /#.
 apply (ler_trans _ _ R) => {R}; rewrite big_map /(\o)/= big_mkcond.
 exact Bigreal.ler_sum.
@@ -928,7 +928,7 @@ lemma summable_bij ['a 'b] (h : 'a -> 'b) s :
   bijective h => summable s => summable (s \o h).
 proof. move/bij_inj. exact summable_inj. qed.
 
-lemma summableM (s1 s2 : 'a -> real) : 
+lemma summableM (s1 s2 : 'a -> real) :
   summable s1 => summable s2 => summable (fun x => s1 x * s2 x).
 proof.
 move => sum_s1 sum_s2; have H := summableM_prod _ _ sum_s1 sum_s2.
@@ -936,11 +936,11 @@ have := summable_inj (fun x : 'a => (x,x)) _ _ H; 1: by move=> x y [-> _].
 by move => sum_s; apply (summable_le _ sum_s).
 qed.
 
-lemma summableM_bound (k : real) (s1 s2 : 'a -> real)  : 
-  0%r < k => summable s1 => (forall x, `|s2 x| <= k) => 
+lemma summableM_bound (k : real) (s1 s2 : 'a -> real)  :
+  0%r < k => summable s1 => (forall x, `|s2 x| <= k) =>
   summable (fun x => s1 x * s2 x).
 proof.
-move => k_gt0 [M sum_s1] bound_s2; exists (k * M) => J uniq_J. 
+move => k_gt0 [M sum_s1] bound_s2; exists (k * M) => J uniq_J.
 have R := sum_s1 _ uniq_J; rewrite -(@ler_pmul2l k) // in R.
 apply (ler_trans _ _ R) => {R}; rewrite mulr_sumr /=.
 by apply Bigreal.ler_sum => /= x; rewrite normrM Domain.mulrC ler_wpmul2r /#.
@@ -948,11 +948,11 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 
-lemma summable_oapp (s : 'a -> real) x : 
+lemma summable_oapp (s : 'a -> real) x :
   summable s => summable (oapp s x).
 proof.
 move/(summable_partition Some); apply (eqL_notin_summable [None]).
-by case => //= z; rewrite (@sumE_fin _ [z]) //= => z'; case (z = z'). 
+by case => //= z; rewrite (@sumE_fin _ [z]) //= => z'; case (z = z').
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -1002,7 +1002,7 @@ lemma summable_pswap ['a 'b] (s : 'a * 'b -> real) :
   summable s => summable (s \o pswap).
 proof. by apply/summable_bij/bij_pswap. qed.
 
-lemma pswap_summable (s : 'a * 'b -> real) : 
+lemma pswap_summable (s : 'a * 'b -> real) :
   summable (s \o pswap) => summable s.
 proof. by move=> /summable_pswap; apply eq_summable => -[//]. qed.
 
@@ -1015,8 +1015,8 @@ qed.
 
 (* the pattern [s a b] seems to be preferrable over the pattern [s(a,b)] *)
 lemma nosmt sum_swap' (s : 'a -> 'b -> real) :
-  summable (fun p : 'a * 'b => s p.`1 p.`2) => 
-  sum (fun (a : 'a) => sum (fun (b : 'b) => s a b)) = 
+  summable (fun p : 'a * 'b => s p.`1 p.`2) =>
+  sum (fun (a : 'a) => sum (fun (b : 'b) => s a b)) =
   sum (fun (b : 'b) => sum (fun (a : 'a) => s a b)).
 proof. exact (@sum_swap (fun (ab : 'a * 'b) => s ab.`1 ab.`2)). qed.
 
@@ -1040,25 +1040,25 @@ by rewrite big_seq1 /s1 /= ltr_neqAle eq_sym ge0_s.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt ler_sum_norm (s : 'a -> real) : 
+lemma nosmt ler_sum_norm (s : 'a -> real) :
   summable s => sum s <= sum (fun x => `|s x|).
 proof.
-move => sum_s; apply ler_sum => // => [x|]; 1: exact ler_norm. 
+move => sum_s; apply ler_sum => // => [x|]; 1: exact ler_norm.
 exact summable_norm.
 qed.
 
-lemma nosmt ler_norm_sum (s : 'a -> real) : 
+lemma nosmt ler_norm_sum (s : 'a -> real) :
   summable s => `| sum s | <= sum (fun x => `| s x |).
 proof.
-move => sum_s; rewrite ler_norml ler_sum_norm //= ler_oppl -sumN. 
+move => sum_s; rewrite ler_norml ler_sum_norm //= ler_oppl -sumN.
 apply ler_sum => /=; [smt()| exact summableN| exact summable_norm].
 qed.
 
-lemma sum_oapp (s : 'a -> real) x : 
+lemma sum_oapp (s : 'a -> real) x :
   summable s => sum (oapp s x) = x + sum s.
-proof. 
+proof.
 move=> sum_s; rewrite (@sumD1 _ None) ?summable_oapp //=; congr.
-rewrite (@sum_partition Some s) // &(eq_sum). 
+rewrite (@sum_partition Some s) // &(eq_sum).
 by case=> /= [|a]; rewrite ?sum0 // (@sumE_fin _ [a]) // /#.
 qed.
 

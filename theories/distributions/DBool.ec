@@ -93,7 +93,7 @@ proof. by rewrite eq_distr => b; rewrite dbiased1E dunit1E /#. qed.
 
 lemma marginal_sampling_pred (d : 'a distr) (p : 'a -> bool) :
   is_lossless d =>
-  d = dlet (dbiased (mu d p)) 
+  d = dlet (dbiased (mu d p))
            (fun b => if b then (dcond d p) else (dcond d (predC p))).
 proof.
 move => d_ll; rewrite -dmap_pred // {1}(marginal_sampling d p).
@@ -170,10 +170,10 @@ rewrite mulr_const_cond expr1z mulr1; congr; apply: eq_count.
 by move=> x @/predI @/predC; case: (pT x) (pF x) (h x).
 qed.
 
-lemma dbfunE_mem_uniq (c: real) (lT lF : t list) : 
-  0%r <= c <= 1%r => uniq lT => uniq lF => 
+lemma dbfunE_mem_uniq (c: real) (lT lF : t list) :
+  0%r <= c <= 1%r => uniq lT => uniq lF =>
   (forall x, !(x \in lT /\ x \in lF)) =>
-  mu (dbfun c) (fun f => 
+  mu (dbfun c) (fun f =>
          (forall x, x \in lT => f x)
       /\ (forall x, x \in lF => !f x)) =
     (      c) ^ (size lT)
@@ -183,11 +183,11 @@ move=> hc huT huF hd; have := dbfunE c (mem lT) (mem lF) hc hd.
 by rewrite !FinT.count_mem.
 qed.
 
-lemma dbfunE_mem_le (c: real) (lT lF : t list) : 
+lemma dbfunE_mem_le (c: real) (lT lF : t list) :
   0%r <= c <= 1%r =>
   (forall x, !(x \in lT /\ x \in lF)) =>
-  c ^ (size lT) * (1%r - c) ^ (size lF) <= 
-    mu (dbfun c) (fun f => 
+  c ^ (size lT) * (1%r - c) ^ (size lF) <=
+    mu (dbfun c) (fun f =>
          (forall x, x \in lT => f x)
       /\ (forall x, x \in lF => !f x)).
 proof.
@@ -208,7 +208,7 @@ end MUniFinFunBiased.
 (* -------------------------------------------------------------------- *)
 abstract theory Cost.
   op cdbool : { int | 0 <= cdbool } as ge0_cdbool.
-  
+
   schema cost_dbool `{P} : cost [P: dbool] = N cdbool.
   hint simplify cost_dbool.
 end Cost.

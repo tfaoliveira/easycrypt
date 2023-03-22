@@ -522,11 +522,11 @@ lemma filterE ['a 'b] (p : 'a -> 'b -> bool) m x :
   (filter p m).[x] = oapp (p x) false m.[x] ? m.[x] : None.
 proof. by rewrite /filter /"_.[_]" filter_valE Map.offunE. qed.
 
-lemma mem_filter (m : ('a,'b) fmap) (p : 'a -> 'b -> bool) x : 
+lemma mem_filter (m : ('a,'b) fmap) (p : 'a -> 'b -> bool) x :
    x \in filter p m <=> x \in m /\ p x (oget m.[x]).
 proof. smt(filterE). qed.
 
-lemma get_filter (m : ('a,'b) fmap) (p : 'a -> 'b -> bool) x : 
+lemma get_filter (m : ('a,'b) fmap) (p : 'a -> 'b -> bool) x :
   x \in filter p m => (filter p m).[x] = m.[x].
 proof. smt(filterE). qed.
 
@@ -535,9 +535,9 @@ proof. by apply/fmap_eqP => x; rewrite filterE emptyE. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma eq_in_filter ['a 'b] (p1 p2 : 'a -> 'b -> bool) (m : ('a,'b) fmap) :
-  (forall (x : 'a) y , m.[x] = Some y => p1 x y <=> p2 x y) => 
+  (forall (x : 'a) y , m.[x] = Some y => p1 x y <=> p2 x y) =>
   filter p1 m = filter p2 m.
-proof. 
+proof.
 move=> eq_p; apply/fmap_eqP => x; rewrite !filterE /#.
 qed.
 
@@ -545,8 +545,8 @@ qed.
 lemma rem_filter (m : ('a,'b) fmap) x (p : 'a -> 'b -> bool) :
   (forall y, !p x y) => rem (filter p m) x = filter p m.
 proof.
-move => Hpx; apply/fmap_eqP => z; rewrite remE. 
-by case(z = x) => // ->; rewrite filterE /#. 
+move => Hpx; apply/fmap_eqP => z; rewrite remE.
+by case(z = x) => // ->; rewrite filterE /#.
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -718,18 +718,18 @@ lemma find_some (P : 'a -> 'b -> bool) (m : ('a, 'b) fmap) x:
   find P m = Some x => exists y, m.[x] = Some y /\ P x y.
 proof.
 rewrite findE => /onth_some.
-pose s := elems _;  pose p := (fun (x0 : 'a) => P x0 (oget m.[x0])). 
+pose s := elems _;  pose p := (fun (x0 : 'a) => P x0 (oget m.[x0])).
 move => [find0s def_x]. exists (oget m.[x]); rewrite get_some /=.
   by rewrite -mem_fdom memE -/s -def_x mem_nth find0s.
 rewrite -/(p x) -def_x nth_find has_find /#.
 qed.
 
-lemma find_not_none (P : 'a -> 'b -> bool) (m : ('a,'b) fmap) : 
-     find P m <> None 
+lemma find_not_none (P : 'a -> 'b -> bool) (m : ('a,'b) fmap) :
+     find P m <> None
   => exists x y, find P m = Some x /\ m.[x] = Some y /\ P x y.
 proof. by case _ : (find P m) => // [x /find_some] /#. qed.
 
-lemma find_eq_none (p : 'a -> 'b -> bool) (m : ('a,'b) fmap): 
+lemma find_eq_none (p : 'a -> 'b -> bool) (m : ('a,'b) fmap):
   (forall x, x \in m => !p x (oget m.[x])) => find p m = None.
 proof. by move=> np; apply contraT => /find_not_none /#. qed.
 
@@ -771,13 +771,13 @@ lemma nosmt uniq_find_eq_some z (P : 'a -> 'b -> bool) (m : ('a, 'b) fmap) :
   (forall (x : 'a) (y : 'b), m.[x] = Some y => P x y => x = z) =>
   z \in m => P z (oget m.[z]) => find P m = Some z.
 proof.
-move => uniq_m z_m p_z; case (findP P m) => [/#|x y fmx mx p_xy]. 
+move => uniq_m z_m p_z; case (findP P m) => [/#|x y fmx mx p_xy].
 by have <- := find_some_unique _ _ _ _ uniq_m fmx.
 qed.
 
 (* -------------------------------------------------------------------- *)
 
-lemma find_map (m : ('a, 'b) fmap) (f : 'a -> 'b -> 'c) P : 
+lemma find_map (m : ('a, 'b) fmap) (f : 'a -> 'b -> 'c) P :
   find P (map f m) = find (fun x y => P x (f x y)) m.
 proof.
 rewrite !findE fdom_map; congr; apply find_eq_in => x /=.
@@ -813,10 +813,10 @@ qed.
 
 op fsize (m : ('a,'b) fmap) : int = FSet.card (fdom m).
 
-lemma fsize_empty ['a 'b] : fsize<:'a,'b> empty = 0. 
+lemma fsize_empty ['a 'b] : fsize<:'a,'b> empty = 0.
 proof. by rewrite /fsize fdom0 fcards0. qed.
 
-lemma fsize_set (m : ('a, 'b) fmap) k v : 
+lemma fsize_set (m : ('a, 'b) fmap) k v :
   fsize m.[k <- v] = b2i (k \notin m) + fsize m.
 proof. by rewrite /fsize fdom_set fcardU1 mem_fdom. qed.
 
@@ -824,12 +824,12 @@ proof. by rewrite /fsize fdom_set fcardU1 mem_fdom. qed.
 
 (* f-collisions (i.e. collisions under some function f) *)
 op fcoll (f : 'b -> 'c) (m : ('a,'b) fmap)  =
-  exists i j, i \in m /\ j \in m /\ i <> j /\ 
+  exists i j, i \in m /\ j \in m /\ i <> j /\
               f (oget m.[i]) = f (oget m.[j]).
 
-lemma fcollPn (f : 'b -> 'c) (m : ('a,'b) fmap) : 
-      !fcoll f m 
-  <=> forall i j, i \in m => j \in m => 
+lemma fcollPn (f : 'b -> 'c) (m : ('a,'b) fmap) :
+      !fcoll f m
+  <=> forall i j, i \in m => j \in m =>
         i <> j => f (oget m.[i]) <> f (oget m.[j]).
 proof. smt(). qed.
 
@@ -899,10 +899,10 @@ qed.
 (* Some definitions for cost of operations in fmap                             *)
 (* --------------------------------------------------------------------------- *)
 
-op bounded ['from 'to] (m : ('from, 'to)fmap) (size:int) = 
+op bounded ['from 'to] (m : ('from, 'to)fmap) (size:int) =
    card (fdom m) <= size.
 
-lemma bounded_set ['from 'to] (m : ('from, 'to)fmap) (size:int) x e : 
+lemma bounded_set ['from 'to] (m : ('from, 'to)fmap) (size:int) x e :
   bounded m size => bounded (m.[x<-e]) (size + 1).
 proof. by rewrite /bounded fdom_set fcardU fcard1; smt (fcard_ge0). qed.
 
@@ -925,22 +925,22 @@ abstract theory FMapCost.
   axiom cin_pos (x:int) : 0 <= cin x.
 
   schema cost_get_P ['b] `{P} {m:(from, 'b) fmap, x:from} (max_size: int):
-    cost [P /\ bounded m max_size : m.[x]] = 
+    cost [P /\ bounded m max_size : m.[x]] =
     cost[P:m] + cost[P:x] + N (cget max_size).
   hint simplify cost_get_P.
 
   schema cost_set_P ['b] `{P} {m:(from, 'b) fmap, x:from, e:'b} (max_size : int) :
-    cost [P /\ bounded m max_size : m.[x<-e]] = 
+    cost [P /\ bounded m max_size : m.[x<-e]] =
     cost[P:m] + cost[P:x] + cost[P:e] + N (cset max_size).
 
   schema cost_in_P ['b] `{P} {m:(from, 'b) fmap, x:from} (max_size : int) :
-    cost [P /\ bounded m max_size: x \in m] = 
+    cost [P /\ bounded m max_size: x \in m] =
     cost[P:m] + cost[P:x] + N (cin max_size).
 
   hint simplify cost_get_P, cost_set_P, cost_in_P.
 
   schema cost_get ['b] {m:(from, 'b) fmap, x:from} (max_size:int) :
-    cost [bounded m max_size : m.[x]] = 
+    cost [bounded m max_size : m.[x]] =
     cost[true:m] + cost[true:x] + N (cget max_size).
 
   schema cost_set ['b] {m:(from, 'b) fmap, x:from, e:'b} (max_size:int) :
@@ -948,7 +948,7 @@ abstract theory FMapCost.
     cost[true:m] + cost[true:x] + cost[true:e] + N (cset max_size).
 
   schema cost_in ['b] {m:(from, 'b) fmap, x:from} (max_size:int):
-    cost [bounded m max_size: x \in m] = 
+    cost [bounded m max_size: x \in m] =
     cost[true:m] + cost[true:x] + N (cin max_size).
 
   hint simplify cost_get, cost_set, cost_in.
@@ -1001,22 +1001,22 @@ proof. done. qed.
 
 op union_map (m1 m2: ('a, 'b) fmap) = merge o_union m1 m2.
 
-lemma set_union_map_l (m1 m2: ('a, 'b)fmap) x y: 
+lemma set_union_map_l (m1 m2: ('a, 'b)fmap) x y:
   (union_map m1 m2).[x <- y] = union_map m1.[x <- y] m2.
-proof. 
+proof.
   have hn := o_union_none <:'a, 'b>.
-  by apply fmap_eqP => z; rewrite mergeE // !get_setE mergeE // /#. 
-qed. 
+  by apply fmap_eqP => z; rewrite mergeE // !get_setE mergeE // /#.
+qed.
 
 lemma set_union_map_r (m1 m2: ('a, 'b)fmap) x y:
-  x \notin m1 => 
+  x \notin m1 =>
   (union_map m1 m2).[x <- y] = union_map m1 m2.[x <- y].
 proof.
 by rewrite domE=> /= h; apply fmap_eqP=> z; rewrite mergeE // !get_setE //= mergeE /#.
-qed. 
+qed.
 
 lemma mem_union_map (m1 m2:('a, 'b)fmap) x: (x \in union_map m1 m2) = (x \in m1 || x \in m2).
-proof. by rewrite /dom mergeE // /#. qed. 
+proof. by rewrite /dom mergeE // /#. qed.
 
 (* -------------------------------------------------------------------- *)
 op o_pair (_ : 'a) (x : 'b1 option) (y : 'b2 option) =
@@ -1027,7 +1027,7 @@ proof. done. qed.
 
 op pair_map (m1:('a, 'b1)fmap) (m2:('a, 'b2)fmap) = merge o_pair m1 m2.
 
-lemma set_pair_map (m1: ('a, 'b1)fmap) (m2: ('a, 'b2)fmap) x y: 
+lemma set_pair_map (m1: ('a, 'b1)fmap) (m2: ('a, 'b2)fmap) x y:
   (pair_map m1 m2).[x <- y] = pair_map m1.[x <- y.`1] m2.[x <- y.`2].
 proof. by apply fmap_eqP=> z; rewrite mergeE // !get_setE mergeE // /#. qed.
 

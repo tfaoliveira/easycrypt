@@ -109,7 +109,7 @@ lemma finiteD (A B : 'a -> bool):
 proof. by move=> fin_A; apply/(finite_leq A)=> //= x @/predD. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma sub_size_to_seq (p q : 'a -> bool) : 
+lemma sub_size_to_seq (p q : 'a -> bool) :
   p <= q => is_finite q =>
   size (to_seq p) <= size (to_seq q).
 proof.
@@ -142,7 +142,7 @@ lemma is_finite_surj ['a 'b] (f : 'a -> 'b) pa pb :
       (forall b, pb b => exists a, pa a /\ b = f a)
    => is_finite pa
    => is_finite pb.
-proof. 
+proof.
 move=> surj_f /finiteP [s hs]; apply/finiteP.
 exists (map f s) => b /surj_f [a [pa_a ->]].
 by apply/mapP; exists a => /=; apply/hs.
@@ -291,11 +291,11 @@ op finite_type = is_finite predT<:'a>.
 lemma finite_typeP ['a] :
   (exists (s:'a list), forall x, x \in s) <=> finite_type <:'a>.
 proof. by rewrite /finite_type -finiteP /predT. qed.
-  
+
 lemma finite_type_surj ['a 'b] (f : 'a -> 'b):
   surjective f => finite_type <:'a> => finite_type <:'b>.
 proof. by move=> surj_f h; apply: (is_finite_surj f predT predT). qed.
- 
+
 (* -------------------------------------------------------------------- *)
 lemma finite_type_unit : finite_type <:unit>.
 proof. by apply: finite_unit. qed.
@@ -305,30 +305,30 @@ lemma finite_type_bool : finite_type <:bool>.
 proof. by apply: finite_bool. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma finite_type_pair ['a 'b] : 
+lemma finite_type_pair ['a 'b] :
   finite_type <:'a> => finite_type <:'b> => finite_type <:'a * 'b>.
 proof. by apply: finite_pair. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma finite_type_tuple3 ['a 'b 'c] : 
+lemma finite_type_tuple3 ['a 'b 'c] :
      finite_type <:'a>
   => finite_type <:'b>
   => finite_type <:'c>
   => finite_type <:'a * 'b * 'c>.
-proof. 
+proof.
 move=> ha hb hc; pose f (p : 'a * ('b * 'c)) := (p.`1, p.`2.`1, p.`2.`2).
 apply: (finite_type_surj f); 1: by case=> t1 t2 t3; exists (t1, (t2, t3)).
 by apply/finite_type_pair/finite_type_pair.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma finite_type_tuple4 ['a 'b 'c 'd] : 
+lemma finite_type_tuple4 ['a 'b 'c 'd] :
      finite_type <:'a>
   => finite_type <:'b>
   => finite_type <:'c>
   => finite_type <:'d>
   => finite_type <:'a * 'b * 'c * 'd>.
-proof. 
+proof.
 move=> ha hb hc hd; pose f (p: 'a * ('b * 'c * 'd)) :=
   (p.`1, p.`2.`1, p.`2.`2, p.`2.`3); apply: (finite_type_surj f).
 - by case=> t1 t2 t3 t4; exists (t1, (t2, t3, t4)).
@@ -336,14 +336,14 @@ move=> ha hb hc hd; pose f (p: 'a * ('b * 'c * 'd)) :=
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma finite_type_tuple5 ['a 'b 'c 'd 'e] : 
+lemma finite_type_tuple5 ['a 'b 'c 'd 'e] :
      finite_type <:'a>
   => finite_type <:'b>
   => finite_type <:'c>
   => finite_type <:'d>
   => finite_type <:'e>
   => finite_type <:'a * 'b * 'c * 'd * 'e>.
-proof. 
+proof.
 move=> ha hb hc hd he; pose f (p: 'a * ('b * 'c * 'd * 'e)) :=
   (p.`1, p.`2.`1, p.`2.`2, p.`2.`3, p.`2.`4); apply: (finite_type_surj f).
 - by case=> t1 t2 t3 t4 t5; exists (t1, (t2, t3, t4, t5)).

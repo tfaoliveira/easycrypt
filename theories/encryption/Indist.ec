@@ -261,7 +261,7 @@ module Orclb (O:Orcl) = {
 
   proc orcl (m0 m1:input) : output = {
     var r : output;
-    
+
     Count.incr();
     r <@ O.orcl(b?m0:m1);
     return r;

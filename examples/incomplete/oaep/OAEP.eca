@@ -217,7 +217,7 @@ op extract (p : 'x -> bool) (xs : 'x list) =
   with xs = x::xs =>
     if   p x
     then Some x
-    else extract p xs. 
+    else extract p xs.
 
 op extract2 (p : 'x -> 'y -> bool) (xs : 'x list) (ys : 'y list) =
   with xs = []    => None
@@ -694,7 +694,7 @@ move=> h' _; rewrite !getP_eq /=; split.
 move=> g_in_mHR; split.
 + by move=> g_notin_mHL b' _; split=> [/upto [#] <*>|_] /#.
 by move=> g_in_mHL b' _; split=> [/upto [#] <*> /=|_] /#.
-qed.  
+qed.
 
 lemma mu_dgtag_xor (P : gtag -> bool) (s : gtag):
     mu dgtag (fun x=> P (x + s))
@@ -934,5 +934,5 @@ local module Game2 (A : CCA_ADV) = {
 local equiv eq1_1__2: Game1_1(A).main ~ Game2(A).main:
   ={glob A} ==> ={res}.
 proof. by sim. qed.
-  
+
 end section.

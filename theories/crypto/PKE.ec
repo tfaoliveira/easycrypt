@@ -1,9 +1,9 @@
 require import AllCore List Distr DBool.
 require (****) ROM.
 
-require LorR. 
+require LorR.
 clone import LorR as LorR' with
-  type input <- unit.  
+  type input <- unit.
 
 type pkey.
 type skey.
@@ -75,17 +75,17 @@ section.
   declare module S <: Scheme.
   declare module A <: Adversary{-S}.
 
-  lemma pr_CPA_LR &m: 
+  lemma pr_CPA_LR &m:
     islossless S.kg => islossless S.enc =>
-    islossless A.choose => islossless A.guess => 
+    islossless A.choose => islossless A.guess =>
     `| Pr[CPA_L(S,A).main () @ &m : res] - Pr[CPA_R(S,A).main () @ &m : res] | =
      2%r * `| Pr[CPA(S,A).main() @ &m : res] - 1%r/2%r |.
   proof.
     move => kg_ll enc_ll choose_ll guess_ll.
-    have -> : Pr[CPA(S, A).main() @ &m : res] = 
+    have -> : Pr[CPA(S, A).main() @ &m : res] =
               Pr[RandomLR(CPA_R(S,A), CPA_L(S,A)).main() @ &m : res].
     + byequiv (_ : ={glob S, glob A} ==> ={res})=> //.
-      proc.      
+      proc.
       swap{1} 3-2; seq 1 1 : (={glob S, glob A, b}); first by rnd.
       if{2}; inline *; wp; do 4! call (_: true); auto => /> /#.
     rewrite -(pr_AdvLR_AdvRndLR (CPA_R(S,A)) (CPA_L(S,A)) &m) 2:/#.
@@ -166,7 +166,7 @@ module Correctness (S:Scheme) = {
 }.
 
 module type CAdversary = {
-   proc find(pk : pkey, sk : skey) : plaintext 
+   proc find(pk : pkey, sk : skey) : plaintext
 }.
 
 module CorrectnessAdv(S : Scheme, A : CAdversary) = {

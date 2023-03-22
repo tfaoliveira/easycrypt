@@ -66,7 +66,7 @@ theory SigmaProtocol.
       return (x, m, e, z);
     }
   }.
-  
+
   (*
     Special soundness is supposed to be a PPTA.
     S(m, e, z, e', z') → (x, w) in R
@@ -97,7 +97,7 @@ theory SigmaProtocol.
   (*
     The simulator M is a PPTA that generates
     Sigma Protocol transcripts from (x, e).
-    
+
     M(x, e) → (a, e, z)
     M'(x)   → (a, e, z) more strict but simulatable -- usless to implement?
   *)
@@ -154,17 +154,17 @@ theory SigmaProtocol.
 
       return b;
     }
-    
+
     proc main() : bool = {
       var b, b';
-      
+
       b <$ {0,1};
       if (b) {
         b' <@ gameIdeal();
       } else {
         b' <@ gameReal();
       }
-      
+
       return (b' = b);
     }
   }.

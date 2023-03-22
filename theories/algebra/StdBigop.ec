@@ -172,7 +172,7 @@ lemma sumr_const (P : 'a -> bool) (x : real) (s : 'a list):
 proof. by rewrite sumr_const RField.intmulr RField.mulrC. qed.
 
 lemma sumri_const (x : real) (n m : int):
-  n <= m => 
+  n <= m =>
   BRA.bigi predT (fun _ => x) n m = (m - n)%r * x.
 proof. by move=> ?; rewrite sumri_const // RField.intmulr RField.mulrC. qed.
 

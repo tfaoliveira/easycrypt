@@ -5,7 +5,7 @@ abbrev [-printing] floor (n k:int) = (n %/ k) * k.
 lemma lt_floorE (k i n:int) : 0 < k =>  k %| i => i < floor n k <=> i + k <= floor n k.
 proof.
   move => hk /dvdzP [q] ->.
-  by rewrite (IntOrder.ltr_pmul2r k hk) ltzE -(IntOrder.ler_pmul2r k hk) /#. 
+  by rewrite (IntOrder.ltr_pmul2r k hk) ltzE -(IntOrder.ler_pmul2r k hk) /#.
 qed.
 
 lemma floor_le n k : 0 < k => floor n k <= n.
@@ -27,7 +27,7 @@ type t.
 op c : int.
 axiom c_gt0 : 0 < c.
 op step : int.
-axiom step_gt0 : 0 < step. 
+axiom step_gt0 : 0 < step.
 
 module type AdvLoop = {
   proc body(t:t, i:int) : t
@@ -71,7 +71,7 @@ module Loop(B:AdvLoop) = {
     }
     return t;
   }
-  
+
 }.
 
 module ILoop(B:AdvLoop) = {
@@ -120,37 +120,37 @@ module ILoop(B:AdvLoop) = {
     }
     return t;
   }
-  
+
 }.
 
 section.
 
 declare module B <:AdvLoop.
 
-equiv loop1_loopk : Loop(B).loop1 ~ Loop(B).loopk : 
+equiv loop1_loopk : Loop(B).loop1 ~ Loop(B).loopk :
   ={t, glob B} /\ n{1} = (k * n){2} /\ 0 < k{2} ==> ={res, glob B}.
 proof.
   proc.
-  async while [ (fun r => i%r < r), (i{1}+k{2})%r ] 
+  async while [ (fun r => i%r < r), (i{1}+k{2})%r ]
               [ (fun r => i%r < r), (i{2} + 1)%r ]
-              ( (i < n){1}) 
-              (true) : 
+              ( (i < n){1})
+              (true) :
               (={t, glob B} /\ (0 <= i <= n){2} /\ 0 < k{2} /\ n{1} = (k * n){2} /\ i{1} = k{2} * i{2}).
-  + smt(). + smt (). + done. 
+  + smt(). + smt (). + done.
   + move=> &m2; exfalso; smt().
   + move=> &m1; exfalso; smt().
   + move=> v1 v2.
     rcondt{2} 1; 1: by auto => /> /#.
     rcondf{2} 4; 1: by auto; conseq (_: true);auto.
     exlim i{2} => i2.
-    wp;while (={t,glob B} /\ i{1} = k{2}*i{2} + j{2} /\ 0 <= i{2} < n{2} /\ 
+    wp;while (={t,glob B} /\ i{1} = k{2}*i{2} + j{2} /\ 0 <= i{2} < n{2} /\
               0 <= j{2} <= k{2} /\ v1 = (k{2} * i2 + k{2})%r /\ i{2} = i2 /\ n{1} = (k * n){2}).
     + wp;call (_: true);skip => /> &2 h0i hin h0j hjk.
       rewrite !lt_fromint => h1 h2 h3.
       have := IntOrder.ler_wpmul2l k{2} _ i{2} (n{2} - 1); smt().
     by wp;skip => /> /#.
-  + rcondf 1; skip => /#. 
-  + rcondf 1; skip => /#. 
+  + rcondf 1; skip => /#.
+  + rcondf 1; skip => /#.
   by auto.
 qed.
 
@@ -162,8 +162,8 @@ proof.
   by wp;call (_:true);skip.
 qed.
 
-equiv loop1_loopc : 
-  Loop(B).loop1 ~ Loop(B).loopc : 
+equiv loop1_loopc :
+  Loop(B).loop1 ~ Loop(B).loopc :
     ={t, glob B} /\ n{1} = (c * n){2} ==> ={res, glob B}.
 proof.
   transitivity Loop(B).loopk
@@ -181,14 +181,14 @@ proof.
   case: (n{2} < 0).
   + rcondf{2} 2; 1: by move=> &m1; wp; skip => &m2 />; smt (step_gt0).
     by sim; wp; skip.
-  splitwhile{1} 2 : (i < floor n (step * k0)). 
+  splitwhile{1} 2 : (i < floor n (step * k0)).
   seq 2 2: (={glob B, t, n, i}); last by sim;wp;skip.
-  async while [ (fun r => i%r < r), (i{1} + step * k{2})%r ] 
+  async while [ (fun r => i%r < r), (i{1} + step * k{2})%r ]
               [ (fun r => i%r < r), (i{2} + step * k{2})%r ]
-              ( (i < floor n (step * k0)){1}) 
-              (true) : 
+              ( (i < floor n (step * k0)){1})
+              (true) :
               (={t, glob B, i, n} /\ k{2} = k0 /\ 0 < k{2} /\ (step * k0) %| i{1}).
-  + move=> />;smt (lt_floorE floor_le step_gt0). 
+  + move=> />;smt (lt_floorE floor_le step_gt0).
   + move=> /> &2 h1 h2 [[]// | h3].
     have h4 := le_floorE (step * k0) (i{2} + step * k0) n{2} _ _.
     + smt (step_gt0). + by apply dvdzD => //; apply dvdzz.
@@ -197,20 +197,20 @@ proof.
   + by move=> &m2; exfalso => /#.
   + by move=> &m1; exfalso => /#.
   + move=> v1 v2.
-    rcondt{2} 1. 
+    rcondt{2} 1.
     + move=> &1;skip => /> *; smt (step_gt0 lt_floorE floor_le).
-    rcondf{2} 3. 
-    + move=> &1. 
+    rcondf{2} 3.
+    + move=> &1.
       while (j <= k /\ i = i{1} + step * j).
       + by wp; call (_:true); skip => /#.
       by wp; skip => />; smt (step_gt0).
-    exlim i{1} => i0. 
+    exlim i{1} => i0.
     while (={t, i, glob B, n} /\ i{1} = i0 + step * j{2} /\ v1 = (i0 + step * k{2})%r /\
-            k{2} = k0 /\ (step * k0) %| i0 /\ 0 < k{2} /\ 0 <= j{2} <= k{2} /\ 
+            k{2} = k0 /\ (step * k0) %| i0 /\ 0 < k{2} /\ 0 <= j{2} <= k{2} /\
             v1 <= (floor n{1} (step * k{2}))%r).
     + wp; call (_: true); skip => &1 &2 [#] 7!->> h2 h3 h4 h1.
       rewrite le_fromint /= !lt_fromint=> h5 h6 h7 h8 h9 ???? [#] 2!->> /=.
-      split. smt(). 
+      split. smt().
       have <- := IntOrder.ltr_pmul2l step step_gt0 (j{2} + 1) k0.
       smt (floor_le step_gt0).
     wp; skip => &1 &2 [#] 6!->> h1 h2 h3 h4 2!->> /=.
@@ -220,7 +220,7 @@ proof.
   + rcondf 1; skip => /#.
   + rcondf 1; skip => /#.
   by auto.
-qed.  
+qed.
 
 equiv Iloopk_loopc : ILoop(B).loopk ~ ILoop(B).loopc : ={n,t, glob B} /\ k{1} = c ==> ={res, glob B}.
 proof.
@@ -230,8 +230,8 @@ proof.
   by wp;call (_:true);skip.
 qed.
 
-equiv Iloop1_loopc : 
-  ILoop(B).loop1 ~ ILoop(B).loopc : 
+equiv Iloop1_loopc :
+  ILoop(B).loop1 ~ ILoop(B).loopc :
     ={t, glob B, n} ==> ={res, glob B}.
 proof.
   transitivity ILoop(B).loopk

@@ -9,7 +9,7 @@ type ciphertext.
 module type SKE = {
   proc init(): unit {}
   proc kg(): key
-  proc enc(k:key,p:plaintext): ciphertext 
+  proc enc(k:key,p:plaintext): ciphertext
   proc dec(k:key,c:ciphertext): plaintext option
 }.
 
@@ -21,7 +21,7 @@ module Correctness (S:SKE) = {
     c <@ S.enc(k,p);
     q <@ S.dec(k,c);
     return q = Some p;
-  } 
+  }
 }.
 
 end SKE.
@@ -32,7 +32,7 @@ clone include SKE.
 
 module type Oracles = {
   proc init() : unit
-  proc enc(p:plaintext): ciphertext 
+  proc enc(p:plaintext): ciphertext
   proc dec(c:ciphertext): plaintext option
 }.
 
@@ -41,7 +41,7 @@ module type CCA_Oracles = {
 }.
 
 module type CCA_Adv (O:CCA_Oracles) = {
-  proc main() : bool 
+  proc main() : bool
 }.
 
 module type CPA_Oracles = {
@@ -49,7 +49,7 @@ module type CPA_Oracles = {
 }.
 
 module type CPA_Adv (O:CPA_Oracles) = {
-  proc main() : bool 
+  proc main() : bool
 }.
 
 module CCA_game(A:CCA_Adv, O:Oracles) = {
@@ -89,7 +89,7 @@ module RealOrcls (S:SKE) : CCA_Oracles = {
     var p;
     p <@ S.dec(Mem.k,c);
     return p;
-  } 
+  }
 }.
 
 module CPA_CCA_Orcls(O:CPA_Oracles) : CCA_Oracles = {
@@ -108,7 +108,7 @@ module CPA_CCA_Orcls(O:CPA_Oracles) : CCA_Oracles = {
   proc dec(c:ciphertext) = {
      Mem.lc <- if c \in Mem.log then Mem.lc else c :: Mem.lc;
     return Mem.log.[c];
-  } 
+  }
 }.
 
 module CCA_CPA_Adv(A:CCA_Adv, O:CPA_Oracles) = {
@@ -119,7 +119,7 @@ module CCA_CPA_Adv(A:CCA_Adv, O:CPA_Oracles) = {
     return b;
   }
 }.
-      
+
 (* ------------------------------------------------------------------- *)
 (* In this game we log the answers to the encryption queries.          *)
 (* We prove that if the scheme is correct this does not change.        *)
@@ -132,7 +132,7 @@ type globS.
 op enc : globS -> key -> plaintext -> ciphertext.
 op dec : globS -> key -> ciphertext -> plaintext option.
 op valid_key : key -> bool.
-axiom dec_enc : 
+axiom dec_enc :
   forall k, valid_key k =>
     forall gs p, dec gs k (enc gs k p) = Some p.
 
@@ -144,10 +144,10 @@ module type StLOrcls = {
 module StLSke (StL:StLOrcls) : SKE = {
   var gs : globS
 
-  proc init () = { 
+  proc init () = {
     gs <@ StL.init();
   }
- 
+
   proc kg = StL.kg
 
   proc enc(k:key, p:plaintext) = {
@@ -160,7 +160,7 @@ module StLSke (StL:StLOrcls) : SKE = {
 
 }.
 
-module UFCMA(A:CCA_Adv, StL:StLOrcls) = 
+module UFCMA(A:CCA_Adv, StL:StLOrcls) =
   CPA_game(CCA_CPA_Adv(A), RealOrcls(StLSke(StL))).
 (* event : exists c, c \in Mem.lc /\ dec StLSke.gs Mem.k c <> None *)
 
@@ -181,7 +181,7 @@ section PROOFS.
   proof.
     proc; inline *; wp.
     call (_: (exists c, c \in Mem.lc /\ dec StLSke.gs Mem.k c <> None),
-              ={StLSke.gs, Mem.k} /\ 
+              ={StLSke.gs, Mem.k} /\
               valid_key Mem.k{1} /\
               (forall c, c \in Mem.log => dec StLSke.gs Mem.k c = Mem.log.[c]){2}).
     + by apply A_ll.
@@ -198,12 +198,12 @@ section PROOFS.
     by call (: true); call st_init_is_init.
   qed.
 
-  lemma CCA_CPA_UFCMA &m : 
+  lemma CCA_CPA_UFCMA &m :
     Pr[CCA_game(A, RealOrcls(StLSke(St))).main() @ &m : res] <=
-     Pr[CPA_game(CCA_CPA_Adv(A), RealOrcls(StLSke(St))).main() @ &m : res] + 
+     Pr[CPA_game(CCA_CPA_Adv(A), RealOrcls(StLSke(St))).main() @ &m : res] +
      Pr[UFCMA(A, St).main() @ &m : (exists c, c \in Mem.lc /\ dec StLSke.gs Mem.k c <> None)].
   proof. byequiv eqv_CCA_UFCMA => /> /#. qed.
-  
+
 end section PROOFS.
 
 end CCA_CPA_UFCMA.

@@ -7,11 +7,11 @@ type ('a, 'b) sum = [
   | Right of 'b
 ].
 
-op getl (s:('a, 'b) sum) = 
+op getl (s:('a, 'b) sum) =
   with s = Left a  => Some a
   with s = Right _ => None.
 
-op getr (s:('a, 'b) sum) = 
+op getr (s:('a, 'b) sum) =
   with s = Left a  => None
   with s = Right b => Some b.
 
@@ -19,15 +19,15 @@ schema cost_getl ['a 'b] `{P} {s:('a, 'b) sum} : cost[P:getl s] = N 2 + cost[P:s
 schema cost_getr ['a 'b] `{P} {s:('a, 'b) sum} : cost[P:getr s] = N 2 + cost[P:s].
 hint simplify cost_getl, cost_getr.
 
-op smap (fa:'a -> 'c) (fb:'b -> 'd) (s: ('a, 'b) sum) = 
+op smap (fa:'a -> 'c) (fb:'b -> 'd) (s: ('a, 'b) sum) =
   with s = Left a  => Left (fa a)
   with s = Right b => Right (fb b).
 
-schema cost_obind_getr ['a 'b] `{P} {e : ('a,'b)sum option}: 
+schema cost_obind_getr ['a 'b] `{P} {e : ('a,'b)sum option}:
   cost[P : obind getr e] = cost[P : e] + N 3.
 hint simplify cost_obind_getr.
 
-schema cost_obind_getl ['a 'b] `{P} {e : ('a,'b)sum option}: 
+schema cost_obind_getl ['a 'b] `{P} {e : ('a,'b)sum option}:
   cost[P : obind getl e] = cost[P : e] + N 3.
 hint simplify cost_obind_getl.
 
@@ -54,8 +54,8 @@ type cenv = {
   cs    : int; (* number of call to step               *)
   cb    : int; (* number of call to backdoor           *)
 }.
-  
-op cenv_pos (c:cenv) = 
+
+op cenv_pos (c:cenv) =
    0 <= c.`cd /\
    0 <= c.`ci /\
    0 <= c.`co /\
@@ -70,7 +70,7 @@ type cprot = {
   cpbackdoor : int;
 }.
 
-op cprot_pos (cp:cprot) = 
+op cprot_pos (cp:cprot) =
   0 <= cp.`cpinit     /\
   0 <= cp.`cpinputs   /\
   0 <= cp.`cpoutputs  /\
@@ -80,10 +80,10 @@ op cprot_pos (cp:cprot) =
 abstract theory ProtocolType.
 
 (*
-     
+
 exists S, forall Z
 
-We take the formalisation using dummy adversary 
+We take the formalisation using dummy adversary
       ------------------------      ------------------------
       |       Z              |      |       Z              |
       ------------------|    |      ------------------|    |
@@ -96,14 +96,14 @@ We take the formalisation using dummy adversary
       |             |   |    |      |   | |   S   | - |    |
       |-------------|   |----|      |-- | |-------| M |----|
 
-Z communicates with P/P' and S 
+Z communicates with P/P' and S
 P' (can also be a functionality F) communicates with S
 
 *)
-      
+
 type inputs.         (* Z can send inputs to P/F *)
 type ask_outputs.    (* Z can ask outputs to P/F *)
-type outputs.        
+type outputs.
 
 type step.           (* Z can ask to do step *)
 type ask_backdoor.   (* Z can ask backdoors to P/S, S can ask backdoors to F*)
@@ -168,13 +168,13 @@ abstract theory CP.
 
   module type CPROTOCOL  = {
     proc init() : unit `{N cp.`cpinit}
-    
+
     proc inputs(i : inputs) : unit `{N cp.`cpinputs}
-    
+
     proc outputs(o : ask_outputs) : outputs option `{N cp.`cpoutputs}
-    
+
     proc step(m : step) : unit `{N cp.`cpstep}
-    
+
     proc backdoor(m : ask_backdoor) : backdoor option `{N cp.`cpbackdoor}
   }.
 
@@ -192,12 +192,12 @@ type csim = {
   cb_b  : int;
 }.
 
-op csim_pos (c:csim) = 
+op csim_pos (c:csim) =
   0 <= c.`cinit /\
   0 <= c.`cstep /\
-  0 <= c.`cs_s  /\ 
-  0 <= c.`cs_b  /\ 
-  0 <= c.`cbackdoor /\ 
+  0 <= c.`cs_s  /\
+  0 <= c.`cs_b  /\
+  0 <= c.`cbackdoor /\
   0 <= c.`cb_s  /\
   0 <= c.`cb_b.
 
@@ -207,7 +207,7 @@ abstract theory REAL_IDEAL.
   clone EXEC_MODEL as IDEAL with
     type inputs      <- REAL.inputs,
     type ask_outputs <- REAL.ask_outputs,
-    type outputs     <- REAL.outputs.        
+    type outputs     <- REAL.outputs.
 
   module type SIMULATOR (FB:IDEAL.BACKDOORS) = {
     proc init() : unit {}
@@ -256,14 +256,14 @@ abstract theory NON_DUMMY.
     type REAL.ask_outputs   <- RI.REAL.ask_outputs,
     type REAL.outputs       <- RI.REAL.outputs,
     type REAL.step          <- step_A,
-    type REAL.ask_backdoor  <- ask_A, 
+    type REAL.ask_backdoor  <- ask_A,
     type REAL.backdoor      <- get_A,
     type IDEAL.step         <- RI.IDEAL.step,
     type IDEAL.ask_backdoor <- RI.IDEAL.ask_backdoor,
     type IDEAL.backdoor     <- RI.IDEAL.backdoor.
 
   (* A Can't have an init, which seems fine *)
-  module type ADV(B : RI.REAL.BACKDOORS) = { 
+  module type ADV(B : RI.REAL.BACKDOORS) = {
      include NONDUMMY_RI.REAL.BACKDOORS
   }.
 
@@ -275,13 +275,13 @@ abstract theory NON_DUMMY.
      include A(P) [step,backdoor]
   }.
 
-(*  
+(*
   module P : DUMMY_RI.REAL.PROTOCOL.
   module F : DUMMY_RI.IDEAL.PROTOCOL.
 
   op eps : real.
 
-  axiom security : 
+  axiom security :
     exists (S<: NONDUMMY_RI.SIMULATOR),
        forall (Z<: NONDUMMY_RI.REAL.ENV),
          `| Pr[NONDUMMY_RI.REAL.UC_emul(Z,A_PROTOCOL(A,P)).main() @ &m : res] -
@@ -293,7 +293,7 @@ end NON_DUMMY.
 theory NONDUMMY_EQUIV_DUMMY.
 
   clone import NON_DUMMY as NON_DUMMY.
-  
+
   type cadv = {
     cas   : int;
     cas_s : int;
@@ -303,14 +303,14 @@ theory NONDUMMY_EQUIV_DUMMY.
     cab_b : int
   }.
 
-  op cadv_pos cA = 
+  op cadv_pos cA =
     0 <= cA.`cas   /\
     0 <= cA.`cas_s /\
     0 <= cA.`cas_b /\
     0 <= cA.`cab   /\
     0 <= cA.`cab_s /\
     0 <= cA.`cab_b.
-  
+
    module (SeqSA(A:ADV, S:RI.SIMULATOR): NONDUMMY_RI.SIMULATOR) (B:NONDUMMY_RI.IDEAL.BACKDOORS) = {
      proc init () = {
        S(B).init();
@@ -319,7 +319,7 @@ theory NONDUMMY_EQUIV_DUMMY.
      include A(S(B))
   }.
 
-  module SeqZA(Z:NONDUMMY_RI.REAL.ENV) (A:ADV) (I: RI.REAL.E_INTERFACE) = { 
+  module SeqZA(Z:NONDUMMY_RI.REAL.ENV) (A:ADV) (I: RI.REAL.E_INTERFACE) = {
     module IA = {
       proc inputs  = I.inputs
       proc outputs = I.outputs
@@ -340,7 +340,7 @@ theory NONDUMMY_EQUIV_DUMMY.
   |}.
 
   lemma dummy_nondummy (P<:RI.REAL.PROTOCOL) (F<:RI.IDEAL.PROTOCOL) &m eps (cS: csim) :
-    csim_pos cS => 
+    csim_pos cS =>
     forall (S<: RI.SIMULATOR
                  [init : `{N cS.`cinit} {},
                   step : `{N cS.`cstep, #FB.step : cS.`cs_s, #FB.backdoor : cS.`cs_b},
@@ -353,9 +353,9 @@ theory NONDUMMY_EQUIV_DUMMY.
     forall (cA:cadv) (A<:ADV [step : `{N cA.`cas, #B.step: cA.`cas_s, #B.backdoor: cA.`cas_b},
                               backdoor : `{N cA.`cab, #B.step: cA.`cab_s, #B.backdoor: cA.`cab_b}]
                               {-F, -P, -S}),
-     cadv_pos cA =>                       
+     cadv_pos cA =>
      let csa = csa cA cS in
-     exists (S1<: NONDUMMY_RI.SIMULATOR 
+     exists (S1<: NONDUMMY_RI.SIMULATOR
                   [init : `{N csa.`cinit} {},
                    step : `{N csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b},
                    backdoor : `{N csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b}]
@@ -367,11 +367,11 @@ theory NONDUMMY_EQUIV_DUMMY.
     move=> hcS S hS cA A hcA csa.
     exists (SeqSA(A,S)); split.
     + (split; last split) => kb ks FB hkb hks.
-      + by proc; call (:true; time []); skip => /= /#. 
-      + move=> /=; proc true : time 
+      + by proc; call (:true; time []); skip => /= /#.
+      + move=> /=; proc true : time
               [S(FB).step : [N (cS.`cstep + ks * cS.`cs_s + kb * cS.`cs_b)],
                S(FB).backdoor : [N (cS.`cbackdoor + ks * cS.`cb_s + kb * cS.`cb_b)]] => //=.
-        + by rewrite !bigi_constz /#. 
+        + by rewrite !bigi_constz /#.
         + move=> ???.
           proc true : time [FB.step : [N ks],
                             FB.backdoor : [N kb]] => //=.
@@ -384,10 +384,10 @@ theory NONDUMMY_EQUIV_DUMMY.
         + by rewrite !bigi_constz /#.
         + by move=> ???;proc true : time [].
         by move=> ???;proc true : time [].
-      move=> /=; proc true : time 
+      move=> /=; proc true : time
               [S(FB).step : [N (cS.`cstep + ks * cS.`cs_s + kb * cS.`cs_b)],
                S(FB).backdoor : [N (cS.`cbackdoor + ks * cS.`cb_s + kb * cS.`cb_b)]] => //=.
-      + by rewrite !bigi_constz /#. 
+      + by rewrite !bigi_constz /#.
       + move=> ???.
         proc true : time [FB.step : [N ks],
                           FB.backdoor : [N kb]] => //=.
@@ -402,10 +402,10 @@ theory NONDUMMY_EQUIV_DUMMY.
       by move=> ???;proc true : time [].
     move=> Z.
     have := hS (SeqZA(Z,A)).
-    have -> : Pr[RI.REAL.UC_emul(SeqZA(Z, A), P).main() @ &m : res] = 
+    have -> : Pr[RI.REAL.UC_emul(SeqZA(Z, A), P).main() @ &m : res] =
               Pr[NONDUMMY_RI.REAL.UC_emul(Z, A_PROTOCOL(A, P)).main() @ &m : res].
     + by byequiv => //; proc; inline *; sim.
-    have -> // : Pr[RI.REAL.UC_emul(SeqZA(Z, A), RI.CompS(F, S)).main() @ &m : res] = 
+    have -> // : Pr[RI.REAL.UC_emul(SeqZA(Z, A), RI.CompS(F, S)).main() @ &m : res] =
                  Pr[NONDUMMY_RI.REAL.UC_emul(Z, NONDUMMY_RI.CompS(F, SeqSA(A, S))).main() @ &m : res].
     by byequiv => //; proc; inline *; sim.
   qed.
@@ -433,11 +433,11 @@ theory NONDUMMY_EQUIV_DUMMY.
   module type MEM = { }.
 
   lemma nondummy_dummy (P<:RI.REAL.PROTOCOL) (F<:RI.IDEAL.PROTOCOL) &m eps (cS: cadv -> csim) (Mem <: MEM):
-    (forall cA, cadv_pos cA => csim_pos (cS cA)) => 
+    (forall cA, cadv_pos cA => csim_pos (cS cA)) =>
     (forall (cA:cadv) (A<:ADV [step : `{N cA.`cas, #B.step: cA.`cas_s, #B.backdoor: cA.`cas_b},
                      backdoor : `{N cA.`cab, #B.step: cA.`cab_s, #B.backdoor: cA.`cab_b} ]),
      let csa = cS cA in
-     exists (S<: NONDUMMY_RI.SIMULATOR 
+     exists (S<: NONDUMMY_RI.SIMULATOR
                   [init : `{N csa.`cinit} {},
                    step : `{N csa.`cstep, #FB.step : csa.`cs_s, #FB.backdoor : csa.`cs_b},
                    backdoor : `{N csa.`cbackdoor, #FB.step: csa.`cb_s, #FB.backdoor : csa.`cb_b}]
@@ -456,25 +456,25 @@ theory NONDUMMY_EQUIV_DUMMY.
         `| Pr[RI.REAL.UC_emul(Z,P).main() @ &m : res] -
            Pr[RI.REAL.UC_emul(Z,RI.CompS(F,S)).main() @ &m : res] | <= eps).
   proof.
-    move=> hcS hA cdA csd.  
-    have /= [S hS]:= hA cdA (<:DUMMY_A) _ _.     
+    move=> hcS hA cdA csd.
+    have /= [S hS]:= hA cdA (<:DUMMY_A) _ _.
     + by move=> kBb kBs B ??; proc; call(:true; time []); auto.
     + by move=> kBb kBs B ??; proc; call(:true; time []); auto.
     exists S; split.
     + (split; last split) => kBb kBs FB ??.
-      + by proc true : time []. 
+      + by proc true : time [].
       + proc true : time [FB.step : [N kBs],FB.backdoor :[N kBb]] => //=.
         + have cS_pos := hcS cdA _; 1: done.
-          by rewrite !bigi_constz /#. 
+          by rewrite !bigi_constz /#.
         + by move=> *; proc true : time [].
         by move=> *; proc true : time [].
       proc true : time [FB.step : [N kBs],FB.backdoor :[N kBb]] => //=.
       + have cS_pos := hcS cdA _; 1: done.
-        by rewrite !bigi_constz /#. 
+        by rewrite !bigi_constz /#.
       + by move=> *; proc true : time [].
-      by move=> *; proc true : time [].                 
-    move=> Z; have := hS Z. 
-    have -> : Pr[NONDUMMY_RI.REAL.UC_emul(Z, A_PROTOCOL(DUMMY_A, P)).main() @ &m : res] = 
+      by move=> *; proc true : time [].
+    move=> Z; have := hS Z.
+    have -> : Pr[NONDUMMY_RI.REAL.UC_emul(Z, A_PROTOCOL(DUMMY_A, P)).main() @ &m : res] =
               Pr[RI.REAL.UC_emul(Z, P).main() @ &m : res].
     + byequiv => //; last by move=> ?? ->.
       proc; call (_: ={glob P}).
@@ -509,7 +509,7 @@ abstract theory TRANSITIVITY.
     type REAL.ask_outputs  <- H1.REAL.ask_outputs,
     type REAL.outputs      <- H1.REAL.outputs,
     type REAL.step         <- H1.IDEAL.step,
-    type REAL.ask_backdoor <- H1.IDEAL.ask_backdoor, 
+    type REAL.ask_backdoor <- H1.IDEAL.ask_backdoor,
     type REAL.backdoor     <- H1.IDEAL.backdoor.
 
   clone REAL_IDEAL as GOAL with
@@ -517,10 +517,10 @@ abstract theory TRANSITIVITY.
     type REAL.ask_outputs  <- H1.REAL.ask_outputs,
     type REAL.outputs      <- H1.REAL.outputs,
     type REAL.step         <- H1.REAL.step,
-    type REAL.ask_backdoor <- H1.REAL.ask_backdoor, 
+    type REAL.ask_backdoor <- H1.REAL.ask_backdoor,
     type REAL.backdoor     <- H1.REAL.backdoor,
     type IDEAL.step         <- H2.IDEAL.step,
-    type IDEAL.ask_backdoor <- H2.IDEAL.ask_backdoor, 
+    type IDEAL.ask_backdoor <- H2.IDEAL.ask_backdoor,
     type IDEAL.backdoor     <- H2.IDEAL.backdoor.
 
    module (SeqS(S1:H2.SIMULATOR, S2:H1.SIMULATOR): GOAL.SIMULATOR) (FB:GOAL.IDEAL.BACKDOORS) = {
@@ -529,13 +529,13 @@ abstract theory TRANSITIVITY.
        S2(S1(FB)).init();
      }
 
-     include S2(S1(FB)) [-init] 
+     include S2(S1(FB)) [-init]
    }.
 
   module (CompZS(Z:GOAL.REAL.ENV)(S:H1.SIMULATOR) : H2.REAL.ENV) (I:H2.REAL.E_INTERFACE) = {
     module IZ = {
       include I [inputs, outputs]
-      include S(I) 
+      include S(I)
     }
 
     proc distinguish() = {
@@ -544,7 +544,7 @@ abstract theory TRANSITIVITY.
       b <@ Z(IZ).distinguish();
       return b;
     }
-    
+
   }.
 
   section TRANS.
@@ -553,27 +553,27 @@ abstract theory TRANSITIVITY.
      declare module P3 <: H2.IDEAL.PROTOCOL.
      declare module S12 <: H1.SIMULATOR {-P2, -P3}.
      declare module S23 <: H2.SIMULATOR {-P3, -S12}.
-  
+
      declare module Z <: GOAL.REAL.ENV { -P1, -P2, -P3, -S12, -S23}.
- 
-     lemma uc_transitivity &m : 
-       `| Pr[GOAL.REAL.UC_emul(Z, P1).main() @ &m : res] - 
-          Pr[GOAL.REAL.UC_emul(Z, GOAL.CompS(P3, SeqS(S23, S12))).main() @ &m : res] | <= 
-       `| Pr[  H1.REAL.UC_emul(Z, P1).main() @ &m : res] - 
-          Pr[  H1.REAL.UC_emul(Z, H1.CompS(P2, S12)).main() @ &m : res] | + 
-       `| Pr[  H2.REAL.UC_emul(CompZS(Z,S12),P2).main() @ &m : res] - 
+
+     lemma uc_transitivity &m :
+       `| Pr[GOAL.REAL.UC_emul(Z, P1).main() @ &m : res] -
+          Pr[GOAL.REAL.UC_emul(Z, GOAL.CompS(P3, SeqS(S23, S12))).main() @ &m : res] | <=
+       `| Pr[  H1.REAL.UC_emul(Z, P1).main() @ &m : res] -
+          Pr[  H1.REAL.UC_emul(Z, H1.CompS(P2, S12)).main() @ &m : res] | +
+       `| Pr[  H2.REAL.UC_emul(CompZS(Z,S12),P2).main() @ &m : res] -
           Pr[  H2.REAL.UC_emul(CompZS(Z,S12),H2.CompS(P3, S23)).main() @ &m : res] |.
      proof.
       have -> : Pr[GOAL.REAL.UC_emul(Z,P1).main() @ &m : res] = Pr[H1.REAL.UC_emul(Z,P1).main() @ &m : res].
       + by byequiv => //; sim.
-      have -> : 
-        Pr[H1.REAL.UC_emul(Z, H1.CompS(P2, S12)).main() @ &m : res] = 
+      have -> :
+        Pr[H1.REAL.UC_emul(Z, H1.CompS(P2, S12)).main() @ &m : res] =
         Pr[H2.REAL.UC_emul(CompZS(Z,S12),P2).main() @ &m : res].
       + by byequiv => //; proc; inline *; wp; sim.
-      have -> /#: 
-        Pr[GOAL.REAL.UC_emul(Z, GOAL.CompS(P3, SeqS(S23, S12))).main() @ &m : res] = 
+      have -> /#:
+        Pr[GOAL.REAL.UC_emul(Z, GOAL.CompS(P3, SeqS(S23, S12))).main() @ &m : res] =
         Pr[H2.REAL.UC_emul(CompZS(Z, S12), H2.CompS(P3, S23)).main() @ &m : res].
-      by byequiv => //; proc; inline *; wp; sim. 
+      by byequiv => //; proc; inline *; wp; sim.
     qed.
 
    end section TRANS.
@@ -589,14 +589,14 @@ abstract theory TRANSITIVITY.
    axiom cs23_pos : csim_pos cs23.
 
    op cz23 = {|
-     cd = cz.`cd + cs12.`cinit + cz.`cs * cs12.`cstep + cz.`cb * cs12.`cbackdoor; 
+     cd = cz.`cd + cs12.`cinit + cz.`cs * cs12.`cstep + cz.`cb * cs12.`cbackdoor;
      ci = cz.`ci;
      co = cz.`co;
      cs = cz.`cs * cs12.`cs_s + cz.`cb * cs12.`cb_s;
      cb = cz.`cs * cs12.`cs_b + cz.`cb * cs12.`cb_b;
    |}.
 
-   op cs13 = {| 
+   op cs13 = {|
        cinit = cs12.`cinit + cs23.`cinit;
        cstep = cs12.`cstep + cs23.`cstep * cs12.`cs_s + cs23.`cbackdoor * cs12.`cs_b;
        cs_s  = cs12.`cs_s * cs23.`cs_s + cs12.`cs_b * cs23.`cb_s;
@@ -610,15 +610,15 @@ abstract theory TRANSITIVITY.
      op c <- cz,
      op csi <- cs12
      proof * by smt(cz_pos cs12_pos cs23_pos).
-   
-   clone H2.C as CH2 with 
+
+   clone H2.C as CH2 with
      op c <- cz23,
      op csi <- cs23
      proof * by smt(cz_pos cs12_pos cs23_pos).
 
    clone GOAL.C as CGOAL with
      op c <- cz,
-     op csi <- cs13 
+     op csi <- cs13
      proof * by smt (cz_pos cs12_pos cs23_pos).
 
    section.
@@ -633,7 +633,7 @@ abstract theory TRANSITIVITY.
      choare[S23(FB).step] time [N cs23.`cstep; FB.step : cs23.`cs_s; FB.backdoor : cs23.`cs_b].
    proof.
      proc true : time [FB.step : [N kstep], FB.backdoor : [N kbackdoor]] => //=.
-     + by rewrite !bigi_constz; smt(cs23_pos). 
+     + by rewrite !bigi_constz; smt(cs23_pos).
      + by move=> /= *; proc true : time [].
      by move=> /= *; proc true : time [].
    qed.
@@ -642,7 +642,7 @@ abstract theory TRANSITIVITY.
        choare[S23(FB).backdoor] time [N cs23.`cbackdoor; FB.step : cs23.`cb_s; FB.backdoor : cs23.`cb_b].
    proof.
      proc true : time [FB.step : [N kstep], FB.backdoor : [N kbackdoor]] => //=.
-     + by rewrite !bigi_constz; smt(cs23_pos). 
+     + by rewrite !bigi_constz; smt(cs23_pos).
      + by move=> /= *; proc true : time [].
      by move=> /= *; proc true : time [].
    qed.
@@ -650,8 +650,8 @@ abstract theory TRANSITIVITY.
    lemma cost_SeqS_init (FB <: GOAL.IDEAL.BACKDOORS):
       choare[SeqS(S23, S12, FB).init] time [N cs13.`cinit].
    proof. proc; call(:true);call(:true);skip => /#. qed.
-  
-   lemma cost_SeqS_step (kbackdoor kstep : int) (FB <: GOAL.IDEAL.BACKDOORS[backdoor : `{N kbackdoor} , step : `{N kstep} ]): 
+
+   lemma cost_SeqS_step (kbackdoor kstep : int) (FB <: GOAL.IDEAL.BACKDOORS[backdoor : `{N kbackdoor} , step : `{N kstep} ]):
       choare[S12(S23(FB)).step] time [N cs13.`cstep; FB.step : cs13.`cs_s; FB.backdoor : cs13.`cs_b].
    proof.
      proc true: time [S23(FB).step: [N cs23.`cstep; FB.step: cs23.`cs_s; FB.backdoor: cs23.`cs_b],
@@ -661,64 +661,64 @@ abstract theory TRANSITIVITY.
      by move=> ???; apply (cost_S23_backdoor kbackdoor kstep FB).
    qed.
 
-   lemma cost_SeqS_backdoor (kbackdoor kstep : int) (FB <: GOAL.IDEAL.BACKDOORS[backdoor : `{N kbackdoor} , step : `{N kstep} ]): 
+   lemma cost_SeqS_backdoor (kbackdoor kstep : int) (FB <: GOAL.IDEAL.BACKDOORS[backdoor : `{N kbackdoor} , step : `{N kstep} ]):
       choare[S12(S23(FB)).backdoor] time [N cs13.`cbackdoor; FB.step : cs13.`cb_s; FB.backdoor : cs13.`cb_b].
    proof.
      proc true: time [S23(FB).step: [N cs23.`cstep; FB.step: cs23.`cs_s; FB.backdoor: cs23.`cs_b],
                       S23(FB).backdoor: [N cs23.`cbackdoor; FB.step: cs23.`cb_s; FB.backdoor: cs23.`cb_b]] => //=.
-     + by rewrite !bigi_constz; smt(cs12_pos). 
+     + by rewrite !bigi_constz; smt(cs12_pos).
      + move=> *; apply (cost_S23_step kbackdoor kstep FB).
      by move=> *; apply (cost_S23_backdoor kbackdoor kstep FB).
-   qed. 
+   qed.
 
    lemma ex_uc_transitivity &m (e1 e2:real):
       (forall (Z<:CH1.CENV{-P1, -P2, -S12, -P3, -S23}),
-          `| Pr[H1.REAL.UC_emul(Z,P1).main() @ &m : res] - 
+          `| Pr[H1.REAL.UC_emul(Z,P1).main() @ &m : res] -
              Pr[H1.REAL.UC_emul(Z,H1.CompS(P2, S12)).main() @ &m : res] | <= e1) =>
       (forall (Z<:CH2.CENV{-P2,-P3,-S23, -P1}),
-          `| Pr[H2.REAL.UC_emul(Z,P2).main() @ &m : res] - 
+          `| Pr[H2.REAL.UC_emul(Z,P2).main() @ &m : res] -
              Pr[H2.REAL.UC_emul(Z,H2.CompS(P3, S23)).main() @ &m : res] | <= e2) =>
       (exists (S13<:CGOAL.CSIMULATOR {+S12,+S23, -P3}),
         forall (Z<:CGOAL.CENV{-P1,-P2,-P3,-S12,-S23}),
-          `| Pr[GOAL.REAL.UC_emul(Z,P1).main() @ &m : res] - 
+          `| Pr[GOAL.REAL.UC_emul(Z,P1).main() @ &m : res] -
              Pr[GOAL.REAL.UC_emul(Z,GOAL.CompS(P3, S13)).main() @ &m : res] | <= e1 + e2).
    proof.
-     move=> hS12 hS23. 
-     exists (SeqS(S23, S12)) => /=. 
+     move=> hS12 hS23.
+     exists (SeqS(S23, S12)) => /=.
      split.
      + split.
-       + by move=> k1 k2 FB *; apply (cost_SeqS_init FB). 
+       + by move=> k1 k2 FB *; apply (cost_SeqS_init FB).
        split.
        + by move=> k1 k2 FB *; apply (cost_SeqS_step k1 k2 FB).
        by move=> k1 k2 FB *; apply (cost_SeqS_backdoor k1 k2 FB).
      move=> Z.
      have := uc_transitivity P1 P2 P3 S12 S23 Z &m.
-     have := hS12 Z. 
+     have := hS12 Z.
      have /# := hS23 (CompZS(Z,S12)) _.
      move=> kb ks ko ki I ????.
      proc; inline *.
      call (_:true; time [CompZS(Z, S12, I).IZ.inputs:['0; I.inputs: 1],
                          CompZS(Z, S12, I).IZ.outputs:['0; I.outputs: 1],
                          CompZS(Z, S12, I).IZ.step:
-                                 [             N cs12.`cstep; 
-                                  I.step     : cs12.`cs_s; 
+                                 [             N cs12.`cstep;
+                                  I.step     : cs12.`cs_s;
                                   I.backdoor : cs12.`cs_b],
                          CompZS(Z, S12, I).IZ.backdoor:
-                                 [             N cs12.`cbackdoor; 
-                                  I.step     : cs12.`cb_s; 
+                                 [             N cs12.`cbackdoor;
+                                  I.step     : cs12.`cb_s;
                                   I.backdoor : cs12.`cb_b]]).
-     + by move=> /= *; proc true : time []. 
+     + by move=> /= *; proc true : time [].
      + by move=> /= *; proc true : time [].
      + move=> * /=.
        proc true: time [I.step :[N ks], I.backdoor : [N kb]] => //.
        + by rewrite !bigi_constz; smt(cs12_pos).
        + by move=> /= *; proc true : time [].
-       by move=> /= *; proc true : time []. 
+       by move=> /= *; proc true : time [].
      + move=> * /=.
        proc true: time [I.step :[N ks], I.backdoor : [N kb]] => //.
        + by rewrite !bigi_constz; smt(cs12_pos).
        + by move=> /= *; proc true : time [].
-       by move=> /= *; proc true : time []. 
+       by move=> /= *; proc true : time [].
      call (:true); skip => /=.
      by rewrite !big1_eq /= !bigi_constz /=;smt(cz_pos).
    qed.
@@ -731,10 +731,10 @@ end TRANSITIVITY.
 
 theory COMPOSITION.
 
-  (* Pi realizes f => R^Pi realizes R^f 
-      
+  (* Pi realizes f => R^Pi realizes R^f
+
   ____IO___
-  |    ____|    
+  |    ____|
   | R  |_f_| - backdoor
   |________| - backdoor *)
 
@@ -745,7 +745,7 @@ theory COMPOSITION.
   clone REAL_IDEAL as RPi with
     type REAL.inputs       <- R.inputs,
     type REAL.ask_outputs  <- R.ask_outputs,
-    type REAL.outputs      <- R.outputs,  
+    type REAL.outputs      <- R.outputs,
     type REAL.step         = (R.step, Pi.REAL.step) sum,
     type REAL.ask_backdoor = (R.ask_backdoor, Pi.REAL.ask_backdoor) sum,
     type REAL.backdoor     = (R.backdoor, Pi.REAL.backdoor) sum,
@@ -780,21 +780,21 @@ theory COMPOSITION.
   }.
 
   module CompRP(Rho:RHO) (P:Pi.REAL.PROTOCOL) : RPi.REAL.PROTOCOL = {
-    
+
     proc init () = {
       P.init();
       Rho(P).init();
     }
-    include CompR_I(Rho,P) 
+    include CompR_I(Rho,P)
   }.
 
   module CompRF(Rho:RHO) (F:Pi.IDEAL.PROTOCOL) : RPi.IDEAL.PROTOCOL = {
-    
+
     proc init () = {
       F.init();
       Rho(F).init();
     }
-    
+
     include Rho(F) [inputs, outputs]
 
     proc step (m:RPi.IDEAL.step) : unit = {
@@ -816,20 +816,20 @@ theory COMPOSITION.
   }.
 
   module (Sid(Sf:Pi.SIMULATOR) : RPi.SIMULATOR) (FB : RPi.IDEAL.BACKDOORS) = {
-  
+
     module FBPi = {
       proc step(m:Pi.IDEAL.step) : unit = {
         FB.step(Right m);
       }
-      
+
       proc backdoor(m:Pi.IDEAL.ask_backdoor) : Pi.IDEAL.backdoor option = {
         var r;
         r <@ FB.backdoor (Right m);
         return obind getr r;
       }
     }
-    
-    proc init = Sf(FBPi).init 
+
+    proc init = Sf(FBPi).init
 
     proc step(m:RPi.REAL.step) : unit = {
       match (m) with
@@ -837,12 +837,12 @@ theory COMPOSITION.
       | Right m2 => { Sf(FBPi).step(m2); }
       end;
     }
-    
+
     proc backdoor(m:RPi.REAL.ask_backdoor) : RPi.REAL.backdoor option = {
       var r1, r2;
       var r :RPi.REAL.backdoor option;
       match (m) with
-      | Left  m1 => { r1 <@ FB.backdoor(Left m1); r <- omap Left (obind getl r1); } 
+      | Left  m1 => { r1 <@ FB.backdoor(Left m1); r <- omap Left (obind getl r1); }
       | Right m2 => { r2 <@ Sf(FBPi).backdoor(m2); r <- omap Right r2; }
       end;
       return r;
@@ -857,34 +857,34 @@ theory COMPOSITION.
       return b;
     }
   }.
-      
+
   section COMP.
- 
+
     declare module P  <: Pi.REAL.PROTOCOL.
     declare module Ff <: Pi.IDEAL.PROTOCOL.
     declare module Sf <: Pi.SIMULATOR {-Ff}.
 
     declare module Rho<: RHO {-P, -Ff, -Sf}.
- 
+
     declare module Z<: RPi.REAL.ENV {-Rho, -P, -Ff, -Sf}.
 
-    lemma compose &m : 
-      Pr[RPi.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] - 
-        Pr[RPi.REAL.UC_emul(Z,RPi.CompS(CompRF(Rho,Ff), Sid(Sf))).main() @ &m : res] = 
-      Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), P).main() @ &m : res] - 
+    lemma compose &m :
+      Pr[RPi.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] -
+        Pr[RPi.REAL.UC_emul(Z,RPi.CompS(CompRF(Rho,Ff), Sid(Sf))).main() @ &m : res] =
+      Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), P).main() @ &m : res] -
         Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), Pi.CompS(Ff,Sf)).main() @ &m : res].
     proof.
-      have -> :  
+      have -> :
         Pr[RPi.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] =
         Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), P).main() @ &m : res].
       + by byequiv => //; proc; inline *; wp; sim.
-      have -> // : 
+      have -> // :
         Pr[RPi.REAL.UC_emul(Z,RPi.CompS(CompRF(Rho,Ff), Sid(Sf))).main() @ &m : res] =
-        Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), Pi.CompS(Ff,Sf)).main() @ &m : res]. 
+        Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), Pi.CompS(Ff,Sf)).main() @ &m : res].
       byequiv => //; proc; inline *; wp.
-      call (_ : = {glob Rho, glob Ff, glob Sf}); 1,2:sim. 
+      call (_ : = {glob Rho, glob Ff, glob Sf}); 1,2:sim.
       + proc; match; 1,2: smt().
-        + move => m1 m2; inline *; match Left {1} 2.  
+        + move => m1 m2; inline *; match Left {1} 2.
           + by auto => /#.
           call (_: ={glob Ff}); 1,2:sim.
           by auto => /> /#.
@@ -896,15 +896,15 @@ theory COMPOSITION.
       + proc; match; 1,2: smt().
         + move=> m1 m2; wp; inline *; match Left {1} 2; 1: by auto => /#.
           by wp; call (_: ={glob Ff}); 1,2:sim; auto => /> /#.
-        move=> m1 m2; wp; inline *; call (_: ={glob Rho, glob Ff}). 
+        move=> m1 m2; wp; inline *; call (_: ={glob Rho, glob Ff}).
         + proc *; inline *; match Right {1} 3; 1: by auto => /#.
           by call (_: true); auto => /> /#.
         + proc *; inline *; match Right {1} 3; 1: by auto => /#.
-          by wp; call (_: true); auto => /> /#.       
+          by wp; call (_: true); auto => /> /#.
         by auto => />.
-      by swap{1} 2 1; sim />. 
+      by swap{1} 2 1; sim />.
     qed.
- 
+
   end section COMP.
 
   abstract theory C.
@@ -925,7 +925,7 @@ theory COMPOSITION.
     cr_bk_o  : int;
   }.
 
-  op crho_pos (cr: crho) = 
+  op crho_pos (cr: crho) =
     0 <= cr.`cr_init  /\
     0 <= cr.`cr_in    /\
     0 <= cr.`cr_in_i  /\
@@ -939,20 +939,20 @@ theory COMPOSITION.
     0 <= cr.`cr_bk    /\
     0 <= cr.`cr_bk_i  /\
     0 <= cr.`cr_bk_o.
-  
+
   op cr : crho.
   axiom cr_pos : crho_pos cr.
 
   module type CRHO(P : Pi.REAL.IO)  = {
     proc init() : unit {} `{ N cr.`cr_init}
-  
-    proc inputs(i : R.inputs) : unit `{N cr.`cr_in, P.inputs : cr.`cr_in_i, P.outputs : cr.`cr_in_o} 
-  
-    proc outputs(o : R.ask_outputs) : R.outputs option `{N cr.`cr_out, P.inputs : cr.`cr_out_i, P.outputs : cr.`cr_out_o} 
-  
-    proc step(m : R.step) : unit `{N cr.`cr_st, P.inputs : cr.`cr_st_i, P.outputs : cr.`cr_st_o} 
-  
-    proc backdoor(m : R.ask_backdoor) : R.backdoor option `{N cr.`cr_bk, P.inputs : cr.`cr_bk_i, P.outputs : cr.`cr_bk_o} 
+
+    proc inputs(i : R.inputs) : unit `{N cr.`cr_in, P.inputs : cr.`cr_in_i, P.outputs : cr.`cr_in_o}
+
+    proc outputs(o : R.ask_outputs) : R.outputs option `{N cr.`cr_out, P.inputs : cr.`cr_out_i, P.outputs : cr.`cr_out_o}
+
+    proc step(m : R.step) : unit `{N cr.`cr_st, P.inputs : cr.`cr_st_i, P.outputs : cr.`cr_st_o}
+
+    proc backdoor(m : R.ask_backdoor) : R.backdoor option `{N cr.`cr_bk, P.inputs : cr.`cr_bk_i, P.outputs : cr.`cr_bk_o}
   }.
 
   op csi : csim.
@@ -965,7 +965,7 @@ theory COMPOSITION.
     cs_b  = csi.`cs_b;
     cbackdoor = max 7 (3 + csi.`cb_s + csi.`cb_b * 4 + csi.`cbackdoor + csi.`cstep);
     cb_s = csi.`cb_s;
-    cb_b = max 1 csi.`cb_b; 
+    cb_b = max 1 csi.`cb_b;
   |}.
 
   lemma rcsi_pos : csim_pos rcsi by smt(csi_pos).
@@ -981,9 +981,9 @@ theory COMPOSITION.
     co = cr.`cr_in_o * rc.`ci + cr.`cr_out_o * rc.`co + cr.`cr_st_o * rc.`cs + cr.`cr_bk_o * rc.`cb;
     cs = rc.`cs;
     cb = rc.`cb;
-  |}.  
+  |}.
 
-  lemma c_pos : cenv_pos c by smt (rc_pos cr_pos). 
+  lemma c_pos : cenv_pos c by smt (rc_pos cr_pos).
 
   clone Pi.C as CPi with
     op csi <- csi,
@@ -1005,13 +1005,13 @@ theory COMPOSITION.
 
    declare module Rho<: CRHO {-P, -Ff, -Sf}.
 
-   lemma ex_compose e &m : 
+   lemma ex_compose e &m :
      (forall (Z <: CPi.CENV {-P, -Ff, -Sf}),
-       `|Pr[Pi.REAL.UC_emul(Z, P).main() @ &m : res] - 
+       `|Pr[Pi.REAL.UC_emul(Z, P).main() @ &m : res] -
           Pr[Pi.REAL.UC_emul(Z, Pi.CompS(Ff,Sf)).main() @ &m : res]| <= e) =>
      exists (S<:CRPi.CSIMULATOR{+Sf}),
      (forall (Z <: CRPi.CENV {-Rho,-P,-Ff,-Sf}),
-       `|Pr[RPi.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] - 
+       `|Pr[RPi.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] -
           Pr[RPi.REAL.UC_emul(Z,RPi.CompS(CompRF(Rho,Ff), S)).main() @ &m : res]| <= e).
    proof.
      move=> h; exists (Sid(Sf)); split.
@@ -1020,16 +1020,16 @@ theory COMPOSITION.
        + by move=> kb ks FB hkb hks; proc true : time [].
        split.
        + move=> kb ks FB hkb hks; proc.
-         exlim m => -[] mi. 
+         exlim m => -[] mi.
          + match Left 1; [1: by auto; smt() | 2: done].
-           call(:true; time []); auto => />; smt(csi_pos).  
+           call(:true; time []); auto => />; smt(csi_pos).
          match Right 1; [1: by auto; smt() | 2: done].
          call (:true; time [Sid(Sf, FB).FBPi.step : ['1; FB.step : 1], Sid(Sf, FB).FBPi.backdoor : [N 4; FB.backdoor : 1]]).
          + by move=> *; proc; call (:true; time []); skip => />.
          + by move=> *; proc; call (:true; time []); skip => />.
          by skip => &hr />; rewrite !bigi_constz /=; smt(csi_pos).
        move=> kb ks FB hkb hks; proc.
-       exlim m => -[] mi.  
+       exlim m => -[] mi.
        + match Left 1; [1: by auto; smt() | 2: done].
          wp; call(:true; time []); auto => />; smt(csi_pos).
        match Right 1; [1: by auto; smt() | 2: done].
@@ -1050,44 +1050,44 @@ theory COMPOSITION.
        + by move=> *; proc true : time [].
        by move=> *; proc true : time [].
      + move=> *; proc true : time [I.inputs : [N ki], I.outputs : [N ko]] => />.
-       + rewrite !bigi_constz /=; smt (cr_pos). 
+       + rewrite !bigi_constz /=; smt (cr_pos).
        + by move=> *; proc true : time [].
        by move=> *; proc true : time [].
      + move=> *; proc.
-       exlim m => -[] mi. 
+       exlim m => -[] mi.
        + match Left 1; [1: by auto; smt() | 2: done].
          call(:true; time [I.inputs : [N ki], I.outputs : [N ko]]).
          + by move=> *; proc true : time [].
          + by move=> *; proc true : time [].
-         skip => />; rewrite !bigi_constz /=; smt(cr_pos). 
+         skip => />; rewrite !bigi_constz /=; smt(cr_pos).
        match Right 1; [1: by auto; smt() | 2: done].
        by call (:true); skip => />; smt (cr_pos).
      + move=> *; proc.
-       exlim m => -[] mi. 
+       exlim m => -[] mi.
        + match Left 1; [1: by auto; smt() | 2: done].
          wp; call(:true; time [I.inputs : [N ki], I.outputs : [N ko]]).
          + by move=> *; proc true : time [].
          + by move=> *; proc true : time [].
          skip => />; rewrite !bigi_constz /=; smt(cr_pos).
        match Right 1; [1: by auto; smt() | 2: done].
-       by wp; call (:true); skip => />; smt (cr_pos). 
+       by wp; call (:true); skip => />; smt (cr_pos).
      call (:true); skip => />.
      rewrite !bigi_constz /=; smt(rc_pos).
    qed.
-  
+
   end section.
-  
+
   end C.
 
-  clone import TRANSITIVITY as TRANS with 
+  clone import TRANSITIVITY as TRANS with
     type H1.REAL.inputs       <- R.inputs,
     type H1.REAL.ask_outputs  <- R.ask_outputs,
     type H1.REAL.outputs      <- R.outputs,
     type H1.REAL.step         <- RPi.REAL.step,
-    type H1.REAL.ask_backdoor <- RPi.REAL.ask_backdoor, 
+    type H1.REAL.ask_backdoor <- RPi.REAL.ask_backdoor,
     type H1.REAL.backdoor     <- RPi.REAL.backdoor,
     type H1.IDEAL.step         <- RPi.IDEAL.step,
-    type H1.IDEAL.ask_backdoor <- RPi.IDEAL.ask_backdoor, 
+    type H1.IDEAL.ask_backdoor <- RPi.IDEAL.ask_backdoor,
     type H1.IDEAL.backdoor     <- RPi.IDEAL.backdoor.
 
   section StrongCOMP.
@@ -1102,19 +1102,19 @@ theory COMPOSITION.
 
     declare module Z<: RPi.REAL.ENV {-Rho, -P, -Ff, -Sf, -F, -S}.
 
-    lemma strong_compose &m : 
-      `| Pr[GOAL.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] - 
+    lemma strong_compose &m :
+      `| Pr[GOAL.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] -
          Pr[GOAL.REAL.UC_emul(Z,GOAL.CompS(F, SeqS(S, Sid(Sf)))).main() @ &m : res] |
-       <= 
-      `| Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), P).main() @ &m : res] - 
-         Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), Pi.CompS(Ff,Sf)).main() @ &m : res] | + 
-      `| Pr[H2.REAL.UC_emul(CompZS(Z, Sid(Sf)), CompRF(Rho,Ff)).main() @ &m : res] - 
+       <=
+      `| Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), P).main() @ &m : res] -
+         Pr[Pi.REAL.UC_emul(CompZR(Z,Rho), Pi.CompS(Ff,Sf)).main() @ &m : res] | +
+      `| Pr[H2.REAL.UC_emul(CompZS(Z, Sid(Sf)), CompRF(Rho,Ff)).main() @ &m : res] -
          Pr[H2.REAL.UC_emul(CompZS(Z, Sid(Sf)), H2.CompS(F,S)).main() @ &m : res] |.
     proof.
       have h1 := uc_transitivity (CompRP(Rho,P)) (CompRF(Rho,Ff)) F (Sid(Sf)) S Z &m.
       have h2 := compose P Ff Sf Rho Z &m.
       apply (StdOrder.RealOrder.ler_trans _ _ _ h1) => {h1}.
-      have -> : Pr[H1.REAL.UC_emul(Z, CompRP(Rho, P)).main() @ &m : res] = 
+      have -> : Pr[H1.REAL.UC_emul(Z, CompRP(Rho, P)).main() @ &m : res] =
                 Pr[Pi.REAL.UC_emul(CompZR(Z, Rho), P).main() @ &m : res].
       + by byequiv=> //; proc; inline *; wp; sim.
       have -> // : Pr[H1.REAL.UC_emul(Z, H1.CompS(CompRF(Rho, Ff), Sid(Sf))).main() @ &m : res] =
@@ -1125,7 +1125,7 @@ theory COMPOSITION.
         + move=> m1 m2; inline *; match Left {1} 2; 1: by auto => /> /#.
           call (_: ={glob Ff} ); 1,2:sim.
           by auto => /#.
-        move=> m1 m2; inline *; call (_: ={glob Rho, glob Ff}). 
+        move=> m1 m2; inline *; call (_: ={glob Rho, glob Ff}).
         + proc *; inline *; match Right {1} 3; 1: by auto => /> /#.
           by call (_: true); auto => /> /#.
         + proc *; inline *; match Right {1} 3; 1: by auto => /> /#.
@@ -1135,7 +1135,7 @@ theory COMPOSITION.
         + move=> m1 m2; inline *; match Left {1} 2; 1: by auto => /> /#.
           wp;call (_: ={glob Ff} ); 1,2:sim.
           by auto => /#.
-        move=> m1 m2; inline *; wp; call (_: ={glob Rho, glob Ff}). 
+        move=> m1 m2; inline *; wp; call (_: ={glob Rho, glob Ff}).
         + proc *; inline *; match Right {1} 3; 1: by auto => /> /#.
           by call (_: true); auto => /> /#.
         + proc *; inline *; match Right {1} 3; 1: by auto => /> /#.
@@ -1157,20 +1157,20 @@ theory COMPOSITION.
       max 1 csi.`cs_s; cs_b = csi.`cs_b; cbackdoor =
       max 7 (3 + csi.`cb_s + csi.`cb_b * 4 + csi.`cbackdoor + csi.`cstep); cb_s = csi.`cb_s; cb_b =
       max 1 csi.`cb_b; |}.
-  
+
   lemma rcsi_pos : csim_pos rcsi by smt (csi_pos).
 
   clone TRANS.C as CT
     with op cs12 <- rcsi
     proof cs12_pos by apply rcsi_pos.
 
-  clone COMPOSITION.C as C0 with 
+  clone COMPOSITION.C as C0 with
     op rc <- CT.cz,
     op csi <- csi
     proof rc_pos by apply CT.cz_pos
     proof csi_pos by apply csi_pos.
 
-  section.  
+  section.
     declare module P  <: Pi.REAL.PROTOCOL.
     declare module Ff <: Pi.IDEAL.PROTOCOL.
     declare module Sf <: C0.CPi.CSIMULATOR {-Ff}.
@@ -1179,26 +1179,26 @@ theory COMPOSITION.
     declare module F <: H2.IDEAL.PROTOCOL {-Sf}.
     declare module S <: CT.CH2.CSIMULATOR {-F, -Sf}.
 
-    lemma ex_strong_compose &m e1 e2 : 
+    lemma ex_strong_compose &m e1 e2 :
       (forall (Z <: C0.CPi.CENV {-P, -Ff, -Sf}),
-        `| Pr[Pi.REAL.UC_emul(Z, P).main() @ &m : res] - 
+        `| Pr[Pi.REAL.UC_emul(Z, P).main() @ &m : res] -
          Pr[Pi.REAL.UC_emul(Z, Pi.CompS(Ff,Sf)).main() @ &m : res] | <= e1) =>
       (forall (Z <: CT.CH2.CENV {-CompRF(Rho,Ff), -F, -S}),
-        `| Pr[H2.REAL.UC_emul(Z, CompRF(Rho,Ff)).main() @ &m : res] - 
+        `| Pr[H2.REAL.UC_emul(Z, CompRF(Rho,Ff)).main() @ &m : res] -
            Pr[H2.REAL.UC_emul(Z, H2.CompS(F,S)).main() @ &m : res] | <= e2) =>
-      exists (S' <: CT.CGOAL.CSIMULATOR {+S, +Sf, -F}), 
+      exists (S' <: CT.CGOAL.CSIMULATOR {+S, +Sf, -F}),
       (forall (Z <: CT.CGOAL.CENV {-Rho, -P, -Ff, -Sf, -F, -S}),
-        `| Pr[GOAL.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] - 
+        `| Pr[GOAL.REAL.UC_emul(Z,CompRP(Rho,P)).main() @ &m : res] -
            Pr[GOAL.REAL.UC_emul(Z,GOAL.CompS(F, S')).main() @ &m : res] | <= e1 + e2).
     proof.
       move=> hP HR.
       have [Srho HSrho]:= C0.ex_compose P Ff Sf Rho e1 &m _; 1: by move=> Z0; apply (hP Z0).
       have := CT.ex_uc_transitivity (CompRP(Rho,P)) (CompRF(Rho,Ff)) F Srho S &m e1 e2 _ _.
       + move=> Z1; have := HSrho Z1.
-        + have -> : Pr[RPi.REAL.UC_emul(Z1, CompRP(Rho, P)).main() @ &m : res] = 
+        + have -> : Pr[RPi.REAL.UC_emul(Z1, CompRP(Rho, P)).main() @ &m : res] =
                     Pr[H1.REAL.UC_emul(Z1, CompRP(Rho, P)).main() @ &m : res].
           + by byequiv => //; sim.
-          have -> // : Pr[RPi.REAL.UC_emul(Z1, RPi.CompS(CompRF(Rho, Ff), Srho)).main() @ &m : res] = 
+          have -> // : Pr[RPi.REAL.UC_emul(Z1, RPi.CompS(CompRF(Rho, Ff), Srho)).main() @ &m : res] =
                     Pr[H1.REAL.UC_emul(Z1, H1.CompS(CompRF(Rho, Ff), Srho)).main() @ &m : res].
           + by byequiv => //; sim.
       + by move=> Z1; apply (HR Z1).
@@ -1212,7 +1212,7 @@ theory COMPOSITION.
 end COMPOSITION.
 
 abstract theory PARA.
-  
+
   clone EXEC_MODEL as Pi1.
   clone EXEC_MODEL as Pi2.
 
@@ -1225,9 +1225,9 @@ abstract theory PARA.
     type backdoor       = (Pi1.backdoor, Pi2.backdoor) sum.
 
   (* Build the parallel composition of Pi1 and Pi2 *)
-  
+
   module EIPara(P1:Pi1.E_INTERFACE, P2:Pi2.E_INTERFACE) : Pi12.E_INTERFACE = {
-   
+
     proc inputs(i: Pi12.inputs) = {
       match i with
       | Left i => P1.inputs(i);
@@ -1243,23 +1243,23 @@ abstract theory PARA.
       end;
       return r;
     }
-  
+
     proc step(m : Pi12.step) : unit = {
       match m with
       | Left m  => P1.step(m);
       | Right m => P2.step(m);
       end;
     }
-  
+
     proc backdoor(m : Pi12.ask_backdoor) : Pi12.backdoor option = {
       var r1, r2, r;
-      match m with 
+      match m with
       | Left m  => { r1 <@ P1.backdoor(m); r <- omap Left r1; }
       | Right m => { r2 <@ P2.backdoor(m); r <- omap Right r2; }
       end;
       return r;
     }
- 
+
   }.
 
   module PPara (P1:Pi1.PROTOCOL, P2:Pi2.PROTOCOL) : Pi12.PROTOCOL = {
@@ -1316,34 +1316,34 @@ abstract theory PARA_IR.
     type IDEAL.step          <- I.Pi12.step,
     type IDEAL.ask_backdoor  <- I.Pi12.ask_backdoor,
     type IDEAL.backdoor      <- I.Pi12.backdoor.
-   
+
   module (Sid(Sf:Pi2.SIMULATOR) : RI.SIMULATOR) (FB : RI.IDEAL.BACKDOORS) = {
-  
+
     module FBPi = {
       proc step(m:Pi2.IDEAL.step) : unit = {
         FB.step(Right m);
       }
-      
+
       proc backdoor(m:Pi2.IDEAL.ask_backdoor) : Pi2.IDEAL.backdoor option = {
         var r;
         r <@ FB.backdoor (Right m);
         return obind getr r;
       }
     }
-    
-    proc init = Sf(FBPi).init 
-  
+
+    proc init = Sf(FBPi).init
+
     proc step(m:R.Pi12.step) : unit = {
       match (m) with
       | Left m1  => { FB.step(Left m1); }
       | Right m2 => { Sf(FBPi).step(m2); }
       end;
     }
-    
+
     proc backdoor(m:R.Pi12.ask_backdoor) : R.Pi12.backdoor option = {
       var r1, r2, r;
       match (m) with
-      | Left  m1 => { r1 <@ FB.backdoor(Left m1); r <- omap Left (obind getl r1); } 
+      | Left  m1 => { r1 <@ FB.backdoor(Left m1); r <- omap Left (obind getl r1); }
       | Right m2 => { r2 <@ Sf(FBPi).backdoor(m2); r <- omap Right r2; }
       end;
       return r;
@@ -1358,7 +1358,7 @@ abstract theory PARA_IR.
       return b;
     }
   }.
-  
+
   section PROOF.
 
     declare module F1 <: Pi1.PROTOCOL.
@@ -1370,19 +1370,19 @@ abstract theory PARA_IR.
 
     equiv F2_step : Sid(S2, I.PPara(F1, F2)).FBPi.step ~ F2.step : ={arg, glob F2, glob F1} ==>  ={res, glob F2, glob F1}.
     proof.
-      proc *; inline *; sp; match Right {1} 1; 1: by auto; smt(). 
+      proc *; inline *; sp; match Right {1} 1; 1: by auto; smt().
       by call(:true); skip.
     qed.
 
     equiv F2_backdoor: Sid(S2, I.PPara(F1, F2)).FBPi.backdoor ~ F2.backdoor : ={arg, glob F2, glob F1} ==>  ={res, glob F2, glob F1}.
     proof.
-      proc *; inline *; sp; match Right {1} 1; 1: by auto; smt(). 
+      proc *; inline *; sp; match Right {1} 1; 1: by auto; smt().
       by wp; call(:true); skip => /> /#.
     qed.
 
-    lemma compose &m : 
+    lemma compose &m :
       Pr[RI.REAL.UC_emul(Z, R.PPara(F1, P2)).main() @ &m : res] -
-      Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), Sid(S2))).main() @ &m : res] = 
+      Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), Sid(S2))).main() @ &m : res] =
       Pr[Pi2.REAL.UC_emul(CompZR(Z,F1), P2).main() @ &m : res] -
       Pr[Pi2.REAL.UC_emul(CompZR(Z,F1), Pi2.CompS(F2, S2)).main() @ &m : res].
     proof.
@@ -1418,8 +1418,8 @@ abstract theory PARA_IR.
   axiom cf1_pos  : cprot_pos cf1.
   axiom cs2_pos  : csim_pos cs2.
 
-  clone Pi1.CP as CPi1 with 
-    op cp <- cf1 
+  clone Pi1.CP as CPi1 with
+    op cp <- cf1
     proof * by smt (cf1_pos).
 
   clone RI.C as CRI with
@@ -1429,16 +1429,16 @@ abstract theory PARA_IR.
         cinit = cs2.`cinit;
         cstep = max 2 (1 + cs2.`cstep + cs2.`cs_s + 4 * cs2.`cs_b);
         cs_s  = max 1 cs2.`cs_s;
-        cs_b  = cs2.`cs_b; 
+        cs_b  = cs2.`cs_b;
         cbackdoor = max 7 (3 + cs2.`cbackdoor + cs2.`cb_s + 4 * cs2.`cb_b);
         cb_s  = cs2.`cb_s;
         cb_b  = max 1 cs2.`cb_b;
       |}
     proof *by smt(cz_pos cs2_pos).
-  
+
   clone Pi2.C as CPi2 with
     op c = {|
-        cd = cf1.`cpinit + cz.`cd + 
+        cd = cf1.`cpinit + cz.`cd +
              (1 + cf1.`cpinputs) * cz.`ci + (4 + cf1.`cpoutputs) * cz.`co + (1 + cf1.`cpstep) * cz.`cs + (4 + cf1.`cpbackdoor) * cz.`cb;
         ci = cz.`ci;
         co = cz.`co;
@@ -1455,12 +1455,12 @@ abstract theory PARA_IR.
     declare module F2 <: Pi2.IDEAL.PROTOCOL {-F1, -P2}.
     declare module S2 <: CPi2.CSIMULATOR {-F1, -P2, -F2}.
 
-    lemma ex_compose &m e : 
-      (forall (Z<:CPi2.CENV{-P2, -F2, -S2}), 
-         `|Pr[Pi2.REAL.UC_emul(Z, P2).main() @ &m : res] - 
+    lemma ex_compose &m e :
+      (forall (Z<:CPi2.CENV{-P2, -F2, -S2}),
+         `|Pr[Pi2.REAL.UC_emul(Z, P2).main() @ &m : res] -
             Pr[Pi2.REAL.UC_emul(Z, Pi2.CompS(F2,S2)).main() @ &m : res]| <= e) =>
-      exists (S <: CRI.CSIMULATOR { +S2, -I.PPara(F1,F2)}), 
-        forall (Z <: CRI.CENV{-F1, -P2, -F2, -S2}), 
+      exists (S <: CRI.CSIMULATOR { +S2, -I.PPara(F1,F2)}),
+        forall (Z <: CRI.CENV{-F1, -P2, -F2, -S2}),
          `|Pr[RI.REAL.UC_emul(Z, R.PPara(F1, P2)).main() @ &m : res] -
              Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), S)).main() @ &m : res]| <= e.
     proof.
@@ -1469,23 +1469,23 @@ abstract theory PARA_IR.
       + split.
         + by move=> kbackdoor kstep FB hkb hks; proc true : time [].
         split => kbackdoor kstep FB hkb hks.
-        + proc; exlim m => -[] mi. 
+        + proc; exlim m => -[] mi.
           + match Left 1; [1: by auto; smt() | 2: done].
-            call(:true; time []); auto => />; smt(cs2_pos). 
+            call(:true; time []); auto => />; smt(cs2_pos).
           match Right 1; [1: by auto; smt() | 2: done].
           call(:true; time [Sid(S2, FB).FBPi.step     : [ '1; FB.step : 1],
                             Sid(S2, FB).FBPi.backdoor : [ N 4; FB.backdoor : 1]]).
           + by move=> * /=; proc; call (:true; time []); auto.
-          + by move=> * /=; proc; call (:true; time []); auto.     
-          skip => />; rewrite !bigi_constz /=; smt(cs2_pos). 
-        proc; exlim m => -[] mi. 
+          + by move=> * /=; proc; call (:true; time []); auto.
+          skip => />; rewrite !bigi_constz /=; smt(cs2_pos).
+        proc; exlim m => -[] mi.
         + match Left 1; [1:by auto; smt() | 2: done].
           wp; call(:true; time []); auto => />; smt(cs2_pos).
         match Right 1; [1: by auto; smt() | 2: done].
         wp; call(:true; time [Sid(S2, FB).FBPi.step     : [ '1; FB.step : 1],
                               Sid(S2, FB).FBPi.backdoor : [ N 4; FB.backdoor : 1]]).
         + by move=> * /=; proc; call (:true; time []); auto.
-        + by move=> * /=; proc; call (:true; time []); auto.     
+        + by move=> * /=; proc; call (:true; time []); auto.
         skip => />; rewrite !bigi_constz /=; smt(cs2_pos).
       move=> Z.
       rewrite (compose F1 P2 F2 S2 Z).
@@ -1496,22 +1496,22 @@ abstract theory PARA_IR.
                          R.EIPara(F1, I).step     : [N (1 + cf1.`cpstep)    ; I.step     : 1],
                          R.EIPara(F1, I).backdoor : [N (4 + cf1.`cpbackdoor); I.backdoor : 1]]) => *.
       + proc; exlim i => -[] ii.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by call(:true; time []); auto => /> /#.
         match Right 1; [1: by auto => /# | 2:done].
         by call(:true; time []); auto => />; smt (cf1_pos).
       + proc; exlim o => -[] oi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by wp; call(:true; time []); auto => /> /#.
         match Right 1; [1: by auto => /# | 2:done].
         by wp; call(:true; time []); auto => />; smt (cf1_pos).
       + proc; exlim m => -[] mi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by call(:true; time []); auto => /> /#.
         match Right 1; [1: by auto => /# | 2:done].
         by call(:true; time []); auto => />; smt (cf1_pos).
       + proc; exlim m => -[] mi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by wp; call(:true; time []); auto => /> /#.
         match Right 1; [1: by auto => /# | 2:done].
         by wp; call(:true; time []); auto => />; smt (cf1_pos).
@@ -1566,22 +1566,22 @@ abstract theory PARA_RI.
     type IDEAL.step          <- I.Pi12.step,
     type IDEAL.ask_backdoor  <- I.Pi12.ask_backdoor,
     type IDEAL.backdoor      <- I.Pi12.backdoor.
-   
+
   module (Sid(Sf:Pi1.SIMULATOR) : RI.SIMULATOR) (FB : RI.IDEAL.BACKDOORS) = {
-  
+
     module FBPi = {
       proc step(m:Pi1.IDEAL.step) : unit = {
         FB.step(Left m);
       }
-      
+
       proc backdoor(m:Pi1.IDEAL.ask_backdoor) : Pi1.IDEAL.backdoor option = {
         var r;
         r <@ FB.backdoor (Left m);
         return obind getl r;
       }
     }
-    
-    proc init = Sf(FBPi).init 
+
+    proc init = Sf(FBPi).init
 
     proc step(m:R.Pi12.step) : unit = {
       match (m) with
@@ -1589,11 +1589,11 @@ abstract theory PARA_RI.
       | Right m2 => { FB.step(Right m2); }
       end;
     }
-    
+
     proc backdoor(m:R.Pi12.ask_backdoor) : R.Pi12.backdoor option = {
       var r1, r2, r;
       match (m) with
-      | Left  m1 => { r1 <@ Sf(FBPi).backdoor(m1); r <- omap Left r1; } 
+      | Left  m1 => { r1 <@ Sf(FBPi).backdoor(m1); r <- omap Left r1; }
       | Right m2 => { r2 <@ FB.backdoor(Right m2); r <- omap Right (obind getr r2); }
       end;
       return r;
@@ -1608,7 +1608,7 @@ abstract theory PARA_RI.
       return b;
     }
   }.
-  
+
   section PROOF.
 
     declare module F2 <: Pi2.PROTOCOL.
@@ -1620,19 +1620,19 @@ abstract theory PARA_RI.
 
     equiv F1_step : Sid(S1, I.PPara(F1, F2)).FBPi.step ~ F1.step : ={arg, glob F2, glob F1} ==>  ={res, glob F2, glob F1}.
     proof.
-      proc *; inline *; sp; match Left {1} 1; 1: by auto; smt(). 
+      proc *; inline *; sp; match Left {1} 1; 1: by auto; smt().
       by call(:true); skip.
     qed.
 
     equiv F1_backdoor: Sid(S1, I.PPara(F1, F2)).FBPi.backdoor ~ F1.backdoor : ={arg, glob F2, glob F1} ==>  ={res, glob F2, glob F1}.
     proof.
-      proc *; inline *; sp; match Left {1} 1; 1: by auto; smt(). 
+      proc *; inline *; sp; match Left {1} 1; 1: by auto; smt().
       by wp; call(:true); skip => /> /#.
     qed.
 
-    lemma compose &m : 
+    lemma compose &m :
       Pr[RI.REAL.UC_emul(Z, R.PPara(P1, F2)).main() @ &m : res] -
-      Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), Sid(S1))).main() @ &m : res] = 
+      Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), Sid(S1))).main() @ &m : res] =
       Pr[Pi1.REAL.UC_emul(CompZR(Z,F2), P1).main() @ &m : res] -
       Pr[Pi1.REAL.UC_emul(CompZR(Z,F2), Pi1.CompS(F1, S1)).main() @ &m : res].
     proof.
@@ -1668,8 +1668,8 @@ abstract theory PARA_RI.
   axiom cf2_pos  : cprot_pos cf2.
   axiom cs1_pos  : csim_pos cs1.
 
-  clone Pi2.CP as CPi2 with 
-    op cp <- cf2 
+  clone Pi2.CP as CPi2 with
+    op cp <- cf2
     proof * by smt (cf2_pos).
 
   clone RI.C as CRI with
@@ -1679,16 +1679,16 @@ abstract theory PARA_RI.
         cinit = cs1.`cinit;
         cstep = max 2 (1 + cs1.`cstep + cs1.`cs_s + 4 * cs1.`cs_b);
         cs_s  = max 1 cs1.`cs_s;
-        cs_b  = cs1.`cs_b; 
+        cs_b  = cs1.`cs_b;
         cbackdoor = max 7 (3 + cs1.`cbackdoor + cs1.`cb_s + 4 * cs1.`cb_b);
         cb_s  = cs1.`cb_s;
         cb_b  = max 1 cs1.`cb_b;
       |}
     proof *by smt(cz_pos cs1_pos).
-  
+
   clone Pi1.C as CPi1 with
     op c = {|
-        cd = cf2.`cpinit + cz.`cd + 
+        cd = cf2.`cpinit + cz.`cd +
              (1 + cf2.`cpinputs) * cz.`ci + (4 + cf2.`cpoutputs) * cz.`co + (1 + cf2.`cpstep) * cz.`cs + (4 + cf2.`cpbackdoor) * cz.`cb;
         ci = cz.`ci;
         co = cz.`co;
@@ -1705,12 +1705,12 @@ abstract theory PARA_RI.
     declare module F1 <: Pi1.IDEAL.PROTOCOL {-F2, -P1}.
     declare module S1 <: CPi1.CSIMULATOR {-F2, -P1}.
 
-    lemma ex_compose &m e : 
-      (forall (Z<:CPi1.CENV{-P1, -F1, -S1}), 
-         `|Pr[Pi1.REAL.UC_emul(Z, P1).main() @ &m : res] - 
+    lemma ex_compose &m e :
+      (forall (Z<:CPi1.CENV{-P1, -F1, -S1}),
+         `|Pr[Pi1.REAL.UC_emul(Z, P1).main() @ &m : res] -
             Pr[Pi1.REAL.UC_emul(Z, Pi1.CompS(F1,S1)).main() @ &m : res]| <= e) =>
-      exists (S <: CRI.CSIMULATOR { +S1, -I.PPara(F1,F2) }), 
-        forall (Z <: CRI.CENV{-F2, -P1, -F1, -S1}), 
+      exists (S <: CRI.CSIMULATOR { +S1, -I.PPara(F1,F2) }),
+        forall (Z <: CRI.CENV{-F2, -P1, -F1, -S1}),
          `|Pr[RI.REAL.UC_emul(Z, R.PPara(P1, F2)).main() @ &m : res] -
             Pr[RI.REAL.UC_emul(Z, RI.CompS(I.PPara(F1,F2), S)).main() @ &m : res]| <= e.
     proof.
@@ -1719,21 +1719,21 @@ abstract theory PARA_RI.
       + split.
         + by move=> kbackdoor kstep FB hkb hks; proc true : time [].
         split => kbackdoor kstep FB hkb hks.
-        + proc; exlim m => -[] mi. 
+        + proc; exlim m => -[] mi.
           + match Left 1; [1: by auto; smt() | 2:done] .
             call(:true; time [Sid(S1, FB).FBPi.step     : [ '1; FB.step : 1],
                               Sid(S1, FB).FBPi.backdoor : [ N 4; FB.backdoor : 1]]).
             + by move=> * /=; proc; call (:true; time []); auto.
-            + by move=> * /=; proc; call (:true; time []); auto.     
-            skip => />; rewrite !bigi_constz /=; smt(cs1_pos). 
+            + by move=> * /=; proc; call (:true; time []); auto.
+            skip => />; rewrite !bigi_constz /=; smt(cs1_pos).
           match Right 1; [1: by auto; smt() | 2:done].
-          call(:true; time []); auto => />; smt(cs1_pos). 
-        proc; exlim m => -[] mi. 
+          call(:true; time []); auto => />; smt(cs1_pos).
+        proc; exlim m => -[] mi.
         + match Left 1; [1: by auto; smt() | 2:done].
           wp; call(:true; time [Sid(S1, FB).FBPi.step     : [ '1; FB.step : 1],
                                 Sid(S1, FB).FBPi.backdoor : [ N 4; FB.backdoor : 1]]).
           + by move=> * /=; proc; call (:true; time []); auto.
-          + by move=> * /=; proc; call (:true; time []); auto.     
+          + by move=> * /=; proc; call (:true; time []); auto.
           skip => />; rewrite !bigi_constz /=; smt(cs1_pos).
         match Right 1; [1: by auto; smt() | 2:done].
         wp; call(:true; time []); auto => />; smt(cs1_pos).
@@ -1746,22 +1746,22 @@ abstract theory PARA_RI.
                          R.EIPara(I, F2).step     : [N (1 + cf2.`cpstep)    ; I.step     : 1],
                          R.EIPara(I, F2).backdoor : [N (4 + cf2.`cpbackdoor); I.backdoor : 1]]) => *.
       + proc; exlim i => -[] ii.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by call(:true; time []); auto => />; smt (cf2_pos).
         match Right 1; [1: by auto => /# | 2:done].
         by call(:true; time []); auto => /> /#.
       + proc; exlim o => -[] oi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by wp; call(:true; time []); auto => />; smt (cf2_pos).
         match Right 1; [1: by auto => /# | 2:done].
         by wp; call(:true; time []); auto => /> /#.
       + proc; exlim m => -[] mi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by call(:true; time []); auto => />; smt (cf2_pos).
         match Right 1; [1: by auto => /# | 2:done].
         by call(:true; time []); auto => /> /#.
       + proc; exlim m => -[] mi.
-        + match Left 1; [1: by auto => /# | 2:done]. 
+        + match Left 1; [1: by auto => /# | 2:done].
           by wp; call(:true; time []); auto => />; smt (cf2_pos).
         match Right 1; [1: by auto => /# | 2:done].
         by wp; call(:true; time []); auto => /> /#.

@@ -54,7 +54,7 @@ module PRFi = {
 
   proc f (x:D): R = {
     var r;
-    if (x \notin m) { 
+    if (x \notin m) {
       r <$ uR;
       m.[x] <- r;
     }

@@ -6,7 +6,7 @@ abstract theory Split.
 
   op sampleto : from -> to distr.
 
-  clone import FullRO as IdealAll with 
+  clone import FullRO as IdealAll with
     type in_t    <- from,
     type out_t   <- to,
     type d_in_t  <- input,
@@ -19,7 +19,7 @@ op test : from -> bool.
 
 module RO_DOM (ROT : RO) (ROF: RO) : RO = {
   proc init () = { ROT.init(); ROF.init(); }
- 
+
   proc get(x : from) = {
     var r;
     if (test x) r <@ ROT.get(x);
@@ -49,13 +49,13 @@ clone MkRO as ROF.
 section PROOFS.
   declare module D <: RO_Distinguisher { -RO, -ROT.RO, -ROF.RO }.
 
-  equiv RO_split: 
-    MainD(D,RO).distinguish ~ MainD(D,RO_DOM(ROT.RO,ROF.RO)).distinguish : 
+  equiv RO_split:
+    MainD(D,RO).distinguish ~ MainD(D,RO_DOM(ROT.RO,ROF.RO)).distinguish :
       ={glob D, x} ==> ={res, glob D} /\ RO.m{1} = union_map ROT.RO.m{2} ROF.RO.m{2} /\
                      (forall x, x \in ROT.RO.m{2} => test x) /\
                      (forall x, x \in ROF.RO.m{2} => !test x).
   proof.
-    proc. 
+    proc.
     call (_: RO.m{1} = union_map ROT.RO.m{2} ROF.RO.m{2} /\
              (forall x, x \in ROT.RO.m{2} => test x) /\
              (forall x, x \in ROF.RO.m{2} => !test x)).
@@ -71,7 +71,7 @@ section PROOFS.
   qed.
 
   (* Remark: this is not the most general result *)
-  lemma pr_RO_split (p: glob D -> output -> bool) &m x0: 
+  lemma pr_RO_split (p: glob D -> output -> bool) &m x0:
     Pr[ MainD(D,RO).distinguish(x0) @ &m : p (glob D) res] =
     Pr[ MainD(D,RO_DOM(ROT.RO,ROF.RO)).distinguish(x0) @ &m : p (glob D) res].
   proof. by byequiv RO_split. qed.
@@ -111,7 +111,7 @@ clone FullRO as I2 with
 
 module RO_Pair (RO1 : I1.RO) (RO2 : I2.RO) : RO = {
   proc init () = { RO1.init(); RO2.init(); }
- 
+
   proc get(x : from) = {
     var r1, r2;
     r1 <@ RO1.get(x);
@@ -140,10 +140,10 @@ section PROOFS.
     type t1 <- to1,
     type t2 <- to2.
 
-  equiv RO_get : RO.get ~ RO_Pair(I1.RO, I2.RO).get : 
+  equiv RO_get : RO.get ~ RO_Pair(I1.RO, I2.RO).get :
      ={x} /\
       RO.m{1} = map (fun (_ : from) => ofpair) (pair_map I1.RO.m{2} I2.RO.m{2}) /\
-      forall (x : from),  x \in RO.m{1} = x \in I1.RO.m{2} /\ x \in RO.m{1} = x \in I2.RO.m{2} 
+      forall (x : from),  x \in RO.m{1} = x \in I1.RO.m{2} /\ x \in RO.m{1} = x \in I2.RO.m{2}
      ==>
      ={res} /\
       RO.m{1} = map (fun (_ : from) => ofpair) (pair_map I1.RO.m{2} I2.RO.m{2}) /\
@@ -156,11 +156,11 @@ section PROOFS.
       transitivity*{2} { (r,r0) <@ S.sample2(sampleto1 x0, sampleto2 x1); } => //.
       move => />; smt().
       + transitivity*{2} { (r,r0) <@ S.sample(sampleto1 x0, sampleto2 x1); } => //.
-        move => />; smt(). 
+        move => />; smt().
         + inline *; wp; rnd topair ofpair; auto => /> &2 ?; split.
-          + by move=> ??; rewrite ofpairK. 
+          + by move=> ??; rewrite ofpairK.
           move=> _; split.
-          + move=> [t1 t2]?; rewrite sample_spec dmap1E; congr; apply fun_ext => p. 
+          + move=> [t1 t2]?; rewrite sample_spec dmap1E; congr; apply fun_ext => p.
             by rewrite /pred1 /(\o) (can_eq _ _ ofpairK).
           move=> _ t; rewrite sample_spec supp_dmap => -[[t1 t2] []] + ->>.
           by rewrite topairK ofpairK => ->.
@@ -169,34 +169,34 @@ section PROOFS.
     by auto => />; smt (get_setE map_set set_pair_map mem_map mem_pair_map mem_set mapE mergeE).
   qed.
 
-  equiv RO_split: 
-    MainD(D,RO).distinguish ~ MainD(D,RO_Pair(I1.RO,I2.RO)).distinguish : 
+  equiv RO_split:
+    MainD(D,RO).distinguish ~ MainD(D,RO_Pair(I1.RO,I2.RO)).distinguish :
       ={glob D, x} ==> ={res, glob D} /\ RO.m{1} = map (fun _ => ofpair) (pair_map I1.RO.m{2} I2.RO.m{2}) /\
                        forall x, x \in RO.m{1} = x \in I1.RO.m{2} /\ x \in RO.m{1} = x \in I2.RO.m{2}.
   proof.
     proc.
     call (_: RO.m{1} = map (fun _ => ofpair) (pair_map I1.RO.m{2} I2.RO.m{2}) /\
              forall x, x \in RO.m{1} = x \in I1.RO.m{2} /\ x \in RO.m{1} = x \in I2.RO.m{2}).
-    + proc; inline *;auto => /> &2 _. 
+    + proc; inline *;auto => /> &2 _.
       have hn := o_pair_none <: from, to1, to2>.
-      by rewrite /pair_map merge_empty // map_empty /= => ?; rewrite !mem_empty. 
+      by rewrite /pair_map merge_empty // map_empty /= => ?; rewrite !mem_empty.
     + by conseq RO_get.
     + by proc; inline *; auto => />;
        smt (get_setE map_set set_pair_map mem_map mem_pair_map mem_set mapE mergeE ofpairK topairK).
     + by proc; inline *; auto; smt (map_rem rem_merge mem_map mem_pair_map mem_rem).
     + proc *.
-      alias{1} 1 y = witness <:to>; alias{2} 1 y = witness <:to>. 
+      alias{1} 1 y = witness <:to>; alias{2} 1 y = witness <:to>.
       transitivity*{1} { y <@ RO.get(x); } => //;1: smt().
       + by inline *; sim.
       transitivity*{2} { y <@  RO_Pair(I1.RO, I2.RO).get(x); } => //; 1:smt().
       + by call RO_get.
       by inline *; sim.
     inline *; auto => />.
-    have hn := o_pair_none <: from, to1, to2>. 
+    have hn := o_pair_none <: from, to1, to2>.
     by rewrite /pair_map merge_empty // map_empty /= => ?; rewrite !mem_empty.
   qed.
 
-  lemma pr_RO_split (p: glob D -> output -> bool) &m x0: 
+  lemma pr_RO_split (p: glob D -> output -> bool) &m x0:
     Pr[ MainD(D,RO).distinguish(x0) @ &m : p (glob D) res] =
     Pr[ MainD(D,RO_Pair(I1.RO,I2.RO)).distinguish(x0) @ &m : p (glob D) res].
   proof. by byequiv RO_split. qed.

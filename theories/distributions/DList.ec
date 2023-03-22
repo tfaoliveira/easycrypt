@@ -159,7 +159,7 @@ lemma weight_dlistS n (d:'a distr):
   0 <= n => weight (dlist d (n + 1)) = weight d * weight (dlist d n).
 proof. by move=> ge0;rewrite -(dlistSE witness) //. qed.
 
-lemma weight_dlist (d : 'a distr) n : 
+lemma weight_dlist (d : 'a distr) n :
  0 <= n => weight (dlist d n) = (weight d)^n.
 proof.
 elim: n => [|n ? IHn]; 1: by rewrite weight_dlist0 // RField.expr0.

@@ -19,7 +19,7 @@ op size (xs : 'a list) =
 lemma size_ge0 (s : 'a list): 0 <= size s.
 proof. by elim: s => //= x s; smt. qed.
 
-hint exact : size_ge0. 
+hint exact : size_ge0.
 
 lemma size_eq0 (s : 'a list): (size s = 0) <=> (s = []).
 proof. by case: s => //=; smt. qed.
@@ -2411,7 +2411,7 @@ case (0 <= n); last by move => ?; rewrite !mkseq0_le /#.
 move => ge0_n; apply (eq_from_nth witness) => [|i rg_i].
 - by rewrite size_map !size_mkseq.
 rewrite size_map size_mkseq lez_maxr // in rg_i.
-by rewrite (nth_map witness) ?size_mkseq ?lez_maxr // !nth_mkseq. 
+by rewrite (nth_map witness) ?size_mkseq ?lez_maxr // !nth_mkseq.
 qed.
 
 
@@ -3393,7 +3393,7 @@ declare type t.
 (* get max relative to this transitive and strongly connective relation *)
 declare op rel: t -> t -> bool.
 
-declare axiom nosmt rel_trans: transitive rel. 
+declare axiom nosmt rel_trans: transitive rel.
 
 declare axiom nosmt rel_conn (a b: t): rel a b \/ rel b a.
 
@@ -3556,11 +3556,11 @@ qed.
 abstract theory Cost.
   schema cost_eqnil ['a] `{P} {l:'a list} : cost [P: l = []] = cost [P:l] + '1.
   hint simplify cost_eqnil.
-  
-  schema cost_drop ['a] `{P} {l: 'a list} : 
+
+  schema cost_drop ['a] `{P} {l: 'a list} :
     cost [P: drop 1 l] = cost [P: l] + '1.
 
-  schema cost_head ['a] `{P} {w:'a, l:'a list} : 
+  schema cost_head ['a] `{P} {w:'a, l:'a list} :
     cost [P:head w l] = cost[P:w] + cost[P:l] + '1.
 
   hint simplify cost_drop, cost_head.

@@ -194,7 +194,7 @@ move=> [h0p hp1] eps he /=.
 case: (p = 0%r) => [-> | ?].
 + by exists 1 => n hn; rewrite RField.expr0n /#.
 pose P := `|p|.
-have [# 4?] : 0%r < P < 1%r /\ P <> 0%r /\ 0%r <= P by smt().  
+have [# 4?] : 0%r < P < 1%r /\ P <> 0%r /\ 0%r <= P by smt().
 case: (1%r <= eps) => h1e.
 +  exists 1 => n hn; apply (ler_lt_trans (`|p|^1)).
    + rewrite normrX; smt(ler_wiexpn2l expr_ge0).
@@ -203,11 +203,11 @@ pose N := ceil (-log (inv P) eps) + 1; exists N => n hn.
 rewrite normrX -/P.
 have ? : 1%r < inv P by apply invr_gt1.
 have ? : 0 < N by smt (log_le0 ceil_bound).
-apply (ler_lt_trans (P ^ N)); 1: by apply ler_wiexpn2l => /#. 
+apply (ler_lt_trans (P ^ N)); 1: by apply ler_wiexpn2l => /#.
 rewrite -(RField.invrK P) -RField.exprN1 -RField.exprM /= mulN1r.
 rewrite -(@log_mono_ltr (inv P)) //; 1: by apply/expr_gt0/invr_gt0.
 rewrite -rpow_int 1:invr_ge0 // logK 1:invr_gt0 1:// 1:/#.
-smt(ceil_bound). 
+smt(ceil_bound).
 qed.
 
 (* -------------------------------------------------------------------- *)
@@ -420,7 +420,7 @@ apply/(cnvP l)/convergeto_sum => /= x Px.
 by apply/limP/cvg.
 qed.
 
-lemma lim_sum 
+lemma lim_sum
   (P : 'a -> bool)
   (F : 'a -> int -> real)
   (s : 'a list)

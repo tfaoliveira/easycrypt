@@ -90,13 +90,13 @@ lemma lex_add2l (x1 x2 y : xint) :
   x1 <= x2 => y + x1 <= y + x2.
 proof. by rewrite !(@addxC y) &(lex_add2r). qed.
 
-op xmax (x y : xint) = 
+op xmax (x y : xint) =
   with x = N x, y = N y => N (max x y)
   with x = N _, y = Inf => Inf
   with x = Inf, y = N _ => Inf
   with x = Inf, y = Inf => Inf.
 
-lemma sub_completness (t1 t2 t:xint) : 
+lemma sub_completness (t1 t2 t:xint) :
    t1 + t2 <= t <=>
    t1 <= t - t2 /\ (is_int t2 \/ is_inf t).
 proof.
@@ -134,7 +134,7 @@ lemma big_constNz x (s: 'a list) :
   big predT (fun _ => N x) s = N (size s * x).
 proof. by rewrite big_const_Nx count_predT. qed.
 
-lemma bigi_constz x (n m:int) : 
+lemma bigi_constz x (n m:int) :
    n <= m =>
    bigi predT (fun _ => N x) n m = N ((m - n) * x).
 proof. by move=> hnm;rewrite big_constNz size_range /#. qed.
@@ -146,21 +146,21 @@ export Bigxint.
 lemma is_int_xopp (x:xint) : is_int x => is_int (-x).
 proof. by case: x. qed.
 
-lemma is_int_xadd (x y: xint) : 
+lemma is_int_xadd (x y: xint) :
   is_int x => is_int y => is_int (x + y).
 proof. by case: x; case y. qed.
 
-lemma is_int_xmul (x y: xint) : 
+lemma is_int_xmul (x y: xint) :
   is_int x => is_int y => is_int (x * y).
 proof. by case: x; case y. qed.
 
 hint simplify is_int_xopp, is_int_xadd, is_int_xmul.
 
-lemma is_int_big (P: 'a -> bool) (f:'a -> xint) (s:'a list) : 
+lemma is_int_big (P: 'a -> bool) (f:'a -> xint) (s:'a list) :
     (forall x, is_int (f x)) =>
     is_int (big P f s).
 proof.
-  move=> h; elim: s. 
+  move=> h; elim: s.
   + by rewrite big_nil.
   move=> x l hl; rewrite big_cons; case: (P x) => ? //.
   by apply is_int_xadd => //; apply h.

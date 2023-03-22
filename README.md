@@ -1,4 +1,4 @@
-EasyCrypt: Computer-Aided Cryptographic Proofs
+EasyCrypt: Computer-Aided Cryptographic Proofs 
 ====================================================================
 
 EasyCrypt is a toolset for reasoning about relational properties of
@@ -185,14 +185,14 @@ Then, at the root of the EasyCrypt source tree, type:
     ```
     $> nix-shell
     ```
-    
+
 These should install all the required dependencies. From there, simply
 run:
 
     ```
     $> make
     ```
-    
+
 to compile EasyCrypt.
 
 Note on Prover Versions

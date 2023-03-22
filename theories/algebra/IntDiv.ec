@@ -576,7 +576,7 @@ qed.
 lemma nosmt divzDr m n d : d %| n => (m + n) %/ d = (m %/ d) + (n %/ d).
 proof. by move=> dv_n; rewrite addrC divzDl // addrC. qed.
 
-lemma divz_mulp (n d1 d2 : int) : 
+lemma divz_mulp (n d1 d2 : int) :
   0 < d1 =>
   0 < d2 =>
   n %/ (d1 * d2) = n %/ d1 %/ d2.
@@ -680,13 +680,13 @@ proof. by case: ((a, b) = (0, 0)) => [@/gcd ->//|/gcdP]. qed.
 hint exact : ge0_gcd.
 
 lemma dvdz_gcdr a b : gcd a b %| b.
-proof. 
+proof.
 case: (b = 0) => [->|nz_b]; 1: by apply: dvdz0.
 by have /gcdP: (a, b) <> (0, 0) by apply: contra nz_b.
 qed.
 
 lemma dvdz_gcdl a b : gcd a b %| a.
-proof. 
+proof.
 case: (a = 0) => [->|nz_a]; 1: by apply: dvdz0.
 by have /gcdP: (a, b) <> (0, 0) by apply: contra nz_a.
 qed.
@@ -966,7 +966,7 @@ lemma dvdz2_eq m n :
   m = n.
 proof.
   move => le0m le0n /dvdzP [x ->>] /dvdzP [y /(congr1 (transpose (%/) m) _ _) /=].
-  rewrite mulrA divzz; case (m = 0) => /= [->> //=|neqm0]. 
+  rewrite mulrA divzz; case (m = 0) => /= [->> //=|neqm0].
   rewrite /b2i mulzK //= => eq1mul; move: (unitrM y x); move: eq1mul => <- /=.
   move => [_ [|] ->> //=]; move: le0n; rewrite mulNr /= oppr_ge0 => lem0.
   by move: neqm0; rewrite eqz_leq lem0 le0m.
@@ -1077,7 +1077,7 @@ proof.
   by rewrite !pdiv_small.
 qed.
 
-lemma nosmt divzMr i a b :  
+lemma nosmt divzMr i a b :
   0 <= a => 0 <= b => i %/ (a * b) = i %/ a %/ b.
 proof.
 move=> ge0_a ge0_b.
@@ -1086,11 +1086,11 @@ case (b = 0) => [-> | neq0_b]; first by rewrite mulr0 2!divz0.
 pose ab := a * b; move: (edivzP i ab) (divz_eq i a) (divz_eq (i %/ a) b) => [].
 rewrite mulf_eq0 neq0_b neq0_a /= => eqi_ab rngi_ab eqi_a eqia_b.
 move: (euclideU ab (i %/ ab) (i %/ a %/ b) (i %% ab) (i %/ a %% b * a + i %% a)).
-move=> /(_ _ _ _) //; last rewrite andaE. 
+move=> /(_ _ _ _) //; last rewrite andaE.
 + by rewrite -eqi_ab /ab (mulrC a) mulrA addrA -mulrDl -eqia_b -eqi_a.
 split; first by rewrite addz_ge0 1:mulr_ge0 1,3:modz_ge0.
 rewrite ger0_norm 1:mulr_ge0 // (ltr_le_trans ((b - 1) * a + a)).
-+ by rewrite ler_lt_add 1:ler_pmul 1:modz_ge0 // 1:-ltzS ltz_pmod ltr_def. 
++ by rewrite ler_lt_add 1:ler_pmul 1:modz_ge0 // 1:-ltzS ltz_pmod ltr_def.
 by rewrite mulzDl mulNr -addzA addNz mulzC.
 qed.
 
@@ -1099,7 +1099,7 @@ lemma nosmt divzMl i a b :
 proof. by move=> *; rewrite mulrC divzMr. qed.
 
 (*
-lemma nosmt modz_pow2_div n p i: 
+lemma nosmt modz_pow2_div n p i:
   0 <= p <= n => (i %% 2^n) %/ 2^p = (i %/ 2^p) %% 2^(n-p).
 proof.
 move=> [ge0_p len_p].

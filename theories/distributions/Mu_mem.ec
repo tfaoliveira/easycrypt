@@ -3,12 +3,12 @@ require import AllCore List FSet SmtMap Distr.
 require import Ring Number StdRing StdOrder.
 (*---*) import RField RealOrder.
 
-lemma mu_mem_le_gen (s:'a fset) (d:'b distr) p (bd:real) : 
+lemma mu_mem_le_gen (s:'a fset) (d:'b distr) p (bd:real) :
   (forall (x : 'a), mem s x => mu d (p x) <= bd) =>
   mu d (fun r => exists x, x \in s /\ p x r) <= (card s)%r * bd.
 proof.
 elim/fset_ind: s; first by rewrite mu0_false; smt(in_fset0 fcards0).
-move => x s x_fresh IH H. 
+move => x s x_fresh IH H.
 rewrite (@mu_eq _ _ (predU (p x)
   (fun (r : 'b) => exists (x : 'a), (x \in s) /\ p x r))); 1: smt(in_fsetU1).
 rewrite mu_or; apply ler_naddr; 1: smt(mu_bounded).
@@ -18,7 +18,7 @@ qed.
 lemma mu_mem_le (s:'a fset): forall (d:'a distr) (bd:real),
   (forall (x : 'a), mem s x => mu d (pred1 x) <= bd) =>
   mu d (mem s) <= (card s)%r * bd.
-proof. 
+proof.
 by move => d bd; have X := mu_mem_le_gen s d pred1 bd; smt(mu_eq).
 qed.
 

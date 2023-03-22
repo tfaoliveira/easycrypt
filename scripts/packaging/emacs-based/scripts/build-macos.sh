@@ -171,7 +171,7 @@ def _main():
     os.chdir(mydir)
     os.putenv('PATH', '%s%s%s' % (os.path.join(mydir, 'bin'), \\
                                   os.pathsep, \\
-                                  os.environ.get('PATH', '')))    
+                                  os.environ.get('PATH', '')))
     os.execvp(emacs, [emacs] + args)
 
 # --------------------------------------------------------------------

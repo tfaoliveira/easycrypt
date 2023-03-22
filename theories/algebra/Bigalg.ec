@@ -60,13 +60,13 @@ move=> /IntOrder.ler_eqVlt [<<- | hmn].
 + by rewrite big_geq 1:// subrr.
 rewrite -sumrB (@big_ltn m n F) 1:// /=.
 have heq: n = n - 1 + 1 by ring.
-rewrite heq (@big_int_recr (n-1) m) 1:/# -heq /=. 
+rewrite heq (@big_int_recr (n-1) m) 1:/# -heq /=.
 rewrite (@big_reindex _ _ (fun x=> x - 1) (fun x=> x + 1) (range m (n - 1))) //.
 have ->: (transpose Int.(+) 1) = ((+) 1).
 + by apply: fun_ext=> x; ring.
 have ->: predT \o transpose Int.(+) (-1) = predT by done.
 by rewrite /(\o) /= -(@range_addl m n 1) (@addrC _ (F n)) subr_add2r.
-qed. 
+qed.
 
 lemma telescoping_sum_down (F: int -> t) (m n:int) : m <= n =>
   F n - F m = bigi predT (fun i => F (i+1) - F i) m n.
@@ -170,7 +170,7 @@ rewrite mulrBl !(BAdd.big_distrr mulr0 mulrDr).
 rewrite BAdd.big_int_recl // BAdd.big_int_recr //= !expr0 /=.
 rewrite !(mulr1, mul1r) -!exprS // opprD !addrA; congr.
 rewrite -addrA BAdd.sumrB /= BAdd.big_seq BAdd.big1 ?addr0 //=.
-move=> i /mem_range rg_i; rewrite mulrA -exprS 1:/# mulrCA. 
+move=> i /mem_range rg_i; rewrite mulrA -exprS 1:/# mulrCA.
 by rewrite -exprS 1:/# subr_eq0; do 2! congr => /#.
 qed.
 end BigComRing.
@@ -227,8 +227,8 @@ move=> h; apply: (@BAdd.big_ind (fun x => zeror <= x)) => //=.
   by apply/addr_ge0.
 qed.
 
-lemma nosmt sub_ler_sum (P1 P2 : 'a -> bool) (F1 F2 : 'a -> t) s : 
-  (forall x, P1 x => P2 x) => 
+lemma nosmt sub_ler_sum (P1 P2 : 'a -> bool) (F1 F2 : 'a -> t) s :
+  (forall x, P1 x => P2 x) =>
   (forall x, P1 x => F1 x <= F2 x) =>
   (forall x, P2 x => !P1 x => zeror <= F2 x) =>
   BAdd.big P1 F1 s <= BAdd.big P2 F2 s.
@@ -302,12 +302,12 @@ move=> h; rewrite !(@BMul.big_seq_cond P).
 by rewrite prodr_gt0=> //= x []; apply/h.
 qed.
 
-lemma gt0_prodr_seq (P : 'a -> bool) (F : 'a -> t) (s : 'a list) : 
-  (forall (a : 'a), a \in s => P a => zeror <= F a) => 
-  zeror < BMul.big P F s => 
+lemma gt0_prodr_seq (P : 'a -> bool) (F : 'a -> t) (s : 'a list) :
+  (forall (a : 'a), a \in s => P a => zeror <= F a) =>
+  zeror < BMul.big P F s =>
   (forall (a : 'a), a \in s => P a => zeror < F a).
 proof.
-elim: s => // x s IHs F_ge0; rewrite BMul.big_cons. 
+elim: s => // x s IHs F_ge0; rewrite BMul.big_cons.
 have {IHs} IHs := IHs _; first by smt().
 case: (P x) => [Px F_big_gt0 a a_x_s Pa| nPx /IHs]; 2:smt().
 smt(pmulr_gt0 prodr_ge0_seq).

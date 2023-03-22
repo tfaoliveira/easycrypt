@@ -12,7 +12,7 @@ op q : { int | 0 <= q } as q_ge0.
 
 (* This file provides a theory for hybrid arguments. The main lemmas are
   named: Hybrid[_restr][_div] where the "restr" suffix denotes the variant
-  where the adversary is known to make at most q calls and the "div" suffix 
+  where the adversary is known to make at most q calls and the "div" suffix
   denotes the statement using 1/q, in the case where q is not 0.
 
   The main module types and modules are:
@@ -22,22 +22,22 @@ op q : { int | 0 <= q } as q_ge0.
   - L : projection from Oraclb to Orcl, using the left oracle
   - R : projection from Oraclb to Orcl, using the right oracle
   - AdvOrclb: Main adversary, requirig acces to both (Ob : Orclb) and (O : Orcl)
-  - AdvOrcl: Adversary requiring only (O: Orcl), 
+  - AdvOrcl: Adversary requiring only (O: Orcl),
     usually a partially instantiated (A : AdvOrclb)
   - OrclCount: counting wrapper for (O:Orcl)
   - HybGame(A,Ob,O): Hybrid game, where at most one randomly chosen
     query is made to O.orcl and all other queries are answered using Ob.
-  
+
   All four main lemmas express the difference beween the games
 
     AdvCount(A(Ob, OrclCount(L(Ob)))).main    and
-    AdvCount(A(Ob, OrclCount(L(Ob)))).main 
+    AdvCount(A(Ob, OrclCount(L(Ob)))).main
 
-  with q allowed queries in terms of 
+  with q allowed queries in terms of
 
     AdvCount(HybGame(A, Ob, OrclCount(L(Ob)))).main   and
     AdvCount(HybGame(A, Ob, OrclCount(R(Ob)))).main
-*)  
+*)
 
 (* -------------------------------------------------------------------- *)
 (* Wrappers for counting *)
@@ -148,11 +148,11 @@ clone import Means as M with
     op d <- [0..max 0 (q-1)].
 
 (* In the case of 0 oracle calls, the behavor does not depend on the oracle *)
-lemma orcl_no_call (A <: AdvOrcl{-Count}) (O1 <: Orcl{-Count,-A}) (O2 <: Orcl{-Count,-A}) &m p : 
-  (forall (O <: Orcl{-A}), islossless O.orcl => islossless A(O).main ) => 
+lemma orcl_no_call (A <: AdvOrcl{-Count}) (O1 <: Orcl{-Count,-A}) (O2 <: Orcl{-Count,-A}) &m p :
+  (forall (O <: Orcl{-A}), islossless O.orcl => islossless A(O).main ) =>
   islossless O1.orcl => islossless O2.orcl =>
   let p' = fun ga l r, p ga l r /\ l <= 0 in
-    Pr[ AdvCount(A(OrclCount(O1))).main() @ &m : p' (glob A) Count.c res] = 
+    Pr[ AdvCount(A(OrclCount(O1))).main() @ &m : p' (glob A) Count.c res] =
     Pr[ AdvCount(A(OrclCount(O2))).main() @ &m : p' (glob A) Count.c res].
 proof.
 move=> A_ll O1_ll O2_ll p'; byequiv => //; proc; inline*; auto.
@@ -370,41 +370,41 @@ section.
      for the concrete instance, dealing with the additonal cases. *)
   local lemma Hybrid0 &m (p:glob A -> glob Ob -> int -> outputA -> bool):
     let p' = fun ga ge l r, p ga ge l r /\ l <= q in
-    q = 0 => 
-    Pr[Ln(Ob,A).main() @ &m : p' (glob A) (glob Ob) Count.c res] = 
+    q = 0 =>
+    Pr[Ln(Ob,A).main() @ &m : p' (glob A) (glob Ob) Count.c res] =
     Pr[Rn(Ob,A).main() @ &m : p' (glob A) (glob Ob) Count.c res].
   proof.
     move=> /= ?; byequiv => //; proc; inline *.
     call(: 0 < Count.c, 0 <= Count.c{2} /\ ={glob Ob,Count.c}, 0 < Count.c{1} /\ 0 < Count.c{2}).
     + apply losslessA.
-    + proc; inline *; wp; conseq (: true ==> true); 1: smt(). 
+    + proc; inline *; wp; conseq (: true ==> true); 1: smt().
       by call {1} losslessOb1; call {2} losslessOb2.
     + move => &m2 *; proc; inline*; auto.
-      conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2});[smt()|smt()|by call(: true)|]. 
+      conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2});[smt()|smt()|by call(: true)|].
       by islossless; apply losslessOb1.
     + move => &m1 *; proc; inline*; auto.
-      conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1});[smt()|smt()|by call(: true)|]. 
+      conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1});[smt()|smt()|by call(: true)|].
       by islossless; apply losslessOb2.
     + by proc (={Count.c} /\ Count.c{2} = 0); smt().
-    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt(). 
+    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt().
       by conseq losslessL.
-    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt(). 
+    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt().
       by conseq losslessL.
     + by proc (={Count.c} /\ Count.c{2} = 0); smt().
-    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt(). 
+    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt().
       by conseq losslessOb1.
-    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt(). 
+    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt().
       by conseq losslessOb1.
     + by proc (={Count.c} /\ Count.c{2} = 0); smt().
-    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt(). 
+    + move => &m2 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m2}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m2}); smt().
       by conseq losslessOb2.
-    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt(). 
-        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt(). 
+    + move => &m1 *; conseq (:_ ==> true) (:  0 < Count.c /\ 0 < Count.c{m1}); 1,2: smt().
+        by proc ( 0 < Count.c /\ 0 < Count.c{m1}); smt().
       by conseq losslessOb2.
     + by auto => />; smt().
   qed.
@@ -461,7 +461,7 @@ section.
 
   (* previous statement using division for [q <> 0] *)
   lemma Hybrid_div &m (p:glob A -> glob Ob -> int -> outputA -> bool):
-    q <> 0 => 
+    q <> 0 =>
     let p' = fun ga ge l r, p ga ge l r /\ l <= q in
        Pr[Ln(Ob,HybGame(A)).main() @ &m : p' (glob A) (glob Ob) HybOrcl.l res /\ Count.c <= 1]
      - Pr[Rn(Ob,HybGame(A)).main() @ &m : p' (glob A) (glob Ob) HybOrcl.l res /\ Count.c <= 1]
@@ -640,7 +640,7 @@ section.
   + by conseq (: _ ==> ={res, glob Ob})=> //; sim.
   by auto=> /> l0 /supp_dinter /#.
   qed.
-  
+
   lemma Hybrid_restr_div &m (p:glob A -> glob Ob -> int -> outputA -> bool):
       q <> 0 =>
         Pr[HybGame(A,Ob,L(Ob)).main() @ &m : p (glob A) (glob Ob) HybOrcl.l res]

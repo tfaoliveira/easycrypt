@@ -45,7 +45,7 @@ type ta, tb.
 module S = {
   proc sample(d: ta -> tb distr, xs: ta list): tb list = {
     var r;
-  
+
     r <$ djoinmap d xs;
     return r;
   }
@@ -78,7 +78,7 @@ module S = {
 }.
 
 equiv Sample_Loop_eq: S.sample ~ S.loop: ={d, xs} ==> ={res}.
-proof. 
+proof.
   proc => /=;  alias{1} 0 rb = witness <:tb>.
   sp 1 2; exlim xs{1}, l{2} => xs_ l2.
   pose xs' := List."[]" <:ta>.
@@ -88,7 +88,7 @@ proof.
   + rcondf{2} ^while; 1: by auto.
     rnd{1}; skip => />; split; 1: by apply djoin_ll.
     by move=> _ ?; rewrite djoin_nil => /supp_dunit.
-  rcondt{2} ^while; 1: by auto => />; rewrite size_rcons /= size_ge0. 
+  rcondt{2} ^while; 1: by auto => />; rewrite size_rcons /= size_ge0.
   transitivity{1} { rb <$ (d x);
                     xs <- xs_;
                     r <$ djoinmap d xs;
@@ -117,10 +117,10 @@ proof.
 qed.
 
 equiv Sample_Loop_first_eq: S.sample ~ S.loop_first : ={d, xs} ==> ={res}.
-proof. 
+proof.
   proc => /=;  alias{1} 0 rb = witness <:tb>.
   sp 1 1; exlim xs{1}, l{2} => xs_ l2.
-  conseq (: ={d,xs} /\ l{2} = l2 /\ xs{2} = xs_ 
+  conseq (: ={d,xs} /\ l{2} = l2 /\ xs{2} = xs_
              ==> l2++r{1} = l{2}); 1,2: by move=> />.
   elim: xs_ l2 => [ | x xs_ hrec] l2.
   + rcondf{2} ^while; 1: by auto.

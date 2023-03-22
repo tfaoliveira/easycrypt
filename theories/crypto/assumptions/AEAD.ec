@@ -53,7 +53,7 @@ module AEAD_Oracles : AEAD_OraclesT = {
         c <$ enc (oget keylist.[kid]) a m;
         co <- Some c;
      }
-     return co;     
+     return co;
   }
 
   proc lor(kid : int, m0 m1 : Msg, a : AData) : Cph option = {
@@ -64,7 +64,7 @@ module AEAD_Oracles : AEAD_OraclesT = {
         cphlist <- cphlist `|` fset1 (kid,a,c);
         co <- Some c;
      }
-     return co;     
+     return co;
   }
 
   proc dec(kid : int, a : AData, c : Cph) : Msg option = {
@@ -127,12 +127,12 @@ module AEAD_LoRCondProb(A : AEAD_Adv) = {
 
 declare module A <: AEAD_Adv {-AEAD_Oracles}.
 
-equiv condprob_equiv : 
-  AEAD_LoR(A).main ~ AEAD_LoRCondProb(A).main : 
+equiv condprob_equiv :
+  AEAD_LoR(A).main ~ AEAD_LoRCondProb(A).main :
   ={glob A} ==> ={res}.
 proof.
   proc; inline*.
-  wp.  
+  wp.
   call (_: ={glob AEAD_Oracles}).
     sim.
     sim.
@@ -140,7 +140,7 @@ proof.
     sim.
   wp.
   rnd.
-  skip => /#. 
+  skip => /#.
 qed.
 
 end section CondProb.
@@ -177,7 +177,7 @@ section AEADmul.
     var n_keys : int
     var lorcount : int
     var deccount : int
-    
+
     proc init () = {
       b <$ {0,1};
       keys <- [];
@@ -205,7 +205,7 @@ section AEADmul.
 
       return olctxt;
     }
-    
+
     proc dec (id : int, tag : AData, ctxt : Cph) : Msg option = {
       var ptxt : Msg option;
 
@@ -226,7 +226,7 @@ section AEADmul.
       var m0, m1, mb : Msg;
       var tag : AData;
       var c : Cph;
-      
+
       Or.init();
       b' <@ A(Or).guess();
 

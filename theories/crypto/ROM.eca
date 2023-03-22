@@ -550,7 +550,7 @@ have: Pr[G0(D,LRO).main(i) @ &m: res = r] <= Pr[G1'(D,LRO).main(i) @ &m: res = r
   + proc; inline LRO.o; auto=> /> &2 eq_qs_m y _; split.
     + by move=> x_notin_m x1; rewrite in_fsetU in_fset1 mem_set eq_qs_m.
     move=> x_in_m x1; rewrite in_fsetU in_fset1 eq_qs_m; case: (x1 = x{2})=> //=.
-    by move=> ->; rewrite x_in_m.          
+    by move=> ->; rewrite x_in_m.
   inline Log(LRO).init LRO.init; auto=> />; split=> [x1|_ a qs m eq_qs_m y _].
   + by rewrite in_fset0 mem_empty.
   by rewrite get_set_eqE //= eq_except_setl /= eq_qs_m /#.
@@ -658,7 +658,7 @@ have: Pr[G0(D,LRO).main(i) @ &m: res = r] <= Pr[G1'(D,LRO).main(i) @ &m: res = r
     + proc; inline Log(LRO).o LRO.o; sp; if=> //; auto=> /> &2 eq_qs_m _ y _; split.
       + by move=> x_notin_m x1; rewrite in_fsetU in_fset1 mem_set eq_qs_m.
       move=> x_in_m x1; rewrite in_fsetU in_fset1 eq_qs_m; case: (x1 = x{2})=> //=.
-      by move=> ->; rewrite x_in_m.          
+      by move=> ->; rewrite x_in_m.
     inline Log(LRO).init LRO.init; auto=> />; split=> [x1|_ a qs m eq_qs_m y _].
     + by rewrite in_fset0 mem_empty.
   by rewrite get_set_eqE //= eq_except_setl /= eq_qs_m /#.

@@ -26,11 +26,11 @@ void eprintf_exit(LPWSTR format, ...)
 
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
                   FORMAT_MESSAGE_ALLOCATE_BUFFER,
-                  NULL, 
+                  NULL,
                   error,
                   0,
-                  (LPWSTR) &buffer, 
-                  0, 
+                  (LPWSTR) &buffer,
+                  0,
                   NULL);
 
     va_start(ars, format);
@@ -122,7 +122,7 @@ int wmain(int argc, LPWSTR argv[]) {
           FALSE,          // Set handle inheritance to FALSE
           piflags,        // No creation flags
           NULL,           // Use parent's environment block
-          NULL,           // Use parent's startin directory 
+          NULL,           // Use parent's startin directory
           &si,            // Pointer to STARTUPINFO structure
           &pi)            // Pointer to PROCESS_INFORMATION structure
        )

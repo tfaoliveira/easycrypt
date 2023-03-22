@@ -76,7 +76,7 @@ have ->:   Pr[Rand(A).main() @ &m:
 + by rewrite Pr[mu_eq].
 rewrite Pr[mu_disjoint].
 + move=> /> &0; rewrite negb_and negb_and //=.
-  case: (v = res{0}.`1)=> //= ->>. 
+  case: (v = res{0}.`1)=> //= ->>.
   case: (ev res{0}.`1 (glob A){0} res{0}.`2)=> //= hev.
   rewrite bigP hasP negb_exists=> //= v'.
   rewrite negb_and negb_and filter_predT.

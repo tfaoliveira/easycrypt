@@ -541,7 +541,7 @@ section CollisionProbability.
     op maxu <- witness
   proof *.
   realize ge0_q by apply ge0_q.
-  realize maxuP. 
+  realize maxuP.
   proof.
   by move=> x; exact/StdOrder.RealOrder.lerr_eq/dD_funi.
   qed.
@@ -582,7 +582,7 @@ section CollisionProbability.
   by inline*; auto.
   qed.
 
-  local equiv IND_Exp : 
+  local equiv IND_Exp :
      A(Sample).a ~ IND(PRFi,D).main : ={glob D} /\ size Sample.l{1} = 0 ==>
          (collision PRFi.m{2} <=> !uniq Sample.l{1}) /\
          size Sample.l{1} = card (fdom PRFi.m){2}.
@@ -639,7 +639,7 @@ module FBounder (F : PRF_Oracles) = {
 }.
 
 module DBounder (D : Distinguisher) (F : PRF_Oracles) = {
- 
+
   proc distinguish(): bool = {
     var b;
     FBounder.c <- 0;
@@ -653,7 +653,7 @@ section BOUNDER.
 declare module D <: Distinguisher {-RP, -PRFi, -DBounder}.
 declare axiom D_ll (O <: PRF_Oracles {-D}): islossless O.f => islossless D(O).distinguish.
 
-lemma DBounder_ll (O <: PRF_Oracles{-DBounder(D)}): 
+lemma DBounder_ll (O <: PRF_Oracles{-DBounder(D)}):
   islossless O.f => islossless DBounder(D, O).distinguish.
 proof.
   move=> hll; islossless.
@@ -716,7 +716,7 @@ module PRP = {
 
   proc init() = { k <$ dK; }
   proc f(x : D) = { return p k x; }
-  proc fi(x : D) = { return pi k x; }  
+  proc fi(x : D) = { return pi k x; }
 }.
 
 end PseudoRP.

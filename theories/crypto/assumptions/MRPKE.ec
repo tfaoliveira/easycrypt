@@ -52,14 +52,14 @@ module type MRPKE_Adv(O:MRPKE_OrclT) = {
 }.
 
 op fold_encs(pks : MPk, tag : Tag, ctxts : (MCTxt)) =
-   map (fun x, (x,tag,oget ctxts.[x])) (elems pks).  
+   map (fun x, (x,tag,oget ctxts.[x])) (elems pks).
 
 op q_gen : int.
 op q_lor : int.
 op q_dec : int.
 
 module MRPKE_lor = {
-  
+
   module S = Scheme
   var b:bool
   var pklist : (Pk,Sk) fmap
@@ -76,7 +76,7 @@ module MRPKE_lor = {
     count_lor <- 0;
     count_dec <- 0;
   }
-  
+
   proc gen () = {
     var k : Sk * Pk;
     var pk : Pk;
@@ -117,7 +117,7 @@ module MRPKE_lor = {
           r <@ S.decrypt(oget pklist.[pk],tag,ctxt);
        }
        count_dec <- count_dec + 1;
-    }    
+    }
     return r;
   }
 }.

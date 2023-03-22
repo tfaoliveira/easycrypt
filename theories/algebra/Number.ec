@@ -747,9 +747,9 @@ lemma nosmt lerNgt (x y : t): (x <= y) <=> !(y < x).
 proof. by rewrite ltrNge. qed.
 
 (* -------------------------------------------------------------------- *)
-lemma pmulr_gt0 x y : zeror <= x => zeror <= y => 
-  zeror < x * y <=> zeror < x /\ zeror < y. 
-proof. 
+lemma pmulr_gt0 x y : zeror <= x => zeror <= y =>
+  zeror < x * y <=> zeror < x /\ zeror < y.
+proof.
 move=> x_ge0 y_ge0; split; last by smt(pmulr_rgt0).
 smt (pmulr_rgt0 ltrNge ler_anti mul0r ltrr).
 qed.
@@ -1302,7 +1302,7 @@ lemma maxr_ub (x y : t) : x <= maxr x y /\ y <= maxr x y.
 proof. by rewrite maxrl maxrr. qed.
 
 lemma ler_maxrP m n1 n2 : (maxr n1 n2 <= m) <=> (n1 <= m) /\ (n2 <= m).
-proof. 
+proof.
 split; last by case=> le1 le2; rewrite maxrE; case: (n2 <= n1).
 rewrite maxrE; case: (n2 <= n1).
 * by move=> le_21 le_n1m; rewrite (ler_trans _ le_21 le_n1m).
@@ -1319,9 +1319,9 @@ rewrite maxrE; case: (n2 <= n1).
   by rewrite (ltr_trans _ lt_12 lt_n1m).
 qed.
 
-lemma ler_maxr_trans (x1 x2 y1 y2 : t) : 
+lemma ler_maxr_trans (x1 x2 y1 y2 : t) :
   x1 <= x2 => y1 <= y2 => maxr x1 y1 <= maxr x2 y2.
-proof. 
+proof.
   by move=> hx hy; rewrite ler_maxrP; case (maxr_ub x2 y2) => hx' hy'; split;
    [apply: ler_trans hx' | apply: ler_trans hy'].
 qed.
@@ -1337,7 +1337,7 @@ proof.
   rewrite ler_subr_addr add0r => -> /=.
   by rewrite opprB -ler_subr_addr opprK ler_addl.
 qed.
-     
+
 (* -------------------------------------------------------------------- *)
 lemma minrC (x y : t) : minr x y = minr y x.
 proof. by rewrite !minrE lerNgt ler_eqVlt; case: (y = x); case: (y < x). qed.

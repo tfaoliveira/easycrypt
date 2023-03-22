@@ -1537,13 +1537,13 @@ let trans_if_match ~loc env ue (gindty, gind) (c, b1, b2) =
 
   List.map
     (fun (x, xargs) ->
-      if sym_equal c x then 
+      if sym_equal c x then
         (cargs, Some b1)
-      else 
+      else
         (* Create a pattern C _ _ ... for each constructor *)
-        let wilds = List.map (fun _ -> EcLocation.mk_loc loc None) xargs in 
+        let wilds = List.map (fun _ -> EcLocation.mk_loc loc None) xargs in
         let pat = PPApp ((EcLocation.mk_loc loc ([], x), None), wilds) in
-        let b2 = 
+        let b2 =
           (match b2 with
           | None -> []
           | Some b2 -> b2

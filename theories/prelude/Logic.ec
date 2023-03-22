@@ -387,11 +387,11 @@ lemma  if_arg b x (fT fF : 'a -> 'b) :
   (if b then fT else fF) x = if b then fT x else fF x
 by smt().
 
-lemma ifT (b : bool) (e1 e2 : 'a) : 
-  b => (if b then e1 else e2) = e1 
+lemma ifT (b : bool) (e1 e2 : 'a) :
+  b => (if b then e1 else e2) = e1
 by move=> ->.
 
-lemma ifF (b : bool) (e1 e2 : 'a) : 
+lemma ifF (b : bool) (e1 e2 : 'a) :
  !b => (if b then e1 else e2) = e2
 by move=> ->.
 

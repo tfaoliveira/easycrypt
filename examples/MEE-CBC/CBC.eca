@@ -861,6 +861,6 @@ have BA_distinguish_ll: (forall (O <: RCPA_Oracles { -QueryBounder(A) }), isloss
 have:= reduction (QueryBounder(A)) &m BA_distinguish_ll.
 have:= Bound_by_Birthday A A_distinguish_ll &m.
 have:= Bound_by_PRP_PRF A A_distinguish_ll &m.
-have -> : (q * ell)^2 = (q * ell) * (q * ell) by ring. 
+have -> : (q * ell)^2 = (q * ell) * (q * ell) by ring.
 smt(mu_bounded).
 qed.

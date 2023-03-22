@@ -16,8 +16,8 @@ lemma dexcepted1E d P (x : 'a) :
   = if   P x
     then 0%r
     else (mu1 d x / (weight d - mu d (P))).
-proof. 
-by rewrite dscale1E weight_drestrict drestrict1E mu_not /predC; case: (P x). 
+proof.
+by rewrite dscale1E weight_drestrict drestrict1E mu_not /predC; case: (P x).
 qed.
 
 lemma nosmt dexcepted1E_notin (d : 'a distr) P x:
@@ -309,7 +309,7 @@ while (i = x /\ test = X) (if test x r then 1 else 0) 1 (mu (dt x) (predC (X x))
     rewrite -(@divrr (weight (dt x) - mu (dt x) (X x))).
     + smt().
     rewrite mulrA mulrA -mulrDl; congr.
-    by rewrite mulrDr mulrC mulrN (mulrC (_ _ (X x))) subrK dt_ll. 
+    by rewrite mulrDr mulrC mulrN (mulrC (_ _ (X x))) subrK dt_ll.
   + seq  2: (P r0 /\ !X x r0)
             (mu (dt x) (predI P (predC (X x)))) 1%r
                                               _ 0%r

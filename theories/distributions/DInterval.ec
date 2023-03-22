@@ -40,17 +40,17 @@ rewrite is_finiteE; exists (range i (j+1)).
 by rewrite range_uniq /= => x; rewrite mem_range supp_dinter /#.
 qed.
 
-lemma perm_eq_dinter (i j : int) : 
+lemma perm_eq_dinter (i j : int) :
   perm_eq (to_seq (support (dinter i j))) (range i (j+1)).
-proof. 
+proof.
 apply: uniq_perm_eq; first exact/uniq_to_seq/finite_dinter.
 - exact: range_uniq.
 by move=> x; rewrite mem_to_seq ?finite_dinter // supp_dinter mem_range /#.
 qed.
 
-lemma perm_eq_dinter_pred (i j : int) : 
+lemma perm_eq_dinter_pred (i j : int) :
     perm_eq (to_seq (support (dinter i (j-1)))) (range i j).
-proof. by have /# := perm_eq_dinter i (j-1). qed.  
+proof. by have /# := perm_eq_dinter i (j-1). qed.
 
 (* -------------------------------------------------------------------- *)
 lemma duni_range_dvd (p q : int) : 0 < p => 0 < q => q %| p =>
@@ -102,9 +102,9 @@ qed.
 abstract theory Cost.
   op cdinterval : int -> int.
   axiom ge0_cdinterval m : 0 <= cdinterval m.
-  
-  schema cost_dinterval {i j : int} (k:int) : 
-    cost [ i <= j <= k - i : dinter i (j - 1)] = 
+
+  schema cost_dinterval {i j : int} (k:int) :
+    cost [ i <= j <= k - i : dinter i (j - 1)] =
     cost [true : i] + cost [true : j] + N (cdinterval k).
   hint simplify cost_dinterval.
 end Cost.

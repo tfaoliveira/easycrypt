@@ -75,7 +75,7 @@ qed.
 end IntOrder.
 
 (* -------------------------------------------------------------------- *)
-theory RealOrder. 
+theory RealOrder.
 clone include Number.RealField
   with type Field.t <- real,
 
@@ -106,12 +106,12 @@ lemma upto_maxr (E1 E1b E1nb E2 E2b E2nb E1b' E2b' : real) :
   E1 = E1b + E1nb =>
   E2 = E2b + E2nb =>
   E1nb = E2nb =>
-  0.0 <= E1b => 
+  0.0 <= E1b =>
   E1b <= E1b' =>
-  0.0 <= E2b => 
+  0.0 <= E2b =>
   E2b <= E2b' =>
   `| E1 - E2 | <= maxr E1b' E2b'.
-proof. 
+proof.
   move=> h1 h2 h3 h4 h5 h6 h7.
   apply (ler_trans `|E1b - E2b|); 1: by apply (upto_abs _ _ _ _ _ _ h1 h2 h3).
   apply (ler_trans (maxr E1b E2b)); 1: by apply (ler_norm_maxr _ _ h4 h6).

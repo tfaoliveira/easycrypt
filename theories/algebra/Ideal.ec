@@ -163,7 +163,7 @@ qed.
 (* -------------------------------------------------------------------- *)
 lemma idDC I J : idD I J = idD J I.
 proof.
-apply/fun_ext=> x @/idD; apply: eq_iff; split; 
+apply/fun_ext=> x @/idD; apply: eq_iff; split;
   by case=> i j [? ->]; exists j i; rewrite addrC /= andbC.
 qed.
 
@@ -280,8 +280,8 @@ qed.
 
 lemma in_idgen_mem xs x : x \in xs => idgen xs x.
 proof.
-move => x_xs; pose n := index x xs; pose cs := rcons (nseq n zeror) oner. 
-have get_cs : forall i, cs.[i] = if i = n then oner else zeror. 
+move => x_xs; pose n := index x xs; pose cs := rcons (nseq n zeror) oner.
+have get_cs : forall i, cs.[i] = if i = n then oner else zeror.
 - by move => i; rewrite nth_rcons size_nseq !ler_maxr ?index_ge0 nth_nseq_if /#.
 exists cs; rewrite (BAdd.bigD1 _ _ n) ?BAdd.big1 ?range_uniq /=.
 - by rewrite mem_range index_ge0 index_mem.
@@ -406,7 +406,7 @@ lemma eqvMr x1 x2 y : eqv x1 x2 => eqv (x1 * y) (x2 * y).
 proof. by rewrite !(mulrC _ y) &(eqvMl). qed.
 
 lemma eqvX x y n : 0 <= n => eqv x y => eqv (exp x n) (exp y n).
-proof. 
+proof.
 move => ge0_n eqv_x_y.
 elim: n ge0_n => [|n ge0_n IHn]; rewrite ?expr0 ?exprSr //.
 by apply (eqv_trans (exp x n * y)); [exact eqvMl|exact eqvMr].

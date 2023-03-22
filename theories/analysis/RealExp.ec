@@ -220,7 +220,7 @@ lemma logK (b x : real) : 0%r < b => b <> 1%r =>
 proof.
 move=> gt0_b ne1_b; rewrite /log rpowE //.
 by rewrite lnK -mulrA divrr // ln_eq0.
-qed.  
+qed.
 
 (* -------------------------------------------------------------------- *)
 lemma log_ge0 (b x : real) : 1%r <= b => 1%r <= x => 0%r <= log b x.
@@ -257,7 +257,7 @@ lemma rpowK (b x : real) : 0%r < b => b <> 1%r => 0%r < x =>
   b ^ (log b x) = x.
 proof.
 by move=> gt0_b ne1_b gt0_x; rewrite &(inj_log b) // 1:rpow_gt0 // logK.
-qed.  
+qed.
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt rpow_mono (x y n : real):

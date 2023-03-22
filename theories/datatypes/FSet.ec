@@ -155,7 +155,7 @@ hint rewrite inE : in_fset0 in_fset1 in_fsetU in_fsetI in_fsetD.
 lemma oflist_cons ['a] (x : 'a) s : oflist (x::s) = fset1 x `|` oflist s.
 proof. by apply fsetP => z;rewrite mem_oflist !inE mem_oflist /=. qed.
 
-lemma oflist_cat ['a] (s1 s2 : 'a list) : 
+lemma oflist_cat ['a] (s1 s2 : 'a list) :
   oflist (s1 ++ s2) = oflist s1 `|` oflist s2.
 proof. by apply fsetP => z; rewrite in_fsetU !mem_oflist mem_cat. qed.
 
@@ -260,7 +260,7 @@ lemma nosmt subsetP (s1 s2 : 'a fset):
   (s1 \subset s2) <=> (mem s1 <= mem s2).
 proof. by []. qed.
 
-lemma nosmt subset_trans (s1 s2 s3 : 'a fset): 
+lemma nosmt subset_trans (s1 s2 s3 : 'a fset):
   s1 \subset s2 => s2 \subset s3 => s1 \subset s3.
 proof. by move=> le1 le2 ? le3; apply/le2/le1. qed.
 
@@ -508,13 +508,13 @@ proof. by rewrite -(fcardID A B) addzAC subzz. qed.
 
 (* -------------------------------------------------------------------- *)
 
-lemma fcardI1 (A : 'a fset) x : 
+lemma fcardI1 (A : 'a fset) x :
   card (A `&` fset1 x) = b2i (x \in A).
 proof.
 by rewrite fsetI1; case: (x \in A) => _; rewrite ?fcard1 ?fcards0.
 qed.
 
-lemma fcardU1 (A : 'a fset) x : 
+lemma fcardU1 (A : 'a fset) x :
   card (A `|` fset1 x) = b2i (x \notin A) + card A.
 proof. by rewrite fcardU fcard1 fcardI1 /#. qed.
 
@@ -531,8 +531,8 @@ lemma uniq_card_oflist (s : 'a list) : uniq s => card (oflist s) = size s.
 proof. by rewrite /card => /oflist_uniq/perm_eq_size => <-. qed.
 
 lemma card_iota (n : int) : 0 <= n => card (oflist (iota_ 1 n)) = n.
-proof. 
-by move=> n_ge0; rewrite uniq_card_oflist ?iota_uniq size_iota /#. 
+proof.
+by move=> n_ge0; rewrite uniq_card_oflist ?iota_uniq size_iota /#.
 qed.
 
 (* -------------------------------------------------------------------- *)

@@ -64,7 +64,7 @@ def _main():
         for output in stream:
             sys.stdout.write(output.decode('ascii'))
 
-        return dck.api.exec_inspect(handle['Id']).get('ExitCode') 
+        return dck.api.exec_inspect(handle['Id']).get('ExitCode')
 
     errors = 0
 

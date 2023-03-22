@@ -70,7 +70,7 @@ section.
     + by rewrite -Bigreal.BRA.mulr_suml  Bigreal.sumidE 1:ge0_q.
     + by inline*; auto.
     + proc;wp; rnd (mem Sample.l); skip=> // /> &hr ???.
-      apply (Mu_mem.mu_mem_le_size (Sample.l{hr}) uT (mu1 uT maxu)). 
+      apply (Mu_mem.mu_mem_le_size (Sample.l{hr}) uT (mu1 uT maxu)).
       by move=> x _;rewrite maxuP.
     by move=> c; proc; auto=> /#.
   qed.
@@ -79,15 +79,15 @@ section.
     Pr[Exp(Sample,A).main() @ &m: size Sample.l <= q /\ !uniq Sample.l]
     <= (q^2)%r * mu1 uT maxu.
   proof.
-    apply (ler_trans _ _ _ (pr_Sample_le &m)). 
-    apply ler_wpmul2r; 1: by apply ge0_mu. 
+    apply (ler_trans _ _ _ (pr_Sample_le &m)).
+    apply ler_wpmul2r; 1: by apply ge0_mu.
     have -> : q^2 = q*q by ring.
     smt(ge0_q).
   qed.
 
   declare axiom A_bounded: hoare [A(Sample).a : size Sample.l = 0 ==> size Sample.l <= q].
 
-  local lemma aux &m : 
+  local lemma aux &m :
     Pr[Exp(Sample,A).main() @ &m: !uniq Sample.l] =
     Pr[Exp(Sample,A).main() @ &m: size Sample.l <= q /\ !uniq Sample.l].
   proof.
@@ -170,7 +170,7 @@ section.
     + byequiv (PushBound Sample A) => //.
     apply (pr_collision_q2 (Bounded(A)) _ _ &m).
     + move=> S HS;proc;call (A_ll (ABounder(S)) _);2:by auto.
-      by proc;sp;if;auto;call HS.     
+      by proc;sp;if;auto;call HS.
     proc; call (_: size Sample.l <= Bounder.c <= q).
     + proc;sp;if=>//;inline *;auto=> /#.
     auto;smt w=ge0_q.

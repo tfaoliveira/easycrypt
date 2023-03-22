@@ -60,13 +60,13 @@ async while
 + move=> v1 v2.
   rcondt {2} 1; 1: by auto => /> /#.
   rcondf{2} 4; 1: by auto; conseq (_: true);auto.
-  wp;while (   ={glob A, x} 
+  wp;while (   ={glob A, x}
          /\ i{1} = k * i{2} + j{2}
          /\ v1 = (i{2} + 1)%r
          /\ 0 <= i{2} <  n
          /\ 0 <= j{2} <= k) => /=; last by auto; smt(gt0_k ge0_n).
   wp; call (_ : true); skip => &1 &2 /= />.
-  rewrite -fromintM !lt_fromint => *. 
+  rewrite -fromintM !lt_fromint => *.
   by have := StdOrder.IntOrder.ler_wpmul2l k{2} _ i{2} (n - 1); smt().
 + by while true (n * k - i) => //; auto;1: call llA; auto => /#.
 + while true (n - i);2: by auto=>/#.

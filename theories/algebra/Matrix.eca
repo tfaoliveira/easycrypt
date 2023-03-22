@@ -455,7 +455,7 @@ pose E := bigi predT (fun j => bigi predT (F j) 0 size) 0 size.
 apply: (@eq_trans _ E).
 + by rewrite /E /F &(eq_bigr) => /= j _; rewrite mulr_suml.
 rewrite /E /F exchange_big !big_seq &(eq_bigr) /= => j.
-move/mem_range => rgj; rewrite offunvE //= mulr_sumr. 
+move/mem_range => rgj; rewrite offunvE //= mulr_sumr.
 by apply: eq_bigr => /= k _; rewrite mulrA.
 qed.
 
@@ -603,11 +603,11 @@ exists (map (fun i => v.[i]) (range 0 size)); split=> /=.
 - apply/supp_djoin; rewrite size_nseq ler_maxr // size_map.
   rewrite size_range /= ler_maxr //=; apply/allP.
   case=> d' x /mem_zip []; rewrite mem_nseq => -[_ <<-] /= _.
-  by apply: full_d.  
+  by apply: full_d.
 - apply/eq_vectorP=> i rg_i; rewrite offunvE //.
   by rewrite (nth_map witness) -1:nth_range // size_range ler_maxr.
 qed.
- 
+
 lemma dvector_funi d : is_full d => is_uniform d =>
   is_funiform (dvector d).
 proof.
@@ -664,7 +664,7 @@ by rewrite nth_mkseq 1:sz'E.
 qed.
 
 lemma dmatrix_dvector d : dmatrix d =
-  dmap (djoin (nseq size (dvector d))) 
+  dmap (djoin (nseq size (dvector d)))
     (fun vs : vector list => offunm (fun i j => (nth witness vs j).[i])).
 proof.
 apply/eq_distr=> m; rewrite !dmap1E.
@@ -741,7 +741,7 @@ exists (map (fun j => map (fun i => m.[i, j]) ns) ns); split=> /=.
   - by rewrite size_range ler_maxr.
   by rewrite (nth_map witness) -1:nth_range //= size_range ler_maxr.
 qed.
- 
+
 lemma dmatrix_funi d : is_full d => is_uniform d =>
   is_funiform (dmatrix d).
 proof.

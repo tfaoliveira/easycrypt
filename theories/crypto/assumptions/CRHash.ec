@@ -1,8 +1,8 @@
 require import AllCore FSet SmtMap Distr.
 (* Formalisation of collision resistance:
-     CR : Collision resistance game 
-     RealHash/IdealHash: 
-        Collision resistance expressed in term 
+     CR : Collision resistance game
+     RealHash/IdealHash:
+        Collision resistance expressed in term
         indistinghuishability game *)
 
 type hkey.
@@ -39,8 +39,8 @@ module OrclCR : OrclCR = {
   proc collision(m1 : domain option, m2 : domain option) = {
     if (col_count < q_col) {
        if (m1 <> None && m2 <> None) {
-          col_found <- col_found || 
-               ( m1 <> m2 /\ hash hk (oget m1) = hash hk (oget m2)); 
+          col_found <- col_found ||
+               ( m1 <> m2 /\ hash hk (oget m1) = hash hk (oget m2));
        }
        col_count <- col_count + 1;
     }
@@ -81,9 +81,9 @@ module RealHash = {
    var count_hash : int
    var hk : hkey
 
-   proc init () = { 
+   proc init () = {
         hk <$ hkgen;
-        pres <- empty; 
+        pres <- empty;
         count_hash <- 0;
    }
 
@@ -121,7 +121,7 @@ module IdealHash = {
         ho <- None;
         if (RealHash.count_hash < q_hash) {
            h <- hash RealHash.hk p;
-           ho <- Some h;  
+           ho <- Some h;
            if (h \notin RealHash.pres) {
                 RealHash.pres.[h] <- p;
            }
@@ -185,7 +185,7 @@ module (MkAdvCR(A:AdvInd):AdvCR) (O:OrclCR) = {
         ho <- None;
         if (RealHash.count_hash < q_hash) {
            h <- hash RealHash.hk p;
-           ho <- Some h;  
+           ho <- Some h;
            if (h \notin RealHash.pres) {
                 RealHash.pres.[h] <- p;
            }
@@ -207,7 +207,7 @@ module (MkAdvCR(A:AdvInd):AdvCR) (O:OrclCR) = {
 
       }
     }
-    
+
     proc main (hk : hkey) = {
       var b;
       OA.init();
@@ -219,13 +219,13 @@ module (MkAdvCR(A:AdvInd):AdvCR) (O:OrclCR) = {
 section.
 
   declare module A <: AdvInd { -RealHash, -OrclCR}.
-  
+
   declare axiom Alossless :
     forall (O <: OrclInd{-A}),
-          islossless O.hash => 
+          islossless O.hash =>
           islossless O.check => islossless A(O).main.
 
-  local module Wrap (O:HashI) = { 
+  local module Wrap (O:HashI) = {
       var flag : bool
 
       proc init():unit =  { O.init(); OrclCR.init(); RealHash.hk <- OrclCR.hk; flag <- false; }
@@ -252,13 +252,13 @@ section.
         return b;
       }
   }.
-  
+
   local lemma lem1 &m :
     Pr[IndHash(RealHash, A).main() @ &m : res] =
     Pr[IndHash(Wrap(RealHash), A).main() @ &m : res].
   proof.
-    byequiv => //. 
-    proc; inline *; call (_: ={glob RealHash} /\ 
+    byequiv => //.
+    proc; inline *; call (_: ={glob RealHash} /\
             (Wrap.flag{2} => RealHash.count_hash{1} = q_hash));
      1..2: by proc; inline *; wp; skip => /#.
     by wp;rnd;wp;rnd{2};auto => /> *; apply hkgen_ll.
@@ -268,30 +268,30 @@ section.
     Pr[IndHash(IdealHash, A).main() @ &m : res] =
     Pr[IndHash(Wrap(IdealHash), A).main() @ &m : res].
   proof.
-    byequiv => //. 
-    proc; inline *; call (_: ={glob RealHash} /\ 
+    byequiv => //.
+    proc; inline *; call (_: ={glob RealHash} /\
            (Wrap.flag{2} => RealHash.count_hash{1} = q_hash));
-      1..2: by  proc;inline *;wp;skip => /#. 
+      1..2: by  proc;inline *;wp;skip => /#.
     by wp;rnd;wp;rnd{2};auto => /> *; apply hkgen_ll.
   qed.
 
   local lemma lem3 &m :
-    Pr[CR(MkAdvCR(A)).main() @ &m : res] = 
+    Pr[CR(MkAdvCR(A)).main() @ &m : res] =
     Pr[IndHash(Wrap(RealHash), A).main() @ &m : OrclCR.col_found].
   proof.
-    byequiv => //. 
-    proc; inline *; sp. 
-    call (_: ={glob OrclCR, glob RealHash} /\ 
+    byequiv => //.
+    proc; inline *; sp.
+    call (_: ={glob OrclCR, glob RealHash} /\
            (Wrap.flag{2} => RealHash.count_hash{1} = q_hash) /\
               (OrclCR.col_count{1} = RealHash.count_hash{1}));
-      1..2: by  proc;inline *;wp;skip => /#. 
-    wp; conseq />. 
+      1..2: by  proc;inline *;wp;skip => /#.
+    wp; conseq />.
     swap {1} 5 -4.
     swap {2} 4 -2.
     by auto => />.
   qed.
 
-  lemma ind_cr &m : 
+  lemma ind_cr &m :
     `| Pr[IndHash(RealHash, A).main() @ &m : res] -
        Pr[IndHash(IdealHash, A).main() @ &m : res] | <=
      Pr[CR(MkAdvCR(A)).main() @ &m : res].
@@ -299,15 +299,15 @@ section.
     rewrite (lem1 &m) (lem2 &m) (lem3 &m) StdOrder.RealOrder.distrC.
     byequiv : (OrclCR.col_found)=> // [ | ?? [->] /= h /h -> //].
     proc; inline *. sp.
-    call (_:OrclCR.col_found, 
+    call (_:OrclCR.col_found,
           ={glob OrclCR, glob RealHash, glob Wrap} /\ OrclCR.hk{2} = RealHash.hk{2} /\
           (forall h, h \in RealHash.pres{1} => hash RealHash.hk{1} (oget RealHash.pres{1}.[h]) = h) /\
            (Wrap.flag{2} => RealHash.count_hash{1} = q_hash) /\
-              (OrclCR.col_count{1} = RealHash.count_hash{1}), 
+              (OrclCR.col_count{1} = RealHash.count_hash{1}),
           ={OrclCR.col_found});last first.
     + by auto => />;smt(emptyE).
     + by apply Alossless.
-    + move => *;proc;inline *;auto => /> *; smt(get_setE). 
+    + move => *;proc;inline *;auto => /> *; smt(get_setE).
     + by move => *;proc;inline *;wp;skip => />; smt(get_setE).
     + by move => *;proc;inline *;wp;skip => />; smt(get_setE).
     + by move => *;proc;inline *;wp;skip => />; smt(get_setE).

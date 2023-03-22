@@ -71,7 +71,7 @@ theory RField.
   realize mulrDl    by smt().
   realize mulVr     by rewrite /left_inverse_in /#.
   realize unitP     by smt().
-  realize unitout   by move=> x /= ->. 
+  realize unitout   by move=> x /= ->.
   realize mulf_eq0  by smt().
 
   lemma nosmt ofintR (i : int): ofint i = i%r.
@@ -291,10 +291,10 @@ lemma upto_abs (E1 E1b E1nb E2 E2b E2nb: real) :
   `| E1 - E2 | <= `|E1b - E2b|.
 proof. by move=> h1 h2 h3; rewrite (eq_upto _ _ _ _ _ _ h1 h2 h3). qed.
 
-lemma upto_le (E1 E1b E1nb E2nb E2nb' E1b' : real) : 
+lemma upto_le (E1 E1b E1nb E2nb E2nb' E1b' : real) :
   E1 = E1b + E1nb =>
   E1nb = E2nb =>
-  E1b <= E1b' => 
-  E2nb <= E2nb' => 
+  E1b <= E1b' =>
+  E2nb <= E2nb' =>
   E1 <= E2nb' + E1b'.
 proof. smt(). qed.

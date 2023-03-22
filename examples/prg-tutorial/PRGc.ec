@@ -138,7 +138,7 @@ module D_PRF (D:PRGa.Distinguisher,F:PRFA) = {
       log        <- SRG.st::log;
       (SRG.st,r) <@ F.f(SRG.st);
       return r;
-    } 
+    }
   }
 
   proc distinguish = IND_PRG(PRGp,D).main
@@ -297,7 +297,7 @@ module C_D_PRF(D:PRFa.Distinguisher,F:PRFa.PRFA) = {
     C_PRF.c <- 0;
     b <@ D'.distinguish();
     return b;
-  }  
+  }
 }.
 
 equiv Count_PRF_equiv (F <: PRFa.PRF {-C_PRF}) (D <: PRFa.Distinguisher {-F,-C_PRF}):
@@ -409,7 +409,7 @@ section Fact2.
     <= Pr[IND_PRF(PRFi,D_PRF(D)).main() @ &m: !uniq D_PRF.log].
   proof. by rewrite (PRGi_PRGil &m) (PRFi_PRGil &m). qed.
 end section Fact2.
-  
+
 (* This concludes the proof of Theorem 1. *)
 lemma Theorem1 (D <: PRGa.Distinguisher {-SRG,-PRFc,-PRFi,-D_PRF}) &m:
   (forall (G <: RGA {-D}), islossless G.next => islossless D(G).distinguish) =>
