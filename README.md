@@ -6,6 +6,12 @@ probabilistic computations with adversarial code. Its main application
 is the construction and verification of game-based cryptographic
 proofs.
 
+> **Note**
+> This README and the instructions it contains are for EasyCrypt's development
+> version (aka `main`). Please see the [latest release's
+> README](https://github.com/EasyCrypt/easycrypt/blob/r2022.04/README.md) for
+> release installation instructions.
+
 Table of Contents
 --------------------------------------------------------------------
 
@@ -28,7 +34,7 @@ Installation requirements
 
 EasyCrypt uses the following third-party tools/libraries:
 
- * OCaml (>= 4.08)
+ * OCaml (>= 4.10) [Recommended: 4.13.1]
 
      Available at https://ocaml.org/
 
@@ -106,7 +112,7 @@ packages manager.
       $> opam switch create easycrypt $OVERSION
       ```
 
-      where `$OVERSION` is a valid OCaml version (e.g. ocaml-base-compiler.4.07.0)
+      where `$OVERSION` is a valid OCaml version (e.g. ocaml-base-compiler.4.13.1)
 
   1. Add the EasyCrypt package from repository:
 
@@ -139,6 +145,7 @@ packages manager.
 
      * Z3: [https://github.com/Z3Prover/z3]
      * CVC4: [https://cvc4.github.io/]
+     * CVC5: [https://cvc5.github.io/]
 
 ### Installing requirements using OPAM (non-POSIX systems)
 
@@ -172,6 +179,7 @@ You can install all the needed dependencies via the opam OCaml packages manager.
 
      * Z3: [https://github.com/Z3Prover/z3]
      * CVC4: [https://cvc4.github.io/]
+     * CVC5: [https://cvc5.github.io/]
 
 
 Via NIX
@@ -185,14 +193,14 @@ Then, at the root of the EasyCrypt source tree, type:
     ```
     $> nix-shell
     ```
-    
+
 These should install all the required dependencies. From there, simply
 run:
 
     ```
     $> make
     ```
-    
+
 to compile EasyCrypt.
 
 Note on Prover Versions
@@ -207,15 +215,11 @@ following prover versions:
 
  * Alt-Ergo 2.4.2
  * CVC4 1.8
+ * CVC5 1.0.5
  * Z3 4.12.1
 
 `alt-ergo` can be installed using opam, if you do you can use pins to
 select a specific version (e.g, `opam pin alt-ergo 2.4.1`).
-
-Development branches use `dune-3.x` and which is incompatible with
-`alt-ergo-2.4.1`. In this case, you can use `alt-ergo-2.4.2`. The
-warning "Prover Alt-Ergo version 2.4.2 is not recognized." upon
-configuration (see below) can be [safely ignored](https://gitlab.inria.fr/why3/why3/-/commit/f2863d84f65824f21afd75546117becbf453efcc).
 
 Installing/Compiling EasyCrypt
 ====================================================================
