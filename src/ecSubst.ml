@@ -262,8 +262,7 @@ and subst_modtype
   let mt_name    = s.s_p modty.mt_name in
   let mt_args    = List.map (EcPath.m_subst s.s_fmp) modty.mt_args in
   let mt_restr   = subst_mod_restr s modty.mt_restr in
-  let mt_opacity = modty.mt_opacity in
-  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity ~mt_restr
+  mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
 
 (* TODO: cost: in main before merging *)
 (* and subst_modtype (s : _subst) (modty : module_type) =

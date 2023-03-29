@@ -2024,9 +2024,6 @@ let process_exists args (tc : tcenv1) =
             (* TODO: cost: ? *)
             assert( ns = Std);
 
-            if mt.mt_opacity <> Open then
-              tc_error !!tc "cannot introduce opaque existential";
-
             trans_pterm_arg_mod pte arg
 
           (* TODO: cost: ? *)

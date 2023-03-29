@@ -198,7 +198,7 @@ module LowApply = struct
 
             let obl = EcTyping.check_modtype hyps mp mt emt in
 
-            if mode = `Intro && emt.mt_opacity <> Open then
+            if mode = `Intro then
               raise InvalidProofTerm;
 
             let f = match obl with

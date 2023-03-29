@@ -2650,7 +2650,6 @@ module ModTy = struct
       ~mt_name:p
       ~mt_args:(List.map (EcPath.mident -| fst) sig_.mis_params)
       ~mt_restr:sig_.mis_restr
-      ~mt_opacity:Opaque
 
   let bind ?(import = import0) name modty env =
     let env = if import.im_immediate then MC.bind_modty name modty env else env in
@@ -2682,9 +2681,6 @@ module ModTy = struct
     let restr2 = EcSubst.subst_mod_restr subst mty2.mt_restr in
 
     if not (NormMp.equal_restr f_equiv env restr1 restr2) then
-      raise ModTypeNotEquiv;
-
-    if mty1.mt_opacity <> mty2.mt_opacity then
       raise ModTypeNotEquiv;
 
     if not (

@@ -1874,7 +1874,7 @@ and modcost_info
     `Crecord (Msym.find proc modcost)
   else `Proj (mc, proc)
 
-and pp_orclinfos ppe fmt (opacity, ois, cost) =
+and pp_orclinfos ppe fmt (ois, cost) =
   (* if there are no oracle restrictions, we do not print anything *)
   let orcl_infos =
     List.filter_map (fun (sym, oi) ->
@@ -1887,11 +1887,10 @@ and pp_orclinfos ppe fmt (opacity, ois, cost) =
           Some (sym, oi, o_cost)
       ) (Msym.bindings ois)
   in
-  if orcl_infos = [] && opacity = Opaque then
+  if orcl_infos = [] then
     Format.fprintf fmt ""
   else
-  Format.fprintf fmt "[@[<hv>%t%a@]]"
-    (fun fmt -> if opacity <> Opaque then Format.fprintf fmt "open@;")
+  Format.fprintf fmt "[@[<hv>%a@]]"
     (pp_list ",@ " (pp_orclinfo ppe)) orcl_infos
 
 (* -------------------------------------------------------------------- *)
@@ -1937,15 +1936,15 @@ and pp_mem_restr ppe fmt mr =
 
 (* -------------------------------------------------------------------- *)
 (* Use in an hv box. *)
-and pp_restr ppe fmt (opacity, mr) =
+and pp_restr ppe fmt mr =
   Format.fprintf fmt "%a%a"
     (pp_mem_restr ppe) mr
-    (pp_orclinfos ppe) (opacity, mr.mr_params, mr.mr_cost)
+    (pp_orclinfos ppe) (mr.mr_params, mr.mr_cost)
 
 (* -------------------------------------------------------------------- *)
 and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
   Format.fprintf fmt "@[<hv 2>%a%a@]"
-    (pp_modtype1 ppe) mty (pp_restr ppe) (mty.mt_opacity, mty.mt_restr)
+    (pp_modtype1 ppe) mty (pp_restr ppe) mty.mt_restr
 
 (* -------------------------------------------------------------------- *)
 and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =

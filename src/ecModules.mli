@@ -28,7 +28,6 @@ val mk_mt_r :
   mt_name    : EcPath.path ->
   mt_args    : EcPath.mpath list ->
   mt_restr   : mod_restr ->
-  mt_opacity : mod_opacity ->
   module_type
 
 (* Update existing module type *)
@@ -37,7 +36,6 @@ val update_mt :
   ?mt_name    : EcPath.path ->
   ?mt_args    : EcPath.mpath list ->
   ?mt_restr   : EcCoreFol.form p_mod_restr ->
-  ?mt_opacity : mod_opacity ->
   module_type ->
   module_type
 

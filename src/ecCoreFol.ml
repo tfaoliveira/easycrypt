@@ -822,7 +822,6 @@ let mk_mt_r
     ~(mt_name    : EcPath.path)
     ~(mt_args    : EcPath.mpath list)
     ~(mt_restr   : 'a p_mod_restr)
-    ~(mt_opacity : mod_opacity)
   : module_type
   =
   let check (f : form) : bool =
@@ -844,7 +843,7 @@ let mk_mt_r
     check_modcost f params
   in
   EcCoreModules._prelude_mk_mt_r
-    ~check ~mt_params ~mt_name ~mt_opacity ~mt_args ~mt_restr
+    ~check ~mt_params ~mt_name ~mt_args ~mt_restr
 
 (* -------------------------------------------------------------------- *)
 (* Smart constructor for module signatures.
@@ -2479,7 +2478,7 @@ module Fsubst = struct
         (Mp.find_opt mty.mt_name s.fs_modtydef) in
     let mt_args   = List.map sm mty.mt_args in
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
-    mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_opacity:mty.mt_opacity ~mt_restr
+    mk_mt_r ~mt_params ~mt_name ~mt_args ~mt_restr
 
   and subst_gty ~tx s gty =
     if is_subst_id s then gty else
@@ -2928,13 +2927,12 @@ and dump_binding ~(long:bool) fmt (x,ty) : unit =
 and dump_modty ~(long:bool) fmt (mty : module_type) : unit =
   Format.fprintf fmt "@[<hv 2>%s%a@]"
     (EcPath.tostring mty.mt_name)
-    (dump_restr ~long) (mty.mt_opacity, mty.mt_restr)
+    (dump_restr ~long) mty.mt_restr
 
-and dump_restr ~(long:bool) fmt ((op, mr) : mod_opacity * mod_restr) : unit =
-  Format.fprintf fmt "{%a} [%a] `[%s%a]"
+and dump_restr ~(long:bool) fmt (mr : mod_restr) : unit =
+  Format.fprintf fmt "{%a} [%a] `[%a]"
     dump_mem_restr mr
     dump_orcl_call mr.mr_params
-    (if op = Opaque then "opaque " else "")
     (dump_form ~long) mr.mr_cost
 
 and dump_mem_restr fmt (_mr : mod_restr) : unit =

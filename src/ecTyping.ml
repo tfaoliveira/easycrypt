@@ -1150,7 +1150,6 @@ let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
       ~mt_name:p
       ~mt_args:(List.map (EcPath.mident -| fst) sig_.mis_params)
       ~mt_restr:sig_.mis_restr
-      ~mt_opacity:Opaque
   in
   (modty, sig_)
 
@@ -2199,7 +2198,7 @@ let replace_if_provided
       then mr.mr_xpaths, mr.mr_mpaths
       else mr'.mr_xpaths, mr'.mr_mpaths in
 
-    let _, pmr_procs = pmr.pmr_procs in
+    let pmr_procs = pmr.pmr_procs in
 
     let mr_params =
       Msym.fold2_union (fun s oi oi' mr_params -> match oi,oi' with
@@ -2421,16 +2420,11 @@ and transmod_restr
     (params : Sm.t)
     (procs  : Ssym.t)
     (mr     : pmod_restr)
-  : mod_opacity * mod_restr
+  : mod_restr
   =
   let r_mem = trans_restr_mem env mr.pmr_mem in
 
-  let opaque, mr_procs = mr.pmr_procs in
-
-  let opaque = match opaque with
-    | Some `Open -> Open
-    | Some `Opaque | None -> Opaque
-  in
+  let mr_procs = mr.pmr_procs in
 
   let mr_params, mod_cost =
     List.fold_left (fun (mr_params, mod_cost) r_elem ->
@@ -2452,7 +2446,6 @@ and transmod_restr
 
   let mr_cost = f_mod_cost_r mod_cost in
 
-  opaque,
   { mr_xpaths = fst r_mem;
     mr_mpaths = snd r_mem;
     mr_params;
@@ -2476,7 +2469,7 @@ and trans_restr_for_modty
     |> Ssym.of_list
   in
 
-  let op_mr' = match pmr with
+  let mr' = match pmr with
     | None -> None
     | Some restr ->
       (* We build the environment where [modty]'s parameters are binded. *)
@@ -2487,19 +2480,14 @@ and trans_restr_for_modty
       let env_in = EcEnv.Mod.bind_locals mi_params env in
 
       (* We type the restricion. *)
-      transmod_restr env env_in s_params procs restr |> some in
-
-  let opacity' = omap fst op_mr' in
-  let mr' = omap snd op_mr' in
+      transmod_restr env env_in s_params procs restr |> some
+  in
 
   (* We update the memory restriction in [mr]
      if a new restriction is provided. *)
   let new_mr = replace_if_provided env mr mr' pmr in
 
-  (* we update the cost opacity if a new one is provided *)
-  let mt_opacity = odfl modty.mt_opacity opacity' in
-
-  update_mt ~mt_opacity ~mt_restr:new_mr modty
+  update_mt ~mt_restr:new_mr modty
 
 (* -------------------------------------------------------------------- *)
 and transmodsig (env : EcEnv.env) (inft : pinterface) : top_module_sig =
@@ -2527,8 +2515,7 @@ and transmodsig (env : EcEnv.env) (inft : pinterface) : top_module_sig =
   (* We translate the additional restrictions that may have been given. *)
   let op_mr' = omap (transmod_restr env env params procs) modty.pmsig_restr in
 
-  (* module cost opacity is ignored in module type declaration *)
-  let mr' = omap snd op_mr' in
+  let mr' = op_mr' in
 
   let mr = replace_if_provided env mr mr' modty.pmsig_restr in
 

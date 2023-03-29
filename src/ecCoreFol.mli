@@ -463,7 +463,6 @@ val mk_mt_r :
   mt_name    : EcPath.path ->
   mt_args    : EcPath.mpath list ->
   mt_restr   : mod_restr ->
-  mt_opacity : mod_opacity ->
   module_type
 
 (* Smart constructor for module signatures *)

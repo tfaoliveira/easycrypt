@@ -327,9 +327,7 @@ module FunAbsLow = struct
     let fn_orcl = EcPath.xpath top fn in
 
     let f_cost =
-      match info.opacity with
-      | Opaque -> f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true)
-      | Open -> f_cost_proj_r info.cost_info (Intr fn)
+      f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true)
     in
 
     let orcls_cost = List.map (fun o ->
