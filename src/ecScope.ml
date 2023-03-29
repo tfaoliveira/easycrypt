@@ -1406,6 +1406,8 @@ module Mod = struct
         (ur_empty Sm.empty)
         env
 
+    | ME_Wrap _ -> assert false (* TODO: cost: *)
+
   let bind ?(import = EcTheory.import0) (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_module m) in

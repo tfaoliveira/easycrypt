@@ -339,7 +339,7 @@ let lident = (lower ichar*) | ('_' ichar+)
 let uident = upper ichar*
 let tident = '\'' lident
 let mident = '&'  (lident | uint)
-let aident = '#'  (lident | uint) (* agent names for modules *)
+let aident = "##" (lident | uint) (* agent names for modules *)
 
 let opchar = ['=' '<' '>' '+' '-' '*' '/' '\\' '%' '&' '^' '|' ':' '#' '$']
 

@@ -814,8 +814,7 @@ and dfl_arg_for_value pe   arg = ofdfl (fun () -> (hole_for_value pe  ).ptea_arg
 
 (* -------------------------------------------------------------------- *)
 and check_pterm_oarg ?loc pe (x, xty) f arg =
-  let env  = LDecl.toenv (pe.pte_hy) in
-
+  (* let env  = LDecl.toenv (pe.pte_hy) in *)
   match xty with
   | GTty xty -> begin
       match dfl_arg_for_value pe arg with

@@ -2124,7 +2124,8 @@ let top_is_mem_binding pf = match pf with
   | PFeqveq   _
   | PFeqf     _
   | PFlsless  _
-  | PFscope   _ -> false
+  | PFscope   _
+  | PFagent   _ -> false
 
 (* -------------------------------------------------------------------- *)
 let f_or_mod_ident_loc : f_or_mod_ident -> EcLocation.t = function
@@ -3251,6 +3252,13 @@ and trans_gbinding env ue decl =
 
         in List.map_fold add1 env xs
 
+      | PGTY_Agent ->
+        let xs  = List.map (fun x -> ident_of_osymbol (unloc x)) xs in
+        (* TODO: cost: bind agent names in env and uncomment line below *)
+        (* let env = EcEnv.Agent.bind_locals xs env in *)
+        let xs  = List.map (fun x -> x,GTagent) xs in
+        (env, xs)
+
       | PGTY_Mem pmt ->
         let mt = match pmt with
           | None     -> EcMemory.abstract_mt
@@ -3492,6 +3500,9 @@ and trans_form_or_pattern
         unify_or_fail env ue pf.pl_loc ~expct:ty aout.f_ty; aout
 
     | PFmem _ -> tyerror f.pl_loc env MemNotAllowed
+
+    | PFagent _ -> assert false
+    (* TODO: cost: do we allow agent in formulas? *)
 
     | PFscope (popsc, f) ->
         let opsc = lookup_scope env popsc in

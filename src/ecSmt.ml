@@ -83,6 +83,7 @@ type tenv = {
   (*---*) te_xpath      : WTerm.lsymbol Hx.t;  (* proc and global var *)
   (*---*) te_absmod     : w3absmod Hid.t;      (* abstract module     *)
   mutable te_cost       : WTy.ty option;       (* cost *)
+  mutable te_agent      : WTy.ty option;       (* agent *)
 }
 
 let empty_tenv env task (kwty, kw, kwk) =
@@ -99,6 +100,7 @@ let empty_tenv env task (kwty, kw, kwk) =
     te_xpath      = Hx.create 0;
     te_absmod     = Hid.create 0;
     te_cost       = None;
+    te_agent      = None;
   }
 
 (* -------------------------------------------------------------------- *)
@@ -369,8 +371,34 @@ let mk_tglob genv mp =
     Hid.add genv.te_absmod id { w3am_ty = ty };
     ty
 
+(* TODO: cost: reuse SMT types as much as possible
+   (check if uncommenting is fine) *)
+let mk_tcost genv =
+  (* match genv.te_cost with
+   * | None -> *)
+    let pid = WIdent.id_fresh "cost" in
+    let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+    genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+    let ty = WTy.ty_app ts [] in
+    genv.te_cost <- Some ty;
+    ty
+  (* | Some ty -> ty *)
+
+(* TODO: cost: reuse SMT types as much as possible
+   (check if uncommenting is fine) *)
+let mk_tagent genv =
+  (* match genv.te_cost with
+   * | None -> *)
+    let pid = WIdent.id_fresh "agent" in
+    let ts = WTy.create_tysymbol pid [] WTy.NoDef in
+    genv.te_task <- WTask.add_ty_decl genv.te_task ts;
+    let ty = WTy.ty_app ts [] in
+    genv.te_agent <- Some ty;
+    ty
+  (* | Some ty -> ty *)
+
 let mk_tmodcost procs oracles genv =
-  (* TODO A: reuse SMT types as much as possible *)
+  (* TODO: cost: code below does not make sense *)
   let pid = WIdent.id_fresh "cost" in
   let ts = WTy.create_tysymbol pid [] WTy.NoDef in
   genv.te_task <- WTask.add_ty_decl genv.te_task ts;
@@ -1215,6 +1243,9 @@ let trans_hyp ((genv, lenv) as env) { l_id = x; l_kind = ty; } =
       Hid.add genv.te_lc x w3op;
       (genv, lenv)
 
+  | LD_agent -> env
+  (* TODO: cost: do something more there, or remove [te_cost] *)
+
   | LD_modty  _ -> env
 
   | LD_abs_st _ -> env
@@ -1465,7 +1496,7 @@ module Frequency = struct
       end
     | LD_hyp f       ->
       r_union rs (f_ops unwanted_op f)
-    | LD_mem _ | LD_modty _ | LD_abs_st _ ->
+    | LD_agent | LD_mem _ | LD_modty _ | LD_abs_st _ ->
       rs
 
   let f_ops_hyps unwanted_op = List.fold_left (f_ops_hyp unwanted_op)

@@ -1986,6 +1986,15 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
       in
         (tenv1, pp)
 
+  | GTagent ->
+      let tenv1  = PPEnv.add_locals ppe xs in
+      let pp fmt =
+        (* TODO: cost: printing *)
+        Format.fprintf fmt "(%a : #agent)"
+          (pp_list pp_sep (pp_local tenv1)) xs
+      in
+        (tenv1, pp)
+
 (* -------------------------------------------------------------------- *)
 and pp_mod_params ppe bms =
   let pp_mp ppe (id,mt) =
@@ -2973,6 +2982,10 @@ module PPGoal = struct
         | EcBaseLogic.LD_abs_st _ ->
             (None, fun fmt -> Format.fprintf fmt "statement") (* FIXME *)
 
+        | EcBaseLogic.LD_agent ->
+            (None, fun fmt -> Format.fprintf fmt "#agent")
+            (* TODO: cost: keep like this? *)
+
     in (ppe, (id, pdk))
 
   let pp_goal1 ?(pphyps = true) ?prpo ?(idx) (ppe : PPEnv.t) fmt (hyps, concl) =
@@ -3222,6 +3235,12 @@ and pp_modbody ppe fmt (mp, body) =
 
   | ME_Decl mt ->
       Format.fprintf fmt "[Abstract :@;<1 2> %a@,]" (pp_modtype ppe) mt
+
+  | ME_Wrap (id, kind, mt) ->
+    Format.fprintf fmt "[Wrap%s[#%a] :@;<1 2> %a@,]"
+      (match kind with `Cb -> "Cb" | `Ext -> "")
+      EcIdent.pp_ident id
+      (pp_modtype ppe) mt
 
 and pp_moditem ppe fmt (mp, i) =
   match i with

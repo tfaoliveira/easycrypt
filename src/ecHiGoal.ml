@@ -1100,6 +1100,7 @@ let process_view1 pe tc =
             match idty with
             | id, GTty    ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
             | id, GTmem   _  -> evm := MEV.set x (`Mem id) !evm
+            | _ , GTagent    -> assert false (* TODO: cost: ? *)
             | _ , GTmodty _  -> assert false
           in
 
@@ -1121,8 +1122,8 @@ let process_view1 pe tc =
             match idty with
             | _, GTty   ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
             | _, GTmem   _ -> evm := MEV.set x (`Mem id) !evm
+            | _ , GTagent  -> assert false (* TODO: cost: ? *)
             | _, GTmodty _ -> assert false
-
           in
 
           let tc = EcLowGoal.t_intros_i_1 intros tc in
@@ -2020,12 +2021,16 @@ let process_exists args (tc : tcenv1) =
           | GTty    _ -> trans_pterm_arg_value pte arg
           | GTmem   _ -> trans_pterm_arg_mem   pte arg
           | GTmodty (ns,mt) ->
-            assert( ns = Any);  (* unsupported *)
+            (* TODO: cost: ? *)
+            assert( ns = Std);
 
             if mt.mt_opacity <> Open then
               tc_error !!tc "cannot introduce opaque existential";
 
-            trans_pterm_arg_mod   pte arg
+            trans_pterm_arg_mod pte arg
+
+          (* TODO: cost: ? *)
+          | GTagent -> trans_pterm_arg_agent pte arg
         in
           PT.check_pterm_arg pte (x, xty) f arg.ptea_arg
   in

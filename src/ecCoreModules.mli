@@ -170,6 +170,7 @@ val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 (* -------------------------------------------------------------------- *)
 (* Opacity tells what is the intrinsic cost of a call to an abstract module.
    Default to [Opaque]. *)
+(* TODO: cost: remove this *)
 type mod_opacity =
   | Open                  (* calling [A.f] costs the cost of [A.f]'s body *)
   | Opaque                (* calling [A.f] costs `[A.f : 1] *)

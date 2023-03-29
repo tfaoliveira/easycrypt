@@ -60,6 +60,7 @@ and pt_ev_arg_r =
 val trans_pterm_arg_value : pt_env -> ?name:symbol -> ppt_arg located -> pt_ev_arg
 val trans_pterm_arg_mod   : pt_env -> ppt_arg located -> pt_ev_arg
 val trans_pterm_arg_mem   : pt_env -> ?name:symbol -> ppt_arg located -> pt_ev_arg
+val trans_pterm_arg_agent : pt_env -> ?name:symbol -> ppt_arg located -> pt_ev_arg
 
 (* Proof-terms typing *)
 val process_pterm_cut

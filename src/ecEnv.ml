@@ -1956,7 +1956,7 @@ module Mod = struct
 
   and vars_item mp xs = function
     | MI_Module me  -> vars_me mp xs me
-    (* FIXME:MERGE-COST *)
+    (* TODO: cost: MERGE-COST *)
     | MI_Variable v -> Sx.add (EcPath.xpath mp v.v_name) xs
     | MI_Function _ -> xs
 

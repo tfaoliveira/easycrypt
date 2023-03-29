@@ -51,7 +51,7 @@ let lossless_hyps env top sub =
     List.map
       (fun (id, mt) ->
          let mt = update_mt ~mt_restr:(clear_to_top mt.mt_restr) mt in
-         (id, GTmodty (Any,mt))
+         (id, GTmodty (Std,mt))
       ) sig_.mis_params
   in
   (* WARN: this implies that the oracle do not have access to top *)

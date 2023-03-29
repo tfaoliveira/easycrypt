@@ -334,6 +334,8 @@ and subst_module_body (s : _subst) (body : module_body) : module_body =
 
   | ME_Decl p -> ME_Decl (subst_modtype ~in_me_decl:true s p)
 
+  | ME_Wrap (id, k, mt) -> assert false (* TODO: cost: *)
+
 (* -------------------------------------------------------------------- *)
 and subst_module_comps (s : _subst) (comps : module_comps) =
   (subst_module_items s comps : module_comps)

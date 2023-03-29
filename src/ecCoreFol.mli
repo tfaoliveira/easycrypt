@@ -40,6 +40,11 @@ type mod_info =
   (* external wrapped module: execution cost belongs to the implicit
      agent associated to the module *)
 
+(* TODO: cost: since abstract modules can be used as agent names,
+   substitution need to be updated accordingly *)
+
+(* TODO: cost: epoch need to be done correctly *)
+
 (* -------------------------------------------------------------------- *)
 type gty =
   | GTty    of EcTypes.ty

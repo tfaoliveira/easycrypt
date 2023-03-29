@@ -77,7 +77,7 @@ module LowApply = struct
        - we check that for any local declaration with an epoch smaller than
          [e1] in [ld1], there exists a corresponding declaration in [e2]
          with an epoch smaller than [e2] *)
-    let mt_check_epochs e1 e2 =
+    let mt_check_epochs (e1 : Epoch.t) (e2 : Epoch.t) : bool =
       let check1 { l_id = y; l_epoch = ey1 } =
         if not (Epoch.leq ey1 e1) then true
         else match Mid.find_opt y tophyps  with
@@ -102,8 +102,9 @@ module LowApply = struct
 
           | LD_modty (ns1,mt1), LD_modty (ns2,mt2) ->
             let check_ns =
-              ns1 = Any ||
-              ( ns1 = Fresh && ns2 = Fresh &&
+              (* TODO: cost: probably does not make sense *)
+              ns1 = Std ||
+              ( ns1 = Wrap && ns2 = Wrap &&
                 mt_check_epochs e1 e2 )
             in
             check_ns && mt1 == mt2
@@ -113,6 +114,10 @@ module LowApply = struct
 
           | LD_abs_st au1, LD_abs_st au2 ->
              au1 (*φ*)== au2
+
+          | LD_agent, LD_agent ->
+            (* TODO: cost: can we set this to true without any further check? *)
+            false
 
           | _, _ -> false
 
@@ -188,7 +193,8 @@ module LowApply = struct
         | GTmodty (ns,emt), PAModule (mp, mt) -> begin
           (* FIXME: poor API ==> poor error recovery *)
           try
-            if ns <> Any then raise InvalidProofTerm; (* [Fresh] unsupported *)
+            if ns <> Std then assert false;
+            (* TODO: cost: *)
 
             let obl = EcTyping.check_modtype hyps mp mt emt in
 
@@ -307,7 +313,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
 
         | LD_hyp f -> for_form known f
 
-        | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
+        | LD_agent | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
         end;
         (Sid.add id known, LDecl.add_local id x.l_kind new_)
 
@@ -842,20 +848,28 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         let args = PAMemory id :: args in
         (s, bds, args, cls)
 
-      | LD_modty (_ns,mt) ->
+      | LD_modty (ns,mt) ->
         let x    = fresh id in
         let s    = Fsubst.f_bind_mod s id (EcPath.mident x) in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
-        (* TODO: precision improvement: we could replace [Any] by [Fresh]
-           if the epochs allow it (it is a bit complicated to check though) *)
-        let bds  = `Forall (x, GTmodty (Any,mt)) :: bds in
+        (* TODO: cost: make sure that we are not generalizing without
+           clearing its dependencies (because the module ident is used as
+           agent name). *)
+        let bds  = `Forall (x, GTmodty (ns,mt)) :: bds in
         let args = PAModule (mp, sig_) :: args in
         (s, bds, args, cls)
 
       | LD_hyp f ->
         let bds  = `Imp f :: bds in
         let args = palocal id :: args in
+        (s, bds, args, cls)
+
+      | LD_agent ->
+        let x    = fresh id in
+        let s    = Fsubst.f_bind_agent s id x in
+        let bds  = `Forall (x, GTagent) :: bds in
+        let args = PAAgent id :: args in
         (s, bds, args, cls)
 
       | LD_abs_st _ ->
@@ -1816,9 +1830,12 @@ let gen_hyps (post : l_locals) (gG : form) : form =
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
     | LD_mem mt               -> f_forall_mems [id, mt] gG
 
-    | LD_modty (_ns,mt)       -> f_forall [id, GTmodty (Any,mt)] gG
-    (* TODO: precision improvement: we could replace [Any] by [Fresh]
-       if the epochs allow it (it is a bit complicated to check though) *)
+    | LD_agent                -> f_forall [id, GTagent] gG
+
+    | LD_modty (ns,mt)       -> f_forall [id, GTmodty (ns,mt)] gG
+    (* TODO: cost: make sure that we are not generalizing without
+       clearing its dependencies (because the module ident is used as
+       agent name). *)
 
     | LD_hyp f                -> f_imp f gG
     | LD_abs_st _             -> raise InvalidGoalShape in
@@ -1902,7 +1919,8 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
         else `Pre  hyp
 
     | LD_mem    _ -> `Pre hyp
-    | LD_modty  _ -> `Pre hyp (* TODO: subst cost *)
+    | LD_modty  _ -> `Pre hyp (* TODO: cost: ?? *)
+    | LD_agent    -> `Pre hyp (* TODO: cost: ?? *)
     | LD_abs_st _ -> `Pre hyp
   in
 
