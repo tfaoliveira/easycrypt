@@ -297,8 +297,10 @@ let rec on_form (cb : cb) (f : EcFol.form) =
 
   and on_cost cb cost =
     on_form cb cost.EcFol.c_self;
-    Mx.iter (fun f c ->
-        on_xp cb f;
+    Mcp.iter (fun (id,id_f) c ->
+        (* TODO: cost: see with Benjamin
+           [id] may not be a module ident, if it is an agent name *)
+        cb (`Module (EcPath.mident id));
         on_form cb c;
       ) cost.EcFol.c_calls
 

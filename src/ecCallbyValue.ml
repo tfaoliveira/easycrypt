@@ -26,6 +26,7 @@ module Subst : sig
   val subst_ty       : subst -> ty -> ty
   val subst_xpath    : subst -> EcPath.xpath -> EcPath.xpath
   val subst_m        : subst -> ident -> ident
+  val subst_cp       : subst -> cp -> cp
   val subst_me       : subst -> EcMemory.memenv -> EcMemory.memenv
   val subst_lpattern : subst -> lpattern -> subst * lpattern
   val subst_stmt     : subst -> EcModules.stmt -> EcModules.stmt
@@ -45,6 +46,7 @@ end = struct
   let subst_ty       = Fsubst.subst_ty
   let subst_xpath    = Fsubst.subst_xpath
   let subst_m        = Fsubst.subst_m
+  let subst_cp       = Fsubst.subst_cp
   let subst_me       = Fsubst.subst_me
   let subst_lpattern = Fsubst.subst_lpattern
   let subst_stmt     = Fsubst.subst_stmt
@@ -161,12 +163,12 @@ let rec norm st s f =
 and norm_cost st s (c : cost) : cost =
   let self'  = norm st s c.c_self
   and calls' =
-    EcPath.Mx.fold (fun f cb calls ->
+    Mcp.fold (fun f cb calls ->
         (* We do not normalize the xpath, as it is not a valid xpath. *)
-        let f' = Subst.subst_xpath s f
+        let f' = Subst.subst_cp s f
         and cb' = norm st s cb in
-        EcPath.Mx.change (fun old -> assert (old = None); Some cb') f' calls
-      ) c.c_calls EcPath.Mx.empty
+        Mcp.change (fun old -> assert (old = None); Some cb') f' calls
+      ) c.c_calls Mcp.empty
   in
   cost_r self' calls' c.c_full
 

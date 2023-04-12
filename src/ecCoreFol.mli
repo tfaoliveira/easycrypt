@@ -10,6 +10,14 @@ open EcCoreModules
 open EcMemory
 
 (* -------------------------------------------------------------------- *)
+type cp = EcIdent.t * symbol
+
+val cp_hash : cp -> int
+val cp_equal : cp -> cp -> bool
+
+module Mcp : EcMaps.Map.S with type key = cp
+
+(* -------------------------------------------------------------------- *)
 val mhr    : memory
 val mleft  : memory
 val mright : memory
@@ -183,16 +191,15 @@ and pr = {
   pr_event : form;
 }
 
-
 (* A cost record, used in both CHoares and in procedure cost restrictions.
-   Keys of [c_calls] are functions of local modules, with no arguments.
+   Keys of [c_calls] are agent names.
    Missing entries in [c_calls] are:
    - any number of times in if [full] is [false]
    - zero times if [full] is [true] *)
 and crecord = private {
   c_self  : form;              (* type [txint] for [cost],
                                   type [tcost] for [proc_cost] *)
-  c_calls : form EcPath.Mx.t;  (* type [xint] *)
+  c_calls : form Mcp.t;        (* type [xint] *)
   c_full  : bool;
 }
 
@@ -290,10 +297,10 @@ val f_lambda : bindings -> form -> form
 val f_forall_mems : (EcIdent.t * memtype) list -> form -> form
 
 (* soft-constructors - cost hoare *)
-val cost_r   : form -> form EcPath.Mx.t -> bool -> cost
+val cost_r   : form -> form Mcp.t -> bool -> cost
 val f_cost_r : cost -> form
 
-val proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost
+val proc_cost_r : form -> form Mcp.t -> bool -> proc_cost
 
 val f_mod_cost_r : mod_cost -> form
 
@@ -691,6 +698,7 @@ module Fsubst : sig
   val subst_e        : f_subst -> expr  -> expr
   val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
+  val subst_cp       : f_subst -> cp    -> cp
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
   val subst_param    : f_subst -> oi_param -> oi_param

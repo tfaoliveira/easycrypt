@@ -694,7 +694,7 @@ let cost_mk_cmp
   let full = if fullcmp c1.c_full c2.c_full then f_true else f_false in
   let self = xcmp c1.c_self c2.c_self in
   let calls =
-    EcPath.Mx.fold2_union (fun _ x1 x2 forms ->
+    Mcp.fold2_union (fun _ x1 x2 forms ->
         let x1 = oget_c_bnd x1 c1.c_full
         and x2 = oget_c_bnd x2 c2.c_full in
         xcmp x1 x2 :: forms
@@ -1054,16 +1054,20 @@ let f_is_int_simpl (c : form) : form =
 
 (* -------------------------------------------------------------------- *)
 
+(* TODO: cost: check this *)
+
 (** Simplification of cost equality and inequality tests using
     module freshness and epochs. *)
 module CostCompSimplify = struct
   type cproj =
-    | PFresh of EcPath.xpath * Epoch.t
-    (* proj. over a procedure of a [Fresh] module with its epoch *)
+    | PFresh of cp * Epoch.t
+    (* proj. over a procedure of a [Fresh] agent name (with an associated function name)
+       with its epoch *)
 
-    | AllExcept of EcPath.xpath list * Epoch.t
+    | AllExcept of cp list * Epoch.t
     (* procedures and concrete cost except some (already projected) procedures
-       of [Fresh] modules, and the minimum epoch of all these [Fresh] modules. *)
+       of [Fresh] agent names (with associated function names), and the minimum epoch of
+       all these [Fresh] modules. *)
 
 
   (* replace arithmetic operations by their counterpart after projection *)
@@ -1112,7 +1116,7 @@ module CostCompSimplify = struct
       List.fold_left_map (fun e (mid, mt, e') ->
           let procs =
             List.map (fun (EcModules.Tys_function fs) ->
-                let xp = EcPath.xpath (EcPath.mident mid) fs.fs_name in
+                let xp = (mid, fs.fs_name) in
                 xp, e'
               )
               (EcEnv.ModTy.sig_of_mt env mt).EcModules.mis_body
@@ -1168,14 +1172,14 @@ module CostCompSimplify = struct
       | Fcost c ->
         begin match p with
           | AllExcept (xps,_) ->
-            let calls = EcPath.Mx.filter (fun xp _ ->
-                not (List.exists (EcPath.x_equal xp) xps)
+            let calls = Mcp.filter (fun xp _ ->
+                not (List.exists (cp_equal xp) xps)
               ) c.c_calls
             in
             f_cost_r (cost_r c.c_self calls c.c_full)
 
           | PFresh (xp', _) ->
-            oget_c_bnd (EcPath.Mx.find_opt xp' c.c_calls) c.c_full
+            oget_c_bnd (Mcp.find_opt xp' c.c_calls) c.c_full
         end
 
       | Fapp (f_op, lf)
@@ -1254,7 +1258,7 @@ let f_cost_map
   else
     let c = destr_cost c in
     let self = xf c.c_self in
-    let calls = EcPath.Mx.map (fun x -> xf x) c.c_calls in
+    let calls = Mcp.map (fun x -> xf x) c.c_calls in
     f_cost_r (cost_r self calls c.c_full)
 
 let f_cost_opp_simpl =
@@ -1296,7 +1300,7 @@ let f_lam_cost_map
   else
     let body = destr_cost body in
     let self = xf (f_lambda bd body.c_self) in
-    let calls = EcPath.Mx.map (fun x -> xf (f_lambda bd x)) body.c_calls in
+    let calls = Mcp.map (fun x -> xf (f_lambda bd x)) body.c_calls in
     f_cost_r (cost_r self calls body.c_full)
 
 let f_bigcost_simpl (pred : form) (cost : form) (l : form) : form =
@@ -1311,7 +1315,7 @@ let cost_is_zero (c : form) : bool =
     let c = destr_cost c in
     c.c_full &&
     f_equal f_x0 c.c_self &&
-    EcPath.Mx.for_all (fun _ -> f_equal f_x0) c.c_calls
+    Mcp.for_all (fun _ -> f_equal f_x0) c.c_calls
 
 (* -------------------------------------------------------------------- *)
 (* lift a binary operator over [txint] to [tcost] *)
@@ -1323,7 +1327,7 @@ let f_cost_mk_bin_simpl xop costop (c1 : form) (c2 : form) : form =
 
     let self = xop c1.c_self c2.c_self in
     let calls =
-      EcPath.Mx.merge (fun _ x1 x2 ->
+      Mcp.merge (fun _ x1 x2 ->
           let x1 = oget_c_bnd x1 c1.c_full
           and x2 = oget_c_bnd x2 c2.c_full in
           Some (xop x1 x2)
@@ -1366,7 +1370,7 @@ let f_cost_is_int_simpl c =
     else
       let self = f_is_int_simpl c.c_self in
       let calls =
-        List.map (fun (_, x) -> f_is_int_simpl x) (EcPath.Mx.bindings c.c_calls)
+        List.map (fun (_, x) -> f_is_int_simpl x) (Mcp.bindings c.c_calls)
       in
       f_ands0_simpl (self :: calls)
 
@@ -1380,9 +1384,9 @@ let mod_cost_proj_simpl (mc : mod_cost) (p : cost_proj) : form =
   | Param {proc = fname; param_m; param_p } ->
     let pcost = Msym.find fname mc in (* cannot fail *)
 
-    let c = EcPath.Mx.find_fun_opt (fun xp _ ->
-        EcIdent.name (EcPath.mget_ident xp.x_top) = param_m &&
-        xp.x_sub = param_p
+    let c = Mcp.find_fun_opt (fun (id,id_f) _ ->
+        EcIdent.name id = param_m &&
+        id_f = param_p
       ) pcost.c_calls
     in
 

@@ -78,7 +78,7 @@ let mr_add_restr
 (* -------------------------------------------------------------------- *)
 let cost_has_restr (c : cost) : bool =
   not (is_inf c.c_self) ||
-  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  Mcp.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
   c.c_full
 
 let f_cost_has_restr (c : form) =
@@ -90,7 +90,7 @@ let f_cost_has_restr (c : form) =
 (* -------------------------------------------------------------------- *)
 let proc_cost_has_restr (c : cost) : bool =
   not (f_equal f_cost_inf c.c_self || f_equal f_cost_inf0 c.c_self) ||
-  Mx.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
+  Mcp.exists (fun _ bnd -> not (is_inf bnd)) c.c_calls ||
   c.c_full
 
 let modcost_has_restr (mc : mod_cost) : bool =

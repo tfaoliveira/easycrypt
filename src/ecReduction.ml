@@ -450,8 +450,8 @@ let check_bindings test env subst bd1 bd2 =
    of call costs.
    Also return all elements of [c_calls] that have not been used. *)
 let zapp_cost_l
-    (calls : xpath list)
-    (c_calls : form list) : form Mx.t * form list
+    (calls : cp list)
+    (c_calls : form list) : form Mcp.t * form list
   =
   let rec aux calls c_calls cost =
     match calls, c_calls with
@@ -459,31 +459,31 @@ let zapp_cost_l
     | _, [] -> assert false
 
     | xb :: calls, cb :: c_calls ->
-      aux calls c_calls (Mx.add xb cb cost)
+      aux calls c_calls (Mcp.add xb cb cost)
   in
-  aux calls c_calls Mx.empty
+  aux calls c_calls Mcp.empty
 
 let check_crecord_l
     subst
     (co1 : cost)
-    (co2 : cost) : xpath list * (form * form) list
+    (co2 : cost) : cp list * (form * form) list
   =
   if co1.c_full <> co2.c_full then raise NotConv;
 
   let calls1 =
-    EcPath.Mx.fold (fun f c calls ->
+    Mcp.fold (fun f c calls ->
         (* we do not normalize [f], as it is not a proper [xpath] *)
-        EcPath.Mx.change (fun old -> assert (old = None); Some c) f calls
-      ) co1.c_calls EcPath.Mx.empty
+        Mcp.change (fun old -> assert (old = None); Some c) f calls
+      ) co1.c_calls Mcp.empty
   and calls2 =
-    EcPath.Mx.fold (fun f c calls ->
-        let f' = Fsubst.subst_xpath subst f in
+    Mcp.fold (fun f c calls ->
+        let f' = Fsubst.subst_cp subst f in
         (* we do not normalize [f'], as it is not a proper [xpath] *)
-        EcPath.Mx.change (fun old -> assert (old = None); Some c) f' calls
-      ) co2.c_calls EcPath.Mx.empty in
+        Mcp.change (fun old -> assert (old = None); Some c) f' calls
+      ) co2.c_calls Mcp.empty in
 
   let f_calls, pforms =
-    EcPath.Mx.fold2_union (fun f a1 a2 (f_calls, pforms) ->
+    Mcp.fold2_union (fun f a1 a2 (f_calls, pforms) ->
         let a1 = EcFol.oget_c_bnd a1 co1.c_full
         and a2 = EcFol.oget_c_bnd a2 co2.c_full in
         f :: f_calls, (a1, a2) :: pforms
@@ -1135,7 +1135,7 @@ let reduce_cost ri env coe =
 (* remove useless entries in the cost record *)
 let _reduce_crecord (c : crecord) =
   let has_red, c_calls =
-    Mx.mapi_filter_fold (fun _ f has_red ->
+    Mcp.mapi_filter_fold (fun _ f has_red ->
         match destr_xint f with
         | `Inf when not c.c_full ->
           true, None
@@ -1555,10 +1555,10 @@ type head_sub =
   | Zhl      of form (* program logic predicates *)
 
     (* program logic cost record *)
-  | Zcrecord of { full : bool; calls : xpath list; }
+  | Zcrecord of { full : bool; calls : cp list; }
 
     (* module cost *)
-  | Zmodcost of (EcSymbols.symbol * bool * xpath list) list
+  | Zmodcost of (EcSymbols.symbol * bool * cp list) list
 
   | Zmod_cost_proj of cost_proj
 
@@ -1980,7 +1980,7 @@ let is_conv_cproc
 
         if not a1.c_full && a2.c_full then raise Failed;
 
-        EcPath.Mx.fold2_union (fun _ c1 c2 () ->
+        Mcp.fold2_union (fun _ c1 c2 () ->
             let c1 = EcFol.oget_c_bnd c1 a1.c_full
             and c2 = EcFol.oget_c_bnd c2 a2.c_full in
             let f = match mode with

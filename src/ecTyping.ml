@@ -93,7 +93,7 @@ type modtyp_error =
 type modsig_error =
 | MTS_DupProcName of symbol
 | MTS_DupArgName  of symbol * symbol
-| MTS_NotAnOracle of EcPath.xpath list
+| MTS_NotAnAgent  of cp list
 
 type funapp_error =
 | FAE_WrongArgCount
@@ -930,18 +930,19 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
     let get_cost proj = f_cost_proj_simpl cost proj in
 
     (* for every module parameter [o], maximum number of calls to [o] *)
-    let c_calls : form Mx.t = List.fold_left (fun c_calls (_, (o, _, o_msig)) ->
-        (* for every procedure [o_f] of [o] *)
-        List.fold_left (fun c_calls (Tys_function o_f) ->
-            let ofx = EcPath.xpath (EcPath.mident o) o_f.fs_name in
-            let id_proc_cost =
-              get_cost (Param { proc = fn;
-                                param_m = EcIdent.name o;
-                                param_p = o_f.fs_name })
-            in
-            Mx.add ofx id_proc_cost c_calls
-          ) c_calls o_msig.mis_body
-      ) Mx.empty s_params
+    let c_calls : form Mcp.t =
+      List.fold_left (fun c_calls (_, (o, _, o_msig)) ->
+          (* for every procedure [o_f] of [o] *)
+          List.fold_left (fun c_calls (Tys_function o_f) ->
+              let ofx = (o, o_f.fs_name) in
+              let id_proc_cost =
+                get_cost (Param { proc = fn;
+                                  param_m = EcIdent.name o;
+                                  param_p = o_f.fs_name })
+              in
+              Mcp.add ofx id_proc_cost c_calls
+            ) c_calls o_msig.mis_body
+        ) Mcp.empty s_params
     in
 
     let c_self : cost option =
@@ -954,7 +955,7 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
     match c_self with
     | None ->
       let sg_self =
-        let calls_infnty = Mx.map (fun _ -> f_Inf) c_calls in
+        let calls_infnty = Mcp.map (fun _ -> f_Inf) c_calls in
         let cost_oracle_infnty = f_cost_r (cost_r f_x0 calls_infnty true) in
 
         let masked_cost = f_cost_add (get_cost (Intr fn)) cost_oracle_infnty in
@@ -967,7 +968,7 @@ let restr_proof_obligation hyps (mp_in : mpath) (mt : module_type) : form list =
       f_and sg_self sg_calls
 
     | Some c_self ->
-      let new_calls = Mx.merge (fun _ c1 c2 ->
+      let new_calls = Mcp.merge (fun _ c1 c2 ->
           match c1, c2 with
           | None, Some c | Some c, None -> Some c
 
@@ -1920,21 +1921,32 @@ let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
         EcPath.xpath mpath funsymb
 
 (* -------------------------------------------------------------------- *)
-let trans_oracle (env : EcEnv.env) ((m,f) : psymbol * psymbol) : xpath =
-  let msymbol = mk_loc (loc m) [m,None] in
-  let (mpath, sig_) = trans_msymbol env msymbol in
+let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
+  let id =
+    match EcEnv.Agent.lookup (unloc name) env with
+    | Some (id, _) -> id
+    | None ->
+      let msymbol = mk_loc (loc name) [name,None] in
+      let (mpath, sig_) = trans_msymbol env msymbol in
 
-  let () = match mpath.m_top with
-    | `Local _ -> ()
-    | `Concrete _ ->
-      tyerror (loc m) env (ModuleNotAbstract (unloc m)) in
+      let id : EcIdent.t =
+        match mpath.m_top with
+        | `Local id -> id
+        | `Concrete _ ->
+          tyerror (loc name) env (ModuleNotAbstract (unloc name))
+      in
 
-  let fmem = List.exists (fun (Tys_function fs) ->
-      fs.fs_name = unloc f) sig_.miss_body in
-  if not fmem then
-    tyerror (loc f) env (UnknownFunName ([unloc m],unloc f));
-
-  EcPath.xpath mpath (unloc f)
+      (* check that [f] is a existing function name of [name] *)
+      let fmem =
+        List.exists
+          (fun (Tys_function fs) -> fs.fs_name = unloc f )
+          sig_.miss_body
+      in
+      if not fmem then
+        tyerror (loc f) env (UnknownFunName ([unloc name],unloc f));
+      id
+  in
+  (id, unloc f)
 
 (* -------------------------------------------------------------------- *)
 let trans_topmsymbol env gp =
@@ -2173,7 +2185,7 @@ let trans_cost_proj env ~f_loc ~f_ty (p : pcost_proj) : cost_proj =
 (* -------------------------------------------------------------------- *)
 let proc_cost_is_unbounded (c : crecord) : bool =
   f_equal c.c_self f_cost_inf &&
-  Mx.for_all (fun _ c -> f_equal c f_Inf) c.c_calls &&
+  Mcp.for_all (fun _ c -> f_equal c f_Inf) c.c_calls &&
   not c.c_full
 
 let modcost_is_unbounded (mc : form) : bool =
@@ -2324,7 +2336,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
 let rec trans_restr_compl
     (env     : EcEnv.env)
     (env_in  : EcEnv.env)
-    (r_compl : pcompl option) : form * form Mx.t * bool
+    (r_compl : pcompl option) : form * form Mcp.t * bool
   =
   let trans_closed_form (form : pformula) (ty : EcTypes.ty) : form =
     let ue = EcUnify.UniEnv.create None in
@@ -2337,7 +2349,7 @@ let rec trans_restr_compl
     EcFol.Fsubst.uni subs tform
   in
 
-  let calls = Mx.empty in
+  let calls = Mcp.empty in
 
   let mk_elc ~(mode:[`Cost | `Xint]) : pformula option -> form = function
     | None      ->
@@ -2360,9 +2372,9 @@ let rec trans_restr_compl
     let calls =
       List.fold_left (fun calls (name, form) ->
           let s_env = if name.inp_in_params then env_in else env in
-          let fn = trans_oracle s_env name.inp_content in
+          let fn = trans_cp s_env name.inp_content in
 
-          Mx.change (fun _ -> Some (mk_elc ~mode:`Xint form)) fn calls
+          Mcp.change (fun _ -> Some (mk_elc ~mode:`Xint form)) fn calls
         ) calls restr_elems
     in
 
@@ -2391,13 +2403,13 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
   in
 
   (* check that [calls] only talks about oracle calls *)
-  if not (EcPath.Mx.for_all (fun f _ -> Sm.mem f.x_top params) c_calls) then
+  if not (Mcp.for_all (fun (id,id_f) _ -> Sm.mem (mident id) params) c_calls) then
    begin
      let orcls_err =
-       EcPath.Mx.filter (fun f _ -> not (Sm.mem f.x_top params)) c_calls
+       Mcp.filter (fun (id,id_f) _ -> not (Sm.mem (mident id) params)) c_calls
      in
      tyerror (loc r_el.pmre_name) env
-       (InvalidModSig (MTS_NotAnOracle (EcPath.Mx.keys orcls_err)))
+       (InvalidModSig (MTS_NotAnAgent (Mcp.keys orcls_err)))
    end;
 
   let c_cost = cost_r c_self c_calls c_full in
@@ -2405,9 +2417,12 @@ and trans_restr_fun env env_in (params : Sm.t) (r_el : pmod_restr_el) :
   (* We add to [oi_allowed] elements of [c_calls], if necessary. *)
   let oi_allowed =
     oi_allowed @
-    (Mx.bindings c_calls
-     |> List.filter_map (fun (f,_) ->
-         if List.mem f oi_allowed then None else Some f))
+    (Mcp.bindings c_calls
+     |> List.filter_map (fun ((id,id_f),_) ->
+         (* TODO: cost: we may be adding [xpath] to oi_allowed that are not modules
+            but agent names *)
+         let xp = xpath (mident id) id_f in
+         if List.mem xp oi_allowed then None else Some xp))
   in
 
   (name, { oi_allowed; }, c_cost )
@@ -3984,12 +3999,12 @@ and trans_form_or_pattern
     =
     let self  = trans_bnd opsc ~incoe env self_ty self in
     let calls = List.map (fun (m,fn,c) ->
-        let fn = trans_oracle env (m,fn) in
+        let fn = trans_cp env (m,fn) in
         let f_c = trans_bnd opsc ~incoe env txint c in
         fn, f_c
       ) calls
     in
-    let calls = Mx.of_list calls in
+    let calls = Mcp.of_list calls in
 
     cost_r self calls full
 

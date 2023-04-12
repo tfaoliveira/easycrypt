@@ -497,9 +497,11 @@ end = struct
     | InvalidModSig (MTS_DupArgName (f, x)) ->
         msg "duplicated proc. arg. name in signature: `%s.%s'" f x
 
-    | InvalidModSig (MTS_NotAnOracle xp_l) ->
-        msg "not a functor parameter: %a"
-          (EcUtils.pp_list " " (EcPrinting.pp_funname env) ) xp_l
+    | InvalidModSig (MTS_NotAnAgent cp_l) ->
+        msg "not a functor parameter or agent name: %a"
+          (EcUtils.pp_list " "
+             (fun fmt (id,id_f) -> Format.fprintf fmt "%s.%s" (EcIdent.tostring id) id_f)
+          ) cp_l
 
     | InvalidMem (name, MAE_IsConcrete) ->
         msg "the memory %s must be abstract" name

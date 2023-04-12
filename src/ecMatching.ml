@@ -692,10 +692,10 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
     if c1.c_full <> c2.c_full then raise MatchFailure;
 
     let calls2 =
-      EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) c2.c_calls
+      Mcp.translate (EcFol.Fsubst.subst_cp subst) c2.c_calls
     in
 
-    EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
+    Mcp.fold2_union (fun _ cb1 cb2 () ->
         let cb1 = EcFol.oget_c_bnd cb1 c1.c_full
         and cb2 = EcFol.oget_c_bnd cb2 c2.c_full in
         doit env (subst, mxs) cb1 cb2
@@ -914,14 +914,14 @@ module FPosition = struct
 
           | Fcost c ->
             let calls =
-              List.map (fun (_,cb) -> cb) (EcPath.Mx.bindings c.c_calls)
+              List.map (fun (_,cb) -> cb) (Mcp.bindings c.c_calls)
             in
             doit pos (`WithCtxt (ctxt, c.c_self :: calls))
 
           | Fmodcost mc ->
             let forms = EcSymbols.Msym.fold (fun _ pc forms ->
                 let calls =
-                  List.map (fun (_,cb) -> cb) (EcPath.Mx.bindings pc.c_calls)
+                  List.map (fun (_,cb) -> cb) (Mcp.bindings pc.c_calls)
                 in
                 pc.c_self :: (calls @ forms)
               ) mc []
@@ -1026,14 +1026,14 @@ module FPosition = struct
     | `Pre
     | `Post
     | `Self
-    | `Xpath of EcPath.Mx.key
+    | `Cp of cp
   ]
 
   type kforms = (key * form) list
   (* ------------------------------------------------------------------ *)
   let kforms_of_crecord (c : crecord) : kforms =
     let calls =
-      List.map (fun (f,cb) -> `Xpath f, cb) (EcPath.Mx.bindings c.c_calls)
+      List.map (fun (f,cb) -> `Cp f, cb) (Mcp.bindings c.c_calls)
     in
     (`Self, c.c_self) :: calls
 
@@ -1049,12 +1049,12 @@ module FPosition = struct
     let kfs', calls =
       let rec get_xp calls kfs =
         match kfs with
-        | (`Xpath xp, f) :: kfs -> get_xp ((xp, f) :: calls) kfs
+        | (`Cp xp, f) :: kfs -> get_xp ((xp, f) :: calls) kfs
         | _ -> kfs, List.rev calls
       in
       get_xp [] kfs
     in
-    kfs', cost_r c_self (EcPath.Mx.of_list calls) old_c.c_full
+    kfs', cost_r c_self (Mcp.of_list calls) old_c.c_full
 
 
   (* ------------------------------------------------------------------ *)

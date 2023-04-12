@@ -23,12 +23,12 @@ let cost_sub ~(c : form) ~(sub : form) : csub_res =
 (* Same as [cost_sub], but only for the concrete cost.
    [c] of type [tcost], [sub] of type [xint]. *)
 let cost_sub_self ~(c : form) ~(sub : form) : csub_res =
-  cost_sub ~c ~sub:(f_cost_r (cost_r sub Mx.empty true))
+  cost_sub ~c ~sub:(f_cost_r (cost_r sub Mcp.empty true))
 
 (* -------------------------------------------------------------------- *)
 (* [c] of type [tcost], [a] of type [xint] *)
 let cost_add_self ~(c : form) ~(a : form) : form =
-  let a_c = f_cost_r (cost_r a Mx.empty true) in
+  let a_c = f_cost_r (cost_r a Mcp.empty true) in
   f_cost_add c a_c
 
 (* -------------------------------------------------------------------- *)

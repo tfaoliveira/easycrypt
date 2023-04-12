@@ -277,9 +277,10 @@ module FunAbsLow = struct
           if EcPath.m_is_local oracle.x_top &&
              oracle.x_top.m_args = [] &&
              not (List.exists (fun x -> x_equal x.oracle oracle) xc) then
+            let o_id = mget_ident oracle.x_top in
             let k = EcIdent.create "k", GTty tint in
 
-            let calls =  Mx.singleton oracle f_x1 in
+            let calls =  Mcp.singleton (o_id, oracle.x_sub) f_x1 in
             let cost = f_lambda [k] (f_cost_r (cost_r f_x0 calls true)) in
             let xc = { oracle; cost; finite = true; } :: xc in
 
@@ -324,10 +325,12 @@ module FunAbsLow = struct
       (info : abstract_info)
       (xc   : abs_inv_inf) : form
     =
-    let fn_orcl = EcPath.xpath top fn in
+    assert (top.m_args = []);
+
+    let fn_orcl = (mget_ident top, fn) in
 
     let f_cost =
-      f_cost_r (cost_r f_x0 (Mx.singleton fn_orcl f_x1) true)
+      f_cost_r (cost_r f_x0 (Mcp.singleton fn_orcl f_x1) true)
     in
 
     let orcls_cost = List.map (fun o ->

@@ -17,6 +17,21 @@ module Sx = EcPath.Sx
 open EcBigInt.Notations
 
 (* -------------------------------------------------------------------- *)
+type cp = EcIdent.t * symbol
+
+let cp_equal (a,f) (a',f') = EcIdent.id_equal a a' && EcSymbols.sym_equal f f'
+
+let cp_hash (a,f) = Why3.Hashcons.combine (EcIdent.tag a) (Hashtbl.hash f)
+
+let cp_fv fv (a,f) = EcIdent.fv_add a fv
+
+module Mcp = EcMaps.Map.Make(struct
+    type t = cp
+
+    let compare (a,f) (a',f') = compare (EcIdent.tag a, f) (EcIdent.tag a', f')
+  end)
+
+(* -------------------------------------------------------------------- *)
 type quantif =
   | Lforall
   | Lexists
@@ -178,14 +193,14 @@ and coe = {
 }
 
 (* A cost record, used in both CHoares and in procedure cost restrictions.
-   Keys of [c_calls] are functions of local modules, with no arguments.
+   Keys of [c_calls] are agent names.
    Missing entries in [c_calls] are:
    - any number of times in if [full] is [false]
    - zero times if [full] is [true] *)
 and crecord = {
   c_self  : form;              (* type [txint] for [cost],
                                   type [tcost] for [proc_cost] *)
-  c_calls : form EcPath.Mx.t;  (* type [xint] *)
+  c_calls : form Mcp.t;        (* type [xint] *)
   c_full  : bool;
 }
 
@@ -331,7 +346,7 @@ module Hf = MSHf.H
 
 let crecord_equal (c1 : crecord) (c2 : crecord) : bool =
      f_equal c1.c_self c2.c_self
-  && EcPath.Mx.equal f_equal c1.c_calls c2.c_calls
+  && Mcp.equal f_equal c1.c_calls c2.c_calls
   && c1.c_full = c2.c_full
 
 let cost_equal : cost -> cost -> bool = crecord_equal
@@ -432,7 +447,7 @@ let crecord_hash (r : crecord) : int =
   Why3.Hashcons.combine
     (f_hash r.c_self)
     (Why3.Hashcons.combine
-       (EcPath.Mx.hash EcPath.x_hash f_hash r.c_calls)
+       (Mcp.hash cp_hash f_hash r.c_calls)
        (if r.c_full then 0 else 1))
 
 let cost_hash      : cost      -> int = crecord_hash
@@ -624,9 +639,9 @@ module Hsform = Why3.Hashcons.Make (struct
 
   let crecord_fv (r : crecord) : int Mid.t =
     let self_fv = f_fv r.c_self in
-    EcPath.Mx.fold (fun f c fv ->
+    Mcp.fold (fun f c fv ->
         let fv = fv_union fv (f_fv c) in
-        EcPath.x_fv fv f
+        cp_fv fv f
       ) r.c_calls self_fv
 
   let cost_fv      : cost      -> int Mid.t = crecord_fv
@@ -797,18 +812,14 @@ let check_modcost (f : form) (params : EcIdent.t list) : bool =
   match f.f_node with
   | Fmodcost mc ->
     Msym.for_all (fun _ pc ->
-        EcPath.Mx.for_all (fun orcl _ ->
-            match orcl.x_top.m_top with
-            | `Local id ->
-              if not (List.mem id params) then begin
-                Format.eprintf "%s does not appear in %s@."
-                  (EcPath.m_tostring orcl.x_top)
-                  (String.concat ", " (List.map EcIdent.tostring params));
-                false
-              end
-              else true
-
-            | _ -> assert false
+        Mcp.for_all (fun (a,f) _ ->
+            if not (List.mem a params) then begin
+              Format.eprintf "%s does not appear in %s@."
+                (EcIdent.tostring a)
+                (String.concat ", " (List.map EcIdent.tostring params));
+              false
+            end
+            else true
           ) pc.c_calls
       ) mc
   | _ -> f_equal f f_true
@@ -943,26 +954,16 @@ let f_eqs fs1 fs2 =
   f_ands (List.map2 f_eq fs1 fs2)
 
 (* -------------------------------------------------------------------- *)
-(* Check that keys of [mx] are functions of local modules,
-   with no arguments. *)
-let check_mx_local (mx : 'a EcPath.Mx.t) : bool =
-  EcPath.Mx.for_all (fun x _ ->
-      match x.x_top.m_top with
-      | `Local _ -> x.x_top.m_args = []
-      | _ -> false
-    ) mx
-
-let crecord_r (c_self : form) (c_calls : form EcPath.Mx.t) c_full : crecord =
-  assert (check_mx_local c_calls);
+let crecord_r (c_self : form) (c_calls : form Mcp.t) c_full : crecord =
   { c_self; c_calls; c_full; }
 
 (* -------------------------------------------------------------------- *)
-let cost_r : form -> form EcPath.Mx.t -> bool -> cost = crecord_r
+let cost_r : form -> form Mcp.t -> bool -> cost = crecord_r
 
 let f_cost_r (c : cost) : form = mk_form (Fcost c) EcTypes.tcost
 
 (* -------------------------------------------------------------------- *)
-let proc_cost_r : form -> form EcPath.Mx.t -> bool -> proc_cost = crecord_r
+let proc_cost_r : form -> form Mcp.t -> bool -> proc_cost = crecord_r
 
 (* direct constructeur, taking the type in arguments *)
 let _f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
@@ -971,15 +972,26 @@ let _f_mod_cost_r (mc : mod_cost) (ty : EcTypes.ty) : form =
 (* Computes a module cost record types.
    Does not check that the module cost record corresponds to an existing module. *)
 let mod_cost_ty (mc : mod_cost) : EcTypes.ty =
+  (* check that there does not exists two different id's with the same name *)
+  let check_uniq_id proc_cost =
+    assert (
+      Mcp.for_all (fun (id1,_) _ ->
+          Mcp.for_all (fun (id2,_) _ ->
+              EcIdent.id_equal id1 id2 || EcIdent.name id1 <> EcIdent.name id2
+            ) proc_cost.c_calls
+        ) proc_cost.c_calls
+    )
+  in
+
   let procs, oracles =
     Msym.fold (fun f proc_cost (procs, oracles) ->
+        check_uniq_id proc_cost;
         let oracles =
-          EcPath.Mx.fold (fun id _ oracles ->
-              let idtop, idsub = EcPath.mget_ident id.x_top, id.x_sub in
+          Mcp.fold (fun (id,id_f) _ oracles ->
               Msym.change (function
-                  | None   -> Some (Ssym.singleton idsub)
-                  | Some s -> Some (Ssym.add idsub s)
-                ) (EcIdent.name idtop) oracles
+                  | None   -> Some (Ssym.singleton id_f)
+                  | Some s -> Some (Ssym.add id_f s)
+                ) (EcIdent.name id) oracles
             ) proc_cost.c_calls oracles
         in
         let procs = Msym.add f proc_cost.c_full procs in
@@ -1155,13 +1167,13 @@ let f_cost_subcond f1 f2 = f_app fop_cost_subcond [f1; f2] tbool
 let f_cost_is_int  f1    = f_app fop_cost_is_int  [f1]     tbool
 
 
-let f_cost_inf0 = f_cost_r (cost_r f_Inf EcPath.Mx.empty false)
+let f_cost_inf0 = f_cost_r (cost_r f_Inf Mcp.empty false)
 
 (* FIXME: since we cannot define abbrevs and operators for cost (yet),
    do not use the operator but directly its definition *)
 let f_cost_inf = f_cost_inf0
 
-let f_cost_zero = f_cost_r (cost_r  f_x0 EcPath.Mx.empty true)
+let f_cost_zero = f_cost_r (cost_r f_x0 Mcp.empty true)
 
 (* -------------------------------------------------------------------- *)
 let f_int_add_simpl f1 f2 =
@@ -1228,7 +1240,7 @@ let x_scalar_mult
 (* -------------------------------------------------------------------- *)
 (* auxilliary function used in [cost] and [r_cost] addition *)
 let cost_add_map (calls1, full1) (calls2, full2) =
-  EcPath.Mx.merge (fun _ call1 call2 ->
+  Mcp.merge (fun _ call1 call2 ->
       let call1 = oget_c_bnd call1 full1
       and call2 = oget_c_bnd call2 full2 in
       Some (f_xadd_simpl call1 call2 )
@@ -1251,7 +1263,7 @@ let proc_cost_add (c1 : proc_cost) (c2 : proc_cost) : proc_cost =
 (* -------------------------------------------------------------------- *)
 let cost_top : cost =
   { c_self  = f_Inf;
-    c_calls = EcPath.Mx.empty;
+    c_calls = Mcp.empty;
     c_full  = false; }
 
 let fcost_top : form = f_cost_r cost_top
@@ -1259,7 +1271,7 @@ let fcost_top : form = f_cost_r cost_top
 (* -------------------------------------------------------------------- *)
 let proc_cost_top : proc_cost =
   { c_self   = fcost_top;
-    c_calls  = EcPath.Mx.empty;
+    c_calls  = Mcp.empty;
     c_full   = false; }
 
 (* -------------------------------------------------------------------- *)
@@ -1275,7 +1287,7 @@ let mod_cost_top_r (procs  : Ssym.t) : form =
 (* [l] has type [int] *)
 let cost_scalar_mult (l : form) (c : cost) : cost =
   let c_self = x_scalar_mult ~mode_l:`Int l c.c_self in
-  let c_calls = EcPath.Mx.map (x_scalar_mult ~mode_l:`Int l) c.c_calls in
+  let c_calls = Mcp.map (x_scalar_mult ~mode_l:`Int l) c.c_calls in
   { c_self; c_calls; c_full = c.c_full; }
 
 (* -------------------------------------------------------------------- *)
@@ -1392,7 +1404,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 let crecord_map (g : form -> form) (cost : crecord): crecord =
-  let calls = EcPath.Mx.map g cost.c_calls in
+  let calls = Mcp.map g cost.c_calls in
   cost_r (g cost.c_self) calls cost.c_full
 
 let cost_map      : (form -> form) -> cost      -> cost      = crecord_map
@@ -1404,7 +1416,7 @@ let mod_cost_map (g : form -> form) (mc : mod_cost): mod_cost =
 (* -------------------------------------------------------------------- *)
 let crecord_iter (g : form -> unit) (cost : crecord) : unit =
   g cost.c_self;
-  EcPath.Mx.iter (fun _ -> g) cost.c_calls
+  Mcp.iter (fun _ -> g) cost.c_calls
 
 let cost_iter      : (form -> unit) -> cost      -> unit = crecord_iter
 let proc_cost_iter : (form -> unit) -> proc_cost -> unit = crecord_iter
@@ -1419,7 +1431,7 @@ let crecord_fold
     (init : 'a) : 'a
   =
   g cost.c_self init |>
-  EcPath.Mx.fold (fun _ -> g) cost.c_calls
+  Mcp.fold (fun _ -> g) cost.c_calls
 
 let cost_fold      : (form -> 'a -> 'a) -> cost      -> 'a -> 'a = crecord_fold
 let proc_cost_fold : (form -> 'a -> 'a) -> proc_cost -> 'a -> 'a = crecord_fold
@@ -2153,6 +2165,8 @@ module Fsubst = struct
   let subst_xpath s f =
     EcPath.x_subst s.fs_sty.ts_mp f
 
+  let subst_cp s (a,f) = (Mid.find_def a a s.fs_agent, f)
+
   let subst_stmt s c =
     let es =
       e_subst_init s.fs_freshen s.fs_sty.ts_p
@@ -2637,22 +2651,13 @@ module Fsubst = struct
     : crecord
     =
     let c_self = f_subst ~tx s init_crec.c_self
-    and c_calls = EcPath.Mx.fold (fun x cb calls ->
-        let x' = subst_xpath s x in
-        let cb' = f_subst ~tx s cb in
-
-        (* TODO: cost: [crecord] must be instantiated by external agent names, which
-           are never concrectized. Update this *)
-        match x'.x_top.m_top with
-        (* if [x'] is local, check if it can stays in the record *)
-        | `Local _ ->
-          EcPath.Mx.change
-            (fun old -> assert (old  = None); Some cb')
-            x' calls
-
-        (* TODO: cost: cannot happen with external agent names *)
-        | _ -> assert false
-      ) init_crec.c_calls EcPath.Mx.empty
+    and c_calls = Mcp.fold (fun cp cb calls ->
+        let cp = subst_cp s cp in
+        let cb = f_subst ~tx s cb in
+        Mcp.change
+          (fun old -> assert (old  = None); Some cb)
+          cp calls
+      ) init_crec.c_calls Mcp.empty
     in
     { c_self; c_calls; c_full = init_crec.c_full }
 
@@ -2865,15 +2870,15 @@ let rec dump_form ~(long:bool) fmt (f : form) =
   | _              -> dump_todo fmt
 
 and _dump_crecord ~(long:bool) fmt
-    ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
+    ((self, calls, full) : form * (cp * form) list * bool)
   =
   let pp_self fmt self =
     Format.fprintf fmt ": %a"
       (dump_form ~long) self
 
-  and pp_call_el fmt (f,c) =
-    Format.fprintf fmt "%s : %a"
-      (EcPath.x_tostring f)
+  and pp_call_el fmt ((id,f),c) =
+    Format.fprintf fmt "%s.%s : %a"
+      (EcIdent.tostring id) f
       (dump_form ~long) c
 
   and pp_full fmt = if not full then Format.fprintf fmt ".." in
@@ -2887,7 +2892,7 @@ and _dump_crecord ~(long:bool) fmt
 
 and dump_crecord ~(long:bool) fmt (c : crecord) =
   (_dump_crecord ~long) fmt
-    (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
+    (c.c_self, Mcp.bindings c.c_calls, c.c_full)
 
 and dump_cost      ~(long:bool) fmt c = dump_crecord ~long fmt c
 and dump_proc_cost ~(long:bool) fmt c = dump_crecord ~long fmt c

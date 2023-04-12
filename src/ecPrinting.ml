@@ -1793,15 +1793,14 @@ and pp_tuple_expr ppe fmt e =
 (** if [proccost] is true, we print the function path without looking
     in the environment. *)
 and _pp_crecord ~proccost ppe fmt
-    ((self, calls, full) : form * (EcPath.xpath * form) list * bool)
+    ((self, calls, full) : form * (cp * form) list * bool)
   =
-  let pp_f fmt (f : EcPath.xpath) =
-    if not proccost then
-      pp_funname ppe fmt f
-    else
-      Format.fprintf fmt "%a.%s"
-        EcIdent.pp_ident (EcPath.mget_ident f.EcPath.x_top)
-        f.x_sub
+  let pp_f fmt ((id,id_f) : cp) =
+    (* if not proccost then
+     *   pp_funname ppe fmt f
+     * else *)
+    (* TODO: cost: restore different printing behavior depending on proccost? *)
+      Format.fprintf fmt "%a.%s" EcIdent.pp_ident id id_f
   in
 
   let pp_self fmt self =
@@ -1821,7 +1820,7 @@ and _pp_crecord ~proccost ppe fmt
 
 and pp_crecord ~proccost ppe fmt (c : crecord) =
   _pp_crecord ~proccost ppe fmt
-    (c.c_self, EcPath.Mx.bindings c.c_calls, c.c_full)
+    (c.c_self, EcCoreFol.Mcp.bindings c.c_calls, c.c_full)
 
 and pp_cost      ppe fmt c = pp_crecord ~proccost:false ppe fmt c
 and pp_proc_cost ppe fmt c = pp_crecord ~proccost:true  ppe fmt c

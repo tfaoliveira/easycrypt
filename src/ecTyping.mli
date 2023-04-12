@@ -82,7 +82,7 @@ type modtyp_error =
 type modsig_error =
 | MTS_DupProcName of symbol
 | MTS_DupArgName  of symbol * symbol
-| MTS_NotAnOracle of EcPath.xpath list
+| MTS_NotAnAgent  of cp list
 
 type funapp_error =
 | FAE_WrongArgCount
@@ -267,7 +267,7 @@ val transmod     : attop:bool -> env -> pmodule_def -> module_expr
 val trans_topmsymbol : env -> pmsymbol located -> mpath
 val trans_msymbol    : env -> pmsymbol located -> mpath * module_smpl_sig
 val trans_gamepath   : env -> pgamepath -> xpath
-val trans_oracle     : env -> psymbol * psymbol -> xpath
+val trans_cp         : env -> psymbol * psymbol -> cp
 val trans_restr_mem : env -> pmod_restr_mem -> Sx.t use_restr * Sm.t use_restr
 
 (* -------------------------------------------------------------------- *)

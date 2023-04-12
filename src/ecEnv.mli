@@ -449,6 +449,10 @@ end
 module Agent : sig
   type t = EcModules.module_expr option
 
+  val lookup : symbol -> env -> (EcIdent.t * t) option
+
+  val mem : EcIdent.t -> env -> bool
+
   val byid : EcIdent.t -> env -> t
   val bind : EcIdent.t -> t -> env -> env
 

@@ -138,10 +138,14 @@ end)
 
 (* -------------------------------------------------------------------- *)
 
-module Mmem : sig
+(* Map from [EcIdent.t] to some values ['a], with efficient
+   lookup by [EcSymbol].
+   Used both for memories and agent names. *)
+module Msymid : sig
   type 'a t
   val empty : 'a t
   val all   : 'a t -> (EcIdent.t * 'a) list
+  val mem   : EcIdent.t -> 'a t -> bool
   val byid  : EcIdent.t -> 'a t -> 'a
   val bysym : EcSymbols.symbol -> 'a t -> EcIdent.t * 'a
   val add   : EcIdent.t -> 'a -> 'a t -> 'a t
@@ -158,6 +162,8 @@ end = struct
     }
 
   let all m = Mid.bindings m.m_id
+
+  let mem id m = Mid.mem id m.m_id
 
   let byid id m = Mid.find id m.m_id
 
@@ -181,10 +187,10 @@ type preenv = {
   env_current  : mc;
   env_comps    : mc Mip.t;
   env_locals   : (EcIdent.t * EcTypes.ty) MMsym.t;
-  env_memories : EcMemory.memtype Mmem.t;
+  env_memories : EcMemory.memtype Msymid.t;
   env_actmem   : EcMemory.memory option;
   env_abs_st   : EcModules.abs_uses Mid.t;
-  env_agent    : EcModules.module_expr option Mid.t;
+  env_agent    : EcModules.module_expr option Msymid.t;
   env_tci      : ((ty_params * ty) * tcinstance) list;
   env_tc       : TC.graph;
   env_rwbase   : Sp.t Mip.t;
@@ -300,10 +306,10 @@ let empty gstate =
     env_current  = env_current;
     env_comps    = Mip.singleton (IPPath path) (empty_mc None);
     env_locals   = MMsym.empty;
-    env_memories = Mmem.empty;
+    env_memories = Msymid.empty;
     env_actmem   = None;
     env_abs_st   = Mid.empty;
-    env_agent    = Mid.empty;
+    env_agent    = Msymid.empty;
     env_tci      = [];
     env_tc       = TC.Graph.empty;
     env_rwbase   = Mip.empty;
@@ -1266,14 +1272,14 @@ exception MEError of meerror
 
 (* -------------------------------------------------------------------- *)
 module Memory = struct
-  let all env = Mmem.all env.env_memories
+  let all env = Msymid.all env.env_memories
 
   let byid (me : memory) (env : env) =
-    try Some (me, Mmem.byid me env.env_memories)
+    try Some (me, Msymid.byid me env.env_memories)
     with Not_found -> None
 
   let lookup (me : symbol) (env : env) =
-    try Some (Mmem.bysym me env.env_memories)
+    try Some (Msymid.bysym me env.env_memories)
     with Not_found -> None
 
   let set_active (me : memory) (env : env) =
@@ -1290,7 +1296,7 @@ module Memory = struct
     | Some me -> byid me env
 
   let update (me: EcMemory.memenv) (env : env) =
-    { env with env_memories = Mmem.add (fst me) (snd me) env.env_memories; }
+    { env with env_memories = Msymid.add (fst me) (snd me) env.env_memories; }
 
   let push (me : EcMemory.memenv) (env : env) =
     update me env
@@ -1829,17 +1835,23 @@ end
 module Agent = struct
   type t = EcModules.module_expr option
 
+  let lookup (a : symbol) (env : env) =
+    try Some (Msymid.bysym a env.env_agent)
+    with Not_found -> None
+
+  let mem id env = Msymid.mem id env.env_agent
+
   let byid id env =
-    try Mid.find id env.env_agent
+    try Msymid.byid id env.env_agent
     with Not_found -> raise (LookupFailure (`Agent id))
 
   let bind id (me : t) env =
-    assert (not (Mid.mem id env.env_agent));
-    { env with env_agent = Mid.add id me env.env_agent }
+    assert (not (Msymid.mem id env.env_agent));
+    { env with env_agent = Msymid.add id me env.env_agent }
 
   let set_me id (me : EcModules.module_expr) env =
-    assert (Mid.find id env.env_agent = None);
-    { env with env_agent = Mid.add id (Some me) env.env_agent }
+    assert (Msymid.byid id env.env_agent = None);
+    { env with env_agent = Msymid.add id (Some me) env.env_agent }
 end
 
 (* -------------------------------------------------------------------- *)
