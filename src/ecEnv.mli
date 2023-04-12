@@ -196,8 +196,8 @@ end
 (* -------------------------------------------------------------------- *)
 module Mod : sig
   type t   = top_module_expr
-  type lkt = module_expr * locality option
-  type spt = mpath * module_expr suspension * locality option
+  type lkt = (mod_info * module_expr) * locality option
+  type spt = mpath * (mod_info * module_expr) suspension * locality option
 
   val by_mpath    : mpath -> env -> lkt
   val by_mpath_opt: mpath -> env -> lkt option
@@ -208,12 +208,12 @@ module Mod : sig
   val sp_lookup     : qsymbol -> env -> spt
   val sp_lookup_opt : qsymbol -> env -> spt option
 
-  val bind  : ?import:import -> symbol -> t -> env -> env
+  val bind  : ?import:import -> symbol -> mod_info -> t -> env -> env
   val enter : symbol -> (EcIdent.t * module_type) list -> env -> env
 
-  val bind_local    : EcIdent.t -> module_type -> env -> env
+  val bind_local    : EcIdent.t -> ?minfo:mod_info -> module_type -> env -> env
   val bind_locals   : (EcIdent.t * module_type) list -> env -> env
-  val declare_local : EcIdent.t -> module_type -> env -> env
+  val declare_local : EcIdent.t -> ?minfo:mod_info -> module_type -> env -> env
   val is_declared   : EcIdent.t -> env -> bool
 
   val add_restr_to_locals : Sx.t use_restr -> Sm.t use_restr -> env -> env

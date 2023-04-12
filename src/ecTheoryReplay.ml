@@ -763,7 +763,8 @@ and replay_mod
       let name  = me.tme_expr.me_name in
       let env   = EcSection.env (ove.ovre_hooks.henv scope) in
 
-      let mp, (newme, newlc) = EcEnv.Mod.lookup (unloc newname) env in
+      (* TODO: cost: [mod_info] ignore during replay *)
+      let mp, ((mod_info,newme), newlc) = EcEnv.Mod.lookup (unloc newname) env in
 
       let np =
         match mp.m_top with

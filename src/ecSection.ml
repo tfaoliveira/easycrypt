@@ -1539,7 +1539,8 @@ let add_item_ (item : theory_item) (scenv:scenv) =
     | Th_axiom   (s, ax) -> EcEnv.Ax.bind s ax env
     | Th_schema  (s, sc) -> EcEnv.Schema.bind s sc env
     | Th_modtype (s, ms) -> EcEnv.ModTy.bind s ms env
-    | Th_module       me -> EcEnv.Mod.bind me.tme_expr.me_name me env
+    (* TODO: cost: Th_module are always [Std]  *)
+    | Th_module       me -> EcEnv.Mod.bind me.tme_expr.me_name Std me env
     | Th_typeclass(s,tc) -> EcEnv.TypeClass.bind s tc env
     | Th_theory (s, cth) -> EcEnv.Theory.bind s cth env
     | Th_export  (p, lc) -> EcEnv.Theory.export p lc env

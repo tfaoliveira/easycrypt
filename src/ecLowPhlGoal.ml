@@ -499,6 +499,8 @@ type abstract_info = {
   f         : EcPath.xpath;     (* procedure (normalized) *)
   oi_param  : oi_param;         (* oracle parameters of [f] *)
 
+  mod_info  : mod_info;
+
   cost_info : form;
   (* Cost information of the functor [top].
      Of type [Tmodsig t], where [t] contains an entry for [f.x_sub]. *)
@@ -528,7 +530,7 @@ let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let f   = EcEnv.NormMp.norm_xfun env f1 in
   let top = EcPath.m_functor f.EcPath.x_top in
 
-  let me, _ = EcEnv.Mod.by_mpath top env in
+  let (mod_info,me), _ = EcEnv.Mod.by_mpath top env in
   let cost_info = (EcEnv.NormMp.get_restr_me env me top).mr_cost in
   let args_map =
     List.map2 (fun x (y,_) -> x,y) f.x_top.EcPath.m_args me.me_params
@@ -548,7 +550,7 @@ let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
    *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param))
    *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param')); *)
 
-  { top; f; oi_param; args_map; cost_info; fsig = def.f_sig }
+  { top; f; mod_info; oi_param; args_map; cost_info; fsig = def.f_sig }
 
 (* -------------------------------------------------------------------- *)
 let abstract_info2

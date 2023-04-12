@@ -178,6 +178,7 @@ type tyerror =
 | SchemaVariableReBinded of EcIdent.t
 | SchemaMemBinderBelowCost
 | ModuleNotAbstract      of symbol
+| ModuleNotWrapped       of symbol
 | ProcedureUnbounded     of symbol * symbol
 | LvMapOnNonAssign
 | NoDefaultMemRestr
@@ -1036,6 +1037,7 @@ let split_msymb (env : EcEnv.env) (msymb : pmsymbol located) =
     (top, args, sm)
 
 (* -------------------------------------------------------------------- *)
+(** Internal. *)
 let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
   let loc = msymb.pl_loc in
   let (top, args, sm) = split_msymb env msymb in
@@ -1050,7 +1052,9 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
 
   let top_qname = to_qsymbol (top@sm) in
 
-  let (top_path, {EcEnv.sp_target = mod_expr; EcEnv.sp_params = (spi, params)}) =
+  (* TODO: cost: [mod_info] is ignored here. Is that fine? *)
+  let (top_path, { EcEnv.sp_target = (mod_info,mod_expr);
+                   EcEnv.sp_params = (spi, params)       }) =
     match EcEnv.Mod.sp_lookup_opt top_qname.pl_desc env with
     | None ->
         tyerror top_qname.pl_loc env (UnknownModName top_qname.pl_desc)
@@ -1125,6 +1129,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
        { miss_params = remn;
          miss_body   = body; })
 
+(** Exported. *)
 let trans_msymbol env (msymb : pmsymbol located) : mpath * module_smpl_sig =
   let ((m,_),mt) = trans_msymbol env msymb in
   (m,mt)
@@ -1923,6 +1928,8 @@ let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
 (* -------------------------------------------------------------------- *)
 let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
   let id =
+    (* lookup [name] as either an agent name (in [EcEnv.Agent]) or an
+       abstract module marked as [Wrap] *)
     match EcEnv.Agent.lookup (unloc name) env with
     | Some (id, _) -> id
     | None ->
@@ -1934,6 +1941,15 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
         | `Local id -> id
         | `Concrete _ ->
           tyerror (loc name) env (ModuleNotAbstract (unloc name))
+      in
+
+      (* check that [mpath] is module with a wrapped module type *)
+      let () =
+        let (mod_info,_), _ = EcEnv.Mod.by_mpath mpath env in
+        match mod_info with
+        | Wrap -> ()
+        | Std ->
+          tyerror (loc name) env (ModuleNotWrapped (unloc name))
       in
 
       (* check that [f] is a existing function name of [name] *)
@@ -2309,7 +2325,7 @@ let trans_restr_oracle_calls env env_in (params : Sm.t) pfd_uses : xpath list =
   match pfd_uses with
   | None ->
     let do_one mp calls =
-      let me, _ = EcEnv.Mod.by_mpath mp env_in in
+      let (_,me), _ = EcEnv.Mod.by_mpath mp env_in in
       if me.me_params <> [] then calls
       else
         let fs = List.map (fun (Tys_function fsig) ->
@@ -2686,7 +2702,8 @@ and transmod_header
        i.e: remove the n first argument *)
     let rm,_ = List.takedrop n me.me_params in
 
-    let env = EcEnv.Mod.bind me.me_name
+    (* TODO: cost: can module [me] be something else than [Std]? *)
+    let env = EcEnv.Mod.bind me.me_name Std
                 { tme_expr = me; tme_loca = `Global } env in
 
     let env = List.fold_left (fun env (id, mt) ->
@@ -2720,7 +2737,7 @@ and transmod_header
     n,me
 
 (* -------------------------------------------------------------------- *)
-and transmod_body ~attop (env : EcEnv.env) x params (me:pmodule_expr) =
+and transmod_body ~attop (env : EcEnv.env) x params (me:pmodule_expr) : module_expr =
   (* Check parameters types *) (* FIXME: dup names *)
   let stparams =
     List.map                          (* FIXME: exn *)
@@ -2738,7 +2755,7 @@ and transmod_body ~attop (env : EcEnv.env) x params (me:pmodule_expr) =
     if nb_params > 0 && not attop then
       tyerror me.pl_loc env
         (InvalidModAppl (MAE_WrongArgCount(0,nb_params)));
-    let me, _ = EcEnv.Mod.by_mpath mp env in
+    let (_mod_info, me), _ = EcEnv.Mod.by_mpath mp env in
     let arity = List.length stparams in
 
     assert (List.length sig_.miss_params = List.length me.me_params);

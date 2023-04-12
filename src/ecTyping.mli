@@ -167,6 +167,7 @@ type tyerror =
 | SchemaVariableReBinded of EcIdent.t
 | SchemaMemBinderBelowCost
 | ModuleNotAbstract      of symbol
+| ModuleNotWrapped       of symbol
 | ProcedureUnbounded     of symbol * symbol
 | LvMapOnNonAssign
 | NoDefaultMemRestr

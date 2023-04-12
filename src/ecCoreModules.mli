@@ -277,7 +277,7 @@ and 'a p_module_body =
   | ME_Alias       of int * EcPath.mpath
   | ME_Structure   of 'a p_module_structure    (* Concrete modules. *)
   | ME_Decl        of 'a p_module_type         (* Abstract modules. *)
-  | ME_Wrap of EcIdent.t * [`Cb | `Ext] * 'a p_module_type
+  | ME_Wrap        of EcIdent.t * [`Cb | `Ext] * 'a p_module_type
   (* Wrapped module [(id, kind, mt)]:
      - the ident [id] represents an agent name
      - [kind = `Ext]: controls goes to [id]

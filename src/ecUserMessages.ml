@@ -562,6 +562,9 @@ end = struct
     | ModuleNotAbstract m ->
       msg "the module %s is not abstract" m
 
+    | ModuleNotWrapped m ->
+      msg "the module %s is not wrapped" m
+
     | ProcedureUnbounded (m,f) ->
       msg "%s.%s's complexity is unbounded" m f
 
