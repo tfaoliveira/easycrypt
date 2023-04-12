@@ -2525,7 +2525,7 @@ module Fsubst = struct
 
   and add_bindings ~tx = List.map_fold (add_binding ~tx)
 
-  (* TODO: cost: hold substitution code *)
+  (* TODO: cost: old substitution code *)
   (* (\* complicated, because when a local module is substituted, its
    *    cost (time the number of times it is called) may need to be
    *    moved (see instantiation rule):

@@ -738,12 +738,12 @@ and trans_pterm_arg_mem pe ?name { pl_desc = arg; pl_loc = loc; } =
 (* ------------------------------------------------------------------ *)
 (* for external agent name *)
 and trans_pterm_arg_agent (pe : pt_env) ?name { pl_desc = arg; pl_loc = loc; } =
-  (* TODO: cost: agent name of the form `#n...` *)
-  let dfl () = Printf.sprintf "#n%d" (EcUid.unique ()) in
+  (* TODO: cost: agent name of the form `$n...` *)
+  let dfl () = Printf.sprintf "$n%d" (EcUid.unique ()) in
 
   match arg with
   | EA_form { pl_loc = lc; pl_desc = (PFagent m) } ->
-      trans_pterm_arg_agent pe ?name (mk_loc lc (EA_agent m))
+    trans_pterm_arg_agent pe ?name (mk_loc lc (EA_agent m))
 
   | EA_mem _ | EA_mod  _ | EA_proof _ | EA_form _ ->
       let ak = oget (argkind_of_parg arg) in

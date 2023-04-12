@@ -534,6 +534,9 @@ end = struct
     | MemNotAllowed ->
         msg "memory not allowed here"
 
+    | AgentNotAllowed ->
+        msg "agent names not allowed here"
+
     | UnknownScope sc ->
         msg "unknown scope: `%a'" pp_qsymbol sc
 

@@ -45,6 +45,7 @@ type lookup_error = [
   | `Path    of path
   | `QSymbol of qsymbol
   | `AbsStmt of EcIdent.t
+  | `Agent   of EcIdent.t
 ]
 
 val pp_lookup_failure : Format.formatter -> lookup_error -> unit
@@ -442,6 +443,17 @@ module AbsStmt : sig
   type t = EcModules.abs_uses
 
   val byid : EcIdent.t -> env -> t
+end
+
+(* -------------------------------------------------------------------- *)
+module Agent : sig
+  type t = EcModules.module_expr option
+
+  val byid : EcIdent.t -> env -> t
+  val bind : EcIdent.t -> t -> env -> env
+
+  (** set the (unique) module expression associated to an external agent *)
+  val set_me : EcIdent.t -> EcModules.module_expr -> env -> env
 end
 
 (* -------------------------------------------------------------------- *)

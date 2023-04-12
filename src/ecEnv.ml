@@ -184,6 +184,7 @@ type preenv = {
   env_memories : EcMemory.memtype Mmem.t;
   env_actmem   : EcMemory.memory option;
   env_abs_st   : EcModules.abs_uses Mid.t;
+  env_agent    : EcModules.module_expr option Mid.t;
   env_tci      : ((ty_params * ty) * tcinstance) list;
   env_tc       : TC.graph;
   env_rwbase   : Sp.t Mip.t;
@@ -302,6 +303,7 @@ let empty gstate =
     env_memories = Mmem.empty;
     env_actmem   = None;
     env_abs_st   = Mid.empty;
+    env_agent    = Mid.empty;
     env_tci      = [];
     env_tc       = TC.Graph.empty;
     env_rwbase   = Mip.empty;
@@ -323,6 +325,7 @@ type lookup_error = [
   | `Path    of path
   | `QSymbol of qsymbol
   | `AbsStmt of EcIdent.t
+  | `Agent   of EcIdent.t
 ]
 
 exception LookupFailure of lookup_error
@@ -335,6 +338,7 @@ let pp_lookup_failure fmt e =
     | `Path    p -> EcPath.tostring p
     | `QSymbol p -> string_of_qsymbol p
     | `AbsStmt p -> EcIdent.tostring p
+    | `Agent   p -> EcIdent.tostring p
   in
     Format.fprintf fmt "unknown symbol: %s" p
 
@@ -1822,6 +1826,23 @@ module AbsStmt = struct
 end
 
 (* -------------------------------------------------------------------- *)
+module Agent = struct
+  type t = EcModules.module_expr option
+
+  let byid id env =
+    try Mid.find id env.env_agent
+    with Not_found -> raise (LookupFailure (`Agent id))
+
+  let bind id (me : t) env =
+    assert (not (Mid.mem id env.env_agent));
+    { env with env_agent = Mid.add id me env.env_agent }
+
+  let set_me id (me : EcModules.module_expr) env =
+    assert (Mid.find id env.env_agent = None);
+    { env with env_agent = Mid.add id (Some me) env.env_agent }
+end
+
+(* -------------------------------------------------------------------- *)
 module Mod = struct
   type t   = top_module_expr
   type lkt = module_expr * locality option
@@ -1950,7 +1971,11 @@ module Mod = struct
     vars_mb (EcPath.mqname mp me.me_name) xs me.me_body
 
   and vars_mb mp xs = function
+    | ME_Wrap _
     | ME_Alias _ | ME_Decl _ -> xs
+    (* TODO: cost: Benjamin
+       should we recurse in module type (for ME_Decl and ME_Wrap) here? *)
+
     | ME_Structure ms ->
       List.fold_left (vars_item mp) xs ms.ms_body
 
@@ -2298,6 +2323,7 @@ module NormMp = struct
   and body_use env rm fdone mp us comps body =
     match body with
     | ME_Alias _ -> assert false
+    | ME_Wrap _
     | ME_Decl _ ->
       let id = match mp.m_top with `Local id -> id | _ -> assert false in
       let us = add_glob_except rm id us in
@@ -2507,7 +2533,9 @@ module NormMp = struct
         match gty with
         | GTty ty -> GTty (norm_ty env ty)
         | GTmodty _ -> gty
-        | GTmem mt -> GTmem (mt_subst (norm_ty env) mt) in
+        | GTmem mt -> GTmem (mt_subst (norm_ty env) mt)
+        | GTagent -> gty
+      in
       id,gty in
 
     let has_mod b =
@@ -3563,6 +3591,8 @@ module LDecl = struct
     | LD_abs_st _ ->                    (* FIXME *)
         assert false
 
+    | LD_agent -> LD_agent
+
   (* ------------------------------------------------------------------ *)
   let ld_fv = function
   | LD_var (ty, None) ->
@@ -3584,6 +3614,7 @@ module LDecl = struct
     let fv = List.fold_left add fv us.aus_reads in
     let fv = List.fold_left add fv us.aus_writes in
     List.fold_left EcPath.x_fv fv us.aus_calls
+  | LD_agent -> Mid.empty
 
   (* ------------------------------------------------------------------ *)
   let by_name s hyps =
@@ -3716,8 +3747,10 @@ module LDecl = struct
     | LD_mem mt        -> Memory.push (x, mt) env
     | LD_modty (_ns,i) -> Mod.bind_local x i env
     (* namespace [ns] only recorded in the local hypotheses *)
+    (* TODO: cost: update above? *)
     | LD_hyp   _       -> env
     | LD_abs_st us     -> AbsStmt.bind x us env
+    | LD_agent         -> Agent.bind x None env
 
   (* ------------------------------------------------------------------ *)
   let add_local x k h =

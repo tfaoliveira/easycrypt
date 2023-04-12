@@ -170,6 +170,7 @@ type tyerror =
 | NoActiveMemory
 | PatternNotAllowed
 | MemNotAllowed
+| AgentNotAllowed
 | UnknownScope           of qsymbol
 | NoWP
 | FilterMatchFailure
@@ -3488,7 +3489,7 @@ and trans_form_or_pattern
 
     | PFmem _ -> tyerror f.pl_loc env MemNotAllowed
 
-    | PFagent _ -> assert false
+    | PFagent _ -> tyerror f.pl_loc env AgentNotAllowed
     (* TODO: cost: do we allow agent in formulas? *)
 
     | PFscope (popsc, f) ->

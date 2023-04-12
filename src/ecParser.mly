@@ -1240,9 +1240,8 @@ sform_u(P):
 | x=mident
    { PFmem x }
 
-(* TODO: cost: *)
-(* | x=aident
- *    { PFagent x } *)
+| x=aident
+   { PFagent x }
 
 | se=sform_r(P) DLBRACKET ti=tvars_app? e=loc(plist1(form_r(P), COMMA)) RBRACKET
    { let e = List.reduce1 (fun _ -> lmap (fun x -> PFtuple x) e) (unloc e) in

@@ -159,6 +159,7 @@ type tyerror =
 | NoActiveMemory
 | PatternNotAllowed
 | MemNotAllowed
+| AgentNotAllowed
 | UnknownScope           of qsymbol
 | NoWP
 | FilterMatchFailure
