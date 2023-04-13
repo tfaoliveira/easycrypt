@@ -389,6 +389,7 @@ rule main = parse
 
   (* punctuation *)
   | '_'   { [UNDERSCORE     ] }
+  | '$'   { [DOLLAR         ] }
   | "#<"  { [DASHLT         ] }
   | '('   { [LPAREN         ] }
   | ')'   { [RPAREN         ] }

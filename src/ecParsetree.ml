@@ -280,8 +280,9 @@ and pmodcost  = (psymbol * pcost) list
    while in the latter case, we replace the type-checking restriction by an
    empty restriction.  *)
 and pmodule_type_restr =
-  { pmty_pq  : pqsymbol;
-    pmty_mem : pmod_restr option; }
+  { pmty_pq      : pqsymbol;
+    pmty_mem     : pmod_restr option;
+    pmty_wrapped : unit located option; }
 
 (* -------------------------------------------------------------------- *)
 and 'a g_inparam = { inp_in_params : bool;

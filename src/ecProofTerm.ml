@@ -854,6 +854,7 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
           try
             let obl = EcTyping.check_modtype pe.pte_hy mp mt emt in
 
+            (* TODO: cost: lift restriction below *)
             (* for now, we forbid to instantiate any quantification
                with a [Wrap] module. *)
             if ns <> Std then

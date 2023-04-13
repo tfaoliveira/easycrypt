@@ -455,9 +455,14 @@ module Agent : sig
 
   val byid : EcIdent.t -> env -> t
   val bind : EcIdent.t -> t -> env -> env
+  val bindall : (EcIdent.t * t) list -> env -> env
 
   (** set the (unique) module expression associated to an external agent *)
   val set_me : EcIdent.t -> EcModules.module_expr -> env -> env
+
+  val getall : env -> (EcIdent.t * t) list
+
+  val pp_all : Format.formatter -> env -> unit
 end
 
 (* -------------------------------------------------------------------- *)

@@ -1442,6 +1442,7 @@ module Mod = struct
     (* We modify tysig restrictions according if necessary. *)
     let tysig = trans_restr_for_modty (env scope) tysig modty.pmty_mem in
 
+    (* TODO: cost: do something with [pmty_wrapped] *)
     { scope with
         sc_env = EcSection.add_decl_mod name tysig scope.sc_env }
 

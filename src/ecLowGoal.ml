@@ -39,7 +39,7 @@ let (@~+) (tt : FApi.tactical) (ts : FApi.backward list) =
   fun tc -> FApi.t_sub ts (tt tc)
 
 (* -------------------------------------------------------------------- *)
-exception InvalidProofTerm
+exception InvalidProofTerm of int
 
 type side    = [`Left|`Right]
 type lazyred = [`Full | `NoDelta | `None]
@@ -145,14 +145,14 @@ module LowApply = struct
         in
         (* proof reuse - fetch corresponding subgoal*)
         if not (sub_hyps subgoal.g_hyps (hyps_of_ckenv tc)) then
-          raise InvalidProofTerm;
+          raise (InvalidProofTerm 0);
         (pt, subgoal.g_concl)
     end
 
     | PTLocal x -> begin
         let hyps = hyps_of_ckenv tc in
         try  (pt, LDecl.hyp_by_id x hyps)
-        with LDecl.LdeclError _ -> raise InvalidProofTerm
+        with LDecl.LdeclError _ -> raise (InvalidProofTerm 1)
     end
 
     | PTGlobal (p, tys) ->
@@ -184,22 +184,22 @@ module LowApply = struct
         match xty, arg with
         | GTty xty, PAFormula arg ->
             if not (EcReduction.EqTest.for_type env xty arg.f_ty) then
-              raise InvalidProofTerm;
+              raise (InvalidProofTerm 2);
             (Fsubst.f_bind_local sbt x arg, f)
 
         | GTmem _, PAMemory m ->
             (Fsubst.f_bind_mem sbt x m, f)
 
-        | GTmodty (ns,emt), PAModule (mp, mt) -> begin
-          (* FIXME: poor API ==> poor error recovery *)
-          try
-            if ns <> Std then assert false;
-            (* TODO: cost: *)
+        | GTmodty (minfo,emt), PAModule (mp, mt) ->
+          begin
+            (* TODO: cost: PY: how can we do the check below? *)
+            (* let (minfo',_),_ = EcEnv.Mod.by_mpath mp env in
+             * if minfo' <> minfo then raise (InvalidProofTerm 10); *)
 
             let obl = EcTyping.check_modtype hyps mp mt emt in
 
             if mode = `Intro then
-              raise InvalidProofTerm;
+              raise (InvalidProofTerm 3);
 
             let f = match obl with
               | `Ok ->  f
@@ -209,10 +209,9 @@ module LowApply = struct
             in
 
             (Fsubst.f_bind_mod sbt x mp, f)
-          with _ -> raise InvalidProofTerm
-        end
+          end
 
-        | _ -> raise InvalidProofTerm
+        | _ -> raise (InvalidProofTerm 5)
       in
 
       match mode with
@@ -227,7 +226,7 @@ module LowApply = struct
               in
               let subpt, subax = check mode subpt tc in
                 if not (EcReduction.is_conv hyps f1 subax) then
-                  raise InvalidProofTerm;
+                  raise (InvalidProofTerm 6);
                 ((sbt, f2), PASub (Some subpt))
 
           | Some (`Forall (x, xty, f)), _ ->
@@ -235,7 +234,7 @@ module LowApply = struct
 
           | _, _ ->
               if Fsubst.is_subst_id sbt then
-                raise InvalidProofTerm;
+                raise (InvalidProofTerm 7);
               check_arg (Fsubst.f_subst_id, Fsubst.f_subst sbt ax) arg
       end
 
@@ -246,7 +245,7 @@ module LowApply = struct
 
           | None ->
               if Fsubst.is_subst_id sbt then
-                raise InvalidProofTerm;
+                raise (InvalidProofTerm 8);
               check_arg (Fsubst.f_subst_id, Fsubst.f_subst sbt ax) arg
       end
     in
@@ -1618,7 +1617,7 @@ let t_rewrite
           -> (pt, ax, f_true)
 
       | _ -> raise EcReduction.NoMatch
-    in oget ~exn:InvalidProofTerm (EcReduction.lazy_destruct hyps doit ax)
+    in oget ~exn:(InvalidProofTerm 9) (EcReduction.lazy_destruct hyps doit ax)
   in
 
   let (left, right) =

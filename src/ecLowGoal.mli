@@ -13,7 +13,7 @@ open EcMatching
 open EcCoreGoal
 
 (* -------------------------------------------------------------------- *)
-exception InvalidProofTerm         (* invalid proof term *)
+exception InvalidProofTerm of int         (* invalid proof term *)
 
 type side    = [`Left|`Right]
 type lazyred = [`Full | `NoDelta | `None]

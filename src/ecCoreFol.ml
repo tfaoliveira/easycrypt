@@ -2165,7 +2165,15 @@ module Fsubst = struct
   let subst_xpath s f =
     EcPath.x_subst s.fs_sty.ts_mp f
 
-  let subst_cp s (a,f) = (Mid.find_def a a s.fs_agent, f)
+  let subst_cp s (a,f) =
+    let a =
+      let mp = EcPath.m_subst s.fs_sty.ts_mp (EcPath.mident a) in
+      match mp.m_top with
+      | `Local id when mp.m_args = [] -> id
+      | `Local _
+      | `Concrete _ -> Mid.find a s.fs_agent (* must be bound by the map *)
+    in
+    (Mid.find_def a a s.fs_agent, f)
 
   let subst_stmt s c =
     let es =
@@ -2793,7 +2801,7 @@ let pp_cost_proj fmt (p : cost_proj) =
 let pp_mod_info fmt (ns : mod_info) =
   match ns with
   | Std -> ()
-  | Wrap -> Format.fprintf fmt "Wrap "
+  | Wrap -> Format.fprintf fmt "$"
 
 (* -------------------------------------------------------------------- *)
 let dump_todo fmt = Format.fprintf fmt "#?"

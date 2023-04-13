@@ -6,15 +6,15 @@ module V = { var v : int }.
 (* TODO: COST: a few tests  *)
 module type U = { proc o () : unit }.
 
-lemma test0 (H <: U): N 3 <= Inf by done.
+lemma test0: N 3 <= Inf by done.
 
-lemma test1 (H <: U):
+lemma test1 (H <: $U):
 `[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf] by done.
 
-lemma test2 (x, y : xint) (H <: U):
+lemma test2 (x, y : xint) (H <: $U):
 `[: x, H.o : y] <= `[: Inf, H.o : Inf, ..] by done.
 
-lemma test (H <: U):
+lemma test (H <: $U):
 `[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf, ..] by done.
 
 (*********************)
@@ -220,7 +220,7 @@ module (MyAdv : Adv) (H0 : H) = {
   }
 }.
 
-lemma MyAdv_compl (H0 <: H) : 
+lemma MyAdv_compl (H0 <: $H) : 
   choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
 proof.
   by proc; do !(call(_: true)); auto. 

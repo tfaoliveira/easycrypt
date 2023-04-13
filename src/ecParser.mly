@@ -598,6 +598,7 @@
 %token TRIVIAL
 %token TRY
 %token TYPE
+%token DOLLAR
 %token UNDERSCORE
 %token UNDO
 %token UNROLL
@@ -1109,8 +1110,12 @@ cost_elc(P):
 cost_self(P):
 | COLON c=cost_elc(P) { c }
 
+luident:
+| m=uident { m }
+| m=lident { m }
+
 orcl_time(P):
-| m=uident DOT f=lident COLON c=cost_elc(P) { (m,f, c) }
+| m=luident DOT f=lident COLON c=cost_elc(P) { (m,f,c) }
 
 %inline cost_calls(P,S):
 | calls=rlist1(orcl_time(P), S) { calls }
@@ -1821,11 +1826,11 @@ mod_restr:
 | x = qident { x }
 
 %inline mod_type_with_restr:
-| x = qident
-    { { pmty_pq = x; pmty_mem = None; } }
+| w=loc(DOLLAR)? x = qident
+    { { pmty_pq = x; pmty_mem = None; pmty_wrapped = w; } }
 
-| x = qident mr=mod_restr
-    { { pmty_pq = x; pmty_mem = Some mr; } }
+| w=loc(DOLLAR)? x = qident mr=mod_restr
+    { { pmty_pq = x; pmty_mem = Some mr; pmty_wrapped = w; } }
 
 sig_def:
 | pi_locality=loc(locality) MODULE TYPE pi_name=uident args=sig_params* mr=mod_restr? EQ i=sig_body

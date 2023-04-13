@@ -143,12 +143,13 @@ end)
    Used both for memories and agent names. *)
 module Msymid : sig
   type 'a t
-  val empty : 'a t
-  val all   : 'a t -> (EcIdent.t * 'a) list
-  val mem   : EcIdent.t -> 'a t -> bool
-  val byid  : EcIdent.t -> 'a t -> 'a
-  val bysym : EcSymbols.symbol -> 'a t -> EcIdent.t * 'a
-  val add   : EcIdent.t -> 'a -> 'a t -> 'a t
+  val empty    : 'a t
+  val all      : 'a t -> (EcIdent.t * 'a) list
+  val mem      : EcIdent.t -> 'a t -> bool
+  val byid     : EcIdent.t -> 'a t -> 'a
+  val bysym    : EcSymbols.symbol -> 'a t -> EcIdent.t * 'a
+  val add      : EcIdent.t -> 'a -> 'a t -> 'a t
+  val bindings : 'a t -> (EcIdent.t * 'a) list
 end = struct
 
   type 'a t = {
@@ -175,6 +176,8 @@ end = struct
       m_s = Msym.add (EcIdent.name id) id m.m_s;
       m_id = Mid.add id a m.m_id
     }
+
+  let bindings m = Mid.bindings m.m_id
 end
 
 
@@ -1029,6 +1032,7 @@ module MC = struct
           let (subp2, mep) = subp2 subme.me_name in
           let submcs = mc_of_module_r (p1, args, Some subp2, None) subme in
           let mc = _up_mc false mc (IPPath mep) in
+          (* TODO: cost: PY: Std below? *)
           let mc = _up_mod false mc subme.me_name (IPPath mep, ((Std,subme), lc)) in
           (mc, Some submcs)
 
@@ -1120,6 +1124,7 @@ module MC = struct
           let submcs =
             mc_of_module_r (expath subme.me_name, args, None, Some lc) subme
           in
+          (* TODO: cost: PY: Std below? *)
             (add2mc _up_mod subme.me_name ((Std,subme), Some lc) mc, Some submcs)
 
       | Th_theory (xsubth, cth) ->
@@ -1849,9 +1854,19 @@ module Agent = struct
     assert (not (Msymid.mem id env.env_agent));
     { env with env_agent = Msymid.add id me env.env_agent }
 
+  let bindall l env =
+    List.fold_left (fun env (id,me) -> bind id me env) env l
+
   let set_me id (me : EcModules.module_expr) env =
     assert (Msymid.byid id env.env_agent = None);
     { env with env_agent = Msymid.add id (Some me) env.env_agent }
+
+  let getall env = Msymid.bindings env.env_agent
+
+  let pp_all fmt env =
+    let l = getall env in
+    Format.fprintf fmt "@[<hv 2>%a@]"
+      (pp_list ",@ " (fun fmt (id,_) -> EcIdent.pp_ident fmt id)) l
 end
 
 (* -------------------------------------------------------------------- *)
@@ -3370,7 +3385,7 @@ module Theory = struct
             MC.import_modty (xpath x) mty env
 
         | Th_module ({ tme_expr = me; tme_loca = lc; }) ->
-          (* TODO: cost: are top module expression without module info? *)
+          (* TODO: cost: PY: Std below? *)
             let env = MC.import_mod (IPPath (xpath me.me_name)) ((Std,me), Some lc) env in
             let env = MC.import_mc (IPPath (xpath me.me_name)) env in
               env

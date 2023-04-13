@@ -1930,7 +1930,7 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
   let id =
     (* lookup [name] as either an agent name (in [EcEnv.Agent]) or an
        abstract module marked as [Wrap] *)
-    match EcEnv.Agent.lookup (unloc name) env with
+    match EcEnv.Agent.lookup ("$" ^ unloc name) env with
     | Some (id, _) -> id
     | None ->
       let msymbol = mk_loc (loc name) [name,None] in
@@ -3257,25 +3257,24 @@ and trans_gbinding env ue decl =
         let xs  = List.map (fun (x,ty) -> x,GTty ty) xs in
         (env, xs)
 
-      | PGTY_ModTy { pmty_pq = mi; pmty_mem = restr } ->
+      | PGTY_ModTy { pmty_pq = mi; pmty_mem = restr; pmty_wrapped; } ->
+        let minfo = match pmty_wrapped with None -> Std | Some _ -> Wrap in
+
         let mi = fst (transmodtype env mi) in
         let mi = trans_restr_for_modty env mi restr in
 
-        (* there is no user-level syntax to require a module to be external
-           for now, so it must be a standard module. *)
-        let ty = GTmodty (Std,mi) in
+        let ty = GTmodty (minfo,mi) in
 
         let add1 env x =
           let x   = ident_of_osymbol (unloc x) in
-          let env = EcEnv.Mod.bind_local x mi env in
+          let env = EcEnv.Mod.bind_local x ~minfo mi env in
           (env, (x, ty))
 
         in List.map_fold add1 env xs
 
       | PGTY_Agent ->
         let xs  = List.map (fun x -> ident_of_osymbol (unloc x)) xs in
-        (* TODO: cost: bind agent names in env and uncomment line below *)
-        (* let env = EcEnv.Agent.bind_locals xs env in *)
+        let env = EcEnv.Agent.bindall (List.map (fun x -> x, None) xs) env in
         let xs  = List.map (fun x -> x,GTagent) xs in
         (env, xs)
 
