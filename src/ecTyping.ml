@@ -1906,6 +1906,8 @@ let transcall transexp env ue loc fsig args =
   in
     (args, fsig.fs_ret)
 
+let trans_args env ue = transcall (transexp env `InProc ue) env ue
+
 (* -------------------------------------------------------------------- *)
 let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
   let loc = gp.pl_loc in

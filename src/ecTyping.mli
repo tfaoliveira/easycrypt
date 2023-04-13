@@ -271,6 +271,14 @@ val trans_gamepath   : env -> pgamepath -> xpath
 val trans_cp         : env -> psymbol * psymbol -> cp
 val trans_restr_mem : env -> pmod_restr_mem -> Sx.t use_restr * Sm.t use_restr
 
+val trans_args :
+     EcEnv.env
+  -> EcUnify.unienv
+  -> EcLocation.t
+  -> EcModules.funsig
+  -> pexpr list
+  -> expr list * EcTypes.ty
+
 (* -------------------------------------------------------------------- *)
 
 (* This only checks the memory restrictions. *)
