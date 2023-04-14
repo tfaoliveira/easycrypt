@@ -120,6 +120,7 @@ type tyerror =
 | UnknownInstrMetaVar    of symbol
 | UnknownMetaVar         of symbol
 | UnknownProgVar         of qsymbol * EcMemory.memory
+| UnknownAgent           of symbol
 | DuplicatedRecFieldName of symbol
 | MissingRecField        of symbol
 | MixingRecFields        of EcPath.path tuple2

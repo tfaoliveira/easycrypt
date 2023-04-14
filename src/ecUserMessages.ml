@@ -385,6 +385,9 @@ end = struct
         msg "unknown program variable (in %a): `%a'"
           (EcPrinting.pp_mem env) mem pp_qsymbol p
 
+    | UnknownAgent name ->
+        msg "unknown agent: %a" pp_symbol name
+
     | UnknownVarOrOp (name, []) ->
         msg "unknown variable or constant: `%a'" pp_qsymbol name
 

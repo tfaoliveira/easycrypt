@@ -131,6 +131,7 @@ type tyerror =
 | UnknownInstrMetaVar    of symbol
 | UnknownMetaVar         of symbol
 | UnknownProgVar         of qsymbol * EcMemory.memory
+| UnknownAgent           of symbol
 | DuplicatedRecFieldName of symbol
 | MissingRecField        of symbol
 | MixingRecFields        of EcPath.path tuple2
@@ -1928,6 +1929,8 @@ let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
         EcPath.xpath mpath funsymb
 
 (* -------------------------------------------------------------------- *)
+(* translate a call-point annotation, i.e. a pair of an agent name and
+   a procedure name *)
 let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
   let id =
     (* lookup [name] as either an agent name (in [EcEnv.Agent]) or an
@@ -2002,8 +2005,12 @@ let transmem env m =
       (fst me)
 
 (* -------------------------------------------------------------------- *)
-let transagent (env : EcEnv.env) (m : symbol located) = assert false
-  (* TODO: cost *)
+let transagent (env : EcEnv.env) (name : symbol located) =
+  (* lookup [name] as an agent name in [EcEnv.Agent] *)
+  match EcEnv.Agent.lookup (unloc name) env with
+  | Some (id, _) -> id
+  | None ->
+    tyerror name.pl_loc env (UnknownAgent (unloc name))
 
 (* -------------------------------------------------------------------- *)
 let transpvar env side p =

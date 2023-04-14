@@ -211,6 +211,10 @@ module LowApply = struct
             (Fsubst.f_bind_mod sbt x mp, f)
           end
 
+        (* TODO: cost: PY: further checks to do? *)
+        | GTagent, PAAgent a ->
+            (Fsubst.f_bind_agent sbt x a, f)
+
         | _ -> raise (InvalidProofTerm 5)
       in
 
