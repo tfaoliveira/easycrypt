@@ -839,7 +839,8 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
-  (* TODO: cost: freshness of the application must be checked. *)
+  (* TODO: cost: PY: what is this function doing?
+     freshness of the application must be checked? *)
   | GTagent -> begin
       match dfl_arg_for_agent pe arg with
       | PVAAgent arg -> (Fsubst.f_subst_agent x arg f, PAAgent arg)

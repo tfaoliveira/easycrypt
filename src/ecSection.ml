@@ -784,7 +784,7 @@ let rec generalize_extra_args binds fv =
       | GTty ty -> (id, ty) :: args
       | GTmodty  _ -> assert false
       | GTmem _    -> assert false
-      | GTagent     -> assert false
+      | GTagent    -> assert false
     else args
   | Imply _ :: binds -> generalize_extra_args binds fv
 

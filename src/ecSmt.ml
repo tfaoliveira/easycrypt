@@ -538,6 +538,8 @@ let trans_binding genv lenv (x, xty) =
     | GTmem mt ->
       { lenv with le_mt = Mid.add x mt lenv.le_mt }, trans_memtype (genv, lenv) mt
 
+    (* TODO: cost: PY: translate agent to SMT? *)
+
     | _ -> raise CanNotTranslate
   in
   let wvs = WTerm.create_vsymbol (preid x) wty in

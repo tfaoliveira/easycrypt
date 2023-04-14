@@ -284,6 +284,8 @@ let gty_equal ty1 ty2 =
   | GTmem mt1, GTmem mt2 ->
       EcMemory.mt_equal mt1 mt2
 
+  | GTagent, GTagent -> true
+
   | _ , _ -> false
 
 let gty_hash = function
@@ -2533,7 +2535,7 @@ module Fsubst = struct
         | GTty    _ -> f_rem_local s x
         | GTmodty _ -> f_rem_mod   s x
         | GTmem   _ -> f_rem_mem   s x
-        | GTagent    -> f_rem_agent s x
+        | GTagent   -> f_rem_agent s x
       in
         (s, xt)
     else
@@ -2541,7 +2543,7 @@ module Fsubst = struct
         | GTty   ty -> f_bind_rename s x x' ty
         | GTmodty _ -> f_bind_mod   s x (EcPath.mident x')
         | GTmem   _ -> f_bind_mem   s x x'
-        | GTagent    -> f_bind_agent s x x'
+        | GTagent   -> f_bind_agent s x x'
       in
         (s, (x', gty'))
 
