@@ -76,7 +76,7 @@ let is_pasub     = function PASub     _ -> true | _ -> false
 (* -------------------------------------------------------------------- *)
 let paformula = fun x -> PAFormula x
 let pamemory  = fun x -> PAMemory  x
-let paagent   = fun x -> PAMemory  x
+let paagent   = fun x -> PAAgent   x
 let pamodule  = fun x -> PAModule  x
 
 let paglobal p tys =
