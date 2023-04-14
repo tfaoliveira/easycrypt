@@ -2057,6 +2057,7 @@ module Fsubst = struct
     && is_ty_subst_id s.fs_sty
     && Mid.is_empty   s.fs_loc
     && Mid.is_empty   s.fs_mem
+    && Mid.is_empty   s.fs_agent
     && Mp.is_empty    s.fs_opdef
     && Mp.is_empty    s.fs_pddef
     && Mp.is_empty    s.fs_modtydef
