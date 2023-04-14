@@ -1867,7 +1867,7 @@ and _pp_crecord ~proccost ppe fmt
      *   pp_funname ppe fmt f
      * else *)
     (* TODO: cost: restore different printing behavior depending on proccost? *)
-      Format.fprintf fmt "%a.%s" EcIdent.pp_ident id id_f
+      Format.fprintf fmt "%a.%s" (pp_local ppe) id id_f
   in
 
   let pp_self fmt self =
