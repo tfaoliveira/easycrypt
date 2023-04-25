@@ -81,11 +81,12 @@
   let pflist loc ti (es : pformula    list) : pformula    =
     List.fold_right (fun e1 e2 -> pf_cons loc ti e1 e2) es (pf_nil loc ti)
 
-  let mk_axiom  ?(nosmt = false) ~locality (x, ty, pv, scv, vd, f) k =
+  let mk_axiom  ?(nosmt = false) ~locality (x, ty, agents, pv, scv, vd, f) k =
     { pa_name     = x;
       pa_tyvars   = ty;
-      pa_pvars   = pv;
-      pa_scvars  = scv;
+      pa_agents   = agents;
+      pa_pvars    = pv;
+      pa_scvars   = scv;
       pa_vars     = vd;
       pa_formula  = f;
       pa_kind     = k;
@@ -488,6 +489,7 @@
 %token LAST
 %token LBRACE
 %token LBRACKET
+%token LBRACKETDOLLAR
 %token LEAT
 %token LEFT
 %token LEMMA
@@ -2023,6 +2025,10 @@ tyvars_decl:
 | LBRACKET tyvars=rlist2(tident , empty) RBRACKET
     { List.map (fun x -> (x, [])) tyvars }
 
+agents_decl:
+| LBRACKETDOLLAR agents=rlist0(lident, empty) RBRACKET
+    { agents }
+
 op_or_const:
 | OP    { `Op    }
 | CONST { `Const }
@@ -2215,11 +2221,12 @@ mempred_binding:
 lemma_decl:
 | x=ident
   tyvars=tyvars_decl?
+  agents=agents_decl?
   predvars=mempred_binding?
   scvars=sc_ptybindings_decl?
   pd=pgtybindings?
   COLON f=form
-    { x,tyvars,predvars,scvars,pd,f }
+    { x,tyvars,agents,predvars,scvars,pd,f }
 
 nosmt:
 | NOSMT { true  }
@@ -2244,7 +2251,7 @@ axiom:
 | l=locality  HOARE x=ident pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
 | l=locality PHOARE x=ident pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
 | l=locality CHOARE x=ident pd=pgtybindings? COLON p=loc(choare_body(none)) ao=axiom_tc
-    { mk_axiom ~locality:l (x, None, None, None, pd, p) ao }
+    { mk_axiom ~locality:l (x, None, None, None, None, pd, p) ao }
 
 proofend:
 | QED      { `Qed   }

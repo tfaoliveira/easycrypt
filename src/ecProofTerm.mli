@@ -138,7 +138,7 @@ val pattern_form :
      ?name:symbol -> LDecl.hyps -> ptn:form -> form
   -> EcIdent.t * form
 
-(* Proof-terms concretization, i.e. evmap/unienv resolution *)
+(* Proof-terms concretization, i.e. evmap/unienv/name constraints resolution *)
 val can_concretize  : pt_env -> bool
 val concretize_env  : pt_env -> cptenv
 val concretize      : pt_ev  -> proofterm * form

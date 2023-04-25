@@ -292,7 +292,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
 
   try
     let hypstc, concl = FApi.tc1_flat tc in
-    let { h_tvar; h_local = hyps } = EcEnv.LDecl.tohyps hypstc in
+    let { h_tvar; h_local = hyps; h_agents } = EcEnv.LDecl.tohyps hypstc in
     let hyps = Mid.of_list (List.map (fun x -> x.l_id, x) hyps) in
 
     let test_fv known fv =
@@ -305,7 +305,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
     let for_form known f = test_fv known f.f_fv in
     let for_type known ty = test_fv known ty.ty_fv in
 
-    let new_ = LDecl.init (LDecl.baseenv hypstc) h_tvar in
+    let new_ = LDecl.init (LDecl.baseenv hypstc) h_tvar ~agents:h_agents in
 
     let known, new_ =
       let add1 (known, new_) id =
@@ -683,10 +683,10 @@ let tt_apply_hyp (x : EcIdent.t) ?(args = []) ?(sk = 0) tc =
   tt_apply pt tc
 
 (* -------------------------------------------------------------------- *)
-let tt_apply_s (p : path) tys ?(args = []) ?(sk = 0) tc =
+let tt_apply_s (p : path) tys ~agents ?(args = []) ?(sk = 0) tc =
   let pt =
     let args = (List.map paformula args) @ (List.make sk (PASub None)) in
-    { pt_head = PTGlobal (p, tys); pt_args = args; } in
+    { pt_head = PTGlobal (p, tys, agents); pt_args = args; } in
 
   tt_apply pt tc
 
@@ -711,8 +711,8 @@ let t_hyp (x : EcIdent.t) tc =
   t_apply_hyp x ~args:[] ~sk:0 tc
 
 (* -------------------------------------------------------------------- *)
-let t_apply_s (p : path) (tys : ty list) ?args ?sk tc =
-  tt_apply_s p tys ?args ?sk (FApi.tcenv_of_tcenv1 tc)
+let t_apply_s (p : path) (tys : ty list) ~(agents : EcIdent.t list) ?args ?sk tc =
+  tt_apply_s p tys ~agents ?args ?sk (FApi.tcenv_of_tcenv1 tc)
 
 (* -------------------------------------------------------------------- *)
 let t_apply_hd (hd : handle) ?args ?sk tc =
@@ -963,23 +963,23 @@ let t_assumption mode (tc : tcenv1) =
     LowAssumption.t_gen_assumption convs tc
 
 (* -------------------------------------------------------------------- *)
-let t_cut (fp : form) (tc : tcenv1) =
+let t_cut (fp : form) (tc : tcenv1) : tcenv =
   let concl = FApi.tc1_goal tc in
-  t_apply_s LG.p_cut_lemma [] ~args:[fp; concl] ~sk:2 tc
+  t_apply_s LG.p_cut_lemma [] ~agents:[] ~args:[fp; concl] ~sk:2 tc
 
 (* -------------------------------------------------------------------- *)
-let t_cutdef (pt : proofterm) (fp : form) (tc : tcenv1) =
+let t_cutdef (pt : proofterm) (fp : form) (tc : tcenv1) : tcenv =
   FApi.t_first (t_apply pt) (t_cut fp tc)
 
 (* -------------------------------------------------------------------- *)
-let t_true (tc : tcenv1) =
-  t_apply_s LG.p_true_intro [] tc
+let t_true (tc : tcenv1) : tcenv =
+  t_apply_s LG.p_true_intro [] ~agents:[] tc
 
 (* -------------------------------------------------------------------- *)
-let t_reflex_s (f : form) (tc : tcenv1) =
-  t_apply_s LG.p_eq_refl [f.f_ty] ~args:[f] tc
+let t_reflex_s (f : form) (tc : tcenv1) : tcenv =
+  t_apply_s LG.p_eq_refl [f.f_ty] ~agents:[] ~args:[f] tc
 
-let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) =
+let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) : tcenv =
   let t_reflex_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f2) ->
@@ -992,10 +992,10 @@ let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) =
     t_lazy_match ?reduce t_reflex_r tc
 
 (* -------------------------------------------------------------------- *)
-let t_symmetry_s f1 f2 tc =
-  t_apply_s LG.p_eq_sym_imp [f1.f_ty] ~args:[f2; f1] ~sk:1 tc
+let t_symmetry_s f1 f2 tc : tcenv =
+  t_apply_s LG.p_eq_sym_imp [f1.f_ty] ~agents:[] ~args:[f2; f1] ~sk:1 tc
 
-let t_symmetry ?reduce (tc : tcenv1) =
+let t_symmetry ?reduce (tc : tcenv1) : tcenv =
   let t_symmetry_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f2) -> t_symmetry_s f1 f2 tc
@@ -1004,10 +1004,10 @@ let t_symmetry ?reduce (tc : tcenv1) =
     t_lazy_match ?reduce t_symmetry_r tc
 
 (* -------------------------------------------------------------------- *)
-let t_transitivity_s f1 f2 f3 tc =
-  t_apply_s LG.p_eq_trans [f1.f_ty] ~args:[f1; f2; f3] ~sk:2 tc
+let t_transitivity_s f1 f2 f3 tc : tcenv =
+  t_apply_s LG.p_eq_trans [f1.f_ty] ~agents:[] ~args:[f1; f2; f3] ~sk:2 tc
 
-let t_transitivity ?reduce f2 (tc : tcenv1) =
+let t_transitivity ?reduce f2 (tc : tcenv1) : tcenv =
   let t_transitivity_r (fp : form) (tc : tcenv1) =
     match sform_of_form fp with
     | SFeq (f1, f3) -> t_transitivity_s f1 f2 f3 tc
@@ -1032,7 +1032,7 @@ let t_or_intro_s opsym (side : side) (f1, f2 : form pair) (tc : tcenv1) =
     | `Left , `Sym  -> LG.p_or_intro_l
     | `Right, `Sym  -> LG.p_or_intro_r
   in
-  t_apply_s p [] ~args:[f1; f2] ~sk:1 tc
+  t_apply_s p [] ~agents:[] ~args:[f1; f2] ~sk:1 tc
 
 let t_or_intro ?reduce (side : side) (tc : tcenv1) =
   let t_or_intro_r (fp : form) (tc : tcenv1) =
@@ -1053,7 +1053,7 @@ let t_and_intro_s opsym (f1, f2 : form pair) (tc : tcenv1) =
     | `Sym  -> LG.p_and_intro
   in
 
-  t_apply_s p [] ~args:[f1; f2] ~sk:2 tc
+  t_apply_s p [] ~agents:[] ~args:[f1; f2] ~sk:2 tc
 
 let t_and_intro ?reduce (tc : tcenv1) =
   let t_and_intro_r (fp : form) (tc : tcenv1) =
@@ -1065,7 +1065,7 @@ let t_and_intro ?reduce (tc : tcenv1) =
 
 (* -------------------------------------------------------------------- *)
 let t_iff_intro_s (f1, f2 : form pair) (tc : tcenv1) =
-  t_apply_s LG.p_iff_intro [] ~args:[f1; f2] ~sk:2 tc
+  t_apply_s LG.p_iff_intro [] ~agents:[] ~args:[f1; f2] ~sk:2 tc
 
 let t_iff_intro ?reduce (tc : tcenv1) =
   let t_iff_intro_r (fp : form) (tc : tcenv1) =
@@ -1158,7 +1158,7 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
 (* -------------------------------------------------------------------- *)
 let t_elim_false_r ((_, sf) : form * sform) concl tc =
   match sf with
-  | SFfalse -> t_apply_s LG.p_false_elim [] ~args:[concl] tc
+  | SFfalse -> t_apply_s LG.p_false_elim [] ~agents:[] ~args:[concl] tc
   | _ -> raise EcReduction.NoMatch
 
 let t_elim_false ?reduce tc = t_elim_r ?reduce [t_elim_false_r] tc
@@ -1172,7 +1172,7 @@ let t_elim_and_r ((_, sf) : form * sform) concl tc =
         | `Asym -> LG.p_anda_elim
         | `Sym  -> LG.p_and_elim
 
-      in t_apply_s p [] ~args:[a1; a2; concl] ~sk:1 tc
+      in t_apply_s p [] ~agents:[] ~args:[a1; a2; concl] ~sk:1 tc
 
   | _ -> raise EcReduction.NoMatch
 
@@ -1187,7 +1187,7 @@ let t_elim_or_r ((_, sf) : form * sform) concl tc =
         | `Asym -> LG.p_ora_elim
         | `Sym  -> LG.p_or_elim
 
-      in t_apply_s p [] ~args:[a1; a2; concl] ~sk:2 tc
+      in t_apply_s p [] ~agents:[] ~args:[a1; a2; concl] ~sk:2 tc
 
   | _ -> raise EcReduction.NoMatch
 
@@ -1197,7 +1197,7 @@ let t_elim_or ?reduce tc = t_elim_r ?reduce [t_elim_or_r] tc
 let t_elim_iff_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFiff (a1, a2) ->
-      t_apply_s LG.p_iff_elim [] ~args:[a1; a2; concl] ~sk:1 tc
+      t_apply_s LG.p_iff_elim [] ~agents:[] ~args:[a1; a2; concl] ~sk:1 tc
   | _ -> raise EcReduction.NoMatch
 
 let t_elim_iff ?reduce tc = t_elim_r ?reduce [t_elim_iff_r] tc
@@ -1206,7 +1206,7 @@ let t_elim_iff ?reduce tc = t_elim_r ?reduce [t_elim_iff_r] tc
 let t_elim_if_r ((_, sf) : form * sform) concl tc =
   match sf with
   | SFif (a1, a2, a3) ->
-      t_apply_s LG.p_if_elim [] ~args:[a1; a2; a3; concl] ~sk:2 tc
+      t_apply_s LG.p_if_elim [] ~agents:[] ~args:[a1; a2; a3; concl] ~sk:2 tc
   | _ -> raise EcReduction.NoMatch
 
 let t_elim_if ?reduce tc = t_elim_r ?reduce [t_elim_if_r] tc
@@ -1354,8 +1354,8 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
   FApi.t_focus (t_apply pt) tc
 
 (* -------------------------------------------------------------------- *)
-let t_elimT_form_global p ?(typ = []) ?sk f tc =
-  let pt = { pt_head = PTGlobal (p, typ); pt_args = []; } in
+let t_elimT_form_global p ?(typ = []) ?(agents = []) ?sk f tc =
+  let pt = { pt_head = PTGlobal (p, typ, agents); pt_args = []; } in
   t_elimT_form pt f ?sk tc
 
 (* -------------------------------------------------------------------- *)
@@ -1395,7 +1395,7 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
 
       match EcEnv.Ty.scheme_of_ty mode ty env with
       | Some (p, typ) ->
-          let pt = { pt_head = PTGlobal (p, typ); pt_args = []; } in
+          let pt = { pt_head = PTGlobal (p, typ, []); pt_args = []; } in
           (tc, pt, 0)
 
       | None ->
@@ -1407,17 +1407,17 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
               (tc, pt, 0)
 
           | _ when EcReduction.EqTest.for_type env tunit ty ->
-              let pt = { pt_head = PTGlobal (LG.p_unit_elim, []);
+              let pt = { pt_head = PTGlobal (LG.p_unit_elim, [], []);
                          pt_args = []; } in
               (tc, pt, 0)
 
           | _ when EcReduction.EqTest.for_type env tint ty ->
-              let pt = { pt_head = PTGlobal (EcCoreLib.CI_Int.p_int_elim, []);
+              let pt = { pt_head = PTGlobal (EcCoreLib.CI_Int.p_int_elim, [], []);
                          pt_args = []; } in
               (tc, pt, 1)
 
           | _ when EcReduction.EqTest.for_type env tbool ty ->
-              let pt = { pt_head = PTGlobal (LG.p_bool_elim, []);
+              let pt = { pt_head = PTGlobal (LG.p_bool_elim, [], []);
                          pt_args = []; } in
               (tc, pt, 0)
 
@@ -1485,7 +1485,7 @@ let t_elim_prind_r ?reduce ?accept (_mode : [`Case | `Ind]) tc =
 
          | _ -> raise InvalidGoalShape
 
-       in t_apply_s p tv ~args:(args @ [f2]) ~sk tc
+       in t_apply_s p tv ~agents:[] ~args:(args @ [f2]) ~sk tc
 
     | _ -> raise EcReduction.NoMatch
 
@@ -1565,7 +1565,7 @@ let t_split_prind ?reduce (tc : tcenv1) =
     | None -> raise InvalidGoalShape
     | Some (x, sk) ->
        let p = EcInductive.prind_introsc_path p x in
-       t_apply_s p tv ~args ~sk tc
+       t_apply_s p tv ~agents:[] ~args ~sk tc
 
   in t_lazy_match ?reduce t_split_r tc
 
@@ -1585,10 +1585,10 @@ let t_or_intro_prind ?reduce (side : side) (tc : tcenv1) =
     match EcInductive.prind_is_iso_ors pri with
     | Some ((x, sk), _) when side = `Left ->
        let p = EcInductive.prind_introsc_path p x in
-       t_apply_s p tv ~args ~sk tc
+       t_apply_s p tv ~agents:[] ~args ~sk tc
     | Some (_, (x, sk)) when side = `Right ->
        let p = EcInductive.prind_introsc_path p x in
-       t_apply_s p tv ~args ~sk tc
+       t_apply_s p tv ~agents:[] ~args ~sk tc
     | _  -> raise InvalidGoalShape
 
   in t_lazy_match ?reduce t_split_r tc
@@ -1870,11 +1870,11 @@ let t_rw_for_subst y (togen : l_locals) concl side eqid tc =
     match destr_eq eq with
     | _ -> t_hyp eqid
     | exception (DestrError _) ->
-
-      FApi.t_seq (t_apply_s LG.p_eq_iff_imp [] ~args:[f1';f2'] ~sk:1) (t_hyp eqid) in
+      FApi.t_seq (t_apply_s LG.p_eq_iff_imp [] ~agents:[] ~args:[f1';f2'] ~sk:1) (t_hyp eqid)
+  in
 
   let t_eq_ind =
-    (t_apply_s LG.p_eq_ind [ty] ~args:[f1;f2;posty_G] ~sk:2) @+
+    (t_apply_s LG.p_eq_ind [ty] ~agents:[] ~args:[f1;f2;posty_G] ~sk:2) @+
       [ if side = `LtoR then t_symmetry @! t_eq else t_eq;
         t_id] in
     FApi.t_seqs [
@@ -2026,8 +2026,8 @@ let t_absurd_hyp ?(conv  = `AlphaEq) id tc =
   let x, hnx, hx = if b then f, id, id' else f_not f, id', id in
 
   FApi.t_internal (FApi.t_seqs [
-    t_apply_s LG.p_false_elim [] ~args:[concl] ~sk:1;
-    FApi.t_seqsub (t_apply_s LG.p_negbTE [] ~args:[x] ~sk:2)
+    t_apply_s LG.p_false_elim [] ~agents:[] ~args:[concl] ~sk:1;
+    FApi.t_seqsub (t_apply_s LG.p_negbTE [] ~agents:[] ~args:[x] ~sk:2)
       [ t_apply_hyp hnx; t_apply_hyp hx ]
   ]) tc
 
@@ -2461,7 +2461,7 @@ let t_congr (f1, f2) (args, ty) tc =
         let aty  = a1.f_ty in
         let m1   = f_app f1 (List.rev_map fst args) (tfun aty ty) in
         let m2   = f_app f2 (List.rev_map snd args) (tfun aty ty) in
-        let tcgr = t_apply_s LG.p_fcongr [ty; aty] ~args:[m2; a1; a2] ~sk:1 in
+        let tcgr = t_apply_s LG.p_fcongr [ty; aty] ~agents:[] ~args:[m2; a1; a2] ~sk:1 in
 
         let tsub tc =
           let fx   = EcIdent.create "f" in
@@ -2470,7 +2470,7 @@ let t_congr (f1, f2) (args, ty) tc =
           let lam  = EcFol.f_lambda [(fx, GTty fty)] body in
             FApi.t_sub
               [doit args fty]
-              (t_apply_s LG.p_fcongr [ty; fty] ~args:[lam; m1; m2] ~sk:1 tc)
+              (t_apply_s LG.p_fcongr [ty; fty] ~agents:[] ~args:[lam; m1; m2] ~sk:1 tc)
         in
           FApi.t_sub
             [tsub; tcgr]

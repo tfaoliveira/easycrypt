@@ -468,10 +468,12 @@ let process_exacttype qs (tc : tcenv1) =
     with LookupFailure cause ->
       tc_error !!tc "%a" EcEnv.pp_lookup_failure cause
   in
-  let tys =
-    List.map (fun (a,_) -> EcTypes.tvar a)
-      (EcEnv.LDecl.tohyps hyps).h_tvar in
-  EcLowGoal.t_apply_s p tys ~args:[] ~sk:0 tc
+  let tys, agents =
+    let hyps = EcEnv.LDecl.tohyps hyps in
+    ( List.map (fun (a,_) -> EcTypes.tvar a) hyps.h_tvar,
+      hyps.h_agents )
+  in
+  EcLowGoal.t_apply_s p tys ~agents ~args:[] ~sk:0 tc
 
 (* -------------------------------------------------------------------- *)
 let process_apply_fwd ~implicits (pe, hyp) tc =
@@ -582,7 +584,7 @@ let process_delta ~und_delta ?target (s, o, p) tc =
   in
 
   match unloc p with
-  | PFident ({ pl_desc = ([], x) }, None)
+  | PFident ({ pl_desc = ([], x) }, (None,None))
       when s = `LtoR && EcUtils.is_none o ->
 
     let check_op = fun p -> if sym_equal (EcPath.basename p) x then `Force else `No in
@@ -606,7 +608,8 @@ let process_delta ~und_delta ?target (s, o, p) tc =
   let (ptenv, p) =
     let (ps, ue), p = TTC.tc1_process_pattern tc p in
     let ev = MEV.of_idents (Mid.keys ps) `Form in
-      (ptenv !!tc hyps (ue, ev), p)
+    (* TODO: PY: empty constraints? *)
+      (ptenv !!tc hyps (ue, EcAgent.empty, ev), p)
   in
 
   let (tvi, tparams, body, args, dp) =
@@ -768,7 +771,8 @@ let process_rewrite1_r ttenv ?target ri tc =
           | Some p ->
               let (ps, ue), p = TTC.tc1_process_pattern tc p in
               let ev = MEV.of_idents (Mid.keys ps) `Form in
-              (PT.ptenv !!tc hyps (ue, ev), Some p) in
+              (* TODO: PY: empty constraints? *)
+              (PT.ptenv !!tc hyps (ue, EcAgent.empty, ev), Some p) in
 
         let theside =
           match s, subs with
@@ -780,7 +784,7 @@ let process_rewrite1_r ttenv ?target ri tc =
           EcEnv.BaseRw.is_base p.pl_desc (FApi.tc1_env tc) in
 
         match pt with
-        | { fp_head = FPNamed (p, None, None); fp_args = []; }
+        | { fp_head = FPNamed (p, (None, None)); fp_args = []; }
               when pt.fp_mode = `Implicit && is_baserw p
         ->
           let env = FApi.tc1_env tc in
@@ -792,7 +796,7 @@ let process_rewrite1_r ttenv ?target ri tc =
                process_rewrite1_core ~mode ?target (theside, prw, o) pt tc
           in t_ors (List.map do1 ls) tc
 
-        | { fp_head = FPNamed (p, None, None); fp_args = []; }
+        | { fp_head = FPNamed (p, (None, None)); fp_args = []; }
               when pt.fp_mode = `Implicit
         ->
           let env    = FApi.tc1_env tc in
@@ -1011,7 +1015,7 @@ let process_rewrite1_r ttenv ?target ri tc =
       let p = process_tfocus tc (Some [Some 6,Some 6], None) in
       let pterm =
         { fp_mode = `Implicit;
-          fp_head = FPNamed (name, None);
+          fp_head = FPNamed (name, (None,None));
           fp_args = []; } in
       let tc =
         t_onselect
@@ -1175,7 +1179,7 @@ let process_view1 pe tc =
         let hyps = FApi.tc1_hyps tc in
         let hid  = LDecl.fresh_id hyps "h" in
         let hqs  = mk_loc _dummy ([], EcIdent.name hid) in
-        let pe   = { pe with fp_head = FPNamed (hqs, None) } in
+        let pe   = { pe with fp_head = FPNamed (hqs, (None,None)) } in
 
         t_intros_i_seq ~clear:true [hid]
           (fun tc ->
@@ -1811,7 +1815,7 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
     match pattern with
     | `Form (occ, pf) -> begin
         match pf.pl_desc with
-        | PFident ({pl_desc = ([], s)}, None)
+        | PFident ({pl_desc = ([], s)}, (None,None))
             when not doeq && is_none occ && LDecl.has_name s hyps
           ->
             let id = LDecl.get_id s hyps in
@@ -1821,7 +1825,8 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
           let (ptenv, p) =
             let (ps, ue), p = TTC.tc1_process_pattern tc pf in
             let ev = MEV.of_idents (Mid.keys ps) `Form in
-              (ptenv !!tc hyps (ue, ev), p)
+            (* TODO: PY: empty constraints is fine when building a PT from a formula (or pattern)? *)
+            (ptenv !!tc hyps (ue, EcAgent.empty, ev), p)
           in
 
           (try  ignore (PT.pf_find_occurence ptenv ~ptn:p concl)
@@ -1861,7 +1866,7 @@ let process_generalize1 ?(doeq = false) pattern (tc : tcenv1) =
 
     | `ProofTerm fp -> begin
         match fp.fp_head with
-        | FPNamed ({ pl_desc = ([], s) }, None)
+        | FPNamed ({ pl_desc = ([], s) }, (None,None))
             when LDecl.has_name s hyps && List.is_empty fp.fp_args
           ->
             let id = LDecl.get_id s hyps in
@@ -1932,7 +1937,7 @@ let process_move ?doeq views pr (tc : tcenv1) =
     tc
 
 (* -------------------------------------------------------------------- *)
-let process_pose xsym bds o p (tc : tcenv1) =
+let process_pose xsym bds o p (tc : tcenv1) : tcenv =
   let (env, hyps, concl) = FApi.tc1_eflat tc in
   let o = norm_rwocc o in
 
@@ -1942,7 +1947,8 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let (senv, bds) = EcTyping.trans_binding env ue bds in
     let p = EcTyping.trans_pattern senv ps ue p in
     let ev = MEV.of_idents (Mid.keys !ps) `Form in
-    (ptenv !!tc hyps (ue, ev),
+    (* TODO: PY: empty constraints? *)
+    (ptenv !!tc hyps (ue, EcAgent.empty, ev),
      f_lambda (List.map (snd_map gtty) bds) p)
   in
 
@@ -2133,7 +2139,7 @@ let process_elim (pe, qs) tc =
     | Some qs ->
         let qs = {
             fp_mode = `Implicit;
-            fp_head = FPNamed (qs, None);
+            fp_head = FPNamed (qs, (None,None));
             fp_args = [];
         } in process_elimT qs tc
   in
@@ -2184,7 +2190,7 @@ let process_case ?(doeq = false) gp tc =
 (* -------------------------------------------------------------------- *)
 let process_exists args (tc : tcenv1) =
   let hyps = FApi.tc1_hyps tc in
-  let pte  = (TTC.unienv_of_hyps hyps, EcMatching.MEV.empty) in
+  let pte  = (TTC.unienv_of_hyps hyps, EcAgent.empty, EcMatching.MEV.empty) in
   let pte  = PT.ptenv !!tc (FApi.tc1_hyps tc) pte in
 
   let for1 concl arg =

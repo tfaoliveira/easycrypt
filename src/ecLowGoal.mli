@@ -90,11 +90,14 @@ end
  * valid (not typable or not a proof of the focused goal). *)
 val t_apply : proofterm -> FApi.backward
 
-(* Apply a proof term of the form [p<:ty1...tyn> f1...fp _ ... _]
- * constructed from the path, type parameters, and formulas given to
- * the function. The [int] argument gives the number of premises to
- * skip before applying [p]. *)
-val t_apply_s : path -> ty list -> ?args:(form list) -> ?sk:int -> FApi.backward
+(* Apply a proof term of the form [p<:ty1...tyn><$a1...al> f1...fp _ ... _]
+ * constructed from the path, type parameters [ty1...tyn], agent names [a1...al]
+ * and formulas given to the function. The [int] argument gives the number of
+ * premises to skip before applying [p]. *)
+val t_apply_s :
+  path -> ty list -> agents:EcIdent.t list ->
+  ?args:(form list) -> ?sk:int ->
+  FApi.backward
 
 (* Apply a proof term of the form [h f1...fp _ ... _] constructed from
  * the local hypothesis and formulas given to the function. The [int]
@@ -172,7 +175,8 @@ val t_elim_iso_or   : ?reduce:lazyred -> tcenv1 -> int list * tcenv
 
 (* Elimination using an custom elimination principle. *)
 val t_elimT_form : proofterm -> ?sk:int -> form -> FApi.backward
-val t_elimT_form_global : path -> ?typ:(ty list) -> ?sk:int -> form -> FApi.backward
+val t_elimT_form_global :
+  path -> ?typ:(ty list) -> ?agents:EcIdent.t list -> ?sk:int -> form -> FApi.backward
 
 (* Eliminiation using an elimation principle of an induction type *)
 val t_elimT_ind : ?reduce:lazyred -> [ `Case | `Ind ] -> FApi.backward

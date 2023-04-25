@@ -122,7 +122,7 @@ let process_exists_intro ~(elim : bool) fs tc =
   else tc
 
 (* -------------------------------------------------------------------- *)
-let process_ecall oside (l, tvi, fs) tc =
+let process_ecall oside (l, tvi, fs) tc : tcenv =
   let (hyps, concl) = FApi.tc1_flat tc in
 
   let hyps, kind =

@@ -862,6 +862,13 @@ module Ax = struct
     if ax.pa_kind <> PSchema && ax.pa_scvars <> None then
       hierror "can only have schema variables in schema";
 
+    let env, agent_params =
+      let agents = omap (List.map (fun x -> EcIdent.create (unloc x))) ax.pa_agents in
+      let agents = odfl [] agents in
+      let env = EcEnv.Agent.bindall (List.map (fun x -> x, None) agents) env in
+      (env, agents)
+    in
+
     let (pconcl, tintro) =
       match ax.pa_vars with
       | None ->
@@ -920,6 +927,7 @@ module Ax = struct
           | _ -> `Lemma
 
         in { ax_tparams    = tparams;
+             ax_agents     = agent_params;
              ax_spec       = concl;
              ax_kind       = kind;
              ax_loca       = ax.pa_locality;
@@ -1263,6 +1271,7 @@ module Op = struct
                List.combine axpm (List.map snd tparams)) in
           let ax =
             { ax_tparams    = axpm;
+              ax_agents     = [];
               ax_spec       = ax;
               ax_kind       = `Axiom (Ssym.empty, false);
               ax_loca       = lc;
@@ -1316,6 +1325,7 @@ module Op = struct
 
       let ax =
         { ax_tparams    = List.map (fun ty -> (ty, Sp.empty)) nparams;
+          ax_agents     = [];   (* TODO: cost: in lossless lemmas, do we need agent name polymorphism? *)
           ax_spec       = ax;
           ax_kind       = `Axiom (Ssym.empty, false);
           ax_loca       = lc;
@@ -1684,6 +1694,7 @@ module Ty = struct
            if not (Mstr.mem x symbs) then
              let ax = {
                ax_tparams    = [];
+               ax_agents     = [];
                ax_spec       = req;
                ax_kind       = `Lemma;
                ax_loca       = lc;
@@ -1699,6 +1710,7 @@ module Ty = struct
           let t  = { pt_core = t; pt_intros = []; } in
           let ax = {
               ax_tparams    = [];
+              ax_agents     = [];
               ax_spec       = f;
               ax_kind       = `Axiom (Ssym.empty, false);
               ax_visibility = `NoSmt;
@@ -2232,7 +2244,7 @@ module Search = struct
     let paths =
       let do1 fp =
         match unloc fp with
-        | PFident (q, None) -> begin
+        | PFident (q, (None,None)) -> begin
             match EcEnv.Op.all ~name:q.pl_desc env with
             | [] ->
                 hierror ~loc:q.pl_loc "unknown operator: `%s'"

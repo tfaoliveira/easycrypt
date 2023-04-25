@@ -3320,7 +3320,8 @@ and trans_form_or_pattern
     env ?mv ?ps
     ~(schema_mpreds:EcIdent.t list option)
     ~(schema_mt:sc_params option)
-    ue pf tt =
+    (ue : EcUnify.unienv)
+    (pf : EcParsetree.pformula) (tt : EcTypes.ty option) =
   let state = PFS.create () in
 
   let rec transf_r opsc ~incoe env f =

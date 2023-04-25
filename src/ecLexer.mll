@@ -407,6 +407,7 @@ rule main = parse
   | "{|"  { [LPBRACE        ] }
   | "|}"  { [RPBRACE        ] }
   | "`["  { [TICKLBRACKET   ] }
+  | "[$"  { [LBRACKETDOLLAR ] }
   | "`|"  { [TICKPIPE       ] }
   | "`{"  { [TICKBRACE      ] }
   | "`("  { [TICKPAREN      ] }

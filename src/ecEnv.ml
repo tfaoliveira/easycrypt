@@ -3074,12 +3074,14 @@ module Ax = struct
     MC.bind_axiom name ax env
 
   let instanciate p tys ~agents env =
-    (* TODO: cost: check that [ax.ax_agents] and [agents] are a valid instanciation? *)
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
+        (* sanity check *)
+        assert (EcAgent.no_duplicates agents);
+        assert (List.length agents = List.length ax.ax_agents);
+
         Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst ax.ax_tparams) tys) f
-        |>
+          (EcTypes.Tvar.init (List.map fst ax.ax_tparams) tys) f |>
         Fsubst.subst_agents (EcIdent.Mid.of_list (List.combine ax.ax_agents agents))
 
     | _ -> raise (LookupFailure (`Path p))

@@ -134,10 +134,15 @@ let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
 
 and concretize_e_head (CPTEnv subst) head =
   match head with
-  | PTCut    f        -> PTCut    (Fsubst.f_subst subst f)
-  | PTHandle h        -> PTHandle h
-  | PTLocal  x        -> PTLocal  x
-  | PTGlobal (p, tys) -> PTGlobal (p, List.map subst.fs_ty tys)
+  | PTCut    f -> PTCut    (Fsubst.f_subst subst f)
+  | PTHandle h -> PTHandle h
+  | PTLocal  x -> PTLocal  x
+
+  | PTGlobal (p, tys, agents) ->
+    let agents = List.map (fun id -> Mid.find_def id id subst.fs_agent) agents in
+    assert (EcAgent.no_duplicates agents); (* sanity check *)
+    PTGlobal (p, List.map subst.fs_ty tys, agents)
+
   | PTSchema _ -> assert false
 
 and concretize_e_pt cptenv { pt_head; pt_args } =
@@ -184,7 +189,7 @@ let pt_of_global pf hyps p tys ~agents =
   let ax    = EcEnv.Ax.instanciate p tys (LDecl.toenv hyps) ~agents in
 
   { ptev_env = ptenv;
-    ptev_pt  = { pt_head = PTGlobal (p, tys); pt_args = []; };
+    ptev_pt  = { pt_head = PTGlobal (p, tys, agents); pt_args = []; };
     ptev_ax  = ax; }
 
 (* -------------------------------------------------------------------- *)
@@ -193,7 +198,7 @@ let pt_of_global_r ptenv p tys ~agents =
   let ax  = EcEnv.Ax.instanciate p tys env ~agents:[] in
 
   { ptev_env = ptenv;
-    ptev_pt  = { pt_head = PTGlobal (p, tys); pt_args = []; };
+    ptev_pt  = { pt_head = PTGlobal (p, tys, agents); pt_args = []; };
     ptev_ax  = ax; }
 
 (* -------------------------------------------------------------------- *)
@@ -222,7 +227,7 @@ let pt_of_uglobal_r ptenv p =
   let ax = Fsubst.subst_agents asubst ax in
 
   { ptev_env = { ptenv with pte_ac };
-    ptev_pt  = { pt_head = PTGlobal (p, typ); pt_args = []; };
+    ptev_pt  = { pt_head = PTGlobal (p, typ, agents); pt_args = []; };
     ptev_ax  = ax; }
 
 (* -------------------------------------------------------------------- *)
@@ -503,18 +508,20 @@ let process_named_pterm pe (tvi, ag_annot, fp) =
   let ax  = Fsubst.subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
-  (* bind provided agent names, if any *)
-  let ag_annot =
-    Exn.recast_pe pe.pte_pe pe.pte_hy
-      (fun () -> omap (EcTyping.transagents env ~expected:(List.length ag)) ag_annot)
-  in
-  let ev =
+  (* Bind provided agent names in [ev], if any provided by [ag_annot].
+     [agents] are the agent names used to instanciate [ax]. *)
+  let agents, ev =
+    let ag_annot =
+      Exn.recast_pe pe.pte_pe pe.pte_hy
+        (fun () -> omap (EcTyping.transagents env ~expected:(List.length ag)) ag_annot)
+    in
     match ag_annot with
-    | None -> !(pe.pte_ev)
+    | None -> (ag, !(pe.pte_ev))
     | Some ag_annot ->
-      List.fold_left2 (fun ev ag1 ag2 ->
-          MEV.set ag1 (`Agent ag2) ev
-        ) !(pe.pte_ev) ag ag_annot
+      let ev =
+        List.fold_left2 (fun ev ag1 ag2 -> MEV.set ag1 (`Agent ag2) ev) !(pe.pte_ev) ag ag_annot
+      in
+      (ag_annot, ev)
   in
 
   (* add disjointness agent constraint *)
@@ -523,7 +530,7 @@ let process_named_pterm pe (tvi, ag_annot, fp) =
 
   let pe = { pe with pte_ac; pte_ev = ref ev; } in
 
-  (pe, (p, (typ, ax)))
+  (pe, (p, (typ, agents, ax)))
 
 (* -------------------------------------------------------------------- *)
 (* FIXME: agents names not allowed in schema (hence [ag_annot] is useless here) *)
@@ -659,8 +666,8 @@ let process_pterm_cut ~prcut pe pt : pt_ev =
         let pe, ax_info = process_named_pterm pe (tyargs, ag_annot, fp) in
         let pt, ax =
           match ax_info with
-          | (`Local  x, ([] , ax)) -> (PTLocal  x, ax)
-          | (`Global p, (typ, ax)) -> (PTGlobal (p, typ), ax)
+          | (`Local  x, ([] ,     [], ax)) -> (PTLocal  x, ax)
+          | (`Global p, (typ, agents, ax)) -> (PTGlobal (p, typ, agents), ax)
 
           | _ -> assert false
         in

@@ -804,7 +804,7 @@ end = struct
     | `Mod   -> "module"
     | `PTerm -> "proof-term"
 
-  let pp_pterm_apperror fmt (((hyps, ue, ev), kind) : pterror) =
+  let pp_pterm_apperror fmt (((hyps, ue, ac, ev), kind) : pterror) =
     let msg x = Format.fprintf fmt x in
 
     match kind with
@@ -836,6 +836,7 @@ end = struct
         "invalid argument (incompatible module type):"
         (TypingError.pp_cnv_failure (LDecl.toenv hyps)) cnv_failure
 
+    (* TODO: cost: print name constraints? *)
     | AE_InvalidArgProof (src, dst) ->
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
        let sb  = EcMatching.CPTEnv (EcMatching.MEV.assubst ue ev) in
@@ -860,6 +861,9 @@ let pp_apply_error fmt (dpe, reason, pt, (src, dst)) =
 
   Format.fprintf fmt "the given proof-term proves:@\n@\n";
   Format.fprintf fmt "  @[%a@]@\n@\n" (EcPrinting.pp_form ppe) src;
+  if not (EcAgent.is_empty pt.pte_ac) then
+    (* TODO: cost: better printing (use ppe etc) *)
+    Format.fprintf fmt "  @[<hov 2>constraints:@ @[%a@]@]@\n@\n" EcAgent.pp_constrs pt.pte_ac;
   match reason with
   | `DoNotMatch ->
        Format.fprintf fmt "it does not apply to the goal@\n@\n";

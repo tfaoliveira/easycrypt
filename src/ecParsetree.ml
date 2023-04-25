@@ -1080,6 +1080,7 @@ type paxiom = {
   pa_scvars   : pgscbindings option;
   pa_pvars    : mempred_binding option;
   pa_tyvars   : (psymbol * pqsymbol list) list option;
+  pa_agents   : psymbol list option;
   pa_vars     : pgtybindings option;
   pa_formula  : pformula;
   pa_kind     : paxiom_kind;
