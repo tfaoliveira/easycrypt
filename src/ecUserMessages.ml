@@ -259,6 +259,9 @@ end = struct
     | FXE_MatchPartial ->
         msg "this pattern matching is non-exhaustive"
 
+    | FXE_AgentUnsupported ->
+        msg "agent names unsupported in pattern matching"
+
     | FXE_CtorUnk ->
         msg "unknown constructor name"
 
@@ -395,6 +398,9 @@ end = struct
         msg "no matching operator, named `%a', " pp_qsymbol name;
         msg "for the following parameters' type:@\n";
         List.iteri (fun i ty -> msg "  [%d]: @[%a@]@\n" (i+1) pp_type ty) tys
+
+    | BadNumberOfAgents expected ->
+        msg "incorrect number of agents (expected %d)" expected
 
     | MultipleOpMatch (name, tys, matches) -> begin
         let uvars = List.map EcTypes.Tuni.univars tys in

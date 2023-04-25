@@ -766,6 +766,7 @@ module MC = struct
       let ax   =
         { ax_kind       = `Axiom (Ssym.empty, false);
           ax_tparams    = tv;
+          ax_agents     = [];
           ax_spec       = cl;
           ax_loca       = (snd obj).op_loca;
           ax_visibility = `Visible; } in
@@ -820,6 +821,7 @@ module MC = struct
             let do1 scheme name =
               let scname = Printf.sprintf "%s_%s" x name in
                 (scname, { ax_tparams    = tyd.tyd_params;
+                           ax_agents     = [];
                            ax_spec       = scheme;
                            ax_kind       = `Axiom (Ssym.empty, false);
                            ax_loca       = loca;
@@ -865,6 +867,7 @@ module MC = struct
           let scheme =
             let scname = Printf.sprintf "%s_ind" x in
               (scname, { ax_tparams    = tyd.tyd_params;
+                         ax_agents     = [];
                          ax_spec       = scheme;
                          ax_kind       = `Axiom (Ssym.empty, false);
                          ax_loca       = loca;
@@ -955,6 +958,7 @@ module MC = struct
           (fun (x, ax) ->
             let ax = Fsubst.f_subst fsubst ax in
               (x, { ax_tparams    = [(self, Sp.singleton mypath)];
+                    ax_agents     = [];
                     ax_spec       = ax;
                     ax_kind       = `Axiom (Ssym.empty, false);
                     ax_loca       = loca;
@@ -3069,11 +3073,15 @@ module Ax = struct
   let rebind name ax env =
     MC.bind_axiom name ax env
 
-  let instanciate p tys env =
+  let instanciate p tys ~agents env =
+    (* TODO: cost: check that [ax.ax_agents] and [agents] are a valid instanciation? *)
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
         Fsubst.subst_tvar
           (EcTypes.Tvar.init (List.map fst ax.ax_tparams) tys) f
+        |>
+        Fsubst.subst_agents (EcIdent.Mid.of_list (List.combine ax.ax_agents agents))
+
     | _ -> raise (LookupFailure (`Path p))
 
   let iter ?name f (env : env) =
@@ -3795,7 +3803,7 @@ module LDecl = struct
     { h with le_hyps; le_env; }
 
   (* ------------------------------------------------------------------ *)
-  let init env ?(locals = []) tparams =
+  let init env ?(locals = []) ~agents tparams =
     let buildenv env =
       List.fold_right
         (fun { l_id = x; l_kind = k; } env -> add_local_env x k env)
@@ -3804,10 +3812,10 @@ module LDecl = struct
 
     { le_init = env;
       le_env  = buildenv env;
-      le_hyps = { h_tvar = tparams; h_local = locals}; }
+      le_hyps = { h_tvar = tparams; h_local = locals; h_agents = agents; }; }
 
   (* ------------------------------------------------------------------ *)
-  let clear ?(leniant = false) ids hyps =
+  let clear ?(leniant = false) ids hyps : hyps =
     let rec filter ids (hyps : EcBaseLogic.l_locals) =
       match hyps with
       | [] -> []
@@ -3831,13 +3839,15 @@ module LDecl = struct
 
     let locals = filter ids hyps.le_hyps.h_local in
 
-    init hyps.le_init ~locals hyps.le_hyps.h_tvar
+    init hyps.le_init ~locals hyps.le_hyps.h_tvar ~agents:hyps.le_hyps.h_agents
 
   (* ------------------------------------------------------------------ *)
-  let hyp_convert x check hyps =
+  let hyp_convert x check hyps : hyps option =
     let module E = struct exception NoOp end in
 
-    let init locals = init hyps.le_init ~locals hyps.le_hyps.h_tvar in
+    let init locals =
+      init hyps.le_init ~locals hyps.le_hyps.h_tvar ~agents:hyps.le_hyps.h_agents
+    in
 
     let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
@@ -3853,10 +3863,11 @@ module LDecl = struct
       | [] -> error (LookupError (`Ident x))
       | ld :: locals -> ld :: (doit locals)
 
-    in (try Some (doit hyps.le_hyps.h_local) with E.NoOp -> None) |> omap init
+    in (try Some (doit hyps.le_hyps.h_local) with E.NoOp -> None) |>
+       omap init
 
   (* ------------------------------------------------------------------ *)
-  let local_hyps x hyps =
+  let local_hyps x hyps : hyps =
     let rec doit (locals : EcBaseLogic.l_locals) =
       match locals with
       | { l_id = y } :: locals ->
@@ -3865,7 +3876,7 @@ module LDecl = struct
           error (LookupError (`Ident x)) in
 
     let locals = doit hyps.le_hyps.h_local in
-    init hyps.le_init ~locals hyps.le_hyps.h_tvar
+    init hyps.le_init ~locals hyps.le_hyps.h_tvar ~agents:hyps.le_hyps.h_agents
 
   (* ------------------------------------------------------------------ *)
   let by_name  s hyps = by_name  s (tohyps hyps)

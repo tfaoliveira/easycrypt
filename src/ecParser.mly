@@ -610,7 +610,7 @@
 %token WP
 %token ZETA
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4 NUMOP
-%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
+%token LTCOLON LTDOLLAR DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
 %token < Lexing.position> FINAL
 
 %nonassoc prec_below_comma
@@ -906,6 +906,12 @@ tyvar_annot:
 %inline tvars_app:
 | LTCOLON k=loc(tyvar_annot) GT { k }
 
+%inline ag_app:
+| LTDOLLAR ag=loc(plist0(aident, empty)) GT { ag }
+
+%inline tvars_ag_app:
+| tv=tvars_app? ag=ag_app? { tv, ag }
+
 (* -------------------------------------------------------------------- *)
 %inline sexpr: x=loc(sexpr_u) { x }
 %inline  expr: x=loc( expr_u) { x }
@@ -919,7 +925,7 @@ sexpr_u:
        PEscope (pqsymb_of_symb p.pl_loc "<top>", e)
      else
        let p = lmap (fun x -> "%" ^ x) p in
-       PEapp (mk_loc (loc p) (PEident (pqsymb_of_psymb p, None)), [e]) }
+       PEapp (mk_loc (loc p) (PEident (pqsymb_of_psymb p, (None,None))), [e]) }
 
 | LPAREN e=expr COLONTILD ty=loc(type_exp) RPAREN
    { PEcast (e, ty) }
@@ -930,27 +936,27 @@ sexpr_u:
 | d=DECIMAL
    { PEdecimal d }
 
-| x=qoident ti=tvars_app?
+| x=qoident ti=tvars_ag_app
    { PEident (x, ti) }
 
-| op=loc(numop) ti=tvars_app?
+| op=loc(numop) ti=tvars_ag_app
     { peapp_symb op.pl_loc op.pl_desc ti [] }
 
-| se=sexpr DLBRACKET ti=tvars_app? e=loc(plist1(expr, COMMA)) RBRACKET
+| se=sexpr DLBRACKET ti=tvars_ag_app e=loc(plist1(expr, COMMA)) RBRACKET
    { let e = List.reduce1 (fun _ -> lmap (fun x -> PEtuple x) e) (unloc e) in
      peget (EcLocation.make $startpos $endpos) ti se e }
 
-| se=sexpr DLBRACKET ti=tvars_app? e1=loc(plist1(expr, COMMA)) LARROW e2=expr RBRACKET
+| se=sexpr DLBRACKET ti=tvars_ag_app e1=loc(plist1(expr, COMMA)) LARROW e2=expr RBRACKET
    { let e1 = List.reduce1 (fun _ -> lmap (fun x -> PEtuple x) e1) (unloc e1) in
      peset (EcLocation.make $startpos $endpos) ti se e1 e2 }
 
-| TICKPIPE ti=tvars_app? e=expr PIPE
+| TICKPIPE ti=tvars_ag_app e=expr PIPE
    { peapp_symb e.pl_loc EcCoreLib.s_abs ti [e] }
 
-| LBRACKET ti=tvars_app? es=loc(plist0(expr, SEMICOLON)) RBRACKET
+| LBRACKET ti=tvars_ag_app es=loc(plist0(expr, SEMICOLON)) RBRACKET
    { unloc (pelist es.pl_loc ti es.pl_desc) }
 
-| LBRACKET ti=tvars_app? e1=expr op=loc(DOTDOT) e2=expr RBRACKET
+| LBRACKET ti=tvars_ag_app e1=expr op=loc(DOTDOT) e2=expr RBRACKET
    { let id =
        PEident (mk_loc op.pl_loc EcCoreLib.s_dinter, ti)
      in
@@ -960,7 +966,7 @@ sexpr_u:
    { PEtuple es }
 
 | r=loc(RBOOL)
-   { PEident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }
+   { PEident (mk_loc r.pl_loc EcCoreLib.s_dbool, (None,None)) }
 
 | LPBRACE fields=rlist1(expr_field, SEMICOLON) SEMICOLON? RPBRACE
    { PErecord (None, fields) }
@@ -982,13 +988,13 @@ expr_u:
 | e=sexpr args=sexpr+
     { PEapp (e, args) }
 
-| op=loc(uniop) ti=tvars_app? e=expr
+| op=loc(uniop) ti=tvars_ag_app e=expr
     { peapp_symb op.pl_loc op.pl_desc ti [e] }
 
 | e=expr_chained_orderings %prec prec_below_order
     { fst e }
 
-| e1=expr op=loc(binop) ti=tvars_app? e2=expr
+| e1=expr op=loc(binop) ti=tvars_ag_app e2=expr
     { peapp_symb op.pl_loc op.pl_desc ti [e1; e2] }
 
 | c=expr QUESTION e1=expr COLON e2=expr %prec LOP2
@@ -1009,7 +1015,7 @@ expr_u:
    { PElet (p, (e1, Some ty), e2) }
 
 | r=loc(RBOOL) TILD e=sexpr
-    { let id  = PEident(mk_loc r.pl_loc EcCoreLib.s_dbitstring, None) in
+    { let id  = PEident(mk_loc r.pl_loc EcCoreLib.s_dbitstring, (None,None)) in
       let loc = EcLocation.make $startpos $endpos in
         PEapp (mk_loc loc id, [e]) }
 
@@ -1024,7 +1030,7 @@ expr_field:
     { { rf_name = x ; rf_tvi = None; rf_value = e; } }
 
 expr_ordering:
-| e1=expr op=loc(ordering_op) ti=tvars_app? e2=expr
+| e1=expr op=loc(ordering_op) ti=tvars_ag_app e2=expr
     { (op, ti, e1, e2) }
 
 expr_chained_orderings:
@@ -1032,10 +1038,10 @@ expr_chained_orderings:
     { let (op, ti, e1, e2) = e in
         (peapp_symb op.pl_loc (unloc op) ti [e1; e2], e2) }
 
-| e1=loc(expr_chained_orderings) op=loc(ordering_op) ti=tvars_app? e2=expr
+| e1=loc(expr_chained_orderings) op=loc(ordering_op) ti=tvars_ag_app e2=expr
     { let (lce1, (e1, le)) = (e1.pl_loc, unloc e1) in
       let loc = EcLocation.make $startpos $endpos in
-        (peapp_symb loc "&&" None
+        (peapp_symb loc "&&" (None,None)
            [EcLocation.mk_loc lce1 e1;
             EcLocation.mk_loc loc
               (peapp_symb op.pl_loc (unloc op) ti [le; e2])],
@@ -1222,7 +1228,7 @@ sform_u(P):
        PFscope (pqsymb_of_symb p.pl_loc "<top>", f)
      else
        let p = lmap (fun x -> "%" ^ x) p in
-       PFapp (mk_loc (loc p) (PFident (pqsymb_of_psymb p, None)), [f]) }
+       PFapp (mk_loc (loc p) (PFident (pqsymb_of_psymb p, (None,None))), [f]) }
 
 | SHARP pf=pffilter* x=ident
    { PFref (x, pf) }
@@ -1237,9 +1243,9 @@ sform_u(P):
    { PFdecimal d }
 
 | x=loc(RES)
-   { PFident (mk_loc x.pl_loc ([], "res"), None) }
+   { PFident (mk_loc x.pl_loc ([], "res"), (None,None)) }
 
-| x=qoident ti=tvars_app?
+| x=qoident ti=tvars_ag_app
    { PFident (x, ti) }
 
 | x=mident
@@ -1248,12 +1254,12 @@ sform_u(P):
 | x=aident
    { PFagent x }
 
-| se=sform_r(P) DLBRACKET ti=tvars_app? e=loc(plist1(form_r(P), COMMA)) RBRACKET
+| se=sform_r(P) DLBRACKET ti=tvars_ag_app e=loc(plist1(form_r(P), COMMA)) RBRACKET
    { let e = List.reduce1 (fun _ -> lmap (fun x -> PFtuple x) e) (unloc e) in
      pfget (EcLocation.make $startpos $endpos) ti se e }
 
 | se=sform_r(P) DLBRACKET
-    ti=tvars_app? e1=loc(plist1(form_r(P), COMMA))LARROW e2=form_r(P)
+    ti=tvars_ag_app e1=loc(plist1(form_r(P), COMMA))LARROW e2=form_r(P)
   RBRACKET
    { let e1 = List.reduce1 (fun _ -> lmap (fun x -> PFtuple x) e1) (unloc e1) in
      pfset (EcLocation.make $startpos $endpos) ti se e1 e2 }
@@ -1261,10 +1267,10 @@ sform_u(P):
 | x=sform_r(P) s=loc(pside)
    { PFside (x, s) }
 
-| op=loc(numop) ti=tvars_app?
+| op=loc(numop) ti=tvars_ag_app
     { pfapp_symb op.pl_loc op.pl_desc ti [] }
 
-| TICKPIPE ti=tvars_app? e =form_r(P) PIPE
+| TICKPIPE ti=tvars_ag_app e =form_r(P) PIPE
    { pfapp_symb e.pl_loc EcCoreLib.s_abs ti [e] }
 
 | LPAREN fs=plist0(form_r(P), COMMA) RPAREN
@@ -1276,7 +1282,7 @@ sform_u(P):
 | LPBRACE b=sform WITH fields=rlist1(form_field, SEMICOLON) SEMICOLON? RPBRACE
    { PFrecord (Some b, fields) }
 
-| LBRACKET ti=tvars_app? es=loc(plist0(form_r(P), SEMICOLON)) RBRACKET
+| LBRACKET ti=tvars_ag_app es=loc(plist0(form_r(P), SEMICOLON)) RBRACKET
    { (pflist es.pl_loc ti es.pl_desc).pl_desc }
 
 | f=sform_r(P) DOTTICK x=qident
@@ -1306,9 +1312,9 @@ sform_u(P):
     { PFprob (mp, args, pn, event) }
 
 | r=loc(RBOOL)
-    { PFident (mk_loc r.pl_loc EcCoreLib.s_dbool, None) }
+    { PFident (mk_loc r.pl_loc EcCoreLib.s_dbool, (None,None)) }
 
-| LBRACKET ti=tvars_app? e1=form_r(P) op=loc(DOTDOT) e2=form_r(P) RBRACKET
+| LBRACKET ti=tvars_ag_app e1=form_r(P) op=loc(DOTDOT) e2=form_r(P) RBRACKET
     { let id = PFident(mk_loc op.pl_loc EcCoreLib.s_dinter, ti) in
       PFapp(mk_loc op.pl_loc id, [e1; e2]) }
 
@@ -1319,13 +1325,13 @@ form_u(P):
 
 | e=sform_r(P) args=sform_r(P)+ { PFapp (e, args) }
 
-| op=loc(uniop) ti=tvars_app? e=form_r(P)
+| op=loc(uniop) ti=tvars_ag_app e=form_r(P)
    { pfapp_symb op.pl_loc op.pl_desc ti [e] }
 
 | f=form_chained_orderings(P) %prec prec_below_order
     { fst f }
 
-| e1=form_r(P) op=loc(binop) ti=tvars_app? e2=form_r(P)
+| e1=form_r(P) op=loc(binop) ti=tvars_ag_app e2=form_r(P)
     { pfapp_symb op.pl_loc op.pl_desc ti [e1; e2] }
 
 | c=form_r(P) QUESTION e1=form_r(P) COLON e2=form_r(P) %prec LOP2
@@ -1361,7 +1367,7 @@ form_u(P):
 | FUN    pd=ptybindings  IMPL  e=form_r(P) { PFlambda (pd, e) }
 
 | r=loc(RBOOL) TILD e=sform_r(P)
-    { let id  = PFident (mk_loc r.pl_loc EcCoreLib.s_dbitstring, None) in
+    { let id  = PFident (mk_loc r.pl_loc EcCoreLib.s_dbitstring, (None,None)) in
       let loc = EcLocation.make $startpos $endpos in
         PFapp (mk_loc loc id, [e]) }
 
@@ -1379,7 +1385,7 @@ form_field:
     { { rf_name = x; rf_tvi = None; rf_value = f; } }
 
 form_ordering(P):
-| f1=form_r(P) op=loc(ordering_op) ti=tvars_app? f2=form_r(P)
+| f1=form_r(P) op=loc(ordering_op) ti=tvars_ag_app f2=form_r(P)
     { (op, ti, f1, f2) }
 
 form_chained_orderings(P):
@@ -1387,10 +1393,10 @@ form_chained_orderings(P):
     { let (op, ti, f1, f2) = f in
         (pfapp_symb op.pl_loc (unloc op) ti [f1; f2], f2) }
 
-| f1=loc(form_chained_orderings(P)) op=loc(ordering_op) ti=tvars_app? f2=form_r(P)
+| f1=loc(form_chained_orderings(P)) op=loc(ordering_op) ti=tvars_ag_app f2=form_r(P)
     { let (lcf1, (f1, le)) = (f1.pl_loc, unloc f1) in
       let loc = EcLocation.make $startpos $endpos in
-        (pfapp_symb loc "&&" None
+        (pfapp_symb loc "&&" (None,None)
            [EcLocation.mk_loc lcf1 f1;
             EcLocation.mk_loc loc
               (pfapp_symb op.pl_loc (unloc op) ti [le; f2])],
@@ -1531,7 +1537,7 @@ lvalue_u:
 | LPAREN p=plist2(qident, COMMA) RPAREN
    { PLvTuple p }
 
-| x=loc(fident) DLBRACKET ti=tvars_app? e=expr RBRACKET
+| x=loc(fident) DLBRACKET ti=tvars_ag_app e=expr RBRACKET
    { match lqident_of_fident x.pl_desc with
      | None   -> parse_error x.pl_loc None
      | Some v -> PLvMap (mk_loc x.pl_loc v, ti, e) }
@@ -2079,24 +2085,24 @@ opbr:
     { p }
 
 mcptn(BOP):
-| c=qoident tvi=tvars_app? ps=bdident*
+| c=qoident tvi=tvars_ag_app ps=bdident*
     { PPApp ((c, tvi), ps) }
 
-| LBRACKET tvi=tvars_app? RBRACKET {
+| LBRACKET tvi=tvars_ag_app RBRACKET {
     let loc = EcLocation.make $startpos $endpos in
     PPApp ((pqsymb_of_symb loc EcCoreLib.s_nil, tvi), [])
   }
 
-| op=loc(uniop) tvi=tvars_app?
+| op=loc(uniop) tvi=tvars_ag_app
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), []) }
 
-| op=loc(uniop) tvi=tvars_app? x=bdident
+| op=loc(uniop) tvi=tvars_ag_app x=bdident
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x]) }
 
-| x1=bdident op=loc(BOP) tvi=tvars_app? x2=bdident
+| x1=bdident op=loc(BOP) tvi=tvars_ag_app x2=bdident
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x1; x2]) }
 
-| x1=bdident op=loc(ordering_op) tvi=tvars_app? x2=bdident
+| x1=bdident op=loc(ordering_op) tvi=tvars_ag_app x2=bdident
     { PPApp ((pqsymb_of_symb op.pl_loc op.pl_desc, tvi), [x1; x2]) }
 
 (* -------------------------------------------------------------------- *)
@@ -2556,7 +2562,7 @@ intro_pattern:
    { IPCrush cm }
 
 gpterm_head(F):
-| exp=iboption(AT) p=qident tvi=tvars_app?
+| exp=iboption(AT) p=qident tvi=tvars_ag_app
    { (exp, FPNamed (p, tvi)) }
 
 | LPAREN exp=iboption(AT) UNDERSCORE? COLON f=F RPAREN
@@ -2579,7 +2585,7 @@ gpterm_arg:
       | _      -> EA_form f }
 
 | LPAREN COLON
-    exp=iboption(AT) p=qident tvi=tvars_app? args=loc(gpterm_arg)*
+    exp=iboption(AT) p=qident tvi=tvars_ag_app args=loc(gpterm_arg)*
   RPAREN
     { EA_proof (mk_pterm exp (FPNamed (p, tvi)) args) }
 
@@ -2602,7 +2608,7 @@ gpoterm(F):
 
 (* ------------------------------------------------------------------ *)
 pcutdef1:
-| p=qident tvi=tvars_app? args=loc(gpterm_arg)*
+| p=qident tvi=tvars_ag_app args=loc(gpterm_arg)*
     { { ptcd_name = p; ptcd_tys = tvi; ptcd_args = args; } }
 
 pcutdef:
@@ -2618,10 +2624,11 @@ pmempred_args:
 | l=pmempred_arg* { l }
 
 pcutdef_schema1:
-| p=qident tvi=tvars_app? mt=memtype pargs=loc(pmempred_args)
+| p=qident tvi=tvars_ag_app mt=memtype pargs=loc(pmempred_args)
   exprs=loc(sexpr*)
     { { ptcds_name  = p;
         ptcds_tys   = tvi;
+        ptcds_ag    = (* ag *) None; (* TODO: cost *)
         ptcds_mt    = mt;
         ptcds_mps   = pargs;
         ptcds_exprs = exprs; } }
@@ -3369,7 +3376,7 @@ phltactic:
 
     { Phrex_intro (l, b) }
 
-| ECALL s=side? x=paren(p=qident tvi=tvars_app? fs=sform* { (p, tvi, fs) })
+| ECALL s=side? x=paren(p=qident tvi=tvars_ag_app fs=sform* { (p, tvi, fs) })
     { Phecall (s, x) }
 
 | EXFALSO

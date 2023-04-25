@@ -125,7 +125,7 @@ module Axioms = struct
 
     let for1 axname =
       let ax = EcEnv.Ax.by_path (EcPath.pqname tmod axname) env in
-        assert (ax.ax_tparams = [] && is_axiom ax.ax_kind);
+        assert (ax.ax_tparams = [] && ax.ax_agents = [] && is_axiom ax.ax_kind);
         (axname, EcSubst.subst_form subst ax.ax_spec)
     in
       List.map for1 axs

@@ -687,6 +687,9 @@ module Fsubst : sig
     EcTypes.ty EcIdent.Mid.t ->
     form -> form
 
+  (* susbtitute agent names in a formula *)
+  val subst_agents : EcIdent.t EcIdent.Mid.t -> form -> form
+
   val add_binding  : f_subst -> binding  -> f_subst * binding
   val add_bindings : f_subst -> bindings -> f_subst * bindings
 

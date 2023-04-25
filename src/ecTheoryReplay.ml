@@ -113,7 +113,7 @@ let tydecl_compatible env tyd1 tyd2 =
   let ty_body1 = tyd1.tyd_type in
   let ty_body2 = EcSubst.open_tydecl tyd2 tparams in
   let exn  = Incompatible (TyBody(*tyd1,tyd2*)) in
-  let hyps = EcEnv.LDecl.init env params in
+  let hyps = EcEnv.LDecl.init env params ~agents:[] in
   match ty_body1, ty_body2 with
   | `Abstract _, _ -> () (* FIXME Sp.t *)
   | _, _ -> tybody_compatible exn hyps ty_body1 ty_body2
@@ -124,7 +124,8 @@ let expr_compatible exn env s e1 e2 =
   let f1 = EcFol.form_of_expr EcFol.mhr e1 in
   let f2 = EcFol.Fsubst.f_subst s (EcFol.form_of_expr EcFol.mhr e2) in
   let ri = { EcReduction.full_red with delta_p = fun _-> `Force; } in
-  error_body exn (EcReduction.is_conv ~ri:ri (EcEnv.LDecl.init env []) f1 f2)
+  error_body exn
+    (EcReduction.is_conv ~ri:ri (EcEnv.LDecl.init env [] ~agents:[]) f1 f2)
 
 let get_open_oper exn env p tys =
   let oper = EcEnv.Op.by_path p env in
@@ -194,7 +195,8 @@ let get_open_pred exn env p tys =
 
 let rec pred_compatible exn env pb1 pb2 =
   match pb1, pb2 with
-  | PR_Plain f1, PR_Plain f2 -> error_body exn (EcReduction.is_conv (EcEnv.LDecl.init env []) f1 f2)
+  | PR_Plain f1, PR_Plain f2 ->
+    error_body exn (EcReduction.is_conv (EcEnv.LDecl.init env [] ~agents:[]) f1 f2)
   | PR_Plain {f_node = Fop(p,tys)}, _ ->
     let pb1 = get_open_pred exn env p tys  in
     pred_compatible exn env pb1 pb2
@@ -212,10 +214,16 @@ and ind_compatible exn env pi1 pi2 =
 
 and prctor_compatible exn env s prc1 prc2 =
   error_body exn (EcSymbols.sym_equal prc1.prc_ctor prc2.prc_ctor);
-  let env, s = EcReduction.check_bindings exn [] env s prc1.prc_bds prc2.prc_bds in
+  let env, s =
+    EcReduction.check_bindings exn [] ~agents:[] env s prc1.prc_bds prc2.prc_bds
+  in
   error_body exn (List.length prc1.prc_spec = List.length prc2.prc_spec);
   let doit f1 f2 =
-    error_body exn (EcReduction.is_conv (EcEnv.LDecl.init env []) f1 (EcFol.Fsubst.f_subst s f2)) in
+    error_body exn
+      (EcReduction.is_conv
+         (EcEnv.LDecl.init env [] ~agents:[])
+         f1 (EcFol.Fsubst.f_subst s f2))
+  in
   List.iter2 doit prc1.prc_spec prc2.prc_spec
 
 let nott_compatible exn env nb1 nb2 =
@@ -232,7 +240,7 @@ let operator_compatible env oper1 oper2 =
   let oty2, okind2 = EcSubst.open_oper oper2 tparams in
   if not (EcReduction.EqTest.for_type env oty1 oty2) then
     raise (Incompatible (DifferentType(oty1, oty2)));
-  let hyps = EcEnv.LDecl.init env params in
+  let hyps = EcEnv.LDecl.init env params ~agents:[] in
   let env  = EcEnv.LDecl.toenv hyps in
   let exn  = Incompatible (OpBody(*oper1,oper2*)) in
   match okind1, okind2 with

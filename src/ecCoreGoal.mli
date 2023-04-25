@@ -50,7 +50,7 @@ and pt_head =
 | PTCut    of EcFol.form
 | PTHandle of handle
 | PTLocal  of EcIdent.t
-| PTGlobal of EcPath.path * (ty list)
+| PTGlobal of EcPath.path * (ty list) * (EcIdent.t list) (* path, tparams, agent params *)
 | PTSchema of
     EcPath.path * (ty list) * EcMemory.memtype * mem_pr list * (expr list)
 
@@ -78,7 +78,7 @@ val paformula : EcFol.form -> pt_arg
 val pamemory  : EcMemory.memory -> pt_arg
 val paagent   : EcIdent.t -> pt_arg
 val pamodule  : EcPath.mpath * EcModules.module_sig -> pt_arg
-val paglobal  : EcPath.path -> ty list -> pt_arg
+val paglobal  : EcPath.path -> ty list -> agents:EcIdent.t list -> pt_arg
 val palocal   : EcIdent.t -> pt_arg
 val pahandle  : handle -> pt_arg
 

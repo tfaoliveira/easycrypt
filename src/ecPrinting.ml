@@ -1545,7 +1545,7 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
       let ue   = EcUnify.UniEnv.create None in
       let ov   = EcUnify.UniEnv.opentvi ue tv None in
       let ti   = Tvar.subst ov in
-      let hy   = EcEnv.LDecl.init ppe.PPEnv.ppe_env [] in
+      let hy   = EcEnv.LDecl.init ppe.PPEnv.ppe_env [] ~agents:[] in
       let mr   = odfl mhr (EcEnv.Memory.get_active ppe.PPEnv.ppe_env) in
       let bd   = form_of_expr mr nt.ont_body in
       let bd   = Fsubst.subst_tvar ov bd in
@@ -1555,7 +1555,7 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
           EcMatching.f_match_core fmnotation hy (ue, ev) ~ptn:bd f
         in
 
-        if not (EcMatching.can_concretize ev ue) then
+        if not (EcMatching.can_concretize ev ue EcAgent.empty) then
           raise EcMatching.MatchFailure;
 
         let rty  = ti nt.ont_resty in

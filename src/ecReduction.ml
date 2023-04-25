@@ -2040,6 +2040,7 @@ module User = struct
     | NotAnEq
     | NotFirstOrder
     | RuleDependsOnMemOrModule
+    | RuleDependsOnAgents
     | HeadedByVar
 
   exception InvalidUserRule of error
@@ -2069,7 +2070,7 @@ module User = struct
   let compile ~opts ~prio (env : EcEnv.env) mode p =
     let simp =
       if opts.EcTheory.ur_delta then
-        let hyps = EcEnv.LDecl.init env [] in
+        let hyps = EcEnv.LDecl.init env [] ~agents:[] in
         fun f -> odfl f (h_red_opt delta hyps f)
       else fun f -> f in
 
@@ -2077,6 +2078,12 @@ module User = struct
       | `Ax -> `Ax (EcEnv.Ax.by_path p env)
       | `Sc -> `Sc (EcEnv.Schema.by_path p env) in
     let bds, rl = EcFol.decompose_forall (simp (get_spec ax_sc)) in
+
+    let () = match ax_sc with
+      | `Ax ax ->
+        if ax.ax_agents <> [] then raise (InvalidUserRule RuleDependsOnAgents)
+      | `Sc _  -> ()
+    in
 
     let bds =
       let filter = function
@@ -2232,7 +2239,7 @@ let error_body b =
 let conv_expr (env:env) s e1 e2 =
   let f1 = form_of_expr mhr e1 in
   let f2 = form_of_expr mhr e2 in
-  error_body (is_conv (LDecl.init env []) f1 (Fsubst.f_subst s f2))
+  error_body (is_conv (LDecl.init env [] ~agents:[]) f1 (Fsubst.f_subst s f2))
 
 let get_open_oper env p tys =
   let oper = Op.by_path p env in
@@ -2241,10 +2248,10 @@ let get_open_oper env p tys =
   | OB_oper (Some ob) -> ob
   | _ -> raise OpNotConv
 
-let check_bindings exn tparams env s bd1 bd2 =
+let check_bindings exn tparams ~agents env s bd1 bd2 =
   let test env s f1 f2 =
     let f2 = Fsubst.f_subst s f2 in
-    is_conv (LDecl.init env tparams) f1 f2
+    is_conv (LDecl.init env tparams ~agents) f1 f2
   in
 
   try check_bindings test env s bd1 bd2
@@ -2311,7 +2318,7 @@ let get_open_pred env p tys =
 
 let rec conv_pred env pb1 pb2 =
   match pb1, pb2 with
-  | PR_Plain f1, PR_Plain f2 -> error_body (is_conv (LDecl.init env []) f1 f2)
+  | PR_Plain f1, PR_Plain f2 -> error_body (is_conv (LDecl.init env [] ~agents:[]) f1 f2)
   | PR_Plain {f_node = Fop(p,tys)}, _ ->
     let pb1 = get_open_pred env p tys  in
     conv_pred env pb1 pb2
@@ -2330,10 +2337,10 @@ and conv_ind env pi1 pi2 =
 and conv_prctor env s prc1 prc2 =
   error_body (EcSymbols.sym_equal prc1.prc_ctor prc2.prc_ctor);
   (* FIXME:MERGE-CODE tparams=[]? *)
-  let env, s = check_bindings OpNotConv [] env s prc1.prc_bds prc2.prc_bds in
+  let env, s = check_bindings OpNotConv [] ~agents:[] env s prc1.prc_bds prc2.prc_bds in
   error_body (List.length prc1.prc_spec = List.length prc2.prc_spec);
   let doit f1 f2 =
-    error_body (is_conv (LDecl.init env []) f1 (Fsubst.f_subst s f2)) in
+    error_body (is_conv (LDecl.init env [] ~agents:[]) f1 (Fsubst.f_subst s f2)) in
   List.iter2 doit prc1.prc_spec prc2.prc_spec
 
 let conv_nott env nb1 nb2 =
@@ -2349,7 +2356,7 @@ let conv_operator env oper1 oper2 =
   let tparams = List.map (fun (id,_) -> tvar id) params in
   let oty2, okind2 = EcSubst.open_oper oper2 tparams in
   error_body (EqTest_i.for_type env oty1 oty2);
-  let hyps = EcEnv.LDecl.init env params in
+  let hyps = EcEnv.LDecl.init env params ~agents:[] in
   let env  = EcEnv.LDecl.toenv hyps in
   match okind1, okind2 with
   | OB_oper None      , OB_oper None       -> ()
@@ -2381,7 +2388,7 @@ module EqTest = struct
       let f1 = convert e1 in
       let f2 = convert e2 in
 
-      is_conv (LDecl.init env []) f1 f2
+      is_conv (LDecl.init env [] ~agents:[]) f1 f2
    end)
 
   let for_pv    = fun env ?(norm = true) -> for_pv    env ~norm

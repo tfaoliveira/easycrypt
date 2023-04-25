@@ -17,6 +17,7 @@ type pt_env = {
   pte_pe : proofenv;
   pte_hy : LDecl.hyps;
   pte_ue : EcUnify.unienv;
+  pte_ac : EcAgent.constraints;
   pte_ev : EcMatching.mevmap ref;
 }
 
@@ -56,7 +57,7 @@ and invalid_arg_form =
   | IAF_Mismatch of (ty * ty)
   | IAF_TyError of env * EcTyping.tyerror
 
-type pterror = (LDecl.hyps * EcUnify.unienv * EcMatching.mevmap) * apperror
+type pterror = (LDecl.hyps * EcUnify.unienv * EcAgent.constraints * EcMatching.mevmap) * apperror
 
 exception ProofTermError of pterror
 
@@ -80,21 +81,23 @@ let argkind_of_ptarg arg : argkind =
   | PVASub     _ -> `PTerm
 
 (* -------------------------------------------------------------------- *)
-let ptenv pe hyps (ue, ev) =
+let ptenv pe hyps (ue, ac, ev) =
   { pte_pe = pe;
     pte_hy = hyps;
     pte_ue = EcUnify.UniEnv.copy ue;
+    pte_ac = ac;
     pte_ev = ref ev; }
 
 (* -------------------------------------------------------------------- *)
 let copy pe =
-  ptenv pe.pte_pe pe.pte_hy (pe.pte_ue, !(pe.pte_ev))
+  ptenv pe.pte_pe pe.pte_hy (pe.pte_ue, pe.pte_ac, !(pe.pte_ev))
 
 (* -------------------------------------------------------------------- *)
 let ptenv_of_penv (hyps : LDecl.hyps) (pe : proofenv) =
   { pte_pe = pe;
     pte_hy = hyps;
     pte_ue = PT.unienv_of_hyps hyps;
+    pte_ac = EcAgent.empty;
     pte_ev = ref EcMatching.MEV.empty; }
 
 (* -------------------------------------------------------------------- *)
@@ -109,7 +112,7 @@ let rec get_head_symbol (pt : pt_env) (f : form) =
 
 (* -------------------------------------------------------------------- *)
 let can_concretize (pt : pt_env) =
-  EcMatching.can_concretize !(pt.pte_ev) pt.pte_ue
+  EcMatching.can_concretize !(pt.pte_ev) pt.pte_ue pt.pte_ac
 
 (* -------------------------------------------------------------------- *)
 let concretize_env pe =
@@ -155,7 +158,8 @@ let tc_pterm_apperror pte ?loc (kind : apperror) =
   let ue = EcUnify.UniEnv.copy pte.pte_ue in
   let pe = !(pte.pte_ev) in
   let hy = pte.pte_hy in
-  tc_error_exn ?loc pte.pte_pe (ProofTermError ((hy, ue, pe), kind))
+  let ac = pte.pte_ac in
+  tc_error_exn ?loc pte.pte_pe (ProofTermError ((hy, ue, ac, pe), kind))
 
 (* -------------------------------------------------------------------- *)
 let pt_of_hyp pf hyps x =
@@ -175,18 +179,18 @@ let pt_of_hyp_r ptenv x =
     ptev_ax  = ax; }
 
 (* -------------------------------------------------------------------- *)
-let pt_of_global pf hyps p tys =
+let pt_of_global pf hyps p tys ~agents =
   let ptenv = ptenv_of_penv hyps pf in
-  let ax    = EcEnv.Ax.instanciate p tys (LDecl.toenv hyps) in
+  let ax    = EcEnv.Ax.instanciate p tys (LDecl.toenv hyps) ~agents in
 
   { ptev_env = ptenv;
     ptev_pt  = { pt_head = PTGlobal (p, tys); pt_args = []; };
     ptev_ax  = ax; }
 
 (* -------------------------------------------------------------------- *)
-let pt_of_global_r ptenv p tys =
+let pt_of_global_r ptenv p tys ~agents =
   let env = LDecl.toenv ptenv.pte_hy in
-  let ax  = EcEnv.Ax.instanciate p tys env in
+  let ax  = EcEnv.Ax.instanciate p tys env ~agents:[] in
 
   { ptev_env = ptenv;
     ptev_pt  = { pt_head = PTGlobal (p, tys); pt_args = []; };
@@ -202,16 +206,22 @@ let pt_of_handle_r ptenv hd =
 
 (* -------------------------------------------------------------------- *)
 let pt_of_uglobal_r ptenv p =
-  let env     = LDecl.toenv ptenv.pte_hy in
-  let ax      = oget (EcEnv.Ax.by_path_opt p env) in
-  let typ, ax = (ax.EcDecl.ax_tparams, ax.EcDecl.ax_spec) in
+  let env = LDecl.toenv ptenv.pte_hy in
+  let ax  = oget (EcEnv.Ax.by_path_opt p env) in
+  let typ, agents, ax =
+    (ax.EcDecl.ax_tparams, ax.EcDecl.ax_agents, ax.EcDecl.ax_spec)
+  in
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi ptenv.pte_ue typ None in
   let ax  = Fsubst.subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
-  { ptev_env = ptenv;
+  (* add agent constraints + refresh agent names *)
+  let asubst, pte_ac = EcAgent.open_constraints ptenv.pte_ac agents in
+  let ax = Fsubst.subst_agents asubst ax in
+
+  { ptev_env = { ptenv with pte_ac };
     ptev_pt  = { pt_head = PTGlobal (p, typ); pt_args = []; };
     ptev_ax  = ax; }
 
@@ -417,16 +427,16 @@ let rec pmsymbol_of_pform fp : pmsymbol option =
   | _ -> None
 
 (* ------------------------------------------------------------------ *)
-let lookup_named_psymbol (hyps : LDecl.hyps) ~hastyp fp =
+let lookup_named_psymbol (hyps : LDecl.hyps) ~hastyp_or_ag fp =
   match fp with
-  | ([], x) when LDecl.hyp_exists x hyps && not hastyp ->
+  | ([], x) when LDecl.hyp_exists x hyps && not hastyp_or_ag ->
       let (x, fp) = LDecl.hyp_by_name x hyps in
-        Some (`Local x, ([], fp))
+        Some (`Local x, ([], [], fp))
 
   | _ ->
     match EcEnv.Ax.lookup_opt fp (LDecl.toenv hyps) with
     | Some (p, ({ EcDecl.ax_spec = fp } as ax)) ->
-        Some (`Global p, (ax.EcDecl.ax_tparams, fp))
+        Some (`Global p, (ax.EcDecl.ax_tparams, ax.EcDecl.ax_agents, fp))
     | _ -> None
 
 (* -------------------------------------------------------------------- *)
@@ -450,11 +460,11 @@ let ffpattern_of_form hyps fp : ppterm option =
     | _      -> mk_loc fp.pl_loc (EA_form fp)
   in
     match destr_app fp with
-    | ({ pl_desc = PFident (p, tya) }, args) ->
-        let hastyp = not (EcUtils.is_none tya) in
-        if lookup_named_psymbol hyps ~hastyp (unloc p) <> None then
+    | ({ pl_desc = PFident (p, (tya,ag)) }, args) ->
+        let hastyp_or_ag = not (is_none tya && is_none ag) in
+        if lookup_named_psymbol hyps ~hastyp_or_ag (unloc p) <> None then
           Some ({ fp_mode = `Implicit;
-                  fp_head = FPNamed (p, tya);
+                  fp_head = FPNamed (p, (tya,ag));
                   fp_args = List.map ae_of_form args; })
         else
           None
@@ -469,12 +479,15 @@ let ffpattern_of_genpattern hyps (ge : genpattern) =
   | `LetIn _          -> None
 
 (* -------------------------------------------------------------------- *)
-let process_named_pterm pe (tvi, fp) =
+let process_named_pterm pe (tvi, ag_annot, fp) =
   let env = LDecl.toenv pe.pte_hy in
 
-  let (p, (typ, ax)) =
-    match lookup_named_psymbol pe.pte_hy ~hastyp:(tvi <> None) (unloc fp) with
-    | Some (p, ax) -> (p, ax)
+  (* has type or agent annotations *)
+  let hastyp_or_ag = not (is_none tvi && is_none ag_annot) in
+
+  let (p, (typ, ag, ax)) =
+    match lookup_named_psymbol pe.pte_hy ~hastyp_or_ag (unloc fp) with
+    | Some (p, ax_info) -> (p, ax_info)
     | None -> tc_lookup_error pe.pte_pe `Lemma (unloc fp)
   in
 
@@ -490,10 +503,31 @@ let process_named_pterm pe (tvi, fp) =
   let ax  = Fsubst.subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
-  (p, (typ, ax))
+  (* bind provided agent names, if any *)
+  let ag_annot =
+    Exn.recast_pe pe.pte_pe pe.pte_hy
+      (fun () -> omap (EcTyping.transagents env ~expected:(List.length ag)) ag_annot)
+  in
+  let ev =
+    match ag_annot with
+    | None -> !(pe.pte_ev)
+    | Some ag_annot ->
+      List.fold_left2 (fun ev ag1 ag2 ->
+          MEV.set ag1 (`Agent ag2) ev
+        ) !(pe.pte_ev) ag ag_annot
+  in
+
+  (* add disjointness agent constraint *)
+  let asubst, pte_ac = EcAgent.open_constraints pe.pte_ac ag in
+  let ax = Fsubst.subst_agents asubst ax in
+
+  let pe = { pe with pte_ac; pte_ev = ref ev; } in
+
+  (pe, (p, (typ, ax)))
 
 (* -------------------------------------------------------------------- *)
-let process_named_schema pe (tvi, sn) =
+(* FIXME: agents names not allowed in schema (hence [ag_annot] is useless here) *)
+let process_named_schema pe ((tvi, ag_annot), sn) =
   let env = LDecl.toenv pe.pte_hy in
 
   let p, sc =
@@ -534,6 +568,7 @@ let process_named_schema pe (tvi, sn) =
   (p, typ, sc.EcDecl.axs_pparams, e_params, sc_i)
 
 (* -------------------------------------------------------------------- *)
+(* TODO: cost: check agent constraints below, as done for [ax_agents] *)
 let process_sc_instantiation pe inst =
   let env = LDecl.toenv pe.pte_hy in
 
@@ -617,18 +652,21 @@ let process_sc_instantiation pe inst =
   (p, typ, memtype, mpreds, exprs, Fsubst.f_subst ~tx fs sc_i)
 
 (* ------------------------------------------------------------------ *)
-let process_pterm_cut ~prcut pe pt =
-  let (pt, ax) =
+let process_pterm_cut ~prcut pe pt : pt_ev =
+  let (pe, pt, ax) =
     match pt with
-    | FPNamed (fp, tyargs) -> begin
-        match process_named_pterm pe (tyargs, fp) with
-        | (`Local  x, ([] , ax)) -> (PTLocal  x, ax)
-        | (`Global p, (typ, ax)) -> (PTGlobal (p, typ), ax)
+    | FPNamed (fp, (tyargs, ag_annot)) ->
+        let pe, ax_info = process_named_pterm pe (tyargs, ag_annot, fp) in
+        let pt, ax =
+          match ax_info with
+          | (`Local  x, ([] , ax)) -> (PTLocal  x, ax)
+          | (`Global p, (typ, ax)) -> (PTGlobal (p, typ), ax)
 
-        | _ -> assert false
-    end
+          | _ -> assert false
+        in
+        pe, pt, ax
 
-    | FPCut fp -> let fp = prcut fp in (PTCut fp, fp)
+    | FPCut fp -> let fp = prcut fp in (pe, PTCut fp, fp)
   in
 
   let pt = { pt_head = pt; pt_args = []; } in
@@ -839,8 +877,6 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
   end
 
-  (* TODO: cost: PY: what is this function doing?
-     freshness of the application must be checked? *)
   | GTagent -> begin
       match dfl_arg_for_agent pe arg with
       | PVAAgent arg -> (Fsubst.f_subst_agent x arg f, PAAgent arg)
@@ -1070,7 +1106,7 @@ let tc1_process_full_closed_pterm (tc : tcenv1) (ff : ppterm) =
 (* -------------------------------------------------------------------- *)
 type prept = [
   | `Hy   of EcIdent.t
-  | `G    of EcPath.path * ty list
+  | `G    of EcPath.path * ty list * EcIdent.t list (* path, tparams, agent params *)
   | `UG   of EcPath.path
   | `HD   of handle
   | `App  of prept * prept_arg list
@@ -1090,11 +1126,11 @@ let pt_of_prept tc (pt : prept) =
   let ptenv = ptenv_of_penv (FApi.tc1_hyps tc) !!tc in
 
   let rec build_pt = function
-    | `Hy  id         -> pt_of_hyp_r ptenv id
-    | `G   (p, tys)   -> pt_of_global_r ptenv p tys
-    | `UG  p          -> pt_of_global_r ptenv p []
-    | `HD  hd         -> pt_of_handle_r ptenv hd
-    | `App (pt, args) -> List.fold_left app_pt_ev (build_pt pt) args
+    | `Hy  id              -> pt_of_hyp_r ptenv id
+    | `G   (p, tys,agents) -> pt_of_global_r ptenv p tys ~agents
+    | `UG  p               -> pt_of_global_r ptenv p [] ~agents:[]
+    | `HD  hd              -> pt_of_handle_r ptenv hd
+    | `App (pt, args)      -> List.fold_left app_pt_ev (build_pt pt) args
 
   and app_pt_ev pt_ev = function
     | `F f     -> apply_pterm_to_arg_r pt_ev (PVAFormula f)
@@ -1110,10 +1146,10 @@ let pt_of_prept tc (pt : prept) =
 module Prept = struct
   let (@) f args = `App (f, args)
 
-  let hyp   h     = `Hy h
-  let glob  g tys = `G (g, tys)
-  let uglob g     = `UG g
-  let hdl   h     = `HD h
+  let hyp   h            = `Hy h
+  let glob  g tys agents = `G (g, tys, agents)
+  let uglob g            = `UG g
+  let hdl   h            = `HD h
 
   let aform  f  = `F f
   let amem   m  = `Mem m

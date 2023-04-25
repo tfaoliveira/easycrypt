@@ -68,8 +68,10 @@ module LowApply = struct
     if ld1.h_local (*φ*)== ld2.h_local then true  else
 
     let env     = env1 in
-    let hyps    = LDecl.init env ld1.h_tvar in
+    let hyps    = LDecl.init env ld1.h_tvar ~agents:ld1.h_agents in
     let tophyps = Mid.of_list (List.map (fun x -> x.l_id, x) ld2.h_local) in
+
+    (* TODO: cost: check sub agents between ld1 and ld2 *)
 
     (* Subsumption test for module with fresh names at declaration.
        - [e1] is the epoch of declaration of a fresh module in [ld1]
@@ -155,10 +157,10 @@ module LowApply = struct
         with LDecl.LdeclError _ -> raise (InvalidProofTerm 1)
     end
 
-    | PTGlobal (p, tys) ->
+    | PTGlobal (p, tys, agents) ->
         (* FIXME: poor API ==> poor error recovery *)
         let env = LDecl.toenv (hyps_of_ckenv tc) in
-        (pt, EcEnv.Ax.instanciate p tys env)
+        (pt, EcEnv.Ax.instanciate p tys env ~agents)
 
     | PTSchema (p, tys, mt, mps, es) ->
       let env = LDecl.toenv (hyps_of_ckenv tc) in
@@ -761,7 +763,7 @@ module Apply = struct
                                 ptea_arg = PVASub argpt; } in
 
                   (* Type-check view - FIXME: the current API is perfectible *)
-                  let viewpt = PT.pt_of_global_r ptenv p [] in
+                  let viewpt = PT.pt_of_global_r ptenv p [] ~agents:[] in
                   let viewpt =
                     List.fold_left
                       (fun viewpt arg -> apply_pterm_to_arg_r viewpt (PVAFormula arg))
@@ -1614,7 +1616,7 @@ let t_rewrite
       | SFnot f, (None | Some `Bool) when s = `LtoR && donot ->
         let ptev_env = ptenv_of_penv hyps (RApi.tc_penv tc) in
         let pt = { ptev_env; ptev_pt = pt; ptev_ax = ax } in
-        let pt' = pt_of_global_r ptev_env LG.p_negeqF [] in
+        let pt' = pt_of_global_r ptev_env LG.p_negeqF [] ~agents:[] in
         let pt' = apply_pterm_to_arg_r pt' (PVAFormula f) in
         let pt' = apply_pterm_to_arg_r pt' (PVASub pt) in
         let pt, _ = concretize pt' in

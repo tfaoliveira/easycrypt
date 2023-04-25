@@ -39,8 +39,9 @@ val l_epoch : l_local -> Epoch.t
 
 (* -------------------------------------------------------------------- *)
 type hyps = {
-  h_tvar  : EcDecl.ty_params;
-  h_local : l_local list;
+  h_tvar   : EcDecl.ty_params;
+  h_local  : l_local list;
+  h_agents : EcIdent.t list;    (* (disjoint) local agent names *)
 }
 
 val hyps_epoch : hyps -> Epoch.t

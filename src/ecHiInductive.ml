@@ -281,7 +281,8 @@ let trans_matchfix
         let trans1 ((xpos, x, xty) : _ * EcIdent.t * ty) =
           let pb     = oget (Msym.find_opt (EcIdent.name x) pbmap) in
           let filter = fun _ op -> EcDecl.is_ctor op in
-          let PPApp ((cname, tvi), cargs) = pb.pop_pattern in
+          let PPApp ((cname, (tvi,agents)), cargs) = pb.pop_pattern in
+          if agents <> None then fxerror cname.pl_loc env TT.FXE_AgentUnsupported;
           let tvi = tvi |> omap (TT.transtvi env ue) in
           let cts = EcUnify.select_op ~filter tvi env (unloc cname) ue [] in
 

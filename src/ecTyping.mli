@@ -98,6 +98,7 @@ type fxerror =
 | FXE_MatchNonLinear
 | FXE_MatchDupBranches
 | FXE_MatchPartial
+| FXE_AgentUnsupported
 | FXE_CtorUnk
 | FXE_CtorAmbiguous
 | FXE_CtorInvalidArity of (symbol * int * int)
@@ -121,6 +122,7 @@ type tyerror =
 | UnknownMetaVar         of symbol
 | UnknownProgVar         of qsymbol * EcMemory.memory
 | UnknownAgent           of symbol
+| BadNumberOfAgents      of int
 | DuplicatedRecFieldName of symbol
 | MissingRecField        of symbol
 | MixingRecFields        of EcPath.path tuple2
@@ -232,7 +234,8 @@ type metavs = EcFol.form Msym.t
 val transmem       : env -> EcSymbols.symbol located -> EcIdent.t
 
 (* external agent name *)
-val transagent     : env -> EcSymbols.symbol located -> EcIdent.t
+val transagent     : env -> psymbol -> EcIdent.t
+val transagents    : env -> psymbol list located -> expected:int -> EcIdent.t list
 
 val trans_form_opt :
   env -> ?mv:metavs ->

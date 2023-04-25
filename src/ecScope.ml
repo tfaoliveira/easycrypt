@@ -835,7 +835,7 @@ module Ax = struct
       match check with
       | false -> PSNoCheck
       | true  ->
-          let hyps  = EcEnv.LDecl.init (env scope) axd.ax_tparams in
+          let hyps  = EcEnv.LDecl.init (env scope) axd.ax_tparams ~agents:axd.ax_agents in
           let proof = EcCoreGoal.start hyps axd.ax_spec in
           PSCheck proof
     in

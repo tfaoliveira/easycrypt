@@ -184,7 +184,7 @@ end
 (* -------------------------------------------------------------------- *)
 type cptenv = CPTEnv of f_subst
 
-val can_concretize : mevmap -> EcUnify.unienv -> bool
+val can_concretize : mevmap -> EcUnify.unienv -> EcAgent.constraints -> bool
 
 (* -------------------------------------------------------------------------- *)
 type regexp_instr = regexp1_instr gen_regexp

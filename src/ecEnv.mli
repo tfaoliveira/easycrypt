@@ -165,7 +165,7 @@ module Ax : sig
   val iter : ?name:qsymbol -> (path -> t -> unit) -> env -> unit
   val all  : ?check:(path -> t -> bool) -> ?name:qsymbol -> env -> (path * t) list
 
-  val instanciate : path -> EcTypes.ty list -> env -> form
+  val instanciate : path -> EcTypes.ty list -> agents:EcIdent.t list -> env -> form
 end
 
 (* -------------------------------------------------------------------- *)
@@ -490,7 +490,13 @@ module LDecl : sig
 
   type hyps
 
-  val init    : env -> ?locals:EcBaseLogic.l_local list -> ty_params -> hyps
+  val init :
+    env ->
+    ?locals:EcBaseLogic.l_local list ->
+    agents:EcIdent.t list ->
+    ty_params ->
+    hyps
+
   val tohyps  : hyps -> EcBaseLogic.hyps
   val toenv   : hyps -> env
   val baseenv : hyps -> env

@@ -2741,6 +2741,14 @@ module Fsubst = struct
 
   let subst_tvar ?es_loc s =
     f_subst (init_subst_tvar ?es_loc s)
+
+  (* ------------------------------------------------------------------ *)
+  let init_agents s =
+    { f_subst_id with fs_agent = s; fs_freshen = true; }
+  (* TODO: cost: minor: freshen?  *)
+
+  let subst_agents (s : EcIdent.t EcIdent.Mid.t) =
+    f_subst (init_agents s)
 end
 
 (* -------------------------------------------------------------------- *)

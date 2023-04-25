@@ -50,6 +50,7 @@ module User : sig
     | NotAnEq
     | NotFirstOrder
     | RuleDependsOnMemOrModule
+    | RuleDependsOnAgents
     | HeadedByVar
 
   exception InvalidUserRule of error
@@ -105,7 +106,8 @@ val is_conv    : ?ri:reduction_info -> LDecl.hyps -> form -> form -> bool
 val check_conv : ?ri:reduction_info -> LDecl.hyps -> form -> form -> unit
 
 val check_bindings :
-  exn -> EcDecl.ty_params -> EcEnv.env -> EcFol.f_subst ->
+  exn ->
+  EcDecl.ty_params -> agents:EcIdent.t list -> EcEnv.env -> EcFol.f_subst ->
   (EcIdent.t * EcFol.gty) list -> (EcIdent.t * EcFol.gty) list ->
   EcEnv.env * EcFol.f_subst
 (* -------------------------------------------------------------------- *)

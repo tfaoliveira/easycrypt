@@ -55,12 +55,23 @@ type pty_r =
 
 and pty = pty_r located
 
+(* -------------------------------------------------------------------- *)
 type ptyannot_r =
   | TVIunamed of pty list
   | TVInamed  of (psymbol * pty) list
 
 and ptyannot  = ptyannot_r  located
 
+(* -------------------------------------------------------------------- *)
+(* agent annotations *)
+type ag_annot_r = psymbol list
+
+and ag_annot = ag_annot_r located
+
+(* -------------------------------------------------------------------- *)
+type pty_ag_annot = ptyannot option * ag_annot option
+
+(* -------------------------------------------------------------------- *)
 type plpattern_r =
   | LPSymbol of psymbol
   | LPTuple  of osymbol list
@@ -69,7 +80,7 @@ type plpattern_r =
 and plpattern = plpattern_r located
 
 type ppattern =
-| PPApp of (pqsymbol * ptyannot option) * osymbol list
+| PPApp of (pqsymbol * pty_ag_annot) * osymbol list
 
 type ptybinding  = osymbol list * pty
 and  ptybindings = ptybinding list
@@ -78,7 +89,7 @@ and pexpr_r =
   | PEcast   of pexpr * pty                       (* type cast          *)
   | PEint    of zint                              (* int. literal       *)
   | PEdecimal of (zint * (int * zint))             (* dec. literal       *)
-  | PEident  of pqsymbol * ptyannot option        (* symbol             *)
+  | PEident  of pqsymbol * pty_ag_annot        (* symbol             *)
   | PEapp    of pexpr * pexpr list                (* op. application    *)
   | PElet    of plpattern * pexpr_wty * pexpr     (* let binding        *)
   | PEtuple  of pexpr list                        (* tuple constructor  *)
@@ -105,7 +116,7 @@ and 'a rfield = {
 type plvalue_r =
   | PLvSymbol of pqsymbol
   | PLvTuple  of pqsymbol list
-  | PLvMap    of pqsymbol * ptyannot option * pexpr
+  | PLvMap    of pqsymbol * pty_ag_annot * pexpr
 
 and plvalue = plvalue_r located
 
@@ -199,7 +210,7 @@ and pformula_r =
   | PFint     of zint
   | PFdecimal of (zint * (int * zint))
   | PFtuple   of pformula list
-  | PFident   of pqsymbol * ptyannot option
+  | PFident   of pqsymbol * pty_ag_annot
   | PFref     of psymbol * pffilter list
   | PFmem     of psymbol
   | PFagent   of psymbol
@@ -491,7 +502,7 @@ type pabbrev = {
 
 (* -------------------------------------------------------------------- *)
 type 'a ppt_head =
-  | FPNamed of pqsymbol * ptyannot option
+  | FPNamed of pqsymbol * pty_ag_annot
   | FPCut   of 'a
 
 type ppt_arg =
@@ -512,7 +523,7 @@ type ppterm  = (pformula option) gppterm
 
 type pcutdef = {
   ptcd_name : pqsymbol;
-  ptcd_tys  : ptyannot option;
+  ptcd_tys  : pty_ag_annot;
   ptcd_args : ppt_arg located list;
 }
 
@@ -521,7 +532,8 @@ type pmpred_args = (osymbol * pformula) list
 
 type pcutdef_schema = {
   ptcds_name  : pqsymbol;
-  ptcds_tys   : ptyannot option;
+  ptcds_tys   : pty_ag_annot;
+  ptcds_ag    : ag_annot option;
   ptcds_mt    : pmemtype;
   ptcds_mps   : pmpred_args located;
   ptcds_exprs : pexpr list located;
@@ -775,7 +787,7 @@ type phltactic =
   | Pconseqauto    of crushmode
   | Phrex_elim
   | Phrex_intro    of (pformula list * bool)
-  | Phecall        of (oside * (pqsymbol * ptyannot option * pformula list))
+  | Phecall        of (oside * (pqsymbol * pty_ag_annot * pformula list))
   | Pexfalso
   | Pbydeno        of ([`PHoare | `Equiv ] * (deno_ppterm * bool * pformula option))
   | PPr            of (pformula * pformula) option

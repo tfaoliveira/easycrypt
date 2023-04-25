@@ -41,8 +41,9 @@ let l_epoch x = x.l_epoch
 
 (* -------------------------------------------------------------------- *)
 type hyps = {
-  h_tvar  : EcDecl.ty_params;
-  h_local : l_local list;
+  h_tvar   : EcDecl.ty_params;
+  h_local  : l_local list;
+  h_agents : EcIdent.t list;
 }
 
 let hyps_epoch (hyps : hyps) : Epoch.t =

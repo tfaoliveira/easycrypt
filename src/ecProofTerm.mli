@@ -26,16 +26,17 @@ and invalid_arg_form =
   | IAF_Mismatch of (ty * ty)
   | IAF_TyError of env * EcTyping.tyerror
 
-type pterror = (LDecl.hyps * EcUnify.unienv * mevmap) * apperror
+type pterror = (LDecl.hyps * EcUnify.unienv * EcAgent.constraints * EcMatching.mevmap) * apperror
 
 exception ProofTermError of pterror
 
 (* -------------------------------------------------------------------- *)
 type pt_env = {
-  pte_pe : proofenv;         (* proofenv of this proof-term *)
-  pte_hy : LDecl.hyps;       (* local context *)
-  pte_ue : EcUnify.unienv;   (* unification env. *)
-  pte_ev : mevmap ref;       (* metavar env. *)
+  pte_pe : proofenv;             (* proofenv of this proof-term *)
+  pte_hy : LDecl.hyps;           (* local context *)
+  pte_ue : EcUnify.unienv;       (* unification env. *)
+  pte_ac : EcAgent.constraints;  (* disjointness constraints on agents *)
+  pte_ev : mevmap ref;           (* metavar env. *)
 }
 
 type pt_ev = {
@@ -149,13 +150,13 @@ val concretize_e_arg  : cptenv -> pt_arg -> pt_arg
 (* PTEnv constructor *)
 val ptenv_of_penv : LDecl.hyps -> proofenv -> pt_env
 
-val ptenv : proofenv -> LDecl.hyps -> (EcUnify.unienv * mevmap) -> pt_env
+val ptenv : proofenv -> LDecl.hyps -> (EcUnify.unienv * EcAgent.constraints * mevmap) -> pt_env
 val copy  : pt_env -> pt_env
 
 (* Proof-terms construction from components *)
 val pt_of_hyp       : proofenv -> LDecl.hyps -> EcIdent.t -> pt_ev
-val pt_of_global_r  : pt_env -> EcPath.path -> ty list -> pt_ev
-val pt_of_global    : proofenv -> LDecl.hyps -> EcPath.path -> ty list -> pt_ev
+val pt_of_global_r  : pt_env -> EcPath.path -> ty list -> agents:EcIdent.t list -> pt_ev
+val pt_of_global    : proofenv -> LDecl.hyps -> EcPath.path -> ty list -> agents:EcIdent.t list -> pt_ev
 val pt_of_uglobal_r : pt_env -> EcPath.path -> pt_ev
 val pt_of_uglobal   : proofenv -> LDecl.hyps -> EcPath.path -> pt_ev
 
@@ -166,7 +167,7 @@ val ffpattern_of_genpattern : LDecl.hyps -> genpattern -> ppterm option
 (* -------------------------------------------------------------------- *)
 type prept = [
   | `Hy   of EcIdent.t
-  | `G    of EcPath.path * ty list
+  | `G    of EcPath.path * ty list * EcIdent.t list (* path, tparams, agent params *)
   | `UG   of EcPath.path
   | `HD   of handle
   | `App  of prept * prept_arg list
@@ -188,7 +189,7 @@ module Prept : sig
   val (@)    : prept -> prept_arg list -> prept
 
   val hyp    : EcIdent.t -> prept
-  val glob   : EcPath.path -> ty list -> prept
+  val glob   : EcPath.path -> ty list -> EcIdent.t list -> prept (* path, tparams, agent params *)
   val uglob  : EcPath.path -> prept
   val hdl    : handle -> prept
 

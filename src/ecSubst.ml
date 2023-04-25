@@ -392,6 +392,13 @@ let subst_typarams (s : _subst) (typ : ty_params) =
   List.map (subst_typaram s) typ
 
 (* -------------------------------------------------------------------- *)
+let subst_agparam (s : _subst) (id : EcIdent.t) =
+  (EcIdent.fresh id)
+
+let subst_agparams (s : _subst) (ids : EcIdent.t list) =
+  List.map (subst_agparam s) ids
+
+(* -------------------------------------------------------------------- *)
 let subst_genty (s : _subst) (typ, ty) =
   let typ' = subst_typarams s typ in
   let s    = init_tparams s typ typ' in
@@ -530,11 +537,23 @@ let subst_op (s : _subst) (op : operator) =
 
 (* -------------------------------------------------------------------- *)
 let subst_ax (s : _subst) (ax : axiom) =
+  (* refresh type variables *)
   let params = List.map (subst_typaram s) ax.ax_tparams in
   let s      = init_tparams s ax.ax_tparams params in
-  let spec   = Fsubst.f_subst (f_subst_of_subst s) ax.ax_spec in
+
+  (* refresh agent names *)
+  let s = f_subst_of_subst s in
+  let s, ax_agents =
+    List.fold_left_map (fun s ag ->
+        let ag' = EcIdent.fresh ag in
+        (Fsubst.f_bind_agent s ag ag', ag')
+      ) s ax.ax_agents
+  in
+
+  let spec = Fsubst.f_subst s ax.ax_spec in
   { ax_tparams    = params;
     ax_spec       = spec;
+    ax_agents;
     ax_kind       = ax.ax_kind;
     ax_loca       = ax.ax_loca;
     ax_visibility = ax.ax_visibility; }

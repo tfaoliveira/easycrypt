@@ -244,7 +244,7 @@ module LowRewrite = struct
       | EcFol.SFiff (f1, f2) -> [(pt, `Eq, (f1, f2))]
 
       | EcFol.SFnot f ->
-          let pt' = pt_of_global_r pt.ptev_env LG.p_negeqF [] in
+          let pt' = pt_of_global_r pt.ptev_env LG.p_negeqF [] ~agents:[] in
           let pt' = apply_pterm_to_arg_r pt' (PVAFormula f) in
           let pt' = apply_pterm_to_arg_r pt' (PVASub pt) in
           [(pt', `Eq, (f, f_false))]
@@ -255,13 +255,13 @@ module LowRewrite = struct
       match EcFol.sform_of_form ax with
       | EcFol.SFand (`Sym, (f1, f2)) ->
          let pt1 =
-           let pt'= pt_of_global_r pt.ptev_env LG.p_and_proj_l [] in
+           let pt'= pt_of_global_r pt.ptev_env LG.p_and_proj_l [] ~agents:[] in
            let pt'= apply_pterm_to_arg_r pt' (PVAFormula f1) in
            let pt'= apply_pterm_to_arg_r pt' (PVAFormula f2) in
            apply_pterm_to_arg_r pt' (PVASub pt) in
 
          let pt2 =
-           let pt'= pt_of_global_r pt.ptev_env LG.p_and_proj_r [] in
+           let pt'= pt_of_global_r pt.ptev_env LG.p_and_proj_r [] ~agents:[] in
            let pt'= apply_pterm_to_arg_r pt' (PVAFormula f1) in
            let pt'= apply_pterm_to_arg_r pt' (PVAFormula f2) in
            apply_pterm_to_arg_r pt' (PVASub pt) in
@@ -780,7 +780,7 @@ let process_rewrite1_r ttenv ?target ri tc =
           EcEnv.BaseRw.is_base p.pl_desc (FApi.tc1_env tc) in
 
         match pt with
-        | { fp_head = FPNamed (p, None); fp_args = []; }
+        | { fp_head = FPNamed (p, None, None); fp_args = []; }
               when pt.fp_mode = `Implicit && is_baserw p
         ->
           let env = FApi.tc1_env tc in
@@ -792,7 +792,7 @@ let process_rewrite1_r ttenv ?target ri tc =
                process_rewrite1_core ~mode ?target (theside, prw, o) pt tc
           in t_ors (List.map do1 ls) tc
 
-        | { fp_head = FPNamed (p, None); fp_args = []; }
+        | { fp_head = FPNamed (p, None, None); fp_args = []; }
               when pt.fp_mode = `Implicit
         ->
           let env    = FApi.tc1_env tc in
@@ -1310,14 +1310,14 @@ let process_view1 pe tc =
             | `None -> pte
 
             | `IffLR (f1, f2) ->
-                let vpte = PT.pt_of_global_r pte.PT.ptev_env LG.p_iff_lr [] in
+                let vpte = PT.pt_of_global_r pte.PT.ptev_env LG.p_iff_lr [] ~agents:[] in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVAFormula f1) in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVAFormula f2) in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVASub pte) in
                 vpte
 
             | `IffRL (f1, f2) ->
-                let vpte = PT.pt_of_global_r pte.PT.ptev_env LG.p_iff_rl [] in
+                let vpte = PT.pt_of_global_r pte.PT.ptev_env LG.p_iff_rl [] ~agents:[] in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVAFormula f1) in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVAFormula f2) in
                 let vpte = PT.apply_pterm_to_arg_r vpte (PVASub pte) in
@@ -2254,7 +2254,7 @@ let process_congr tc =
      let tt0 tc =
        let hyps = FApi.tc1_hyps tc in
        EcLowGoal.Apply.t_apply_bwd_r
-         (PT.pt_of_global !!tc hyps LG.p_if_congr [cty]) tc
+         (PT.pt_of_global !!tc hyps LG.p_if_congr [cty] ~agents:[]) tc
      in FApi.t_seqs [tt0; t_subgoal] tc
 
   | Ftuple _, Ftuple _ when iseq ->

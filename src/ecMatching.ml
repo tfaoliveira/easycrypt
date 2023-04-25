@@ -1208,8 +1208,15 @@ end
 (* -------------------------------------------------------------------- *)
 type cptenv = CPTEnv of f_subst
 
-let can_concretize ev ue =
-  EcUnify.UniEnv.closed ue && MEV.filled ev
+let can_concretize ev ue (ac : EcAgent.constraints) =
+  let m =                       (* agent map given by [ev] *)
+    MEV.fold (fun id item m ->
+        match item with
+          | `Agent id' -> Mid.add id id' m
+          | _ -> m
+      ) ev Mid.empty
+  in
+  EcUnify.UniEnv.closed ue && MEV.filled ev && EcAgent.closed ac m
 
 (* -------------------------------------------------------------------------- *)
 type regexp_instr = regexp1_instr gen_regexp

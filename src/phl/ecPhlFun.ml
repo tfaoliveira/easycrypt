@@ -369,7 +369,8 @@ module FunAbsLow = struct
     let fv_inv = PV.fv env mhr inv in
     PV.check_depend env fv_inv top;
 
-    let hyps = LDecl.init env [] in
+    (* TODO: cost: v2: agents? *)
+    let hyps = LDecl.init env [] ~agents:[] in
 
     (* If [f] can call [o] at most zero times, we remove it. *)
     let ois : xpath list =

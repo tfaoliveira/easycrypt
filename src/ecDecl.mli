@@ -132,6 +132,7 @@ type axiom_kind = [`Axiom of (Ssym.t * bool) | `Lemma]
 
 type axiom = {
   ax_tparams    : ty_params;
+  ax_agents     : EcIdent.t list; (* (disjoint), ∀-prenex agents parameters *)
   ax_spec       : form;
   ax_kind       : axiom_kind;
   ax_loca       : locality;

@@ -109,6 +109,7 @@ type fxerror =
 | FXE_MatchNonLinear
 | FXE_MatchDupBranches
 | FXE_MatchPartial
+| FXE_AgentUnsupported
 | FXE_CtorUnk
 | FXE_CtorAmbiguous
 | FXE_CtorInvalidArity of (symbol * int * int)
@@ -132,6 +133,7 @@ type tyerror =
 | UnknownMetaVar         of symbol
 | UnknownProgVar         of qsymbol * EcMemory.memory
 | UnknownAgent           of symbol
+| BadNumberOfAgents      of int
 | DuplicatedRecFieldName of symbol
 | MissingRecField        of symbol
 | MixingRecFields        of EcPath.path tuple2
@@ -542,7 +544,8 @@ let check_item_compatible
   let icosts = EcEnv.NormMp.norm_form env cin
   and ocosts = EcEnv.NormMp.norm_form env cout in
 
-  let hyps = EcEnv.LDecl.init env [] in
+  (* TODO: cost: use new agent names? *)
+  let hyps = EcEnv.LDecl.init env [] ~agents:[] in
   if proof_obl then ()
   else
     begin
@@ -1517,7 +1520,8 @@ let trans_record env ue (subtt, proj) (loc, b, fields) =
 (* -------------------------------------------------------------------- *)
 let trans_branch ~loc env ue gindty ((pb, body) : ppattern * _) =
   let filter = fun _ op -> EcDecl.is_ctor op in
-  let PPApp ((cname, tvi), cargs) = pb in
+  let PPApp ((cname, (tvi,agents)), cargs) = pb in
+  if agents <> None then tyerror cname.pl_loc env AgentNotAllowed;
   let tvi = tvi |> omap (transtvi env ue) in
   let cts = EcUnify.select_op ~filter tvi env (unloc cname) ue [] in
 
@@ -1597,7 +1601,7 @@ let trans_if_match ~loc env ue (gindty, gind) (c, b1, b2) =
       else
         (* Create a pattern C _ _ ... for each constructor *)
         let wilds = List.map (fun _ -> EcLocation.mk_loc loc None) xargs in
-        let pat = PPApp ((EcLocation.mk_loc loc ([], x), None), wilds) in
+        let pat = PPApp ((EcLocation.mk_loc loc ([], x), (None,None)), wilds) in
         let b2 =
           (match b2 with
           | None -> []
@@ -1670,8 +1674,9 @@ let transexp (env : EcEnv.env) mode ue e =
     | PEdecimal (n, f) ->
         (e_decimal (n, f), treal)
 
-    | PEident ({ pl_desc = name }, tvi) ->
+    | PEident ({ pl_desc = name; pl_loc }, (tvi,agents)) ->
         let tvi = tvi |> omap (transtvi env ue) in
+        if agents <> None then tyerror pl_loc env AgentNotAllowed;
         let ops = select_exp_op env mode osc name ue tvi [] in
         begin match ops with
         | [] -> tyerror loc env (UnknownVarOrOp (name, []))
@@ -1688,7 +1693,8 @@ let transexp (env : EcEnv.env) mode ue e =
         let opsc = lookup_scope env popsc in
           transexp_r (Some opsc) env e
 
-    | PEapp ({ pl_desc = PEident({ pl_desc = name; pl_loc = loc }, tvi)}, pes) ->
+    | PEapp ({ pl_desc = PEident({ pl_desc = name; pl_loc = loc }, (tvi,agents))}, pes) ->
+        if agents <> None then tyerror loc env AgentNotAllowed;
         let tvi  = tvi |> omap (transtvi env ue) in
         let es   = List.map (transexp env) pes in
         let esig = snd (List.split es) in
@@ -2005,12 +2011,19 @@ let transmem env m =
       (fst me)
 
 (* -------------------------------------------------------------------- *)
-let transagent (env : EcEnv.env) (name : symbol located) =
+let transagent (env : EcEnv.env) (name : psymbol) =
   (* lookup [name] as an agent name in [EcEnv.Agent] *)
   match EcEnv.Agent.lookup (unloc name) env with
   | Some (id, _) -> id
   | None ->
     tyerror name.pl_loc env (UnknownAgent (unloc name))
+
+(* -------------------------------------------------------------------- *)
+let transagents (env : EcEnv.env) (names : psymbol list located) ~(expected:int) =
+  if List.length names.pl_desc <> expected then
+    tyerror names.pl_loc env (BadNumberOfAgents expected);
+
+  List.map (transagent env) (unloc names)
 
 (* -------------------------------------------------------------------- *)
 let transpvar env side p =
@@ -3108,7 +3121,7 @@ and transinstr
 
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function
-        | PEapp ({ pl_desc = PEident (f, None) }, _)
+        | PEapp ({ pl_desc = PEident (f, (None,None)) }, _)
             when EcEnv.Fun.lookup_opt (unloc f) env <> None
           -> tyerror prvalue.pl_loc env (ProcAssign (unloc f))
         | _ -> ()
@@ -3225,7 +3238,8 @@ and translvalue ue (env : EcEnv.env) lvalue =
       let ty = ttuple (List.map snd xs) in
       Lval (LvTuple xs), ty
 
-  | PLvMap (x, tvi, e) ->
+  | PLvMap (x, (tvi,agents), e) ->
+      if agents <> None then tyerror x.pl_loc env AgentNotAllowed;
       let tvi = tvi |> omap (transtvi env ue) in
       let codomty = UE.fresh ue in
       let pv, xty = trans_pv env x in
@@ -3352,7 +3366,7 @@ and trans_form_or_pattern
                   let pt   = trans_pattern env ps ue ppt in
                   let ev   = EcMatching.MEV.of_idents (Mid.keys !ps) `Form in
                   let mode = EcMatching.fmrigid in
-                  let hyps = EcEnv.LDecl.init env [] in
+                  let hyps = EcEnv.LDecl.init env [] ~agents:[] in
 
                   let test (_ : int) f =
                     try
@@ -3419,7 +3433,7 @@ and trans_form_or_pattern
                   let pt   = trans_pattern lenv ps ue ppt in
                   let ev   = EcMatching.MEV.of_idents (x :: Mid.keys !ps) `Form in
                   let mode = EcMatching.fmrigid in
-                  let hyps = EcEnv.LDecl.init lenv [] in
+                  let hyps = EcEnv.LDecl.init lenv [] ~agents:[] in
 
                   let (ue, _, ev) =
                     try  EcMatching.f_match mode hyps (ue, ev) ~ptn:pt f
@@ -3440,7 +3454,7 @@ and trans_form_or_pattern
                   let pt   = trans_pattern lenv ps ue ppt in
                   let ev   = EcMatching.MEV.of_idents (xs @ Mid.keys !ps) `Form in
                   let mode = EcMatching.fmrigid in
-                  let hyps = EcEnv.LDecl.init lenv [] in
+                  let hyps = EcEnv.LDecl.init lenv [] ~agents:[] in
 
                   let (ue, _, ev) =
                     try  EcMatching.f_match mode hyps (ue, ev) ~ptn:pt f
@@ -3463,7 +3477,7 @@ and trans_form_or_pattern
                          let pt   = trans_pattern env ps ue ppt in
                          let ev   = EcMatching.MEV.of_idents (Mid.keys !ps) `Form in
                          let mode = EcMatching.fmrigid in
-                         let hyps = EcEnv.LDecl.init env [] in
+                         let hyps = EcEnv.LDecl.init env [] ~agents:[] in
 
                          let test target =
                            try
@@ -3558,7 +3572,8 @@ and trans_form_or_pattern
           | fs  -> f_tuple fs
     end
 
-    | PFident ({ pl_desc = name; pl_loc = loc }, tvi) ->
+    | PFident ({ pl_desc = name; pl_loc = loc }, (tvi,agents)) ->
+        if agents <> None then tyerror loc env AgentNotAllowed;
         let tvi = tvi |> omap (transtvi env ue) in
         let ops = select_form_op env opsc name ue tvi [] in
         begin match ops with
@@ -3684,7 +3699,8 @@ and trans_form_or_pattern
           check_mem f.pl_loc EcFol.mright;
           EcFol.f_ands (List.map (do1 (EcFol.mleft, EcFol.mright)) fs)
 
-    | PFapp ({pl_desc = PFident ({ pl_desc = name; pl_loc = loc }, tvi)}, pes) ->
+    | PFapp ({pl_desc = PFident ({ pl_desc = name; pl_loc = loc }, (tvi,agents))}, pes) ->
+        if agents <> None then tyerror loc env AgentNotAllowed;
         let tvi  = tvi |> omap (transtvi env ue) in
         let es   = List.map (transf env) pes in
         let esig = List.map EcFol.f_ty es in

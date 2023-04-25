@@ -258,6 +258,7 @@
     ("<<"  , (BACKS            , false));
     (">>"  , (FWDS             , false));
     ("<:"  , (LTCOLON          , false));
+    ("<$"  , (LTDOLLAR          , false));
     ("==>" , (LONGARROW        , false));
     ("="   , (EQ               , false));
     ("<>"  , (NE               , false));

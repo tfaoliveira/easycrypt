@@ -49,7 +49,7 @@ and pt_head =
 | PTCut    of EcFol.form
 | PTHandle of handle
 | PTLocal  of EcIdent.t
-| PTGlobal of EcPath.path * (ty list)
+| PTGlobal of EcPath.path * (ty list) * (EcIdent.t list) (* path, tparams, agent params *)
 | PTSchema of
     EcPath.path * (ty list) * EcMemory.memtype * mem_pr list * (expr list)
 
@@ -79,8 +79,8 @@ let pamemory  = fun x -> PAMemory  x
 let paagent   = fun x -> PAAgent   x
 let pamodule  = fun x -> PAModule  x
 
-let paglobal p tys =
-  PASub (Some { pt_head = PTGlobal (p, tys); pt_args = []; })
+let paglobal p tys ~agents =
+  PASub (Some { pt_head = PTGlobal (p, tys,agents); pt_args = []; })
 
 let palocal x =
   PASub (Some { pt_head = PTLocal x; pt_args = []; })
