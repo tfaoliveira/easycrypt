@@ -510,25 +510,25 @@ let process_named_pterm pe (tvi, ag_annot, fp) =
 
   (* Bind provided agent names in [ev], if any provided by [ag_annot].
      [agents] are the agent names used to instanciate [ax]. *)
-  let agents, ev =
+  let agents =
     let ag_annot =
       Exn.recast_pe pe.pte_pe pe.pte_hy
         (fun () -> omap (EcTyping.transagents env ~expected:(List.length ag)) ag_annot)
     in
     match ag_annot with
-    | None -> (ag, !(pe.pte_ev))
+    | None -> ag
     | Some ag_annot ->
-      let ev =
-        List.fold_left2 (fun ev ag1 ag2 -> MEV.set ag1 (`Agent ag2) ev) !(pe.pte_ev) ag ag_annot
-      in
-      (ag_annot, ev)
+      List.iter2 (fun ag1 ag2 ->
+          pe.pte_ev := MEV.set ag1 (`Agent ag2) !(pe.pte_ev)
+        ) ag ag_annot;
+      ag_annot
   in
 
   (* add disjointness agent constraint *)
   let asubst, pte_ac = EcAgent.open_constraints pe.pte_ac ag in
   let ax = Fsubst.subst_agents asubst ax in
 
-  let pe = { pe with pte_ac; pte_ev = ref ev; } in
+  let pe = { pe with pte_ac; } in
 
   (pe, (p, (typ, agents, ax)))
 
