@@ -2187,6 +2187,11 @@ let pp_tyvarannot (ppe : PPEnv.t) fmt ids =
   | []  -> ()
   | ids -> Format.fprintf fmt "[%a]" (pp_list ",@ " (pp_tyvar_ctt ppe)) ids
 
+let pp_agentannot (ppe : PPEnv.t) fmt ids =
+  match ids with
+  | []  -> ()
+  | ids -> Format.fprintf fmt "[$ %a]" (pp_list "@ " EcIdent.pp_ident) ids
+
 let pp_pvar (ppe : PPEnv.t) fmt ids =
   match ids with
   | []  -> ()
@@ -2425,16 +2430,21 @@ let tags_of_axkind = function
   | `Lemma -> []
 
 let pp_axiom ?(long=false) (ppe : PPEnv.t) fmt (x, ax) =
-  let ppe = PPEnv.add_locals ppe (List.map fst ax.ax_tparams) in
+  let ppe = PPEnv.add_locals ppe (List.map fst ax.ax_tparams @ ax.ax_agents) in
   let basename = P.basename x in
 
   let pp_spec fmt =
     pp_form ppe fmt ax.ax_spec
 
-  and pp_name fmt =
+  and pp_tparams fmt =          (* print type parameters *)
     match ax.ax_tparams with
-    | [] -> Format.fprintf fmt "%s"    basename
-    | ts -> Format.fprintf fmt "%s %a" basename (pp_tyvarannot ppe) ts
+    | [] -> ()
+    | ts -> Format.fprintf fmt " %a" (pp_tyvarannot ppe) ts
+
+  and pp_agparams fmt =         (* print agent names parameters *)
+    match ax.ax_agents with
+    | [] -> ()
+    | ags -> Format.fprintf fmt " %a" (pp_agentannot ppe) ags
 
   and pp_tags fmt =
     let tags = tags_of_axkind ax.ax_kind in
@@ -2456,12 +2466,12 @@ let pp_axiom ?(long=false) (ppe : PPEnv.t) fmt (x, ax) =
       | `Hidden  -> ["(* hidden *)"] in
 
 
-    Format.fprintf fmt "@[<hov 2>%a %t%t:@ %t.@]"
+    Format.fprintf fmt "@[<hov 2>%a %t%s%t%t:@ %t.@]"
       (pp_list " " pp_string)
       (  (otolist (string_of_locality ax.ax_loca))
        @ [string_of_axkind ax.ax_kind]
        @ vs)
-      pp_tags pp_name pp_spec in
+      pp_tags basename pp_tparams pp_agparams pp_spec in
 
   Format.fprintf fmt "@[<v>%a%a@]" pp_long x pp_decl ()
 
