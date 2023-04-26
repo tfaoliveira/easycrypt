@@ -397,6 +397,9 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
   in
 
   let rec doit env ((subst, mxs) as ilc) ptn subject =
+    (* Format.eprintf "ptn:@.%a@.subject:@.%a@.@." *)
+    (*   dump_form ptn dump_form subject; *)
+
     let failure =
       let oue, oev = (EcUnify.UniEnv.copy ue, !ev) in
       fun () ->
@@ -689,19 +692,53 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
     cb (odfl reduced (EcReduction.h_red_opt EcReduction.beta_red hyps reduced))
 
   and doit_crecord env (subst,mxs) c1 c2 =
-    if c1.c_full <> c2.c_full then raise MatchFailure;
+    (* TODO: cost: improve matching, allowing to infer agent names if useful *)
+    if not (c1.c_full && c2.c_full) then
+      raise MatchFailure;
 
     let calls2 =
       Mcp.translate (EcFol.Fsubst.subst_cp subst) c2.c_calls
     in
 
-    Mcp.fold2_union (fun _ cb1 cb2 () ->
-        let cb1 = EcFol.oget_c_bnd cb1 c1.c_full
-        and cb2 = EcFol.oget_c_bnd cb2 c2.c_full in
+    Mcp.fold2_union (fun _id cb1 cb2 () ->
+        if cb1 = None || cb2 = None then raise MatchFailure; (* very imprecise *)
+        let cb1 = oget cb1 in
+        let cb2 = oget cb2 in
+
         doit env (subst, mxs) cb1 cb2
       ) c1.c_calls calls2 ();
 
     doit env (subst, mxs) c1.c_self c2.c_self
+
+    (* TODO: cost: old code *)
+    (* if c1.c_full <> c2.c_full then raise MatchFailure; *)
+
+    (* let calls2 = *)
+    (*   Mcp.translate (EcFol.Fsubst.subst_cp subst) c2.c_calls *)
+    (* in *)
+
+    (* Mcp.fold2_union (fun _ cb1 cb2 () -> *)
+    (*     let cb1 = EcFol.oget_c_bnd cb1 c1.c_full *)
+    (*     and cb2 = EcFol.oget_c_bnd cb2 c2.c_full in *)
+    (*     doit env (subst, mxs) cb1 cb2 *)
+    (*   ) c1.c_calls calls2 (); *)
+
+    (* doit env (subst, mxs) c1.c_self c2.c_self *)
+
+  and _doit_agent _env mxs a1 a2 =
+    match EV.get a1 !ev.evm_agent with
+    | None ->
+        if not (EcIdent.id_equal a1 a2) then
+          raise MatchFailure
+
+    | Some `Unset ->
+        if Mid.mem a2 mxs then
+          raise MatchFailure;
+        ev := { !ev with evm_agent = EV.set a1 a2 !ev.evm_agent }
+
+    | Some (`Set a1) ->
+        if not (EcIdent.id_equal a1 a2) then
+          raise MatchFailure
 
   and doit_mem _env mxs m1 m2 =
     match EV.get m1 !ev.evm_mem with

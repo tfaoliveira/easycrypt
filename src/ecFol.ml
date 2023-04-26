@@ -1054,7 +1054,7 @@ let f_is_int_simpl (c : form) : form =
 
 (* -------------------------------------------------------------------- *)
 
-(* TODO: cost: check this *)
+(* TODO: cost: this needs to be redone *)
 
 (** Simplification of cost equality and inequality tests using
     module freshness and epochs. *)
@@ -1504,7 +1504,7 @@ let rec split_sided mem fp =
       let (l, r) = destr_and fp in
       let fl = split_sided mem l in
       let fr = split_sided mem r in
-      if is_none fr then 
+      if is_none fr then
         fl
       else
         (match fl with
