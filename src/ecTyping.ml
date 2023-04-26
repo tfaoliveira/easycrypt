@@ -174,6 +174,7 @@ type tyerror =
 | PatternNotAllowed
 | MemNotAllowed
 | AgentNotAllowed
+| DuplicatedAgent        of EcIdent.t
 | UnknownScope           of qsymbol
 | NoWP
 | FilterMatchFailure
@@ -1941,7 +1942,7 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
   let id =
     (* lookup [name] as either an agent name (in [EcEnv.Agent]) or an
        abstract module marked as [Wrap] *)
-    match EcEnv.Agent.lookup ("$" ^ unloc name) env with
+    match EcEnv.Agent.lookup (unloc name) env with
     | Some (id, _) -> id
     | None ->
       let msymbol = mk_loc (loc name) [name,None] in
@@ -2023,7 +2024,17 @@ let transagents (env : EcEnv.env) (names : psymbol list located) ~(expected:int)
   if List.length names.pl_desc <> expected then
     tyerror names.pl_loc env (BadNumberOfAgents expected);
 
-  List.map (transagent env) (unloc names)
+  let agents = List.map (transagent env) (unloc names) in
+
+  (* check that agent names are pairwise disjoin *)
+  let seen = ref Sid.empty in
+  List.iter2 (fun ag name ->
+      if Sid.mem ag !seen then
+        tyerror name.pl_loc env (DuplicatedAgent ag);
+      seen := Sid.add ag !seen
+    ) agents (unloc names);
+
+  agents
 
 (* -------------------------------------------------------------------- *)
 let transpvar env side p =

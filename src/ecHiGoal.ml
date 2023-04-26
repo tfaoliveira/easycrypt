@@ -882,6 +882,7 @@ let process_rewrite1_r ttenv ?target ri tc =
           else
             let _, lem = EcEnv.Ax.lookup (unloc name) env in
             assert (List.is_empty lem.ax_tparams);
+            assert (List.is_empty lem.ax_agents);
             lem.ax_spec
         in
         (* TODO: how do we handle errors? *)

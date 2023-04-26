@@ -3812,6 +3812,8 @@ module LDecl = struct
         locals env
     in
 
+    let env = Agent.bindall (List.map (fun x -> x, None) agents) env in
+
     { le_init = env;
       le_env  = buildenv env;
       le_hyps = { h_tvar = tparams; h_local = locals; h_agents = agents; }; }

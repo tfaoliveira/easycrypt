@@ -548,6 +548,9 @@ end = struct
     | AgentNotAllowed ->
         msg "agent names not allowed here"
 
+    | DuplicatedAgent s ->
+        msg "agent name %a is used twice" EcIdent.pp_ident s
+
     | UnknownScope sc ->
         msg "unknown scope: `%a'" pp_qsymbol sc
 
@@ -858,6 +861,12 @@ let pp_apply_error fmt (dpe, reason, pt, (src, dst)) =
 
   let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv pt.PT.pte_hy) in
   let src = PT.concretize_form pt src in
+
+  EcMatching.MEV.fold (fun id item _ ->
+      match item with
+      | `Agent id' -> Format.eprintf "%a -> %a@." EcIdent.pp_ident id EcIdent.pp_ident id'
+      | _ -> ()
+    ) !(pt.pte_ev) ();
 
   Format.fprintf fmt "the given proof-term proves:@\n@\n";
   Format.fprintf fmt "  @[%a@]@\n@\n" (EcPrinting.pp_form ppe) src;

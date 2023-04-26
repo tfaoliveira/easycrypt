@@ -222,11 +222,15 @@ let pt_of_uglobal_r ptenv p =
   let ax  = Fsubst.subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
-  (* add agent constraints + refresh agent names *)
+  (* add disjointness agent constraint *)
   let asubst, pte_ac = EcAgent.open_constraints ptenv.pte_ac agents in
+  let ptenv = { ptenv with pte_ac; } in
   let ax = Fsubst.subst_agents asubst ax in
+  let agents = List.map (fun a -> Mid.find a asubst) agents in
 
-  { ptev_env = { ptenv with pte_ac };
+  List.iter (fun ag -> ptenv.pte_ev := MEV.add ag `Agent !(ptenv.pte_ev)) agents;
+
+  { ptev_env = ptenv;
     ptev_pt  = { pt_head = PTGlobal (p, typ, agents); pt_args = []; };
     ptev_ax  = ax; }
 
@@ -490,7 +494,7 @@ let process_named_pterm pe (tvi, ag_annot, fp) =
   (* has type or agent annotations *)
   let hastyp_or_ag = not (is_none tvi && is_none ag_annot) in
 
-  let (p, (typ, ag, ax)) =
+  let (p, (typ, agents, ax)) =
     match lookup_named_psymbol pe.pte_hy ~hastyp_or_ag (unloc fp) with
     | Some (p, ax_info) -> (p, ax_info)
     | None -> tc_lookup_error pe.pte_pe `Lemma (unloc fp)
@@ -508,27 +512,23 @@ let process_named_pterm pe (tvi, ag_annot, fp) =
   let ax  = Fsubst.subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
-  (* Bind provided agent names in [ev], if any provided by [ag_annot].
-     [agents] are the agent names used to instanciate [ax]. *)
-  let agents =
-    let ag_annot =
-      Exn.recast_pe pe.pte_pe pe.pte_hy
-        (fun () -> omap (EcTyping.transagents env ~expected:(List.length ag)) ag_annot)
-    in
-    match ag_annot with
-    | None -> ag
-    | Some ag_annot ->
-      List.iter2 (fun ag1 ag2 ->
-          pe.pte_ev := MEV.set ag1 (`Agent ag2) !(pe.pte_ev)
-        ) ag ag_annot;
-      ag_annot
-  in
-
   (* add disjointness agent constraint *)
-  let asubst, pte_ac = EcAgent.open_constraints pe.pte_ac ag in
-  let ax = Fsubst.subst_agents asubst ax in
-
+  let asubst, pte_ac = EcAgent.open_constraints pe.pte_ac agents in
   let pe = { pe with pte_ac; } in
+  let ax = Fsubst.subst_agents asubst ax in
+  let agents = List.map (fun a -> Mid.find a asubst) agents in
+
+  List.iter (fun ag -> pe.pte_ev := MEV.add ag `Agent !(pe.pte_ev)) agents;
+
+  (* Bind provided agent names in [ev], if any provided by [ag_annot]. *)
+  let ag_annot =
+    Exn.recast_pe pe.pte_pe pe.pte_hy
+      (fun () -> omap (EcTyping.transagents env ~expected:(List.length agents)) ag_annot)
+  in
+  ag_annot |> oiter
+    (fun ag_annot ->
+       List.iter2 (fun ag1 ag2 -> pe.pte_ev := MEV.set ag1 (`Agent ag2) !(pe.pte_ev)) agents ag_annot
+    );
 
   (pe, (p, (typ, agents, ax)))
 

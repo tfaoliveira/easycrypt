@@ -1257,6 +1257,7 @@ let lenv_of_hyps genv (hyps : hyps) : lenv =
 
 (* -------------------------------------------------------------------- *)
 let trans_axiom genv (p, ax) =
+  (* TODO: cost: translation of axioms with agent names? *)
 (*  if not ax.ax_nosmt then *)
     let lenv = fst (lenv_of_tparams ax.ax_tparams) in
     add_axiom (genv, lenv) (preid_p p) ax.ax_spec

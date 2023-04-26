@@ -1012,6 +1012,7 @@ let generalize_axiom to_gen prefix (name, ax) =
   | `Declare ->
     assert (is_axiom ax.ax_kind);
     assert (ax.ax_tparams = []);
+    assert (ax.ax_agents = []); (* TODO: cost: benjamin: necessary? *)
     let to_gen = add_clear to_gen (`Ax path) in
     let to_gen =
       { to_gen with tg_binds = add_imp to_gen.tg_binds ax.ax_spec } in
@@ -1404,6 +1405,7 @@ let check_ax (scenv : scenv) (prefix : path) (name : symbol) (ax : axiom) =
   | `Declare ->
     check_section scenv from;
     check_polymorph scenv from ax.ax_tparams;
+    (* TODO: cost: check for ax.ax_agents? *)
     error (is_lemma ax.ax_kind) "declare lemma" "is not allowed";
     doit ax
 

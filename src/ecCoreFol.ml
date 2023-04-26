@@ -2665,7 +2665,7 @@ module Fsubst = struct
     and c_calls = Mcp.fold (fun cp cb calls ->
         let cp = subst_cp s cp in
         let cb = f_subst ~tx s cb in
-        Mcp.change
+        Mcp.change  (* assert cannot trigger if agent names are indeed disjoint *)
           (fun old -> assert (old  = None); Some cb)
           cp calls
       ) init_crec.c_calls Mcp.empty

@@ -612,7 +612,7 @@
 %token WP
 %token ZETA
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4 NUMOP
-%token LTCOLON LTDOLLAR DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
+%token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
 %token < Lexing.position> FINAL
 
 %nonassoc prec_below_comma
@@ -909,7 +909,7 @@ tyvar_annot:
 | LTCOLON k=loc(tyvar_annot) GT { k }
 
 %inline ag_app:
-| LTDOLLAR ag=loc(plist0(aident, empty)) GT { ag }
+| LESAMPLE ag=loc(plist0(lident, empty)) GT { ag }
 
 %inline tvars_ag_app:
 | tv=tvars_app? ag=ag_app? { tv, ag }

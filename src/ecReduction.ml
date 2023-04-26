@@ -469,21 +469,19 @@ let zapp_cost_l
   in
   aux calls c_calls Mcp.empty
 
-let check_crecord_l
-    subst
-    (co1 : cost)
-    (co2 : cost) : cp list * (form * form) list
-  =
+let check_crecord_l subst (co1 : cost) (co2 : cost) : cp list * (form * form) list =
   if co1.c_full <> co2.c_full then raise NotConv;
 
   let calls1 =
     Mcp.fold (fun f c calls ->
+        (* TODO: cost: no longer a xpath *)
         (* we do not normalize [f], as it is not a proper [xpath] *)
         Mcp.change (fun old -> assert (old = None); Some c) f calls
       ) co1.c_calls Mcp.empty
   and calls2 =
     Mcp.fold (fun f c calls ->
         let f' = Fsubst.subst_cp subst f in
+        (* TODO: cost: idem *)
         (* we do not normalize [f'], as it is not a proper [xpath] *)
         Mcp.change (fun old -> assert (old = None); Some c) f' calls
       ) co2.c_calls Mcp.empty in
@@ -1851,7 +1849,7 @@ and check_bindings_conv ri env q bd1 bd2 f1 f2 =
 
 (* Note: can be called with a dummy type [ty], when checking
    convertion of module procedure cost record. *)
-and conv_crecord ri env c1 c2 ty stk : bool =
+and conv_crecord ri env (c1 : cost) (c2 : cost) ty stk : bool =
   match check_crecord_l Fsubst.f_subst_id c1 c2 with
   | calls, (self1, self2) :: fs ->
     let fs1, fs2 = List.split fs in

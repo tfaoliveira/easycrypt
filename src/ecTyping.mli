@@ -163,6 +163,7 @@ type tyerror =
 | PatternNotAllowed
 | MemNotAllowed
 | AgentNotAllowed
+| DuplicatedAgent        of EcIdent.t
 | UnknownScope           of qsymbol
 | NoWP
 | FilterMatchFailure
