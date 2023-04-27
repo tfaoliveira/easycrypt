@@ -57,6 +57,10 @@ type mpath = private {
 and mpath_top =
 [ | `Local of ident
   | `Concrete of path * path option ]
+  (** Module path:
+      [ { m_top  = `Concrete (top, Some sub);
+          m_args = args; } ]
+      is [ top(args).sub ]. *)
 
 (* -------------------------------------------------------------------- *)
 val mpath     : mpath_top -> mpath list -> mpath
