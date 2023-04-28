@@ -149,6 +149,68 @@ let rec p_size p =
   | Psymbol _     -> 1
   | Pqname (p, _) -> 1 + (p_size p)
 
+
+(* -------------------------------------------------------------------- *)
+(* TODO: cost *)
+(* (\* resolve( $wrap(core(args))) ) *\) *)
+(* let rec resolve_core (wrap : _ list) (core : mpath_core) (args : mpath list) = *)
+(*   match core with *)
+(*   | Top mtop -> wrap, mtop, args  *)
+(*   | App { core; args' } -> resolve_core wrap core (args' @ args) *)
+(*   | Wrap (core, `Ext, id) -> resolve_core ((`Ext,id) :: wrap) core (List.map (unwrap id) args) *)
+(*   (\* Since ( $x(fun y => m) ) (A) ==> $x( m[y->$cb_x(A)] ) *\) *)
+
+module TODO = struct
+(** toplevel module path: an ident (for abstract modules) or a concrete path *)
+type mpath_core_top = [`Local of ident | `Concrete of path]
+
+(** a core module path  *)
+type mpath_core =
+  | Top  of mpath_core_top
+  | App  of mpath_core * mpath list (** application: [App(mc,args)] is [mc(args)] *)
+  (* | Wrap of mpath_core * [`Ext | `Cb] * ident *)
+
+(** a module path:
+    - [{ core; sub = None   }] is [core].
+    - [{ core; sub = Some p }] is [core.p]. *)
+and mpath = {
+  core : mpath_core;
+  sub  : path option;
+  tag  : int;                   (* hashconsing *)
+}
+
+(* -------------------------------------------------------------------- *)
+let rec resolve_core (core : mpath_core) (args : mpath list) : mpath_core_top * mpath list =
+  match core with
+  | Top top -> (top, args)
+  | App (core, args') -> resolve_core core (args' @ args)
+
+(* -------------------------------------------------------------------- *)
+(** resolved toplevel module path *)
+type mpath_top_r =
+  [ | `Local of ident
+    | `Concrete of path * path option ]
+
+(** [resolve m] resolves [m] and returns:
+    - [(`Local    m            , args')] which is the resolved module [m(args')    ]
+    - [(`Concrete (p, None    ), args')] which is the resolved module [p(args')    ]
+    - [(`Concrete (p, Some sub), args')] which is the resolved module [p(args').sub] *)
+let resolve { core; sub; } : mpath_top_r * mpath list =
+  let top, args = resolve_core core [] in
+  match top, sub with
+  | `Local   _, Some _ -> assert false
+  | `Local top, None   -> `Local top, args
+  | `Concrete p, Some sub -> `Concrete (p, Some sub), args
+  | `Concrete p,     None -> `Concrete (p,     None), args
+
+(* TODO: cost: hashconsing *)
+let margs (m : mpath) : mpath list  = snd (resolve m)
+let mtop  (m : mpath) : mpath_top_r = fst (resolve m)
+end
+
+(** resolved toplevel module path *)
+type mpath_top_r = TODO.mpath_top_r
+
 (* -------------------------------------------------------------------- *)
 type mpath = {
   m_top  : mpath_top;
@@ -159,6 +221,10 @@ type mpath = {
 and mpath_top =
 [ | `Local of ident
   | `Concrete of path * path option ]
+
+let mtop m = m.m_top
+let margs m = m.m_args
+let resolve m = mtop m, margs m
 
 let m_equal   = ((==) : mpath -> mpath -> bool)
 

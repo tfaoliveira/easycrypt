@@ -482,8 +482,8 @@ end
 (* -------------------------------------------------------------------- *)
 let get_abs_functor f =
   let f = f.EcPath.x_top in
-  match f.EcPath.m_top with
-  | `Local _ -> EcPath.mpath (f.EcPath.m_top) []
+  match EcPath.mtop f with
+  | `Local _ -> EcPath.mpath (EcPath.mtop f) []
   | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
@@ -658,7 +658,7 @@ module Mpv2 = struct
     (* FIXME error message *)
     if not (EcPath.m_equal mp1 mp2) then assert false;
     if not (mp1.m_args = []) then assert false;
-    begin match mp1.m_top with
+    begin match EcPath.mtop mp1 with
     | `Local _ -> ()
     | _ -> assert false
     end;
@@ -678,7 +678,7 @@ module Mpv2 = struct
           pv1 eqs.s_pv }
 
   let remove_glob mp eqs =
-    begin match mp.m_top with
+    begin match EcPath.mtop mp with
     | `Local _ -> ()
     | _ -> assert false
     end;

@@ -1006,7 +1006,7 @@ let check_modtype
   let use = NormMp.mod_use env mp in
   check_mem_restr env mp use restr;
 
-  let sym = match mp.m_top with
+  let sym = match EcPath.mtop mp with
     | `Local id -> id.EcIdent.id_symb
     | `Concrete (p,_) -> EcPath.basename p
   in
@@ -1067,7 +1067,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
   in
 
   let (params, istop) =
-    match top_path.EcPath.m_top with
+    match EcPath.mtop top_path with
     | `Concrete (_, Some sub) ->
         if mod_expr.me_params <> [] then
           assert false;
@@ -1130,7 +1130,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
 
       let body = EcSubst.subst_modsig_body subst mod_expr.me_sig_body in
 
-      ((EcPath.mpath top_path.EcPath.m_top args, loc),
+      ((EcPath.mpath (EcPath.mtop top_path) args, loc),
        { miss_params = remn;
          miss_body   = body; })
 
@@ -1949,7 +1949,7 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
       let (mpath, sig_) = trans_msymbol env msymbol in
 
       let id : EcIdent.t =
-        match mpath.m_top with
+        match EcPath.mtop mpath with
         | `Local id -> id
         | `Concrete _ ->
           tyerror (loc name) env (ModuleNotAbstract (unloc name))

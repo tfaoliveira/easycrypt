@@ -2171,7 +2171,7 @@ module Fsubst = struct
   let subst_cp s (a,f) =
     let a =
       let mp = EcPath.m_subst s.fs_sty.ts_mp (EcPath.mident a) in
-      match mp.m_top with
+      match EcPath.mtop mp with
       | `Local id when mp.m_args = [] -> id
       | `Local _
       | `Concrete _ -> Mid.find a s.fs_agent (* must be bound by the map *)

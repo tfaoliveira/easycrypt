@@ -407,8 +407,8 @@ module MC = struct
       in
         match env.env_scope.ec_scope with
         | `Theory   -> None
-        | `Module m -> prefix_of_mtop m.EcPath.m_top
-        | `Fun    m -> prefix_of_mtop m.EcPath.x_top.EcPath.m_top
+        | `Module m -> prefix_of_mtop (EcPath.mtop m)
+        | `Fun    m -> prefix_of_mtop (EcPath.mtop m.EcPath.x_top)
     in
 
     try
@@ -471,8 +471,8 @@ module MC = struct
       in
         match env.env_scope.ec_scope with
         | `Theory   -> None
-        | `Module m -> prefix_of_mtop m.EcPath.m_top
-        | `Fun    m -> prefix_of_mtop m.EcPath.x_top.EcPath.m_top
+        | `Module m -> prefix_of_mtop (EcPath.mtop m)
+        | `Fun    m -> prefix_of_mtop (EcPath.mtop m.EcPath.x_top)
     in
 
     let (l, a, r) =
@@ -1067,7 +1067,7 @@ module MC = struct
 
     | `Module mpath -> begin
        assert (lc = `Global);
-       match mpath.EcPath.m_top with
+       match EcPath.mtop mpath with
        | `Concrete (p1, p2) ->
            let p2 = EcPath.pqoname p2 me.me_name in
            mc_of_module_r (p1, mpath.EcPath.m_args, Some p2, None) me
@@ -1323,7 +1323,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 let ipath_of_mpath (p : mpath) =
-  match p.EcPath.m_top with
+  match EcPath.mtop p with
   | `Local i ->
       (IPIdent (i, None), (0, p.EcPath.m_args))
 
@@ -1927,7 +1927,7 @@ module Mod = struct
       | Some (params, ((mi,o), lc)) ->
           let ((spi, params), op) = MC._downpath_for_mod true env ip params in
           let (params, istop) =
-            match op.EcPath.m_top with
+            match EcPath.mtop op with
             | `Concrete (p, Some _) ->
                 assert ((params = []) || ((spi+1) = EcPath.p_size p));
                 (params, false)
@@ -2159,7 +2159,7 @@ module NormMp = struct
         norm_mpath_for_typing env p
 
     | _ -> begin
-      match p.EcPath.m_top with
+      match EcPath.mtop p with
       | `Local _
       | `Concrete (_, None) -> p
 
@@ -2167,7 +2167,7 @@ module NormMp = struct
         let name = EcPath.basename p2 in
         let pr   = EcPath.mpath_crt p1 p.EcPath.m_args (EcPath.prefix p2) in
         let pr   = norm_mpath_for_typing env pr in
-        match pr.EcPath.m_top with
+        match EcPath.mtop pr with
         | `Local _ -> p
         | `Concrete (p1, p2) ->
           EcPath.mpath_crt p1 pr.EcPath.m_args (Some (EcPath.pqoname p2 name))
@@ -2178,7 +2178,7 @@ module NormMp = struct
     let top = EcPath.m_functor p in
     let args = p.EcPath.m_args in
     let sub =
-      match p.EcPath.m_top with | `Local _ -> None | `Concrete(_,o) -> o in
+      match EcPath.mtop p with | `Local _ -> None | `Concrete(_,o) -> o in
     (* p is (top args).sub *)
     match Mod.by_mpath_opt top env with
     | None -> norm_mpath_for_typing env p
@@ -2208,7 +2208,7 @@ module NormMp = struct
               | Some p -> EcPath.mpath_crt top' args2 (Some (pappend p' p)) in
           norm_mpath env mp
         else
-          EcPath.mpath p.EcPath.m_top (List.map (norm_mpath env) args)
+          EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
 
       | ME_Structure _ when sub <> None ->
         begin
@@ -2222,12 +2222,12 @@ module NormMp = struct
             in
             norm_mpath env p
           | _ ->
-            EcPath.mpath p.EcPath.m_top (List.map (norm_mpath env) args)
+            EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
         end
 
       | _ ->
       (* The top is in normal form simply normalize the arguments *)
-        EcPath.mpath p.EcPath.m_top (List.map (norm_mpath env) args)
+        EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
       end
 
   and norm_mpath env p =
@@ -2290,7 +2290,7 @@ module NormMp = struct
 
   let mem_gl mp us =
     assert (mp.m_args = []);
-    match mp.m_top with
+    match EcPath.mtop mp with
     | `Local id -> Sid.mem id us.us_gl
     | _ -> assert false
 
@@ -2360,7 +2360,7 @@ module NormMp = struct
     | ME_Alias _ -> assert false
     | ME_Wrap _
     | ME_Decl _ ->
-      let id = match mp.m_top with `Local id -> id | _ -> assert false in
+      let id = match EcPath.mtop mp with `Local id -> id | _ -> assert false in
       let us = add_glob_except rm id us in
       List.fold_left (item_use env rm fdone mp) us comps
     | ME_Structure ms ->

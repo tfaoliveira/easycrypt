@@ -237,16 +237,16 @@ module PPEnv = struct
 
   let rec mod_symb (ppe : t) mp : EcSymbols.msymbol =
     let (nm, x, p2) =
-      match mp.P.m_top with
+      match EcPath.mtop mp with
       | `Local x ->
           let name =
             match Mid.find_opt x ppe.ppe_locals with
             | Some name -> name
             | None ->
-                let name = EcIdent.name x in
-                  match EcEnv.Mod.sp_lookup_opt ([], name) ppe.ppe_env with
-                  | Some (p, _, _) when EcPath.mt_equal mp.P.m_top p.P.m_top -> name
-                  | _ -> EcIdent.tostring x
+              let name = EcIdent.name x in
+              match EcEnv.Mod.sp_lookup_opt ([], name) ppe.ppe_env with
+              | Some (p, _, _) when EcPath.mt_equal (P.mtop mp) (P.mtop p) -> name
+              | _ -> EcIdent.tostring x
           in
             ([], name, None)
 

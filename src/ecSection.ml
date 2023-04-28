@@ -42,7 +42,7 @@ let pp_cbarg env fmt (who : cbarg) =
   | `Sc   p -> Format.fprintf fmt "schema %a" (EcPrinting.pp_scname ppe) p
   | `Module mp ->
     let ppe =
-      match mp.m_top with
+      match EcPath.mtop mp with
       | `Local id -> EcPrinting.PPEnv.add_locals ppe [id]
       | _ -> ppe in
     Format.fprintf fmt "module %a" (EcPrinting.pp_topmod ppe) mp

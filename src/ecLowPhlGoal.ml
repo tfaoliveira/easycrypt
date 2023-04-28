@@ -302,7 +302,7 @@ let id_of_pv pv m =
 (* -------------------------------------------------------------------- *)
 let id_of_mp mp m =
   let name =
-    match mp.EcPath.m_top with
+    match EcPath.mtop mp with
     | `Local id -> EcIdent.name id
     | _ -> assert false
   in

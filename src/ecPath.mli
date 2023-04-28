@@ -63,6 +63,24 @@ and mpath_top =
       is [ top(args).sub ]. *)
 
 (* -------------------------------------------------------------------- *)
+(** resolved toplevel module path *)
+type mpath_top_r =
+  [ | `Local    of ident
+    | `Concrete of path * path option ]
+
+(** [resolve m] resolves [m] and returns:
+    - [(`Local    m            , args')] which is the resolved module [m(args')    ]
+    - [(`Concrete (p, None    ), args')] which is the resolved module [p(args')    ]
+    - [(`Concrete (p, Some sub), args')] which is the resolved module [p(args').sub] *)
+val resolve : mpath -> mpath_top_r * mpath list
+
+(** [margs m = fst(resolve m)] *)
+val margs : mpath -> mpath list
+
+(** [mtop m = snd(resolve m)] *)
+val mtop  : mpath -> mpath_top_r
+
+(* -------------------------------------------------------------------- *)
 val mpath     : mpath_top -> mpath list -> mpath
 val mpath_abs : ident -> mpath list -> mpath
 val mqname    : mpath -> symbol -> mpath

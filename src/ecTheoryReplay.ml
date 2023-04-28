@@ -775,7 +775,7 @@ and replay_mod
       let mp, ((mod_info,newme), newlc) = EcEnv.Mod.lookup (unloc newname) env in
 
       let np =
-        match mp.m_top with
+        match EcPath.mtop mp with
         | `Concrete (p, None) -> p
         | _ -> assert false
       in

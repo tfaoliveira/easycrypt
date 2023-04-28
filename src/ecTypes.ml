@@ -528,7 +528,7 @@ let xp_glob x =
   let top = x.EcPath.x_top in
   if top.EcPath.m_args = [] then x else
     (* remove the functor argument *)
-    let ntop = EcPath.mpath top.m_top [] in
+    let ntop = EcPath.mpath (EcPath.mtop top) [] in
     EcPath.xpath ntop x.EcPath.x_sub
 
 let pv_glob x = PVglob (xp_glob x)

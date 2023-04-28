@@ -243,7 +243,7 @@ and subst_modtype
     if in_me_decl then
       match
         let mp = Mid.find id s.s_s.sb_modules in
-        mp.m_top
+        EcPath.mtop mp
       with
       | `Local newid   -> newid
       | `Concrete _
