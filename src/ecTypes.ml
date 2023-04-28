@@ -526,7 +526,7 @@ let pv_res =  PVloc res_symbol
 
 let xp_glob x =
   let top = x.EcPath.x_top in
-  if top.EcPath.m_args = [] then x else
+  if EcPath.margs top = [] then x else
     (* remove the functor argument *)
     let ntop = EcPath.mpath (EcPath.mtop top) [] in
     EcPath.xpath ntop x.EcPath.x_sub

@@ -48,21 +48,8 @@ module Sp : sig
 end
 
 (* -------------------------------------------------------------------- *)
-type mpath = private {
-  m_top  : mpath_top;
-  m_args : mpath list;
-  m_tag  : int;
-}
+type mpath
 
-and mpath_top =
-[ | `Local of ident
-  | `Concrete of path * path option ]
-  (** Module path:
-      [ { m_top  = `Concrete (top, Some sub);
-          m_args = args; } ]
-      is [ top(args).sub ]. *)
-
-(* -------------------------------------------------------------------- *)
 (** resolved toplevel module path *)
 type mpath_top_r =
   [ | `Local    of ident
@@ -81,7 +68,7 @@ val margs : mpath -> mpath list
 val mtop  : mpath -> mpath_top_r
 
 (* -------------------------------------------------------------------- *)
-val mpath     : mpath_top -> mpath list -> mpath
+val mpath     : mpath_top_r -> mpath list -> mpath
 val mpath_abs : ident -> mpath list -> mpath
 val mqname    : mpath -> symbol -> mpath
 val mastrip   : mpath -> mpath
@@ -90,7 +77,7 @@ val mident    : ident -> mpath
 val mpath_crt : path -> mpath list -> path option -> mpath
 
 val m_equal       : mpath -> mpath -> bool
-val mt_equal      : mpath_top -> mpath_top -> bool
+val mt_equal      : mpath_top_r -> mpath_top_r -> bool
 val m_compare     : mpath -> mpath -> int
 val m_ntr_compare : mpath -> mpath -> int
 val m_hash        : mpath -> int

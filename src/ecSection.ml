@@ -95,7 +95,7 @@ let hierror fmt =
 let rec on_mp (cb : cb) (mp : mpath) =
   let f = m_functor mp in
   cb (`Module f);
-  List.iter (on_mp cb) mp.m_args
+  List.iter (on_mp cb) (EcPath.margs mp)
 
 let on_xp (cb : cb) (xp : xpath) =
   on_mp cb xp.x_top

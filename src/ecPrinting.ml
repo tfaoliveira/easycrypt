@@ -254,7 +254,7 @@ module PPEnv = struct
           let exists sm =
             match EcEnv.Mod.sp_lookup_opt sm ppe.ppe_env with
             | None -> false
-            | Some (mp1, _, _) -> P.mt_equal mp1.P.m_top (`Concrete (p1, None))
+            | Some (mp1, _, _) -> P.mt_equal (P.mtop mp1) (`Concrete (p1, None))
           in
 
           let rec shorten prefix (nm, x) =
@@ -273,7 +273,7 @@ module PPEnv = struct
     in
     let msymb =
         (List.map (fun x -> (x, [])) nm)
-      @ [(x, List.map (mod_symb ppe) mp.P.m_args)]
+      @ [(x, List.map (mod_symb ppe) (EcPath.margs mp))]
       @ (List.map (fun x -> (x, [])) (odfl [] (p2 |> omap P.tolist)))
     in
       msymb

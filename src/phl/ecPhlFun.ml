@@ -275,7 +275,7 @@ module FunAbsLow = struct
     let xc, new_bds =
       List.fold_left (fun (xc, new_bds) oracle ->
           if EcPath.m_is_local oracle.x_top &&
-             oracle.x_top.m_args = [] &&
+             EcPath.margs oracle.x_top = [] &&
              not (List.exists (fun x -> x_equal x.oracle oracle) xc) then
             let o_id = mget_ident oracle.x_top in
             let k = EcIdent.create "k", GTty tint in
@@ -325,7 +325,7 @@ module FunAbsLow = struct
       (info : abstract_info)
       (xc   : abs_inv_inf) : form
     =
-    assert (top.m_args = []);
+    assert (EcPath.margs top = []);
 
     let fn_orcl = (mget_ident top, fn) in
 

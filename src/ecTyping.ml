@@ -1981,7 +1981,7 @@ let trans_topmsymbol env gp =
   (* FIXME *)
   let (mp,_) = trans_msymbol env gp in
   let top = EcPath.m_functor mp in
-  let mp = EcPath.m_apply top mp.EcPath.m_args in
+  let mp = EcPath.m_apply top (EcPath.margs mp) in
   mp
 
 (* -------------------------------------------------------------------- *)

@@ -657,7 +657,7 @@ module Mpv2 = struct
     let mp1, mp2 = NormMp.norm_mpath env mp1, NormMp.norm_mpath env mp2 in
     (* FIXME error message *)
     if not (EcPath.m_equal mp1 mp2) then assert false;
-    if not (mp1.m_args = []) then assert false;
+    if not (EcPath.margs mp1 = []) then assert false;
     begin match EcPath.mtop mp1 with
     | `Local _ -> ()
     | _ -> assert false

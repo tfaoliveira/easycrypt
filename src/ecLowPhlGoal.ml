@@ -533,7 +533,7 @@ let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let (mod_info,me), _ = EcEnv.Mod.by_mpath top env in
   let cost_info = (EcEnv.NormMp.get_restr_me env me top).mr_cost in
   let args_map =
-    List.map2 (fun x (y,_) -> x,y) f.x_top.EcPath.m_args me.me_params
+    List.map2 (fun x (y,_) -> x,y) (EcPath.margs f.x_top) me.me_params
   in
 
   let def = EcEnv.Fun.by_xpath f env in

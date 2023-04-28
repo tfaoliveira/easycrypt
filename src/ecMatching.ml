@@ -800,9 +800,9 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           let f_equiv f1 f2 =
             try doit env (subst, mxs) f1 f2; true with
             | MatchFailure ->
-                Format.eprintf "match failure:@\n%a@\n%a@."
-                  (!EcEnv.pp_debug_form env) f1
-                  (!EcEnv.pp_debug_form env) f2;
+                (* Format.eprintf "match failure:@\n%a@\n%a@." *)
+                (*   (!EcEnv.pp_debug_form env) f1 *)
+                (*   (!EcEnv.pp_debug_form env) f2; *)
                 false in
 
             if ns1 <> ns2 || not (ModTy.mod_type_equiv f_equiv env p1 p2) then

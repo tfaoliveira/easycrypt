@@ -356,7 +356,7 @@ let w_witness ty =
 
 (* -------------------------------------------------------------------- *)
 let mk_tglob genv mp =
-  assert (mp.EcPath.m_args = []);
+  assert (EcPath.margs mp = []);
   let id = EcPath.mget_ident mp in
   match Hid.find_opt genv.te_absmod id with
   | Some { w3am_ty } -> w3am_ty
@@ -916,7 +916,7 @@ and trans_glob ((genv, _) as env) mp mem =
   let f = NormMp.norm_glob genv.te_env mem mp in
   match f.f_node with
   | Fglob (mp, mem) ->
-      assert (mp.EcPath.m_args = []);
+      assert (EcPath.margs mp = []);
 
       let id   = EcPath.mget_ident mp in
       let wmem = trans_mem env ~forglobal:true mem in
