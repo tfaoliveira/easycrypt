@@ -4,6 +4,8 @@ open EcMaps
 open EcSymbols
 
 (* -------------------------------------------------------------------- *)
+(** {2 Path} *)
+
 type path = private {
   p_node : path_node;
   p_tag  : int
@@ -48,6 +50,8 @@ module Sp : sig
 end
 
 (* -------------------------------------------------------------------- *)
+(** {2 Module path} *)
+
 type mpath
 
 (** resolved toplevel module path *)
@@ -65,26 +69,40 @@ val resolve : mpath -> mpath_top_r * mpath list
 val margs : mpath -> mpath list
 
 (** [mtop m = snd(resolve m)] *)
-val mtop  : mpath -> mpath_top_r
+val mtop : mpath -> mpath_top_r
 
 (* -------------------------------------------------------------------- *)
 val mpath     : mpath_top_r -> mpath list -> mpath
 val mpath_abs : ident -> mpath list -> mpath
-val mqname    : mpath -> symbol -> mpath
-val mastrip   : mpath -> mpath
 
-val mident    : ident -> mpath
+(** [mqname mp x] adds [x] to [mp]'s sub-path (only for concrete modules) *)
+val mqname    : mpath -> symbol -> mpath
+
+(** strips arguments of a module path (below the sub-path), i.e.
+    [mastrip ( p(args).sub ) = p.sub] *)
+val mastrip : mpath -> mpath
+
+(** build an abstract path from an ident *)
+val mident : ident -> mpath
+
+(** [mpath_crt p args sub] returns [p(args).sub]  *)
 val mpath_crt : path -> mpath list -> path option -> mpath
 
+(** strip arguments and sub-path of a [mpath], i.e.
+    [m_functor ( p(args).sub ) = p] *)
+val m_functor : mpath -> mpath
+
+(** applies [args] to [mp], possibly below [mp]'s sub-path, i.e.
+    [m_apply ( p(args0).sub ) args = p(args0, args).sub] *)
+val m_apply       : mpath -> mpath list -> mpath
+
+(* -------------------------------------------------------------------- *)
 val m_equal       : mpath -> mpath -> bool
-val mt_equal      : mpath_top_r -> mpath_top_r -> bool
+val mtop_equal    : mpath_top_r -> mpath_top_r -> bool
 val m_compare     : mpath -> mpath -> int
 val m_ntr_compare : mpath -> mpath -> int
 val m_hash        : mpath -> int
-val m_apply       : mpath -> mpath list -> mpath
 val m_fv          : int EcIdent.Mid.t -> mpath -> int EcIdent.Mid.t
-
-val m_functor : mpath -> mpath
 
 val m_is_local    : mpath -> bool
 val m_is_concrete : mpath -> bool
@@ -94,6 +112,8 @@ val mget_ident : mpath -> ident
 val pp_m : Format.formatter -> mpath -> unit
 
 (* -------------------------------------------------------------------- *)
+(** {2 Variable and procedure path} *)
+
 type xpath = private {
   x_top : mpath;
   x_sub : symbol;
@@ -110,7 +130,6 @@ val x_hash        : xpath -> int
 
 (* These functions expect xpath representing program variables
  * with a normalized [x_top] field. *)
-val x_equal_na   : xpath -> xpath -> bool
 val x_compare_na : xpath -> xpath -> int
 
 val x_fv : int EcIdent.Mid.t -> xpath -> int EcIdent.Mid.t

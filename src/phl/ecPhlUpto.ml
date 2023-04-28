@@ -114,7 +114,7 @@ and f_upto env bad f1 f2 =
 
   | FBabs (o1,_), FBabs (o2,_) ->
     f1.x_sub = f2.x_sub &&
-    EcPath.mt_equal (EcPath.mtop f1.x_top) (EcPath.mtop f2.x_top) &&
+    EcPath.mtop_equal (EcPath.mtop f1.x_top) (EcPath.mtop f2.x_top) &&
     omap_dfl (fun bad ->
       let fv = EcPV.PV.add env bad tbool EcPV.PV.empty in
       EcPV.PV.check_depend env fv (m_functor f1.x_top); true) true bad &&

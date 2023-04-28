@@ -245,7 +245,7 @@ module PPEnv = struct
             | None ->
               let name = EcIdent.name x in
               match EcEnv.Mod.sp_lookup_opt ([], name) ppe.ppe_env with
-              | Some (p, _, _) when EcPath.mt_equal (P.mtop mp) (P.mtop p) -> name
+              | Some (p, _, _) when EcPath.mtop_equal (P.mtop mp) (P.mtop p) -> name
               | _ -> EcIdent.tostring x
           in
             ([], name, None)
@@ -254,7 +254,7 @@ module PPEnv = struct
           let exists sm =
             match EcEnv.Mod.sp_lookup_opt sm ppe.ppe_env with
             | None -> false
-            | Some (mp1, _, _) -> P.mt_equal (P.mtop mp1) (`Concrete (p1, None))
+            | Some (mp1, _, _) -> P.mtop_equal (P.mtop mp1) (`Concrete (p1, None))
           in
 
           let rec shorten prefix (nm, x) =
