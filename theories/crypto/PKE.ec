@@ -1,4 +1,4 @@
-require import AllCore List Distr DBool PROM_Ext.
+require import AllCore List Distr DBool PROM.
 
 require LorR. 
 clone import LorR as LorR' with
