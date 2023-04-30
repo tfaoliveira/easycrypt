@@ -40,6 +40,24 @@ module MainD (D : RO_Distinguisher) (RO : RO) = {
 }.
 
 (* -------------------------------------------------------------------- *)
+
+module type ROpub = {
+  proc h     (x : in_t)            : out_t
+}.
+
+module Pub(O : RO) : ROpub = {
+  proc h = O.get
+}.
+
+module Dum(O : ROpub) : RO = {
+  proc init() = {}
+  proc get = O.h
+  proc set(x : in_t, y : out_t) : unit = {}
+  proc rem(x : in_t) : unit = {}
+  proc sample(x : in_t) : unit = {}
+}.
+
+(* -------------------------------------------------------------------- *)
 module type ROmap = {
   proc init  ()                    : unit
   proc get   (x : in_t)            : out_t
@@ -113,6 +131,8 @@ module LRO : RO = {
 
   proc sample(x : in_t) = { }
 }.
+
+module LROpub = Pub(LRO).
 
 end MkRO.
 

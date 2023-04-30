@@ -1,5 +1,4 @@
-require import AllCore List Distr DBool.
-require (****) ROM.
+require import AllCore List Distr DBool PROM_Ext.
 
 require LorR. 
 clone import LorR as LorR' with
@@ -183,19 +182,18 @@ module CorrectnessAdv(S : Scheme, A : CAdversary) = {
 
 (* Extensions to ROM *)
 
-theory PKE_ROM.
+clone import FullRO as RO.
 
-clone import ROM as RO.
-
-module type SchemeRO(H : POracle) = {
+module type SchemeRO(H : ROpub) = {
   include Scheme
 }.
 
-module type AdversaryRO(H : POracle) = {
+
+module type AdversaryRO(H : ROpub) = {
   include Adversary
 }.
 
-module type CAdversaryRO(H : POracle) = {
+module type CAdversaryRO(H : ROpub) = {
   include CAdversary
 }.
 
@@ -203,11 +201,12 @@ module type CPAGame(S: Scheme, A : Adversary) = {
    proc main() : bool
 }.
 
-module CPAGameROM(G : CPAGame, S : SchemeRO, A : AdversaryRO, O : Oracle) = {
+module CPAGameROM(G : CPAGame, S : SchemeRO, A : AdversaryRO, O : RO) = {
+   module H = Pub(O)
    proc main() : bool = {
      var b;
      O.init();
-     b <@ G(S(O),A(O)).main();
+     b <@ G(S(H),A(H)).main();
      return b;
    }
 }.
@@ -220,15 +219,16 @@ module type CGame(S: Scheme, A : CAdversary) = {
    proc main() : bool
 }.
 
-module CGameROM(G : CGame, S : SchemeRO, A : CAdversaryRO, O : Oracle) = {
+module CGameROM(G : CGame, S : SchemeRO, A : CAdversaryRO, O : RO) = {
+   module H = Pub(O)
    proc main() : bool = {
      var b;
      O.init();
-     b <@ G(S(O),A(O)).main();
+     b <@ G(S(H),A(H)).main();
      return b;
    }
 }.
 
 module CorrectnessAdvROM = CGameROM(CorrectnessAdv).
 
-end PKE_ROM.
+
