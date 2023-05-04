@@ -76,7 +76,7 @@ val mpath     : mpath_top_r -> mpath list -> mpath
 val mpath_abs : ident -> mpath list -> mpath
 
 (** [mqname mp x] adds [x] to [mp]'s sub-path (only for concrete modules) *)
-val mqname    : mpath -> symbol -> mpath
+val mqname : mpath -> symbol -> mpath
 
 (** strips arguments of a module path (below the sub-path), i.e.
     [mastrip ( p(args).sub ) = p.sub] *)
@@ -94,7 +94,7 @@ val m_functor : mpath -> mpath
 
 (** applies [args] to [mp], possibly below [mp]'s sub-path, i.e.
     [m_apply ( p(args0).sub ) args = p(args0, args).sub] *)
-val m_apply       : mpath -> mpath list -> mpath
+val m_apply : mpath -> mpath list -> mpath
 
 (* -------------------------------------------------------------------- *)
 val m_equal       : mpath -> mpath -> bool
