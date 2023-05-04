@@ -112,7 +112,8 @@ and pregoal = {
 
 and goal = {
   g_goal       : pregoal;
-  g_validation : validation option;
+  g_parent     : handle option;
+  g_validation : (validation * (string option * handle) list) option;
 }
 
 and validation =
@@ -125,7 +126,7 @@ and validation =
 | VApply   of proofterm              (* modus ponens *)
 | VShuffle of ident list             (* goal shuffling *)
 
-  (* external (hl/phl/prhl/...) proof-node *)
+ (* external (hl/phl/prhl/...) proof-node *)
 | VExtern  : 'a * handle list -> validation
 
 and tcenv1 = {
@@ -429,7 +430,7 @@ module FApi = struct
   let pf_newgoal (pe : proofenv) ?vx hyps concl =
     let hid     = ID.gen () in
     let pregoal = { g_uid = hid; g_hyps = hyps; g_concl = concl; } in
-    let goal    = { g_goal = pregoal; g_validation = vx; } in
+    let goal    = { g_goal = pregoal; g_parent = None; g_validation = vx; } in
     let pe      = { pe with pr_goals = ID.Map.add pregoal.g_uid goal pe.pr_goals; } in
       (pe, pregoal)
 
@@ -438,10 +439,15 @@ module FApi = struct
     let hyps     = ofdfl (fun () -> tc_hyps tc) hyps in
     let (pe, pg) = pf_newgoal (tc_penv tc) hyps concl in
 
-    let tc = tc_update_tcenv (fun te -> { te with tce_penv = pe }) tc in
-    let tc = { tc with tce_goals = tc.tce_goals @ [pg.g_uid] } in
+    (* Determine the parent goal *)
+    let pg_uid = pg.g_uid in
+    let pg_parent = omap (fun pg -> pg.g_uid) tc.tce_tcenv.tce_goal in
+    let pe = update_goal_map (fun g -> { g with g_parent = pg_parent }) pg_uid pe in
 
-    (tc_normalize tc, pg.g_uid)
+    let tc = tc_update_tcenv (fun te -> { te with tce_penv = pe }) tc in
+    let tc = { tc with tce_goals = tc.tce_goals @ [pg_uid] } in
+
+    (tc_normalize tc, pg_uid)
 
   (* ------------------------------------------------------------------ *)
   let tc1_close (tc : tcenv1) (vx : validation) =
@@ -450,7 +456,7 @@ module FApi = struct
     let change g =
       if g.g_validation <> None || g.g_goal != current then
         raise (InvalidStateException "goal-map-inconsistent");
-      { g with g_validation = Some vx }
+      { g with g_validation = Some (vx, []) }
     in
 
     (* Close current goal, set focused goal to None *)
@@ -498,7 +504,7 @@ module FApi = struct
 
   (* ------------------------------------------------------------------ *)
   let newfact (pe : proofenv) vx hyps concl =
-    snd_map (fun x -> x.g_uid) (pf_newgoal pe ~vx:vx hyps concl)
+    snd_map (fun x -> x.g_uid) (pf_newgoal pe ~vx:(vx, []) hyps concl)
 
   (* ------------------------------------------------------------------ *)
   let bwd1_of_fwd (tx : forward) (tc : tcenv1) =
@@ -954,7 +960,7 @@ let start (hyps : LDecl.hyps) (goal : form) =
   let hid = ID.gen () in
 
   let goal = { g_uid = hid; g_hyps = hyps; g_concl = goal; } in
-  let goal = { g_goal = goal; g_validation = None; } in
+  let goal = { g_goal = goal; g_parent = None; g_validation = None; } in
   let env  = { pr_uid   = uid;
                pr_main  = hid;
                pr_goals = ID.Map.singleton hid goal; } in
