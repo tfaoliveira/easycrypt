@@ -450,13 +450,13 @@ module FApi = struct
     (tc_normalize tc, pg_uid)
 
   (* ------------------------------------------------------------------ *)
-  let tc1_close (tc : tcenv1) (vx : validation) =
+  let tc1_close (tc : tcenv1) (vx : validation) (sg: (string option * handle) list) =
     let current = tc1_current tc in
 
     let change g =
       if g.g_validation <> None || g.g_goal != current then
         raise (InvalidStateException "goal-map-inconsistent");
-      { g with g_validation = Some (vx, []) }
+      { g with g_validation = Some (vx, sg) }
     in
 
     (* Close current goal, set focused goal to None *)
@@ -466,14 +466,15 @@ module FApi = struct
     tc
 
   (* ------------------------------------------------------------------ *)
-  let close (tc : tcenv) (vx : validation) =
-    let tc = { tc with tce_tcenv = tc1_close tc.tce_tcenv vx } in
+  let close (tc : tcenv) (vx : validation) (sg: (string option * handle) list) =
+    let tc = { tc with tce_tcenv = tc1_close tc.tce_tcenv vx sg } in
     (* Maybe pop one opened goal from proof context *)
     tc_normalize tc
 
   (* ------------------------------------------------------------------ *)
   let mutate (tc : tcenv) (vx : handle -> validation) ?hyps fp =
-    let (tc, hd) = newgoal tc ?hyps fp in close tc (vx hd)
+    let (tc, hd) = newgoal tc ?hyps fp in
+    close tc (vx hd) [(None, hd)]
 
   (* ------------------------------------------------------------------ *)
   let mutate1 (tc : tcenv1) (vx : handle -> validation) ?hyps fp =
@@ -483,7 +484,7 @@ module FApi = struct
   (* ------------------------------------------------------------------ *)
   let xmutate (tc : tcenv) (vx : 'a) (fp : form list) =
     let (tc, hds) = List.map_fold (fun tc fp -> newgoal tc fp) tc fp in
-    close tc (VExtern (vx, hds))
+    close tc (VExtern (vx, hds)) (List.map (fun hd -> (None, hd)) hds)
 
   (* ------------------------------------------------------------------ *)
   let xmutate1 (tc : tcenv1) (vx : 'a) (fp : form list) =
@@ -496,7 +497,7 @@ module FApi = struct
         (fun tc (hyps, fp) -> newgoal tc ~hyps fp)
         tc subgoals
     in
-      close tc (VExtern (vx, hds))
+      close tc (VExtern (vx, hds)) (List.map (fun hd -> (None, hd)) hds)
 
   (* ------------------------------------------------------------------ *)
   let xmutate1_hyps (tc : tcenv1) (vx : 'a) subgoals =
@@ -905,7 +906,7 @@ module RApi = struct
 
   (* ------------------------------------------------------------------ *)
   let close tc validation =
-    tc := FApi.close !tc validation
+    tc := FApi.close !tc validation []
 
   (* ------------------------------------------------------------------ *)
   let bwd_of_fwd (tx : FApi.forward) (tc : rtcenv) =

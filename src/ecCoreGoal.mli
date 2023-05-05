@@ -251,7 +251,7 @@ module FApi : sig
   (* Mark the focused goal in [tcenv] as solved using the given
    * [validation]. It is an internal error if no goal is focused. The
    * focus is then changed to the next opened sibling. *)
-  val close : tcenv -> validation -> tcenv
+  val close : tcenv -> validation -> (string option * handle) list -> tcenv
 
   (* Mutate current goal in [tcenv]. Focused goal will be marked as
    * resolved using the given [validation] producer. This producer is
