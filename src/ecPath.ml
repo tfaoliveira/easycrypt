@@ -232,8 +232,11 @@ module Hsmpath_core = Why3.Hashcons.Make (struct
     | App (c1, args1), App (c2,args2) ->
       mcore_equal c1 c2 && List.length args1 = List.length args2 &&
       List.for_all2 m_equal args1 args2
+    | Wrap (a1,k1,c1), Wrap (a2,k2,c2) ->
+      id_equal a1 a2 && k1 = k2 && mcore_equal c1 c2
 
-    | App _, Top _ | Top _, App _ -> false
+    | App _, Wrap _ | Wrap _, App _
+    | (App _ | Wrap _), Top _ | Top _, (App _ | Wrap _) -> false
 
   let hash (m : t) =
     match m.c_cnt with
@@ -241,6 +244,8 @@ module Hsmpath_core = Why3.Hashcons.Make (struct
     | App (c,args) ->
       let hash = mcore_hash c in
       Why3.Hashcons.combine_list m_hash hash args
+    | Wrap (a,k,c) ->
+      Why3.Hashcons.combine2 (id_hash a) (Hashtbl.hash k) (mcore_hash c)
 
   let tag n (p : t) = { p with c_tag = n }
 end)
@@ -283,8 +288,19 @@ let mcore_top_ntr_compare (mt1 : mpath_core_top) (mt2 : mpath_core_top) =
 let rec mcore_ntr_compare (mc1 : mpath_core) (mc2 : mpath_core) =
   match mc1.c_cnt, mc2.c_cnt with
   | Top t1, Top t2 -> mcore_top_ntr_compare t1 t2
-  | Top  _, App _ -> -1
-  | App  _, Top _ -> +1
+
+  | Top _           , (App _ | Wrap _) -> -1
+  | (App _ | Wrap _), Top _            -> +1
+
+  | Wrap _, App _  -> -1
+  | App _ , Wrap _ -> +1
+
+  | Wrap (a1,k1,c1), Wrap (a2,k2,c2) ->
+    compare3
+      (lazy (id_ntr_compare    a1 a2))
+      (lazy (Stdlib.compare    k1 k2))
+      (lazy (mcore_ntr_compare c1 c2))
+
   | App (c1,args1), App (c2,args2) ->
     match mcore_ntr_compare c1 c2 with
     | 0 -> List.compare m_ntr_compare args1 args2
@@ -327,7 +343,7 @@ let mcore_apply (c : mpath_core) (args : mpath list) : mpath_core =
     let cnt = (* invariant: maximally grouped application *)
       match c.c_cnt with
       | App (c',args') -> App (c', args' @ args)
-      | Top _ -> App (c, args)
+      | Wrap _ | Top _ -> App (c, args)
     in
     mcore cnt
 
@@ -361,6 +377,7 @@ let rec mcore_astrip (c : mpath_core) : mpath_core =
   match c.c_cnt with
   | Top _ -> c
   | App (c, args) -> mcore_astrip c
+  | Wrap (a,k,c) -> mcore (Wrap (a,k,mcore_astrip c))
 
 let mastrip (mp : mpath) = mk_mpath (mcore_astrip mp.core) mp.sub
 
