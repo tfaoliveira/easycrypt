@@ -93,6 +93,7 @@ let _subst_of_subst s =
   let sm  = EcPath.{
     sms_crt = Mp.union (fun _ _ x -> Some x) s.sb_path s.sb_moddef;
     sms_id = s.sb_modules;
+    sms_ag = Mid.empty;
   }
   in
   let sty = { ty_subst_id with ts_p = sp; ts_mp = sm; ts_def = s.sb_tydef; } in

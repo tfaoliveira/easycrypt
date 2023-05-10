@@ -155,17 +155,24 @@ let rec p_size p =
 (* -------------------------------------------------------------------- *)
 (** {2 Module path} *)
 
-(** toplevel module path: an ident (for abstract modules) or a concrete path *)
+type wrap_k = [`Ext | `Cb]
+
+(** top-level module path: an ident (for abstract modules) or a concrete path *)
 type mpath_core_top = [`Local of ident | `Concrete of path]
 
 (** a core module path *)
 type mpath_core_node =
   | Top  of mpath_core_top
+
   | App  of mpath_core * mpath list
   (** application, [App(mc,args)] is [mc(args)]
       applications are strict and maximally grouped, i.e. there are no
       - [App (_, [])]
       - [App (App (_,_), _)] *)
+
+  | Wrap of ident * wrap_k * mpath_core
+  (** [Wrap (a, `Ext, mc)] delegates the evaluation of [mc] to agent [a].
+      [Wrap (a, `Cb , mc)] restores [mc] evaluation to [a]'s caller. *)
 
 (** hashconsed [mpath_core_node] *)
 and mpath_core = { c_cnt : mpath_core_node; c_tag : int }
@@ -178,32 +185,6 @@ and mpath = {
   sub   : path option;
   m_tag : int;                   (* hashconsing *)
 }
-
-(* -------------------------------------------------------------------- *)
-let rec resolve_core (core : mpath_core) (args : mpath list) : mpath_core_top * mpath list =
-  match core.c_cnt with
-  | Top top -> (top, args)
-  | App (core, args') -> resolve_core core (args' @ args)
-
-(* -------------------------------------------------------------------- *)
-(** resolved toplevel module path *)
-type mpath_top_r =
-  [ | `Local of ident
-    | `Concrete of path * path option ]
-
-(* -------------------------------------------------------------------- *)
-let resolve { core; sub; } : mpath_top_r * mpath list =
-  let top, args = resolve_core core [] in
-  match top, sub with
-  | `Local   _, Some _ -> assert false
-  | `Local top, None   -> `Local top, args
-  | `Concrete p, Some sub -> `Concrete (p, Some sub), args
-  | `Concrete p,     None -> `Concrete (p,     None), args
-
-(* -------------------------------------------------------------------- *)
-(* TODO: cost: hashconsing *)
-let margs (m : mpath) : mpath list  = snd (resolve m)
-let mtop  (m : mpath) : mpath_top_r = fst (resolve m)
 
 (* -------------------------------------------------------------------- *)
 let m_equal     = ((==) : mpath      -> mpath      -> bool)
@@ -222,14 +203,6 @@ let mpath_core_top_hash (mt : mpath_core_top) =
   | `Concrete p -> p_hash p
 
 (* -------------------------------------------------------------------- *)
-let mtop_equal (mt1 : mpath_top_r) (mt2 : mpath_top_r) =
-  match mt1, mt2 with
-  | `Local id1, `Local id2 -> EcIdent.id_equal id1 id2
-  | `Concrete(p1, o1), `Concrete(p2, o2) ->
-    p_equal p1 p2 && oall2 p_equal o1 o2
-  | _, _ -> false
-
-(* -------------------------------------------------------------------- *)
 let mcore_hash (p : mpath_core) = p.c_tag
 let mcore_compare (p1 : mpath_core) (p2 : mpath_core) =
   mcore_hash p1 - mcore_hash p2
@@ -237,6 +210,12 @@ let mcore_compare (p1 : mpath_core) (p2 : mpath_core) =
 (* -------------------------------------------------------------------- *)
 let m_hash    (p : mpath)               = p.m_tag
 let m_compare (p1 : mpath) (p2 : mpath) = m_hash p1 - m_hash p2
+
+(* -------------------------------------------------------------------- *)
+(** resolved top-level module path *)
+type mpath_top_r =
+  [ | `Local of ident
+    | `Concrete of path * path option ]
 
 (* -------------------------------------------------------------------- *)
 (** {3 Module core path and path hashconsing} *)
@@ -354,6 +333,7 @@ let mcore_apply (c : mpath_core) (args : mpath list) : mpath_core =
 
 (* -------------------------------------------------------------------- *)
 (** {3 Module path smart constructors} *)
+
 let mk_mpath core sub = Hsmpath.hashcons { core; sub; m_tag = -1; }
 
 let mpath (p : mpath_top_r) (args : mpath list) : mpath =
@@ -389,23 +369,74 @@ let m_apply (mp : mpath) (args : mpath list) =
 
 let m_functor (mp : mpath) = mk_mpath (mcore_astrip mp.core) None
 
+let wrap (a : ident) (k : wrap_k) (m : mpath) : mpath =
+  mk_mpath (mcore (Wrap (a, k, m.core))) m.sub
+
+(* -------------------------------------------------------------------- *)
+(** {3 Module resolution} *)
+
+(** [resolves_core ragks core args] resolves the module [$(agks( core(args) )]
+    where [agks = List.rev ragks] *)
+let rec resolve_core
+    (agks : (ident * wrap_k) list) (core : mpath_core) (args : mpath list)
+  : (ident * wrap_k) list * mpath_core_top * mpath list
+  =
+  match core.c_cnt with
+  | Top top           -> (agks, top, args)
+  | App (core, args') -> resolve_core agks core (args' @ args)
+  | Wrap (ag', `Ext, mc) ->
+    (** [$agks      ( ( $ag'(mc)                  ) (args) ) ->
+         $agks      ( ( $ag'(mc ($cb_ag'(args)) ) )        ) ->
+         ${agks,ag'}( mc ($cb_ag'(args))                   )   ] *)
+    let args = List.map (wrap ag' `Cb) args in
+    resolve_core ((ag', `Ext) :: agks) mc args
+
+  | Wrap (ag', `Cb, mc) ->      (* nothing to do with arguments here *)
+    resolve_core ((ag', `Cb) :: agks) mc args
+
+
+(* -------------------------------------------------------------------- *)
+let mtop_equal (mt1 : mpath_top_r) (mt2 : mpath_top_r) =
+  match mt1, mt2 with
+  | `Local id1, `Local id2 -> EcIdent.id_equal id1 id2
+  | `Concrete(p1, o1), `Concrete(p2, o2) ->
+    p_equal p1 p2 && oall2 p_equal o1 o2
+  | _, _ -> false
+
+(* -------------------------------------------------------------------- *)
+let resolve { core; sub; } : (ident * wrap_k) list * mpath_top_r * mpath list =
+  let agks, top, args = resolve_core [] core [] in
+  match top, sub with
+  | `Local   _ , Some _   -> assert false (* abstract modules have no sub-modules *)
+  | `Local top , None     -> agks, `Local top, args
+  | `Concrete p, Some sub -> agks, `Concrete (p, Some sub), args
+  | `Concrete p, None     -> agks, `Concrete (p,     None), args
+
+(* -------------------------------------------------------------------- *)
+(* TODO: cost: hashconsing *)
+let margs (m : mpath) : mpath list            = let _, _, x = resolve m in x
+let mtop  (m : mpath) : mpath_top_r           = let _, x, _ = resolve m in x
+let magks (m : mpath) : (ident * wrap_k) list = let x, _, _ = resolve m in x
+
 (* -------------------------------------------------------------------- *)
 (** {3 Module path utilities} *)
 
 let rec mcore_is_local (mc : mpath_core) : bool =
   match mc.c_cnt with
-  | Top (`Local    _) -> true
-  | Top (`Concrete _) -> false
-  | App (c,_) -> mcore_is_local c
+  | Top  (`Local    _) -> true
+  | Top  (`Concrete _) -> false
+  | App  (c,_)         -> mcore_is_local c
+  | Wrap (_,_,c)       -> mcore_is_local c
 
 let m_is_local (mp : mpath) : bool = mcore_is_local mp.core
 
 (* -------------------------------------------------------------------- *)
 let rec mcore_is_concrete (mc : mpath_core) : bool =
   match mc.c_cnt with
-  | Top (`Local    _) -> false
-  | Top (`Concrete _) -> true
-  | App (c,_) -> mcore_is_concrete c
+  | Top  (`Local    _) -> false
+  | Top  (`Concrete _) -> true
+  | App  (c,_)         -> mcore_is_concrete c
+  | Wrap (_,_,c)       -> mcore_is_concrete c
 
 let m_is_concrete (mp : mpath) : bool =
   mcore_is_concrete mp.core
@@ -413,9 +444,10 @@ let m_is_concrete (mp : mpath) : bool =
 (* -------------------------------------------------------------------- *)
 let rec mcore_get_ident (mc : mpath_core) : ident =
   match mc.c_cnt with
-  | Top (`Local    id) -> id
-  | Top (`Concrete _) -> assert false
-  | App (c,_) -> mcore_get_ident c
+  | Top  (`Local    id) -> id
+  | Top  (`Concrete _ ) -> assert false
+  | App  (c,_)          -> mcore_get_ident c
+  | Wrap (_,_,c)        -> mcore_get_ident c
 
 let mget_ident mp = mcore_get_ident mp.core
 
@@ -426,6 +458,8 @@ let rec mcore_fv fv mc =
   | Top (`Concrete _) -> fv
   | App (mc,args) ->
     List.fold_left m_fv (mcore_fv fv mc) args
+  | Wrap (a, _, mc) ->
+    mcore_fv (EcIdent.fv_add a fv) mc
 
 and m_fv fv mp = mcore_fv fv mp.core
 
@@ -436,9 +470,11 @@ let rec pp_mcore fmt (mc : mpath_core) =
     Format.fprintf fmt "@[(%a)@]" (pp_list "," pp_m) args
   in
   match mc.c_cnt with
-  | Top (`Local    id) -> Format.fprintf fmt "%s" (EcIdent.tostring id)
-  | Top (`Concrete p ) -> Format.fprintf fmt "%s" (tostring p)
-  | App (c,args )      -> Format.fprintf fmt "%a%a" pp_mcore c pp_args args
+  | Top  (`Local    id) -> Format.fprintf fmt "%s" (EcIdent.tostring id)
+  | Top  (`Concrete p ) -> Format.fprintf fmt "%s" (tostring p)
+  | App  (c,args )      -> Format.fprintf fmt "%a%a" pp_mcore c pp_args args
+  | Wrap (a, `Ext, c)   -> Format.fprintf fmt "$%a(%a)" EcIdent.pp_ident a pp_mcore c
+  | Wrap (a, `Cb , c)   -> Format.fprintf fmt "$cb_%a(%a)" EcIdent.pp_ident a pp_mcore c
 
 and pp_m fmt mp =
   let pp_sub fmt =
@@ -563,19 +599,24 @@ end
 type smsubst = {
   sms_crt : path Mp.t;
   sms_id  : mpath Mid.t;
+  sms_ag  : ident Mid.t;
 }
 
 (* -------------------------------------------------------------------- *)
 let sms_identity : smsubst =
-  { sms_crt = Mp.empty; sms_id = Mid.empty; }
+  { sms_crt = Mp.empty; sms_id = Mid.empty; sms_ag = Mid.empty; }
 
 (* -------------------------------------------------------------------- *)
 let sms_is_identity (s : smsubst) =
-  Mp.is_empty s.sms_crt && Mid.is_empty s.sms_id
+  Mp.is_empty s.sms_crt && Mid.is_empty s.sms_id && Mid.is_empty s.sms_ag
 
 (* -------------------------------------------------------------------- *)
 let sms_bind_abs (x : ident) (mp : mpath) (s : smsubst) =
   { s with sms_id = Mid.add x mp s.sms_id }
+
+(* -------------------------------------------------------------------- *)
+let sms_bind_agent (x : ident) (y : ident) (s : smsubst) =
+  { s with sms_ag = Mid.add x y s.sms_ag }
 
 (* -------------------------------------------------------------------- *)
 let p_subst (s : path Mp.t) =
@@ -596,10 +637,12 @@ let m_subst (s : smsubst) =
   let hc = HCm.create 127 in
   let h  =  Hm.create 127 in
 
+  (* [doit_r] with memoisation *)
   let rec doit (mp : mpath) : mpath =
     try Hm.find h mp with
     | Not_found -> let r = doit_r mp in Hm.add h mp r; r
 
+  (* [doit_core_r] with memoisation *)
   and doit_core (mc : mpath_core) : mpath =
     try HCm.find hc mc with
     | Not_found -> let r = doit_core_r mc in HCm.add hc mc r; r
@@ -628,11 +671,17 @@ let m_subst (s : smsubst) =
     | App (c,args) ->
       let m = doit_core c in
       let args = List.Smart.map doit args in
-      match m.sub with
-      | Some _ -> assert (args <> []); assert false
+      begin
+        match m.sub with
+        | Some _ -> assert (args <> []); assert false
         (* impossible (abstract modules have no sub-modules) *)
 
-      | None -> mk_mpath (mcore_apply m.core args) None
+        | None -> mk_mpath (mcore_apply m.core args) None
+      end
+
+    | Wrap (a,k,c) ->
+      let a = Mid.find_def a a s.sms_ag in
+      wrap a k (doit_core c)
   in
   doit
 

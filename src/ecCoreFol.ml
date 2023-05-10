@@ -2023,7 +2023,6 @@ type f_subst = {
   fs_freshen  : bool; (* true means freshen locals *)
   fs_loc      : form Mid.t;
   fs_mem      : EcIdent.t Mid.t; (* memories *)
-  fs_agent    : EcIdent.t Mid.t; (* agent names *)
   fs_sty      : ty_subst;
   fs_ty       : ty -> ty;
   fs_opdef    : (EcIdent.t list * expr) Mp.t;
@@ -2041,7 +2040,6 @@ module Fsubst = struct
     fs_freshen  = false;
     fs_loc      = Mid.empty;
     fs_mem      = Mid.empty;
-    fs_agent    = Mid.empty;
     fs_sty      = ty_subst_id;
     fs_ty       = ty_subst ty_subst_id;
     fs_opdef    = Mp.empty;
@@ -2057,7 +2055,6 @@ module Fsubst = struct
     && is_ty_subst_id s.fs_sty
     && Mid.is_empty   s.fs_loc
     && Mid.is_empty   s.fs_mem
-    && Mid.is_empty   s.fs_agent
     && Mp.is_empty    s.fs_opdef
     && Mp.is_empty    s.fs_pddef
     && Mp.is_empty    s.fs_modtydef
@@ -2096,9 +2093,11 @@ module Fsubst = struct
     let sty = { s.fs_sty with ts_mp = sms } in
     { s with fs_sty = sty; fs_ty = ty_subst sty }
 
-  let f_bind_agent s m1 m2 =
-    let merger o = assert (o = None); Some m2 in
-    { s with fs_agent = Mid.change merger m1 s.fs_agent }
+  let f_bind_agent s (a1 : ident) (a2 : ident) =
+    assert (not (Mid.mem a1 s.fs_sty.ts_mp.sms_ag));
+    let sms = EcPath.sms_bind_agent a1 a2 s.fs_sty.ts_mp in
+    let sty = { s.fs_sty with ts_mp = sms } in
+    { s with fs_sty = sty; fs_ty = ty_subst sty }
 
   (* ------------------------------------------------------------------ *)
   let f_bind_rename s xfrom xto ty =
@@ -2125,7 +2124,11 @@ module Fsubst = struct
     { s with fs_sty = sty; fs_ty = ty_subst sty }
 
   let f_rem_agent s m =
-    { s with fs_agent = Mid.remove m s.fs_agent }
+    let sms =
+      let subst = s.fs_sty.ts_mp in
+      { subst with sms_ag = Mid.remove m subst.sms_ag } in
+    let sty = { s.fs_sty with ts_mp = sms } in
+    { s with fs_sty = sty; fs_ty = ty_subst sty }
 
   (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
@@ -2174,9 +2177,9 @@ module Fsubst = struct
       match EcPath.mtop mp with
       | `Local id when EcPath.margs mp = [] -> id
       | `Local _
-      | `Concrete _ -> Mid.find a s.fs_agent (* must be bound by the map *)
+      | `Concrete _ -> Mid.find a s.fs_sty.ts_mp.sms_ag (* must be bound by the map *)
     in
-    (Mid.find_def a a s.fs_agent, f)
+    (Mid.find_def a a s.fs_sty.ts_mp.sms_ag, f)
 
   let subst_stmt s c =
     let es =
@@ -2743,8 +2746,14 @@ module Fsubst = struct
     f_subst (init_subst_tvar ?es_loc s)
 
   (* ------------------------------------------------------------------ *)
-  let init_agents s =
-    { f_subst_id with fs_agent = s; fs_freshen = true; }
+  let init_agents (s : ident Mid.t) =
+    let sty =
+      { ty_subst_id with ts_mp = { EcPath.sms_identity with sms_ag = s; } }
+    in
+    { f_subst_id with
+      fs_sty     = sty;
+      fs_ty      = ty_subst sty;
+      fs_freshen = true; }
   (* TODO: cost: minor: freshen?  *)
 
   let subst_agents (s : EcIdent.t EcIdent.Mid.t) =

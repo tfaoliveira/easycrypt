@@ -52,9 +52,13 @@ end
 (* -------------------------------------------------------------------- *)
 (** {2 Module path} *)
 
+(** module wrapper kind *)
+type wrap_k = [`Ext | `Cb]
+
+(** a module path *)
 type mpath
 
-(** resolved toplevel module path *)
+(** resolved top-level module path *)
 type mpath_top_r =
   [ | `Local    of ident
     | `Concrete of path * path option ]
@@ -63,7 +67,7 @@ type mpath_top_r =
     - [(`Local    m            , args')] which is the resolved module [m(args')    ]
     - [(`Concrete (p, None    ), args')] which is the resolved module [p(args')    ]
     - [(`Concrete (p, Some sub), args')] which is the resolved module [p(args').sub] *)
-val resolve : mpath -> mpath_top_r * mpath list
+val resolve : mpath -> (ident * wrap_k) list * mpath_top_r * mpath list
 
 (** [margs m = fst(resolve m)] *)
 val margs : mpath -> mpath list
@@ -166,12 +170,14 @@ end
 type smsubst = {
   sms_crt : path Mp.t;
   sms_id  : mpath Mid.t;
+  sms_ag  : ident Mid.t;        (** agent substitution *)
 }
 
 val sms_identity : smsubst
 val sms_is_identity : smsubst -> bool
 
-val sms_bind_abs : ident -> mpath -> smsubst -> smsubst
+val sms_bind_abs   : ident -> mpath -> smsubst -> smsubst
+val sms_bind_agent : ident -> ident -> smsubst -> smsubst
 
 val p_subst : path Mp.t -> path -> path
 val m_subst : smsubst -> mpath -> mpath

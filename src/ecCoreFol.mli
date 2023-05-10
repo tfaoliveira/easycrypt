@@ -638,7 +638,6 @@ type f_subst = private {
   fs_freshen  : bool; (* true means freshen locals *)
   fs_loc      : form Mid.t;
   fs_mem      : EcIdent.t Mid.t; (* memories *)
-  fs_agent    : EcIdent.t Mid.t; (* agent names *)
   fs_sty      : ty_subst;
   fs_ty       : ty -> ty;
   fs_opdef    : (EcIdent.t list * expr) Mp.t;

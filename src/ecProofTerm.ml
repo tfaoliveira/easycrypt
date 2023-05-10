@@ -127,7 +127,7 @@ let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
   match arg with
   | PAFormula f        -> PAFormula (Fsubst.f_subst subst f)
   | PAMemory  m        -> PAMemory (Mid.find_def m m subst.fs_mem)
-  | PAAgent   m        -> PAAgent  (Mid.find_def m m subst.fs_agent)
+  | PAAgent   m        -> PAAgent  (Mid.find_def m m subst.fs_sty.ts_mp.sms_ag)
   | PAModule  (mp, ms) -> PAModule (mp, ms)
   | PASub     pt       -> PASub (pt |> omap (concretize_e_pt cptenv))
 
@@ -139,7 +139,7 @@ and concretize_e_head (CPTEnv subst) head =
   | PTLocal  x -> PTLocal  x
 
   | PTGlobal (p, tys, agents) ->
-    let agents = List.map (fun id -> Mid.find_def id id subst.fs_agent) agents in
+    let agents = List.map (fun id -> Mid.find_def id id subst.fs_sty.ts_mp.sms_ag) agents in
     assert (EcAgent.no_duplicates agents); (* sanity check *)
     PTGlobal (p, List.map subst.fs_ty tys, agents)
 
