@@ -155,8 +155,13 @@ let rec p_size p =
 (* -------------------------------------------------------------------- *)
 (** {2 Module path} *)
 
+(* -------------------------------------------------------------------- *)
 type wrap_k = [`Ext | `Cb]
 
+type agk  = ident * wrap_k
+type agks = agk list
+
+(* -------------------------------------------------------------------- *)
 (** top-level module path: an ident (for abstract modules) or a concrete path *)
 type mpath_core_top = [`Local of ident | `Concrete of path]
 
@@ -347,25 +352,31 @@ let mcore_apply (c : mpath_core) (args : mpath list) : mpath_core =
     in
     mcore cnt
 
+let mcore_wrap (agk : agk) (c : mpath_core) : mpath_core =
+  mcore (Wrap (fst agk, snd agk, c))
+
+let mcore_wrap_l (agks : agks) (c : mpath_core) : mpath_core =
+  List.fold_left ((^~) mcore_wrap) c (List.rev agks)
+
 (* -------------------------------------------------------------------- *)
 (** {3 Module path smart constructors} *)
 
 let mk_mpath core sub = Hsmpath.hashcons { core; sub; m_tag = -1; }
 
-let mpath (p : mpath_top_r) (args : mpath list) : mpath =
+let mpath (agks : agks) (p : mpath_top_r) (args : mpath list) : mpath =
   match p with
   | `Local id ->
-    let core = mcore_apply (mcore_abs id) args in
+    let core = mcore_wrap_l agks (mcore_apply (mcore_abs id) args) in
     mk_mpath core None
 
   | `Concrete (p, sub) ->
-    let core = mcore_apply (mcore_crt p) args in
+    let core = mcore_wrap_l agks (mcore_apply (mcore_crt p) args) in
     mk_mpath core sub
 
-let mpath_abs id args = mpath (`Local id) args
-let mident id = mpath_abs id []
+let mpath_abs agks id args = mpath agks (`Local id) args
+let mident id = mpath_abs [] id []
 
-let mpath_crt p args sub = mpath (`Concrete(p,sub)) args
+let mpath_crt agks p args sub = mpath agks (`Concrete(p,sub)) args
 
 let mqname (mp : mpath) (x : symbol) : mpath =
   match mp.sub with
@@ -395,8 +406,8 @@ let wrap (a : ident) (k : wrap_k) (m : mpath) : mpath =
 (** [resolves_core ragks core args] resolves the module [$(agks( core(args) )]
     where [agks = List.rev ragks] *)
 let rec resolve_core
-    (agks : (ident * wrap_k) list) (core : mpath_core) (args : mpath list)
-  : (ident * wrap_k) list * mpath_core_top * mpath list
+    (agks : agks) (core : mpath_core) (args : mpath list)
+  : agks * mpath_core_top * mpath list
   =
   match core.c_cnt with
   | Top top           -> (agks, top, args)
@@ -421,7 +432,7 @@ let mtop_equal (mt1 : mpath_top_r) (mt2 : mpath_top_r) =
   | _, _ -> false
 
 (* -------------------------------------------------------------------- *)
-let resolve { core; sub; } : (ident * wrap_k) list * mpath_top_r * mpath list =
+let resolve { core; sub; } : agks * mpath_top_r * mpath list =
   let agks, top, args = resolve_core [] core [] in
   match top, sub with
   | `Local   _ , Some _   -> assert false (* abstract modules have no sub-modules *)
@@ -431,9 +442,9 @@ let resolve { core; sub; } : (ident * wrap_k) list * mpath_top_r * mpath list =
 
 (* -------------------------------------------------------------------- *)
 (* TODO: cost: hashconsing *)
-let margs (m : mpath) : mpath list            = let _, _, x = resolve m in x
-let mtop  (m : mpath) : mpath_top_r           = let _, x, _ = resolve m in x
-let magks (m : mpath) : (ident * wrap_k) list = let x, _, _ = resolve m in x
+let margs (m : mpath) : mpath list  = let _, _, x = resolve m in x
+let mtop  (m : mpath) : mpath_top_r = let _, x, _ = resolve m in x
+let magks (m : mpath) : agks        = let x, _, _ = resolve m in x
 
 (* -------------------------------------------------------------------- *)
 (** {3 Module path utilities} *)
@@ -575,20 +586,14 @@ let x_tostring x =
 module Smart : sig
   type a_psymbol   = symbol
   type a_pqname    = path * symbol
-  type a_mpath_abs = ident * mpath list
-  type a_mpath_crt = path * mpath list * path option
   type a_xpath     = mpath * symbol
 
   val psymbol   : (path * a_psymbol   ) -> a_psymbol   -> path
   val pqname    : (path * a_pqname    ) -> a_pqname    -> path
-  val mpath_abs : (mpath * a_mpath_abs) -> a_mpath_abs -> mpath
-  val mpath_crt : (mpath * a_mpath_crt) -> a_mpath_crt -> mpath
   val xpath     : xpath                 -> a_xpath     -> xpath
 end = struct
   type a_psymbol   = symbol
   type a_pqname    = path * symbol
-  type a_mpath_abs = ident * mpath list
-  type a_mpath_crt = path * mpath list * path option
   type a_xpath     = mpath * symbol
 
   let psymbol (p, x) x' =
@@ -596,17 +601,6 @@ end = struct
 
   let pqname (p, (q, x)) (q', x') =
     if x == x' && q == q' then p else pqname q' x'
-
-  let mk_mpath core sub = assert false
-
-  let mpath_abs (mp, (id, args)) (id', args') =
-    if id == id' && args == args' then mp else mpath_abs id' args'
-
-  let mpath_crt (mp, (p, args, sp)) (p', args', sp') =
-    if p == p' && args == args' && sp == sp' then
-      mp
-    else
-      mpath_crt p' args' sp'
 
   let xpath xp (mp', x') =
     if xp.x_top == mp' && xp.x_sub == x' then xp else xpath mp' x'

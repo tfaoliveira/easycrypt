@@ -52,9 +52,16 @@ end
 (* -------------------------------------------------------------------- *)
 (** {2 Module path} *)
 
+(* -------------------------------------------------------------------- *)
 (** module wrapper kind *)
 type wrap_k = [`Ext | `Cb]
 
+(** agent with an attached module wrapper kind *)
+type agk  = ident * wrap_k
+
+type agks = agk list
+
+(* -------------------------------------------------------------------- *)
 (** a module path *)
 type mpath
 
@@ -63,10 +70,13 @@ type mpath_top_r =
   [ | `Local    of ident
     | `Concrete of path * path option ]
 
+(* -------------------------------------------------------------------- *)
+(** {3 Module resolution} *)
+
 (** [resolve m] resolves [m] and returns:
-    - [(`Local    m            , args')] which is the resolved module [m(args')    ]
-    - [(`Concrete (p, None    ), args')] which is the resolved module [p(args')    ]
-    - [(`Concrete (p, Some sub), args')] which is the resolved module [p(args').sub] *)
+    - [(agks, `Local    m            , args')] which is [$agks( m(args')     )]
+    - [(agks, `Concrete (p, None    ), args')] which is [$agks( p(args')     )]
+    - [(agks, `Concrete (p, Some sub), args')] which is [$agks( p(args').sub )] *)
 val resolve : mpath -> (ident * wrap_k) list * mpath_top_r * mpath list
 
 (** [margs m = fst(resolve m)] *)
@@ -76,31 +86,40 @@ val margs : mpath -> mpath list
 val mtop : mpath -> mpath_top_r
 
 (* -------------------------------------------------------------------- *)
-val mpath     : mpath_top_r -> mpath list -> mpath
-val mpath_abs : ident -> mpath list -> mpath
+(** {3 Smart constructors for modules} *)
 
+(** [mpath agks m args] builds the module path [$agks( m(args) )] *)
+val mpath : agks -> mpath_top_r -> mpath list -> mpath
+
+(** [mpath_abs] is similar to [mpath], but only for abstract modules *)
+val mpath_abs : agks -> ident -> mpath list -> mpath
+
+(** [mpath_crt agks p args sub] returns [$agks( p(args).sub )]  *)
+val mpath_crt : agks -> path -> mpath list -> path option -> mpath
+
+(* -------------------------------------------------------------------- *)
 (** [mqname mp x] adds [x] to [mp]'s sub-path (only for concrete modules) *)
 val mqname : mpath -> symbol -> mpath
 
 (** strips arguments of a module path (below the sub-path), i.e.
-    [mastrip ( p(args).sub ) = p.sub] *)
+    [mastrip ( $agks( p(args).sub ) ) = $agks( p.sub )] *)
 val mastrip : mpath -> mpath
 
 (** build an abstract path from an ident *)
 val mident : ident -> mpath
 
-(** [mpath_crt p args sub] returns [p(args).sub]  *)
-val mpath_crt : path -> mpath list -> path option -> mpath
-
 (** strip arguments and sub-path of a [mpath], i.e.
     [m_functor ( p(args).sub ) = p] *)
+(* TODO: cost: what should this do? *)
 val m_functor : mpath -> mpath
 
 (** applies [args] to [mp], possibly below [mp]'s sub-path, i.e.
-    [m_apply ( p(args0).sub ) args = p(args0, args).sub] *)
+    [m_apply p.sub args = (p(args)).sub )] *)
 val m_apply : mpath -> mpath list -> mpath
 
 (* -------------------------------------------------------------------- *)
+(** {3 Utilities for modules} *)
+
 val m_equal       : mpath -> mpath -> bool
 val mtop_equal    : mpath_top_r -> mpath_top_r -> bool
 val m_compare     : mpath -> mpath -> int
