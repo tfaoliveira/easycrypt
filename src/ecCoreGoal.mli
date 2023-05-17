@@ -139,6 +139,7 @@ type validation =
   (* external (hl/phl/prhl/...) proof-node *)
 | VExtern  : 'a * handle list -> validation
 
+
 (* -------------------------------------------------------------------- *)
 type location = {
   plc_parent : location option;
@@ -239,6 +240,8 @@ module FApi : sig
 
   val get_pregoal_by_id : handle -> proofenv -> pregoal
   val get_main_pregoal  : proofenv -> pregoal
+  val get_child_goals   : handle -> proofenv -> handle list
+  val get_validation_by_id : handle -> proofenv -> validation option
 
   (* Create a new opened goal for the given [form] in the backward
    * environment [tcenv]. If no local context [LDecl.hyps] is given,

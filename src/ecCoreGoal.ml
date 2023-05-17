@@ -306,6 +306,15 @@ module FApi = struct
       { pe with pr_goals = ID.Map.change change hd pe.pr_goals }
 
   (* ------------------------------------------------------------------ *)
+  let get_child_goals (hd : handle) (pe : proofenv) =
+    let is_parent _ g = odfl false (omap (fun ph -> eq_handle ph hd) g.g_parent) in
+    ID.Map.keys (ID.Map.filter is_parent pe.pr_goals)
+
+  let get_validation_by_id (hd : handle) (pe : proofenv) =
+    let g = get_goal_by_id hd pe in
+    omap fst g.g_validation
+
+  (* ------------------------------------------------------------------ *)
   let tc1_update_goal_map (tx : goal -> goal) (hd : handle) (tc : tcenv1) =
     { tc with tce_penv = update_goal_map tx hd tc.tce_penv }
 

@@ -238,17 +238,54 @@ module HiPrinting = struct
 
             if n > sz then
               EcScope.hierror "only %n goal(s) remaining" sz;
-            if n <= 0 then
+            if n < 0 then
               EcScope.hierror "goal ID must be positive";
             let penv = EcCoreGoal.proofenv_of_proof pf in
-            let goal = List.nth hds (n-1) in
-            let goal = EcCoreGoal.FApi.get_pregoal_by_id goal penv in
-            let goal = (EcEnv.LDecl.tohyps goal.EcCoreGoal.g_hyps,
-                        goal.EcCoreGoal.g_concl) in
 
-            Format.fprintf fmt "Printing Goal %d\n\n%!" n;
-            EcPrinting.pp_goal ppe (Pragma.get ()).pm_g_prpo
-              fmt (goal, `One sz)
+            if n > 0 then
+              let goal = List.nth hds (n-1) in
+              let goal = EcCoreGoal.FApi.get_pregoal_by_id goal penv in
+              let goal = (EcEnv.LDecl.tohyps goal.EcCoreGoal.g_hyps,
+                          goal.EcCoreGoal.g_concl)
+              in
+
+              Format.fprintf fmt "Printing Goal %d\n\n%!" n;
+              EcPrinting.pp_goal ppe (Pragma.get ()).pm_g_prpo
+                fmt (goal, `One sz)
+            else
+              let topgoal = EcCoreGoal.FApi.get_main_pregoal penv in
+
+              let rec tabs n =
+                match n with
+                | 0 -> ""
+                | n -> "--" ^ tabs (n-1)
+              in
+
+              let rec pr_childs hd lvl =
+                let v = EcCoreGoal.FApi.get_validation_by_id hd penv in
+                let vstr =
+                  match v with
+                  | None -> "*OPEN*"
+                  | Some vx -> begin
+                      match vx with
+                      | VSmt -> "SMT"
+                      | VAdmit -> "ADMIT"
+                      | VIntros (_, ids) -> "INTROS: " ^ (String.concat "," (List.map EcIdent.tostring ids))
+                      | VConv (_, s) -> "CONV: " ^ (String.concat "," (List.map EcIdent.tostring (Sid.elements s)))
+                      | VLConv (_, id) -> "LCONV: " ^ (EcIdent.tostring id)
+                      | VRewrite _ -> "REWRITE"
+                      | VApply _ -> "APPLY"
+                      | VShuffle ids -> "SHUFFLE: " ^ (String.concat "," (List.map EcIdent.tostring ids))
+                      | VExtern _ -> "EXTERN"
+                    end
+                in
+
+                Format.fprintf fmt "%s%s" (tabs lvl) vstr;
+                Format.fprintf fmt "\n";
+                let childs = EcCoreGoal.FApi.get_child_goals hd penv in
+                List.iter (fun x -> pr_childs x (lvl + 1)) childs
+              in
+              pr_childs topgoal.g_uid 0
         end
     end
 end
