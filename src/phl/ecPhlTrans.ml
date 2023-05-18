@@ -60,7 +60,7 @@ module Low = struct
         es_po = q2;
       } in
 
-     FApi.xmutate1 tc `Trans [cond1; cond2; cond3; cond4]
+     FApi.xmutate1_named tc `Trans [cond1; cond2; cond3; cond4] ["check-pres"; "check-posts"; "left-equiv"; "right-equiv"]
 
   (* ------------------------------------------------------------------ *)
   let t_equivF_trans_r f (p1, q1) (p2, q2) tc =

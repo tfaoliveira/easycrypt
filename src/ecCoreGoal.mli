@@ -23,7 +23,7 @@ exception ClearError of clearerror Lazy.t
 type handle
 
 val eq_handle : handle -> handle -> bool
-
+val handle_str : handle -> string
 (* -------------------------------------------------------------------- *)
 (* EasyCrypt proof-term:                                                *)
 (*                                                                      *)
@@ -242,6 +242,7 @@ module FApi : sig
   val get_main_pregoal  : proofenv -> pregoal
   val get_child_goals   : handle -> proofenv -> handle list
   val get_validation_by_id : handle -> proofenv -> validation option
+  val name_map_string : handle -> proofenv -> string
 
   (* Create a new opened goal for the given [form] in the backward
    * environment [tcenv]. If no local context [LDecl.hyps] is given,
@@ -254,7 +255,7 @@ module FApi : sig
   (* Mark the focused goal in [tcenv] as solved using the given
    * [validation]. It is an internal error if no goal is focused. The
    * focus is then changed to the next opened sibling. *)
-  val close : tcenv -> validation -> (string option * handle) list -> tcenv
+  val close : tcenv -> validation -> (handle * string option) list -> tcenv
 
   (* Mutate current goal in [tcenv]. Focused goal will be marked as
    * resolved using the given [validation] producer. This producer is
@@ -268,6 +269,8 @@ module FApi : sig
    * validation node. *)
   val xmutate  : tcenv  -> 'a -> form list -> tcenv
   val xmutate1 : tcenv1 -> 'a -> form list -> tcenv
+
+  val xmutate1_named : tcenv1 -> 'a -> form list -> string list -> tcenv
 
   val xmutate_hyps  : tcenv  -> 'a -> (LDecl.hyps * form) list -> tcenv
   val xmutate1_hyps : tcenv1 -> 'a -> (LDecl.hyps * form) list -> tcenv
@@ -323,6 +326,8 @@ module FApi : sig
   val t_onfsub     : (int -> backward option) -> tactical
   val t_onselecti  : tfocus -> ?ttout:ibackward -> ibackward -> tactical
   val t_onselect   : tfocus -> ?ttout:backward -> backward -> tactical
+  val t_onselectnm_named : (string -> bool) -> (string -> backward) -> tactical
+  val t_onselect_named : (string -> bool) -> backward -> tactical
   val t_on1        : int -> ?ttout:backward -> backward -> tactical
   val t_firsts     : backward -> int -> tactical
   val t_lasts      : backward -> int -> tactical

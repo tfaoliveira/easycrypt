@@ -965,16 +965,15 @@ let process_rewrite1_r ttenv ?target ri tc =
            (prpo (EcMemory.memory meml) mright argsl)
            (goal.es_pr, goal.es_po)
            tc in
-      let p = process_tfocus tc (Some [Some 4,Some 4], None) in
+      let p = fun nm -> nm = "right-equiv" in
       let tc =
-        t_onselect
+        t_onselect_named
           p
           (EcPhlTrans.t_equivS_trans
              (EcMemory.memtype memr, progr)
              (goal.es_pr, goal.es_po)
              (prpo (EcMemory.memory memr) mleft argsr))
           tc in
-
       (* Two more goals (1 and 4) can be solved in general (with the same proof):
           - by move=> &1 &2 H; exists var1{1} var2{1} ... varn{1}; move: H => //.
           for 4 we use {2}.
@@ -1013,33 +1012,30 @@ let process_rewrite1_r ttenv ?target ri tc =
           t_generalize_hyp ?clear:(Some `Yes) h tc
         in
 
-        t_onselecti
+        t_onselectnm_named
           (fun _ -> true)
-          (function 0 -> ongoal true | 3 -> ongoal false | _ -> t_id)
+          (function "check-pres" -> ongoal true | "right-equiv.check-pres" -> ongoal false | _ -> t_id)
           tc
       in
 
-      let p = process_tfocus tc (Some [Some 6,Some 6], None) in
       let pterm =
         { fp_mode = `Implicit;
           fp_head = FPNamed (name, None);
           fp_args = []; } in
       let tc =
-        t_onselect
-          p
+        t_onselect_named
+          (fun nm -> nm = "right-equiv.left-equiv")
           (t_seq (EcPhlCall.process_call None pterm) EcPhlAuto.t_auto)
           tc in
 
-      let p = process_tfocus tc (Some [Some 3, Some 3; Some (-1), Some (-1)], None) in
       let tc =
-        t_onselect
-          p
+        t_onselect_named
+          (fun nm -> List.mem nm ["left-equiv"; "right-equiv.right-equiv"])
           (t_seq (EcPhlInline.process_inline (`All (None, None))) ((t_try (t_seq EcPhlAuto.t_auto process_done))))
           tc
       in
 
       t_onall process_trivial tc
-
 (* -------------------------------------------------------------------- *)
 let process_rewrite1 ttenv ?target ri tc =
   EcCoreGoal.reloc (loc ri) (process_rewrite1_r ttenv ?target ri) tc

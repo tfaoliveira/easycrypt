@@ -24,6 +24,7 @@ module ID : sig
   type id = private int
 
   val gen : unit -> id
+  val str : id -> string
 
   module Map : EcMaps.Map.S with type key   = id
   module Set : EcMaps.Set.S with type M.key = id
@@ -31,6 +32,7 @@ end = struct
   type id = int
 
   let gen () = EcUid.unique ()
+  let str h = string_of_int h
 
   module Map = EcMaps.Mint
   module Set = EcMaps.Sint
@@ -41,6 +43,8 @@ type handle = ID.id
 
 let eq_handle (hd1 : handle) (hd2 : handle) =
   hd1 = hd2
+
+let handle_str = ID.str
 
 (* -------------------------------------------------------------------- *)
 type proofterm = { pt_head : pt_head; pt_args : pt_arg list; }
@@ -113,7 +117,7 @@ and pregoal = {
 and goal = {
   g_goal       : pregoal;
   g_parent     : handle option;
-  g_validation : (validation * (string option * handle) list) option;
+  g_validation : (validation * (handle * string option) list) option;
 }
 
 and validation =
@@ -314,6 +318,43 @@ module FApi = struct
     let g = get_goal_by_id hd pe in
     omap fst g.g_validation
 
+  let get_base_name_by_id (hd : handle) (pe : proofenv) =
+    let g = get_goal_by_id hd pe in
+    match g.g_parent with
+    | None -> None
+    | Some ph ->
+       let parent = ID.Map.find ph pe.pr_goals in
+       match parent.g_validation with
+       | None -> None
+       | Some vd ->
+          let name_map = snd vd in
+          try List.assoc hd name_map with
+            Not_found -> failwith ("No handle in name_map: " ^ ID.str hd)
+
+  let get_name_by_id (hd : handle) (pe : proofenv) =
+    let rec doit hd =
+      let g = get_goal_by_id hd pe in
+      let bnm = get_base_name_by_id hd pe in
+      match bnm with
+      | None -> None
+      | Some nm ->
+          match g.g_parent with
+          | None -> None
+          | Some ph ->
+             let pnm = doit ph in
+             match pnm with
+             | None -> Some nm
+             | Some pnm -> Some (pnm ^ "." ^ nm)
+    in
+    doit hd
+
+  let name_map_string (hd : handle) (pe : proofenv) =
+    let g = get_goal_by_id hd pe in
+    match g.g_validation with
+    | None -> ""
+    | Some vd ->
+       String.concat "," (List.map (fun (hd, onm) -> (handle_str hd) ^ "~" ^ (odfl "_" onm)) (snd vd))
+
   (* ------------------------------------------------------------------ *)
   let tc1_update_goal_map (tx : goal -> goal) (hd : handle) (tc : tcenv1) =
     { tc with tce_penv = update_goal_map tx hd tc.tce_penv }
@@ -453,13 +494,15 @@ module FApi = struct
     let pg_parent = omap (fun pg -> pg.g_uid) tc.tce_tcenv.tce_goal in
     let pe = update_goal_map (fun g -> { g with g_parent = pg_parent }) pg_uid pe in
 
+    (* Add the new goal to the parent's name map *)
+
     let tc = tc_update_tcenv (fun te -> { te with tce_penv = pe }) tc in
     let tc = { tc with tce_goals = tc.tce_goals @ [pg_uid] } in
 
     (tc_normalize tc, pg_uid)
 
   (* ------------------------------------------------------------------ *)
-  let tc1_close (tc : tcenv1) (vx : validation) (sg: (string option * handle) list) =
+  let tc1_close (tc : tcenv1) (vx : validation) (sg: (handle * string option) list) =
     let current = tc1_current tc in
 
     let change g =
@@ -475,7 +518,7 @@ module FApi = struct
     tc
 
   (* ------------------------------------------------------------------ *)
-  let close (tc : tcenv) (vx : validation) (sg: (string option * handle) list) =
+  let close (tc : tcenv) (vx : validation) (sg: (handle * string option) list) =
     let tc = { tc with tce_tcenv = tc1_close tc.tce_tcenv vx sg } in
     (* Maybe pop one opened goal from proof context *)
     tc_normalize tc
@@ -483,7 +526,12 @@ module FApi = struct
   (* ------------------------------------------------------------------ *)
   let mutate (tc : tcenv) (vx : handle -> validation) ?hyps fp =
     let (tc, hd) = newgoal tc ?hyps fp in
-    close tc (vx hd) [(None, hd)]
+    close tc (vx hd) [(hd, None)]
+
+  (* ------------------------------------------------------------------ *)
+  let mutate_named (tc : tcenv) (vx : handle -> validation) ?hyps fp nm =
+    let (tc, hd) = newgoal tc ?hyps fp in
+    close tc (vx hd) [(hd, Some nm)]
 
   (* ------------------------------------------------------------------ *)
   let mutate1 (tc : tcenv1) (vx : handle -> validation) ?hyps fp =
@@ -491,13 +539,28 @@ module FApi = struct
     assert (tc.tce_goals = []); tc.tce_tcenv
 
   (* ------------------------------------------------------------------ *)
+  let mutate1_named (tc : tcenv1) (vx : handle -> validation) ?hyps fp nm =
+    let tc = mutate_named (tcenv_of_tcenv1 tc) vx ?hyps fp nm in
+    assert (tc.tce_goals = []); tc.tce_tcenv
+
+  (* ------------------------------------------------------------------ *)
   let xmutate (tc : tcenv) (vx : 'a) (fp : form list) =
     let (tc, hds) = List.map_fold (fun tc fp -> newgoal tc fp) tc fp in
-    close tc (VExtern (vx, hds)) (List.map (fun hd -> (None, hd)) hds)
+    close tc (VExtern (vx, hds)) (List.map (fun hd -> (hd, None)) hds)
+
+  (* ------------------------------------------------------------------ *)
+  let xmutate_named (tc : tcenv) (vx : 'a) (fp : form list) (nms : string list) =
+    assert (List.length fp = List.length nms); (* FIXME: Error handling *)
+    let (tc, hds) = List.map_fold (fun tc fp -> newgoal tc fp) tc fp in
+    close tc (VExtern (vx, hds)) (List.map2 (fun nm hd -> (hd, Some nm)) nms hds)
 
   (* ------------------------------------------------------------------ *)
   let xmutate1 (tc : tcenv1) (vx : 'a) (fp : form list) =
     xmutate (tcenv_of_tcenv1 tc) vx fp
+
+  (* ------------------------------------------------------------------ *)
+  let xmutate1_named (tc : tcenv1) (vx : 'a) (fp : form list) (nms : string list) =
+    xmutate_named (tcenv_of_tcenv1 tc) vx fp nms
 
   (* ------------------------------------------------------------------ *)
   let xmutate_hyps (tc : tcenv) (vx : 'a) subgoals =
@@ -506,11 +569,24 @@ module FApi = struct
         (fun tc (hyps, fp) -> newgoal tc ~hyps fp)
         tc subgoals
     in
-      close tc (VExtern (vx, hds)) (List.map (fun hd -> (None, hd)) hds)
+      close tc (VExtern (vx, hds)) (List.map (fun hd -> (hd, None)) hds)
 
+  (* ------------------------------------------------------------------ *)
+  let xmutate_hyps_named (tc : tcenv) (vx : 'a) subgoals nms =
+    assert (List.length subgoals = List.length nms); (* FIXME: Error handling *)
+    let (tc, hds) =
+      List.map_fold
+        (fun tc (hyps, fp) -> newgoal tc ~hyps fp)
+        tc subgoals
+    in
+      close tc (VExtern (vx, hds)) (List.map2 (fun nm hd -> (hd, Some nm)) nms hds)
   (* ------------------------------------------------------------------ *)
   let xmutate1_hyps (tc : tcenv1) (vx : 'a) subgoals =
     xmutate_hyps (tcenv_of_tcenv1 tc) vx subgoals
+
+  (* ------------------------------------------------------------------ *)
+  let xmutate1_hyps_named (tc : tcenv1) (vx : 'a) subgoals nms =
+    xmutate_hyps_named (tcenv_of_tcenv1 tc) vx subgoals nms
 
   (* ------------------------------------------------------------------ *)
   let newfact (pe : proofenv) vx hyps concl =
@@ -651,6 +727,26 @@ module FApi = struct
 
     tcenv_of_penv ~ctxt:tc.tce_tcenv.tce_ctxt (List.flatten ln) !pe
 
+
+  (* ------------------------------------------------------------------ *)
+  let t_onfsub_named (tx : string -> backward option) (tc : tcenv) =
+    let do1 pe hd =
+      let oname = get_name_by_id hd !pe in
+      let tt =
+        match oname with
+        | None -> tcenv_of_tcenv1
+        | Some nm -> odfl tcenv_of_tcenv1 (tx nm)
+      in
+      let tc = tt (tcenv1_of_penv hd !pe) in
+      assert (tc.tce_tcenv.tce_ctxt = []);
+      pe := (tc_penv tc); tc_opened tc
+    in
+
+    let pe = ref (tc_penv tc) in
+    let ln = List.map (do1 pe) (tc_opened tc) in
+
+    tcenv_of_penv ~ctxt:tc.tce_tcenv.tce_ctxt (List.flatten ln) !pe
+
   (* ------------------------------------------------------------------ *)
   let t_onfsub_map (tx : int -> tcenv1 -> 'a * tcenv) (tc : tcenv) =
     let do1 pe i hd =
@@ -685,6 +781,17 @@ module FApi = struct
     if   tc_count tc > 0
     then t_onfsub (fun i -> if test i then Some (tt i) else ttout i) tc
     else tc
+
+
+  (* ------------------------------------------------------------------ *)
+  let t_onselectnm_named (test : string -> bool) (tt : string -> backward) (tc : tcenv) =
+    if   tc_count tc > 0
+    then t_onfsub_named (fun nm -> if test nm then Some (tt nm) else None) tc
+    else tc
+
+  (* ------------------------------------------------------------------ *)
+  let t_onselect_named (test : string -> bool) (tt : backward) (tc : tcenv) =
+    t_onselectnm_named test (fun (_ : string) -> tt) tc
 
   (* ------------------------------------------------------------------ *)
   let t_onselect (test : tfocus) ?ttout (tt : backward) (tc : tcenv) =

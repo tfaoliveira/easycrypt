@@ -280,7 +280,7 @@ module HiPrinting = struct
                     end
                 in
 
-                Format.fprintf fmt "%s%s" (tabs lvl) vstr;
+                Format.fprintf fmt "%s %s > %s ~~> %s" (tabs lvl) (EcCoreGoal.handle_str hd) vstr (EcCoreGoal.FApi.name_map_string hd penv);
                 Format.fprintf fmt "\n";
                 let childs = EcCoreGoal.FApi.get_child_goals hd penv in
                 List.iter (fun x -> pr_childs x (lvl + 1)) childs

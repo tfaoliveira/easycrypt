@@ -525,7 +525,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     let concl = Fsubst.f_subst sbt concl in
     let (tc, hd) = FApi.newgoal tc ~hyps concl in
     let ids = List.map tg_val ids in
-    (FApi.close tc (VIntros (hd, ids)) [(None, hd)], ids)
+    (FApi.close tc (VIntros (hd, ids)) [(hd, None)], ids)
   end
 
 (* -------------------------------------------------------------------- *)
@@ -628,7 +628,9 @@ let tt_apply (pt : proofterm) (tc : tcenv) =
     raise InvalidGoalShape;
   end;
 
-  FApi.close tc (VApply pt) []
+  match pt with
+  | { pt_head = PTHandle hd } -> FApi.close tc (VApply pt) [(hd, None)]
+  | _ ->  FApi.close tc (VApply pt) []
 
 (* -------------------------------------------------------------------- *)
 let tt_apply_hyp (x : EcIdent.t) ?(args = []) ?(sk = 0) tc =
