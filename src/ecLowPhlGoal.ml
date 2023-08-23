@@ -493,24 +493,26 @@ let generalize_mod env m modi f =
   res
 
 (* -------------------------------------------------------------------- *)
-
 type abstract_info = {
-  top       : EcPath.mpath;     (* top functor (args stripped) *)
-  f         : EcPath.xpath;     (* procedure (normalized) *)
-  oi_param  : oi_param;         (* oracle parameters of [f] *)
+  top       : EcPath.mpath;     (** top functor (args and agks stripped) *)
+  f         : EcPath.xpath;     (** procedure (normalized) *)
+  agks      : EcPath.agks;      (** module wrappers *)
+  (* TODO: cost: v2: check [agks] usage everywhere *)
+
+  oi_param  : oi_param;         (** oracle parameters of [f] *)
 
   mod_info  : mod_info;
 
   cost_info : form;
-  (* Cost information of the functor [top].
-     Of type [Tmodsig t], where [t] contains an entry for [f.x_sub]. *)
+  (** Cost information of the functor [top].
+      Of type [Tmodsig t], where [t] contains an entry for [f.x_sub]. *)
 
   args_map : (EcPath.mpath * EcIdent.t) list;
-  (* Mapping between [f]'s arguments and [top]'s abstract argument names.
-     E.g. if [top] is [F(H : O)], and [M] is a module of type [O], then
-     [args_map] contains the entry [(M, O)]. *)
+  (** Mapping between [f]'s arguments and [top]'s abstract argument names.
+      E.g. if [top] is [F(H : O)], and [M] is a module of type [O], then
+      [args_map] contains the entry [(M, O)]. *)
 
-  fsig : funsig;                (* signature of [f] *)
+  fsig : funsig;                (** signature of [f] *)
 }
 
 
@@ -528,7 +530,8 @@ let abstract_info_err env f1 f =
 
 let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
   let f   = EcEnv.NormMp.norm_xfun env f1 in
-  let top = EcPath.m_functor f.EcPath.x_top in
+  let top = EcPath.m_functor ~keep_agks:false f.EcPath.x_top in
+  let agks = EcPath.magks f.x_top in
 
   let (mod_info,me), _ = EcEnv.Mod.by_mpath top env in
   let cost_info = (EcEnv.NormMp.get_restr_me env me top).mr_cost in
@@ -550,7 +553,7 @@ let abstract_info (env : EcEnv.env) (f1 : EcPath.xpath) : abstract_info =
    *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param))
    *   (String.concat ", " @@ List.map EcPath.x_tostring (allowed oi_param')); *)
 
-  { top; f; mod_info; oi_param; args_map; cost_info; fsig = def.f_sig }
+  { top; f; agks; mod_info; oi_param; args_map; cost_info; fsig = def.f_sig }
 
 (* -------------------------------------------------------------------- *)
 let abstract_info2

@@ -483,7 +483,7 @@ end
 let get_abs_functor f =
   let f = f.EcPath.x_top in
   match EcPath.mtop f with
-  | `Local _ -> EcPath.mpath (EcPath.mtop f) []
+  | `Local _ -> EcPath.mpath [] (EcPath.mtop f) []
   | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
@@ -1097,7 +1097,7 @@ and eqobs_inF_refl env f' eqo =
 
   | FBabs (oi_param, _) ->
     let do1 eqo o = PV.union (eqobs_inF_refl env o eqo) eqo in
-    let top = EcPath.m_functor f.x_top in
+    let top = EcPath.m_functor ~keep_agks:false f.x_top in
     let rec aux eqo =
       let eqi = List.fold_left do1 eqo (allowed oi_param) in
       if PV.subset eqi eqo then eqo

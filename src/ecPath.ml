@@ -384,18 +384,24 @@ let mqname (mp : mpath) (x : symbol) : mpath =
   | Some sub -> mk_mpath mp.core (Some (pqname sub x))
 
 (* strips arguments of a [mpath_core] *)
-let rec mcore_astrip (c : mpath_core) : mpath_core =
-  match c.c_cnt with
-  | Top _ -> c
-  | App (c, args) -> mcore_astrip c
-  | Wrap (a,k,c) -> mcore (Wrap (a,k,mcore_astrip c))
+let mcore_astrip ~keep_agks (c : mpath_core) : mpath_core =
+  let rec doit c =
+    match c.c_cnt with
+    | Top _ -> c
+    | App (c, args) -> doit c
+    | Wrap (a,k,c) ->
+      if keep_agks then mcore (Wrap (a,k,doit c)) else doit c
+  in
+  doit c
 
-let mastrip (mp : mpath) = mk_mpath (mcore_astrip mp.core) mp.sub
+let mastrip ~keep_agks (mp : mpath) =
+  mk_mpath (mcore_astrip ~keep_agks mp.core) mp.sub
 
 let m_apply (mp : mpath) (args : mpath list) =
   mk_mpath (mcore_apply mp.core args) mp.sub
 
-let m_functor (mp : mpath) = mk_mpath (mcore_astrip mp.core) None
+let m_functor ~keep_agks (mp : mpath) =
+  mk_mpath (mcore_astrip ~keep_agks mp.core) None
 
 let wrap (a : ident) (k : wrap_k) (m : mpath) : mpath =
   mk_mpath (mcore (Wrap (a, k, m.core))) m.sub
@@ -410,6 +416,7 @@ let rec resolve_core
   : agks * mpath_core_top * mpath list
   =
   match core.c_cnt with
+  (* TODO: cost: should this be [List.rev agks]? *)
   | Top top           -> (agks, top, args)
   | App (core, args') -> resolve_core agks core (args' @ args)
   | Wrap (ag', `Ext, mc) ->
@@ -559,7 +566,9 @@ let xpath top sub =
 
 let x_fv fv xp = m_fv fv xp.x_top
 
-let xastrip x = { x with x_top = mastrip x.x_top }
+(* TODO: cost: hashconsing seems broken here, try to add it back once
+   all tests go through *)
+let xastrip ~keep_agks x = { x with x_top = mastrip ~keep_agks x.x_top }
 let xbasename xp = xp.x_sub
 
 let pp_x fmt x = Format.fprintf fmt "%a.%s" pp_m x.x_top x.x_sub

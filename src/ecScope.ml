@@ -1445,11 +1445,11 @@ module Mod = struct
       (* We keep only the internal part, i.e the inner global variables *)
       (* TODO : using mod_use here to compute the set of inner global
          variables is inefficient, change this algo *)
-      let mp = EcPath.mpath_crt mpath [] None in
+      let mp = EcPath.mpath_crt [] mpath [] None in
       let use = EcEnv.NormMp.mod_use env mp in
       let rx =
         let add x _ rx =
-          if EcPath.m_equal (EcPath.m_functor x.EcPath.x_top) mp then
+          if EcPath.m_equal (EcPath.m_functor ~keep_agks:false x.EcPath.x_top) mp then
             Sx.add x rx
           else rx in
         Mx.fold add use.EcEnv.us_pv EcPath.Sx.empty in
@@ -1478,7 +1478,7 @@ module Mod = struct
       let ppe = EcPrinting.PPEnv.ofenv (env scope) in
       let pp fmt (xp, names) =
         Format.fprintf fmt "  - %a -> [%a]"
-          (EcPrinting.pp_funname ppe) (xastrip xp)
+          (EcPrinting.pp_funname ppe) (EcPath.xastrip ~keep_agks:false xp)
           (EcUtils.pp_list ", " pp_symbol)
           (Ssym.elements names)
       in

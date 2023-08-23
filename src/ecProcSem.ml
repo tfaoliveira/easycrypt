@@ -138,7 +138,11 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
 
      (mode, e_let lv (e_if e bt bf) c) (* FIXME *)
 
-  | Scall (Some lv, ({ x_top = { m_top = `Concrete (p, _) }; x_sub = f } as xp), args)  ->
+  | Scall (Some lv, ({ x_top = mp; x_sub = f } as xp), args)
+    when EcPath.m_is_concrete mp ->
+      let p    =
+        match EcPath.mtop mp with `Concrete (p, _) -> p | `Local _ -> assert false
+      in
       let fd   = oget (EcEnv.Fun.by_xpath_opt xp env.env) in
       let args = translate_e env (e_tuple args) in
       let op   = EcPath.pqname (oget (EcPath.prefix p)) f in

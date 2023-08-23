@@ -93,7 +93,8 @@ let hierror fmt =
 
 (* -------------------------------------------------------------------- *)
 let rec on_mp (cb : cb) (mp : mpath) =
-  let f = m_functor mp in
+  (* TODO: cost: v2: do we need to add a call-back on module agents? *)
+  let f = m_functor ~keep_agks:false mp in
   cb (`Module f);
   List.iter (on_mp cb) (EcPath.margs mp)
 
@@ -635,7 +636,7 @@ let generalize_type to_gen ty =
 let add_declared_mod to_gen id modty =
   { to_gen with
     tg_binds  = add_bind to_gen.tg_binds (id, gtmodty Std modty);
-    tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
+    tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs [] id [])
   }
 
 let add_declared_ty to_gen path tydecl =
@@ -1467,10 +1468,11 @@ let check_modtype scenv prefix name ms =
       on_modsig (cb scenv from cd_glob) ms.tms_sig
 
 
-let check_module scenv prefix tme =
+let check_module scenv prefix (tme : top_module_expr) =
   let me = tme.tme_expr in
   let path = pqname prefix me.me_name in
-  let from = ((tme.tme_loca :> locality), `Module (mpath_crt path [] None)) in
+  (* TODO: cost: v2: ignore [agks]? *)
+  let from = ((tme.tme_loca :> locality), `Module (mpath_crt [] path [] None)) in
   match tme.tme_loca with
   | `Local -> check_section scenv from
   | `Global ->
@@ -1634,7 +1636,8 @@ let add_decl_mod id mt scenv =
       d_modty = [`Global];
       d_tc    = [`Global];
     } in
-    let from = `Declare, `Module (mpath_abs id []) in
+    (* TODO: cost: v2: ignore [agks]? *)
+    let from = `Declare, `Module (mpath_abs [] id []) in
     on_modty (cb scenv from cd) mt;
     { scenv with
       sc_env = EcEnv.Mod.declare_local id mt scenv.sc_env;

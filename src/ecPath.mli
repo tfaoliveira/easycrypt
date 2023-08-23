@@ -77,13 +77,16 @@ type mpath_top_r =
     - [(agks, `Local    m            , args')] which is [$agks( m(args')     )]
     - [(agks, `Concrete (p, None    ), args')] which is [$agks( p(args')     )]
     - [(agks, `Concrete (p, Some sub), args')] which is [$agks( p(args').sub )] *)
-val resolve : mpath -> (ident * wrap_k) list * mpath_top_r * mpath list
+val resolve : mpath -> agks * mpath_top_r * mpath list
 
 (** [margs m = fst(resolve m)] *)
-val margs : mpath -> mpath list
+val magks : mpath -> agks
 
 (** [mtop m = snd(resolve m)] *)
 val mtop : mpath -> mpath_top_r
+
+(** [margs m = thrd(resolve m)] *)
+val margs : mpath -> mpath list
 
 (* -------------------------------------------------------------------- *)
 (** {3 Smart constructors for modules} *)
@@ -101,21 +104,25 @@ val mpath_crt : agks -> path -> mpath list -> path option -> mpath
 (** [mqname mp x] adds [x] to [mp]'s sub-path (only for concrete modules) *)
 val mqname : mpath -> symbol -> mpath
 
-(** strips arguments of a module path (below the sub-path), i.e.
-    [mastrip ( $agks( p(args).sub ) ) = $agks( p.sub )] *)
-val mastrip : mpath -> mpath
-
 (** build an abstract path from an ident *)
 val mident : ident -> mpath
-
-(** strip arguments and sub-path of a [mpath], i.e.
-    [m_functor ( p(args).sub ) = p] *)
-(* TODO: cost: what should this do? *)
-val m_functor : mpath -> mpath
 
 (** applies [args] to [mp], possibly below [mp]'s sub-path, i.e.
     [m_apply p.sub args = (p(args)).sub )] *)
 val m_apply : mpath -> mpath list -> mpath
+
+(* -------------------------------------------------------------------- *)
+(** strips arguments of a module path (below the sub-path), i.e.
+    [mastrip ~keep:agks:true  ( $agks( p(args).sub ) ) = $agks( p.sub )]
+    [mastrip ~keep:agks:false ( $agks( p(args).sub ) ) =        p.sub  ] *)
+val mastrip : keep_agks:bool -> mpath -> mpath
+(* TODO: cost: v2: when finished, simplify the API if [keep_agks] is always false. *)
+
+(** strip arguments and sub-path of a [mpath], i.e.
+    [m_functor ~keep_agks:true  ( $agks ( p(args).sub ) ) =        p  ]
+    [m_functor ~keep_agks:false ( $agks ( p(args).sub ) ) = $agks( p )] *)
+val m_functor : keep_agks:bool -> mpath -> mpath
+(* TODO: cost: v2: when finished, simplify the API if [keep_agks] is always false. *)
 
 (* -------------------------------------------------------------------- *)
 (** {3 Utilities for modules} *)
@@ -143,8 +150,10 @@ type xpath = private {
   x_tag : int;
 }
 
-val xpath     : mpath -> symbol -> xpath
-val xastrip   : xpath -> xpath
+val xpath   : mpath -> symbol -> xpath
+
+val xastrip : keep_agks:bool -> xpath -> xpath
+(* TODO: cost: v2: when finished, simplify the API if [keep_agks] is always false. *)
 
 val x_equal       : xpath -> xpath -> bool
 val x_compare     : xpath -> xpath -> int

@@ -891,7 +891,7 @@ let pp_parse_error fmt msg =
 (* -------------------------------------------------------------------- *)
 let pp_alias_clash env fmt = function
   | EcPV.AC_concrete_abstract (mp, npv) ->
-      let top = m_functor npv.x_top in
+      let top = m_functor ~keep_agks:false npv.x_top in
       let ppe = EcPrinting.PPEnv.ofenv env in
       Format.fprintf fmt
         "The module %a can write %a (maybe add restriction %a)"

@@ -239,7 +239,7 @@ let root (env : env) =
 
 let mroot (env : env) =
   match env.env_scope.ec_scope with
-  | `Theory   -> EcPath.mpath_crt (root env) [] None
+  | `Theory   -> EcPath.mpath_crt [] (root env) [] None
   | `Module m -> m
   | `Fun    x -> x.EcPath.x_top
 
@@ -429,10 +429,11 @@ module MC = struct
                 | None -> assert false
                 | Some q -> begin
                     let ap =
-                        EcPath.xpath
-                          (EcPath.mpath_crt p (if isvar then [] else List.map EcPath.mident n)
-                             (EcPath.prefix q))
-                          (EcPath.basename q)
+                      (* TODO: cost: no module wrappers? *)
+                      EcPath.xpath
+                        (EcPath.mpath_crt [] p (if isvar then [] else List.map EcPath.mident n)
+                           (EcPath.prefix q))
+                        (EcPath.basename q)
                     in
                       (ap, odfl false (prefix |> omap (EcPath.p_equal p)))
                 end
@@ -445,7 +446,8 @@ module MC = struct
               | Some (EcPath.Psymbol x) ->
                   let ap =
                     EcPath.xpath
-                      (EcPath.mpath_abs m
+                      (* TODO: cost: no module wrappers? *)
+                      (EcPath.mpath_abs [] m
                          (if isvar then [] else List.map EcPath.mident n))
                       x
                   in
@@ -491,18 +493,20 @@ module MC = struct
       let (ap, inscope) =
         match p with
         | IPPath p ->
-           (* p,q = frontier with the first module *)
-            let (p, q) = _cutpath (i+1) p in
-              (EcPath.mpath_crt p (List.map EcPath.mident n) q,
-               odfl false (prefix |> omap (EcPath.p_equal p)))
+          (* p,q = frontier with the first module *)
+          let (p, q) = _cutpath (i+1) p in
+          (* TODO: cost: no module wrappers? *)
+          (EcPath.mpath_crt [] p (List.map EcPath.mident n) q,
+           odfl false (prefix |> omap (EcPath.p_equal p)))
 
         | IPIdent (m, None) ->
-            if i <> 0 then assert false;
-            (EcPath.mpath_abs m (List.map EcPath.mident n), false)
+          if i <> 0 then assert false;
+          (* TODO: cost: no module wrappers? *)
+          (EcPath.mpath_abs [] m (List.map EcPath.mident n), false)
 
         | _ -> assert false
       in
-        ((List.length l, if inscope && not spsc then [] else a), ap)
+      ((List.length l, if inscope && not spsc then [] else a), ap)
 
   (* ------------------------------------------------------------------ *)
   let _downpath_for_th _env p args =
@@ -1257,7 +1261,7 @@ let enter mode (name : symbol) (env : env) =
 
   | `Module params, `Theory ->
       let idents = List.map (fun (x, _) -> EcPath.mident x) params in
-      let mpath  = EcPath.mpath_crt path idents None in
+      let mpath  = EcPath.mpath_crt [] path idents None in
       let env    = MC.bind_mc name (empty_mc (Some params)) env in
         { env with
             env_scope = { ec_path = path; ec_scope = `Module mpath; };
@@ -2021,7 +2025,7 @@ module Mod = struct
   let add_restr_to_declared p me env =
     if me.tme_loca = `Local then
       let p = pqname p me.tme_expr.me_name in
-      let mp = EcPath.mpath_crt p [] None in
+      let mp = EcPath.mpath_crt [] p [] None in
       let xs = vars_mb mp Sx.empty me.tme_expr.me_body  in
       add_xs_to_declared xs env
     else env
@@ -2147,7 +2151,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module NormMp = struct
-  let rec norm_mpath_for_typing env p =
+  let rec norm_mpath_for_typing env (p : mpath) =
     let (ip, (i, args)) = ipath_of_mpath p in
     match Mod.by_ipath_r true ip env with
     | Some ((spi, params), ((_, ({ me_body = ME_Alias (arity,alias) } as m)), _)) ->
@@ -2164,22 +2168,29 @@ module NormMp = struct
       | `Concrete (_, None) -> p
 
       | `Concrete (p1, Some p2) -> begin
-        let name = EcPath.basename p2 in
-        let pr   = EcPath.mpath_crt p1 (EcPath.margs p) (EcPath.prefix p2) in
+          let name = EcPath.basename p2 in
+        let pr   =
+          EcPath.mpath_crt (EcPath.magks p) p1 (EcPath.margs p) (EcPath.prefix p2)
+        in
         let pr   = norm_mpath_for_typing env pr in
         match EcPath.mtop pr with
         | `Local _ -> p
         | `Concrete (p1, p2) ->
-          EcPath.mpath_crt p1 (EcPath.margs pr) (Some (EcPath.pqoname p2 name))
+          (* TODO: cost: [EcPath.margs p]? *)
+          EcPath.mpath_crt (EcPath.magks pr) p1 (EcPath.margs pr) (Some (EcPath.pqoname p2 name))
       end
     end
 
   let rec norm_mpath_def env (p : EcPath.mpath) : EcPath.mpath =
-    let top = EcPath.m_functor p in
+    (* TODO: cost: v2: clean-up using [EcPath.resolve] *)
+    let top  = EcPath.m_functor ~keep_agks:false p in
     let args = EcPath.margs p in
+    let agks = EcPath.magks p in
     let sub =
-      match EcPath.mtop p with | `Local _ -> None | `Concrete(_,o) -> o in
-    (* p is (top args).sub *)
+      match EcPath.mtop p with | `Local _ -> None | `Concrete(_,o) -> o
+    in
+
+    (* p is $agks( (top args).sub ) *)
     match Mod.by_mpath_opt top env with
     | None -> norm_mpath_for_typing env p
     | Some ((_,me), _) ->
@@ -2198,17 +2209,17 @@ module NormMp = struct
           let args2 = if extra = [] then args' else args' @ extra in
           let mp =
             match EcPath.mtop mp with
-            | `Local _ as x -> assert (sub = None); EcPath.mpath x args2
+            | `Local _ as x -> assert (sub = None); EcPath.mpath agks x args2
             | `Concrete(top',None) -> (* ((top' args') args).sub *)
-              EcPath.mpath_crt top' args2 sub
+              EcPath.mpath_crt agks top' args2 sub
             | `Concrete(top',(Some p' as sub')) -> (* ((top' args').sub').sub *)
               assert (args = []); (* A submodule cannot be a functor *)
               match sub with
-              | None   -> EcPath.mpath_crt top' args2 sub'
-              | Some p -> EcPath.mpath_crt top' args2 (Some (pappend p' p)) in
+              | None   -> EcPath.mpath_crt agks top' args2 sub'
+              | Some p -> EcPath.mpath_crt agks top' args2 (Some (pappend p' p)) in
           norm_mpath env mp
         else
-          EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
+          EcPath.mpath agks (EcPath.mtop p) (List.map (norm_mpath env) args)
 
       | ME_Structure _ when sub <> None ->
         begin
@@ -2222,12 +2233,12 @@ module NormMp = struct
             in
             norm_mpath env p
           | _ ->
-            EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
+            EcPath.mpath agks (EcPath.mtop p) (List.map (norm_mpath env) args)
         end
 
       | _ ->
       (* The top is in normal form simply normalize the arguments *)
-        EcPath.mpath (EcPath.mtop p) (List.map (norm_mpath env) args)
+        EcPath.mpath agks (EcPath.mtop p) (List.map (norm_mpath env) args)
       end
 
   and norm_mpath env p =
@@ -2252,8 +2263,10 @@ module NormMp = struct
   let norm_xpv env (p : EcPath.xpath) : EcPath.xpath =
     try Mx.find p !(env.env_norm).norm_xpv with Not_found ->
       let mp = p.x_top in
-      assert (EcPath.margs mp = []);
-      let top = m_functor p.x_top in
+      (* TODO: cost: v2: [EcPath.magks mp = []] should be an invariant of [xp] of
+         program variables. Maybe have it checked more globally? *)
+      assert (EcPath.margs mp = [] && EcPath.magks mp = []);
+      let top = EcPath.m_functor ~keep_agks:false p.x_top in
       match Mod.by_mpath_opt top env with
       | None -> (* We are in typing mod .... *)
         let mp = norm_mpath env mp in
@@ -2472,7 +2485,7 @@ module NormMp = struct
           in
 
           let filter f =
-            let ftop = EcPath.m_functor f.EcPath.x_top in
+            let ftop = EcPath.m_functor ~keep_agks:false f.EcPath.x_top in
             Sm.mem ftop mparams
           in
           let calls = List.filter filter (EcPath.Sx.elements all_calls) in

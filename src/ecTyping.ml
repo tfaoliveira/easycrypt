@@ -671,7 +671,7 @@ let rec everything_allowed env
        allowed. *)
     let supp = support env pr r in
     let dum =
-      let mdum = EcPath.mpath_abs (EcIdent.create "__dummy_ecTyping__") [] in
+      let mdum = EcPath.mpath_abs [] (EcIdent.create "__dummy_ecTyping__") [] in
       EcPath.xpath mdum "__dummy_ecTyping_s__" in
     (* Sanity check: [dum] must be fresh. *)
     assert (not @@ Sx.mem dum supp);
@@ -1130,7 +1130,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
 
       let body = EcSubst.subst_modsig_body subst mod_expr.me_sig_body in
 
-      ((EcPath.mpath (EcPath.mtop top_path) args, loc),
+      ((EcPath.mpath [] (EcPath.mtop top_path) args, loc),
        { miss_params = remn;
          miss_body   = body; })
 
@@ -1961,6 +1961,7 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
         match mod_info with
         | Wrap -> ()
         | Std ->
+          (* TODO: cost: v2: does this still makes sens? *)
           tyerror (loc name) env (ModuleNotWrapped (unloc name))
       in
 
@@ -1977,10 +1978,11 @@ let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
   (id, unloc f)
 
 (* -------------------------------------------------------------------- *)
-let trans_topmsymbol env gp =
+let trans_topmsymbol env (gp : pmsymbol located) =
   (* FIXME *)
   let (mp,_) = trans_msymbol env gp in
-  let top = EcPath.m_functor mp in
+  assert (EcPath.magks mp = []);
+  let top = EcPath.m_functor ~keep_agks:false mp in
   let mp = EcPath.m_apply top (EcPath.margs mp) in
   mp
 
@@ -2745,7 +2747,7 @@ and transmod_header
     let mp =
       match EcEnv.scope env with
       | `Theory ->
-        EcPath.mpath_crt (EcPath.pqname (EcEnv.root env) me.me_name) args None
+        EcPath.mpath_crt [] (EcPath.pqname (EcEnv.root env) me.me_name) args None
       | `Module m ->
         assert (List.is_empty args);
         EcPath.mqname m me.me_name
@@ -2762,7 +2764,7 @@ and transmod_header
       try  check_sig_mt_cnv env me.me_name tymod aty
       with TymodCnvFailure err ->
         let args = List.map (fun (id,_) -> EcPath.mident id) rm in
-        let mp = mpath_crt (psymbol me.me_name) args None in
+        let mp = mpath_crt [] (psymbol me.me_name) args None in
         tyerror s.pl_loc env (TypeModMismatch(mp, aty, err))
     in
     List.iter check mts;

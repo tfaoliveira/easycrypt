@@ -254,7 +254,7 @@ and s_eqobs_in sl sr sim local eqo =
   s_eqobs_in_rev (List.rev sl.s_node) (List.rev sr.s_node) sim local eqo
 
 (* -------------------------------------------------------------------- *)
-and f_eqobs_in fl fr sim eqO =
+and f_eqobs_in (fl : EcPath.xpath) (fr : EcPath.xpath) (sim : sim) eqO =
   let env = sim.sim_env in
   let nfl  = NormMp.norm_xfun env fl in
   let nfr  = NormMp.norm_xfun env fr in
@@ -273,7 +273,9 @@ and f_eqobs_in fl fr sim eqO =
           try EcLowPhlGoal.abstract_info2 env fl fr
           with TcError _ -> raise EqObsInError in
 
-        let top = EcPath.m_functor nfl.EcPath.x_top in
+        (* TODO: cost: v2: is ignoring module wrappers fine here? It
+           should be the case if this is a standard hoare tactic *)
+        let top = EcPath.m_functor ~keep_agks:false nfl.EcPath.x_top in
         let sim, eqi =
           (* Try to infer the good invariant for oracle *)
           let eqo = Mpv2.remove_glob top outf in

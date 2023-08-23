@@ -116,8 +116,11 @@ and f_upto env bad f1 f2 =
     f1.x_sub = f2.x_sub &&
     EcPath.mtop_equal (EcPath.mtop f1.x_top) (EcPath.mtop f2.x_top) &&
     omap_dfl (fun bad ->
-      let fv = EcPV.PV.add env bad tbool EcPV.PV.empty in
-      EcPV.PV.check_depend env fv (m_functor f1.x_top); true) true bad &&
+        let fv = EcPV.PV.add env bad tbool EcPV.PV.empty in
+        EcPV.PV.check_depend env fv
+          (* TODO: cost: v2: is ignoring module wrappers fine here? It
+             `should be the case if this is a standard hoare tactic *)
+          (m_functor ~keep_agks:false f1.x_top); true) true bad &&
     List.all2 (f_upto env bad) (allowed o1) (allowed o2)
 
   | _, _ -> false

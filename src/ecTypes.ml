@@ -511,9 +511,12 @@ let pv_res =  PVloc res_symbol
 
 let xp_glob x =
   let top = x.EcPath.x_top in
-  if EcPath.margs top = [] then x else
-    (* remove the functor argument *)
-    let ntop = EcPath.mpath (EcPath.mtop top) [] in
+  let agks, mtop, margs = EcPath.resolve top in
+  if margs = [] && agks = [] then x else
+    (* TODO: cost: this seems correct, because I think [xp_glob] is
+       only used for variables *)
+    (* remove the functor argument and the module wrappers *)
+    let ntop = EcPath.mpath [] mtop [] in
     EcPath.xpath ntop x.EcPath.x_sub
 
 let pv_glob x = PVglob (xp_glob x)

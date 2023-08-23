@@ -818,7 +818,9 @@ let get_uninit_read_of_fun (f : _ p_function_) =
       Ssym.union r raout
 
 (* -------------------------------------------------------------------- *)
-let get_uninit_read_of_module (p : path) (me : _ p_module_expr) =
+let get_uninit_read_of_module
+    (p : path) (me : _ p_module_expr) : (xpath * Ssym.t) list
+  =
   let rec doit_me acc (mp, me) =
     match me.me_body with
     | ME_Alias     _  -> acc
@@ -849,8 +851,8 @@ let get_uninit_read_of_module (p : path) (me : _ p_module_expr) =
   let mp =
     let margs =
       List.map
-        (fun (x, _) -> EcPath.mpath_abs x [])
+        (fun (x, _) -> EcPath.mpath_abs [] x [])
         me.me_params
-    in EcPath.mpath_crt (EcPath.pqname p me.me_name) margs None
+    in EcPath.mpath_crt [] (EcPath.pqname p me.me_name) margs None
 
   in List.rev (doit_me [] (mp, me))

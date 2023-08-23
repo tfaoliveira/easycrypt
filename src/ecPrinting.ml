@@ -3375,7 +3375,7 @@ let pp_modexp_lc ppe fmt (mp, ((mod_info,me), olc)) =
  Format.fprintf fmt "%a%a" pp_locality lc (pp_modexp ppe) (mp, me)
 
 let pp_top_modexp ppe fmt (p, me) =
-  let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.tme_expr.me_name)) in
+  let mp = EcPath.mpath_crt [] p [] (Some (EcPath.psymbol me.tme_expr.me_name)) in
   pp_modexp_lc ppe fmt (mp, ((Std,me.tme_expr), Some me.tme_loca))
 
 let rec pp_theory ppe (fmt : Format.formatter) (path, cth) =

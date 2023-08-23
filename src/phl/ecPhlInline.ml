@@ -462,7 +462,7 @@ let test_match pm sub fx f =
     in
 
   begin match fx with None -> true | Some sym -> EcSymbols.sym_equal sym f.x_sub end
-  && match f.x_top.m_top with
+  && match EcPath.mtop f.x_top with
   | `Local a ->
     sub = [] &&
     begin match pm with
