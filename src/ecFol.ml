@@ -521,8 +521,11 @@ let rec f_let_simpl lp f1 f2 =
       | None   -> f2
       | Some i ->
           if   i = 1 || can_subst f1
-          then Fsubst.f_subst_local id f1 f2
-          else f_let lp f1 f2
+          then
+            let s = Fsubst.f_bind_local Fsubst.f_subst_id id f1 in
+            Fsubst.f_subst s f2
+          else
+            f_let lp f1 f2
     end
 
   | LTuple ids -> begin
@@ -534,13 +537,13 @@ let rec f_let_simpl lp f1 f2 =
               | None   -> (d, s)
               | Some i ->
                   if   i = 1 || can_subst f1
-                  then (d, Mid.add id f1 s)
+                  then (d, Fsubst.f_bind_local s id f1)
                   else (((id, ty), f1) :: d, s))
-              ([], Mid.empty) ids fs
+              ([], Fsubst.f_subst_id) ids fs
           in
             List.fold_left
               (fun f2 (id, f1) -> f_let (LSymbol id) f1 f2)
-              (Fsubst.subst_locals s f2) d
+              (Fsubst.f_subst s f2) d
       | _ ->
         let x = EcIdent.create "tpl" in
         let ty = ttuple (List.map snd ids) in

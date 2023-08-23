@@ -12,9 +12,10 @@ clone G.PowZMod as GP with
 
 clone GP.FDistr as FD.
 
-clone GP.ZModE as ZP.
+(* Cloning GP.ZModE duplicates the type exp and leads to ambiguities. *)
+(* clone GP.ZModE as ZP. *) 
 
-import G GP FD ZP.
+import G GP FD GP.ZModE.
 
 require Hybrid.
 
@@ -57,10 +58,10 @@ lemma islossless_leaks : islossless DDHb.leaks
   by proc; auto.
 
 lemma islossless_orcl1 : islossless DDHb.orclL
-  by proc; auto; progress; smt.
+  by proc; auto; smt(dt_ll).
 
 lemma islossless_orcl2 : islossless DDHb.orclR
-  by proc; auto; progress; smt.
+  by proc; auto; smt(dt_ll).
 
 section.
 

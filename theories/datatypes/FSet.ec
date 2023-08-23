@@ -47,6 +47,18 @@ rewrite -(perm_eq_mem _ _ (oflistK s2)).
 by rewrite !mem_undup (perm_eq_mem _ _ peq_s1s2).
 qed.
 
+lemma oflist_perm_eq_undup (s1 s2 : 'a list):
+  perm_eq (undup s1) (undup s2) => oflist s1 = oflist s2.
+proof.
+move=> peq_s1s2; apply/fset_eq /uniq_perm_eq; 1,2: exact/uniq_elems.
+move=> x; rewrite -(perm_eq_mem _ _ (oflistK s1)).
+by rewrite -(perm_eq_mem _ _ (oflistK s2)) (perm_eq_mem _ _ peq_s1s2).
+qed.
+
+lemma perm_eq_oflistP (s1 s2 : 'a list):
+  oflist s1 = oflist s2 <=> perm_eq (undup s1) (undup s2).
+proof. by split; [apply perm_eq_oflist | apply oflist_perm_eq_undup]. qed.
+
 (* -------------------------------------------------------------------- *)
 op card ['a] (s : 'a fset) = size (elems s) axiomatized by cardE.
 
@@ -456,6 +468,12 @@ proof. by apply/subsetP=> x; rewrite !inE; case. qed.
 lemma sub0set (A : 'a fset) : fset0 \subset A.
 proof. by apply/subsetP=> x; rewrite !inE. qed.
 
+lemma sub1set x (A : 'a fset) : fset1 x \subset A <=> x \in A.
+proof.
+rewrite subsetP; split => [|x_A y /in_fset1 -> //].
+by apply; rewrite in_fset1.
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma fcards0: card fset0<:'a> = 0.
 proof. by rewrite cardE set0E -(perm_eq_size (undup [])) 1:oflistK. qed.
@@ -586,6 +604,13 @@ proof.
   rewrite eq_sym eqEcard z_cA fcards0 //=; apply/sub0set.
 qed.
 
+lemma fcard_eq1 (A : 'a fset) : (card A = 1) <=> (exists a, A = fset1 a).
+proof.
+split=> [o_cA|[a ->]]; last apply/fcard1.
+exists (pick A); rewrite eq_sym eqEcard o_cA fcard1 /= sub1set mem_pick.
+by apply: contraL o_cA => ->; rewrite fcards0.
+qed.
+
 (* -------------------------------------------------------------------- *)
 op image (f: 'a -> 'b) (A : 'a fset): 'b fset = oflist (map f (elems A))
   axiomatized by imageE.
@@ -662,18 +687,20 @@ qed.
 
 (* -------------------------------------------------------------------- *)
 op product (A : 'a fset) (B : 'b fset): ('a * 'b) fset =
-  oflist (flatten (map (fun a => map (fun b => (a,b)) (elems B)) (elems A)))
+  oflist (allpairs (fun x y => (x,y)) (elems A) (elems B))
 axiomatized by productE.
 
 lemma productP (A : 'a fset) (B : 'b fset) (a : 'a) (b : 'b):
-  mem (product A B) (a,b) <=> mem A a /\ mem B b.
+  (a, b) \in product A B <=> (a \in A) /\ (b \in B).
 proof.
-  rewrite productE -{2}(elemsK A) -{2}(elemsK B) !mem_oflist /flatten.
-  elim (elems A) (elems B) a b=> {A B} [//=|].
-  move=> a' A ih B a b /=; rewrite mem_cat mapP ih /=.
-  case (a = a')=> [->|] //=.
-  split=> [[[b']|] //=|b_in_B].
-  by left; exists b.
+by rewrite productE mem_oflist allpairsP; split => [/#|*]; exists (a,b) => /#. 
+qed.
+
+lemma card_product (A B : 'a fset): 
+  card (product A B) = card A * card B.
+proof.
+rewrite productE uniq_card_oflist ?size_allpairs -?cardE //.
+apply allpairs_uniq; smt(uniq_elems).
 qed.
 
 (* -------------------------------------------------------------------- *)

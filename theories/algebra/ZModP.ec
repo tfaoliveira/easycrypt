@@ -1,6 +1,6 @@
 (* -------------------------------------------------------------------- *)
 require import AllCore List Distr Int IntDiv.
-require (*--*) Subtype Ring StdOrder.
+require (*--*) Bigalg Subtype Ring StdOrder.
 (*---*) import Ring.IntID StdOrder.IntOrder.
 
 (* ==================================================================== *)
@@ -11,11 +11,15 @@ abstract theory ZModRing.
 const p : { int | 2 <= p } as ge2_p.
 
 (* -------------------------------------------------------------------- *)
-type zmod.
-
 clone Subtype as Sub with
-  type T <- int, type sT <- zmod,
-  pred P (x : int) <- 0 <= x < p.
+  type T <- int,
+  op P (x : int) <- 0 <= x < p
+proof *.
+realize inhabited.
+exists 0. smt(ge2_p).
+qed.
+
+type zmod = Sub.sT.
 
 (* -------------------------------------------------------------------- *)
 op inzmod (z : int)  = Sub.insubd (z %% p).
@@ -78,16 +82,16 @@ lemma zeroE: asint zero = 0.
 proof. by rewrite /zero inzmodK mod0z. qed.
 
 lemma oneE: asint one = 1.
-proof. by rewrite /one inzmodK modz_small; smt. qed.
+proof. by rewrite /one inzmodK modz_small; smt(ge2_p). qed.
 
 lemma oppE (x : zmod): asint (-x) = (- (asint x)) %% p.
-proof. by rewrite /[-] /inzmod /asint /= Sub.insubdK; smt. qed.
+proof. by rewrite /[-] /inzmod /asint /= Sub.insubdK; smt(ge2_p). qed.
 
 lemma addE (x y : zmod): asint (x + y) = (asint x + asint y) %% p.
-proof. by rewrite /(+) /inzmod /asint /= Sub.insubdK; smt. qed.
+proof. by rewrite /(+) /inzmod /asint /= Sub.insubdK; smt(ge2_p). qed.
 
 lemma mulE (x y : zmod): asint (x * y) = (asint x * asint y) %% p.
-proof. rewrite /( * ) /inzmod /asint /= Sub.insubdK; smt. qed.
+proof. rewrite /( * ) /inzmod /asint /= Sub.insubdK; smt(ge2_p). qed.
 
 (* -------------------------------------------------------------------- *)
 theory ZModule.
@@ -98,7 +102,9 @@ lemma addrC (x y : zmod): x + y = y + x.
 proof. by apply/asint_inj; rewrite !addE addzC. qed.
 
 lemma add0r (x : zmod): zero + x = x.
-proof. by apply/asint_inj; rewrite !(addE, zeroE) add0z #smt. qed.
+proof. 
+by apply/asint_inj; rewrite !(addE, zeroE) add0z; smt(rg_asint pmod_small ge2_p).
+qed.
 
 lemma addNr (x : zmod): (-x) + x = zero.
 proof.
@@ -109,7 +115,8 @@ end ZModule.
 
 (* -------------------------------------------------------------------- *)
 theory ComRing.
-lemma oner_neq0 : one <> zero by smt.
+lemma oner_neq0 : one <> zero.
+proof. by rewrite -eq_inzmod #smt:(ge2_p). qed.
 
 lemma mulrA (x y z : zmod): x * (y * z) = (x * y) * z.
 proof. by apply/asint_inj; rewrite !mulE modzMml modzMmr mulzA. qed.
@@ -118,7 +125,7 @@ lemma mulrC (x y : zmod): x * y = y * x.
 proof. by apply/asint_inj; rewrite !mulE mulzC. qed.
 
 lemma mul1r (x : zmod): one * x = x.
-proof. by apply/asint_inj; rewrite !(mulE, oneE) mul1z #smt. qed.
+proof.  apply/asint_inj; rewrite !(mulE, oneE) mul1z; smt(rg_asint). qed.
 
 lemma mulrDl (x y z : zmod): (x + y) * z = (x * z) + (y * z).
 proof.
@@ -141,15 +148,18 @@ end ComRing.
 
 (* -------------------------------------------------------------------- *)
 clone import Ring.ComRing as ZModpRing with
-  type t     <- zmod,
-  op   zeror <- zero,
-  op   oner  <- one,
-  op   ( + ) <- ( + ),
-  op   [ - ] <- ([-]),
-  op   ( * ) <- ( * ),
-  op   invr  <- inv,
-  pred unit  <- unit
-  proof *.
+  type t     <= zmod,
+  op   zeror <= zero,
+  op   oner  <= one,
+  op   ( + ) <= ( + ),
+  op   [ - ] <= ([-]),
+  op   ( * ) <= ( * ),
+  op   invr  <= inv,
+  pred unit  <= unit
+  proof *
+
+  remove abbrev (-)
+  remove abbrev (/).
 
 realize addrA.     proof. by apply/ZModule.addrA. qed.
 realize addrC.     proof. by apply/ZModule.addrC. qed.
@@ -163,6 +173,10 @@ realize oner_neq0. proof. by apply/ComRing.oner_neq0. qed.
 realize mulVr.     proof. by apply/ComRing.mulVr. qed.
 realize unitP.     proof. by apply/ComRing.unitP. qed.
 realize unitout.   proof. by apply/ComRing.unitout. qed.
+
+clone import Bigalg.BigComRing as BigZMod with
+  theory CR <- ZModpRing
+proof *.
 
 (* -------------------------------------------------------------------- *)
 instance ring with zmod
@@ -215,6 +229,13 @@ proof. by rewrite -inzmod_mod inzmodN. qed.
 lemma inzmodB_mod (a b : int):
   inzmod ((a - b) %% p) = (inzmod a) + (- (inzmod b)).
 proof. by rewrite -inzmod_mod inzmodB. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma zmodcgrP (i j : int) : zmodcgr i j <=> p %| (i - j).
+proof. by rewrite dvdzE -[0](mod0z p) !eq_inzmod inzmodB subr_eq0. qed.
+
+lemma inzmod_eq0P (i : int) : inzmod i = zero <=> p %| i.
+proof. by rewrite -[zero]asintK zeroE -eq_inzmod zmodcgrP. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma intmul_asint (x : zmod) : x = intmul one (asint x).
@@ -273,6 +294,9 @@ clone include ZModRing with
   op    p <- p
   proof ge2_p by smt(gt1_prime prime_p).
 
+import BigZMod.
+import BMul.
+
 lemma unitE (x : zmod) : (unit x) <=> (x <> zero).
 proof.
 split; first by apply: contraL => ->; apply: ZModpRing.unitr0.
@@ -290,8 +314,11 @@ clone import Ring.Field as ZModpField with
   op   ( + ) <- ( + ),
   op   [ - ] <- ([-]),
   op   ( * ) <- ( * ),
-  op   invr  <- inv
-  proof *.
+  op   invr  <- inv,
+  op   exp   <- ZModpRing.exp
+  proof *
+  remove abbrev (-)
+  remove abbrev (/).
 
 realize addrA.     proof. by apply/ZModule.addrA. qed.
 realize addrC.     proof. by apply/ZModule.addrC. qed.
@@ -320,6 +347,8 @@ move=> h; apply: (ZModpRing.mulrI x); last by rewrite ZModpRing.mulr0.
 by rewrite unitE.
 qed.
 
+abbrev exp = ZModpRing.exp.
+
 (* -------------------------------------------------------------------- *)
 instance field with zmod
   op rzero = ZModField.zero
@@ -328,7 +357,7 @@ instance field with zmod
   op mul   = ZModField.( * )
   op opp   = ZModField.([-])
   op inv   = ZModField.inv
-  op expr  = ZModField.ZModpField.exp
+  op expr  = ZModpRing.exp
 
   proof oner_neq0 by apply/ZModpField.oner_neq0
   proof addr0     by apply/ZModpField.addr0
@@ -407,19 +436,21 @@ proof.
       by case (0 <= k) => // _; rewrite exprN invr_eq1.
     by rewrite le0n /= inzmod_exp modz_ge0.
   rewrite -(invrK (exp (inzmod _) _)); apply congr1.
-  rewrite -exprN -(mul1r (ZModField.ZModpField.exp _ _)).
+  rewrite -exprN -(mul1r (exp _ _)).
   rewrite -(expr1z (- n %/ k)) -eq_exp_one -exprM mulrN Ring.IntID.mulrC -exprD.
   + apply/negP => eq_inzmod_zero; move: eq_inzmod_zero eq_exp_one => ->.
     by rewrite expr0z neqk0 /= eq_sym oner_neq0.
   by rewrite -opprD -divz_eq inzmod_exp oppr_ge0 ltzW //= ltrNge.
 qed.
 
-(*FIXME*)
 lemma exp_sub_p_1 (x : zmod) :
   unit x =>
   exp x (p - 1) = one.
 proof.
-admitted.
+elim/inzmodW: x => x rg_x /unitE; rewrite inzmod_eq0P => N_p_div_x.
+rewrite exp_inzmod ifT; first by smt(ge2_p).
+by rewrite -[one]asintK oneE -eq_inzmod zmodcgrP &(Fermat_little) // prime_p.
+qed.
 
 lemma exp_p (x : zmod) :
   exp x p = x.
