@@ -1089,7 +1089,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
         (mod_expr.me_params, true)
   in
 
-  let args = args |> omap (List.map (trans_msymbol env)) in
+  let args = omap (List.map (trans_msymbol env)) args in
 
   match args with
   | None ->

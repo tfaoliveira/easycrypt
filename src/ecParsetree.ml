@@ -29,7 +29,18 @@ let qsymb_of_symb (x : symbol) : qsymbol = ([], x)
 (* -------------------------------------------------------------------- *)
 type psymbol   = symbol  located
 type pqsymbol  = qsymbol located
+
+(** module path without wrappers *)
 type pmsymbol  = (psymbol * ((pmsymbol located) list) option) list
+
+(* -------------------------------------------------------------------- *)
+(** module path with wrappers *)
+type pmpath =
+  | PM_App  of psymbol * ((pmpath located) list) option
+  | PM_Sub  of pmpath * pmpath
+  | PM_Wrap of [`Ext | `Cb] * psymbol * pmpath
+
+(* -------------------------------------------------------------------- *)
 type pgamepath = (pmsymbol * psymbol) located
 
 type osymbol_r   = psymbol option
@@ -381,6 +392,7 @@ and pmodule_header =
 and pmodule_params = (psymbol * pmodule_type) list
 
 and pmodule_expr_r =
+  (* | Pm_ident  of pmpath *)
   | Pm_ident  of pmsymbol
   | Pm_struct of pstructure
 

@@ -1967,7 +1967,7 @@ module Mod = struct
   let lookup_opt name env =
     try_lf (fun () -> lookup name env)
 
-  let sp_lookup qname (env : env) : spt =
+  let sp_lookup (qname : qsymbol) (env : env) : spt =
     let (((i, a), p), (x, lc)) = MC.lookup_mod qname env in
     let obj = { sp_target = x; sp_params = (i, a); } in
     (p, obj, lc)

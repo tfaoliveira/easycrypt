@@ -511,7 +511,7 @@ let rec pp_mcore fmt (mc : mpath_core) =
   | Wrap (a, `Ext, c)   -> Format.fprintf fmt "$%a(%a)" EcIdent.pp_ident a pp_mcore c
   | Wrap (a, `Cb , c)   -> Format.fprintf fmt "$cb_%a(%a)" EcIdent.pp_ident a pp_mcore c
 
-and pp_m fmt mp =
+and pp_m fmt (mp : mpath) =
   let pp_sub fmt =
     match mp.sub with
     | None -> ()

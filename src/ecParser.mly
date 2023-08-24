@@ -652,11 +652,14 @@
 %type <EcParsetree.global> global
 %type <EcParsetree.prog  > prog
 
+(* TODO: cost: v2: get rid of this *)
+%type <EcParsetree.pmpath> top_mpath
+
 %type <unit> is_uniop
 %type <unit> is_binop
 %type <unit> is_numop
 
-%start prog global is_uniop is_binop is_numop
+%start prog global is_uniop is_binop is_numop top_mpath
 %%
 
 (* -------------------------------------------------------------------- *)
@@ -788,6 +791,33 @@ qoident:
   }
 
 (* -------------------------------------------------------------------- *)
+(* module path with wrappers *)
+
+mpath1:
+| x=uident
+    { PM_App (x, None) }
+
+| x=uident LPAREN args=plist1(loc(top_mpath), COMMA) RPAREN
+    { PM_App (x, Some args) }
+
+mpath:
+| m=mpath1
+    { m }
+
+| m=mpath DOT m0=mpath1
+    { PM_Sub (m,m0) }
+
+(* %inline top_mpath: *)
+top_mpath:
+| _l=lloc(TOP) DOT x=mpath
+    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_top, None), x) }
+
+| _l=lloc(SELF) DOT x=mpath
+    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_self, None), x) }
+
+(* -------------------------------------------------------------------- *)
+(* module path without wrappers *)
+
 mod_ident1:
 | x=uident
     { (x, None) }
@@ -808,11 +838,12 @@ mod_ident1:
     { (mk_loc (EcLocation.make $startpos(_l) $endpos(_l))
          EcCoreLib.i_self, None) :: x }
 
+(* -------------------------------------------------------------------- *)
 %inline fident:
 | nm=mod_qident DOT x=lident { (nm, x) }
 | x=lident { ([], x) }
 
-f_or_mod_ident:
+f_or_mod_qident:
 | nm=mod_qident DOT x=lident
     { let fv = mk_loc (EcLocation.make $startpos(nm) $endpos(x)) (nm, x) in
       FM_FunOrVar fv }
@@ -1713,6 +1744,9 @@ mod_item:
 (* Modules                                                              *)
 
 mod_body:
+(* | m=top_mpath *)
+(*     { Pm_ident m } *)
+
 | m=mod_qident
     { Pm_ident m }
 
@@ -1747,9 +1781,9 @@ mod_params:
 (* Memory restrictions *)
 
 mem_restr_el:
-  | PLUS  el=f_or_mod_ident { PMPlus el }
-  | MINUS el=f_or_mod_ident { PMMinus el }
-  |       el=f_or_mod_ident { PMDefault el }
+  | PLUS  el=f_or_mod_qident { PMPlus el }
+  | MINUS el=f_or_mod_qident { PMMinus el }
+  |       el=f_or_mod_qident { PMDefault el }
 
 mem_restr:
   | ol=rlist0(mem_restr_el,COMMA) { ol }
@@ -4223,6 +4257,11 @@ or3(X, Y, Z):
       pl_loc  = EcLocation.make $startpos $endpos;
     }
   }
+
+(* -------------------------------------------------------------------- *)
+(* just the location *)
+%inline lloc(X):
+| X { EcLocation.make $startpos $endpos }
 
 (* -------------------------------------------------------------------- *)
 %inline iboption(X):
