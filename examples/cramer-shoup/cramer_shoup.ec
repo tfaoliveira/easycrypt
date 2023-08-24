@@ -42,7 +42,7 @@ theory DDH_ex.
   module DDH0_ex (A:Adversary) = {
     proc main() : bool = {
       var b, x, y;
-      x <$ dt \ (pred1 zero);
+      x <$ dt \ (pred1 ZModE.zero);
       y <$ dt;
       b <@ A.guess(g ^ x, g ^ y, g ^ (x * y));
       return b;
@@ -53,7 +53,7 @@ theory DDH_ex.
     proc main() : bool = {
       var b, x, y, z;
 
-      x <$ dt \ (pred1 zero);
+      x <$ dt \ (pred1 ZModE.zero);
       y <$ dt;
       z <$ dt;
       b <@ A.guess(g ^ x, g ^ y, g ^ z);
@@ -68,7 +68,7 @@ theory DDH_ex.
   declare axiom A_ll : islossless A.guess.
 
   local module Addh0 : Ad1.ADV = {
-    proc a1 () = { return ((), zero); }
+    proc a1 () = { return ((), ZModE.zero); }
     proc a2 (x : exp) = {
       var b, y;
       y <$ dt;
@@ -142,7 +142,7 @@ module CramerShoup : Scheme = {
     y2 <$ dt;
     z1 <$ dt;
     z2 <$ dt;
-    w  <$ dt \ (pred1 zero);
+    w  <$ dt \ (pred1 ZModE.zero);
     k  <$ dk;
     g_ <- g ^ w;
     pk <- (k, g, g_, g ^ x1 * g_ ^ x2, g ^ y1 * g_ ^ y2, g ^ z1 * g_ ^ z2);
@@ -255,7 +255,7 @@ module B_DDH (A:CCA_ADV) = {
       log <- [];
       g3 <- None;
       cstar <- None;
-      w <$ dt \ (pred1 zero);
+      w <$ dt \ (pred1 ZModE.zero);
       u <$ dt;
       u' <$ dt \ (pred1 u);
       g_ <- g ^ w;
@@ -347,7 +347,7 @@ section Security_Aux.
       log <- [];
       cstar <- None;
       bad <- false;
-      w <$ dt \ (pred1 zero);
+      w <$ dt \ (pred1 ZModE.zero);
       u <$ dt;
       return ((),u);
     }
@@ -512,7 +512,7 @@ section Security_Aux.
       G1.log <- [];
       G1.cstar <- None;
       G1.bad <- false;
-      G1.w <$ dt \ (pred1 zero);
+      G1.w <$ dt \ (pred1 ZModE.zero);
       G1.u <$ dt;
       G1.u' <$ dt \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -536,7 +536,7 @@ section Security_Aux.
       G1.log <- [];
       G1.cstar <- None;
       G1.bad <- false;
-      G1.w <$ dt \ (pred1 zero);
+      G1.w <$ dt \ (pred1 ZModE.zero);
       G1.u <$ dt;
       G1.u' <$ dt \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -575,7 +575,7 @@ section Security_Aux.
     move=> wL /supp_dexcepted [] _ /= HwL uL _ u'L /supp_dexcepted [] _ /= Hu'L .
     move=> kL _ xL _ x2L _ yL _ y2L _ zL _ resu bL _.
     have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> zero.
+    have H2 : (-uL) * wL + u'L * wL <> ZModE.zero.
     + rewrite H1 ZPF.mulf_eq0 negb_or HwL /=.
       by move: Hu'L;apply: contra => H;ring H.
     split => [? _ | _ ]; 1: by field.
@@ -604,7 +604,7 @@ section Security_Aux.
     move=> wL /supp_dexcepted [] _ /= HwL uL _ u'L /supp_dexcepted [] _ /= Hu'L .
     move=> kL _ yL _ y2L _ zL _ r'L _ xL _.
     have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> zero.
+    have H2 : (-uL) * wL + u'L * wL <> ZModE.zero.
     + rewrite H1 ZPF.mulf_eq0 negb_or HwL /=.
       by move: Hu'L;apply: contra => H;ring H.
     split => [? _ | _ ]; 1: by field.
@@ -656,7 +656,7 @@ section Security_Aux.
       G3.cilog <- [];
       G3.g3 <- None;
       G1.cstar <- None;
-      G1.w <$ dt \ (pred1 zero);
+      G1.w <$ dt \ (pred1 ZModE.zero);
       G1.u <$ dt;
       G1.u' <$ dt \ (pred1 G1.u);
       G1.g_ <- g ^ G1.w; G1.k  <$ dk;
@@ -750,7 +750,7 @@ section Security_Aux.
     move=> uL _ u'L /supp_dexcepted [] _ /= HuL kL _.
     move=> yL _ y2L _ zL _ r'L _ xL _ rL _.
     have H1 : (-uL) * wL + u'L * wL = wL * (u'L - uL) by ring.
-    have H2 : (-uL) * wL + u'L * wL <> zero.
+    have H2 : (-uL) * wL + u'L * wL <> ZModE.zero.
     + rewrite H1 ZPF.mulf_eq0 negb_or HwL0 /=.
       by move: HuL;apply: contra => H;ring H.
     split => [ | _ /#].
@@ -830,7 +830,7 @@ section Security_Aux.
       G1.log <- [];
       G3.cilog <- [];
       G1.cstar <- None;
-      G1.w <$ dt \ (pred1 zero);
+      G1.w <$ dt \ (pred1 ZModE.zero);
       G1.g_ <- g ^ G1.w;
 
       G1.k  <$ dk;
@@ -884,7 +884,7 @@ section Security_Aux.
       + by proc;auto => /#.
       by auto.
     seq 13 : true 1%r ((PKE_.qD%r / order%r) ^ 3 * (PKE_.qD%r / (order - 1)%r))
-                 0%r _ (size G3.cilog <= PKE_.qD /\ G1.w <> zero /\ G1.g_ = g ^ G1.w) => //.
+                 0%r _ (size G3.cilog <= PKE_.qD /\ G1.w <> ZModE.zero /\ G1.g_ = g ^ G1.w) => //.
     + call (_ : size G3.cilog <= size G1.log /\ size G1.log <= PKE_.qD).
       + proc;auto => /#.
       auto => /= w /supp_dexcepted;smt (qD_pos).
