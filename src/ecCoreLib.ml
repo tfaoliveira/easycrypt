@@ -94,12 +94,13 @@ module CI_Cost = struct
   let _Cost    = fun x -> EcPath.pqname p_Cost x
 
   let p_cost_inf     = _Pervasive "inf"
+  let p_cost_le      = _Pervasive "le"
+  let p_cost_lt      = _Pervasive "lt"
+
   let p_cost_opp     = _Cost "opp"
   let p_cost_add     = _Cost "add"
   let p_cost_scale   = _Cost "scale"
   let p_cost_xscale  = _Cost "xscale"
-  let p_cost_le      = _Cost "le"
-  let p_cost_lt      = _Cost "lt"
   let p_cost_subcond = _Cost "subcond"
   let p_cost_is_int  = _Cost "is_int"
 end

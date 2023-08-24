@@ -39,3 +39,6 @@ op witness : 'a.                (* All types are inhabited in EC *)
 type cost.
 
 op inf : cost.
+
+op lt : cost -> cost -> bool.
+op le = fun x y => lt x y \/ x = y.
