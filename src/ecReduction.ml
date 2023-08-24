@@ -474,22 +474,30 @@ let check_crecord_l subst (co1 : cost) (co2 : cost) : cp list * (form * form) li
 
   let calls1 =
     Mcp.fold (fun f c calls ->
-        (* TODO: cost: no longer a xpath *)
+        (* TODO: cost: v2: no longer a xpath *)
         (* we do not normalize [f], as it is not a proper [xpath] *)
         Mcp.change (fun old -> assert (old = None); Some c) f calls
       ) co1.c_calls Mcp.empty
   and calls2 =
     Mcp.fold (fun f c calls ->
         let f' = Fsubst.subst_cp subst f in
-        (* TODO: cost: idem *)
+        (* TODO: cost: v2: idem *)
         (* we do not normalize [f'], as it is not a proper [xpath] *)
         Mcp.change (fun old -> assert (old = None); Some c) f' calls
       ) co2.c_calls Mcp.empty in
 
   let f_calls, pforms =
     Mcp.fold2_union (fun f a1 a2 (f_calls, pforms) ->
-        let a1 = EcFol.oget_c_bnd a1 co1.c_full
-        and a2 = EcFol.oget_c_bnd a2 co2.c_full in
+        (* TODO: cost: v2: we could use [oget_c_bnd], but
+           - this is a bit dangerous as it could make some bugs silent
+           - if we do it, we need to do it everywhere, otherwise we have bugs
+             (conversion, call-by-value, matching, all need to behave the same
+           way of you get InvalidGoalShape or other kind of nastyness) *)
+        (* let a1 = EcFol.oget_c_bnd a1 co1.c_full *)
+        (* and a2 = EcFol.oget_c_bnd a2 co2.c_full in *)
+        if a1 = None || a2 = None then raise NotConv;
+        let a1 = oget a1 in
+        let a2 = oget a2 in
         f :: f_calls, (a1, a2) :: pforms
       ) calls1 calls2 ([], [])
   in
@@ -1962,7 +1970,7 @@ let check_conv ?ri hyps f1 f2 =
   else raise (IncompatibleForm ((LDecl.toenv hyps), (f1, f2)))
 
 (* -------------------------------------------------------------------- *)
-(* Check whether two module procedure cost record are convertiable.
+(* Check whether two module procedure cost record are convertible.
    Because [mod_cost] are not formulas per se, this is done in an
    ad-hoc fashion. *)
 let is_conv_cproc

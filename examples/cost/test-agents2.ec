@@ -29,7 +29,6 @@ proof.
 abort.
 
 (* -------------------------------- *)
-(* TMP *)
 axiom TTT [$ x y] x :           (* false axiom, because of last field *)
   P x =>
   `[x.a : N 4, x.b : N 5, y.c : N 20] <= 
@@ -38,12 +37,13 @@ axiom TTT [$ x y] x :           (* false axiom, because of last field *)
 lemma bar0 [$ u v] x :
   `[u.a : N 4, u.b : N 5, u.c : N 20] <=
   `[u.a : x  , u.b : Inf, u.c : x   ].
-proof.
-  apply (TTT<$ v u> x).  (* TODO: invlaidgoalshape! *)
-qed.
+proof. 
+  try apply (TTT<$ v u> x). 
+  rewrite /=.
+abort.
 
-(* END TMP *)
 (* -------------------------------- *)
+axiom pax x : P x.
 
 lemma bar0 [$ u v] x y :
   `[: N 3, u.a : N 4,  u.b : N 5, v.a : N 20] <=
@@ -58,10 +58,11 @@ proof.
   try apply (test1<$ u u>).
 
   try apply (test2<$ u u>).
-  try apply (test2<$ v v>).         (* agent name v is used twice *)
-  
-  apply (test2<$ v u> y x).  (* TODO: cost: v2: this should fail! *)
-  apply (test2<$ u v> x y).
+  try apply (test2<$ v v>).      (* agent name v is used twice *)
+  try apply (test2<$ v u> y x).  (* does not apply to the goal *)
+  apply (test2<$ u v> x y).      (* TODO: cost: v2: giving x and y should 
+                                    not be necessary *)
+  apply pax.
 qed.
 
 (* changed first value *)
