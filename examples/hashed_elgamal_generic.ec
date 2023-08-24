@@ -130,6 +130,8 @@ module S = Hashed_ElGamal(H).
 (* We want to bound the probability of A winning CPA(Bounder(A,RO),S) in terms of
    the probability of B = CDH_from_CPA(SCDH_from_CPA(A,RO)) winning CDH(B) *)
 
+(* TODO: cost: v2: restore *)
+(*
 section.
   declare module A<: Adversary [choose : [cA.`cchoose, #O.o : N cA.`ochoose],
                                 guess  : [cA.`cguess,  #O.o : N cA.`oguess]] {-H}.
@@ -292,3 +294,4 @@ section.
   qed.
 
 end section.
+*)

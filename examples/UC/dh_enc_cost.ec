@@ -3,6 +3,8 @@ require import Composition_cost.
 
 import CoreMap Bigxint.
 
+(* TODO: cost: v2: restore *)
+(*
 (* Parties have some sort of identifier *)
 type party.
 
@@ -2382,3 +2384,4 @@ apply (hS1 Z).
 qed.
 
 end OTP.
+*)

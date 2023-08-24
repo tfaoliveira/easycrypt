@@ -2,6 +2,8 @@ require import AllCore Real Distr.
 require import CHoareTactic.
 import StdBigop Bigint BIA.
 
+(* TODO: cost: v2: restore *)
+(*
 type ('a, 'b) sum = [
   | Left of 'a
   | Right of 'b
@@ -1865,3 +1867,4 @@ abstract theory PARA_RI.
   end C.
 
 end PARA_RI.
+*)
