@@ -1050,9 +1050,9 @@ let reduce_logic ri env hyps f p args =
     | Some (`Int_max  ), [f1;f2] -> f_int_max_simpl f1 f2
     | Some (`Int_edivz), [f1;f2] -> f_int_edivz_simpl f1 f2
 
-    (* TODO: cost: restore, to some extent? *)
-    (* | Some (`Cost_le    ), [f1;f2]    -> f_cost_le_simpl hyps f1 f2 *)
-    (* | Some (`Cost_lt    ), [f1;f2]    -> f_cost_lt_simpl hyps f1 f2 *)
+    (* TODO: cost: v2: check [f_cost_le_simpl] and [f_cost_lt_simpl] *)
+    | Some (`Cost_le    ), [f1;f2]    -> f_cost_le_simpl hyps f1 f2
+    | Some (`Cost_lt    ), [f1;f2]    -> f_cost_lt_simpl hyps f1 f2
     | Some (`Cost_add   ), [f1;f2]    -> f_cost_add_simpl f1 f2
     | Some (`Cost_opp   ), [f]        -> f_cost_opp_simpl f
     | Some (`Cost_scale ), [f1;f2]    -> f_cost_scale_simpl f1 f2

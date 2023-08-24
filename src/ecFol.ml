@@ -1057,7 +1057,7 @@ let f_is_int_simpl (c : form) : form =
 
 (* -------------------------------------------------------------------- *)
 
-(* TODO: cost: this needs to be redone *)
+(* TODO: cost: v2: this needs to be redone *)
 
 (** Simplification of cost equality and inequality tests using
     module freshness and epochs. *)

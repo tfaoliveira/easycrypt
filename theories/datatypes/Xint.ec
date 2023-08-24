@@ -26,7 +26,11 @@ op xle (x y : xint) =
   with x = Inf, y = N y => false
   with x = Inf, y = Inf => true.
 
-op xlt = fun x y => xle x y /\ !(x = y).
+op xlt (x y : xint) =
+  with x = N x, y = N y => (x < y)
+  with x = N x, y = Inf => true
+  with x = Inf, y = N y => false
+  with x = Inf, y = Inf => false.
 
 abbrev ([-])  = xopp.
 abbrev ( + )  = xadd.

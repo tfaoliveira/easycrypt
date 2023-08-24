@@ -24,9 +24,6 @@ op xscale (x : xint) (c : cost) =
 op add : cost -> cost -> cost.
 op opp : cost -> cost.
 
-op lt : cost -> cost -> bool.
-op le = fun x y => lt x y \/ x = y.
-
 abbrev ([-]) = opp.
 abbrev ( + ) = add.
 abbrev ( - ) (x : cost) (y : cost) = add x (-y).

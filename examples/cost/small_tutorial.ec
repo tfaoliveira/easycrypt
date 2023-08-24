@@ -1,22 +1,6 @@
 require import AllCore Xint Int List CHoareTactic StdBigop.
 import Bigint.
 
-module V = { var v : int }.
-
-(* TODO: COST: a few tests  *)
-module type U = { proc o () : unit }.
-
-lemma test0: N 3 <= Inf by done.
-
-lemma test1 (H <: $U):
-`[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf] by done.
-
-lemma test2 (x, y : xint) (H <: $U):
-`[: x, H.o : y] <= `[: Inf, H.o : Inf, ..] by done.
-
-lemma test (H <: $U):
-`[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf, ..] by done.
-
 (* TODO: cost: v2: restore *)
 (*
 

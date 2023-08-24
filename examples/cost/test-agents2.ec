@@ -15,7 +15,7 @@ lemma test1 [$ x y] :
   `[: N 3, x.a : N 10, x.b : Inf, y.a : N 20].
 proof. 
   auto.
-  admit.                        (* TODO *)
+  admit.                        (* TODO: cost: v2 *)
 qed.
 
 axiom test2 [$ x y] :           (* false axiom, because of last field *)
