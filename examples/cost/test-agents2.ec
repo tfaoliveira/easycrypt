@@ -5,17 +5,11 @@ axiom foo0 [$ a] : false. print foo0.
 (* -------------------------------------------------------------------- *)
 module type U = { proc o () : unit }.
 
-lemma test0 (H <: U) : false.
-proof. 
-  move: H. admit.
-qed.
-
 lemma test1 [$ x y] :
   `[: N 3, x.a : N 4,  x.b : N 5, y.a : N 10] <= 
   `[: N 3, x.a : N 10, x.b : Inf, y.a : N 20].
 proof. 
   auto.
-  admit.                        (* TODO: cost: v2 *)
 qed.
 
 axiom test2 [$ x y] :           (* false axiom, because of last field *)
@@ -36,6 +30,10 @@ lemma bar0 [$ u v] :
   `[: N 3, u.a : N 4,  u.b : N 5, v.a : N 20] <=
   `[: N 3, u.a : N 10, u.b : Inf, v.a : N 10].
 proof.
+  have A := test2<$ v u>. 
+  rewrite /= in A.
+  clear A.
+
   try apply (test1<$ u v>). 
   try apply (test1<$ v u>).
   try apply (test1<$ u u>).

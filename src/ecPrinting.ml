@@ -3083,6 +3083,12 @@ module PPGoal = struct
             Format.fprintf fmt "Type variables: %a@\n\n%!"
               (pp_list ", " (pp_tyvar_ctt ppe)) tv
       end;
+      begin match hyps.EcBaseLogic.h_agents with
+        | [] -> ()
+        | agents ->
+          Format.fprintf fmt "Agent variables: @[%a@]@\n\n%!"
+            (pp_agentannot ppe) agents
+      end;
       List.iter (fun (id, (pk, dk)) ->
         let pk fmt =
           match pk with
@@ -3125,6 +3131,12 @@ let pp_hyps (ppe : PPEnv.t) fmt hyps =
   | tv ->
       Format.fprintf fmt "Type variables: %a@\n\n%!"
         (pp_list ", " (pp_tyvar_ctt ppe)) tv
+  end;
+  begin match hyps.EcBaseLogic.h_agents with
+  | [] -> ()
+  | agents ->
+      Format.fprintf fmt "Agent variables: @[%a@]@\n\n%!"
+        (pp_agentannot ppe) agents
   end;
   List.iter (fun (id, (pk, dk)) ->
     let pk fmt =

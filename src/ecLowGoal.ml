@@ -63,15 +63,16 @@ module LowApply = struct
     let env1, ld1 = LDecl.baseenv hy1, LDecl.tohyps hy1 in
     let env2, ld2 = LDecl.baseenv hy2, LDecl.tohyps hy2 in
 
-    if env1        (*φ*)!= env2        then false else
-    if ld1.h_tvar  (*φ*)!= ld2.h_tvar  then false else
-    if ld1.h_local (*φ*)== ld2.h_local then true  else
+    if env1         (*φ*)!= env2         then false else
+    if ld1.h_tvar   (*φ*)!= ld2.h_tvar   then false else
+    if ld1.h_agents (*φ*)!= ld2.h_agents then false else
+    if ld1.h_local  (*φ*)== ld2.h_local  then true  else
 
     let env     = env1 in
     let hyps    = LDecl.init env ld1.h_tvar ~agents:ld1.h_agents in
     let tophyps = Mid.of_list (List.map (fun x -> x.l_id, x) ld2.h_local) in
 
-    (* TODO: cost: check sub agents between ld1 and ld2 *)
+    (* TODO: cost: v2: keep epochs ? *)
 
     (* Subsumption test for module with fresh names at declaration.
        - [e1] is the epoch of declaration of a fresh module in [ld1]
@@ -119,6 +120,7 @@ module LowApply = struct
 
           | LD_agent, LD_agent ->
             (* TODO: cost: can we set this to true without any further check? *)
+            (* TODO: cost: v2: this probably needs to disappear *)
             false
 
           | _, _ -> false

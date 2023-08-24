@@ -1848,6 +1848,13 @@ end
 module Agent = struct
   type t = EcModules.module_expr option
 
+  let getall env = Msymid.bindings env.env_agent
+
+  let pp_all fmt (env : env) =
+    let l = getall env in
+    Format.fprintf fmt "@[<hv 2>%a@]"
+      (pp_list ",@ " (fun fmt (id,_) -> EcIdent.pp_ident fmt id)) l
+
   let lookup (a : symbol) (env : env) =
     try Some (Msymid.bysym a env.env_agent)
     with Not_found -> None
@@ -1859,7 +1866,11 @@ module Agent = struct
     with Not_found -> raise (LookupFailure (`Agent id))
 
   let bind id (me : t) env =
-    assert (not (Msymid.mem id env.env_agent));
+    (* TODO: cost: v2: for now, we do not use this field of the
+       environement (only the field of the local hyps). Restore assert
+       if we do, and fix issue of re-binding in [EcLowGoal] caused by
+       the two calls to [LDecl.init ... ~agents:...]) *)
+    (* assert (not (Msymid.mem id env.env_agent)); *)
     { env with env_agent = Msymid.add id me env.env_agent }
 
   let bindall l env =
@@ -1868,13 +1879,6 @@ module Agent = struct
   let set_me id (me : EcModules.module_expr) env =
     assert (Msymid.byid id env.env_agent = None);
     { env with env_agent = Msymid.add id (Some me) env.env_agent }
-
-  let getall env = Msymid.bindings env.env_agent
-
-  let pp_all fmt env =
-    let l = getall env in
-    Format.fprintf fmt "@[<hv 2>%a@]"
-      (pp_list ",@ " (fun fmt (id,_) -> EcIdent.pp_ident fmt id)) l
 end
 
 (* -------------------------------------------------------------------- *)
