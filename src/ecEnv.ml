@@ -2588,7 +2588,6 @@ module NormMp = struct
         | GTty ty -> GTty (norm_ty env ty)
         | GTmodty _ -> gty
         | GTmem mt -> GTmem (mt_subst (norm_ty env) mt)
-        | GTagent -> gty
       in
       id,gty in
 
@@ -3654,8 +3653,6 @@ module LDecl = struct
     | LD_abs_st _ ->                    (* FIXME *)
         assert false
 
-    | LD_agent -> LD_agent
-
   (* ------------------------------------------------------------------ *)
   let ld_fv = function
   | LD_var (ty, None) ->
@@ -3677,7 +3674,6 @@ module LDecl = struct
     let fv = List.fold_left add fv us.aus_reads in
     let fv = List.fold_left add fv us.aus_writes in
     List.fold_left EcPath.x_fv fv us.aus_calls
-  | LD_agent -> Mid.empty
 
   (* ------------------------------------------------------------------ *)
   let by_name s hyps =
@@ -3813,7 +3809,6 @@ module LDecl = struct
     (* TODO: cost: update above? *)
     | LD_hyp   _       -> env
     | LD_abs_st us     -> AbsStmt.bind x us env
-    | LD_agent         -> Agent.bind x None env
 
   (* ------------------------------------------------------------------ *)
   let add_local x k h =

@@ -60,7 +60,6 @@ type gty =
   | GTty    of EcTypes.ty
   | GTmodty of mod_info * module_type
   | GTmem   of EcMemory.memtype
-  | GTagent
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
@@ -284,15 +283,12 @@ let gty_equal ty1 ty2 =
   | GTmem mt1, GTmem mt2 ->
       EcMemory.mt_equal mt1 mt2
 
-  | GTagent, GTagent -> true
-
   | _ , _ -> false
 
 let gty_hash = function
   | GTty ty -> EcTypes.ty_hash ty
   | GTmodty (ns, p) -> Why3.Hashcons.combine (Hashtbl.hash ns) (mty_hash p)
   | GTmem _ -> 1
-  | GTagent  -> 0
 
 let mr_fv (mr : mod_restr) =
   let fv =
@@ -308,7 +304,6 @@ let gty_fv = function
   | GTty ty -> ty.ty_fv
   | GTmodty (_, mty) -> mr_fv mty.mt_restr
   | GTmem mt -> EcMemory.mt_fv mt
-  | GTagent   -> Mid.empty
 
 (* -------------------------------------------------------------------- *)
 let gtty (ty : EcTypes.ty) =
@@ -2398,8 +2393,6 @@ module Fsubst = struct
         let mt' = EcMemory.mt_subst s.fs_ty mt in
         if mt == mt' then gty else GTmem mt'
 
-    | GTagent -> GTagent
-
   and add_binding ~tx (s : f_subst) (x, gty as xt) : f_subst * binding =
     let gty' = subst_gty ~tx s gty in
     let x'   = if s.fs_freshen then EcIdent.fresh x else x in
@@ -2410,7 +2403,6 @@ module Fsubst = struct
         | GTty    _ -> f_rem_local s x
         | GTmodty _ -> f_rem_mod   s x
         | GTmem   _ -> f_rem_mem   s x
-        | GTagent   -> f_rem_agent s x
       in
         (s, xt)
     else
@@ -2418,7 +2410,6 @@ module Fsubst = struct
         | GTty   ty -> f_bind_rename s x x' ty
         | GTmodty _ -> f_bind_mod   s x (EcPath.mident x')
         | GTmem   _ -> f_bind_mem   s x x'
-        | GTagent   -> f_bind_agent s x x'
       in
         (s, (x', gty'))
 
@@ -2811,10 +2802,6 @@ and dump_binding ~(long:bool) fmt (x,ty) : unit =
       (ident_to_string x)
       pp_mod_info ns
       (dump_modty ~long) mt
-
-  | GTagent ->
-    Format.fprintf fmt "(%s : #name)"
-      (ident_to_string x)
 
 and dump_modty ~(long:bool) fmt (mty : module_type) : unit =
   Format.fprintf fmt "@[<hv 2>%s%a@]"

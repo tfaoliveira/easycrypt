@@ -1486,9 +1486,6 @@ pgtybinding1:
 | LPAREN pn=mident COLON mt=memtype RPAREN
     { [[mk_loc (loc pn) (Some pn)], PGTY_Mem (Some mt)] }
 
-| pn=aident                     (* external agent name *)
-    { [[mk_loc (loc pn) (Some pn)], PGTY_Agent] }
-
 (* list of generalized quantifiers *)
 pgtybindings:
 | x=pgtybinding1+ { List.flatten x }

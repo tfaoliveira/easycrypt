@@ -3308,12 +3308,6 @@ and trans_gbinding env ue decl =
 
         in List.map_fold add1 env xs
 
-      | PGTY_Agent ->
-        let xs  = List.map (fun x -> ident_of_osymbol (unloc x)) xs in
-        let env = EcEnv.Agent.bindall (List.map (fun x -> x, None) xs) env in
-        let xs  = List.map (fun x -> x,GTagent) xs in
-        (env, xs)
-
       | PGTY_Mem pmt ->
         let mt = match pmt with
           | None     -> EcMemory.abstract_mt

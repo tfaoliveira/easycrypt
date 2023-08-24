@@ -1243,9 +1243,6 @@ let trans_hyp ((genv, lenv) as env) { l_id = x; l_kind = ty; } =
       Hid.add genv.te_lc x w3op;
       (genv, lenv)
 
-  | LD_agent -> env
-  (* TODO: cost: do something more there, or remove [te_cost] *)
-
   | LD_modty  _ -> env
 
   | LD_abs_st _ -> env
@@ -1497,7 +1494,7 @@ module Frequency = struct
       end
     | LD_hyp f       ->
       r_union rs (f_ops unwanted_op f)
-    | LD_agent | LD_mem _ | LD_modty _ | LD_abs_st _ ->
+    | LD_mem _ | LD_modty _ | LD_abs_st _ ->
       rs
 
   let f_ops_hyps unwanted_op = List.fold_left (f_ops_hyp unwanted_op)

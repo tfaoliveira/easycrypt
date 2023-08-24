@@ -797,13 +797,6 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
               else Fsubst.f_bind_mem subst x2 x1
             in (env, subst)
 
-        | GTagent, GTagent ->
-            let subst =
-              if   id_equal x1 x2
-              then subst
-              else Fsubst.f_bind_agent subst x2 x1
-            in (env, subst)
-
         | GTmodty (ns1,p1), GTmodty (ns2,p2) ->
           let f_equiv f1 f2 =
             try doit env (subst, mxs) f1 f2; true with

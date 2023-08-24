@@ -342,7 +342,6 @@ and on_gbinding (cb : cb) (b : gty) =
       on_mdecl cb mty
   | EcFol.GTmem m ->
       on_memtype cb m
-  | EcFol.GTagent -> ()
 
 and on_gbindings (cb : cb) (b : (EcIdent.t * gty) list) =
   List.iter (fun (_, b) -> on_gbinding cb b) b
@@ -700,8 +699,6 @@ let rec gty_fv_and_tvar : gty -> int Mid.t = function
 
   | GTmem mt -> EcMemory.mt_fv mt
 
-  | GTagent -> Mid.empty
-
 and fv_and_tvar_f f =
   let fv = ref f.f_fv in
   let rec aux f =
@@ -785,7 +782,6 @@ let rec generalize_extra_args binds fv =
       | GTty ty -> (id, ty) :: args
       | GTmodty  _ -> assert false
       | GTmem _    -> assert false
-      | GTagent    -> assert false
     else args
   | Imply _ :: binds -> generalize_extra_args binds fv
 

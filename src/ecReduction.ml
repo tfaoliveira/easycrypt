@@ -442,11 +442,6 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
     if id_equal x1 x2 then subst
     else Fsubst.f_bind_mem subst x2 x1
 
-  | GTagent, GTagent ->
-    env,
-    if id_equal x1 x2 then subst
-    else Fsubst.f_bind_mem subst x2 x1
-
   | _, _ -> raise NotConv
 
 let check_bindings test env subst bd1 bd2 =

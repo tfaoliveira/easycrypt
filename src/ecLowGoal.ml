@@ -119,11 +119,6 @@ module LowApply = struct
           | LD_abs_st au1, LD_abs_st au2 ->
              au1 (*φ*)== au2
 
-          | LD_agent, LD_agent ->
-            (* TODO: cost: can we set this to true without any further check? *)
-            (* TODO: cost: v2: this probably needs to disappear *)
-            false
-
           | _, _ -> false
 
    in List.for_all h_eqs ld1.h_local
@@ -215,10 +210,6 @@ module LowApply = struct
 
             (Fsubst.f_bind_mod sbt x mp, f)
           end
-
-        (* TODO: cost: PY: further checks to do? *)
-        | GTagent, PAAgent a ->
-            (Fsubst.f_bind_agent sbt x a, f)
 
         | _ -> raise (InvalidProofTerm 5)
       in
@@ -321,7 +312,7 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
 
         | LD_hyp f -> for_form known f
 
-        | LD_agent | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
+        | LD_mem _ | LD_abs_st _ | LD_modty _ -> ()
         end;
         (Sid.add id known, LDecl.add_local id x.l_kind new_)
 
@@ -514,9 +505,6 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     | GTmem me ->
         LowIntro.check_name_validity !!tc `Memory name;
         (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
-    | GTagent ->
-        LowIntro.check_name_validity !!tc `Agent name;
-        (id, LD_agent, Fsubst.f_bind_agent sbt x (tg_val id))
     | GTmodty (ns,i) ->
         LowIntro.check_name_validity !!tc `Module name;
         (id, LD_modty (ns,i), Fsubst.f_bind_mod sbt x (EcPath.mident (tg_val id)))
@@ -664,12 +652,13 @@ let tt_apply (pt : proofterm) (tc : tcenv) =
     RApi.to_pure (fun tc -> LowApply.check `Elim pt (`Tc (tc, None))) tc in
 
   if not (EcReduction.is_conv hyps ax concl) then begin
-    let env = FApi.tc_env tc in
-    let ppe = EcPrinting.PPEnv.ofenv env in
-    (* FIXME: add this to the exception *)
-    Format.eprintf "%a@.should be convertible to:@.%a@.but is not@."
-      (EcPrinting.pp_form ppe) ax
-      (EcPrinting.pp_form ppe) concl;
+    (* FIXME: uncommenting this causes the test script to crash *)
+    (* let env = FApi.tc_env tc in *)
+    (* let ppe = EcPrinting.PPEnv.ofenv env in *)
+    (* (\* FIXME: add this to the exception *\) *)
+    (* Format.eprintf "%a@.should be convertible to:@.%a@.but is not@." *)
+    (*   (EcPrinting.pp_form ppe) ax *)
+    (*   (EcPrinting.pp_form ppe) concl; *)
     invalid_goal_shape ();
   end;
 
@@ -873,13 +862,6 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
       | LD_hyp f ->
         let bds  = `Imp f :: bds in
         let args = palocal id :: args in
-        (s, bds, args, cls)
-
-      | LD_agent ->
-        let x    = fresh id in
-        let s    = Fsubst.f_bind_agent s id x in
-        let bds  = `Forall (x, GTagent) :: bds in
-        let args = PAAgent id :: args in
         (s, bds, args, cls)
 
       | LD_abs_st _ ->
@@ -1840,9 +1822,8 @@ let gen_hyps (post : l_locals) (gG : form) : form =
     | LD_var (ty, None)       -> f_forall [id, GTty ty] gG
     | LD_mem mt               -> f_forall_mems [id, mt] gG
 
-    | LD_agent                -> f_forall [id, GTagent] gG
-
     | LD_modty (ns,mt)       -> f_forall [id, GTmodty (ns,mt)] gG
+    (* TODO: cost: v2: is it still possible? *)
     (* TODO: cost: make sure that we are not generalizing without
        clearing its dependencies (because the module ident is used as
        agent name). *)
@@ -1930,7 +1911,6 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
 
     | LD_mem    _ -> `Pre hyp
     | LD_modty  _ -> `Pre hyp (* TODO: cost: ?? *)
-    | LD_agent    -> `Pre hyp (* TODO: cost: ?? *)
     | LD_abs_st _ -> `Pre hyp
   in
 

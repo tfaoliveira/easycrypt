@@ -840,7 +840,6 @@ and process_pterm_arg
       | GTty    _ -> trans_pterm_arg_value pe ~name:(EcIdent.name x) arg
       | GTmodty _ -> trans_pterm_arg_mod   pe arg
       | GTmem   _ -> trans_pterm_arg_mem   pe arg
-      | GTagent   -> trans_pterm_arg_agent pe arg
   end
 
 (* -------------------------------------------------------------------- *)
@@ -882,14 +881,6 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
       | arg ->
          let ak = argkind_of_ptarg arg in
          tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Mem))
-  end
-
-  | GTagent -> begin
-      match dfl_arg_for_agent pe arg with
-      | PVAAgent arg -> (Fsubst.f_subst_agent x arg f, PAAgent arg)
-      | arg ->
-         let ak = argkind_of_ptarg arg in
-         tc_pterm_apperror ?loc pe (AE_WrongArgKind (ak, `Agent))
   end
 
   | GTmodty (ns,emt) -> begin
@@ -996,9 +987,6 @@ and apply_pterm_to_local ?loc pt id =
 
   | LD_mem _ ->
       apply_pterm_to_arg_r ?loc pt (PVAMemory id)
-
-  | LD_agent ->
-      apply_pterm_to_arg_r ?loc pt (PVAAgent id)
 
   | LD_abs_st _ -> assert false
 

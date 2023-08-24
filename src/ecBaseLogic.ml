@@ -24,7 +24,6 @@ type local_kind =
 | LD_modty  of mod_info * EcModules.module_type
 | LD_hyp    of form
 | LD_abs_st of EcModules.abs_uses
-| LD_agent                                         (* agent name *)
 
 (* -------------------------------------------------------------------- *)
 type l_local = {

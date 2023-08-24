@@ -2057,15 +2057,6 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
       in
         (tenv1, pp)
 
-  | GTagent ->
-      let tenv1  = PPEnv.add_locals ppe xs in
-      let pp fmt =
-        (* TODO: cost: printing *)
-        Format.fprintf fmt "(%a : #agent)"
-          (pp_list pp_sep (pp_local tenv1)) xs
-      in
-        (tenv1, pp)
-
 (* -------------------------------------------------------------------- *)
 and pp_mod_params ppe bms =
   let pp_mp ppe (id,mt) =
@@ -3062,10 +3053,6 @@ module PPGoal = struct
 
         | EcBaseLogic.LD_abs_st _ ->
             (None, fun fmt -> Format.fprintf fmt "statement") (* FIXME *)
-
-        | EcBaseLogic.LD_agent ->
-            (None, fun fmt -> Format.fprintf fmt "#agent")
-            (* TODO: cost: keep like this? *)
 
     in (ppe, (id, pdk))
 

@@ -1277,8 +1277,6 @@ let process_view1 pe tc =
             | GTmem _, PAMemory x when MEV.mem x `Mem evm ->
                 if MEV.isset x `Mem evm then None else Some (x, idty)
 
-            (* TODO: cost: PY: case for GTagent? *)
-
             | _, _ -> assert false
 
           in List.pmap for1 args
@@ -1291,7 +1289,6 @@ let process_view1 pe tc =
             match idty with
             | id, GTty    ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
             | id, GTmem   _  -> evm := MEV.set x (`Mem id) !evm
-            | _ , GTagent    -> assert false (* TODO: cost: ? *)
             | _ , GTmodty _  -> assert false
           in
 
@@ -1313,7 +1310,6 @@ let process_view1 pe tc =
             match idty with
             | _, GTty   ty -> evm := MEV.set x (`Form (f_local id ty)) !evm
             | _, GTmem   _ -> evm := MEV.set x (`Mem id) !evm
-            | _ , GTagent  -> assert false (* TODO: cost: ? *)
             | _, GTmodty _ -> assert false
           in
 
@@ -2218,9 +2214,6 @@ let process_exists args (tc : tcenv1) =
             assert( ns = Std);
 
             trans_pterm_arg_mod pte arg
-
-          (* TODO: cost: ? *)
-          | GTagent -> trans_pterm_arg_agent pte arg
         in
           PT.check_pterm_arg pte (x, xty) f arg.ptea_arg
   in

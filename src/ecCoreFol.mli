@@ -57,7 +57,6 @@ type gty =
   | GTty    of EcTypes.ty
   | GTmodty of mod_info * module_type
   | GTmem   of EcMemory.memtype
-  | GTagent                      (* agent name *)
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list

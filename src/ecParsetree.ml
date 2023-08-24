@@ -257,7 +257,6 @@ and pgty =
 | PGTY_Type  of pty
 | PGTY_ModTy of pmodule_type_restr
 | PGTY_Mem   of pmemtype option
-| PGTY_Agent
 
 and pffilter =
 | PFRange      of bool * pfrange list
