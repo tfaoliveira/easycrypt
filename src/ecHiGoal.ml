@@ -399,7 +399,7 @@ module LowRewrite = struct
     let try1 pt tc =
       let pt = { pt with PT.ptev_env = PT.copy pt.ptev_env } in
         try  t_rewrite_r (`LtoR, None, None) pt tc
-        with RewriteError _ -> raise InvalidGoalShape
+        with RewriteError _ -> invalid_goal_shape ()
     in t_do_r ~focus:0 `Maybe None (t_ors (List.map try1 pts)) !@tc
 end
 

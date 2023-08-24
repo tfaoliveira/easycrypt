@@ -198,11 +198,11 @@ let t_ring r eqs (f1, f2) tc =
 let t_ring_congr (cr:cring) (rm:RState.rstate) li lv tc =
   let r  = ring_of_cring cr in
   let concl = FApi.tc1_goal tc in
-  let f1,f2 = try destr_eq concl with DestrError _ -> raise InvalidGoalShape in
+  let f1,f2 = try destr_eq concl with DestrError _ -> invalid_goal_shape () in
   let pe, rm = toring (FApi.tc1_hyps tc) cr rm f1 in
   let rm' = RState.update rm li lv in
   let f2' = ofring r rm' pe in
-  if not (f_equal f2 f2') then raise InvalidGoalShape;
+  if not (f_equal f2 f2') then invalid_goal_shape ();
 
   let env = FApi.tc1_env tc in
   let mk_goal i =
@@ -240,11 +240,11 @@ let t_field r eqs (f1, f2) tc =
 let t_field_congr (cr:cfield) (rm:RState.rstate) li lv tc =
   let r  = field_of_cfield cr in
   let concl = FApi.tc1_goal tc in
-  let f1,f2 = try destr_eq concl with DestrError _ -> raise InvalidGoalShape in
+  let f1,f2 = try destr_eq concl with DestrError _ -> invalid_goal_shape () in
   let pe, rm = tofield (FApi.tc1_hyps tc) cr rm f1 in
   let rm' = RState.update rm li lv in
   let f2' = offield r rm' pe in
-  if not (f_equal f2 f2') then raise InvalidGoalShape;
+  if not (f_equal f2 f2') then invalid_goal_shape ();
 
   let env = FApi.tc1_env tc in
   let mk_goal i =

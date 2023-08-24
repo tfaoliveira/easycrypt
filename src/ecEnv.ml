@@ -3090,7 +3090,7 @@ module Ax = struct
   let rebind name ax env =
     MC.bind_axiom name ax env
 
-  let instanciate p tys ~agents env =
+  let instanciate p tys ~agents env : form =
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
         (* sanity check *)

@@ -700,8 +700,15 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       Mcp.translate (EcFol.Fsubst.subst_cp subst) c2.c_calls
     in
 
-    Mcp.fold2_union (fun _id cb1 cb2 () ->
-        if cb1 = None || cb2 = None then raise MatchFailure; (* very imprecise *)
+    Mcp.fold2_union (fun (_ag, _sym) cb1 cb2 () ->
+        (* TODO: cost: v2: we could use [oget_c_bnd], but
+           - this is a bit dangerous as it could make some bugs silent
+           - if we do it, we need to do it everywhere, otherwise we have bugs
+             (conversion, call-by-value, matching, all need to behave the same
+           way of you get InvalidGoalShape or other kind of nastyness) *)
+        (* let cb1 = EcFol.oget_c_bnd cb1 c1.c_full *)
+        (* and cb2 = EcFol.oget_c_bnd cb2 c2.c_full in *)
+        if cb1 = None || cb2 = None then raise MatchFailure;
         let cb1 = oget cb1 in
         let cb2 = oget cb2 in
 
@@ -725,6 +732,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
 
     (* doit env (subst, mxs) c1.c_self c2.c_self *)
 
+  (* TODO: cost: v2: use this? *)
   and _doit_agent _env mxs a1 a2 =
     match EV.get a1 !ev.evm_agent with
     | None ->

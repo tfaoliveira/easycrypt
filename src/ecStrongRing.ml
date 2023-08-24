@@ -166,7 +166,7 @@ let t_autorw info g =
 let rec t_alg_eq info g =
   let f1, f2 =
     try destr_eq (tc1_goal g)
-    with EcFol.DestrError _ -> raise InvalidGoalShape
+    with EcFol.DestrError _ -> invalid_goal_shape ()
   in
   t_cut_alg_eq t_reflex_assumption info f1 f2 g
 

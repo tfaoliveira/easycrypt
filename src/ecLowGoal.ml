@@ -39,6 +39,7 @@ let (@~+) (tt : FApi.tactical) (ts : FApi.backward list) =
   fun tc -> FApi.t_sub ts (tt tc)
 
 (* -------------------------------------------------------------------- *)
+(* TODO: cost: v2: using string argument? *)
 exception InvalidProofTerm of int
 
 type side    = [`Left|`Right]
@@ -266,7 +267,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 let t_abort (_ : tcenv1) =
-  raise InvalidGoalShape
+  invalid_goal_shape ()
 
 (* -------------------------------------------------------------------- *)
 let t_admit (tc : tcenv1) =
@@ -337,7 +338,7 @@ let t_change_r ?(fail=false) ?target action (tc : tcenv1) =
   | None -> begin
       let hyps, concl = FApi.tc1_flat tc in
       match action (lazy hyps) concl with
-      | None -> if fail then raise InvalidGoalShape else tc
+      | None -> if fail then invalid_goal_shape () else tc
       | Some fp when fp == concl -> tc
       | Some fp -> FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) fp
   end
@@ -355,7 +356,7 @@ let t_change_r ?(fail=false) ?target action (tc : tcenv1) =
 let t_change1 ?ri ?target (fp : form) (tc : tcenv1) =
   let action (lazy hyps) tgfp =
     if not (EcReduction.is_conv ?ri hyps fp tgfp) then
-      raise InvalidGoalShape;
+      invalid_goal_shape ();
     if fp == tgfp then None else Some fp
 
   in t_change_r ?target action tc
@@ -405,7 +406,7 @@ let rec t_lazy_match ?(reduce = `Full) (tx : form -> FApi.backward)
   with EcReduction.NoMatch ->
     let strategy =
       match reduce with
-      | `None    -> raise InvalidGoalShape
+      | `None    -> invalid_goal_shape ()
       | `Full    -> EcReduction.full_red
       | `NoDelta -> EcReduction.nodelta in
     FApi.t_seq (t_hred_with_info strategy) (t_lazy_match ~reduce tx) tc
@@ -663,13 +664,13 @@ let tt_apply (pt : proofterm) (tc : tcenv) =
     RApi.to_pure (fun tc -> LowApply.check `Elim pt (`Tc (tc, None))) tc in
 
   if not (EcReduction.is_conv hyps ax concl) then begin
-    (* let env = FApi.tc_env tc in *)
-    (* let ppe = EcPrinting.PPEnv.ofenv env in *)
+    let env = FApi.tc_env tc in
+    let ppe = EcPrinting.PPEnv.ofenv env in
     (* FIXME: add this to the exception *)
-    (* Format.eprintf "%a@.should be convertible to:@.%a@.but is not@." *)
-    (*   (EcPrinting.pp_form ppe) ax *)
-    (*   (EcPrinting.pp_form ppe) concl; *)
-    raise InvalidGoalShape;
+    Format.eprintf "%a@.should be convertible to:@.%a@.but is not@."
+      (EcPrinting.pp_form ppe) ax
+      (EcPrinting.pp_form ppe) concl;
+    invalid_goal_shape ();
   end;
 
   FApi.close tc (VApply pt)
@@ -882,7 +883,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
         (s, bds, args, cls)
 
       | LD_abs_st _ ->
-          raise InvalidGoalShape
+          invalid_goal_shape ()
 
     with LDecl.LdeclError _ when missing -> (s, bds, args, cls)
 
@@ -986,7 +987,7 @@ let t_reflex ?(mode=`Conv) ?reduce (tc : tcenv1) : tcenv =
       if mode = `Conv || EcReduction.is_alpha_eq (FApi.tc1_hyps tc) f1 f2 then
         t_reflex_s f1 tc
       else
-        raise InvalidGoalShape
+        invalid_goal_shape ()
     | _ -> raise EcReduction.NoMatch
   in
     t_lazy_match ?reduce t_reflex_r tc
@@ -1142,18 +1143,18 @@ let t_elim_r ?(reduce = (`Full : lazyred)) txs tc =
         | None    -> begin
           let strategy =
             match reduce with
-            | `None    -> raise InvalidGoalShape
+            | `None    -> invalid_goal_shape ()
             | `Full    -> EcReduction.full_red
             | `NoDelta -> EcReduction.nodelta in
 
             match h_red_opt strategy (FApi.tc1_hyps tc) f1 with
-            | None    -> raise InvalidGoalShape
+            | None    -> invalid_goal_shape ()
             | Some f1 -> aux f1
         end
       in
         aux f1
 
-    | _ -> raise InvalidGoalShape
+    | _ -> invalid_goal_shape ()
 
 (* -------------------------------------------------------------------- *)
 let t_elim_false_r ((_, sf) : form * sform) concl tc =
@@ -1294,25 +1295,25 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
     | Some i, _ when i <= 0 -> (a, f)
     | Some i, SFimp (_, f2) -> skip (Some (i-1)) (a+1) f2
     | None  , SFimp (_, f2) -> skip None (a+1) f2
-    | Some _, _ -> raise InvalidGoalShape
+    | Some _, _ -> invalid_goal_shape ()
     | None  , _ -> (a, f)
   in
 
   let (pr, prty, ax) =
     match sform_of_form ax with
     | SFquant (Lforall, (pr, GTty prty), lazy ax) -> (pr, prty, ax)
-    | _ -> raise InvalidGoalShape
+    | _ -> invalid_goal_shape ()
   in
 
   if not (EqTest.for_type env prty (tfun f.f_ty tbool)) then
-    raise InvalidGoalShape;
+    invalid_goal_shape ();
 
   let (aa1, ax) = skip None 0 ax in
 
   let (x, _xty, ax) =
     match sform_of_form ax with
     | SFquant (Lforall, (x, GTty xty), lazy ax) -> (x, xty, ax)
-    | _ -> raise InvalidGoalShape
+    | _ -> invalid_goal_shape ()
   in
 
   let (aa2, ax) =
@@ -1339,7 +1340,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
       else
         match EcReduction.destruct_product hyps pf_inst with
         | Some (`Imp (_, f2)) -> doit f2 (aa+1, sk+1)
-        | _ -> raise InvalidGoalShape
+        | _ -> invalid_goal_shape ()
     in
       doit pf_inst (0, sk)
   in
@@ -1421,7 +1422,7 @@ let t_elimT_ind ?reduce mode (tc : tcenv1) =
                          pt_args = []; } in
               (tc, pt, 0)
 
-          | _ -> raise InvalidGoalShape
+          | _ -> invalid_goal_shape ()
     in
       t_elimT_form ~sk pt (f_local id ty) tc
   in
@@ -1479,11 +1480,11 @@ let t_elim_prind_r ?reduce ?accept (_mode : [`Case | `Ind]) tc =
               let pri = oget (EcEnv.Op.by_path_opt p env) in
               let pri = EcDecl.operator_as_prind pri in
               if not (oget accept pri) then
-                raise InvalidGoalShape;
+                invalid_goal_shape ();
            end;
            (oget (EcEnv.Op.scheme_of_prind env `Case p), tv, args)
 
-         | _ -> raise InvalidGoalShape
+         | _ -> invalid_goal_shape ()
 
        in t_apply_s p tv ~agents:[] ~args:(args @ [f2]) ~sk tc
 
@@ -1557,12 +1558,12 @@ let t_split_prind ?reduce (tc : tcenv1) =
       match fst_map f_node (destr_app fp) with
       | Fop (p, tv), args when EcEnv.Op.is_prind env p ->
          (p, tv, args)
-      | _ -> raise InvalidGoalShape in
+      | _ -> invalid_goal_shape () in
     let pri = oget (EcEnv.Op.by_path_opt p env) in
     let pri = EcDecl.operator_as_prind pri in
 
     match EcInductive.prind_is_iso_ands pri with
-    | None -> raise InvalidGoalShape
+    | None -> invalid_goal_shape ()
     | Some (x, sk) ->
        let p = EcInductive.prind_introsc_path p x in
        t_apply_s p tv ~agents:[] ~args ~sk tc
@@ -1578,7 +1579,7 @@ let t_or_intro_prind ?reduce (side : side) (tc : tcenv1) =
       match fst_map f_node (destr_app fp) with
       | Fop (p, tv), args when EcEnv.Op.is_prind env p ->
          (p, tv, args)
-      | _ -> raise InvalidGoalShape in
+      | _ -> invalid_goal_shape () in
     let pri = oget (EcEnv.Op.by_path_opt p env) in
     let pri = EcDecl.operator_as_prind pri in
 
@@ -1589,7 +1590,7 @@ let t_or_intro_prind ?reduce (side : side) (tc : tcenv1) =
     | Some (_, (x, sk)) when side = `Right ->
        let p = EcInductive.prind_introsc_path p x in
        t_apply_s p tv ~agents:[] ~args ~sk tc
-    | _  -> raise InvalidGoalShape
+    | _  -> invalid_goal_shape ()
 
   in t_lazy_match ?reduce t_split_r tc
 
@@ -1638,7 +1639,7 @@ let t_rewrite
 
   let change f =
     if not (EcReduction.is_conv hyps f left) then
-      raise InvalidGoalShape;
+      invalid_goal_shape ();
     right in
 
   let npos  =
@@ -1648,7 +1649,7 @@ let t_rewrite
 
   let tgfp =
     try  FPosition.map npos change tgfp
-    with InvalidPosition -> raise InvalidGoalShape
+    with InvalidPosition -> invalid_goal_shape ()
   in
 
   match target with
@@ -1847,7 +1848,7 @@ let gen_hyps (post : l_locals) (gG : form) : form =
        agent name). *)
 
     | LD_hyp f                -> f_imp f gG
-    | LD_abs_st _             -> raise InvalidGoalShape in
+    | LD_abs_st _             -> invalid_goal_shape () in
   List.fold_left do1 gG post
 
 let build_var var ty =
@@ -2002,7 +2003,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
   in
 
   try  List.find_map try1 eqs
-  with Not_found -> raise InvalidGoalShape
+  with Not_found -> invalid_goal_shape ()
 
 let t_subst ?kind ?except ?(clear = true) ?var ?tside ?eqid (tc : tcenv1) =
   let clear = if clear then SCall else SChyp in
@@ -2020,7 +2021,7 @@ let t_absurd_hyp ?(conv  = `AlphaEq) id tc =
 
   let id' =
     try  LowAssumption.gen_find_in_hyps test hyps
-    with _ -> raise InvalidGoalShape
+    with _ -> invalid_goal_shape ()
   in
 
   let x, hnx, hx = if b then f, id, id' else f_not f, id', id in
@@ -2046,7 +2047,7 @@ let t_absurd_hyp ?conv ?id (tc : tcenv1) : tcenv =
       in let hyps = (LDecl.tohyps (FApi.tc1_hyps tc)).h_local
       in let tc = FApi.t_try (FApi.t_ors_pmap tott hyps) tc in
 
-      if not (FApi.tc_done tc) then raise InvalidGoalShape; tc
+      if not (FApi.tc_done tc) then invalid_goal_shape (); tc
 
 (* -------------------------------------------------------------------- *)
 let t_false ?(conv = `Eq) id tc =
@@ -2054,7 +2055,7 @@ let t_false ?(conv = `Eq) id tc =
   let hh = LDecl.hyp_by_id id hy in
 
   if not (EcReduction.xconv conv hy hh f_false) then
-    raise InvalidGoalShape;
+    invalid_goal_shape ();
 
   FApi.t_internal ~info:"t_false"
     (FApi.t_seq
@@ -2348,7 +2349,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
           match LowSubst.is_eq_for_subst ~kind:sk ~tside:`LtoR hyps None p,
                 LowSubst.is_eq_for_subst ~kind:sk ~tside:`RtoL hyps None p
           with
-          | None, None -> raise InvalidGoalShape
+          | None, None -> invalid_goal_shape ()
           | Some _, None ->
             t_subst_x ~clear:SCnone ~kind:sk ~tside:`LtoR ~eqid:eqid ~except:st.cs_sbeq tc
           | None, Some _ ->
@@ -2379,7 +2380,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
       pp_tc (FApi.tcenv_of_tcenv1 tc); *)
         togen := Some gen;
         newtc
-      | exception (DestrError _) -> raise InvalidGoalShape in
+      | exception (DestrError _) -> invalid_goal_shape () in
 
     let t_init =
   (*    let sk1 = { empty_subst_kind with sk_local = true ; } in

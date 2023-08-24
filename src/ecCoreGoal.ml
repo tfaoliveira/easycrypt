@@ -11,6 +11,10 @@ module L = EcLocation
 (* -------------------------------------------------------------------- *)
 exception InvalidGoalShape
 
+let invalid_goal_shape () =
+  (* Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000); *)
+  raise InvalidGoalShape
+
 (* -------------------------------------------------------------------- *)
 type clearerror = [
   | `ClearInGoal of EcIdent.t list
@@ -655,14 +659,14 @@ module FApi = struct
   let t_sub (ts : backward list) (tc : tcenv) =
     let ts = Array.of_list ts in
     if Array.length ts <> tc_count tc then
-      raise InvalidGoalShape;
+      invalid_goal_shape ();
     t_onfsub (fun i -> Some ts.(i)) tc
 
   (* -------------------------------------------------------------------- *)
   let t_submap (ts : (tcenv1 -> 'a * tcenv) list) (tc : tcenv) =
     let ts = Array.of_list ts in
     if Array.length ts <> tc_count tc then
-      raise InvalidGoalShape;
+      invalid_goal_shape ();
     t_onfsub_map (fun i -> ts.(i)) tc
 
   (* ------------------------------------------------------------------ *)
@@ -705,7 +709,7 @@ module FApi = struct
       let s =
         let rgs1, g, gs2 =
           try  List.pivot_at g (tc_opened tc)
-          with Invalid_argument _ -> raise InvalidGoalShape
+          with Invalid_argument _ -> invalid_goal_shape ()
         in
         if delta < 0 then
           let len = List.length rgs1 in

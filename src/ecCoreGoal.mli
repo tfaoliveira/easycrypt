@@ -9,6 +9,8 @@ open EcEnv
 (* -------------------------------------------------------------------- *)
 exception InvalidGoalShape
 
+val invalid_goal_shape : unit -> 'a
+
 (* -------------------------------------------------------------------- *)
 type clearerror = [
   | `ClearInGoal of EcIdent.t list
