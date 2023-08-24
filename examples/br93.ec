@@ -716,6 +716,8 @@ local op cA2 : cost.
 local op k1 : int.
 local op k2 : int.
 
+(* TODO: cost: v2: restore *)
+(*
 declare module A <: Adv [a1 : [cA1, #ARO.o : N k1],
                          a2 : [cA2, #ARO.o : N k2]] { -LRO, -I }.
 
@@ -817,5 +819,6 @@ proof.
     by move=> *; exists 0; rewrite drop0 take0 /=; smt (size_eq0 size_ge0).
   by sim.
 qed.
+*)
 end section.
 

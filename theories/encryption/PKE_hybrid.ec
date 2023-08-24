@@ -344,6 +344,8 @@ module B (S:Scheme) (A:AdvCPA) (LR:LR) = {
 }.
 
 
+(* TODO: cost: v2: restore *)
+(*
 section. 
 
 schema cost_Hq `{P} : cost [P : H.q] = '0.
@@ -629,3 +631,4 @@ proof.
 qed.
 end section.
 end Cost.
+*)
