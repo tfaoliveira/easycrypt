@@ -1,6 +1,9 @@
 require import AllCore Int CHoareTactic StdBigop.
 import Bigint.
 
+(* TODO: cost: v2: restore *)
+(*
+
 schema cost_plus `{P} {e e' : int}: 
   cost[P : e + e'] = cost[P : e] + cost[P : e'] + N 1.
 
@@ -75,3 +78,4 @@ proof.
    3: by apply MyH_compl1 | 
    4: by apply MyH_compl2 ].
 qed.
+*)

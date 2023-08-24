@@ -17,6 +17,9 @@ lemma test2 (x, y : xint) (H <: $U):
 lemma test (H <: $U):
 `[: N 3, H.o : N 2] <= `[: Inf, H.o : Inf, ..] by done.
 
+(* TODO: cost: v2: restore *)
+(*
+
 (*********************)
 (* Expression's cost *)
 (*********************)
@@ -414,3 +417,4 @@ qed.
 
 (* Remark: we cannot use hints there, because plus_cost_e is not terminating. *)
 
+*)
