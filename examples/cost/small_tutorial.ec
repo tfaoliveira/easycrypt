@@ -1,8 +1,7 @@
 require import AllCore Xint Int List CHoareTactic StdBigop.
 import Bigint.
 
-(* TODO: cost: v2: restore *)
-(*
+module V = { var v : int }.
 
 (*********************)
 (* Expression's cost *)
@@ -199,6 +198,7 @@ module type H = { proc o () : unit }.
 module type Adv (H0 : H) = { proc a () : unit }.
 
 module (MyAdv : Adv) (H0 : H) = {
+  module A = H0
   proc a () = {
     var y;
     y <- 1 + 1 + 1 + 1;
@@ -207,17 +207,40 @@ module (MyAdv : Adv) (H0 : H) = {
   }
 }.
 
-lemma MyAdv_compl (H0 <: $H) : 
-  choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
-proof.
-  by proc; do !(call(_: true)); auto. 
-qed.
+module F (H0 : H) = {
+  module A = { }
+  module B = MyAdv(H0)
 
-lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k]]) : 
-  choare[MyAdv(H0).a] time `[:N 3, H0.o : N 2].
+  proc a () = {
+    var y;
+    y <- 1 + 1 + 1 + 1;
+    H0.o();
+    H0.o();
+  }
+}.
+print F.
+
+(* TODO: cost: v2: fixme *)
+lemma MyAdv_compl [$a] (H <: H) : 
+  choare[MyAdv($a(H)).a] time `[:N 3, a.o : N 2].
+proof. 
+  proc. 
+  do! call (_: true).
+  auto. 
+abort.
+
+(* TODO: cost: v2: fixme *)
+lemma MyAdv_compl_bis (k : cost) (H0 <: H [o : [k]]) :
+  choare[MyAdv(H0).a] time (`[:N 3] + 2 * k).
 proof.
-  by proc; do !(call(_: true)); auto.
-qed.
+  proc.
+  do !(call(_: true)). 
+  rewrite /=.
+  auto.
+abort.
+
+
+(* TODO: cost: v2: stopped there *)
 
 (* The same lemma, but in a section. *)
 section.
@@ -400,5 +423,3 @@ instantiate -> := (plus_cost_f {} 1 2) => //.
 qed.
 
 (* Remark: we cannot use hints there, because plus_cost_e is not terminating. *)
-
-*)

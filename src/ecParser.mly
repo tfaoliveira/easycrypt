@@ -630,7 +630,6 @@
 
 %nonassoc prec_below_order
 
-%right DOT
 %left  NOP
 %left  GT LT GE LE
 %left  LOP1
@@ -805,9 +804,17 @@ mpath:
 | m=mpath DOT m0=mpath1
     { PM_Sub (m,m0) }
 
+| a=aident LPAREN m=mpath RPAREN
+    { PM_Wrap (`Ext, a, m) }
+
+| a=aident BACKSLASH LPAREN m=mpath RPAREN
+    { PM_Wrap (`Cb, a, m) }
+
 (* [as [mod_qident], but with module wrappers *)
 (* %inline top_mpath: *)
-top_mpath:
+%inline top_mpath:
+| m=mpath { m }
+
 | _l=lloc(TOP) DOT m=mpath
     { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_top, None), m) }
 

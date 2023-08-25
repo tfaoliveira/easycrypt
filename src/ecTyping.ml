@@ -1155,7 +1155,10 @@ let rec trans_resolved_mpath
   in
 
   let top_agks =
-    List.map (fun (ag, k) -> transagent env ag, k) top_agks
+    List.map (fun (ag, k) ->
+        let ag = mk_loc ag.pl_loc (String.lchop ~n:1 ag.pl_desc ) in
+        (transagent env ag, k)
+      ) top_agks
   in
 
   let to_qsymbol l =

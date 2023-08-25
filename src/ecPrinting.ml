@@ -22,6 +22,33 @@ module Sp   = EcPath.Sp
 type prpo_display = { prpo_pr : bool; prpo_po : bool; }
 
 (* -------------------------------------------------------------------- *)
+(** module mpath with agent kinds, normalized *)
+type msymbol_w_agks = EcPath.agks * (symbol * (msymbol_w_agks list)) list
+
+let rec pp_msymb fmt (mx : (symbol * (msymbol_w_agks list)) list) =
+  match mx with
+  | [] -> Format.fprintf fmt ""
+
+  | [(x, [])] -> Format.fprintf fmt "%s" x
+
+  | [(x, args)] ->
+    Format.fprintf fmt "%s(%a)"
+      x (pp_list ", " pp_msymbol_w_agks) args
+
+  | nm :: x ->
+    Format.fprintf fmt "%a.%a" pp_msymb [nm] pp_msymb x
+
+and pp_msymbol_w_agks fmt (msymb_agks : msymbol_w_agks) =
+  match msymb_agks with
+  | [], msymb -> pp_msymb fmt msymb
+  | (a,`Ext) :: agks, msymb ->
+    Format.fprintf fmt "$%a(%a)"
+      EcIdent.pp_ident a pp_msymbol_w_agks (agks, msymb)
+  | (a,`Cb) :: agks, msymb ->
+    Format.fprintf fmt "$%a\\(%a)"
+      EcIdent.pp_ident a pp_msymbol_w_agks (agks, msymb)
+
+(* -------------------------------------------------------------------- *)
 module PPEnv = struct
   type t = {
     ppe_env     : EcEnv.env;
@@ -235,7 +262,8 @@ module PPEnv = struct
     in
       p_shorten exists p
 
-  let rec mod_symb (ppe : t) mp : EcSymbols.msymbol =
+  (* -------------------------------------------------------------------- *)
+  let rec mod_symb (ppe : t) (mp : EcPath.mpath) : msymbol_w_agks =
     let (nm, x, p2) =
       match EcPath.mtop mp with
       | `Local x ->
@@ -276,9 +304,9 @@ module PPEnv = struct
       @ [(x, List.map (mod_symb ppe) (EcPath.margs mp))]
       @ (List.map (fun x -> (x, [])) (odfl [] (p2 |> omap P.tolist)))
     in
-      msymb
+      (EcPath.magks mp, msymb)
 
-  let modtype_symb (ppe : t) mty : EcSymbols.msymbol =
+  let modtype_symb (ppe : t) (mty : module_type) : msymbol_w_agks =
     let exists sm =
       match EcEnv.ModTy.lookup_opt sm ppe.ppe_env with
       | None -> false
@@ -311,7 +339,7 @@ module PPEnv = struct
            (List.map (fun x -> (x, [])) nm)
          @ [(x, List.map (mod_symb ppe) mty.mt_args)]
     in
-      msymb
+      ([], msymb)
 
   let local_symb ppe x =
     match Mid.find_opt x ppe.ppe_locals with
@@ -365,7 +393,7 @@ let pp_path fmt p =
 (* -------------------------------------------------------------------- *)
 let pp_topmod ppe fmt p =
   Format.fprintf fmt "%a"
-    EcSymbols.pp_msymbol (PPEnv.mod_symb ppe p)
+    pp_msymbol_w_agks (PPEnv.mod_symb ppe p)
 
 (* -------------------------------------------------------------------- *)
 let pp_tyvar ppe fmt x =
@@ -434,9 +462,9 @@ let pp_funname (ppe : PPEnv.t) fmt p =
     (pp_topmod ppe) p.P.x_top p.P.x_sub
 
 (* -------------------------------------------------------------------- *)
-let msymbol_of_pv (ppe : PPEnv.t) p =
+let msymbol_of_pv (ppe : PPEnv.t) p : msymbol_w_agks =
   match p with
-  | PVloc name -> [(name,[])]
+  | PVloc name -> [], [(name,[])]
 
   | PVglob xp ->
     let mem =
@@ -454,19 +482,21 @@ let msymbol_of_pv (ppe : PPEnv.t) p =
 
       match omap fst pv' with
       | Some (`Var pv') when EcEnv.NormMp.pv_equal ppe.PPEnv.ppe_env p pv'  ->
-        [(x, [])]
+        [], [(x, [])]
 
       | _ ->
         raise Default
 
     with Default ->
-      (PPEnv.mod_symb ppe xp.P.x_top)
-      @ [(x, [])]
+      let agks, msymb = PPEnv.mod_symb ppe xp.P.x_top in
+      (* TODO: cost: v2: guarantee that pv have no agks? *)
+      (* assert (agks = []); *)
+      agks, msymb @ [(x, [])]
 
 
 (* -------------------------------------------------------------------- *)
 let pp_pv ppe fmt p =
-  EcSymbols.pp_msymbol fmt (msymbol_of_pv ppe p)
+  pp_msymbol_w_agks fmt (msymbol_of_pv ppe p)
 
 (* -------------------------------------------------------------------- *)
 exception NoProjArg
@@ -492,7 +522,7 @@ let pp_restr_s fmt = function
   | false -> Format.fprintf fmt "-"
 
 let pp_modtype1 (ppe : PPEnv.t) fmt mty =
-  EcSymbols.pp_msymbol fmt (PPEnv.modtype_symb ppe mty)
+  pp_msymbol_w_agks fmt (PPEnv.modtype_symb ppe mty)
 
 (* -------------------------------------------------------------------- *)
 let pp_local (ppe : PPEnv.t) fmt x =
@@ -1465,8 +1495,8 @@ and try_pp_form_eqveq (ppe : PPEnv.t) _outer fmt f =
   | None     -> false
   | Some pvs ->
     let pp_msymbol fmt = function
-      | `Var  ms -> pp_msymbol fmt ms
-      | `Glob ms -> Format.fprintf fmt "glob %a" pp_msymbol ms in
+      | `Var  ms -> pp_msymbol_w_agks fmt ms
+      | `Glob ms -> Format.fprintf fmt "glob %a" pp_msymbol_w_agks ms in
     Format.fprintf fmt "={@[<hov 2>%a@]}" (pp_list ",@ " pp_msymbol) pvs;
     true
 
@@ -2063,7 +2093,7 @@ and pp_mod_params ppe bms =
     let ppe1 = PPEnv.add_local ppe id in
     let pp fmt =
       Format.fprintf fmt "%a : %a" (pp_local ppe1) id
-        EcSymbols.pp_msymbol (PPEnv.modtype_symb ppe mt) in
+        pp_msymbol_w_agks (PPEnv.modtype_symb ppe mt) in
     ppe1, pp
   in
   let rec aux ppe bms =
