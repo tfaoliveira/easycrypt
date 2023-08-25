@@ -41,8 +41,12 @@ type pmpath =
   | PM_Wrap of [`Ext | `Cb] * psymbol * pmpath
 
 (* -------------------------------------------------------------------- *)
-type pgamepath = (pmsymbol * psymbol) located
+type pgamepath  = (pmsymbol * psymbol) located
 
+(** [gamepath] with module wrappers supported *)
+type pgamepath_w = (pmpath option * psymbol) located
+
+(* -------------------------------------------------------------------- *)
 type osymbol_r   = psymbol option
 type osymbol     = osymbol_r located
 
@@ -251,8 +255,8 @@ and pformula_r =
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
   | PFBDhoareF of pformula * pgamepath * pformula * phoarecmp * pformula
-  | PFChoareF  of pformula * pgamepath * pformula * pformula
-  | PFChoareFT of pgamepath * pformula
+  | PFChoareF  of pformula * pgamepath_w * pformula * pformula
+  | PFChoareFT of pgamepath_w * pformula
   | PFCoe      of osymbol * pmemtype option * pformula * pexpr * pty option
 
 and pmemtype_el = ([`Single|`Tuple] * (psymbol list)) located * pty

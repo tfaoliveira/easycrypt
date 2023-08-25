@@ -2066,6 +2066,26 @@ let trans_gamepath (env : EcEnv.env) (gp : pgamepath) : xpath =
         EcPath.xpath mpath funsymb
 
 (* -------------------------------------------------------------------- *)
+let trans_gamepath_with_wrappers (env : EcEnv.env) (gp : pgamepath_w) : xpath =
+  let loc = loc   gp in
+  let gp  = unloc gp in
+
+  let funsymb = unloc (snd gp) in
+  match fst gp with
+  | None ->
+    begin
+      match EcEnv.Fun.sp_lookup_opt ([], funsymb) env with
+      | None -> tyerror loc env (UnknownFunName ([], funsymb))
+      | Some (xp,_) -> xp
+    end
+
+  | Some pmpath ->
+    let (mpath, _sig) = trans_mpath env (mk_loc loc pmpath) in
+    if _sig.miss_params <> [] then
+      tyerror loc env (UnknownFunName ([], funsymb)); (* TODO: replace [[]] by [pmpath] *)
+    EcPath.xpath mpath funsymb
+
+(* -------------------------------------------------------------------- *)
 (* translate a call-point annotation, i.e. a pair of an agent name and
    a procedure name *)
 let trans_cp (env : EcEnv.env) ((name,f) : psymbol * psymbol) : cp =
@@ -4029,11 +4049,11 @@ and trans_form_or_pattern
 
       begin match f.pl_desc with
         | PFChoareFT (gp, pcost) ->
-          let fpath = trans_gamepath env gp in
+          let fpath = trans_gamepath_with_wrappers env gp in
           trans_choaref f_true f_true fpath pcost
 
         | PFChoareF (pre, gp, post, pcost) ->
-          let fpath = trans_gamepath env gp in
+          let fpath = trans_gamepath_with_wrappers env gp in
           let penv, qenv = EcEnv.Fun.hoareF fpath env in
           let pre'   = transf penv pre in
           let post'  = transf qenv post in

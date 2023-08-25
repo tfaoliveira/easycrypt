@@ -630,6 +630,7 @@
 
 %nonassoc prec_below_order
 
+%right DOT
 %left  NOP
 %left  GT LT GE LE
 %left  LOP1
@@ -652,14 +653,11 @@
 %type <EcParsetree.global> global
 %type <EcParsetree.prog  > prog
 
-(* TODO: cost: v2: get rid of this *)
-%type <EcParsetree.pmpath> top_mpath
-
 %type <unit> is_uniop
 %type <unit> is_binop
 %type <unit> is_numop
 
-%start prog global is_uniop is_binop is_numop top_mpath
+%start prog global is_uniop is_binop is_numop
 %%
 
 (* -------------------------------------------------------------------- *)
@@ -1481,18 +1479,18 @@ phoare_body(P):
     cmp=hoare_bd_cmp bd=sform_r(P)
   { PFBDhoareF (pre, mp, post, cmp, bd) }
 
-(* TODO: cost: v2: fident->fpath *)
 choare_body(P):
-| LBRACKET mp=loc(fident) COLON
+| LBRACKET mp=loc(fpath) COLON
     pre=form_r(P) LONGARROW post=form_r(P)
   RBRACKET
   TIME
   c=sform_r(P)
-  { PFChoareF (pre, mp, post, c) }
-| LBRACKET mp=loc(fident) RBRACKET
+    { PFChoareF (pre, mp, post, c) }
+
+| LBRACKET mp=loc(fpath) RBRACKET
   TIME
   c=sform_r(P)
-  { PFChoareFT (mp, c) }
+    { PFChoareFT (mp, c) }
 
 coe_ty:
 | COLON ty=loc(type_exp) { ty}
