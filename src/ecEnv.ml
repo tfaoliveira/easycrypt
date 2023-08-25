@@ -1,7 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcSymbols
-open EcPath
+(* open EcPath *)
 open EcTypes
 open EcCoreFol
 open EcMemory
@@ -13,6 +13,12 @@ open EcBaseLogic
 (* -------------------------------------------------------------------- *)
 module Ssym = EcSymbols.Ssym
 module Msym = EcSymbols.Msym
+module Mx   = EcPath.Mx
+module Sx   = EcPath.Sx
+module Mp   = EcPath.Mp
+module Sm   = EcPath.Sm
+module Mm   = EcPath.Mm
+module Sp   = EcPath.Sp
 module Mp   = EcPath.Mp
 module Sid  = EcIdent.Sid
 module Mid  = EcIdent.Mid
@@ -89,7 +95,7 @@ type mc = {
   mc_schemas    : (ipath * EcDecl.ax_schema) MMsym.t;
   mc_theories   : (ipath * ctheory) MMsym.t;
   mc_typeclasses: (ipath * typeclass) MMsym.t;
-  mc_rwbase     : (ipath * path) MMsym.t;
+  mc_rwbase     : (ipath * EcPath.path) MMsym.t;
   mc_components : ipath MMsym.t;
 }
 
@@ -114,9 +120,9 @@ type env_norm = {
 
 (* -------------------------------------------------------------------- *)
 type red_topsym = [
-  | `Path of path
+  | `Path of EcPath.path
   | `Tuple
-  | `Cost of [`Path of path | `Tuple]
+  | `Cost of [`Path of EcPath.path | `Tuple]
 ]
 
 module Mrd = EcMaps.Map.Make(struct
@@ -197,9 +203,9 @@ type preenv = {
   env_tci      : ((ty_params * ty) * tcinstance) list;
   env_tc       : TC.graph;
   env_rwbase   : Sp.t Mip.t;
-  env_atbase   : (path list Mint.t) Msym.t;
+  env_atbase   : (EcPath.path list Mint.t) Msym.t;
   env_redbase  : mredinfo;
-  env_ntbase   : (path * env_notation) list;
+  env_ntbase   : (EcPath.path * env_notation) list;
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
@@ -329,9 +335,9 @@ let copy (env : env) =
 
 (* -------------------------------------------------------------------- *)
 type lookup_error = [
-  | `XPath   of xpath
-  | `MPath   of mpath
-  | `Path    of path
+  | `XPath   of EcPath.xpath
+  | `MPath   of EcPath.mpath
+  | `Path    of EcPath.path
   | `QSymbol of qsymbol
   | `AbsStmt of EcIdent.t
   | `Agent   of EcIdent.t
@@ -1326,7 +1332,7 @@ module Memory = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let ipath_of_mpath (p : mpath) =
+let ipath_of_mpath (p : EcPath.mpath) =
   match EcPath.mtop p with
   | `Local i ->
       (IPIdent (i, None), (0, EcPath.margs p))
@@ -1335,7 +1341,7 @@ let ipath_of_mpath (p : mpath) =
       let pr = odfl p1 (p2 |> omap (MC.pcat p1)) in
         (IPPath pr, ((EcPath.p_size p1)-1, EcPath.margs p))
 
-let ipath_of_xpath (p : xpath) =
+let ipath_of_xpath (p : EcPath.xpath) =
   let x = p.EcPath.x_sub in
 
   let xt p =
@@ -1499,7 +1505,7 @@ module Reduction = struct
   type rule   = EcTheory.rule
   type topsym = red_topsym
 
-  let add_rule ((_, rule) : path * rule option) (db : mredinfo) =
+  let add_rule ((_, rule) : EcPath.path * rule option) (db : mredinfo) =
     match rule with None -> db | Some rule ->
 
     let p =
@@ -1525,10 +1531,10 @@ module Reduction = struct
 
       Some { ri_priomap; ri_list }) p db
 
-  let add_rules (rules : (path * rule option) list) (db : mredinfo) =
+  let add_rules (rules : (EcPath.path * rule option) list) (db : mredinfo) =
     List.fold_left ((^~) add_rule) db rules
 
-  let add ?(import = import0) (rules : (path * rule_option * rule option) list) (env : env) =
+  let add ?(import = import0) (rules : (EcPath.path * rule_option * rule option) list) (env : env) =
     let rstrip = List.map (fun (x, _, y) -> (x, y)) rules in
     let env =
       if import.im_immediate then
@@ -1538,7 +1544,7 @@ module Reduction = struct
     { env with
         env_item = mkitem import (Th_reduction rules) :: env.env_item; }
 
-  let add1 (prule : path * rule_option * rule option) (env : env) =
+  let add1 (prule : EcPath.path * rule_option * rule option) (env : env) =
     add [prule] env
 
   let get (p : topsym) (env : env) =
@@ -1551,7 +1557,7 @@ end
 module Auto = struct
   let dname : symbol = ""
 
-  let updatedb ~level ?base (ps : path list) (db : (path list Mint.t) Msym.t) =
+  let updatedb ~level ?base (ps : EcPath.path list) (db : (EcPath.path list Mint.t) Msym.t) =
     let nbase = (odfl dname base) in
     let ps' = Msym.find_def Mint.empty nbase db in
     let ps' =
@@ -1559,7 +1565,7 @@ module Auto = struct
       Mint.change doit level ps' in
     Msym.add nbase ps' db
 
-  let add ?(import = import0) ~level ?base (ps : path list) lc (env : env) =
+  let add ?(import = import0) ~level ?base (ps : EcPath.path list) lc (env : env) =
     let env =
       if import.im_immediate then
         { env with
@@ -1569,13 +1575,13 @@ module Auto = struct
       { env with env_item = mkitem import
          (Th_auto (level, base, ps, lc)) :: env.env_item; }
 
-  let add1 ?import ~level ?base (p : path) lc (env : env) =
+  let add1 ?import ~level ?base (p : EcPath.path) lc (env : env) =
     add ?import ?base ~level [p] lc env
 
   let get_core ?base (env : env) =
     Msym.find_def Mint.empty (odfl dname base) env.env_atbase
 
-  let flatten_db (db : path list Mint.t) =
+  let flatten_db (db : EcPath.path list Mint.t) =
     Mint.fold_left (fun ps _ ps' -> ps @ ps') [] db
 
   let get ?base (env : env) =
@@ -1751,7 +1757,7 @@ end
 module Var = struct
   type t = glob_var_bind
 
-    let by_xpath_r (spsc : bool) (p : xpath) (env : env) =
+    let by_xpath_r (spsc : bool) (p : EcPath.xpath) (env : env) =
     match ipath_of_xpath p with
     | None -> lookup_error (`XPath p)
     | Some (ip, (i, _args)) ->
@@ -1764,10 +1770,10 @@ module Var = struct
           assert false;
         ty
 
-  let by_xpath (p : xpath) (env : env) =
+  let by_xpath (p : EcPath.xpath) (env : env) =
     by_xpath_r true p env
 
-  let by_xpath_opt (p : xpath) (env : env) =
+  let by_xpath_opt (p : EcPath.xpath) (env : env) =
     try_lf (fun () -> by_xpath p env)
 
   let add (path : EcPath.xpath) (env : env) =
@@ -1885,7 +1891,7 @@ end
 module Mod = struct
   type t   = top_module_expr
   type lkt = (mod_info * module_expr) * locality option
-  type spt = mpath * (mod_info * module_expr) suspension * locality option
+  type spt = EcPath.mpath * (mod_info * module_expr) suspension * locality option
 
   let unsuspend_r f istop (i, args)
       ((spi, params) : (int * (EcIdent.t * module_type) list)) o =
@@ -1925,7 +1931,7 @@ module Mod = struct
                (fun (args, obj) ->
                  (fst (MC._downpath_for_mod spsc env p args), obj))
 
-  let by_mpath (p : mpath) (env : env) : lkt =
+  let by_mpath (p : EcPath.mpath) (env : env) : lkt =
     let (ip, (i, args)) = ipath_of_mpath p in
 
       match MC.by_path (fun mc -> mc.mc_modules) ip env with
@@ -2028,7 +2034,7 @@ module Mod = struct
 
   let add_restr_to_declared p me env =
     if me.tme_loca = `Local then
-      let p = pqname p me.tme_expr.me_name in
+      let p = EcPath.pqname p me.tme_expr.me_name in
       let mp = EcPath.mpath_crt [] p [] None in
       let xs = vars_mb mp Sx.empty me.tme_expr.me_body  in
       add_xs_to_declared xs env
@@ -2155,7 +2161,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module NormMp = struct
-  let rec norm_mpath_for_typing env (p : mpath) =
+  let rec norm_mpath_for_typing env (p : EcPath.mpath) =
     let (ip, (i, args)) = ipath_of_mpath p in
     match Mod.by_ipath_r true ip env with
     | Some ((spi, params), ((_, ({ me_body = ME_Alias (arity,alias) } as m)), _)) ->
@@ -2220,7 +2226,7 @@ module NormMp = struct
               assert (args = []); (* A submodule cannot be a functor *)
               match sub with
               | None   -> EcPath.mpath_crt agks top' args2 sub'
-              | Some p -> EcPath.mpath_crt agks top' args2 (Some (pappend p' p)) in
+              | Some p -> EcPath.mpath_crt agks top' args2 (Some (EcPath.pappend p' p)) in
           norm_mpath env mp
         else
           EcPath.mpath agks (EcPath.mtop p) (List.map (norm_mpath env) args)
@@ -2333,9 +2339,9 @@ module NormMp = struct
   let gen_fun_use
       (env : env)
       (fdone : Sx.t ref)
-      (rm : Sid.t) : use -> xpath -> use
+      (rm : Sid.t) : use -> EcPath.xpath -> use
     =
-    let rec fun_use (us : use) (f : xpath) : use =
+    let rec fun_use (us : use) (f : EcPath.xpath) : use =
       let f = norm_xfun env f in
       if Mx.mem f !fdone then us
       else
@@ -2349,7 +2355,7 @@ module NormMp = struct
           List.fold_left fun_use us f_uses.us_calls
 
         | FBabs (param, _) ->
-            let id = mget_ident f.x_top in
+            let id = EcPath.mget_ident f.x_top in
             let us = add_glob_except rm id us in
             List.fold_left fun_use us (allowed param)
 
@@ -2369,8 +2375,8 @@ module NormMp = struct
   and item_use env rm fdone mp us item =
     match item with
     | MI_Module me -> mod_use env rm fdone us (EcPath.mqname mp me.me_name)
-    | MI_Variable v -> add_var env (xpath mp v.v_name) us
-    | MI_Function f -> fun_use_aux env rm fdone us (xpath mp f.f_name)
+    | MI_Variable v -> add_var env (EcPath.xpath mp v.v_name) us
+    | MI_Function f -> fun_use_aux env rm fdone us (EcPath.xpath mp f.f_name)
 
   and body_use env rm fdone mp us comps body =
     match body with
@@ -2437,7 +2443,7 @@ module NormMp = struct
                         get_restr_use = Mm.add mp res en.get_restr_use };
       res
 
-  let get_restr_me (env : env) (me : module_expr) (mp : mpath) : mod_restr =
+  let get_restr_me (env : env) (me : module_expr) (mp : EcPath.mpath) : mod_restr =
     let mparams =
       List.fold_left (fun mparams (id,_) ->
           Sm.add (EcPath.mident id) mparams
@@ -2466,7 +2472,7 @@ module NormMp = struct
       let comp_oi (oi : oi_params) it = match it with
         | MI_Module  _ | MI_Variable _ -> oi
         | MI_Function f ->
-          let rec f_call (c : Sx.t) (f : xpath) : Sx.t =
+          let rec f_call (c : Sx.t) (f : EcPath.xpath) : Sx.t =
             let f = norm_xfun env f in
             if EcPath.Sx.mem f c then c
             else
@@ -2549,7 +2555,7 @@ module NormMp = struct
     | PVloc _ -> pv
     | PVglob xp ->
       let p = norm_xpv env xp in
-      if   x_equal p xp then pv
+      if   EcPath.x_equal p xp then pv
       else EcTypes.pv_glob p
 
   let globals env m mp =

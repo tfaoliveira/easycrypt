@@ -807,6 +807,7 @@ mpath:
 | m=mpath DOT m0=mpath1
     { PM_Sub (m,m0) }
 
+(* [as [mod_qident], but with module wrappers *)
 (* %inline top_mpath: *)
 top_mpath:
 | _l=lloc(TOP) DOT m=mpath
@@ -839,6 +840,11 @@ mod_ident1:
          EcCoreLib.i_self, None) :: x }
 
 (* -------------------------------------------------------------------- *)
+(* as [fident], but with a [top_mpath] *)
+%inline fpath:
+| nm=top_mpath DOT x=lident { (Some nm, x) }
+| x=lident                  { (None   , x) }
+
 %inline fident:
 | nm=mod_qident DOT x=lident { (nm, x) }
 | x=lident { ([], x) }
@@ -852,7 +858,7 @@ f_or_mod_qident:
       FM_FunOrVar fv}
 | m=loc(mod_qident) { FM_Mod m }
 
-
+(* -------------------------------------------------------------------- *)
 inlinesubpat:
 | m=rlist1(uident, DOT) { m, None }
 | m=rlist1(uident, DOT) DOT f=lident { m, Some f}
@@ -1358,6 +1364,7 @@ sform_u(P):
 
 | EAGER LBRACKET eb=eager_body(P) RBRACKET { eb }
 
+(* TODO: cost: v2: fident->fpath *)
 | PR LBRACKET
     mp=loc(fident) args=paren(plist0(form_r(P), COMMA)) AT pn=mident
     COLON event=form_r(P)
@@ -1430,6 +1437,7 @@ form_u(P):
 
 | COST pb=coe_body(P)      { pb }
 
+(* TODO: cost: v2: fident->fpath *)
 | LOSSLESS mp=loc(fident)
     { PFlsless mp }
 
@@ -1460,10 +1468,12 @@ hoare_bd_cmp :
 | EQ { EcFol.FHeq }
 | GE { EcFol.FHge }
 
+(* TODO: cost: v2: fident->fpath *)
 hoare_body(P):
   mp=loc(fident) COLON pre=form_r(P) LONGARROW post=form_r(P)
     { PFhoareF (pre, mp, post) }
 
+(* TODO: cost: v2: fident->fpath *)
 phoare_body(P):
   LBRACKET mp=loc(fident) COLON
     pre=form_r(P) LONGARROW post=form_r(P)
@@ -1471,6 +1481,7 @@ phoare_body(P):
     cmp=hoare_bd_cmp bd=sform_r(P)
   { PFBDhoareF (pre, mp, post, cmp, bd) }
 
+(* TODO: cost: v2: fident->fpath *)
 choare_body(P):
 | LBRACKET mp=loc(fident) COLON
     pre=form_r(P) LONGARROW post=form_r(P)
@@ -1493,11 +1504,13 @@ coe_body(P):
   COLON e=expr ty=coe_ty? RBRACKET
     { PFCoe (m, Some mt, f, e, ty) }
 
+(* TODO: cost: v2: fident->fpath *)
 equiv_body(P):
   mp1=loc(fident) TILD mp2=loc(fident)
   COLON pre=form_r(P) LONGARROW post=form_r(P)
     { PFequivF (pre, (mp1, mp2), post) }
 
+(* TODO: cost: v2: fident->fpath *)
 eager_body(P):
 | s1=stmt COMMA  mp1=loc(fident) TILD mp2=loc(fident) COMMA s2=stmt
     COLON pre=form_r(P) LONGARROW post=form_r(P)
@@ -1608,6 +1621,7 @@ base_instr:
 | x=lvalue LEAT f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
     { PScall (Some x, f, es) }
 
+(* TODO: cost: v2: fident->fpath *)
 | f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
     { PScall (None, f, es) }
 
@@ -1731,6 +1745,7 @@ mod_item:
     Pst_fun (decl, body)
   }
 
+(* TODO: cost: v2: ?? fident->fpath ?? *)
 | PROC x=lident EQ f=loc(fident)
     { Pst_alias (x, f) }
 
@@ -1744,6 +1759,7 @@ mod_item:
 (* Modules                                                              *)
 
 mod_body:
+(* TODO: cost: v2: move to pmpath? unclear, can we process this afterwards? *)
 (* | m=top_mpath *)
 (*     { Pm_ident m } *)
 
@@ -2858,6 +2874,7 @@ conseq_xt:
 | UNDERSCORE COLON TIME co=sform         { (None, None), Some (CQI_c co) }
 
 
+(* TODO: cost: v2: ?? fident->agents ?? *)
 ci_cost_el:
 | o=loc(fident) x=ident COLON co=form
     { {p_oracle = o; p_finite = true; p_param = Some x; p_cost = co;} }
@@ -3530,6 +3547,7 @@ bdhoare_split:
 | h=trans_hyp
     { h }
 
+(* TODO: cost: v2: ?? fident->fpath ?? *)
 fel_pred_spec:
 | f=loc(fident) COLON p=sform
     { (f, p) }
@@ -3538,9 +3556,11 @@ fel_pred_specs:
 | LBRACKET assoc_ps = plist0(fel_pred_spec, SEMICOLON) RBRACKET
     {assoc_ps}
 
+(* TODO: cost: v2: ?? fident->fpath ?? *)
 eqobs_in_pos:
 | i1=codepos1 i2=codepos1 { (i1, i2) }
 
+(* TODO: cost: v2: ?? fident->fpath ?? *)
 eqobs_in_eqglob1:
 | LPAREN mp1= uoption(loc(fident)) TILD mp2= uoption(loc(fident)) COLON
   geq=form RPAREN

@@ -527,7 +527,7 @@ type ppt_arg =
   | EA_form  of pformula
   | EA_mem   of pmemory
   | EA_agent of pagent
-  | EA_mod   of pmsymbol located
+  | EA_mod   of pmsymbol located (* TODO: cost: v2: pmpath *)
   | EA_proof of (pformula option) gppterm
 
 and 'a gppterm = {
