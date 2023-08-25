@@ -15,7 +15,6 @@ module Ssym = EcSymbols.Ssym
 module Msym = EcSymbols.Msym
 module Mx   = EcPath.Mx
 module Sx   = EcPath.Sx
-module Mp   = EcPath.Mp
 module Sm   = EcPath.Sm
 module Mm   = EcPath.Mm
 module Sp   = EcPath.Sp
@@ -1931,6 +1930,8 @@ module Mod = struct
                (fun (args, obj) ->
                  (fst (MC._downpath_for_mod spsc env p args), obj))
 
+  (* TODO: cost: v2: [agks] should be returned somehow,
+     probably by patching [ipath_of_mpath] *)
   let by_mpath (p : EcPath.mpath) (env : env) : lkt =
     let (ip, (i, args)) = ipath_of_mpath p in
 
@@ -2028,7 +2029,6 @@ module Mod = struct
 
   and vars_item mp xs = function
     | MI_Module me  -> vars_me mp xs me
-    (* TODO: cost: MERGE-COST *)
     | MI_Variable v -> Sx.add (EcPath.xpath mp v.v_name) xs
     | MI_Function _ -> xs
 
@@ -2085,7 +2085,6 @@ module Mod = struct
     in
       env
 
-  (* TODO: cost: keep optional? *)
   let declare_local id ?(minfo : mod_info option) modty env =
     { (bind_local id ?minfo modty env) with
         env_modlcs = Sid.add id env.env_modlcs; }
@@ -2809,8 +2808,6 @@ module ModTy = struct
       mt.mt_restr with
       mr_params = Msym.map do1 mt.mt_restr.mr_params;
       mr_cost   = mt.mt_restr.mr_cost;
-      (* TODO A: I am not sure we are computing the correct cost here
-      indeed, we probably need to substitute the arguments by mr_params in mr_cost *)
     } in
 
     mk_msig_r ~mis_params:params ~mis_body:items ~mis_restr:restr
