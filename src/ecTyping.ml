@@ -1019,33 +1019,116 @@ let check_modtype
     `ProofObligation obl
 
 (* -------------------------------------------------------------------- *)
-let split_msymb (env : EcEnv.env) (msymb : pmsymbol located) =
-  let (top, args, sm) =
-    try
-      let (r, (x, args), sm) =
-        List.find_pivot (fun (_,args) -> args <> None) msymb.pl_desc
-      in
-        (List.rev_append r [x, None], args, sm)
-    with Not_found ->
-      (msymb.pl_desc, None, [])
-  in
+module ParseMPath = struct
 
-  let (top, sm) =
-    let ca (x, args) =
-      if args <> None then
-        tyerror msymb.pl_loc env
-          (InvalidModAppl (MAE_WrongArgCount(0, List.length (oget args))));
-      x
+  (** parsed agent wrapper *)
+  type agk  = ([`Ext | `Cb] * psymbol)
+  type agks = agk list
+
+  (* -------------------------------------------------------------------- *)
+  (** [{top_agks = a; top_mpath = F; args = O; sub_mpath = S;}] is the
+      module path [$a( F(O).S )]*)
+  type resolved_pmpath = {
+    top_agks  : agks;
+    top_mpath : psymbol list;
+    args      : resolved_pmpath located list option;
+    sub_mpath : psymbol list;
+  }
+
+  (* -------------------------------------------------------------------- *)
+  let empty_resolved_mpath = {
+    top_agks  = [];
+    top_mpath = [];
+    args      = None;
+    sub_mpath = [];
+  }
+
+  (* -------------------------------------------------------------------- *)
+  (** Translate a [pmsymbol] into a the more general [pmpath] form *)
+  let rec pmsymbol_to_pmpath (msymb : pmsymbol located) : pmpath located =
+    let trans_args (args : (pmsymbol located list) option) =
+      omap (List.map (pmsymbol_to_pmpath)) args
     in
-      (List.map ca top, List.map ca sm)
-  in
-    (top, args, sm)
+    let (head_m, head_args), msymb' = match unloc msymb with
+      | head :: msymb -> head, msymb
+      | _ -> assert false       (* ensured by the parser *)
+    in
+    let head = PM_App (head_m, trans_args head_args) in
+    let pmpath =
+      List.fold_left (fun pmpath (m, args) ->
+          PM_Sub (pmpath, PM_App (m, trans_args args))
+        ) head msymb'
+    in
+    mk_loc (loc msymb) pmpath
+
+  (* -------------------------------------------------------------------- *)
+  let rec resolve_pmpath
+      (env : EcEnv.env) (msymb : pmpath located) : resolved_pmpath located
+    =
+    (** Resolves:
+        - [$top_agks( top_mpath(args).sub_mpath.pmpath )] if [args <> None]
+        - [$top_agks( top_mpath.pmpath )] if [args <> None], in which case
+          [sub_mpath = []]
+
+        Note: [top_agks], [top_mpath] and [sub_mpath] are stored and
+        returned in reversed order by [doit]. *)
+    let rec doit
+        ({ top_agks; top_mpath; args; sub_mpath } as res : resolved_pmpath)
+        (pmpath : pmpath)
+      : resolved_pmpath
+      =
+      match pmpath with
+      | PM_App (m, papp_args) ->
+        if args <> None then begin
+          (* cannot have arguments twice *)
+          if papp_args <> None then
+            tyerror m.pl_loc env
+              (InvalidModAppl (MAE_WrongArgCount(0, List.length (oget papp_args))));
+
+          { res with sub_mpath = m :: sub_mpath; }
+        end
+        else begin
+          assert (sub_mpath = []);
+          if papp_args = None then
+            (* [args = sub_mpath = []], we append [m] to [top_mpath] *)
+            { res with top_mpath = m :: top_mpath; }
+          else
+            (* we found the arguments, we parse them (recursively) *)
+            let args = List.map (resolve_pmpath env) (oget papp_args) in
+            { top_agks; top_mpath = m :: top_mpath; args = Some args; sub_mpath = []; }
+        end
+
+      | PM_Wrap (k,ag,pmpath') ->
+        doit { res with top_agks = (k,ag) :: top_agks; } pmpath'
+       (* since [F.$a(S) = $a(F.S)] *)
+
+      | PM_Sub (pmpath1, pmpath2) ->
+        doit (doit res pmpath1) pmpath2
+        (* since [  $a  ( F.m1.m2   )
+                  = $a  ( F.m1      ).m2
+                  = $a,b( F.res1    ).m2
+                  = $a,b( F.res1.m2 )]
+           where [$a,b( F.res1 )] is the resolved form of [$a( F.m1 )] *)
+    in
+
+    let res = doit empty_resolved_mpath (unloc msymb) in
+
+    mk_loc (loc msymb)
+      { res with top_agks  = List.rev res.top_agks;
+                 top_mpath = List.rev res.top_mpath;
+                 sub_mpath = List.rev res.sub_mpath; }
+end
 
 (* -------------------------------------------------------------------- *)
-(** Internal. *)
-let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
-  let loc = msymb.pl_loc in
-  let (top, args, sm) = split_msymb env msymb in
+let rec trans_resolved_mpath
+    (env : EcEnv.env) (pmpath_res : ParseMPath.resolved_pmpath located)
+  : ((mpath * EcLocation.t) * module_smpl_sig)
+  =
+  let loc = pmpath_res.pl_loc in
+  let ParseMPath.{ top_agks; top_mpath = top; args; sub_mpath = sm } =
+    unloc pmpath_res
+  in
+  assert (top_agks = []);       (* TODO: cost: v2: allow top_agks to be <> []*)
 
   let to_qsymbol l =
     match List.rev l with
@@ -1089,7 +1172,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
         (mod_expr.me_params, true)
   in
 
-  let args = omap (List.map (trans_msymbol env)) args in
+  let args = omap (List.map (trans_resolved_mpath env)) args in
 
   match args with
   | None ->
@@ -1134,11 +1217,22 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
        { miss_params = remn;
          miss_body   = body; })
 
+(* -------------------------------------------------------------------- *)
 (** Exported. *)
-let trans_msymbol env (msymb : pmsymbol located) : mpath * module_smpl_sig =
-  let ((m,_),mt) = trans_msymbol env msymb in
-  (m,mt)
+let trans_mpath
+    (env : EcEnv.env) (pmpath : pmpath located) : (mpath * module_smpl_sig)
+  =
+  let ((m,_),mt) =
+    trans_resolved_mpath env (ParseMPath.resolve_pmpath env pmpath)
+  in
+  (m, mt)
 
+(* -------------------------------------------------------------------- *)
+(** Exported. *)
+let trans_msymbol
+    (env : EcEnv.env) (msymb : pmsymbol located) : mpath * module_smpl_sig
+  =
+  trans_mpath env (ParseMPath.pmsymbol_to_pmpath msymb)
 
 (* -------------------------------------------------------------------- *)
 let lookup_module_type (env : EcEnv.env) (name : pqsymbol) =

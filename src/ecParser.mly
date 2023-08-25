@@ -809,11 +809,11 @@ mpath:
 
 (* %inline top_mpath: *)
 top_mpath:
-| _l=lloc(TOP) DOT x=mpath
-    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_top, None), x) }
+| _l=lloc(TOP) DOT m=mpath
+    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_top, None), m) }
 
-| _l=lloc(SELF) DOT x=mpath
-    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_self, None), x) }
+| _l=lloc(SELF) DOT m=mpath
+    { PM_Sub ( PM_App (mk_loc _l EcCoreLib.i_self, None), m) }
 
 (* -------------------------------------------------------------------- *)
 (* module path without wrappers *)
