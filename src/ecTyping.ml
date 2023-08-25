@@ -1019,10 +1019,35 @@ let check_modtype
     `ProofObligation obl
 
 (* -------------------------------------------------------------------- *)
+let transagent (env : EcEnv.env) (name : psymbol) : EcIdent.t =
+  (* lookup [name] as an agent name in [EcEnv.Agent] *)
+  match EcEnv.Agent.lookup (unloc name) env with
+  | Some (id, _) -> id
+  | None ->
+    tyerror name.pl_loc env (UnknownAgent (unloc name))
+
+(* -------------------------------------------------------------------- *)
+let transagents (env : EcEnv.env) (names : psymbol list located) ~(expected:int) =
+  if List.length names.pl_desc <> expected then
+    tyerror names.pl_loc env (BadNumberOfAgents expected);
+
+  let agents = List.map (transagent env) (unloc names) in
+
+  (* check that agent names are pairwise disjoin *)
+  let seen = ref Sid.empty in
+  List.iter2 (fun ag name ->
+      if Sid.mem ag !seen then
+        tyerror name.pl_loc env (DuplicatedAgent ag);
+      seen := Sid.add ag !seen
+    ) agents (unloc names);
+
+  agents
+
+(* -------------------------------------------------------------------- *)
 module ParseMPath = struct
 
   (** parsed agent wrapper *)
-  type agk  = ([`Ext | `Cb] * psymbol)
+  type agk  = psymbol * [`Ext | `Cb]
   type agks = agk list
 
   (* -------------------------------------------------------------------- *)
@@ -1099,7 +1124,7 @@ module ParseMPath = struct
         end
 
       | PM_Wrap (k,ag,pmpath') ->
-        doit { res with top_agks = (k,ag) :: top_agks; } pmpath'
+        doit { res with top_agks = (ag,k) :: top_agks; } pmpath'
        (* since [F.$a(S) = $a(F.S)] *)
 
       | PM_Sub (pmpath1, pmpath2) ->
@@ -1128,7 +1153,10 @@ let rec trans_resolved_mpath
   let ParseMPath.{ top_agks; top_mpath = top; args; sub_mpath = sm } =
     unloc pmpath_res
   in
-  assert (top_agks = []);       (* TODO: cost: v2: allow top_agks to be <> []*)
+
+  let top_agks =
+    List.map (fun (ag, k) -> transagent env ag, k) top_agks
+  in
 
   let to_qsymbol l =
     match List.rev l with
@@ -1179,8 +1207,12 @@ let rec trans_resolved_mpath
     if not istop && params <> [] then
       tyerror loc env (InvalidModAppl MAE_AccesSubModFunctor);
 
-    ((top_path,loc), { miss_params = mod_expr.me_params;
-                       miss_body   = mod_expr.me_sig_body; } )
+    let mpath =
+      let agks', topr', args' = EcPath.resolve top_path in
+      EcPath.mpath (top_agks @ agks') topr' args'
+    in
+    ((mpath,loc), { miss_params = mod_expr.me_params;
+                    miss_body   = mod_expr.me_sig_body; } )
 
   | Some args ->
       let lena = List.length args in
@@ -1190,7 +1222,8 @@ let rec trans_resolved_mpath
 
       let params, remn = List.takedrop lena params in
 
-      let args = List.map2
+      let args =
+        List.map2
         (fun (x,tp) ((a,loc),ta_smpl) ->
           try
             let ta = NormMp.sig_of_mp env a in
@@ -1203,7 +1236,8 @@ let rec trans_resolved_mpath
             check_sig_mt_cnv env x.EcIdent.id_symb ta tp; a
           with TymodCnvFailure error ->
             tyerror loc env (InvalidModAppl (MAE_InvalidArgType(a, error))))
-        params args in
+        params args
+      in
 
       let subst =
           List.fold_left2
@@ -1213,7 +1247,9 @@ let rec trans_resolved_mpath
 
       let body = EcSubst.subst_modsig_body subst mod_expr.me_sig_body in
 
-      ((EcPath.mpath [] (EcPath.mtop top_path) args, loc),
+      let agks', topr', _ = EcPath.resolve top_path in
+
+      ((EcPath.mpath (top_agks @ agks') (EcPath.mtop top_path) args, loc),
        { miss_params = remn;
          miss_body   = body; })
 
@@ -2106,31 +2142,6 @@ let transmem env m =
 (*      if (EcMemory.memtype me) <> None then
         tyerror m.pl_loc env (InvalidMem (unloc m, MAE_IsConcrete)); *)
       (fst me)
-
-(* -------------------------------------------------------------------- *)
-let transagent (env : EcEnv.env) (name : psymbol) =
-  (* lookup [name] as an agent name in [EcEnv.Agent] *)
-  match EcEnv.Agent.lookup (unloc name) env with
-  | Some (id, _) -> id
-  | None ->
-    tyerror name.pl_loc env (UnknownAgent (unloc name))
-
-(* -------------------------------------------------------------------- *)
-let transagents (env : EcEnv.env) (names : psymbol list located) ~(expected:int) =
-  if List.length names.pl_desc <> expected then
-    tyerror names.pl_loc env (BadNumberOfAgents expected);
-
-  let agents = List.map (transagent env) (unloc names) in
-
-  (* check that agent names are pairwise disjoin *)
-  let seen = ref Sid.empty in
-  List.iter2 (fun ag name ->
-      if Sid.mem ag !seen then
-        tyerror name.pl_loc env (DuplicatedAgent ag);
-      seen := Sid.add ag !seen
-    ) agents (unloc names);
-
-  agents
 
 (* -------------------------------------------------------------------- *)
 let transpvar env side p =
