@@ -1778,17 +1778,39 @@ signature_item:
     { let qs = omap (List.map (fun x -> { inp_in_params = false;
 					  inp_qident    = x;     })) qs in
       `Include (i, xs, qs) }
-| PROC x=lident pd=param_decl COLON ty=loc(type_exp) fr=fun_restr?
+| PROC x=lident opd=param_decl? COLON ty=loc(type_exp) fr=fun_restr?
     { let orcl, compl = odfl (None,None) fr in
       let frestr = { pmre_name  = x;
 		     pmre_orcls = orcl;
 		     pmre_compl = compl; } in
 
-      `FunctionDecl
+      match opd with
+      | Some pd ->
+        `FunctionDecl
           { pfd_name     = x;
             pfd_tyargs   = pd;
             pfd_tyresult = ty;
-            pfd_uses     = frestr; } }
+            pfd_uses     = frestr; }
+      | None ->
+	let rec ptyfun_flat (ty : pty) =
+	  match ty.pl_desc with
+	  | PTfun (t1, t2) ->
+	     let dom, codom = ptyfun_flat t2 in
+	     (t1 :: dom, codom)
+	  | _ ->
+	     ([], ty)
+	in
+	match ptyfun_flat ty with
+	| [], _ ->
+	   parse_error
+	     (EcLocation.make $startpos $endpos)
+             (Some "procedures must be functions")
+	| dom, codom ->
+	   `FunctionDecl
+            { pfd_name     = x;
+              pfd_tyargs   = List.map (fun t -> mk_loc ty.pl_loc None, t) dom;
+              pfd_tyresult = codom;
+              pfd_uses     = frestr; } }
 
 (* -------------------------------------------------------------------- *)
 %inline locality:
