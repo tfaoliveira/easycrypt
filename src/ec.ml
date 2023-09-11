@@ -445,6 +445,9 @@ let main () =
                    end)
                 commands
 
+          | EP.P_DocComment doc ->
+             EcCommands.doc_comment doc
+
           | EP.P_Undo i ->
               EcCommands.undo i
           | EP.P_Exit ->

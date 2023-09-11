@@ -1289,5 +1289,8 @@ type prog_r =
   | P_Prog of global list * bool
   | P_Exit
   | P_Undo of int
+  | P_DocComment of (dockind * string)
+
+and dockind = [`Global | `Item]
 
 type prog = prog_r located

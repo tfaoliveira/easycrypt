@@ -335,7 +335,37 @@ type scope = {
   sc_clears   : path list;
   sc_pr_uc    : proof_uc option;
   sc_options  : GenOptions.options;
+  sc_doc      : docstate;
 }
+
+and docstate = {
+  docitems : docstate1 list;
+  docfw    : string list;
+}
+
+and docstate1 =
+  | GlobalDoc of string
+  | ItemDoc   of string list * docitem
+
+and docitem =
+  string                        (* raw definition *)
+
+(* -------------------------------------------------------------------- *)
+module DocState = struct
+  let empty : docstate =
+    { docitems = []; docfw = []; }
+
+  let push_global (state : docstate) (doc : string) : docstate =
+    { state with docitems = GlobalDoc doc :: state.docitems }
+
+  let push_temporary (state : docstate) (doc : string) : docstate =
+    { state with docfw = doc :: state.docfw }
+
+  let promote_temporary (state : docstate) (item : string) : docstate =
+    { state with
+        docitems = ItemDoc (state.docfw, item) :: state.docitems;
+        docfw    = []; }
+end
 
 (* -------------------------------------------------------------------- *)
 let empty (gstate : EcGState.gstate) =
@@ -348,7 +378,8 @@ let empty (gstate : EcGState.gstate) =
     sc_required   = [];
     sc_clears     = [];
     sc_pr_uc      = None;
-    sc_options    = GenOptions.freeze (); }
+    sc_options    = GenOptions.freeze ();
+    sc_doc        = DocState.empty; }
 
 (* -------------------------------------------------------------------- *)
 let env (scope : scope) =
@@ -468,7 +499,7 @@ let for_loading (scope : scope) =
     sc_clears     = [];
     sc_pr_uc      = None;
     sc_options    = GenOptions.for_loading scope.sc_options;
-  }
+    sc_doc        = DocState.empty; }
 
 (* -------------------------------------------------------------------- *)
 let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) lc =
@@ -482,7 +513,8 @@ let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) lc =
     sc_required   = scope.sc_required;
     sc_clears     = [];
     sc_pr_uc      = None;
-    sc_options    = GenOptions.for_subscope scope.sc_options; }
+    sc_options    = GenOptions.for_subscope scope.sc_options;
+    sc_doc        = DocState.empty; }
 
 (* -------------------------------------------------------------------- *)
 module Prover = struct
@@ -1132,7 +1164,9 @@ module Op = struct
   let bind ?(import = EcTheory.import0) (scope : scope) ((x, op) : _ * operator) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_operator (x, op)) in
-    { scope with sc_env = EcSection.add_item item scope.sc_env; }
+    { scope with
+        sc_env = EcSection.add_item item scope.sc_env;
+        sc_doc = DocState.promote_temporary scope.sc_doc "operator"; }
 
   let add (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
@@ -2408,4 +2442,15 @@ module Search = struct
     end;
 
     notify scope `Info "%s" (Buffer.contents buffer)
+end
+
+(* -------------------------------------------------------------------- *)
+module DocComment = struct
+  let add (scope : scope) ((kind, doc) : [`Global | `Item] * string) : scope =
+    match kind with
+    | `Global ->
+       { scope with sc_doc = DocState.push_global scope.sc_doc doc }
+
+    | `Item ->
+       { scope with sc_doc = DocState.push_temporary scope.sc_doc doc }
 end

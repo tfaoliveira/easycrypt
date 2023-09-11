@@ -806,6 +806,14 @@ let undo (olduuid : int) =
     done
 
 (* -------------------------------------------------------------------- *)
+let doc_comment (doc : [`Global | `Item] * string) : unit =
+  let current = oget !context in
+  let scope   = current.ct_current in
+  let scope   = EcScope.DocComment.add scope doc in
+
+  context := Some (push_context scope current)
+
+(* -------------------------------------------------------------------- *)
 let reset () =
   context := Some (rootctxt (oget !context).ct_root)
 

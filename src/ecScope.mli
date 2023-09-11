@@ -238,3 +238,8 @@ module Search : sig
   val search : scope -> pformula list -> unit
   val locate : scope -> pqsymbol -> unit
 end
+
+(* -------------------------------------------------------------------- *)
+module DocComment : sig
+  val add : scope -> [`Global | `Item] * string -> scope
+end

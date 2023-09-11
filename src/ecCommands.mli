@@ -42,6 +42,8 @@ val mode  : unit -> string
 
 val check_eco : string -> bool
 
+val doc_comment : [`Global | `Item] * string -> unit
+
 (* -------------------------------------------------------------------- *)
 val pp_current_goal : ?all:bool -> Format.formatter -> unit
 val pp_maybe_current_goal : Format.formatter -> unit

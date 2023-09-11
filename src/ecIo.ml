@@ -131,6 +131,8 @@ let parseall (ecreader : 'a ecreader_g) =
     | EcParsetree.P_Prog (commands, terminate) ->
         let acc = List.rev_append commands acc in
           if terminate then List.rev acc else aux acc
+    | EcParsetree.P_DocComment _ ->
+        aux acc
     | EcParsetree.P_Undo _ | EcParsetree.P_Exit ->
         assert false                    (* FIXME *)
   in
