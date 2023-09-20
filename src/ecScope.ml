@@ -362,13 +362,17 @@ module DocState = struct
   (* let push_global (state : docstate) (doc : string) : docstate =
     { state with docentities = GlobalDoc doc :: state.docentities } *)
 
-  let push (state : docstate) (doc : string) : docstate =
-    { state with docstringbacklog = doc :: state.docstringbacklog }
+  let push_backlog (state : docstate) (doc : string) : docstate =
+    { state with docstringbacklog = state.docstringbacklog @ [doc] }
 
-  let promote (state : docstate) (item : string) : docstate =
+  let add_item (state : docstate) (item : string) : docstate =
     { state with
-        docentities = ItemDoc (state.docstringbacklog, item) :: state.docentities;
-        docstringbacklog = []; }
+        docentities = state.docentities @ [ItemDoc (state.docstringbacklog, item)];
+        docstringbacklog = [] }
+  
+  let add_sub (state : docstate) (substate : docstate) : docstate =
+    { state with 
+        docentities = state.docentities @ [SubDoc (substate.docentities)] }
 end
 
 (* -------------------------------------------------------------------- *)
@@ -868,7 +872,7 @@ module Ax = struct
     let item = EcTheory.mkitem import (EcTheory.Th_axiom (x, ax)) in
     { scope with 
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.promote scope.sc_locdoc "axiom" }
+        sc_locdoc = DocState.add_item scope.sc_locdoc "axiom" }
 
   (* ------------------------------------------------------------------ *)
   let start_lemma scope (cont, axflags) check ?name (axd, ctxt) =
@@ -1175,7 +1179,7 @@ module Op = struct
     let item = EcTheory.mkitem import (EcTheory.Th_operator (x, op)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.promote scope.sc_locdoc "operator"; }
+        sc_locdoc = DocState.add_item scope.sc_locdoc "operator"; }
 
   let add (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
@@ -1506,7 +1510,7 @@ module Mod = struct
     let item = EcTheory.mkitem import (EcTheory.Th_module m) in
     { scope with 
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.promote scope.sc_locdoc "module" }
+        sc_locdoc = DocState.add_item scope.sc_locdoc "module" }
 
   let add_concrete (scope : scope) lc (ptm : pmodule_def) =
     assert (scope.sc_pr_uc = None);
@@ -1569,7 +1573,7 @@ module ModType = struct
     let item = EcTheory.mkitem import (EcTheory.Th_modtype (x, tysig)) in
     { scope with 
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.promote scope.sc_locdoc "moduletype" }
+        sc_locdoc = DocState.add_item scope.sc_locdoc "moduletype" }
 
   let add (scope : scope) (intf : pinterface) =
     assert (scope.sc_pr_uc = None);
@@ -1600,7 +1604,7 @@ module Ty = struct
     let item = EcTheory.mkitem import (EcTheory.Th_type (x, tydecl)) in
     { scope with 
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.promote scope.sc_locdoc "type" }
+        sc_locdoc = DocState.add_item scope.sc_locdoc "type" }
 
   (* ------------------------------------------------------------------ *)
   let add scope (tyd : ptydecl located) =
@@ -2009,7 +2013,8 @@ module Theory = struct
   let bind (scope : scope) (x, cth) =
     assert (scope.sc_pr_uc = None);
     { scope with
-        sc_env = EcSection.add_th ~import:EcTheory.import0 x cth scope.sc_env }
+        sc_env = EcSection.add_th ~import:EcTheory.import0 x cth scope.sc_env;
+        sc_locdoc = DocState.add_item scope.sc_locdoc "theory" }
 
   (* ------------------------------------------------------------------ *)
   let required (scope : scope) (name : required_info) =
@@ -2073,7 +2078,9 @@ module Theory = struct
       let _, cth, _ = EcSection.exit_theory ?pempty ~clears scope.sc_env in
       let loaded   = scope.sc_loaded in
       let required = scope.sc_required in
-      let sup = { sup with sc_loaded = loaded; } in
+      let sup = { sup with 
+                    sc_loaded = loaded;
+                    sc_locdoc = DocState.add_sub sup.sc_locdoc scope.sc_locdoc} in
       ((cth, required), scope.sc_name, sup)
 
   (* ------------------------------------------------------------------ *)
@@ -2467,5 +2474,5 @@ module DocComment = struct
        { scope with sc_globdoc = scope.sc_globdoc @ [doc] }
 
     | `Item ->
-       { scope with sc_locdoc = DocState.push scope.sc_locdoc doc }
+       { scope with sc_locdoc = DocState.push_backlog scope.sc_locdoc doc }
 end
