@@ -327,9 +327,9 @@ and process_interface (scope : EcScope.scope) intf =
   EcScope.ModType.add scope intf
 
 (* -------------------------------------------------------------------- *)
-and process_operator (scope : EcScope.scope) (pop : poperator located) =
+and process_operator (scope : EcScope.scope) ?(src : string option) (pop : poperator located) =
   EcScope.check_state `InTop "operator" scope;
-  let op, axs, scope = EcScope.Op.add scope pop in
+  let op, axs, scope = EcScope.Op.add scope ?src pop in
   let ppe = EcPrinting.PPEnv.ofenv (EcScope.env scope) in
   List.iter
     (fun { pl_desc = name } ->
@@ -635,7 +635,7 @@ and process_dump scope (source, tc) =
   scope
 
 (* -------------------------------------------------------------------- *)
-and process (ld : Loader.loader) (scope : EcScope.scope) g =
+and process ?src (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in
 
   let scope =
@@ -646,7 +646,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
       | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
       | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
-      | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  (mk_loc loc o))
+      | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  ?src (mk_loc loc o))
       | Gprocop      o    -> `Fct   (fun scope -> process_procop     scope  (mk_loc loc o))
       | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
       | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
@@ -818,14 +818,17 @@ let reset () =
   context := Some (rootctxt (oget !context).ct_root)
 
 (* -------------------------------------------------------------------- *)
-let process ?(timed = false) ?(break = false) (g : global_action located) : float option =
+let process
+    ?(src : string option) ?(timed = false) ?(break = false)
+    (g : global_action located) : float option
+=
   ignore break;
 
   let current = oget !context in
   let scope   = current.ct_current in
 
   try
-    let (tdelta, oscope) = EcUtils.timed (process loader scope) g in
+    let (tdelta, oscope) = EcUtils.timed (process ?src loader scope) g in
     oscope |> oiter (fun scope -> context := Some (push_context scope current));
     if timed then
       EcScope.notify scope `Info "time: %f" tdelta;

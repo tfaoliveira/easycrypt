@@ -421,8 +421,10 @@ let main () =
            | Some (`Int i) -> Some i | _ -> None);
 
         begin
-          match EcLocation.unloc (T.next terminal) with
-          | EP.P_Prog (commands, locterm) ->
+          match snd_map EcLocation.unloc (T.next terminal) with
+          | (src, EP.P_Prog (commands, locterm)) ->
+              let src = String.strip src in
+              Format.eprintf "@.@.[W]%s@.@." src;
               terminate := locterm;
               List.iter
                 (fun p ->
@@ -431,7 +433,7 @@ let main () =
                    let break = p.EP.gl_debug = Some `Break in
                      try
                        let tdelta =
-                         EcCommands.process ~timed ~break p.EP.gl_action
+                         EcCommands.process ~src ~timed ~break p.EP.gl_action
                        in tstats loc tdelta
                      with
                      | EcCommands.Restart ->
@@ -445,12 +447,12 @@ let main () =
                    end)
                 commands
 
-          | EP.P_DocComment doc ->
+          | _, EP.P_DocComment doc ->
              EcCommands.doc_comment doc
 
-          | EP.P_Undo i ->
+          | _, EP.P_Undo i ->
               EcCommands.undo i
-          | EP.P_Exit ->
+          | _, EP.P_Exit ->
               terminate := true
         end;
         T.finish `ST_Ok terminal;

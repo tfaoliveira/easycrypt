@@ -32,7 +32,7 @@ val current     : unit -> EcScope.scope
 val addnotifier : notifier -> unit
 
 (* -------------------------------------------------------------------- *)
-val process : ?timed:bool -> ?break:bool ->
+val process : ?src:string -> ?timed:bool -> ?break:bool ->
   EcParsetree.global_action located -> float option
 
 val undo  : int  -> unit

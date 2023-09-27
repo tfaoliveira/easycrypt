@@ -369,9 +369,9 @@ module DocState = struct
     { state with
         docentities = state.docentities @ [ItemDoc (state.docstringbacklog, item)];
         docstringbacklog = [] }
-  
+
   let add_sub (state : docstate) (substate : docstate) : docstate =
-    { state with 
+    { state with
         docentities = state.docentities @ [SubDoc (substate.docentities)] }
 end
 
@@ -870,7 +870,7 @@ module Ax = struct
   let bind ?(import = EcTheory.import0) (scope : scope) ((x, ax) : _ * axiom) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_axiom (x, ax)) in
-    { scope with 
+    { scope with
         sc_env = EcSection.add_item item scope.sc_env;
         sc_locdoc = DocState.add_item scope.sc_locdoc "axiom" }
 
@@ -1174,14 +1174,17 @@ module Op = struct
   module TT  = EcTyping
   module EHI = EcHiInductive
 
-  let bind ?(import = EcTheory.import0) (scope : scope) ((x, op) : _ * operator) =
+  let bind
+    ?(src : string option) ?(import = EcTheory.import0)
+    (scope : scope) ((x, op) : _ * operator)
+  =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_operator (x, op)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc "operator"; }
+        sc_locdoc = DocState.add_item scope.sc_locdoc (odfl "operator" src); }
 
-  let add (scope : scope) (op : poperator located) =
+  let add (scope : scope) ?(src : string option) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
     let op = op.pl_desc and loc = op.pl_loc in
     let eenv = env scope in
@@ -1275,7 +1278,7 @@ module Op = struct
 
     let scope =
       match op.po_ax with
-      | None    -> bind scope (unloc op.po_name, tyop)
+      | None    -> bind ?src scope (unloc op.po_name, tyop)
       | Some ax -> begin
           match tyop.op_kind with
           | OB_oper (Some (OP_Plain (bd, _))) ->
@@ -1285,7 +1288,7 @@ module Op = struct
                 let nargs = List.sum (List.map (List.length |- fst) op.po_args) in
                   EcDecl.axiomatized_op ~nargs ~nosmt path (tyop.op_tparams, bd) lc in
               let tyop  = { tyop with op_opaque = true; } in
-              let scope = bind scope (unloc op.po_name, tyop) in
+              let scope = bind ?src scope (unloc op.po_name, tyop) in
               Ax.bind scope (unloc ax, axop)
 
           | _ -> hierror ~loc "cannot axiomatize non-plain operators"
@@ -1508,7 +1511,7 @@ module Mod = struct
   let bind ?(import = EcTheory.import0) (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_module m) in
-    { scope with 
+    { scope with
         sc_env = EcSection.add_item item scope.sc_env;
         sc_locdoc = DocState.add_item scope.sc_locdoc "module" }
 
@@ -1571,7 +1574,7 @@ module ModType = struct
   =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_modtype (x, tysig)) in
-    { scope with 
+    { scope with
         sc_env = EcSection.add_item item scope.sc_env;
         sc_locdoc = DocState.add_item scope.sc_locdoc "moduletype" }
 
@@ -1602,7 +1605,7 @@ module Ty = struct
   let bind ?(import = EcTheory.import0) (scope : scope) ((x, tydecl) : (_ * tydecl)) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_type (x, tydecl)) in
-    { scope with 
+    { scope with
         sc_env = EcSection.add_item item scope.sc_env;
         sc_locdoc = DocState.add_item scope.sc_locdoc "type" }
 
@@ -2078,7 +2081,7 @@ module Theory = struct
       let _, cth, _ = EcSection.exit_theory ?pempty ~clears scope.sc_env in
       let loaded   = scope.sc_loaded in
       let required = scope.sc_required in
-      let sup = { sup with 
+      let sup = { sup with
                     sc_loaded = loaded;
                     sc_locdoc = DocState.add_sub sup.sc_locdoc scope.sc_locdoc} in
       ((cth, required), scope.sc_name, sup)
