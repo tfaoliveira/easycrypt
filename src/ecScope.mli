@@ -88,21 +88,21 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Op : sig
-  val add : scope -> ?src:string -> poperator located -> EcDecl.operator * string list * scope
+  val add : ?src:string -> scope -> poperator located -> EcDecl.operator * string list * scope
 
-  val add_opsem : scope -> pprocop located -> scope
+  val add_opsem : ?src:string -> scope -> pprocop located -> scope
 end
 
 (* -------------------------------------------------------------------- *)
 module Pred : sig
-  val add : scope -> ppredicate located -> EcDecl.operator * scope
+  val add : ?src:string -> scope -> ppredicate located -> EcDecl.operator * scope
 end
 
 (* -------------------------------------------------------------------- *)
 module Ax : sig
   type mode = [`WeakCheck | `Check | `Report]
 
-  val add     : scope -> mode -> paxiom located -> symbol option * scope
+  val add     : ?src:string -> scope -> mode -> paxiom located -> symbol option * scope
   val save    : scope -> string option * scope
   val admit   : scope -> string option * scope
   val abort   : scope -> scope
@@ -111,7 +111,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Ty : sig
-  val add : scope -> ptydecl located -> scope
+  val add : ?src:string -> scope -> ptydecl located -> scope
 
   val add_class    : scope -> ptypeclass located -> scope
   val add_instance : ?import:EcTheory.import -> scope -> Ax.mode -> ptycinstance located -> scope
@@ -119,14 +119,14 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Mod : sig
-  val add : scope -> pmodule_def_or_decl -> scope
+  val add : ?src:string ->scope -> pmodule_def_or_decl -> scope
   val declare : scope -> pmodule_decl -> scope
   val import : scope -> pmsymbol located -> scope
 end
 
 (* -------------------------------------------------------------------- *)
 module ModType : sig
-  val add : scope -> pinterface -> scope
+  val add : ?src:string -> scope -> pinterface -> scope
 end
 
 (* -------------------------------------------------------------------- *)
@@ -142,7 +142,8 @@ module Theory : sig
   (* [exit scope] close and finalize the top-most theory and returns
    * its name. Raises [TopScope] if [scope] has not super scope. *)
   val exit :
-       ?pempty:[`ClearOnly | `Full | `No]
+       ?src:string
+    -> ?pempty:[`ClearOnly | `Full | `No]
     -> ?clears:(pqsymbol option) list
     -> scope -> symbol * scope
 

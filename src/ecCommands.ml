@@ -294,15 +294,15 @@ let process_print scope p =
 exception Pragma of [`Reset | `Restart]
 
 (* -------------------------------------------------------------------- *)
-let rec process_type (scope : EcScope.scope) (tyd : ptydecl located) =
+let rec process_type ?(src : string option) (scope : EcScope.scope) (tyd : ptydecl located) =
   EcScope.check_state `InTop "type" scope;
-  let scope  =  EcScope.Ty.add scope tyd in
+  let scope  =  EcScope.Ty.add ?src scope tyd in
   EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
   scope
 
 (* -------------------------------------------------------------------- *)
-and process_types (scope : EcScope.scope) tyds =
-  List.fold_left process_type scope tyds
+and process_types ?(src : string option) (scope : EcScope.scope) tyds =
+  List.fold_left (process_type ?src) scope tyds
 
 (* -------------------------------------------------------------------- *)
 and process_typeclass (scope : EcScope.scope) (tcd : ptypeclass located) =
@@ -317,17 +317,17 @@ and process_tycinst (scope : EcScope.scope) (tci : ptycinstance located) =
   EcScope.Ty.add_instance scope (Pragma.get ()).pm_check tci
 
 (* -------------------------------------------------------------------- *)
-and process_module (scope : EcScope.scope) m =
+and process_module ?(src : string option) (scope : EcScope.scope) m =
   EcScope.check_state `InTop "module" scope;
   EcScope.Mod.add scope m
 
 (* -------------------------------------------------------------------- *)
-and process_interface (scope : EcScope.scope) intf =
+and process_interface ?(src : string option) (scope : EcScope.scope) intf =
   EcScope.check_state `InTop "interface" scope;
-  EcScope.ModType.add scope intf
+  EcScope.ModType.add ?src scope intf
 
 (* -------------------------------------------------------------------- *)
-and process_operator (scope : EcScope.scope) ?(src : string option) (pop : poperator located) =
+and process_operator ?(src : string option) (scope : EcScope.scope) (pop : poperator located) =
   EcScope.check_state `InTop "operator" scope;
   let op, axs, scope = EcScope.Op.add scope ?src pop in
   let ppe = EcPrinting.PPEnv.ofenv (EcScope.env scope) in
@@ -341,14 +341,14 @@ and process_operator (scope : EcScope.scope) ?(src : string option) (pop : poper
   scope
 
 (* -------------------------------------------------------------------- *)
-and process_procop (scope : EcScope.scope) (pop : pprocop located) =
+and process_procop ?(src : string option) (scope : EcScope.scope) (pop : pprocop located) =
   EcScope.check_state `InTop "operator" scope;
-  EcScope.Op.add_opsem scope pop
+  EcScope.Op.add_opsem ?src scope pop
 
 (* -------------------------------------------------------------------- *)
-and process_predicate (scope : EcScope.scope) (p : ppredicate located) =
+and process_predicate ?(src : string option) (scope : EcScope.scope) (p : ppredicate located) =
   EcScope.check_state `InTop "predicate" scope;
-  let op, scope = EcScope.Pred.add scope p in
+  let op, scope = EcScope.Pred.add ?src scope p in
   let ppe = EcPrinting.PPEnv.ofenv (EcScope.env scope) in
   EcScope.notify scope `Info "added predicate %s %a"
     (unloc p.pl_desc.pp_name) (EcPrinting.pp_added_op ppe) op;
@@ -372,10 +372,10 @@ and process_abbrev (scope : EcScope.scope) (a : pabbrev located) =
     scope
 
 (* -------------------------------------------------------------------- *)
-and process_axiom (scope : EcScope.scope) (ax : paxiom located) =
+and process_axiom ?(src : string option) (scope : EcScope.scope) (ax : paxiom located) =
   EcScope.check_state `InTop "axiom" scope;
   (* TODO: A: aybe rename, as this now also adds schemata. *)
-  let (name, scope) = EcScope.Ax.add scope (Pragma.get ()).pm_check ax in
+  let (name, scope) = EcScope.Ax.add ?src scope (Pragma.get ()).pm_check ax in
     name |> EcUtils.oiter
       (fun x ->
          match (unloc ax).pa_kind with
@@ -635,23 +635,23 @@ and process_dump scope (source, tc) =
   scope
 
 (* -------------------------------------------------------------------- *)
-and process ?src (ld : Loader.loader) (scope : EcScope.scope) g =
+and process ?(src : string option) (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in
 
   let scope =
     match
       match g.pl_desc with
-      | Gtype        t    -> `Fct   (fun scope -> process_types      scope  (List.map (mk_loc loc) t))
+      | Gtype        t    -> `Fct   (fun scope -> process_types      ?src scope  (List.map (mk_loc loc) t))
       | Gtypeclass   t    -> `Fct   (fun scope -> process_typeclass  scope  (mk_loc loc t))
       | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
-      | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
-      | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
-      | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  ?src (mk_loc loc o))
-      | Gprocop      o    -> `Fct   (fun scope -> process_procop     scope  (mk_loc loc o))
-      | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
+      | Gmodule      m    -> `Fct   (fun scope -> process_module     ?src scope m)
+      | Ginterface   i    -> `Fct   (fun scope -> process_interface  ?src scope i)
+      | Goperator    o    -> `Fct   (fun scope -> process_operator   ?src scope (mk_loc loc o))
+      | Gprocop      o    -> `Fct   (fun scope -> process_procop     ?src scope (mk_loc loc o))
+      | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  ?src scope (mk_loc loc p))
       | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
       | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
-      | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      scope  (mk_loc loc a))
+      | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      ?src scope  (mk_loc loc a))
       | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  name)
       | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
       | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
