@@ -1355,6 +1355,7 @@ type prover_call = {
   mutable timeover : float option ;
   mutable interrupted : bool ;
 }
+
 type verdict =
   | NoResult
   | Invalid
@@ -1365,10 +1366,6 @@ type verdict =
   | Failed
   | Canceled
 
-(*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*)
-
-(* remove the following type*)
-
 type result = {
   verdict : verdict ;
   cached : bool ;
@@ -1378,9 +1375,6 @@ type result = {
   prover_errpos : Lexing.position option ;
   prover_errmsg : string ;
 }
-
-(*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*)
-
 
 let result ?(cached=false) ?(solver=0.0) ?(time=0.0) ?(steps=0) verdict =
   {
@@ -1413,54 +1407,20 @@ let canceled = result Canceled
 let is_valid = function { verdict = Valid } -> true | _ -> false
 
 let ping_prover_call ~config p =
-  let alive = ref true in
-  let status = ref None in
-
-  while !alive do
-    match Why3.Call_provers.query_call p.call with
-    | NoUpdates
-    | ProverStarted ->
-      if p.timeout > 0.0 then
-        begin
-          match p.timeover with
-          | None ->
-            let started = Unix.time () in
-            p.timeover <- Some (started +. 2.0 +. p.timeout)
-          | Some timeout ->
-            let time = Unix.time () in
-            if time > timeout then
-              begin
-                p.interrupted <- true ;
-                Why3.Call_provers.interrupt_call ~config p.call
-              end
-            else Unix.sleep 1
-        end;
-    | InternalFailure exn ->
-      let msg = Format.asprintf "@[<hov 2>%a@]"
-          Why3.Exn_printer.exn_printer exn in
-      status := Some (failed msg);
-      alive := false
-    | ProverInterrupted ->
-      status := Some (canceled);
-      alive := false
-    | ProverFinished pr ->
-      let r =
-        match pr.pr_answer with
-        | Timeout -> timeout pr.pr_time
-        | Valid -> result ~time:pr.pr_time ~steps:pr.pr_steps Valid
-        | Invalid -> result ~time:pr.pr_time ~steps:pr.pr_steps Invalid
-        | OutOfMemory -> failed "out of memory"
-        | StepLimitExceeded -> result ?steps:p.steps Stepout
-        | Unknown _ -> unknown
-        | _ when p.interrupted -> timeout p.timeout
-        | Failure s -> failed s
-        | HighFailure -> failed "Unknown error"
-      in
-      status := Some (r);
-      alive := false
-  done;
-
-  !status
+  let pr = Why3.Call_provers.wait_on_call p.call in
+  let r =
+  match pr.pr_answer with
+  | Timeout -> timeout pr.pr_time
+  | Valid -> result ~time:pr.pr_time ~steps:pr.pr_steps Valid
+  | Invalid -> result ~time:pr.pr_time ~steps:pr.pr_steps Invalid
+  | OutOfMemory -> failed "out of memory"
+  | StepLimitExceeded -> result ?steps:p.steps Stepout
+  | Unknown _ -> unknown
+  | _ when p.interrupted -> timeout p.timeout
+  | Failure s -> failed s
+  | HighFailure -> failed "Unknown error"
+  in
+  Some r
 
 let call_prover_task ~timeout ~steps ~config prover call =
   let timeout = match timeout with None -> 0.0 | Some tlimit -> tlimit in
