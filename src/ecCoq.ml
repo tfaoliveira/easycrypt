@@ -1045,7 +1045,7 @@ let add_axiom ((genv, _) as env) preid form =
   let w    = trans_form env form in
   let pr   = WDecl.create_prsymbol preid in
   let decl = WDecl.create_prop_decl WDecl.Paxiom pr (Cast.force_prop w) in
-  genv.te_th <- WTheory.add_decl genv.te_th decl
+  genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl
 
 (* -------------------------------------------------------------------- *)
 let trans_hyp ((genv, lenv) as env) (x, ty) =
@@ -1300,7 +1300,6 @@ let init ~env hyps concl =
   Hp.add known CI_Distr.p_mu mu;
   let witness = (fs_witness, witness_theory) in
   Hp.add known CI_Witness.p_witness witness;
-
 
   let init_select _ ax = ax.ax_visibility = `Visible in
   let toadd = EcEnv.Ax.all ~check:init_select eenv in
