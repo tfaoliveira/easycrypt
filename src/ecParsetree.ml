@@ -970,7 +970,7 @@ type logtactic =
   | Pmemory     of psymbol
   | Pgenhave    of pgenhave
   | Pwlog       of (psymbol list * bool * pformula)
-  | Pcoq
+  | Pcoq        of EcCoq.mode option
 
 (* -------------------------------------------------------------------- *)
 and ptactic_core_r =

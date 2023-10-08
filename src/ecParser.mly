@@ -422,6 +422,11 @@
 %token CONSEQ
 %token CONST
 %token COQ
+%token BATCH
+%token UPDATE
+%token EDIT
+%token FIX
+%token FIXUPDATE
 %token COST
 %token DEBUG
 %token DECLARE
@@ -2934,11 +2939,11 @@ logtactic:
 | SMT pi=smt_info
    { Psmt pi }
 
+| COQ pi=coq_info
+    { Pcoq pi}
+
 | SMT LPAREN dbmap=dbmap1* RPAREN
    { Psmt (SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
-
-| COQ
-    { Pcoq }
 
 | SPLIT
     { Psplit }
@@ -3880,6 +3885,13 @@ print:
 | REWRITE     qs=qident          { Pr_db   (`Rewrite qs) }
 | SOLVE       qs=ident           { Pr_db   (`Solve   qs) }
 
+coq_info:
+|           { None }
+| BATCH     { Some EcCoq.Batch }
+| UPDATE    { Some EcCoq.Update }
+| EDIT      { Some EcCoq.Edit }
+| FIX       { Some EcCoq.Fix }
+| FIXUPDATE { Some EcCoq.FixUpdate }
 
 smt_info:
 | li=smt_info1* { SMT.mk_smt_option li}
