@@ -3,6 +3,7 @@ open EcUtils
 open EcSymbols
 open EcTypes
 open EcPath
+open EcMaps
 
 module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
@@ -77,40 +78,128 @@ type quantum_ref =
   | QRtuple of quantum_ref list
   | QRproj  of quantum_ref * int
 
-let quantum_unit = QRtuple []
-let is_quantum_unit qr = qr = quantum_unit
+let quantum_unit =
+  QRtuple []
 
-(*
-let quantum_valid qr =
-  let view = Map.empty (* prog_var -> int set option *) in
-  let viewed x oi =
-    match Map.find view x with
-    | None -> error
-    | Some s ->
-        begin match oi with
-        | None -> error
-        | Some i -> if i \in s then error
-          else upd x (Some (add i s))
-        end
-    | exception Not_found ->
-         upd x oi in
-  let rec check qr =
+let is_quantum_unit (qr : quantum_ref) =
+  qr = quantum_unit
+
+(* -------------------------------------------------------------------- *)
+module PrefixSet : sig
+  type prefix = int list
+  type t
+
+  val empty : t
+
+  val mem : t -> prefix -> bool
+
+  val add : t -> prefix -> t
+end = struct
+  type prefix = int list
+
+  type t =
+    | Member
+    | Split of t Mint.t
+
+  let empty : t =
+    Split Mint.empty
+
+  let rec add (t : t) (p : prefix) : t =
+    match t, p with
+    | Member, _ ->
+       Member
+
+    | Split _, [] ->
+       Member
+
+    | Split children, i :: subp ->
+       let change subt =
+         Some (add (Option.value ~default:empty subt) subp) in
+       Split (Mint.change change i children)
+
+  let rec mem (t : t) (p : prefix) : bool =
+    match t, p with
+    | Member, _ ->
+       true
+
+    | Split children, i :: subp ->
+        (* Ah mais la, je chaine :) *)
+        Mint.find_opt i children
+        |> Option.map (fun subt -> mem subt subp)
+        |> Option.value ~default:false
+
+    | Split _, [] ->
+       false
+end
+
+(* -------------------------------------------------------------------- *)
+let qref_reduce (norm : prog_var -> prog_var) =
+  let rec reduce (qr : quantum_ref) =
     match qr with
-    | QRvar (pv, _) -> viewed x None
-    | QProj (QRvar (pv, _), i) -> viewed x (Some i)
-    | QProj (QRtuple t, i) -> check (nth i t)
-    | QProj (QRproj qr, j) i -> FIXME
-    | QRtuple (
+    | QRvar (pv, pty) ->
+       QRvar (norm pv, pty)
 
-  *)
+    | QRproj (subqr, i) -> begin
+        match reduce subqr with
+        | QRtuple t ->
+           List.nth t i
 
+        | subqr ->
+           QRproj (subqr, i)
+      end
 
+    | QRtuple qrs ->
+       QRtuple (List.map reduce qrs)
 
+  in fun qr -> reduce qr
 
+(* -------------------------------------------------------------------- *)
+(* All variables in quantum_arg should be pairwise disjoint             *)
+(*                                                                      *)
+(* We here reduce on the fly. We could have first reduced the qvar      *)
+(* using the function `qref_reduce` above.                              *)
 
+let quantum_valid (norm : prog_var -> prog_var) =
+  let module PS = PrefixSet in
 
-(*  all variable in quantum_arg should be disjoint *)
+  let exception InvalidQRef in
 
+  let seen : PS.t Mnpv.t ref = ref Mnpv.empty in
+
+  let rec validate (proj : int list) (qr : quantum_ref) =
+    match qr with
+    | QRvar (pv, _) ->
+       let pv = norm pv in
+
+       let change (pfx : PS.t option) =
+         let pfx = Option.value ~default:PS.empty pfx in
+
+         if PS.mem pfx proj then
+           raise InvalidQRef;
+         Some (PS.add pfx proj) in
+
+       seen := Mnpv.change change pv !seen
+
+    | QRproj (qr, i) ->
+       validate (i :: proj) qr
+
+    | QRtuple qrs -> begin
+        match proj with
+        | [] ->
+           List.iter (validate []) qrs
+
+        | i :: proj' ->
+           validate proj' (List.nth qrs i)
+      end
+
+  in
+
+  fun qr ->
+    match validate [] qr with
+    | _ -> true
+    | exception InvalidQRef -> false
+
+(* -------------------------------------------------------------------- *)
 let rec qr_equal qr1 qr2 =
   match qr1, qr2 with
   | QRvar x1, QRvar x2 -> pvt_equal x1 x2

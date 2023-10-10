@@ -15,10 +15,6 @@ type alias_clash =
 exception AliasClash of env * alias_clash
 
 (* -------------------------------------------------------------------- *)
-module Mnpv : Map.S with type key = prog_var
-module Snpv : Set.S with module M = Map.MakeBase(Mnpv)
-
-(* -------------------------------------------------------------------- *)
 module PVMap : sig
   type 'a t
 

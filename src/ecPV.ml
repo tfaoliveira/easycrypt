@@ -19,15 +19,6 @@ let pvm = EcEnv.NormMp.norm_pvar
 let uerror env c =
   EcCoreGoal.tacuerror_exn (AliasClash (env, c))
 
-module Mnpv =
-  EcMaps.Map.Make(struct
-    (* We assume that the mpath are in normal form *)
-    type t = prog_var
-    let compare = pv_compare_p
-  end)
-
-module Snpv = EcMaps.Set.MakeOfMap(Mnpv)
-
 (* -------------------------------------------------------------------- *)
 module PVMap = struct
   type 'a t = {

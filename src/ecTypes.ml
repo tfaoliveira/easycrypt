@@ -468,6 +468,16 @@ let pv_subst m_subst px = match px with
   | PVloc _ -> px
 
 (* -------------------------------------------------------------------- *)
+module Mnpv =
+  EcMaps.Map.Make(struct
+    (* We assume that the mpath are in normal form *)
+    type t = prog_var
+    let compare = pv_compare_p
+  end)
+
+module Snpv = EcMaps.Set.MakeOfMap(Mnpv)
+
+(* -------------------------------------------------------------------- *)
 type lpattern =
   | LSymbol of (EcIdent.t * ty)
   | LTuple  of (EcIdent.t * ty) list

@@ -193,6 +193,10 @@ val pv_res  : prog_var
 val pv_arg  : prog_var
 
 (* -------------------------------------------------------------------- *)
+module Mnpv : Map.S with type key = prog_var
+module Snpv : Set.S with module M = Map.MakeBase(Mnpv)
+
+(* -------------------------------------------------------------------- *)
 type expr = private {
   e_node : expr_node;
   e_ty   : ty;
