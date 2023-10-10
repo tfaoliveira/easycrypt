@@ -72,7 +72,11 @@ let name_of_lv lv =
 
 
 (* -------------------------------------------------------------------- *)
-type quantum_arg = (EcTypes.prog_var * EcTypes.ty) list
+type quantum_ref =
+  | QAvar   of prog_var_ty
+  | QAtuple of quantum_ref list
+  | QAproj  of quantum_ref * int
+
 (*  all variable in quantum_arg should be disjoint *)
 
 let qa_equal = List.all2 pvt_equal
@@ -94,9 +98,9 @@ type instr = {
 }
 
 and instr_node =
-  | Squantum  of quantum_arg * quantum_op * expr  (* quantum_arg is never empty *)
+  | Squantum  of quantum_arg * quantum_op * expr
   | Smeasure  of lvalue * quantum_arg * expr
-     (* x <- measure q with f, quantum_arg is never empty*)
+     (* x <- measure q with f *)
   | Sasgn     of lvalue * EcTypes.expr
   | Srnd      of lvalue * EcTypes.expr
   | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list * quantum_arg
@@ -423,6 +427,9 @@ let rec s_subst_top (s : EcTypes.e_subst) =
     match i.i_node with
     | Squantum (qarg, qop, e) ->
         i_quantum (pvts_subst qarg, qop, e_subst e)
+
+    | Smeasure(lv, qa, e) ->
+        i_measure (lv_subst lv, pvts_subst qa, e_subst e)
 
     | Sasgn (lv, e) ->
         i_asgn (lv_subst lv, e_subst e)
