@@ -1367,6 +1367,22 @@ let lower_left (ppe : PPEnv.t) (t_ty : form -> EcTypes.ty) (f : form)
   l_l f onm opprec
 
 (* -------------------------------------------------------------------- *)
+let rec pp_quantum_ref (ppe : PPEnv.t) fmt qr =
+  match qr with
+  | QRvar (p, _) ->
+    (* FIXME QUANTUM *)
+    pp_pv ppe fmt p
+  | QRtuple t ->
+    Format.fprintf fmt "(%a)" (pp_list ",@ " (pp_quantum_ref ppe) ) t
+  | QRproj (qr, i) ->
+    Format.fprintf fmt "%a.`%i" (pp_quantum_ref ppe) qr i
+
+let pp_quantum_ref_call (ppe : PPEnv.t) fmt qr =
+  if is_quantum_unit qr then ()
+  else
+    Format.fprintf fmt "{%a}" (pp_quantum_ref ppe) qr
+
+(* -------------------------------------------------------------------- *)
 let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
   match lv with
   | LvVar (p, _) ->
@@ -1377,8 +1393,33 @@ let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
         (pp_paren (pp_list ",@ " (pp_pv ppe))) (List.map fst ps)
 
 (* -------------------------------------------------------------------- *)
+and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
+  match o with
+  | Qinit ->
+      Format.fprintf fmt "%a <-@;<1 2>%a"
+        (pp_quantum_ref ppe) qr
+        (pp_expr ppe) e
+
+  | Qunitary ->
+      Format.fprintf fmt "%a <*@;<1 2>U[%a]"
+        (pp_quantum_ref ppe) qr
+        (pp_expr ppe) e
+
+(* -------------------------------------------------------------------- *)
+and pp_i_measure (ppe : PPEnv.t) fmt (lv, qr, e) =
+  Format.fprintf fmt "%a <-@;<1 2>measure@ %a@ with@ %a"
+    (pp_lvalue ppe) lv
+    (pp_quantum_ref ppe) qr
+    (pp_expr ppe) e
+
+(* -------------------------------------------------------------------- *)
+
 and pp_instr_for_form (ppe : PPEnv.t) fmt i =
   match i.i_node with
+  | Squantum(qr, o, e) -> pp_i_quantum ppe fmt (qr, o, e)
+
+  | Smeasure(lv, qr, e) -> pp_i_measure ppe fmt (lv, qr, e)
+
   | Sasgn (lv, e) -> begin
       match lv, EcTypes.split_args e with
       | LvVar (x, _), ({ e_node = Eop (op, _) }, [ { e_node = Evar y }; k; v])
@@ -1396,16 +1437,18 @@ and pp_instr_for_form (ppe : PPEnv.t) fmt i =
       Format.fprintf fmt "%a <$@;<1 2>$%a"
         (pp_lvalue ppe) lv (pp_expr ppe) e
 
-  | Scall (None, xp, args) ->
-      Format.fprintf fmt "%a(@[<hov 0>%a@]);"
+  | Scall (None, xp, args, qr) ->
+      Format.fprintf fmt "%a(@[<hov 0>%a@])%a;"
         (pp_funname ppe) xp
         (pp_list ",@ " (pp_expr ppe)) args
+        (pp_quantum_ref_call ppe) qr
 
-  | Scall (Some lv, xp, args) ->
-      Format.fprintf fmt "%a <@@@;<1 2>@[%a(@[<hov 0>%a@]);@]"
+  | Scall (Some lv, xp, args, qr) ->
+      Format.fprintf fmt "%a <@@@;<1 2>@[%a(@[<hov 0>%a@])%a;@]"
         (pp_lvalue ppe) lv
         (pp_funname ppe) xp
         (pp_list ",@ " (pp_expr ppe)) args
+        (pp_quantum_ref_call ppe) qr
 
   | Sassert e ->
       Format.fprintf fmt "assert %a;"
@@ -2479,9 +2522,11 @@ let pp_schema ?(long=false) (ppe : PPEnv.t) fmt (x, sc) =
 
 (* -------------------------------------------------------------------- *)
 type ppnode1 = [
+  | `Quantum  of (EcModules.quantum_ref * EcModules.quantum_op * EcTypes.expr)
+  | `Measure  of (EcModules.lvalue * EcModules.quantum_ref * EcTypes.expr)
   | `Asgn     of (EcModules.lvalue * EcTypes.expr)
   | `Assert   of (EcTypes.expr)
-  | `Call     of (EcModules.lvalue option * P.xpath * EcTypes.expr list)
+  | `Call     of (EcModules.lvalue option * P.xpath * EcTypes.expr list * EcModules.quantum_ref)
   | `Rnd      of (EcModules.lvalue * EcTypes.expr)
   | `Abstract of EcIdent.t
   | `If       of EcTypes.expr
@@ -2500,9 +2545,11 @@ type cppnode  = cppnode1 * cppnode1 * char * cppnode list list
 
 let at (ppe : PPEnv.t) n i =
   match i, n with
+  | Squantum(qr, o, e), 0 -> Some (`Quantum (qr, o, e), `P, [])
+  | Smeasure(lv, qr, e), 0 -> Some (`Measure (lv, qr, e), `P, [])
   | Sasgn (lv, e)    , 0 -> Some (`Asgn (lv, e)    , `P, [])
   | Srnd  (lv, e)    , 0 -> Some (`Rnd  (lv, e)    , `P, [])
-  | Scall (lv, f, es), 0 -> Some (`Call (lv, f, es), `P, [])
+  | Scall (lv, f, es, qr), 0 -> Some (`Call (lv, f, es, qr), `P, [])
   | Sassert e        , 0 -> Some (`Assert e        , `P, [])
   | Sabstract id     , 0 -> Some (`Abstract id     , `P, [])
   | Swhile (e, s), 0 -> Some (`While e, `P, s.s_node)
@@ -2593,18 +2640,20 @@ let pp_i_asgn (ppe : PPEnv.t) fmt (lv, e) =
 let pp_i_assert (ppe : PPEnv.t) fmt e =
   Format.fprintf fmt "assert (%a)" (pp_expr ppe) e
 
-let pp_i_call (ppe : PPEnv.t) fmt (lv, xp, args) =
+let pp_i_call (ppe : PPEnv.t) fmt (lv, xp, args, qr) =
   match lv with
   | None ->
-      Format.fprintf fmt "%a(%a)"
+      Format.fprintf fmt "%a(%a)%a"
         (pp_funname ppe) xp
         (pp_list ",@ " (pp_expr ppe)) args
+        (pp_quantum_ref_call ppe) qr
 
   | Some lv ->
-      Format.fprintf fmt "@[<hov 2>%a <@@@ %a(%a)@]"
+      Format.fprintf fmt "@[<hov 2>%a <@@@ %a(%a)%a@]"
         (pp_lvalue ppe) lv
         (pp_funname ppe) xp
         (pp_list ",@ " (pp_expr ppe)) args
+        (pp_quantum_ref_call ppe) qr
 
 let pp_i_rnd (ppe : PPEnv.t) fmt (lv, e) =
   Format.fprintf fmt "%a <$@ @[<hov 2>%a@]"
@@ -2637,6 +2686,8 @@ let pp_i_abstract (_ppe : PPEnv.t) fmt id =
 (* -------------------------------------------------------------------- *)
 let c_ppnode1 ~width ppe (pp1 : ppnode1) =
   match pp1 with
+  | `Quantum  x -> c_split ~width (pp_i_quantum  ppe) x
+  | `Measure  x -> c_split ~width (pp_i_measure  ppe) x
   | `Asgn     x -> c_split ~width (pp_i_asgn     ppe) x
   | `Assert   x -> c_split ~width (pp_i_assert   ppe) x
   | `Call     x -> c_split ~width (pp_i_call     ppe) x
@@ -3172,6 +3223,10 @@ let pp_top_modsig ppe fmt (p,ms) =
 
 let rec pp_instr_r (ppe : PPEnv.t) fmt i =
   match i.i_node with
+  | Squantum (qr, o, e) -> pp_i_quantum ppe fmt (qr, o, e)
+
+  | Smeasure (lv, qr, e) -> pp_i_measure ppe fmt (lv, qr, e)
+
   | Sasgn (lv, e) -> begin
       match lv, EcTypes.split_args e with
       | LvVar (x, _), ({ e_node = Eop (op, _) }, [ { e_node = Evar y }; k; v])
@@ -3189,16 +3244,18 @@ let rec pp_instr_r (ppe : PPEnv.t) fmt i =
     Format.fprintf fmt "@[<hov 2>%a <$@ @[%a@]@];"
       (pp_lvalue ppe) lv (pp_expr ppe) e
 
-  | Scall (None, xp, args) ->
-    Format.fprintf fmt "%a(@[%a@]);"
+  | Scall (None, xp, args, qr) ->
+    Format.fprintf fmt "%a(@[%a@])%a;"
       (pp_funname ppe) xp
       (pp_list ",@ " (pp_expr ppe)) args
+      (pp_quantum_ref_call ppe) qr
 
-  | Scall (Some lv, xp, args) ->
-    Format.fprintf fmt "@[<hov 2>%a <@@@ %a(@[%a@])@];"
+  | Scall (Some lv, xp, args, qr) ->
+    Format.fprintf fmt "@[<hov 2>%a <@@@ %a(@[%a@])%a@];"
       (pp_lvalue ppe) lv
       (pp_funname ppe) xp
       (pp_list ",@ " (pp_expr ppe)) args
+      (pp_quantum_ref_call ppe) qr
 
   | Sassert e ->
     Format.fprintf fmt "@[<hov 2>assert %a@];"

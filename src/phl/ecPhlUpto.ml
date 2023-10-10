@@ -49,13 +49,16 @@ and s_upto env alpha bad s1 s2 = s_upto_r env alpha bad s1.s_node s2.s_node
 and i_upto env alpha bad i1 i2 =
 
   match i1.i_node, i2.i_node with
+  | Squantum _, Squantum _ -> assert false
+  | Smeasure _, Smeasure _ -> assert false
   | Sasgn (lv1, _), Sasgn (lv2, _)
   | Srnd  (lv1, _), Srnd  (lv2, _) ->
     check_not_bad env bad lv1 &&
     check_not_bad env bad lv2 &&
     EqTest.for_instr env ~alpha i1 i2
 
-  | Scall (lv1, f1, e1), Scall (lv2, f2, e2) ->
+  | Scall (lv1, f1, e1, qr1), Scall (lv2, f2, e2, qr2) ->
+    assert (is_quantum_unit qr1 && is_quantum_unit qr2);
     omap_dfl (check_not_bad env bad) true lv1 &&
     omap_dfl (check_not_bad env bad) true lv2 &&
     oall2 (EqTest.for_lv env) lv1 lv2 &&

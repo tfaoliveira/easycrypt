@@ -24,6 +24,8 @@ type i_pat =
 and s_pat = (int * i_pat) list
 
 (* -------------------------------------------------------------------- *)
+(* FIXME QUANTUM *)
+
 module LowSubst = struct
   let pvsubst m pv =
     odfl pv (PVMap.find pv m)
@@ -43,9 +45,12 @@ module LowSubst = struct
     let ssubst = ssubst m in
 
     match i.i_node with
+    | Squantum _ | Smeasure _ -> assert false
     | Sasgn  (lv, e)     -> i_asgn   (lvsubst m lv, esubst e)
     | Srnd   (lv, e)     -> i_rnd    (lvsubst m lv, esubst e)
-    | Scall  (lv, f, es) -> i_call   (lv |> omap (lvsubst m), f, List.map esubst es)
+    | Scall  (lv, f, es, qr) ->
+        assert (is_quantum_unit qr);
+        i_call  (omap (lvsubst m) lv, f, List.map esubst es, qr)
     | Sif    (c, s1, s2) -> i_if     (esubst c, ssubst s1, ssubst s2)
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, bs)     -> i_match  (esubst e, List.Smart.map (snd_map ssubst) bs)
@@ -135,7 +140,8 @@ module LowInternal = struct
 
     let rec inline_i me ip i =
       match ip, i.i_node with
-      | IPpat, Scall (lv, p, args) ->
+      | IPpat, Scall (lv, p, args, qr) ->
+          assert (is_quantum_unit qr);
           inline1 me lv p args
       | IPif (sp1, sp2), Sif (e, s1, s2) ->
           let me, s1 = inline_s me sp1 s1.s_node in
@@ -224,7 +230,8 @@ module HiInternal = struct
 
     let rec aux_i i =
       match i.i_node with
-      | Scall (_, f, _) ->
+      | Scall (_, f, _, qr) ->
+          assert (is_quantum_unit qr);
           if test f then Some IPpat else None
 
       | Sif (_, s1, s2) ->
@@ -262,7 +269,8 @@ module HiInternal = struct
 
     let rec aux_i occ i =
       match i.i_node with
-      | Scall (_,f,_) ->
+      | Scall (_,f,_, qr) ->
+          assert (is_quantum_unit qr);
         if cond f then
           let occ = 1 + occ in
           if Sint.mem occ !occs then begin

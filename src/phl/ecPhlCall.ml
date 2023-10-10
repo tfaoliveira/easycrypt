@@ -58,7 +58,8 @@ let wp2_call
 let t_hoare_call fpre fpost tc =
   let env = FApi.tc1_env tc in
   let hs = tc1_as_hoareS tc in
-  let (lp,f,args),s = tc1_last_call tc hs.hs_s in
+  let (lp,f,args, qr),s = tc1_last_call tc hs.hs_s in
+  assert (is_quantum_unit qr);
   let m = EcMemory.memory hs.hs_m in
   let fsig = (Fun.by_xpath f env).f_sig in
   (* The function satisfies the specification *)
@@ -82,7 +83,8 @@ let t_hoare_call fpre fpost tc =
 let t_choare_call fpre fpost fcost tc =
   let env = FApi.tc1_env tc in
   let chs = tc1_as_choareS tc in
-  let (lp,f,args),s = tc1_last_call tc chs.chs_s in
+  let (lp,f,args,qr),s = tc1_last_call tc chs.chs_s in
+  assert (is_quantum_unit qr);
   let m = EcMemory.memory chs.chs_m in
   let fsig = (Fun.by_xpath f env).f_sig in
   (* The function satisfies the specification *)
@@ -132,7 +134,8 @@ let bdhoare_call_spec pf fpre fpost f cmp bd opt_bd =
 let t_bdhoare_call fpre fpost opt_bd tc =
   let env = FApi.tc1_env tc in
   let bhs = tc1_as_bdhoareS tc in
-  let (lp,f,args),s = tc1_last_call tc bhs.bhs_s in
+  let (lp,f,args,qr),s = tc1_last_call tc bhs.bhs_s in
+  assert (is_quantum_unit qr);
   let m = EcMemory.memory bhs.bhs_m in
   let fsig = (Fun.by_xpath f env).f_sig in
   let f_concl =
@@ -188,8 +191,10 @@ let t_bdhoare_call fpre fpost opt_bd tc =
 let t_equiv_call fpre fpost tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let es = tc1_as_equivS tc in
-  let (lpl,fl,argsl),sl = tc1_last_call tc es.es_sl in
-  let (lpr,fr,argsr),sr = tc1_last_call tc es.es_sr in
+  let (lpl,fl,argsl,qrl),sl = tc1_last_call tc es.es_sl in
+  let (lpr,fr,argsr,qrr),sr = tc1_last_call tc es.es_sr in
+  assert (is_quantum_unit qrl);
+  assert (is_quantum_unit qrr);
   let ml = EcMemory.memory es.es_ml in
   let mr = EcMemory.memory es.es_mr in
   (* The functions satisfy their specification *)
@@ -218,7 +223,8 @@ let t_equiv_call1 side fpre fpost tc =
     | `Right -> (EcMemory.memory equiv.es_mr, equiv.es_sr)
   in
 
-  let (lp, f, args), fstmt = tc1_last_call tc stmt in
+  let (lp, f, args, qr), fstmt = tc1_last_call tc stmt in
+  assert (is_quantum_unit qr);
   let fsig = (Fun.by_xpath f env).f_sig in
 
   (* The function satisfies its specification *)
@@ -264,26 +270,31 @@ let t_call side ax tc =
 
   match ax.f_node, concl.f_node with
   | FhoareF hf, FhoareS hs ->
-      let (_, f, _), _ = tc1_last_call tc hs.hs_s in
+      let (_, f, _, qr), _ = tc1_last_call tc hs.hs_s in
+      assert (is_quantum_unit qr);
       if not (EcEnv.NormMp.x_equal env hf.hf_f f) then
         call_error env tc hf.hf_f f;
       t_hoare_call hf.hf_pr hf.hf_po tc
 
   | FcHoareF chf, FcHoareS chs ->
-      let (_, f, _), _ = tc1_last_call tc chs.chs_s in
+      let (_, f, _, qr), _ = tc1_last_call tc chs.chs_s in
+      assert (is_quantum_unit qr);
       if not (EcEnv.NormMp.x_equal env chf.chf_f f) then
         call_error env tc chf.chf_f f;
       t_choare_call chf.chf_pr chf.chf_po chf.chf_co tc
 
   | FbdHoareF hf, FbdHoareS hs ->
-      let (_, f, _), _ = tc1_last_call tc hs.bhs_s in
+      let (_, f, _, qr), _ = tc1_last_call tc hs.bhs_s in
+      assert (is_quantum_unit qr);
       if not (EcEnv.NormMp.x_equal env hf.bhf_f f) then
         call_error env tc hf.bhf_f f;
       t_bdhoare_call hf.bhf_pr hf.bhf_po None tc
 
   | FequivF ef, FequivS es ->
-      let (_, fl, _), _ = tc1_last_call tc es.es_sl in
-      let (_, fr, _), _ = tc1_last_call tc es.es_sr in
+      let (_, fl, _, qrl), _ = tc1_last_call tc es.es_sl in
+      let (_, fr, _, qrr), _ = tc1_last_call tc es.es_sr in
+      assert (is_quantum_unit qrl);
+      assert (is_quantum_unit qrr);
       if not (EcEnv.NormMp.x_equal env ef.ef_fl fl) ||
          not (EcEnv.NormMp.x_equal env ef.ef_fr fr) then
         tc_error_lazy !!tc (fun fmt ->
@@ -348,12 +359,14 @@ let process_call side info tc =
     let (hyps, concl) = FApi.tc1_flat tc in
       match concl.f_node, side, cost with
       | FhoareS hs, None, None ->
-          let (_,f,_) = fst (tc1_last_call tc hs.hs_s) in
+          let (_,f,_, qr) = fst (tc1_last_call tc hs.hs_s) in
+          assert (is_quantum_unit qr);
           let penv, qenv = LDecl.hoareF f hyps in
           (penv, qenv, fun pre post -> f_hoareF pre f post)
 
       | FcHoareS chs, None, Some cost ->
-          let (_,f,_),_ = tc1_last_call tc chs.chs_s in
+          let (_,f,_, qr),_ = tc1_last_call tc chs.chs_s in
+          assert (is_quantum_unit qr);
           let penv, qenv = LDecl.hoareF f hyps in
 
           let cost  = TTC.tc1_process_cost tc [] cost in
@@ -361,7 +374,8 @@ let process_call side info tc =
           (penv, qenv, fun pre post -> f_cHoareF pre f post cost)
 
       | FbdHoareS bhs, None, None ->
-          let (_,f,_) = fst (tc1_last_call tc bhs.bhs_s) in
+          let (_,f,_,qr) = fst (tc1_last_call tc bhs.bhs_s) in
+          assert (is_quantum_unit qr);
           let penv, qenv = LDecl.hoareF f hyps in
           (penv, qenv, fun pre post ->
             bdhoare_call_spec !!tc pre post f bhs.bhs_cmp bhs.bhs_bd None)
@@ -380,14 +394,17 @@ let process_call side info tc =
             tc_error !!tc "a cost must be given for choare judgements"
 
       | FequivS es, None, None ->
-          let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
-          let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
+          let (_,fl,_,qrl) = fst (tc1_last_call tc es.es_sl) in
+          assert (is_quantum_unit qrl);
+          let (_,fr,_,qrr) = fst (tc1_last_call tc es.es_sr) in
+          assert (is_quantum_unit qrr);
           let penv, qenv = LDecl.equivF fl fr hyps in
           (penv, qenv, fun pre post -> f_equivF pre fl fr post)
 
       | FequivS es, Some side, None ->
           let fstmt = sideif side es.es_sl es.es_sr in
-          let (_,f,_) = fst (tc1_last_call tc fstmt) in
+          let (_,f,_,qr) = fst (tc1_last_call tc fstmt) in
+          assert (is_quantum_unit qr);
           let penv, qenv = LDecl.hoareF f hyps in
           (penv, qenv, fun pre post -> f_bdHoareF pre f post FHeq f_r1)
 
@@ -405,14 +422,16 @@ let process_call side info tc =
     let hyps, concl = FApi.tc1_flat tc in
     match concl.f_node with
     | FhoareS hs ->
-        let (_,f,_) = fst (tc1_last_call tc hs.hs_s) in
+        let (_,f,_,qr) = fst (tc1_last_call tc hs.hs_s) in
+        assert (is_quantum_unit qr);
         let penv = LDecl.inv_memenv1 hyps in
         (penv, fun inv inv_info ->
             check_none inv_info;
             f_hoareF inv f inv)
 
     | FcHoareS chs ->
-      let (_,f,_) = fst (tc1_last_call tc chs.chs_s) in
+      let (_,f,_,qr) = fst (tc1_last_call tc chs.chs_s) in
+      assert (is_quantum_unit qr);
       let penv = LDecl.inv_memenv1 hyps in
       (penv, fun inv inv_info ->
           let inv_info = odfl (`CostAbs []) inv_info in
@@ -439,15 +458,18 @@ let process_call side info tc =
             f_cHoareF pre f post cost)
 
     | FbdHoareS bhs ->
-      let (_,f,_) = fst (tc1_last_call tc bhs.bhs_s) in
+      let (_,f,_, qr) = fst (tc1_last_call tc bhs.bhs_s) in
+      assert (is_quantum_unit qr);
       let penv = LDecl.inv_memenv1 hyps in
       (penv, fun inv inv_info ->
           check_none inv_info;
          bdhoare_call_spec !!tc inv inv f bhs.bhs_cmp bhs.bhs_bd None)
 
     | FequivS es ->
-      let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
-      let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
+      let (_,fl,_,qrl) = fst (tc1_last_call tc es.es_sl) in
+      assert (is_quantum_unit qrl);
+      let (_,fr,_,qrr) = fst (tc1_last_call tc es.es_sr) in
+      assert (is_quantum_unit qrr);
       let penv = LDecl.inv_memenv hyps in
       let env  = LDecl.toenv hyps in
       (penv, fun inv inv_info ->
@@ -462,8 +484,10 @@ let process_call side info tc =
     let env, _, concl = FApi.tc1_eflat tc in
       match concl.f_node with
       | FequivS es ->
-        let (_,fl,_) = fst (tc1_last_call tc es.es_sl) in
-        let (_,fr,_) = fst (tc1_last_call tc es.es_sr) in
+        let (_,fl,_,qrl) = fst (tc1_last_call tc es.es_sl) in
+        assert (is_quantum_unit qrl);
+        let (_,fr,_,qrr) = fst (tc1_last_call tc es.es_sr) in
+        assert (is_quantum_unit qrr);
         let bad,invP,invQ = EcPhlFun.process_fun_upto_info info tc in
         let (topl,fl,_,sigl),
             (topr,fr,_  ,sigr) = EcLowPhlGoal.abstract_info2 env fl fr in

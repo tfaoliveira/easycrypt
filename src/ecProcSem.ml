@@ -176,7 +176,8 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
 
      end
 
-  | Scall (Some lv, ({ x_top = { m_top = `Concrete (p, _) }; x_sub = f } as xp), args)  ->
+  | Scall (Some lv, ({ x_top = { m_top = `Concrete (p, _) }; x_sub = f } as xp), args, qr) ->
+      assert (is_quantum_unit qr);
       let fd   = oget (EcEnv.Fun.by_xpath_opt xp env.env) in
       let args = translate_e env (e_tuple args) in
       let op   = EcPath.pqname (oget (EcPath.prefix p)) f in
@@ -188,6 +189,8 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
 
       (cmode, e_let lv op c)
 
+  | Squantum  _
+  | Smeasure  _
   | Swhile    _
   | Smatch    _
   | Sassert   _

@@ -378,17 +378,20 @@ let rec subst_stmt (s : subst) (st : stmt) : stmt =
 (* -------------------------------------------------------------------- *)
 and subst_instr (s : subst) (i : instr) : instr =
   match i.i_node with
+  | Squantum _ | Smeasure _ -> assert false
+
   | Sasgn (lv, e) ->
      i_asgn (subst_lv s lv, subst_expr s e)
 
   | Srnd (lv, e) ->
      i_rnd (subst_lv s lv, subst_expr s e)
 
-  | Scall (lv, p, args) ->
+  | Scall (lv, p, args, qr) ->
+     assert (is_quantum_unit qr);
      let lv = omap (subst_lv s) lv in
      let p = subst_xpath s p in
      let args = List.map (subst_expr s) args in
-     i_call (lv, p, args)
+     i_call (lv, p, args, qr)
 
   | Sif (e, s1, s2) ->
      let e = subst_expr s e in
@@ -435,12 +438,16 @@ let subst_fun_uses (s : subst) (u : uses) =
 (* -------------------------------------------------------------------- *)
 let subst_funsig (s : subst) (funsig : funsig) =
   let fs_arg = subst_ty s funsig.fs_arg in
+  let fs_qarg = subst_ty s funsig.fs_qarg in
   let fs_ret = subst_ty s funsig.fs_ret in
   let fs_anm = List.map (subst_ovariable s) funsig.fs_anames in
+  let fs_qnm = List.map (subst_ovariable s) funsig.fs_qnames in
 
   { fs_name   = funsig.fs_name;
     fs_arg    = fs_arg;
+    fs_qarg    = fs_qarg;
     fs_anames = fs_anm;
+    fs_qnames = fs_qnm;
     fs_ret    = fs_ret; }
 
 (* -------------------------------------------------------------------- *)

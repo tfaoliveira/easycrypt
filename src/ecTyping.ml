@@ -247,6 +247,7 @@ let (_i_inuse, s_inuse, se_inuse) =
 
   and i_inuse (map : uses) (i : instr) =
     match i.i_node with
+    | Squantum _ | Smeasure _ -> assert false
     | Sasgn (lv, e) ->
       let map = lv_inuse map lv in
       let map = se_inuse map e in
@@ -257,7 +258,8 @@ let (_i_inuse, s_inuse, se_inuse) =
       let map = se_inuse map e in
         map
 
-    | Scall (lv, p, es) -> begin
+    | Scall (lv, p, es, qr) -> begin
+            assert (is_quantum_unit qr);
       let map = List.fold_left se_inuse map es in
       let map = add_call map p in
       let map = lv |> ofold ((^~) lv_inuse) map in
@@ -2035,7 +2037,8 @@ let i_rnd_lv loc env lv e =
 
 let i_call_lv loc env lv f args =
   match lv with
-  | Lval lv -> i_call (Some lv, f, args)
+  (* FIXME QUANTUM *)
+  | Lval lv -> i_call (Some lv, f, args, quantum_unit)
   | LvMap _ -> tyerror loc env LvMapOnNonAssign
 
 (* -------------------------------------------------------------------- *)
@@ -2375,7 +2378,11 @@ and transmodsig_body
 
       let sig_ = { fs_name   = name.pl_desc;
                    fs_arg    = ttuple (List.map ov_type tyargs);
+                   (* FIXME QUANTUM *)
+                   fs_qarg = tunit;
                    fs_anames = tyargs;
+                   (* FIXME QUANTUM *)
+                   fs_qnames = [];
                    fs_ret    = resty; }
       and mr = EcModules.add_oinfo mr name.pl_desc oi in
       [Tys_function sig_], mr
@@ -2632,7 +2639,11 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
           f_sig    = {
             fs_name   = decl.pfd_name.pl_desc;
             fs_arg    = ttuple (List.map (fun vd -> vd.v_type) params);
+            (* FIXME QUANTUM *)
+            fs_qarg   = tunit;
             fs_anames = List.map ovar_of_var params;
+            (* FIXME QUANTUM *)
+            fs_qnames = [];
             fs_ret    = retty;
           };
           f_def = FBdef {
@@ -2876,8 +2887,9 @@ and transinstr
       [ i_rnd_lv i.pl_loc env lvalue rvalue ]
 
   | PScall (None, name, args) ->
-      let (fpath, args, _rty) = transcall name args.fa_classical in (* FIXME QUANTUM *)
-      [ i_call (None, fpath, args) ]
+      let (fpath, args, _rty) = transcall name args.fa_classical in
+      (* FIXME QUANTUM *)
+      [ i_call (None, fpath, args, quantum_unit) ]
 
   | PScall (Some lvalue, name, args) ->
       let lvalue, lty = translvalue ue env lvalue in

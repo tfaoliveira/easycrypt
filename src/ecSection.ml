@@ -154,6 +154,8 @@ let on_lv (cb : cb) (lv : lvalue) =
 
 let rec on_instr (cb : cb) (i : instr)=
   match i.i_node with
+  | Squantum _ | Smeasure _ -> assert false
+
   | Srnd (lv, e) | Sasgn (lv, e) ->
       on_lv cb lv;
       on_expr cb e
@@ -161,7 +163,8 @@ let rec on_instr (cb : cb) (i : instr)=
   | Sassert e ->
       on_expr cb e
 
-  | Scall (lv, f, args) ->
+  | Scall (lv, f, args, qr) ->
+      assert (is_quantum_unit qr);
       lv |> oiter (on_lv cb);
       on_xp cb f;
       List.iter (on_expr cb) args

@@ -30,17 +30,17 @@ let lv_equal lv1 lv2 =
   | _, _ -> false
 
 (* -------------------------------------------------------------------- *)
+let pvt_fv (pv, _) =
+  (* FIXME QUANTUM: why type are not inspected *)
+  EcTypes.pv_fv pv
+
 let pvts_fv pvs =
   (* FIXME QUANTUM: why type are not inspected *)
-  let add s (pv, _) = EcIdent.fv_union s (EcTypes.pv_fv pv) in
+  let add s xt = EcIdent.fv_union s (pvt_fv xt) in
   List.fold_left add Mid.empty pvs
 
-
 let lv_fv = function
-  | LvVar (pv, _) ->
-      (* FIXME QUANTUM: why type are not inspected *)
-      EcTypes.pv_fv pv
-
+  | LvVar x -> pvt_fv x
   | LvTuple pvs -> pvts_fv pvs
 
 let symbol_of_lv = function
@@ -73,19 +73,62 @@ let name_of_lv lv =
 
 (* -------------------------------------------------------------------- *)
 type quantum_ref =
-  | QAvar   of prog_var_ty
-  | QAtuple of quantum_ref list
-  | QAproj  of quantum_ref * int
+  | QRvar   of prog_var_ty
+  | QRtuple of quantum_ref list
+  | QRproj  of quantum_ref * int
+
+let quantum_unit = QRtuple []
+let is_quantum_unit qr = qr = quantum_unit
+
+(*
+let quantum_valid qr =
+  let view = Map.empty (* prog_var -> int set option *) in
+  let viewed x oi =
+    match Map.find view x with
+    | None -> error
+    | Some s ->
+        begin match oi with
+        | None -> error
+        | Some i -> if i \in s then error
+          else upd x (Some (add i s))
+        end
+    | exception Not_found ->
+         upd x oi in
+  let rec check qr =
+    match qr with
+    | QRvar (pv, _) -> viewed x None
+    | QProj (QRvar (pv, _), i) -> viewed x (Some i)
+    | QProj (QRtuple t, i) -> check (nth i t)
+    | QProj (QRproj qr, j) i -> FIXME
+    | QRtuple (
+
+  *)
+
+
+
+
+
 
 (*  all variable in quantum_arg should be disjoint *)
 
-let qa_equal = List.all2 pvt_equal
-let qa_fv = pvts_fv
+let rec qr_equal qr1 qr2 =
+  match qr1, qr2 with
+  | QRvar x1, QRvar x2 -> pvt_equal x1 x2
+  | QRtuple t1, QRtuple t2 -> List.all2 qr_equal t1 t2
+  | QRproj (qr1, i1), QRproj (qr2, i2) ->
+      qr_equal qr1 qr2 && i1 == i2
+  | _, _ -> false
+
+let rec qr_fv = function
+  | QRvar x -> pvt_fv x
+  | QRtuple t ->
+      let add s qr = EcIdent.fv_union s (qr_fv qr) in
+      List.fold_left add Mid.empty t
+  | QRproj (qr, _) -> qr_fv qr
 
 type quantum_op =
   | Qinit
   | Qunitary
-(*  | Qmeasure *)
 
 let qo_equal (o1:quantum_op) (o2:quantum_op) = o1 == o2
 let qo_fv (o:quantum_op) : int Mid.t = Mid.empty
@@ -98,12 +141,12 @@ type instr = {
 }
 
 and instr_node =
-  | Squantum  of quantum_arg * quantum_op * expr
-  | Smeasure  of lvalue * quantum_arg * expr
+  | Squantum  of quantum_ref * quantum_op * expr
+  | Smeasure  of lvalue * quantum_ref * expr
      (* x <- measure q with f *)
   | Sasgn     of lvalue * EcTypes.expr
   | Srnd      of lvalue * EcTypes.expr
-  | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list * quantum_arg
+  | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list * quantum_ref
      (* quantum_arg can be empty, only local *)
   | Sif       of EcTypes.expr * stmt * stmt
   | Swhile    of EcTypes.expr * stmt
@@ -135,11 +178,11 @@ module Hinstr = Why3.Hashcons.Make (struct
 
   let equal_node i1 i2 =
     match i1, i2 with
-    | Squantum (qa1, o1, e1), Squantum (qa2, o2, e2) ->
-        (qa_equal qa1 qa2) && (qo_equal o1 o2) && (EcTypes.e_equal e1 e2)
+    | Squantum (qr1, o1, e1), Squantum (qr2, o2, e2) ->
+        (qr_equal qr1 qr2) && (qo_equal o1 o2) && (EcTypes.e_equal e1 e2)
 
-    | Smeasure(lv1, qa1, e1), Smeasure(lv2, qa2, e2) ->
-        (lv_equal lv1 lv2) && (qa_equal qa1 qa2) && (EcTypes.e_equal e1 e2)
+    | Smeasure(lv1, qr1, e1), Smeasure(lv2, qr2, e2) ->
+        (lv_equal lv1 lv2) && (qr_equal qr1 qr2) && (EcTypes.e_equal e1 e2)
 
     | Sasgn (lv1, e1), Sasgn (lv2, e2) ->
         (lv_equal lv1 lv2) && (EcTypes.e_equal e1 e2)
@@ -151,7 +194,7 @@ module Hinstr = Why3.Hashcons.Make (struct
            (EcUtils.opt_equal lv_equal lv1 lv2)
         && (EcPath.x_equal f1 f2)
         && (List.all2 EcTypes.e_equal es1 es2)
-        && (qa_equal q1 q2)
+        && (qr_equal q1 q2)
 
     | Sif (c1, s1, r1), Sif (c2, s2, r2) ->
            (EcTypes.e_equal c1 c2)
@@ -220,11 +263,11 @@ module Hinstr = Why3.Hashcons.Make (struct
     | Sabstract id -> EcIdent.id_hash id
 
   let i_fv   = function
-    | Squantum(qa, qo, e) ->
-        EcIdent.fv_unions [qa_fv qa; qo_fv qo; EcTypes.e_fv e]
+    | Squantum(qr, qo, e) ->
+        EcIdent.fv_unions [qr_fv qr; qo_fv qo; EcTypes.e_fv e]
 
-    | Smeasure(lv, qa, e) ->
-        EcIdent.fv_unions [lv_fv lv; qa_fv qa; EcTypes.e_fv e]
+    | Smeasure(lv, qr, e) ->
+        EcIdent.fv_unions [lv_fv lv; qr_fv qr; EcTypes.e_fv e]
 
     | Sasgn (lv, e) ->
         EcIdent.fv_union (lv_fv lv) (EcTypes.e_fv e)
@@ -236,7 +279,7 @@ module Hinstr = Why3.Hashcons.Make (struct
         (* There is not fv in quantum argument *)
         let ffv = EcPath.x_fv Mid.empty f in
         let ofv = olv |> omap lv_fv |> odfl Mid.empty in
-        let qfv = qa_fv qarg in
+        let qfv = qr_fv qarg in
         List.fold_left
           (fun s a -> EcIdent.fv_union s (EcTypes.e_fv a))
           (EcIdent.fv_unions [ffv; ofv; qfv]) args
@@ -301,19 +344,11 @@ let stmt s = Hstmt.hashcons
 let rstmt s = stmt (List.rev s)
 
 (* --------------------------------------------------------------------- *)
-let i_quantum  (qa, op, e)  =
-  assert (qa <> []);
-  mk_instr (Squantum (qa, op, e))
-let i_measure  (lv, qa, e)  =
-  mk_instr (Smeasure (lv, qa, e))
-
+let i_quantum  (qr, op, e)  = mk_instr (Squantum (qr, op, e))
+let i_measure  (lv, qr, e)  = mk_instr (Smeasure (lv, qr, e))
 let i_asgn     (lv, e)      = mk_instr (Sasgn (lv, e))
 let i_rnd      (lv, e)      = mk_instr (Srnd (lv, e))
-
-let i_call     (lv, m, arg, qarg) =
-  assert (List.for_all (fun (x,_) -> EcTypes.is_loc x) qarg);
-  mk_instr (Scall (lv, m, arg, qarg))
-
+let i_call     (lv, m, arg, qarg) = mk_instr (Scall (lv, m, arg, qarg))
 let i_if       (c, s1, s2)  = mk_instr (Sif (c, s1, s2))
 let i_while    (c, s)       = mk_instr (Swhile (c, s))
 let i_match    (e, b)       = mk_instr (Smatch (e, b))
@@ -423,13 +458,18 @@ let rec s_subst_top (s : EcTypes.e_subst) =
 
   in
 
+  let rec qr_subst = function
+    | QRvar x -> QRvar (pvt_subst x)
+    | QRtuple t -> QRtuple (List.Smart.map qr_subst t)
+    | QRproj (x, i) -> QRproj (qr_subst x, i) in
+
   let rec i_subst i =
     match i.i_node with
-    | Squantum (qarg, qop, e) ->
-        i_quantum (pvts_subst qarg, qop, e_subst e)
+    | Squantum (qr, qop, e) ->
+        i_quantum (qr_subst qr, qop, e_subst e)
 
-    | Smeasure(lv, qa, e) ->
-        i_measure (lv_subst lv, pvts_subst qa, e_subst e)
+    | Smeasure(lv, qr, e) ->
+        i_measure (lv_subst lv, qr_subst qr, e_subst e)
 
     | Sasgn (lv, e) ->
         i_asgn (lv_subst lv, e_subst e)
@@ -441,7 +481,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
         let olv'  = olv |> OSmart.omap lv_subst in
         let mp'   = EcPath.x_subst_abs s.es_ty.ts_cmod mp in
         let args' = List.Smart.map e_subst args in
-        let qarg' = pvts_subst qarg in
+        let qarg' = qr_subst qarg in
         i_call (olv', mp', args', qarg')
 
     | Sif (e, s1, s2) ->
@@ -507,14 +547,21 @@ and s_get_uninit_read (w : Ssym.t) (s : stmt) =
 
 and i_get_uninit_read (w : Ssym.t) (i : instr) =
   match i.i_node with
-  | Squantum(lv, o, e) ->
+  | Squantum(qr, o, e) ->
+      let r1 = Ssym.diff (Uninit.e_pv e) w in
+      (w, r1)
+
+  | Smeasure(lv, _qr, e) ->
+      let r1 = Ssym.diff (Uninit.e_pv e) w in
+      let w2 = lv_get_uninit_read w lv in
+      (Ssym.union w w2, r1)
 
   | Sasgn (lv, e) | Srnd (lv, e) ->
       let r1 = Ssym.diff (Uninit.e_pv e) w in
       let w2 = lv_get_uninit_read w lv in
       (Ssym.union w w2, r1)
 
-  | Scall (olv, _, args) ->
+  | Scall (olv, _, args, _qargs) ->
       let r1 = Ssym.diff (Ssym.big_union (List.map (Uninit.e_pv) args)) w in
       let w = olv |> omap (lv_get_uninit_read w) |> odfl w in
       (w, r1)
@@ -731,14 +778,18 @@ let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
 type funsig = {
   fs_name   : symbol;
   fs_arg    : EcTypes.ty;
+  fs_qarg   : EcTypes.ty;
   fs_anames : ovariable list;
+  fs_qnames : ovariable list;
   fs_ret    : EcTypes.ty;
 }
 
 let fs_equal f1 f2 =
-    List.all2 EcTypes.ov_equal f1.fs_anames f2.fs_anames
+       List.all2 EcTypes.ov_equal f1.fs_anames f2.fs_anames
+    && List.all2 EcTypes.ov_equal f1.fs_anames f2.fs_anames
     && (EcTypes.ty_equal f1.fs_ret f2.fs_ret)
     && (EcTypes.ty_equal f1.fs_arg f2.fs_arg)
+    && (EcTypes.ty_equal f1.fs_qarg f2.fs_qarg)
     && (EcSymbols.sym_equal f1.fs_name f2.fs_name)
 
 (* -------------------------------------------------------------------- *)

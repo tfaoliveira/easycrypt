@@ -857,6 +857,9 @@ let process_rewrite1_r ttenv ?target ri tc =
       process_algebra `Solve `Field [] tc
 
   | RWEquiv (side, name, (argsl, resl), (argsr, resr)) ->
+      (* FIXME QUANTUM *)
+      assert false
+   (*
       (* Check which direction we wish to go in *)
       let tc = match side with
         | `Left  -> tc
@@ -1041,6 +1044,7 @@ let process_rewrite1_r ttenv ?target ri tc =
       in
 
       t_onall process_trivial tc
+*)
 
 (* -------------------------------------------------------------------- *)
 let process_rewrite1 ttenv ?target ri tc =

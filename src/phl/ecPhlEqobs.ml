@@ -197,11 +197,14 @@ let rec s_eqobs_in_rev rsl rsr sim local (eqo:Mpv2.t) =
 
 and i_eqobs_in il ir sim local (eqo:Mpv2.t) =
   match il.i_node, ir.i_node with
+  | Squantum _, Squantum _ -> assert false
+  | Smeasure _, Smeasure _ -> assert false
   | Sasgn(lvl,el), Sasgn(lvr,er) | Srnd(lvl,el), Srnd(lvr,er) ->
     sim, add_eqs sim local (remove sim lvl lvr eqo) el er
 
-  | Scall(lvl,fl,argsl), Scall(lvr,fr,argsr)
-    when List.length argsl = List.length argsr ->
+  | Scall(lvl,fl,argsl,qrl), Scall(lvr,fr,argsr, qrr)
+    when List.length argsl = List.length argsr &&
+      is_quantum_unit qrl && is_quantum_unit qrl ->
     let eqo = oremove sim lvl lvr eqo in
     let env = sim.sim_env in
     let modl, modr = f_write env fl, f_write env fr in

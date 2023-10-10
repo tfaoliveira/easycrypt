@@ -113,9 +113,12 @@ module Mpv = struct
     let ssubst = ssubst env s in
 
     match i.i_node with
+    | Squantum _ | Smeasure _ -> assert false
     | Sasgn  (lv, e)     -> i_asgn   (lv, esubst e)
     | Srnd   (lv, e)     -> i_rnd    (lv, esubst e)
-    | Scall  (lv, f, es) -> i_call   (lv, f, List.map esubst es)
+    | Scall  (lv, f, es, qr) ->
+        assert (is_quantum_unit qr);
+        i_call   (lv, f, List.map esubst es, qr)
     | Sif    (c, s1, s2) -> i_if     (esubst c, ssubst s1, ssubst s2)
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, b)      -> i_match  (esubst e, List.Smart.map (snd_map ssubst) b)
@@ -529,11 +532,14 @@ and s_write_r ?(except=Sx.empty) env w s =
 
 and i_write_r ?(except=Sx.empty) env w i =
   match i.i_node with
+  | Squantum _ | Smeasure _ -> assert false
+
   | Sasgn  (lp, _) -> lp_write_r env w lp
   | Srnd   (lp, _) -> lp_write_r env w lp
   | Sassert _      -> w
 
-  | Scall(lp,f,_) ->
+  | Scall(lp,f,_, qr) ->
+    assert (is_quantum_unit qr);
     if Sx.mem f except then w else
       let w  = match lp with None -> w | Some lp -> lp_write_r env w lp in
       f_write_r ~except env w f
@@ -587,11 +593,13 @@ and s_read_r env w s =
 
 and i_read_r env r i =
   match i.i_node with
+  | Squantum _ | Smeasure _ -> assert false
   | Sasgn   (_lp, e) -> e_read_r env r e
   | Srnd    (_lp, e) -> e_read_r env r e
   | Sassert e       -> e_read_r env r e
 
-  | Scall (_lp, f, es) ->
+  | Scall (_lp, f, es, qr) ->
+      assert (is_quantum_unit qr);
       let r = List.fold_left (e_read_r env) r es in
       f_read_r env r f
 
@@ -1015,6 +1023,8 @@ and is_eqobs_in_refl env c eqo =
 
 and i_eqobs_in_refl env i eqo =
   match i.i_node with
+  | Squantum _ | Smeasure _ -> assert false
+
   | Sasgn(lv,e) ->
     if is_in_refl env lv eqo then
       add_eqs_refl env (remove_refl env lv eqo) e
@@ -1023,7 +1033,8 @@ and i_eqobs_in_refl env i eqo =
   | Srnd(lv,e) ->
     add_eqs_refl env (remove_refl env lv eqo) e
 
-  | Scall(lv,f,args) ->
+  | Scall(lv,f,args,qr) ->
+    assert (is_quantum_unit qr);
     let eqo  =
       match lv with
       | None -> eqo

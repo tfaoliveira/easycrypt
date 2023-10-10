@@ -4,9 +4,13 @@ open EcPath
 open EcTypes
 
 (* -------------------------------------------------------------------- *)
+
+type prog_var_ty =
+  EcTypes.prog_var * EcTypes.ty
+
 type lvalue =
-  | LvVar   of (prog_var * ty)
-  | LvTuple of (prog_var * ty) list
+  | LvVar   of prog_var_ty
+  | LvTuple of prog_var_ty list
 
 val lv_equal     : lvalue -> lvalue -> bool
 val symbol_of_lv : lvalue -> symbol
@@ -16,12 +20,18 @@ val lv_to_list   : lvalue -> prog_var list
 val name_of_lv   : lvalue -> string
 
 (* --------------------------------------------------------------------- *)
-type quantum_arg = symbol list
+type quantum_ref =
+  | QRvar   of prog_var_ty
+  | QRtuple of quantum_ref list
+  | QRproj  of quantum_ref * int
+
+val quantum_unit    : quantum_ref
+val is_quantum_unit : quantum_ref -> bool
 
 type quantum_op =
   | Qinit
   | Qunitary
-  | Qmeasure
+
 
 (* --------------------------------------------------------------------- *)
 type instr = private {
@@ -31,10 +41,11 @@ type instr = private {
 }
 
 and instr_node =
-  | Squantum  of quantum_arg * quantum_op * expr
+  | Squantum  of quantum_ref * quantum_op * expr
+  | Smeasure  of lvalue * quantum_ref * expr
   | Sasgn     of lvalue * expr
   | Srnd      of lvalue * expr
-  | Scall     of lvalue option * xpath * expr list * quantum_arg option
+  | Scall     of lvalue option * xpath * expr list * quantum_ref
   | Sif       of expr * stmt * stmt
   | Swhile    of expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
@@ -61,18 +72,22 @@ val s_fv      : stmt -> int EcIdent.Mid.t
 val s_subst   : e_subst -> stmt -> stmt
 
 (* -------------------------------------------------------------------- *)
+val i_quantum  : quantum_ref * quantum_op * expr -> instr
+val i_measure  : lvalue * quantum_ref * expr -> instr
 val i_asgn     : lvalue * expr -> instr
 val i_rnd      : lvalue * expr -> instr
-val i_call     : lvalue option * xpath * expr list -> instr
+val i_call     : lvalue option * xpath * expr list * quantum_ref -> instr
 val i_if       : expr * stmt * stmt -> instr
 val i_while    : expr * stmt -> instr
 val i_match    : expr * ((EcIdent.t * ty) list * stmt) list -> instr
 val i_assert   : expr -> instr
 val i_abstract : EcIdent.t -> instr
 
+val s_quantum  : quantum_ref * quantum_op * expr -> stmt
+val s_measure  : lvalue * quantum_ref * expr -> stmt
 val s_asgn     : lvalue * expr -> stmt
 val s_rnd      : lvalue * expr -> stmt
-val s_call     : lvalue option * xpath * expr list -> stmt
+val s_call     : lvalue option * xpath * expr list * quantum_ref -> stmt
 val s_if       : expr * stmt * stmt -> stmt
 val s_while    : expr * stmt -> stmt
 val s_match    : expr * ((EcIdent.t * ty) list * stmt) list -> stmt
@@ -85,14 +100,18 @@ val stmt  : instr list -> stmt
 val rstmt : instr list -> stmt
 
 (* the following functions raise Not_found if the argument does not match *)
+val destr_quantum : instr -> quantum_ref * quantum_op * expr
+val destr_measure : instr -> lvalue * quantum_ref * expr
 val destr_asgn   : instr -> lvalue * expr
 val destr_rnd    : instr -> lvalue * expr
-val destr_call   : instr -> lvalue option * xpath * expr list
+val destr_call   : instr -> lvalue option * xpath * expr list * quantum_ref
 val destr_if     : instr -> expr * stmt * stmt
 val destr_while  : instr -> expr * stmt
 val destr_match  : instr -> expr * ((EcIdent.t * ty) list * stmt) list
 val destr_assert : instr -> expr
 
+val is_quantum : instr -> bool
+val is_measure : instr -> bool
 val is_asgn   : instr -> bool
 val is_rnd    : instr -> bool
 val is_call   : instr -> bool
@@ -108,7 +127,7 @@ val get_uninit_read : stmt -> Sx.t
 type funsig = {
   fs_name   : symbol;
   fs_arg    : EcTypes.ty;
-  fs_qarg   : EcTypes.ty option;
+  fs_qarg   : EcTypes.ty;
   fs_anames : ovariable list;
   fs_qnames : ovariable list;
   fs_ret    : EcTypes.ty;

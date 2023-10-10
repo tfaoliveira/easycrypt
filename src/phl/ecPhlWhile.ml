@@ -18,6 +18,8 @@ module Mid = EcIdent.Mid
 let while_info env e s =
   let rec i_info (w,r,c) i =
     match i.i_node with
+    | Squantum _ | Smeasure _ -> assert false
+
     | Sasgn(lp, e) | Srnd(lp, e) ->
         let r = e_read_r env r e in
         let w = lp_write_r env w lp in
@@ -33,7 +35,8 @@ let while_info env e s =
         let r = e_read_r env r e in
         List.fold_left (fun st (_, b) -> s_info st b) (w, r, c) bs
 
-    | Scall (lp, f, es) ->
+    | Scall (lp, f, es, qr) ->
+        assert (is_quantum_unit qr);
         let r = List.fold_left (e_read_r env) r es in
         let w = match lp with None -> w | Some lp -> lp_write_r env w lp in
         let f = EcEnv.NormMp.norm_xfun env f in

@@ -337,8 +337,10 @@ let t_eager_call_r fpre fpost tc =
   let env, hyps, _ = FApi.tc1_eflat tc in
   let es = tc1_as_equivS tc in
 
-  let (lvl, fl, argsl), sl = pf_last_call  !!tc es.es_sl in
-  let (lvr, fr, argsr), sr = pf_first_call !!tc es.es_sr in
+  let (lvl, fl, argsl, qrl), sl = pf_last_call  !!tc es.es_sl in
+    assert (is_quantum_unit qrl);
+  let (lvr, fr, argsr, qrr), sr = pf_first_call !!tc es.es_sr in
+    assert (is_quantum_unit qrr);
 
   let swl = s_write env sl in
   let swr = s_write env sr in
@@ -460,9 +462,11 @@ let eager pf env s s' inv eqIs eqXs c c' eqO =
         let eqi = Mpv2.union eqIs eqnm in
         (fhyps, Mpv2.add_eqs env el er (remove lvl lvr eqi) )
 
-    | Scall (lvl, fl, argsl), Scall (lvr, fr, argsr)
+    | Scall (lvl, fl, argsl, qrl), Scall (lvr, fr, argsr, qrr)
         when List.length argsl = List.length argsr
       ->
+    assert (is_quantum_unit qrr);
+    assert (is_quantum_unit qrl);
         check_args argsl;
         let eqo  = oremove lvl lvr eqo in
         let modl = PV.union modi (f_write env fl) in
@@ -643,8 +647,10 @@ let process_call info tc =
         let env, hyps, _ = FApi.tc1_eflat tc in
         let es  = tc1_as_equivS tc in
 
-        let (_,fl,_), sl = tc1_last_call  tc es.es_sl in
-        let (_,fr,_), sr = tc1_first_call tc es.es_sr in
+        let (_,fl,_,qrl), sl = tc1_last_call  tc es.es_sl in
+    assert (is_quantum_unit qrl);
+        let (_,fr,_,qrr), sr = tc1_first_call tc es.es_sr in
+    assert (is_quantum_unit qrr);
 
         check_only_global !!tc env sl;
         check_only_global !!tc env sr;

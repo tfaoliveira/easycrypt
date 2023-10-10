@@ -547,6 +547,7 @@ module ToCodeLow = struct
     let me = EcMemory.empty_local ~witharg:false m in
 
     let args =
+      assert (fd.f_sig.fs_qnames = []);
       let freshen_arg i ov =
         match ov.ov_name with
         | None   -> { ov with ov_name = Some (Printf.sprintf "arg%d" (i + 1)) }
@@ -567,7 +568,8 @@ module ToCodeLow = struct
     in
 
     let icall =
-      i_call (Some (LvVar (pv_loc (oget res.ov_name), res.ov_type)), f, eargs)
+      i_call (Some (LvVar (pv_loc (oget res.ov_name), res.ov_type)), f, eargs, quantum_unit)
+      (* FIXME QUANTUM quantum_unit *)
     in (me, stmt [icall], res, args)
 
   let add_var env vfrom mfrom v me s =
