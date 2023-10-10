@@ -2349,13 +2349,13 @@ and transmodsig_body
           List.map
             (fun (x, ty) -> {
                  ov_name = omap unloc x.pl_desc;
-                 ov_type = transty_for_decl env ty }) f.pfd_tyargs
+                 ov_type = transty_for_decl env ty }) f.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
         in
 
         let args = List.fold_left (fun names (x, _) ->
           match unloc x with
           | None   -> names
-          | Some x -> x :: names) [] f.pfd_tyargs
+          | Some x -> x :: names) [] f.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
         in
 
         Msym.odup unloc args |> oiter (fun (_, a) ->
@@ -2575,7 +2575,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
     let me = transmod ~attop:false env pe in
     [], [me.me_name, MI_Module me]
 
-  | Pst_var (xs, ty) ->
+  | Pst_var (_quantum, xs, ty) ->  (* FIXME QUANTUM *)
       let ty    = transty_for_decl env ty in
       let items =
         List.map
@@ -2598,7 +2598,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
         in
         List.map (fun (s,pty) -> {
               v_name = checked_name s;
-              v_type = transty tp_uni env ue pty}, s.pl_loc) decl.pfd_tyargs
+              v_type = transty tp_uni env ue pty}, s.pl_loc) decl.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
       in
       let memenv = EcMemory.empty_local ~witharg:false mhr in
       let memenv = fundef_add_symbol env memenv params in
@@ -2706,6 +2706,7 @@ and transstruct1_alias env name f =
 
 (* -------------------------------------------------------------------- *)
 and transbody ue memenv (env : EcEnv.env) retty pbody =
+  (* FIXME quantum local decl use quantum + quantum args *)
   let { pl_loc = loc; pl_desc = pbody; } = pbody in
 
   let prelude = ref []
@@ -2847,6 +2848,8 @@ and transinstr
           tyerror (loc x) env (UnknownInstrMetaVar (unloc x))
     end
 
+  | PSunitary (plvalue, prvalue) (* FIXME QUANTUM *)
+  | PSmeasure (plvalue, prvalue) (* FIXME QUANTUM *)
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function
         | PEapp ({ pl_desc = PEident (f, None) }, _)
@@ -2863,7 +2866,7 @@ and transinstr
             tyerror l e exn
       in
       unify_or_fail env ue prvalue.pl_loc ~expct:lty rty;
-      [ i_asgn_lv i.pl_loc env lvalue rvalue ]
+      [ i_asgn_lv i.pl_loc env lvalue rvalue ] (* FIXME QUANTUM *)
     end
 
   | PSrnd (plvalue, prvalue) ->
@@ -2873,12 +2876,12 @@ and transinstr
       [ i_rnd_lv i.pl_loc env lvalue rvalue ]
 
   | PScall (None, name, args) ->
-      let (fpath, args, _rty) = transcall name (unloc args) in
+      let (fpath, args, _rty) = transcall name args.fa_classical in (* FIXME QUANTUM *)
       [ i_call (None, fpath, args) ]
 
   | PScall (Some lvalue, name, args) ->
       let lvalue, lty = translvalue ue env lvalue in
-      let (fpath, args, rty) = transcall name (unloc args) in
+      let (fpath, args, rty) = transcall name args.fa_classical in (* FIXME QUANTUM *)
       unify_or_fail env ue name.pl_loc ~expct:lty rty;
       [ i_call_lv i.pl_loc env lvalue fpath args ]
 

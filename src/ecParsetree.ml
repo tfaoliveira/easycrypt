@@ -100,11 +100,18 @@ type plvalue_r =
 
 and plvalue = plvalue_r located
 
+type funargs = {
+  fa_classical : (pexpr list);
+  fa_quantum   : (pqsymbol list); (* FIXME this should be just pqsymbol *)
+}
+
 type pinstr_r =
   | PSident  of psymbol
   | PSasgn   of plvalue * pexpr
+  | PSunitary of plvalue * pexpr
+  | PSmeasure of plvalue * pexpr
   | PSrnd    of plvalue * pexpr
-  | PScall   of plvalue option * pgamepath * (pexpr list) located
+  | PScall   of plvalue option * pgamepath * funargs
   | PSif     of pscond * pscond list * pstmt
   | PSwhile  of pscond
   | PSmatch  of pexpr * psmatch
@@ -123,6 +130,9 @@ and pstmt  = pinstr list
 type is_local = [ `Local | `Global]
 
 type locality = [`Declare | `Local | `Global]
+
+(* -------------------------------------------------------------------- *)
+type quantum = [`Quantum | `Classical]
 
 (* -------------------------------------------------------------------- *)
 type pmodule_type = pqsymbol
@@ -300,7 +310,8 @@ and pvariable_decl = {
   pvd_type : pty;
 }
 
-and fun_params = (osymbol * pty) list
+and fun_params =
+  { fp_classical : (osymbol * pty) list; fp_quantum : (osymbol * pty) list }
 
 and pfunction_decl = {
   pfd_name     : psymbol;
@@ -342,7 +353,7 @@ and pstructure = pstructure_item located list
 
 and pstructure_item =
   | Pst_mod      of (psymbol * pqsymbol list * pmodule_expr)
-  | Pst_var      of (psymbol list * pty)
+  | Pst_var      of (quantum * psymbol list * pty)
   | Pst_fun      of (pfunction_decl * pfunction_body)
   | Pst_alias    of (psymbol * pgamepath)
   | Pst_include  of (pmsymbol located * bool * minclude_proc option)
@@ -356,6 +367,7 @@ and pfunction_body = {
 }
 
 and pfunction_local = {
+  pfl_quantum : quantum;
   pfl_names : ([`Single|`Tuple] * (psymbol list)) located;
   pfl_type  : pty   option;
   pfl_init  : pexpr option;

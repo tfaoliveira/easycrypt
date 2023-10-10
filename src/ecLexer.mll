@@ -43,6 +43,8 @@
     "in"          , IN         ;        (* KW: prog *)
     "for"         , FOR        ;        (* KW: prog *)
     "var"         , VAR        ;        (* KW: prog *)
+    "quantum"     , QUANTUM    ;        (* KW: prog *)
+
     "proc"        , PROC       ;        (* KW: prog *)
     "if"          , IF         ;        (* KW: prog *)
     "is"          , IS         ;        (* KW: prog *)
@@ -51,6 +53,7 @@
     "else"        , ELSE       ;        (* KW: prog *)
     "elif"        , ELIF       ;        (* KW: prog *)
     "match"       , MATCH      ;        (* KW: prog *)
+    "measure"     , MEASURE    ;        (* KW: prog *)
     "for"         , FOR        ;        (* KW: prog *)
     "while"       , WHILE      ;        (* KW: prog *)
     "assert"      , ASSERT     ;        (* KW: prog *)
@@ -240,6 +243,7 @@
     ("\\"  , (BACKSLASH        , true ));
     ("<-"  , (LARROW           , true ));
     ("->"  , (RARROW           , true ));
+    ("<*"  , (LSARROW          , true ));
     ("<<-" , (LLARROW          , true ));
     ("->>" , (RRARROW          , true ));
     ("!"   , (NOT              , false));

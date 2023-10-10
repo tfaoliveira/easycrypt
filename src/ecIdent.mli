@@ -33,6 +33,7 @@ module Hid : EcMaps.EHashtbl.S with type key = ident
 (* -------------------------------------------------------------------- *)
 val fv_singleton : ident -> int Mid.t
 val fv_union     : int Mid.t -> int Mid.t -> int Mid.t
+val fv_unions    : int Mid.t list -> int Mid.t
 val fv_diff      : int Mid.t -> 'a Mid.t -> int Mid.t
 val fv_add       : ident -> int Mid.t -> int Mid.t
 

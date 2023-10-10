@@ -16,6 +16,14 @@ val lv_to_list   : lvalue -> prog_var list
 val name_of_lv   : lvalue -> string
 
 (* --------------------------------------------------------------------- *)
+type quantum_arg = symbol list
+
+type quantum_op =
+  | Qinit
+  | Qunitary
+  | Qmeasure
+
+(* --------------------------------------------------------------------- *)
 type instr = private {
   i_node : instr_node;
   i_fv   : int EcIdent.Mid.t;
@@ -23,9 +31,10 @@ type instr = private {
 }
 
 and instr_node =
+  | Squantum  of quantum_arg * quantum_op * expr
   | Sasgn     of lvalue * expr
   | Srnd      of lvalue * expr
-  | Scall     of lvalue option * xpath * expr list
+  | Scall     of lvalue option * xpath * expr list * quantum_arg option
   | Sif       of expr * stmt * stmt
   | Swhile    of expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
@@ -99,7 +108,9 @@ val get_uninit_read : stmt -> Sx.t
 type funsig = {
   fs_name   : symbol;
   fs_arg    : EcTypes.ty;
+  fs_qarg   : EcTypes.ty option;
   fs_anames : ovariable list;
+  fs_qnames : ovariable list;
   fs_ret    : EcTypes.ty;
 }
 

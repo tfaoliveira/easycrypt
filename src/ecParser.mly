@@ -498,7 +498,9 @@
 %token LOSSLESS
 %token LPAREN
 %token LPBRACE
+%token LSARROW
 %token MATCH
+%token MEASURE
 %token MINUS
 %token MODPATH
 %token MODULE
@@ -526,6 +528,7 @@
 %token PROOF
 %token PROVER
 %token QED
+%token QUANTUM
 %token QUESTION
 %token RARROW
 %token RBOOL
@@ -1473,6 +1476,14 @@ param_decl:
 | LPAREN aout=plist0(typed_vars_or_anons, COMMA) RPAREN
     { List.flatten aout }
 
+qparam_decl:
+| LBRACE aout=plist0(typed_vars_or_anons, COMMA) RBRACE
+    { List.flatten aout }
+
+cqparam_decl:
+| p=param_decl q=qparam_decl? { {fp_classical = p; fp_quantum = EcUtils.odfl [] q } }
+| q=qparam_decl               { {fp_classical = []; fp_quantum = q } }
+
 (* -------------------------------------------------------------------- *)
 (* Statements                                                           *)
 
@@ -1493,6 +1504,16 @@ lvalue_u:
 %inline lvalue:
 | x=loc(lvalue_u) { x }
 
+classical_funargs:
+ | LPAREN es=plist0(expr, COMMA) RPAREN { es }
+
+quantum_funargs:
+ | LBRACE es=plist0(qoident, COMMA) RBRACE { es }
+
+funargs:
+ | c=classical_funargs q=quantum_funargs? { { fa_classical = c; fa_quantum = odfl [] q } }
+ | q=quantum_funargs { { fa_classical = []; fa_quantum = q } }
+
 base_instr:
 | x=lident
     { PSident x }
@@ -1503,10 +1524,17 @@ base_instr:
 | x=lvalue LARROW e=expr
     { PSasgn (x, e) }
 
-| x=lvalue LEAT f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
+| x=lvalue LARROW MEASURE e=expr
+    { PSmeasure (x, e) }
+
+| x=lvalue LSARROW u=loc(_uident) LBRACKET e=expr RBRACKET
+    { if u.pl_desc <> "U" then parse_error u.pl_loc (Some "U expected");
+      PSunitary (x, e) }
+
+| x=lvalue LEAT f=loc(fident) es=funargs
     { PScall (Some x, f, es) }
 
-| f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
+| f=loc(fident) es=funargs
     { PScall (None, f, es) }
 
 | ASSERT LPAREN c=expr RPAREN
@@ -1555,27 +1583,32 @@ stmt: aout=loc(instr)* { aout }
 (* -------------------------------------------------------------------- *)
 (* Module definition                                                    *)
 
+quantum_classical :
+| QUANTUM VAR { `Quantum }
+|         VAR { `Classical }
+
 var_decl:
-| VAR xs=plist1(lident, COMMA) COLON ty=loc(type_exp)
-   { (xs, ty) }
+| qc=quantum_classical xs=plist1(lident, COMMA) COLON ty=loc(type_exp)
+   { (qc, xs, ty) }
 
 loc_decl_names:
 | x=plist1(lident, COMMA) { (`Single, x) }
 
 | LPAREN x=plist2(lident, COMMA) RPAREN { (`Tuple, x) }
 
+
 loc_decl_r:
-| VAR x=loc(loc_decl_names)
-    { { pfl_names = x; pfl_type = None; pfl_init = None; } }
+| q=quantum_classical x=loc(loc_decl_names)
+    { { pfl_quantum = q; pfl_names = x; pfl_type = None; pfl_init = None; } }
 
-| VAR x=loc(loc_decl_names) COLON ty=loc(type_exp)
-    { { pfl_names = x; pfl_type = Some ty; pfl_init = None; } }
+| q=quantum_classical x=loc(loc_decl_names) COLON ty=loc(type_exp)
+    { { pfl_quantum = q; pfl_names = x; pfl_type = Some ty; pfl_init = None; } }
 
-| VAR x=loc(loc_decl_names) COLON ty=loc(type_exp) LARROW e=expr
-    { { pfl_names = x; pfl_type = Some ty; pfl_init = Some e; } }
+| q=quantum_classical x=loc(loc_decl_names) COLON ty=loc(type_exp) LARROW e=expr
+    { { pfl_quantum = q; pfl_names = x; pfl_type = Some ty; pfl_init = Some e; } }
 
-| VAR x=loc(loc_decl_names) LARROW e=expr
-    { { pfl_names = x; pfl_type = None; pfl_init = Some e; } }
+| q=quantum_classical x=loc(loc_decl_names) LARROW e=expr
+    { { pfl_quantum = q; pfl_names = x; pfl_type = None; pfl_init = Some e; } }
 
 loc_decl:
 | x=loc_decl_r SEMICOLON { x }
@@ -1602,7 +1635,7 @@ fun_def_body:
     }
 
 fun_decl:
-| x=lident pd=param_decl ty=prefix(COLON, loc(type_exp))?
+| x=lident pd=cqparam_decl ty=prefix(COLON, loc(type_exp))?
     { let frestr = { pmre_name  = x;
 		     pmre_orcls = None;
 		     pmre_compl = None;	} in
@@ -1785,7 +1818,7 @@ signature_item:
     { let qs = omap (List.map (fun x -> { inp_in_params = false;
 					  inp_qident    = x;     })) qs in
       `Include (i, xs, qs) }
-| PROC x=lident pd=param_decl COLON ty=loc(type_exp) fr=fun_restr?
+| PROC x=lident pd=cqparam_decl COLON ty=loc(type_exp) fr=fun_restr?
     { let orcl, compl = odfl (None,None) fr in
       let frestr = { pmre_name  = x;
 		     pmre_orcls = orcl;

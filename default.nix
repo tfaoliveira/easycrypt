@@ -50,7 +50,7 @@ stdenv.mkDerivation {
     menhirLib
     yojson
     zarith
-  ]);
+  ]) ++ (with ocamlPackages; [ merlin ocaml-lsp ]);
 
   propagatedBuildInputs = [ why3-pin ]
     ++ devDeps

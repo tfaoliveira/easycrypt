@@ -8,33 +8,40 @@ module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
 
 (* -------------------------------------------------------------------- *)
+type prog_var_ty =
+  EcTypes.prog_var * EcTypes.ty
+
 type lvalue =
-  | LvVar   of (EcTypes.prog_var * EcTypes.ty)
-  | LvTuple of (EcTypes.prog_var * EcTypes.ty) list
+  | LvVar   of prog_var_ty
+  | LvTuple of prog_var_ty list
+
+
+let pvt_equal (pv1, ty1) (pv2, ty2) =
+     EcTypes.pv_equal pv1 pv2
+  && EcTypes.ty_equal ty1 ty2
 
 let lv_equal lv1 lv2 =
   match lv1, lv2 with
-  | LvVar (pv1, ty1), LvVar (pv2, ty2) ->
-         (EcTypes.pv_equal pv1 pv2)
-      && (EcTypes.ty_equal ty1 ty2)
+  | LvVar pv1, LvVar pv2 -> pvt_equal pv1 pv2
 
   | LvTuple tu1, LvTuple tu2 ->
-      List.all2
-        (fun (pv1, ty1) (pv2, ty2) ->
-             (EcTypes.pv_equal pv1 pv2)
-          && (EcTypes.ty_equal ty1 ty2))
-        tu1 tu2
+      List.all2 pvt_equal tu1 tu2
 
   | _, _ -> false
 
 (* -------------------------------------------------------------------- *)
+let pvts_fv pvs =
+  (* FIXME QUANTUM: why type are not inspected *)
+  let add s (pv, _) = EcIdent.fv_union s (EcTypes.pv_fv pv) in
+  List.fold_left add Mid.empty pvs
+
+
 let lv_fv = function
   | LvVar (pv, _) ->
+      (* FIXME QUANTUM: why type are not inspected *)
       EcTypes.pv_fv pv
 
-  | LvTuple pvs ->
-      let add s (pv, _) = EcIdent.fv_union s (EcTypes.pv_fv pv) in
-      List.fold_left add Mid.empty pvs
+  | LvTuple pvs -> pvts_fv pvs
 
 let symbol_of_lv = function
   | LvVar (pv, _) ->
@@ -63,6 +70,22 @@ let name_of_lv lv =
   | LvTuple pvs ->
      String.concat "_" (List.map (EcTypes.name_of_pvar |- fst) pvs)
 
+
+(* -------------------------------------------------------------------- *)
+type quantum_arg = (EcTypes.prog_var * EcTypes.ty) list
+(*  all variable in quantum_arg should be disjoint *)
+
+let qa_equal = List.all2 pvt_equal
+let qa_fv = pvts_fv
+
+type quantum_op =
+  | Qinit
+  | Qunitary
+(*  | Qmeasure *)
+
+let qo_equal (o1:quantum_op) (o2:quantum_op) = o1 == o2
+let qo_fv (o:quantum_op) : int Mid.t = Mid.empty
+
 (* -------------------------------------------------------------------- *)
 type instr = {
   i_node : instr_node;
@@ -71,9 +94,13 @@ type instr = {
 }
 
 and instr_node =
+  | Squantum  of quantum_arg * quantum_op * expr  (* quantum_arg is never empty *)
+  | Smeasure  of lvalue * quantum_arg * expr
+     (* x <- measure q with f, quantum_arg is never empty*)
   | Sasgn     of lvalue * EcTypes.expr
   | Srnd      of lvalue * EcTypes.expr
-  | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list
+  | Scall     of lvalue option * EcPath.xpath * EcTypes.expr list * quantum_arg
+     (* quantum_arg can be empty, only local *)
   | Sif       of EcTypes.expr * stmt * stmt
   | Swhile    of EcTypes.expr * stmt
   | Smatch    of expr * ((EcIdent.t * EcTypes.ty) list * stmt) list
@@ -104,16 +131,23 @@ module Hinstr = Why3.Hashcons.Make (struct
 
   let equal_node i1 i2 =
     match i1, i2 with
+    | Squantum (qa1, o1, e1), Squantum (qa2, o2, e2) ->
+        (qa_equal qa1 qa2) && (qo_equal o1 o2) && (EcTypes.e_equal e1 e2)
+
+    | Smeasure(lv1, qa1, e1), Smeasure(lv2, qa2, e2) ->
+        (lv_equal lv1 lv2) && (qa_equal qa1 qa2) && (EcTypes.e_equal e1 e2)
+
     | Sasgn (lv1, e1), Sasgn (lv2, e2) ->
         (lv_equal lv1 lv2) && (EcTypes.e_equal e1 e2)
 
     | Srnd (lv1, e1), Srnd (lv2, e2) ->
         (lv_equal lv1 lv2) && (EcTypes.e_equal e1 e2)
 
-    | Scall (lv1, f1, es1), Scall (lv2, f2, es2) ->
+    | Scall (lv1, f1, es1, q1), Scall (lv2, f2, es2, q2) ->
            (EcUtils.opt_equal lv_equal lv1 lv2)
         && (EcPath.x_equal f1 f2)
         && (List.all2 EcTypes.e_equal es1 es2)
+        && (qa_equal q1 q2)
 
     | Sif (c1, s1, r1), Sif (c2, s2, r2) ->
            (EcTypes.e_equal c1 c2)
@@ -143,6 +177,12 @@ module Hinstr = Why3.Hashcons.Make (struct
 
   let hash p =
     match p.i_node with
+    | Squantum(qa, o, e) ->
+        Why3.Hashcons.combine2 (Hashtbl.hash qa) (Hashtbl.hash o) (EcTypes.e_hash e)
+
+    | Smeasure(lv, qa, e) ->
+        Why3.Hashcons.combine2 (Hashtbl.hash lv) (Hashtbl.hash qa) (EcTypes.e_hash e)
+
     | Sasgn (lv, e) ->
         Why3.Hashcons.combine
           (Hashtbl.hash lv) (EcTypes.e_hash e)
@@ -151,11 +191,11 @@ module Hinstr = Why3.Hashcons.Make (struct
         Why3.Hashcons.combine
           (Hashtbl.hash lv) (EcTypes.e_hash e)
 
-    | Scall (lv, f, tys) ->
+    | Scall (lv, f, arg, qarg) ->
         Why3.Hashcons.combine_list EcTypes.e_hash
-          (Why3.Hashcons.combine
-             (Hashtbl.hash lv) (EcPath.x_hash f))
-          tys
+          (Why3.Hashcons.combine2
+             (Hashtbl.hash lv) (EcPath.x_hash f) (Hashtbl.hash qarg))
+          arg
 
     | Sif (c, s1, s2) ->
         Why3.Hashcons.combine2
@@ -176,22 +216,29 @@ module Hinstr = Why3.Hashcons.Make (struct
     | Sabstract id -> EcIdent.id_hash id
 
   let i_fv   = function
+    | Squantum(qa, qo, e) ->
+        EcIdent.fv_unions [qa_fv qa; qo_fv qo; EcTypes.e_fv e]
+
+    | Smeasure(lv, qa, e) ->
+        EcIdent.fv_unions [lv_fv lv; qa_fv qa; EcTypes.e_fv e]
+
     | Sasgn (lv, e) ->
         EcIdent.fv_union (lv_fv lv) (EcTypes.e_fv e)
 
     | Srnd (lv, e) ->
         EcIdent.fv_union (lv_fv lv) (EcTypes.e_fv e)
 
-    | Scall (olv, f, args) ->
+    | Scall (olv, f, args, qarg) ->
+        (* There is not fv in quantum argument *)
         let ffv = EcPath.x_fv Mid.empty f in
         let ofv = olv |> omap lv_fv |> odfl Mid.empty in
+        let qfv = qa_fv qarg in
         List.fold_left
           (fun s a -> EcIdent.fv_union s (EcTypes.e_fv a))
-          (EcIdent.fv_union ffv ofv) args
+          (EcIdent.fv_unions [ffv; ofv; qfv]) args
 
     | Sif (e, s1, s2) ->
-        List.fold_left EcIdent.fv_union Mid.empty
-          [EcTypes.e_fv e; s_fv s1; s_fv s2]
+        EcIdent.fv_unions [EcTypes.e_fv e; s_fv s1; s_fv s2]
 
     | Swhile (e, s)  ->
         EcIdent.fv_union (EcTypes.e_fv e) (s_fv s)
@@ -250,9 +297,19 @@ let stmt s = Hstmt.hashcons
 let rstmt s = stmt (List.rev s)
 
 (* --------------------------------------------------------------------- *)
+let i_quantum  (qa, op, e)  =
+  assert (qa <> []);
+  mk_instr (Squantum (qa, op, e))
+let i_measure  (lv, qa, e)  =
+  mk_instr (Smeasure (lv, qa, e))
+
 let i_asgn     (lv, e)      = mk_instr (Sasgn (lv, e))
 let i_rnd      (lv, e)      = mk_instr (Srnd (lv, e))
-let i_call     (lv, m, tys) = mk_instr (Scall (lv, m, tys))
+
+let i_call     (lv, m, arg, qarg) =
+  assert (List.for_all (fun (x,_) -> EcTypes.is_loc x) qarg);
+  mk_instr (Scall (lv, m, arg, qarg))
+
 let i_if       (c, s1, s2)  = mk_instr (Sif (c, s1, s2))
 let i_while    (c, s)       = mk_instr (Swhile (c, s))
 let i_match    (e, b)       = mk_instr (Smatch (e, b))
@@ -262,6 +319,8 @@ let i_abstract id           = mk_instr (Sabstract id)
 let s_seq      s1 s2        = stmt (s1.s_node @ s2.s_node)
 let s_empty                 = stmt []
 
+let s_quantum  arg = stmt [i_quantum arg]
+let s_measure  arg = stmt [i_measure arg]
 let s_asgn     arg = stmt [i_asgn arg]
 let s_rnd      arg = stmt [i_rnd arg]
 let s_call     arg = stmt [i_call arg]
@@ -272,6 +331,14 @@ let s_assert   arg = stmt [i_assert arg]
 let s_abstract arg = stmt [i_abstract arg]
 
 (* -------------------------------------------------------------------- *)
+let get_quantum = function
+  | { i_node = Squantum(lv,o,e) } -> Some (lv,o,e)
+  | _ -> None
+
+let get_measure = function
+  | { i_node = Smeasure(lv,qa,e) } -> Some (lv,qa,e)
+  | _ -> None
+
 let get_asgn = function
   | { i_node = Sasgn (lv, e) } -> Some (lv, e)
   | _ -> None
@@ -281,7 +348,7 @@ let get_rnd = function
   | _ -> None
 
 let get_call = function
-  | { i_node = Scall (lv, f, fs) } -> Some (lv, f, fs)
+  | { i_node = Scall (lv, f, arg, qarg) } -> Some (lv, f, arg, qarg)
   | _ -> None
 
 let get_if = function
@@ -304,25 +371,29 @@ let get_assert = function
 let _destr_of_get (get : instr -> 'a option) (i : instr) =
   match get i with Some x -> x | None -> raise Not_found
 
-let destr_asgn   = _destr_of_get get_asgn
-let destr_rnd    = _destr_of_get get_rnd
-let destr_call   = _destr_of_get get_call
-let destr_if     = _destr_of_get get_if
-let destr_while  = _destr_of_get get_while
-let destr_match  = _destr_of_get get_match
-let destr_assert = _destr_of_get get_assert
+let destr_quantum = _destr_of_get get_quantum
+let destr_measure = _destr_of_get get_measure
+let destr_asgn    = _destr_of_get get_asgn
+let destr_rnd     = _destr_of_get get_rnd
+let destr_call    = _destr_of_get get_call
+let destr_if      = _destr_of_get get_if
+let destr_while   = _destr_of_get get_while
+let destr_match   = _destr_of_get get_match
+let destr_assert  = _destr_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
 let _is_of_get (get : instr -> 'a option) (i : instr) =
   EcUtils.is_some (get i)
 
-let is_asgn   = _is_of_get get_asgn
-let is_rnd    = _is_of_get get_rnd
-let is_call   = _is_of_get get_call
-let is_if     = _is_of_get get_if
-let is_while  = _is_of_get get_while
-let is_match  = _is_of_get get_match
-let is_assert = _is_of_get get_assert
+let is_quantum = _is_of_get get_quantum
+let is_measure = _is_of_get get_measure
+let is_asgn    = _is_of_get get_asgn
+let is_rnd     = _is_of_get get_rnd
+let is_call    = _is_of_get get_call
+let is_if      = _is_of_get get_if
+let is_while   = _is_of_get get_while
+let is_match   = _is_of_get get_match
+let is_assert  = _is_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
 let rec s_subst_top (s : EcTypes.e_subst) =
@@ -336,31 +407,35 @@ let rec s_subst_top (s : EcTypes.e_subst) =
 
     if pv == pv' && ty == ty' then p else (pv', ty') in
 
+  let pvts_subst = List.Smart.map pvt_subst in
+
   let lv_subst lv =
     match lv with
     | LvVar pvt ->
         LvVar (pvt_subst pvt)
 
     | LvTuple pvs ->
-        let pvs' = List.Smart.map pvt_subst pvs in
-        LvTuple pvs'
+        LvTuple (pvts_subst pvs)
 
   in
 
   let rec i_subst i =
     match i.i_node with
+    | Squantum (qarg, qop, e) ->
+        i_quantum (pvts_subst qarg, qop, e_subst e)
+
     | Sasgn (lv, e) ->
         i_asgn (lv_subst lv, e_subst e)
 
     | Srnd (lv, e) ->
         i_rnd (lv_subst lv, e_subst e)
 
-    | Scall (olv, mp, args) ->
+    | Scall (olv, mp, args, qarg) ->
         let olv'  = olv |> OSmart.omap lv_subst in
         let mp'   = EcPath.x_subst_abs s.es_ty.ts_cmod mp in
         let args' = List.Smart.map e_subst args in
-
-        i_call (olv', mp', args')
+        let qarg' = pvts_subst qarg in
+        i_call (olv', mp', args', qarg')
 
     | Sif (e, s1, s2) ->
         i_if (e_subst e, s_subst s1, s_subst s2)
@@ -425,6 +500,8 @@ and s_get_uninit_read (w : Ssym.t) (s : stmt) =
 
 and i_get_uninit_read (w : Ssym.t) (i : instr) =
   match i.i_node with
+  | Squantum(lv, o, e) ->
+
   | Sasgn (lv, e) | Srnd (lv, e) ->
       let r1 = Ssym.diff (Uninit.e_pv e) w in
       let w2 = lv_get_uninit_read w lv in
