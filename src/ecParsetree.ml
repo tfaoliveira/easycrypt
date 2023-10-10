@@ -368,9 +368,9 @@ and pfunction_body = {
 
 and pfunction_local = {
   pfl_quantum : quantum;
-  pfl_names : ([`Single|`Tuple] * (psymbol list)) located;
-  pfl_type  : pty   option;
-  pfl_init  : pexpr option;
+  pfl_names   : ([`Single | `Tuple] * (psymbol list)) located;
+  pfl_type    : pty   option;
+  pfl_init    : pexpr option;
 }
 
 type pinterface = {

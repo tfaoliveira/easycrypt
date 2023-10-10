@@ -445,7 +445,9 @@ let name_of_pvar pv =
 
 let pv_loc id = PVloc id
 
-let arg_symbol = "arg"
+let arg_symbol  = "arg"
+let qarg_symbol = "qarg"
+
 let res_symbol = "res"
 let pv_arg = PVloc arg_symbol
 let pv_res =  PVloc res_symbol

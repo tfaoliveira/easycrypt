@@ -185,7 +185,9 @@ val pv_loc  : EcSymbols.symbol -> prog_var
 val pv_glob : EcPath.xpath -> prog_var
 val xp_glob : EcPath.xpath -> EcPath.xpath
 
-val arg_symbol : symbol
+val arg_symbol  : symbol
+val qarg_symbol : symbol
+
 val res_symbol : symbol
 val pv_res  : prog_var
 val pv_arg  : prog_var

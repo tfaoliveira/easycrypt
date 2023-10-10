@@ -175,7 +175,7 @@ let swap (x, y) = (y, x)
 module Option = BatOption
 
 (* -------------------------------------------------------------------- *)
-let opt_equal (f : 'a -> 'a -> bool) o1 o2 =
+let opt_equal (f : 'a -> 'a -> bool) o1 o2 = (* FIXME: duplicate of eq *)
   match o1, o2 with
   | Some x1, Some x2 -> f x1 x2
   | None   , None    -> true
