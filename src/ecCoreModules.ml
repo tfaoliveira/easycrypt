@@ -91,7 +91,7 @@ module PrefixSet : sig
 
   val empty : t
 
-  val mem : t -> prefix -> bool
+  val conflict : t -> prefix -> bool
 
   val add : t -> prefix -> t
 end = struct
@@ -117,19 +117,21 @@ end = struct
          Some (add (Option.value ~default:empty subt) subp) in
        Split (Mint.change change i children)
 
-  let rec mem (t : t) (p : prefix) : bool =
+  let rec conflict (t : t) (p : prefix) : bool =
     match t, p with
+    (* There exists a prefix of `p` in the set *)
     | Member, _ ->
+       true
+
+    (* `p` is a prefix of a member of the set *)
+    | Split _, [] ->
        true
 
     | Split children, i :: subp ->
         (* Ah mais la, je chaine :) *)
         Mint.find_opt i children
-        |> Option.map (fun subt -> mem subt subp)
+        |> Option.map (fun subt -> conflict subt subp)
         |> Option.value ~default:false
-
-    | Split _, [] ->
-       false
 end
 
 (* -------------------------------------------------------------------- *)
@@ -174,7 +176,7 @@ let quantum_valid (norm : prog_var -> prog_var) =
        let change (pfx : PS.t option) =
          let pfx = Option.value ~default:PS.empty pfx in
 
-         if PS.mem pfx proj then
+         if PS.conflict pfx proj then
            raise InvalidQRef;
          Some (PS.add pfx proj) in
 
