@@ -1493,13 +1493,19 @@ lvalue_u:
      | None   -> parse_error x.pl_loc None
      | Some v -> PLvSymbol (mk_loc x.pl_loc v) }
 
-| LPAREN p=plist2(qident, COMMA) RPAREN
+| LPAREN p=plist2(lvalue, COMMA) RPAREN
    { PLvTuple p }
+
+| p=lvalue DOTTICK n=loc(word)
+   { if n.pl_desc = 0 then
+       parse_error n.pl_loc (Some "tuple projection start at 1");
+     PLvProji(p,n.pl_desc - 1) }
 
 | x=loc(fident) DLBRACKET ti=tvars_app? e=expr RBRACKET
    { match lqident_of_fident x.pl_desc with
      | None   -> parse_error x.pl_loc None
      | Some v -> PLvMap (mk_loc x.pl_loc v, ti, e) }
+
 
 %inline lvalue:
 | x=loc(lvalue_u) { x }
@@ -1508,7 +1514,7 @@ classical_funargs:
  | LPAREN es=plist0(expr, COMMA) RPAREN { es }
 
 quantum_funargs:
- | LBRACE es=plist0(qoident, COMMA) RBRACE { es }
+ | LBRACE es=plist0(lvalue, COMMA) RBRACE { es }
 
 funargs:
  | c=classical_funargs q=quantum_funargs? { { fa_classical = c; fa_quantum = odfl [] q } }
@@ -1524,8 +1530,8 @@ base_instr:
 | x=lvalue LARROW e=expr
     { PSasgn (x, e) }
 
-| x=lvalue LARROW MEASURE e=expr
-    { PSmeasure (x, e) }
+| x=lvalue LARROW MEASURE q=lvalue WITH e=expr
+    { PSmeasure (x, q, e) }
 
 | x=lvalue LSARROW u=loc(_uident) LBRACKET e=expr RBRACKET
     { if u.pl_desc <> "U" then parse_error u.pl_loc (Some "U expected");

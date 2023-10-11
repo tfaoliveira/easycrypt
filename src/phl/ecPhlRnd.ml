@@ -377,7 +377,7 @@ module Core = struct
 
     match lv_of_list wr with
     | None ->
-       let x =  { ov_name = Some "x"; ov_type = tunit; } in
+       let x =  { ov_quantum = `Classical; ov_name = Some "x"; ov_type = tunit; } in
        let mem, x = EcMemory.bind_fresh x mem in
        let x, xty = pv_loc (oget x.ov_name), x.ov_type in
        (mem, [i_rnd (LvVar (x, xty), distr)])

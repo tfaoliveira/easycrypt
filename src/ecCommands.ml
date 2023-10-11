@@ -215,8 +215,9 @@ module HiPrinting = struct
       (Mx.cardinal us.EcEnv.us_pv);
     List.iter (fun (xp,_) ->
       let pv = EcTypes.pv_glob xp in
-      let ty = EcEnv.Var.by_xpath xp env in
-      Format.fprintf fmt "  @[%a : %a@]@."
+      let q, ty = EcEnv.Var.by_xpath xp env in
+      Format.fprintf fmt "  @[%s%a : %a@]@."
+        (EcTypes.pp_quantum q)
         (EcPrinting.pp_pv ppe) pv
         (EcPrinting.pp_type ppe) ty)
       (List.rev (Mx.bindings us.EcEnv.us_pv))

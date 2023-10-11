@@ -88,7 +88,7 @@ module LowInternal = struct
         let named_arg ov =
           match ov.ov_name with
           | None   -> assert false
-          | Some v -> { v_name = v; v_type = ov.ov_type }
+          | Some v -> { v_quantum = `Classical; v_name = v; v_type = ov.ov_type }
         in List.map named_arg f.f_sig.fs_anames
       in
       let me, anames = EcMemory.bindall_fresh f.f_sig.fs_anames me in
@@ -122,7 +122,7 @@ module LowInternal = struct
         | Some r, Some (LvTuple lvs) when not use_tuple ->
           let r = LowSubst.esubst subst r in
           let vlvs =
-            List.map (fun (x,ty) -> { ov_name = Some (symbol_of_pv x); ov_type = ty}) lvs in
+            List.map (fun (x,ty) -> { ov_quantum = `Classical; ov_name = Some (symbol_of_pv x); ov_type = ty}) lvs in
           let me, auxs = EcMemory.bindall_fresh vlvs me in
           let auxs = List.map (fun v -> pv_loc (oget v.ov_name), v.ov_type) auxs in
           let s1 =

@@ -172,7 +172,7 @@ module LowMatch = struct
     let me, pvs =
       let cvars =
         List.map
-          (fun (x, xty) -> { ov_name = Some (EcIdent.name x); ov_type = xty; })
+          (fun (x, xty) -> { ov_quantum = `Classical; ov_name = Some (EcIdent.name x); ov_type = xty; })
           cvars in
       EcMemory.bindall_fresh cvars me0 in
 

@@ -2351,6 +2351,8 @@ and transmodsig_body
         let tyargs =
           List.map
             (fun (x, ty) -> {
+                 (* FIXME QUANTUM *)
+                 ov_quantum = `Classical;
                  ov_name = omap unloc x.pl_desc;
                  ov_type = transty_for_decl env ty }) f.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
         in
@@ -2582,12 +2584,12 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
     let me = transmod ~attop:false env pe in
     [], [me.me_name, MI_Module me]
 
-  | Pst_var (_quantum, xs, ty) ->  (* FIXME QUANTUM *)
+  | Pst_var (v_quantum, xs, ty) ->  (* FIXME QUANTUM *)
       let ty    = transty_for_decl env ty in
       let items =
         List.map
           (fun { pl_desc = x } ->
-            (x, MI_Variable { v_name = x; v_type = ty; }))
+            (x, MI_Variable { v_quantum; v_name = x; v_type = ty; }))
           xs in
 
       [], items
@@ -2604,6 +2606,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
           | Some os -> unloc os
         in
         List.map (fun (s,pty) -> {
+              v_quantum = `Classical; (* FIXME QUANTUM *)
               v_name = checked_name s;
               v_type = transty tp_uni env ue pty}, s.pl_loc) decl.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
       in
@@ -2751,7 +2754,10 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
     end;
 
     (* building the list of locals *)
-    let xs = List.map2 (fun x ty -> {v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
+    let xs =
+      (* FIXME QUANTUM *)
+      List.map2 (fun x ty ->
+          {v_quantum = `Classical; v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
     let memenv = fundef_add_symbol env memenv xs in
     locals := xs :: !locals;
     init |> oiter
@@ -2859,8 +2865,11 @@ and transinstr
           tyerror (loc x) env (UnknownInstrMetaVar (unloc x))
     end
 
+  | PSmeasure (plvalue, prvalue, measure) (* FIXME QUANTUM *) ->
+      assert false
+
   | PSunitary (plvalue, prvalue) (* FIXME QUANTUM *)
-  | PSmeasure (plvalue, prvalue) (* FIXME QUANTUM *)
+
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function
         | PEapp ({ pl_desc = PEident (f, None) }, _)
@@ -3751,12 +3760,11 @@ and trans_memtype env ue (pmemtype : pmemtype) : memtype =
 
     (* building the list of locals *)
     let xs = List.map2 (fun x ty ->
-        {v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
+        (* FIXME QUANTUM *)
+        {v_quantum = `Classical; v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
 
-    let mt = fundef_add_symbol_mt env memtype xs in
-    (* REM *)
-    Format.eprintf "dump: %s@." (EcMemory.dump_memtype mt);
-    mt
+    fundef_add_symbol_mt env memtype xs
+
   in
 
   List.fold_left add_decl mt pmemtype

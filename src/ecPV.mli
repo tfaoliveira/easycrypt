@@ -1,5 +1,4 @@
 (* -------------------------------------------------------------------- *)
-open EcMaps
 open EcPath
 open EcTypes
 open EcModules

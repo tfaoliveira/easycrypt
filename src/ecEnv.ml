@@ -75,7 +75,7 @@ module Sip = EcMaps.Set.MakeOfMap(Mip)
 let ippath_as_path (ip : ipath) =
   match ip with IPPath p -> p | _ -> assert false
 
-type glob_var_bind = EcTypes.ty
+type glob_var_bind = quantum * EcTypes.ty
 
 type mc = {
   mc_parameters : ((EcIdent.t * module_type) list) option;
@@ -1021,7 +1021,7 @@ module MC = struct
 
       | MI_Variable v ->
           let (_subp2, mep) = subp2 v.v_name in
-          let vty  = v.v_type in
+          let vty  = v.v_quantum, v.v_type in
             (_up_var false mc v.v_name (IPPath mep, vty), None)
 
       | MI_Function f ->
@@ -1066,7 +1066,7 @@ module MC = struct
       | MI_Module _ -> assert false
 
       | MI_Variable v ->
-          _up_var false mc v.v_name (xpath v.v_name, v.v_type)
+          _up_var false mc v.v_name (xpath v.v_name, (v.v_quantum, v.v_type))
 
 
       | MI_Function f ->
@@ -1651,7 +1651,8 @@ module Fun = struct
 
   let actmem_post me fun_ =
     let mem = EcMemory.empty_local ~witharg:false me in
-    add_in_memenv mem { ov_name = Some res_symbol; ov_type = fun_.f_sig.fs_ret}
+    add_in_memenv mem
+      { ov_quantum = `Classical; ov_name = Some res_symbol; ov_type = fun_.f_sig.fs_ret}
 
   let actmem_body me fun_ =
     match fun_.f_def with
@@ -1768,8 +1769,8 @@ module Var = struct
       | [] ->
           let memenv = oget (Memory.byid side env) in
           begin match EcMemory.lookup_me (snd qname) memenv with
-          | Some (v, Some pa, _) -> Some (`Proj(pv_arg, pa), v.v_type)
-          | Some (v, None, _)    -> Some (`Var (pv_loc v.v_name), v.v_type)
+          | Some (v, Some pa, _) -> Some (`Proj(pv_arg, pa), (v.v_quantum, v.v_type))
+          | Some (v, None, _)    -> Some (`Var (pv_loc v.v_name), (v.v_quantum, v.v_type))
           | None                 -> None
           end
       | _ -> None
@@ -2065,7 +2066,7 @@ module Mod = struct
       | MI_Variable v ->
         let vp  = EcPath.xpath p v.v_name in
         let ip  = fst (oget (ipath_of_xpath vp)) in
-        let obj = v.v_type in
+        let obj = v.v_quantum, v.v_type in
         MC.import_var ip obj env
 
       | _ -> env
@@ -2239,7 +2240,7 @@ module NormMp = struct
   let add_var env xp us =
     let xp = xp_glob xp in
     let xp = norm_xpv env xp in
-    let ty = Var.by_xpath xp env in
+    let _, ty = Var.by_xpath xp env in
     { us with us_pv = Mx.add xp ty us.us_pv }
 
   let add_glob id us =
@@ -3445,7 +3446,7 @@ let initial gstate = empty gstate
 
 (* -------------------------------------------------------------------- *)
 type ebinding = [
-  | `Variable  of EcTypes.ty
+  | `Variable  of quantum * EcTypes.ty
   | `Function  of function_
   | `Module    of module_expr
   | `ModType   of module_sig

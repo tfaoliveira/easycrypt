@@ -81,7 +81,7 @@ let t_kill_r side cpos olen tc =
 let alias_stmt env id (pf, _) me i =
   let dopv ty =
     let id       = odfl "x" (omap EcLocation.unloc id) in
-    let id       = { ov_name = Some id; ov_type = ty; } in
+    let id       = { ov_quantum = `Classical; ov_name = Some id; ov_type = ty; } in
     let (me, id) = EcMemory.bind_fresh id me in
     (* oget cannot fail — Some in, Some out *)
     let pv       = pv_loc (oget id.ov_name)  in
@@ -115,7 +115,7 @@ let t_alias_r side cpos id g =
 let set_stmt (fresh, id) e =
   let get_i me =
     let id       = EcLocation.unloc id in
-    let  v       = { ov_name = Some id; ov_type = e.e_ty } in
+    let  v       = { ov_quantum = `Classical; ov_name = Some id; ov_type = e.e_ty } in
     let (me, id) = EcMemory.bind_fresh v me in
     (* oget cannot fail — Some in, Some out *)
     let pv       = pv_loc (oget id.ov_name) in

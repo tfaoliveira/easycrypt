@@ -12,22 +12,6 @@ type memory = EcIdent.t
 let mem_equal = EcIdent.id_equal
 
 (* -------------------------------------------------------------------- *)
-type quantum = [`Quantum | `Classical]
-
-let is_quantum vs : quantum =
-  `Classical
-
-(*
-  match vs with
-  | [] ->
-     `Classical
-
-  | v :: vs ->
-      assert (List.for_all (fun v' -> v'.ov_quantum = v.ov_quantum) vs);
-      v.ov_quantum
-*)
-
-(* -------------------------------------------------------------------- *)
 type proj_arg = {
   arg_quantum : quantum;    (* classical/quantum *)
   arg_ty      : ty;         (* type of the procedure argument "arg" *)
@@ -96,20 +80,16 @@ let lmt_iter_ty_ (f : ty -> unit) (lmt : local_memtype_) =
 (* -------------------------------------------------------------------- *)
 type local_memtype = {
   classical_lmt : local_memtype_;
-  quantum_lmt   : local_memtype_ option;
+  quantum_lmt   : local_memtype_;
 }
 
 let lmt_hash (lmem : local_memtype) =
-  EcUtils.ofold
-    (fun lm i -> Why3.Hashcons.combine i (lmem_hash_ lm))
-    (lmem_hash_ lmem.classical_lmt)
-    lmem.quantum_lmt
+  Why3.Hashcons.combine (lmem_hash_ lmem.classical_lmt) (lmem_hash_ lmem.quantum_lmt)
 
 let lmt_fv (lmem : local_memtype) =
-  let fv = EcIdent.Mid.empty in
-  let fv = lmt_fv_ lmem.classical_lmt fv in
-  let fv = ofold lmt_fv_ fv lmem.quantum_lmt in
-  fv
+  EcIdent.Mid.empty
+  |> lmt_fv_ lmem.classical_lmt
+  |> lmt_fv_ lmem.quantum_lmt
 
 let lmt_equal
     (ty_equal : ty -> ty -> bool)
@@ -117,11 +97,11 @@ let lmt_equal
     (mt2      : local_memtype)
   =
      lmt_equal_ ty_equal mt1.classical_lmt mt2.classical_lmt
-  && oeq (lmt_equal_ ty_equal) mt1.quantum_lmt mt2.quantum_lmt
+  && lmt_equal_ ty_equal mt1.quantum_lmt mt2.quantum_lmt
 
 let lmt_iter_ty (f : ty -> unit) (lmem : local_memtype) =
   lmt_iter_ty_ f lmem.classical_lmt;
-  oiter (lmt_iter_ty_ f) lmem.quantum_lmt
+  lmt_iter_ty_ f lmem.quantum_lmt
 
 (* -------------------------------------------------------------------- *)
 
@@ -199,24 +179,18 @@ exception DuplicatedMemoryBinding of symbol
 exception NoQuantumMemory
 
 (* -------------------------------------------------------------------- *)
-let empty_local_mt ~(witharg : bool) (quantum : quantum) =
+let empty_local_mt ~(witharg : bool) =
   let empty (argname : symbol) =
     let name = if witharg then Some argname else None in
     mk_lmt name [] Msym.empty in
 
-  let classical_lmt = empty arg_symbol
+  let classical_lmt = empty arg_symbol in
+  let quantum_lmt = empty qarg_symbol in
 
-  and quantum_lmt =
-    match quantum with
-    | `Classical ->
-       None
-    | `Quantum ->
-       Some (empty qarg_symbol)
+  Lmt_concrete (Some { classical_lmt; quantum_lmt; })
 
-  in Lmt_concrete (Some { classical_lmt; quantum_lmt; })
-
-let empty_local ~(witharg : bool) (quantum : quantum) (me : memory) =
-  me, empty_local_mt ~witharg quantum
+let empty_local ~(witharg : bool) (me : memory) =
+  me, empty_local_mt ~witharg
 
 (* -------------------------------------------------------------------- *)
 let schema_mt =
@@ -238,25 +212,25 @@ let is_bound_lmt_ (lmt : local_memtype_) (x : symbol) =
 
 let is_bound_lmt (lmem : local_memtype) (x : symbol) =
      is_bound_lmt_ lmem.classical_lmt x
-  || omap_dfl (is_bound_lmt_^~ x) false lmem.quantum_lmt
+  || is_bound_lmt_ lmem.quantum_lmt x
 
-let is_bound (mt : memtype) (x : symbol) =
+let is_bound (x : symbol) (mt : memtype) =
   match mt with
   | Lmt_schema -> false
   | Lmt_concrete None -> false
   | Lmt_concrete (Some lmem) -> is_bound_lmt lmem x
 
-let is_bound_pv (mt : memtype) (pv : prog_var) =
+let is_bound_pv (pv : prog_var) (mt : memtype) =
   match pv with
   | PVglob _ -> false
-  | PVloc id -> is_bound mt id
+  | PVloc id -> is_bound id mt
 
 (* -------------------------------------------------------------------- *)
 type lookup = (variable * proj_arg option * int option) option
 
 let lmt_lookup_ (lmt : local_memtype_) (q : quantum) (x : symbol) =
   let mk (v_name : symbol) (v_type : ty) =
-    { v_name; v_type; } in      (* FIXME: quantum *)
+    { v_quantum = q; v_name; v_type; } in
 
   if lmt.mt_name = Some x then
     Some (mk x lmt.mt_ty, None, None)
@@ -277,9 +251,9 @@ let lmt_lookup_ (lmt : local_memtype_) (q : quantum) (x : symbol) =
 let lmt_lookup (lmem : local_memtype) (x : symbol) : lookup =
   match lmt_lookup_ lmem.classical_lmt `Classical  x with
   | Some _ as aout -> aout
-  | None -> obind (fun lmt -> lmt_lookup_ lmt `Quantum x) lmem.quantum_lmt
+  | None -> lmt_lookup_ lmem.quantum_lmt `Quantum x
 
-let lookup (mt : memtype) (x : symbol) : lookup =
+let lookup (x : symbol) (mt : memtype) : lookup =
   match mt with
   | Lmt_schema ->
      None
@@ -290,35 +264,33 @@ let lookup (mt : memtype) (x : symbol) : lookup =
   | Lmt_concrete (Some lmem) ->
      lmt_lookup lmem x
 
-let lookup_me (me : memenv) (x : symbol) =
-  lookup (snd me) x
+let lookup_me (x : symbol) (me : memenv) =
+  lookup x (snd me)
 
 (* -------------------------------------------------------------------- *)
-let lmt_bindall_ (vs : ovariable list) (lmt : local_memtype_) =
-  let add_proj mt_proj i v =
+
+let lmt_bind_ (lmt : local_memtype_) (v : ovariable) =
+  let mt_decl = lmt.mt_decl @ [v] in
+  let mt_proj =
     match v.ov_name with
-    | None -> mt_proj
-    | Some x ->
-        if lmt.mt_name = Some x then raise (DuplicatedMemoryBinding x);
-        let merger = function
-          | Some _ -> raise (DuplicatedMemoryBinding x)
-          | None   -> Some (lmt.mt_n + i, v.ov_type)
-        in Msym.change merger x mt_proj
+    | None -> lmt.mt_proj
+    | Some x -> Msym.add x (lmt.mt_n, v.ov_type) lmt.mt_proj
   in
-  let mt_decl = lmt.mt_decl @ vs in
-  let mt_proj = List.fold_lefti add_proj lmt.mt_proj vs in
   mk_lmt lmt.mt_name mt_decl mt_proj
 
-(* -------------------------------------------------------------------- *)
-let lmt_bindall (vs : ovariable list) (lmt : local_memtype) =
-  match is_quantum vs with
-  | `Classical ->
-     { lmt with classical_lmt = lmt_bindall_ vs lmt.classical_lmt }
 
-  | `Quantum ->
-     let quantum_lmt =
-       lmt_bindall_ vs (oget ~exn:NoQuantumMemory lmt.quantum_lmt)
-     in { lmt with quantum_lmt = Some (quantum_lmt) }
+let lmt_bind (lmt : local_memtype) (v : ovariable) =
+  let _ =
+    match v.ov_name with
+    | None -> ()
+    | Some x -> if is_bound_lmt lmt x then raise (DuplicatedMemoryBinding x)
+  in
+  match v.ov_quantum with
+  | `Classical -> { lmt with classical_lmt = lmt_bind_ lmt.classical_lmt v }
+  | `Quantum   -> { lmt with quantum_lmt   = lmt_bind_ lmt.quantum_lmt   v }
+
+let lmt_bindall (vs : ovariable list) (lmt : local_memtype) =
+  List.fold_left lmt_bind lmt vs
 
 (* -------------------------------------------------------------------- *)
 let mt_bindall (vs : ovariable list) (mt : memtype) : memtype =
@@ -333,51 +305,25 @@ let bindall (vs : ovariable list) ((m, mt) : memenv) : memenv =
   (m, mt_bindall vs mt)
 
 (* -------------------------------------------------------------------- *)
-let bindall_fresh (vs : ovariable list) ((m, mt) : memenv) =
-  match mt with
-  | Lmt_schema | Lmt_concrete None ->
-     assert false
+let bind_fresh (v : ovariable) ((m, mt) : memenv) =
+  let v =
+    match v.ov_name with
+    | None -> v
+    | Some x ->
+        if is_bound x mt then
+          let rec for_idx idx =
+            let x' = Printf.sprintf "%s%d" x idx in
+              if is_bound x' mt then for_idx (idx+1)
+              else x' in
+          let x' = for_idx 0 in
+          {v with ov_name = Some x' }
+        else
+          v
+  in
+  bindall [v] (m,mt), v
 
-  | Lmt_concrete (Some lmt) ->
-     let boundmap_of_lmt lmt map =
-       let map = ofold (fun x map -> Ssym.add x map) map lmt.mt_name in
-       let map = Msym.fold (fun x _ map -> Ssym.add x map) lmt.mt_proj map in
-       map in
-
-     let bmap =
-       let map = Ssym.empty in
-       let map = boundmap_of_lmt lmt.classical_lmt map in
-       let map = ofold boundmap_of_lmt map lmt.quantum_lmt in
-       map in
-
-    let fresh_pv bmap v =
-      match v.ov_name with
-      | None ->
-         (bmap, v)
-
-      | Some name ->
-          let name =
-            match Ssym.mem name bmap with
-            | false ->
-               name
-            | true ->
-               let rec for_idx idx =
-                 let x = Printf.sprintf "%s%d" name idx in
-                 if   Ssym.mem x bmap
-                 then for_idx (idx+1)
-                 else x
-               in for_idx 0 in
-          let bmap = Ssym.add name bmap in
-          (bmap, { v with ov_name = Some name }) in
-
-    let _, vs = List.map_fold fresh_pv bmap vs in
-    let lmt = lmt_bindall vs lmt in
-    (m, Lmt_concrete (Some lmt)), vs
-
-(* -------------------------------------------------------------------- *)
-let bind_fresh (v : ovariable) (me : memenv) =
-  let me, vs = bindall_fresh [v] me in
-  (me, as_seq1 vs)
+let bindall_fresh (vs : ovariable list) (me : memenv) =
+  List.map_fold (fun me v -> bind_fresh v me) me vs
 
 (* -------------------------------------------------------------------- *)
 let lmt_subst_ (st : ty -> ty) (lmt : local_memtype_) =
@@ -398,9 +344,9 @@ let lmt_subst_ (st : ty -> ty) (lmt : local_memtype_) =
 (* -------------------------------------------------------------------- *)
 let lmt_subst (st : ty -> ty) (lmem : local_memtype) =
   let classical_lmt = lmt_subst_ st lmem.classical_lmt in
-  let quantum_lmt   = OSmart.omap (lmt_subst_ st) lmem.quantum_lmt in
+  let quantum_lmt   = lmt_subst_ st lmem.quantum_lmt in
 
-    if   classical_lmt == lmem.classical_lmt && quantum_lmt == lmem.quantum_lmt
+    if classical_lmt == lmem.classical_lmt && quantum_lmt == lmem.quantum_lmt
     then lmem
     else { classical_lmt; quantum_lmt; }
 
@@ -441,18 +387,18 @@ let lmt_get_name_ (lmt : local_memtype_) (s : symbol) (p : int option) =
 
 (* -------------------------------------------------------------------- *)
 let lmt_get_name
-    (lmem   : local_memtype)
-    ((q, s) : quantum * symbol)
-    (p      : int option)
+    (lmem : local_memtype)
+    (s    : symbol)
+    (p    : int option)
   =
-  match q with
-  | `Classical -> lmt_get_name_ lmem.classical_lmt s p
-  | `Quantum   -> obind (fun lmt -> lmt_get_name_ lmt s p) lmem.quantum_lmt
+  match lmt_get_name_ lmem.classical_lmt s p with
+  | Some _ as s -> s
+  | None -> lmt_get_name_ lmem.quantum_lmt s p
 
 (* -------------------------------------------------------------------- *)
 let mt_get_name
     (mt : memtype)
-    (qs : quantum * symbol)
+    (s  : symbol)
     (p  : int option)
   =
   match mt with
@@ -463,11 +409,11 @@ let mt_get_name
      None
 
   | Lmt_concrete (Some mt) ->
-     lmt_get_name mt qs p
+     lmt_get_name mt s p
 
 (* -------------------------------------------------------------------- *)
-let get_name ((_, mt) : memenv) (qs : quantum * symbol) (p : int option) =
-  mt_get_name mt qs p
+let get_name (s : symbol) (p : int option) ((_, mt) : memenv)  =
+  mt_get_name mt s p
 
 (* -------------------------------------------------------------------- *)
 let lmt_local_type_ (lmt : local_memtype_) =
@@ -475,7 +421,7 @@ let lmt_local_type_ (lmt : local_memtype_) =
 
 let lmt_local_type (lmem : local_memtype) =
   let cl = lmt_local_type_ lmem.classical_lmt in
-  let ql = omap lmt_local_type_ lmem.quantum_lmt in
+  let ql = lmt_local_type_ lmem.quantum_lmt in
   (cl, ql)
 
 let mt_local_type (mt : memtype) =
@@ -495,7 +441,7 @@ let has_locals mt = match mt with
 
 (* -------------------------------------------------------------------- *)
 type lmt_printing = symbol option * ovariable list
-type mt_printing  = lmt_printing * lmt_printing option
+type mt_printing  = lmt_printing * lmt_printing
 
 let for_printing (mt : memtype) : mt_printing option =
   match mt with
@@ -507,4 +453,4 @@ let for_printing (mt : memtype) : mt_printing option =
 
   | Lmt_concrete (Some mt) ->
      let doit mt = mt.mt_name, mt.mt_decl in
-     Some (doit mt.classical_lmt, omap doit mt.quantum_lmt)
+     Some (doit mt.classical_lmt, doit mt.quantum_lmt)

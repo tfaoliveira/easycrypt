@@ -119,7 +119,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Var : sig
-  type t = EcTypes.ty
+  type t = quantum * EcTypes.ty
 
   val by_xpath     : xpath -> env -> t
   val by_xpath_opt : xpath -> env -> t option
@@ -130,11 +130,9 @@ module Var : sig
   val lookup_local_opt : symbol -> env -> (EcIdent.t * EcTypes.ty) option
 
   val lookup_progvar     : ?side:memory -> qsymbol -> env ->
-    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] *
-     EcTypes.ty)
+    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] * t)
   val lookup_progvar_opt : ?side:memory -> qsymbol -> env ->
-    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] *
-     EcTypes.ty) option
+    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] * t) option
 
   exception DuplicatedLocalBinding of EcIdent.t
 
@@ -143,8 +141,8 @@ module Var : sig
   val bind_locals : ?uniq:bool -> (EcIdent.t * EcTypes.ty) list -> env -> env
 
   (* Program variables binding *)
-  val bind_pvglob    : symbol -> EcTypes.ty -> env -> env
-  val bindall_pvglob : (EcSymbols.symbol * EcTypes.ty) list -> env -> env
+  val bind_pvglob    : symbol -> t -> env -> env
+  val bindall_pvglob : (symbol * t) list -> env -> env
 
 end
 
@@ -448,7 +446,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 type ebinding = [
-  | `Variable  of EcTypes.ty
+  | `Variable  of quantum * EcTypes.ty
   | `Function  of function_
   | `Module    of module_expr
   | `ModType   of module_sig

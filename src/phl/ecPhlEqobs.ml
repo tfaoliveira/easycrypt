@@ -20,7 +20,7 @@ let extend_body fsig body =
       let named_arg ov =
         match ov.ov_name with
         | None   -> assert false; (* only called on concrete procedures *)
-        | Some v -> { v_name = v; v_type = ov.ov_type }
+        | Some v -> { v_quantum = `Classical; v_name = v; v_type = ov.ov_type }
       in
       List.map named_arg fsig.fs_anames
     in

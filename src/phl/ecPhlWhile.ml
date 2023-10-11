@@ -632,14 +632,14 @@ let process_async_while (winfos : EP.async_while_info) tc =
         Mid.fold (fun mh pvs fp ->
           let mty = Mid.find_opt mh mtypes in
           let fp  =
-            EcPV.Mnpv.fold (fun pv (x, ty) fp ->
+            Mnpv.fold (fun pv (x, ty) fp ->
               f_let1 x (f_pvar pv ty mh) fp)
             (EcPV.PVMap.raw pvs) fp
           in f_forall_mems [mh, oget mty] fp)
         m fp
       and cnt =
         Mid.fold
-          (fun _ pvs i -> i + 1 + EcPV.Mnpv.cardinal (EcPV.PVMap.raw pvs))
+          (fun _ pvs i -> i + 1 + Mnpv.cardinal (EcPV.PVMap.raw pvs))
           m 0
       in (cnt, fp)
   in

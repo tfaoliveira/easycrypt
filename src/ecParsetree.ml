@@ -95,21 +95,22 @@ and 'a rfield = {
 (* -------------------------------------------------------------------- *)
 type plvalue_r =
   | PLvSymbol of pqsymbol
-  | PLvTuple  of pqsymbol list
+  | PLvTuple  of plvalue list
+  | PLvProji  of plvalue * int
   | PLvMap    of pqsymbol * ptyannot option * pexpr
 
 and plvalue = plvalue_r located
 
 type funargs = {
-  fa_classical : (pexpr list);
-  fa_quantum   : (pqsymbol list); (* FIXME this should be just pqsymbol *)
+  fa_classical : pexpr list;
+  fa_quantum   : plvalue list;
 }
 
 type pinstr_r =
   | PSident  of psymbol
   | PSasgn   of plvalue * pexpr
   | PSunitary of plvalue * pexpr
-  | PSmeasure of plvalue * pexpr
+  | PSmeasure of plvalue * plvalue * pexpr
   | PSrnd    of plvalue * pexpr
   | PScall   of plvalue option * pgamepath * funargs
   | PSif     of pscond * pscond list * pstmt

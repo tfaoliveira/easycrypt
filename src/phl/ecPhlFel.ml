@@ -178,7 +178,7 @@ let t_failure_event_r (at_pos, cntr, ash, q, f_event, pred_specs, inv) tc =
     let eqgs = List.map (fun m -> f_eqglob m mh m mi) gs in
     let eqparams =
       let vs = fsig.fs_anames in
-      let var_of_ovar ov = { v_name = oget ov.ov_name; v_type = ov.ov_type } in
+      let var_of_ovar ov = { v_quantum = `Classical; v_name = oget ov.ov_name; v_type = ov.ov_type } in
       let f_x x = assert (is_some x.ov_name); f_pvloc (var_of_ovar x) mh in
       f_eq (f_tuple (List.map f_x vs)) pr.pr_args in
     let pre = f_ands (eqparams :: (eqxs@eqgs)) in

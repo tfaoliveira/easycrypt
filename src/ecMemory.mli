@@ -7,7 +7,6 @@ type memory = EcIdent.t
 val mem_equal : memory -> memory -> bool
 
 (* -------------------------------------------------------------------- *)
-type quantum = [`Quantum | `Classical]
 
 type proj_arg = {
   arg_quantum : quantum;    (* classical/quantum *)
@@ -35,8 +34,8 @@ val memory   : memenv -> memory
 val memtype  : memenv -> memtype
 
 (* -------------------------------------------------------------------- *)
-val empty_local    : witharg:bool -> quantum -> memory -> memenv
-val empty_local_mt : witharg:bool -> quantum -> memtype
+val empty_local    : witharg:bool -> memory -> memenv
+val empty_local_mt : witharg:bool -> memtype
 
 val schema    : memory -> memenv
 val schema_mt : memtype
@@ -57,16 +56,16 @@ val bindall_fresh : ovariable list -> memenv -> memenv * ovariable list
 (* -------------------------------------------------------------------- *)
 type lookup = (variable * proj_arg option * int option) option
 
-val lookup : memtype -> symbol -> lookup
+val lookup : symbol -> memtype -> lookup
 
-val lookup_me : memenv -> symbol -> lookup
-
-(* -------------------------------------------------------------------- *)
-val get_name : memenv -> quantum * symbol -> int option -> symbol option
+val lookup_me : symbol -> memenv -> lookup
 
 (* -------------------------------------------------------------------- *)
-val is_bound : memtype -> symbol -> bool
-val is_bound_pv : memtype -> EcTypes.prog_var -> bool
+val get_name : symbol -> int option -> memenv -> symbol option
+
+(* -------------------------------------------------------------------- *)
+val is_bound : symbol -> memtype -> bool
+val is_bound_pv : EcTypes.prog_var -> memtype -> bool
 
 (* -------------------------------------------------------------------- *)
 val mt_subst : (ty -> ty) -> memtype -> memtype
@@ -74,10 +73,10 @@ val me_subst : memory EcIdent.Mid.t -> (ty -> ty) -> memenv -> memenv
 
 (* -------------------------------------------------------------------- *)
 type lmt_printing = symbol option * ovariable list
-type mt_printing  = lmt_printing * lmt_printing option
+type mt_printing  = lmt_printing * lmt_printing
 
 (* -------------------------------------------------------------------- *)
-val local_type : memtype -> (ty * ty option) option
+val local_type : memtype -> (ty * ty) option
 val has_locals : memtype -> bool
 
 (* -------------------------------------------------------------------- *)

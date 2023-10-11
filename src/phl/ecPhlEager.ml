@@ -261,7 +261,7 @@ let t_eager_fun_def_r tc =
     match fdef.f_ret with
     | None -> f_tt, mem, fdef.f_body
     | Some e ->
-      let v = { ov_name = Some "result"; ov_type = e.e_ty } in
+      let v = { ov_quantum = `Classical; ov_name = Some "result"; ov_type = e.e_ty } in
       let mem, s = EcMemory.bind_fresh v mem in
       (* oget cannot fail — Some in, Some out *)
       let x = EcTypes.pv_loc (oget s.ov_name) in

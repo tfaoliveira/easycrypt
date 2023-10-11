@@ -68,7 +68,7 @@ let subst_pre env fs (m : memory) s =
   let fresh ov =
     match ov.ov_name with
     | None   -> assert false;
-    | Some v -> { v_name = v; v_type = ov.ov_type }
+    | Some v -> { v_quantum = `Classical; v_name = v; v_type = ov.ov_type }
   in
   let v = List.map (fun v -> f_pvloc (fresh v) m) fs.fs_anames in
   PVM.add env pv_arg m (f_tuple v) s
@@ -557,13 +557,13 @@ module ToCodeLow = struct
 
     let (me, args) = EcMemory.bindall_fresh args me in
 
-    let res = { ov_name = Some "r"; ov_type = fd.f_sig.fs_ret; } in
+    let res = { ov_quantum = `Classical; ov_name = Some "r"; ov_type = fd.f_sig.fs_ret; } in
 
     let me, res = EcMemory.bind_fresh res me in
 
     let eargs = List.map (fun v -> e_var (pv_loc (oget v.ov_name)) v.ov_type) args in
     let args =
-      let var ov = { v_name = oget ov.ov_name; v_type = ov.ov_type } in
+      let var ov = { v_quantum = `Classical; v_name = oget ov.ov_name; v_type = ov.ov_type } in
       List.map var args
     in
 

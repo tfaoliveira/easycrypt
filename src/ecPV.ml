@@ -509,7 +509,7 @@ let rec f_write_r ?(except=Sx.empty) env w f =
 
   | FBdef fdef ->
       let add x w =
-        let ty = Var.by_xpath x env in
+        let _, ty = Var.by_xpath x env in
         PV.add env (pv_glob x) ty w in
       List.fold_left folder
         (EcPath.Sx.fold add fdef.f_uses.us_writes w )
@@ -566,7 +566,7 @@ let rec f_read_r env r f =
 
   | FBdef fdef ->
       let add x r =
-        let ty = Var.by_xpath x env in
+        let _, ty = Var.by_xpath x env in
         PV.add env (pv_glob x) ty r in
       let r = EcPath.Sx.fold add fdef.f_uses.us_reads r in
       List.fold_left (f_read_r env) r fdef.f_uses.us_calls

@@ -331,11 +331,19 @@ module Tvar = struct
 end
 
 (* -------------------------------------------------------------------- *)
+type quantum = [`Quantum | `Classical]
+
+let pp_quantum = function
+  | `Classical -> ""
+  | `Quantum -> "quantum "
+(* -------------------------------------------------------------------- *)
 type ovariable = {
+  ov_quantum : quantum;
   ov_name : EcSymbols.symbol option;
   ov_type : ty;
 }
 
+let ov_quantum { ov_quantum = x } = x
 let ov_name { ov_name = x } = x
 let ov_type { ov_type = x } = x
 
@@ -345,14 +353,17 @@ let ov_hash v =
     (ty_hash v.ov_type)
 
 let ov_equal vd1 vd2 =
+  vd1.ov_quantum = vd2.ov_quantum &&
   EcUtils.opt_equal (=) vd1.ov_name vd2.ov_name &&
   ty_equal vd1.ov_type vd2.ov_type
 
 type variable = {
+  v_quantum : quantum;
   v_name : EcSymbols.symbol;   (* can be "_" *)
   v_type : ty;
 }
 
+let v_quantum { v_quantum = x } = x
 let v_name { v_name = x } = x
 let v_type { v_type = x } = x
 
@@ -362,11 +373,12 @@ let v_hash v =
     (ty_hash v.v_type)
 
 let v_equal vd1 vd2 =
+  vd1.v_quantum = vd2.v_quantum &&
   vd1.v_name = vd2.v_name &&
   ty_equal vd1.v_type vd2.v_type
 
-let ovar_of_var { v_name = n; v_type = t } =
-  { ov_name = Some n; ov_type = t }
+let ovar_of_var { v_quantum = q; v_name = n; v_type = t } =
+  { ov_quantum = q; ov_name = Some n; ov_type = t }
 
 let ty_fv_and_tvar (ty : ty) =
   EcIdent.fv_union ty.ty_fv (Mid.map (fun () -> 1) (Tvar.fv ty))

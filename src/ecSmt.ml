@@ -465,7 +465,9 @@ and trans_tydecl genv (p, tydecl) =
 let trans_memtype ((genv, _) as env) mt =
   match EcMemory.local_type mt with
   | None -> ty_mem
-  | Some ty ->
+  | Some (ty, qty) ->
+    (* FIXME QUANTUM *)
+    assert (ty_equal qty tunit);
     let ty = trans_ty env ty in
     wty_tuple genv [ty; ty_mem]
 
