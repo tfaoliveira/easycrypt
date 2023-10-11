@@ -435,6 +435,16 @@ let mt_local_type (mt : memtype) =
 let local_type = mt_local_type  (* FIXME *)
 
 (* -------------------------------------------------------------------- *)
+let has_quantum (mt : memtype) =
+  match mt with
+  | Lmt_schema
+  | Lmt_concrete None ->
+     false
+
+  | Lmt_concrete (Some lmem) ->
+     List.is_empty lmem.quantum_lmt.mt_decl
+
+(* -------------------------------------------------------------------- *)
 let has_locals mt = match mt with
   | Lmt_schema -> assert false
   | Lmt_concrete lmem -> Option.is_some lmem

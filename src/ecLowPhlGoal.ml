@@ -148,26 +148,81 @@ let tc1_pos_last_while  tc s = pf_pos_last_while  !!tc s
 let tc1_pos_last_assert tc s = pf_pos_last_assert !!tc s
 
 (* -------------------------------------------------------------------- *)
-let pf_as_hoareF   pe c = as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
-let pf_as_hoareS   pe c = as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe
-let pf_as_choareF  pe c = as_phl (`CHoare `Pred) (fun () -> destr_cHoareF  c) pe
-let pf_as_choareS  pe c = as_phl (`CHoare `Stmt) (fun () -> destr_cHoareS  c) pe
-let pf_as_bdhoareF pe c = as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
-let pf_as_bdhoareS pe c = as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
-let pf_as_equivF   pe c = as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
-let pf_as_equivS   pe c = as_phl (`Equiv  `Stmt) (fun () -> destr_equivS   c) pe
-let pf_as_eagerF   pe c = as_phl `Eager          (fun () -> destr_eagerF   c) pe
+let check (q : quantum) (pe : proofenv) (c : form) =
+  let check me =
+    match q with
+    | `Classical ->
+       if EcMemory.has_quantum (EcMemory.memtype me) then
+         assert false
+    | `Quantum ->
+       ()
+  in
+
+  let env =
+    let goal = FApi.get_main_pregoal pe in
+    EcEnv.LDecl.baseenv goal.g_hyps
+ in
+
+  match c.f_node with
+  | FhoareF f ->
+     let m1, m2 = EcEnv.Fun.hoareF_memenv f.hf_f env in
+     check m1; check m2
+
+  | FhoareS s ->
+     check s.hs_m
+
+  | FcHoareF f ->
+     let m1, m2 = EcEnv.Fun.hoareF_memenv f.chf_f env in
+     check m1; check m2
+
+  | FcHoareS  s ->
+     check s.chs_m
+
+  | FbdHoareF f ->
+     let m1, m2 = EcEnv.Fun.hoareF_memenv f.bhf_f env in
+     check m1; check m2
+
+  | FbdHoareS s ->
+     check s.bhs_m
+
+  | FequivF f ->
+     let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.ef_fl f.ef_fr env in
+     check m1; check m2; check m3; check m4
+
+  | FequivS s ->
+     check s.es_ml;
+     check s.es_mr
+
+  | FeagerF f ->
+     let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.eg_fl f.eg_fr env in
+     check m1; check m2; check m3; check m4
+
+  | Fpr p ->
+     let m1, m2 = EcEnv.Fun.hoareF_memenv p.pr_fun env in
+     check m1; check m2
+
+  | _ -> ()
+
+let pf_as_hoareF   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
+let pf_as_hoareS   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe
+let pf_as_choareF  ?(q = `Classical) pe c = check q pe c; as_phl (`CHoare `Pred) (fun () -> destr_cHoareF  c) pe
+let pf_as_choareS  ?(q = `Classical) pe c = check q pe c; as_phl (`CHoare `Stmt) (fun () -> destr_cHoareS  c) pe
+let pf_as_bdhoareF ?(q = `Classical) pe c = check q pe c; as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
+let pf_as_bdhoareS ?(q = `Classical) pe c = check q pe c; as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
+let pf_as_equivF   ?(q = `Classical) pe c = check q pe c; as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
+let pf_as_equivS   ?(q = `Classical) pe c = check q pe c; as_phl (`Equiv  `Stmt) (fun () -> destr_equivS   c) pe
+let pf_as_eagerF   ?(q = `Classical) pe c = check q pe c; as_phl `Eager          (fun () -> destr_eagerF   c) pe
 
 (* -------------------------------------------------------------------- *)
-let tc1_as_hoareF   tc = pf_as_hoareF   !!tc (FApi.tc1_goal tc)
-let tc1_as_hoareS   tc = pf_as_hoareS   !!tc (FApi.tc1_goal tc)
-let tc1_as_choareF  tc = pf_as_choareF  !!tc (FApi.tc1_goal tc)
-let tc1_as_choareS  tc = pf_as_choareS  !!tc (FApi.tc1_goal tc)
-let tc1_as_bdhoareF tc = pf_as_bdhoareF !!tc (FApi.tc1_goal tc)
-let tc1_as_bdhoareS tc = pf_as_bdhoareS !!tc (FApi.tc1_goal tc)
-let tc1_as_equivF   tc = pf_as_equivF   !!tc (FApi.tc1_goal tc)
-let tc1_as_equivS   tc = pf_as_equivS   !!tc (FApi.tc1_goal tc)
-let tc1_as_eagerF   tc = pf_as_eagerF   !!tc (FApi.tc1_goal tc)
+let tc1_as_hoareF   ?q tc = pf_as_hoareF   ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_hoareS   ?q tc = pf_as_hoareS   ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_choareF  ?q tc = pf_as_choareF  ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_choareS  ?q tc = pf_as_choareS  ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_bdhoareF ?q tc = pf_as_bdhoareF ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_bdhoareS ?q tc = pf_as_bdhoareS ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_equivF   ?q tc = pf_as_equivF   ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_equivS   ?q tc = pf_as_equivS   ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_eagerF   ?q tc = pf_as_eagerF   ?q !!tc (FApi.tc1_goal tc)
 
 (* -------------------------------------------------------------------- *)
 let tc1_get_stmt side tc =

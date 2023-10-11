@@ -7,7 +7,6 @@ type memory = EcIdent.t
 val mem_equal : memory -> memory -> bool
 
 (* -------------------------------------------------------------------- *)
-
 type proj_arg = {
   arg_quantum : quantum;    (* classical/quantum *)
   arg_ty      : ty;         (* type of the procedure argument "arg" *)
@@ -28,6 +27,8 @@ type memenv = memory * memtype
 val mem_hash : memenv -> int
 val me_equal_gen : (ty -> ty -> bool) -> memenv -> memenv -> bool
 val me_equal : memenv -> memenv -> bool
+
+val has_quantum : memenv -> bool
 
 (* -------------------------------------------------------------------- *)
 val memory   : memenv -> memory
@@ -78,6 +79,7 @@ type mt_printing  = lmt_printing * lmt_printing
 (* -------------------------------------------------------------------- *)
 val local_type : memtype -> (ty * ty) option
 val has_locals : memtype -> bool
+val has_quantum : memtype -> bool
 
 (* -------------------------------------------------------------------- *)
 val for_printing : memtype -> mt_printing option
