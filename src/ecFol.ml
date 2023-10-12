@@ -1101,8 +1101,8 @@ let rec dump_f f =
   | FequivS {es_ml = (ml, _); es_mr = (mr, _); es_po = po; es_pr = pr } ->
      "equivS [ ML = " ^ EcIdent.tostring ml
      ^ "; MR = " ^ EcIdent.tostring mr
-     ^ "; PR = " ^ dump_f pr
-     ^ "; PO = " ^ dump_f po
+     ^ "; PR = " ^ dump_f pr.ec_f (* FIXME QUANTUM *)
+     ^ "; PO = " ^ dump_f po.ec_f (* FIXME QUANTUM *)
      ^ "]"
   | FeagerF _ -> "eagerF"
   | Fcoe _ -> "Fcoe"

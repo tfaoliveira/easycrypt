@@ -168,6 +168,27 @@ let norm_stmt s c  = Subst.subst_stmt s c
 let norm_me   s me = Subst.subst_me s me
 let norm_e    s e  = Subst.subst_e s e
 
+
+(* -------------------------------------------------------------------- *)
+let norm_pv st s pv =
+  let pv = EcTypes.pv_subst (Subst.subst_xpath s) pv in
+  if   st.st_ri.modpath then
+    EcEnv.NormMp.norm_pvar st.st_env pv
+  else pv
+
+let norm_pvt st s (pv ,t) =
+  (norm_pv st s pv, Subst.subst_ty s t)
+
+let rec norm_qr st s qr =
+  let open EcCoreModules in
+  match qr with
+  | QRvar x -> qrvar (norm_pvt st s x)
+  | QRtuple t -> qrtuple (List.Smart.map (norm_qr st s) t)
+  | QRproj (x, i) -> qrproj (norm_qr st s x, i)
+
+let norm_qe st s {qeg; qel; qer } =
+  { qeg; qel = norm_qr st s qel; qer = norm_qr st s qel }
+
 (* -------------------------------------------------------------------- *)
 let rec norm st s f =
 (* FIXME : I think substitution in type is wrong *)
@@ -529,8 +550,8 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     assert (Args.isempty args);
     assert (not (Subst.has_mem s mleft));
     assert (not (Subst.has_mem s mright));
-    let ef_pr = norm st s ef.ef_pr in
-    let ef_po = norm st s ef.ef_po in
+    let ef_pr = norm_ec st s ef.ef_pr in
+    let ef_po = norm_ec st s ef.ef_po in
     let ef_fl = norm_xfun st s ef.ef_fl in
     let ef_fr = norm_xfun st s ef.ef_fr in
     f_equivF_r {ef_pr; ef_fl; ef_fr; ef_po }
@@ -539,8 +560,8 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     assert (Args.isempty args);
     assert (not (Subst.has_mem s (fst es.es_ml)));
     assert (not (Subst.has_mem s (fst es.es_mr)));
-    let es_pr = norm st s es.es_pr in
-    let es_po = norm st s es.es_po in
+    let es_pr = norm_ec st s es.es_pr in
+    let es_po = norm_ec st s es.es_po in
     let es_sl = norm_stmt s es.es_sl in
     let es_sr = norm_stmt s es.es_sr in
     let es_ml  = norm_me s es.es_ml in
@@ -582,6 +603,10 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let pr_args  = norm st s pr.pr_args in
     let pr_event = norm st s pr.pr_event in
     f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
+
+and norm_ec st s {ec_f; ec_e} =
+  { ec_f = cbv_init st s ec_f;
+    ec_e = norm_qe st s ec_e }
 
 (* -------------------------------------------------------------------- *)
 (* FIXME : initialize the subst with let in hyps *)

@@ -73,7 +73,7 @@ let name_of_lv lv =
 type quantum_ref =
   | QRvar   of prog_var_ty
   | QRtuple of quantum_ref list
-  | QRproj  of quantum_ref * int
+  | QRproj  of quantum_ref * int  (* proj start at 0 *)
 
 let quantum_unit =
   QRtuple []
@@ -81,12 +81,48 @@ let quantum_unit =
 let is_quantum_unit (qr : quantum_ref) =
   qr = quantum_unit
 
+let rec qr_equal (qr1 : quantum_ref) (qr2 : quantum_ref) =
+  match qr1, qr2 with
+  | QRvar (x1, ty1), QRvar (x2, ty2) -> pv_equal x1 x2 && ty_equal ty1 ty2
+  | QRtuple t1, QRtuple t2 -> List.all2 qr_equal t1 t2
+  | QRproj (qr1, i1), QRproj (qr2, i2) -> i1 = i2 && qr_equal qr1 qr2
+  | _, _ -> false
+
+let rec qr_hash (qr : quantum_ref) : int =
+  match qr with
+  | QRvar (x, ty)  -> Why3.Hashcons.combine (pv_hash x) (ty_hash ty)
+  | QRtuple t      -> Why3.Hashcons.combine_list qr_hash 0 t
+  | QRproj (qr, i) -> Why3.Hashcons.combine (qr_hash qr) i
+
+let rec qr_fv = function
+  | QRvar x -> pvt_fv x
+  | QRtuple t ->
+      let add s qr = EcIdent.fv_union s (qr_fv qr) in
+      List.fold_left add Mid.empty t
+  | QRproj (qr, _) -> qr_fv qr
+
+let qrvar pvt = QRvar pvt
+let qrtuple t = QRtuple t
+let qrproj (qr, i) =
+  match qr with
+  | QRtuple t -> List.nth t i
+  | _ -> QRproj(qr, i)
+
+(* -------------------------------------------------------------------- *)
+type quantum_op =
+  | Qinit
+  | Qunitary
+
+let qo_equal (o1:quantum_op) (o2:quantum_op) = o1 == o2
+let qo_hash (o1:quantum_op) = Hashtbl.hash o1
+let qo_fv (o:quantum_op) : int Mid.t = Mid.empty
+
 (* -------------------------------------------------------------------- *)
 let qref_reduce (norm : prog_var -> prog_var) =
   let rec reduce (qr : quantum_ref) =
     match qr with
     | QRvar (pv, pty) ->
-       QRvar (norm pv, pty)
+       qrvar (norm pv, pty)
 
     | QRproj (subqr, i) -> begin
         match reduce subqr with
@@ -94,11 +130,11 @@ let qref_reduce (norm : prog_var -> prog_var) =
            List.nth t i
 
         | subqr ->
-           QRproj (subqr, i)
+           qrproj (subqr, i)
       end
 
     | QRtuple qrs ->
-       QRtuple (List.map reduce qrs)
+       qrtuple (List.map reduce qrs)
 
   in fun qr -> reduce qr
 
@@ -147,29 +183,6 @@ let is_quantum_valid ~(norm : prog_var -> prog_var) =
     match validate [] qr with
     | _ -> true
     | exception InvalidQRef -> false
-
-(* -------------------------------------------------------------------- *)
-let rec qr_equal qr1 qr2 =
-  match qr1, qr2 with
-  | QRvar x1, QRvar x2 -> pvt_equal x1 x2
-  | QRtuple t1, QRtuple t2 -> List.all2 qr_equal t1 t2
-  | QRproj (qr1, i1), QRproj (qr2, i2) ->
-      qr_equal qr1 qr2 && i1 == i2
-  | _, _ -> false
-
-let rec qr_fv = function
-  | QRvar x -> pvt_fv x
-  | QRtuple t ->
-      let add s qr = EcIdent.fv_union s (qr_fv qr) in
-      List.fold_left add Mid.empty t
-  | QRproj (qr, _) -> qr_fv qr
-
-type quantum_op =
-  | Qinit
-  | Qunitary
-
-let qo_equal (o1:quantum_op) (o2:quantum_op) = o1 == o2
-let qo_fv (o:quantum_op) : int Mid.t = Mid.empty
 
 (* -------------------------------------------------------------------- *)
 type instr = {
@@ -262,11 +275,11 @@ module Hinstr = Why3.Hashcons.Make (struct
 
   let hash p =
     match p.i_node with
-    | Squantum(qa, o, e) ->
-        Why3.Hashcons.combine2 (Hashtbl.hash qa) (Hashtbl.hash o) (EcTypes.e_hash e)
+    | Squantum(q, o, e) ->
+        Why3.Hashcons.combine2 (qr_hash q) (qo_hash o) (EcTypes.e_hash e)
 
-    | Smeasure(lv, qa, e) ->
-        Why3.Hashcons.combine2 (Hashtbl.hash lv) (Hashtbl.hash qa) (EcTypes.e_hash e)
+    | Smeasure(lv, q, e) ->
+        Why3.Hashcons.combine2 (Hashtbl.hash lv) (qr_hash q) (EcTypes.e_hash e)
 
     | Sasgn (lv, e) ->
         Why3.Hashcons.combine
@@ -279,7 +292,7 @@ module Hinstr = Why3.Hashcons.Make (struct
     | Scall (lv, f, arg, qarg) ->
         Why3.Hashcons.combine_list EcTypes.e_hash
           (Why3.Hashcons.combine2
-             (Hashtbl.hash lv) (EcPath.x_hash f) (Hashtbl.hash qarg))
+             (Hashtbl.hash lv) (EcPath.x_hash f) (qr_hash qarg))
           arg
 
     | Sif (c, s1, s2) ->
@@ -473,41 +486,41 @@ let is_match   = _is_of_get get_match
 let is_assert  = _is_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
+
+let pvt_subst (s : EcTypes.e_subst) (pv,ty as p) =
+  let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.es_ty.ts_cmod) pv in
+  let ty' = EcTypes.ty_subst s.EcTypes.es_ty ty in
+  if pv == pv' && ty == ty' then p else (pv', ty')
+
+let rec qr_subst (s : EcTypes.e_subst) = function
+  | QRvar x -> qrvar (pvt_subst s x)
+  | QRtuple t -> qrtuple (List.Smart.map (qr_subst s) t)
+  | QRproj (x, i) -> qrproj (qr_subst s x, i)
+
 let rec s_subst_top (s : EcTypes.e_subst) =
   let e_subst = EcTypes.e_subst s in
 
   if e_subst == identity then identity else
 
-  let pvt_subst (pv,ty as p) =
-    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.es_ty.ts_cmod) pv in
-    let ty' = EcTypes.ty_subst s.EcTypes.es_ty ty in
-
-    if pv == pv' && ty == ty' then p else (pv', ty') in
-
-  let pvts_subst = List.Smart.map pvt_subst in
+  let pvts_subst = List.Smart.map (pvt_subst s) in
 
   let lv_subst lv =
     match lv with
     | LvVar pvt ->
-        LvVar (pvt_subst pvt)
+        LvVar (pvt_subst s pvt)
 
     | LvTuple pvs ->
         LvTuple (pvts_subst pvs)
 
   in
 
-  let rec qr_subst = function
-    | QRvar x -> QRvar (pvt_subst x)
-    | QRtuple t -> QRtuple (List.Smart.map qr_subst t)
-    | QRproj (x, i) -> QRproj (qr_subst x, i) in
-
   let rec i_subst i =
     match i.i_node with
     | Squantum (qr, qop, e) ->
-        i_quantum (qr_subst qr, qop, e_subst e)
+        i_quantum (qr_subst s qr, qop, e_subst e)
 
     | Smeasure(lv, qr, e) ->
-        i_measure (lv_subst lv, qr_subst qr, e_subst e)
+        i_measure (lv_subst lv, qr_subst s qr, e_subst e)
 
     | Sasgn (lv, e) ->
         i_asgn (lv_subst lv, e_subst e)
@@ -519,7 +532,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
         let olv'  = olv |> OSmart.omap lv_subst in
         let mp'   = EcPath.x_subst_abs s.es_ty.ts_cmod mp in
         let args' = List.Smart.map e_subst args in
-        let qarg' = qr_subst qarg in
+        let qarg' = qr_subst s qarg in
         i_call (olv', mp', args', qarg')
 
     | Sif (e, s1, s2) ->

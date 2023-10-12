@@ -13,6 +13,21 @@ val mleft  : memory
 val mright : memory
 
 (* -------------------------------------------------------------------- *)
+type quantum_equality = {
+   qeg : bool;
+   qel : quantum_ref;
+   qer : quantum_ref;
+}
+
+val qe_equal : quantum_equality -> quantum_equality -> bool
+val qe_hash  : quantum_equality -> int
+val qe_fv    : quantum_equality -> int Mid.t
+
+val qe_empty : quantum_equality
+
+val is_qe_empty : quantum_equality -> bool
+
+(* -------------------------------------------------------------------- *)
 type quantif =
   | Lforall
   | Lexists
@@ -76,20 +91,25 @@ and eagerF = {
   eg_po : form
 }
 
+and equiv_cond = {
+  ec_f : form;
+  ec_e : quantum_equality;
+}
+
 and equivF = {
-  ef_pr : form;
+  ef_pr : equiv_cond;
   ef_fl : xpath;
   ef_fr : xpath;
-  ef_po : form;
+  ef_po : equiv_cond;
 }
 
 and equivS = {
   es_ml : EcMemory.memenv;
   es_mr : EcMemory.memenv;
-  es_pr : form;
+  es_pr : equiv_cond;
   es_sl : stmt;
   es_sr : stmt;
-  es_po : form;
+  es_po : equiv_cond;
 }
 
 and sHoareF = {
@@ -268,8 +288,8 @@ val f_bdHoareF : form -> xpath -> form -> hoarecmp -> form -> form
 val f_bdHoareS : memenv -> form -> stmt -> form -> hoarecmp -> form -> form
 
 (* soft-constructors - equiv *)
-val f_equivS : memenv -> memenv -> form -> stmt -> stmt -> form -> form
-val f_equivF : form -> xpath -> xpath -> form -> form
+val f_equivS : memenv -> memenv -> equiv_cond -> stmt -> stmt -> equiv_cond -> form
+val f_equivF : equiv_cond -> xpath -> xpath -> equiv_cond -> form
 
 val f_equivS_r : equivS -> form
 val f_equivF_r : equivF -> form

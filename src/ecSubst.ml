@@ -361,15 +361,29 @@ and subst_eop ety tys args (tyids, e) =
   e_app (subst_expr s e) args ety
 
 (* -------------------------------------------------------------------- *)
-let subst_lv (s : subst) (lv : lvalue) =
-  let for1 (pv, ty) = (subst_progvar s pv, subst_ty s ty) in
 
+let subst_pvt (s : subst) ((pv,ty) : prog_var_ty) =
+  (subst_progvar s pv, subst_ty s ty)
+
+let subst_lv (s : subst) (lv : lvalue) =
   match lv with
   | LvVar pvty ->
-     LvVar (for1 pvty)
+     LvVar (subst_pvt s pvty)
 
   | LvTuple pvtys ->
-     LvTuple (List.map for1 pvtys)
+     LvTuple (List.map (subst_pvt s) pvtys)
+
+(* -------------------------------------------------------------------- *)
+let rec subst_qr (s : subst) = function
+  | QRvar x -> qrvar (subst_pvt s x)
+  | QRtuple t -> qrtuple (List.Smart.map (subst_qr s) t)
+  | QRproj (x, i) -> qrproj (subst_qr s x, i)
+
+(* -------------------------------------------------------------------- *)
+let subst_qe s qe =
+  { qeg = qe.qeg;
+    qel = subst_qr s qe.qel;
+    qer = subst_qr s qe.qer; }
 
 (* -------------------------------------------------------------------- *)
 let rec subst_stmt (s : subst) (st : stmt) : stmt =
@@ -378,7 +392,9 @@ let rec subst_stmt (s : subst) (st : stmt) : stmt =
 (* -------------------------------------------------------------------- *)
 and subst_instr (s : subst) (i : instr) : instr =
   match i.i_node with
-  | Squantum _ | Smeasure _ -> assert false
+  | Squantum (q,o,e) -> i_quantum (subst_qr s q, o, subst_expr s e)
+
+  | Smeasure (lv,q,e) -> i_measure (subst_lv s lv, subst_qr s q, subst_expr s e)
 
   | Sasgn (lv, e) ->
      i_asgn (subst_lv s lv, subst_expr s e)
@@ -583,8 +599,8 @@ let rec subst_form (s : subst) (f : form) =
      let ef_pr, ef_po =
        let s = add_memory s mleft mleft in
        let s = add_memory s mright mright in
-       let ef_pr = subst_form s ef_pr in
-       let ef_po = subst_form s ef_po in
+       let ef_pr = subst_ec s ef_pr in
+       let ef_po = subst_ec s ef_po in
        (ef_pr, ef_po) in
      let ef_fl = subst_xpath s ef_fl in
      let ef_fr = subst_xpath s ef_fr in
@@ -594,8 +610,8 @@ let rec subst_form (s : subst) (f : form) =
      let (es_ml, es_mr), (es_pr, es_po) =
        let s, es_ml = subst_memtype s es_ml in
        let s, es_mr = subst_memtype s es_mr in
-       let es_pr = subst_form s es_pr in
-       let es_po = subst_form s es_po in
+       let es_pr = subst_ec s es_pr in
+       let es_po = subst_ec s es_po in
        (es_ml, es_mr), (es_pr, es_po) in
      let es_sl = subst_stmt s es_sl in
      let es_sr = subst_stmt s es_sr in
@@ -632,6 +648,10 @@ let rec subst_form (s : subst) (f : form) =
 
   | Fif _ | Fint _ | Ftuple _ | Fproj _ | Fapp _ ->
      f_map (subst_ty s) (subst_form s) f
+
+(* -------------------------------------------------------------------- *)
+and subst_ec s { ec_f; ec_e } =
+  { ec_f = subst_form s ec_f; ec_e = subst_qe s ec_e }
 
 (* -------------------------------------------------------------------- *)
 and subst_fop fty tys args (tyids, f) =

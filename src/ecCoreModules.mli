@@ -19,19 +19,30 @@ val lv_to_list   : lvalue -> prog_var list
 val name_of_lv   : lvalue -> string
 
 (* --------------------------------------------------------------------- *)
-type quantum_ref =
+type quantum_ref = private
   | QRvar   of prog_var_ty
   | QRtuple of quantum_ref list
   | QRproj  of quantum_ref * int
 
 val quantum_unit    : quantum_ref
 val is_quantum_unit : quantum_ref -> bool
+val qr_equal : quantum_ref -> quantum_ref -> bool
+val qr_hash  : quantum_ref -> int
+val qr_fv    : quantum_ref -> int EcIdent.Mid.t
+val qr_subst : e_subst -> quantum_ref -> quantum_ref
+
+val qrvar   : prog_var_ty -> quantum_ref
+val qrtuple : quantum_ref list -> quantum_ref
+val qrproj  : quantum_ref * int -> quantum_ref
 
 val is_quantum_valid : norm:(prog_var -> prog_var) -> quantum_ref -> bool
 
 type quantum_op =
   | Qinit
   | Qunitary
+
+val qo_equal : quantum_op -> quantum_op -> bool
+val qo_hash  : quantum_op -> int
 
 (* --------------------------------------------------------------------- *)
 type instr = private {

@@ -15,6 +15,39 @@ module Sx = EcPath.Sx
 
 open EcBigInt.Notations
 
+(* quantum_equality:
+   qeg = true : equality of all global quantum variable;
+   type of qel = type of qer
+   qel and qer should be valid;
+   qeg = true implies qel and qer are only locals
+*)
+
+type quantum_equality = {
+   qeg : bool;
+   qel : quantum_ref;
+   qer : quantum_ref;
+}
+
+let qe_equal qe1 qe2 =
+     qe1.qeg = qe2.qeg
+  && qr_equal qe1.qel qe2.qel
+  && qr_equal qe1.qer qe2.qer
+
+let qe_hash qe =
+  Why3.Hashcons.combine2 (Hashtbl.hash qe.qeg) (qr_hash qe.qel) (qr_hash qe.qer)
+
+let qe_fv qe =
+  fv_union (qr_fv qe.qel) (qr_fv qe.qer)
+
+let qe_empty = {
+  qeg = false;
+  qel = quantum_unit;
+  qer = quantum_unit;
+}
+
+let is_qe_empty qe =
+  not qe.qeg && is_quantum_unit qe.qel && is_quantum_unit qe.qer
+
 (* -------------------------------------------------------------------- *)
 type quantif =
   | Lforall
@@ -79,20 +112,25 @@ and eagerF = {
   eg_po : form
 }
 
+and equiv_cond = {
+  ec_f : form;
+  ec_e : quantum_equality;
+}
+
 and equivF = {
-  ef_pr : form;
+  ef_pr : equiv_cond;
   ef_fl : EcPath.xpath;
   ef_fr : EcPath.xpath;
-  ef_po : form;
+  ef_po : equiv_cond;
 }
 
 and equivS = {
   es_ml  : EcMemory.memenv;
   es_mr  : EcMemory.memenv;
-  es_pr  : form;
+  es_pr  : equiv_cond;
   es_sl  : stmt;
   es_sr  : stmt;
-  es_po  : form; }
+  es_po  : equiv_cond; }
 
 and sHoareF = {
   hf_pr : form;
@@ -326,15 +364,19 @@ let bhs_equal bhs1 bhs2 =
   && bhs1.bhs_cmp = bhs2.bhs_cmp
   && f_equal bhs1.bhs_bd bhs2.bhs_bd
 
+let ec_equal ec1 ec2 =
+     f_equal ec1.ec_f ec2.ec_f
+  && qe_equal ec1.ec_e ec2.ec_e
+
 let eqf_equal ef1 ef2 =
-     f_equal ef1.ef_pr ef2.ef_pr
-  && f_equal ef1.ef_po ef2.ef_po
+     ec_equal ef1.ef_pr ef2.ef_pr
+  && ec_equal ef1.ef_po ef2.ef_po
   && EcPath.x_equal ef1.ef_fl ef2.ef_fl
   && EcPath.x_equal ef1.ef_fr ef2.ef_fr
 
 let eqs_equal es1 es2 =
-     f_equal es1.es_pr es2.es_pr
-  && f_equal es1.es_po es2.es_po
+     ec_equal es1.es_pr es2.es_pr
+  && ec_equal es1.es_po es2.es_po
   && s_equal es1.es_sl es2.es_sl
   && s_equal es1.es_sr es2.es_sr
   && EcMemory.me_equal es1.es_ml es2.es_ml
@@ -420,14 +462,17 @@ let bhs_hash bhs =
        (EcMemory.mem_hash bhs.bhs_m))
     [bhs.bhs_pr;bhs.bhs_po;bhs.bhs_bd]
 
+let ec_hash ec =
+  Why3.Hashcons.combine (f_hash ec.ec_f) (qe_hash ec.ec_e)
+
 let ef_hash ef =
   Why3.Hashcons.combine3
-    (f_hash ef.ef_pr) (f_hash ef.ef_po)
+    (ec_hash ef.ef_pr) (ec_hash ef.ef_po)
     (EcPath.x_hash ef.ef_fl) (EcPath.x_hash ef.ef_fr)
 
 let es_hash es =
   Why3.Hashcons.combine3
-    (f_hash es.es_pr) (f_hash es.es_po)
+    (ec_hash es.es_pr) (ec_hash es.es_po)
     (EcCoreModules.s_hash es.es_sl)
     (Why3.Hashcons.combine2
        (EcMemory.mem_hash es.es_mr)
@@ -447,6 +492,8 @@ let pr_hash pr =
     (f_hash          pr.pr_args)
     (f_hash          pr.pr_event)
 
+let ec_fv ec =
+  fv_union ec.ec_f.f_fv (qe_fv ec.ec_e)
 
 (* -------------------------------------------------------------------- *)
 module Hsform = Why3.Hashcons.Make (struct
@@ -508,6 +555,7 @@ module Hsform = Why3.Hashcons.Make (struct
   let equal f1 f2 =
        ty_equal f1.f_ty f2.f_ty
     && equal_node f1.f_node f2.f_node
+
 
   let hash f =
     match f.f_node with
@@ -627,12 +675,12 @@ module Hsform = Why3.Hashcons.Make (struct
       fv_union (EcCoreModules.s_fv bhs.bhs_s) (Mid.remove (fst bhs.bhs_m) fv)
 
     | FequivF ef ->
-        let fv = fv_union (f_fv ef.ef_pr) (f_fv ef.ef_po) in
+        let fv = fv_union (ec_fv ef.ef_pr) (ec_fv ef.ef_po) in
         let fv = fv_diff fv fv_mlr in
         EcPath.x_fv (EcPath.x_fv fv ef.ef_fl) ef.ef_fr
 
     | FequivS es ->
-        let fv = fv_union (f_fv es.es_pr) (f_fv es.es_po) in
+        let fv = fv_union (ec_fv es.es_pr) (ec_fv es.es_po) in
         let ml, mr = fst es.es_ml, fst es.es_mr in
         let fv = fv_diff fv (Sid.add ml (Sid.singleton mr)) in
         fv_union fv
@@ -968,6 +1016,9 @@ let cost_iter g cost =
   g cost.c_self;
   EcPath.Mx.iter (fun _ cb -> g cb.cb_cost; g cb.cb_called; ) cost.c_calls
 
+let ec_map g { ec_f; ec_e } =
+  { ec_f = g ec_f; ec_e }
+
 let f_map gt g fp =
   match fp.f_node with
   | Fquant(q, b, f) ->
@@ -1061,13 +1112,13 @@ let f_map gt g fp =
         f_bdHoareS_r { bhs with bhs_pr = pr'; bhs_po = po'; bhs_bd = bd'; }
 
   | FequivF ef ->
-      let pr' = g ef.ef_pr in
-      let po' = g ef.ef_po in
+      let pr' = ec_map g ef.ef_pr in
+      let po' = ec_map g ef.ef_po in
         f_equivF_r { ef with ef_pr = pr'; ef_po = po'; }
 
   | FequivS es ->
-      let pr' = g es.es_pr in
-      let po' = g es.es_po in
+      let pr' = ec_map g es.es_pr in
+      let po' = ec_map g es.es_po in
         f_equivS_r { es with es_pr = pr'; es_po = po'; }
 
   | FeagerF eg ->
@@ -1085,6 +1136,8 @@ let f_map gt g fp =
       f_pr_r { pr with pr_args = args'; pr_event = ev'; }
 
 (* -------------------------------------------------------------------- *)
+let ec_iter g { ec_f; ec_e } = g ec_f
+
 let f_iter g f =
   match f.f_node with
   | Fint     _
@@ -1107,14 +1160,17 @@ let f_iter g f =
   | FcHoareS  chs -> g chs.chs_pr; g chs.chs_po; cost_iter g chs.chs_co
   | FbdHoareF bhf -> g bhf.bhf_pr; g bhf.bhf_po; g bhf.bhf_bd
   | FbdHoareS bhs -> g bhs.bhs_pr; g bhs.bhs_po; g bhs.bhs_bd
-  | FequivF   ef  -> g ef.ef_pr; g ef.ef_po
-  | FequivS   es  -> g es.es_pr; g es.es_po
+  | FequivF   ef  -> ec_iter g ef.ef_pr; ec_iter g ef.ef_po
+  | FequivS   es  -> ec_iter g es.es_pr; ec_iter g es.es_po
   | FeagerF   eg  -> g eg.eg_pr; g eg.eg_po
   | Fcoe      coe -> g coe.coe_pre;
   | Fpr       pr  -> g pr.pr_args; g pr.pr_event
 
 
 (* -------------------------------------------------------------------- *)
+
+let ec_exists g { ec_f; ec_e } = g ec_f
+
 let form_exists g f =
   match f.f_node with
   | Fint     _
@@ -1137,13 +1193,15 @@ let form_exists g f =
   | FcHoareS  chs -> g chs.chs_pr  || g chs.chs_po
   | FbdHoareF bhf -> g bhf.bhf_pr  || g bhf.bhf_po
   | FbdHoareS bhs -> g bhs.bhs_pr  || g bhs.bhs_po
-  | FequivF   ef  -> g ef.ef_pr    || g ef.ef_po
-  | FequivS   es  -> g es.es_pr    || g es.es_po
+  | FequivF   ef  -> ec_exists g ef.ef_pr || ec_exists g ef.ef_po
+  | FequivS   es  -> ec_exists g es.es_pr || ec_exists g es.es_po
   | FeagerF   eg  -> g eg.eg_pr    || g eg.eg_po
   | Fcoe      coe -> g coe.coe_pre
   | Fpr       pr  -> g pr.pr_args  || g pr.pr_event
 
 (* -------------------------------------------------------------------- *)
+let ec_forall g { ec_f; ec_e } = g ec_f
+
 let form_forall g f =
   match f.f_node with
   | Fint     _
@@ -1166,8 +1224,8 @@ let form_forall g f =
   | FcHoareS  chs -> g chs.chs_pr && g chs.chs_po
   | FbdHoareF bhf -> g bhf.bhf_pr && g bhf.bhf_po
   | FbdHoareS bhs -> g bhs.bhs_pr && g bhs.bhs_po
-  | FequivF   ef  -> g ef.ef_pr   && g ef.ef_po
-  | FequivS   es  -> g es.es_pr   && g es.es_po
+  | FequivF   ef  -> ec_forall g ef.ef_pr && ec_forall g ef.ef_po
+  | FequivS   es  -> ec_forall g es.es_pr && ec_forall g es.es_po
   | FeagerF   eg  -> g eg.eg_pr   && g eg.eg_po
   | Fcoe      coe -> g coe.coe_pre
   | Fpr       pr  -> g pr.pr_args && g pr.pr_event
@@ -1715,7 +1773,21 @@ module Fsubst = struct
 
   let subst_ty s ty = ty_subst s.fs_ty ty
 
+  let to_e_subst (s:f_subst) : e_subst =
+    e_subst_init s.fs_freshen s.fs_ty s.fs_esloc
+
+  let subst_qr s qr =
+    qr_subst (to_e_subst s) qr
+
+  let subst_qe s qe =
+    let es = to_e_subst s in
+    { qeg = qe.qeg;
+      qel = qr_subst es qe.qel;
+      qer = qr_subst es qe.qer; }
+
+
   (* ------------------------------------------------------------------ *)
+
   let rec f_subst ~tx s fp =
     tx fp (match fp.f_node with
     | Fquant (q, b, f) ->
@@ -1826,8 +1898,8 @@ module Fsubst = struct
       let pr', po' =
         let s = f_rem_mem s mleft in
         let s = f_rem_mem s mright in
-        let pr' = f_subst ~tx s ef.ef_pr in
-        let po' = f_subst ~tx s ef.ef_po in
+        let pr' = f_subst_ec ~tx s ef.ef_pr in
+        let po' = f_subst_ec ~tx s ef.ef_po in
         (pr', po') in
       let fl' = subst_xpath s ef.ef_fl in
       let fr' = subst_xpath s ef.ef_fr in
@@ -1839,8 +1911,8 @@ module Fsubst = struct
                 not (Mid.mem (fst eqs.es_mr) s.fs_mem));
       let es = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
       let s_subst = EcCoreModules.s_subst es in
-      let pr' = f_subst ~tx s eqs.es_pr in
-      let po' = f_subst ~tx s eqs.es_po in
+      let pr' = f_subst_ec ~tx s eqs.es_pr in
+      let po' = f_subst_ec ~tx s eqs.es_po in
       let sl' = s_subst eqs.es_sl in
       let sr' = s_subst eqs.es_sr in
       let ml' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) eqs.es_ml in
@@ -1905,6 +1977,9 @@ module Fsubst = struct
 
     | _ ->
       f_map (ty_subst s.fs_ty) (f_subst ~tx s) fp)
+
+  and f_subst_ec ~tx s { ec_f; ec_e } =
+    { ec_f = f_subst ~tx s ec_f; ec_e = subst_qe s ec_e }
 
   and f_subst_op ~tx freshen fty tys args (tyids, e) =
     (* FIXME: factor this out *)
