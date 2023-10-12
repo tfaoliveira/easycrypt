@@ -144,3 +144,53 @@ module Hdint = EHashtbl.Make(DInt)
 (* --------------------------------------------------------------------*)
 module Mstr = Map.Make(String)
 module Sstr = Set.MakeOfMap(Mstr)
+
+(* -------------------------------------------------------------------- *)
+module PrefixSet : sig
+  type prefix = int list
+  type t
+
+  val empty : t
+
+  val conflict : t -> prefix -> bool
+
+  val add : t -> prefix -> t
+end = struct
+  type prefix = int list
+
+  type t =
+    | Member
+    | Split of t Mint.t
+
+  let empty : t =
+    Split Mint.empty
+
+  let rec add (t : t) (p : prefix) : t =
+    match t, p with
+    | Member, _ ->
+       Member
+
+    | Split _, [] ->
+       Member
+
+    | Split children, i :: subp ->
+       let change subt =
+         Some (add (Option.value ~default:empty subt) subp) in
+       Split (Mint.change change i children)
+
+  let rec conflict (t : t) (p : prefix) : bool =
+    match t, p with
+    (* There exists a prefix of `p` in the set *)
+    | Member, _ ->
+       true
+
+    (* `p` is a prefix of a member of the set *)
+    | Split _, [] ->
+       true
+
+    | Split children, i :: subp ->
+        (* Ah mais la, je chaine :) *)
+        Mint.find_opt i children
+        |> Option.map (fun subt -> conflict subt subp)
+        |> Option.value ~default:false
+end

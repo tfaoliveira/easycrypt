@@ -27,6 +27,8 @@ type quantum_ref =
 val quantum_unit    : quantum_ref
 val is_quantum_unit : quantum_ref -> bool
 
+val is_quantum_valid : norm:(prog_var -> prog_var) -> quantum_ref -> bool
+
 type quantum_op =
   | Qinit
   | Qunitary

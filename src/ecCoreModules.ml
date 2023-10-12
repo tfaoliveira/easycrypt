@@ -3,7 +3,6 @@ open EcUtils
 open EcSymbols
 open EcTypes
 open EcPath
-open EcMaps
 
 module Sid = EcIdent.Sid
 module Mid = EcIdent.Mid
@@ -83,56 +82,6 @@ let is_quantum_unit (qr : quantum_ref) =
   qr = quantum_unit
 
 (* -------------------------------------------------------------------- *)
-module PrefixSet : sig
-  type prefix = int list
-  type t
-
-  val empty : t
-
-  val conflict : t -> prefix -> bool
-
-  val add : t -> prefix -> t
-end = struct
-  type prefix = int list
-
-  type t =
-    | Member
-    | Split of t Mint.t
-
-  let empty : t =
-    Split Mint.empty
-
-  let rec add (t : t) (p : prefix) : t =
-    match t, p with
-    | Member, _ ->
-       Member
-
-    | Split _, [] ->
-       Member
-
-    | Split children, i :: subp ->
-       let change subt =
-         Some (add (Option.value ~default:empty subt) subp) in
-       Split (Mint.change change i children)
-
-  let rec conflict (t : t) (p : prefix) : bool =
-    match t, p with
-    (* There exists a prefix of `p` in the set *)
-    | Member, _ ->
-       true
-
-    (* `p` is a prefix of a member of the set *)
-    | Split _, [] ->
-       true
-
-    | Split children, i :: subp ->
-        (* Ah mais la, je chaine :) *)
-        Mint.find_opt i children
-        |> Option.map (fun subt -> conflict subt subp)
-        |> Option.value ~default:false
-end
-
-(* -------------------------------------------------------------------- *)
 let qref_reduce (norm : prog_var -> prog_var) =
   let rec reduce (qr : quantum_ref) =
     match qr with
@@ -159,8 +108,8 @@ let qref_reduce (norm : prog_var -> prog_var) =
 (* We here reduce on the fly. We could have first reduced the qvar      *)
 (* using the function `qref_reduce` above.                              *)
 
-let quantum_valid (norm : prog_var -> prog_var) =
-  let module PS = PrefixSet in
+let is_quantum_valid ~(norm : prog_var -> prog_var) =
+  let module PS = EcMaps.PrefixSet in
 
   let exception InvalidQRef in
 

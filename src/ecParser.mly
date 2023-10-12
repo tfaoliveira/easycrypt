@@ -675,7 +675,6 @@ _lident:
 | INTERLEAVE { "interleave" }
 | LAST       { "last"       }
 | LEFT       { "left"       }
-| MEASURE    { "measure"    }
 | RIGHT      { "right"      }
 | SOLVE      { "solve"      }
 | STRICT     { "strict"     }
@@ -1545,7 +1544,7 @@ base_instr:
 | x=lvalue LARROW e=expr
     { PSasgn (x, e) }
 
-| x=lvalue LARROW MEASURE q=qrref WITH e=expr
+| x=lvalue LARROW MEASURE q=loc(qrref) WITH e=expr
     { PSmeasure (x, q, e) }
 
 | x=lvalue LSARROW UNITARY LBRACKET e=expr RBRACKET

@@ -153,7 +153,7 @@ type tyerror =
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
 | InvalidClassicalLValue of [`QVar | `Nested | `Proj]
-| InvalidQRef            of [`CVar | `Map]
+| InvalidQRef            of [`CVar | `Map | `NonDisjoint]
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar

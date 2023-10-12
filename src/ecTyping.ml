@@ -161,7 +161,7 @@ type tyerror =
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
 | InvalidClassicalLValue of [`QVar | `Nested | `Proj]
-| InvalidQRef            of [`CVar | `Map]
+| InvalidQRef            of [`CVar | `Map | `NonDisjoint]
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar
@@ -2893,17 +2893,8 @@ and transinstr
     end
 
   | PSmeasure (plv, pqref, pmeas) ->
-     (* FIXME: QUANTUM validate lv / qref w.r.t. disjointness *)
-
      let lv, lvty = trans_genlvalue ue env plv in
-     let qref = trans_qrref ue env pqref in
-
-     let qref, bds =
-       let qrs = List.map proj3_1 qref in
-       let bds = List.map (fun (_, x, ty) -> (x, ty)) qref in
-       (qrs, bds) in
-
-     let qref = match qref with [qr] -> qr | qrs -> QRtuple qrs in
+     let qref, bds = trans_qrref ~disjoint:true ue env pqref in
 
      let meas, ety =
        let env = EcEnv.Var.bind_locals bds env in
@@ -2913,8 +2904,12 @@ and transinstr
      unify_or_fail env ue pmeas.pl_loc ~expct:lvty ety;
      [ i_measure_lv plv.pl_loc env lv qref meas ]
 
-  | PSunitary (plvalue, prvalue) (* FIXME QUANTUM *) ->
-     assert false
+  | PSunitary (plv, punitary) ->
+     let lv, lvty = trans_qref ~disjoint:true ue env plv in
+     let unitary, uty = transexp env `InProc ue punitary in
+
+     unify_or_fail env ue punitary.pl_loc ~expct:(tfun lvty lvty) uty;
+     [ i_quantum (lv, Qunitary, unitary) ]
 
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function
@@ -3082,7 +3077,7 @@ and trans_genlvalue (ue : EcUnify.unienv) (env : EcEnv.env) (plvalue : plvalue) 
           tyerror x.pl_loc env (MultipleOpMatch (name, esig, matches))
     end
 
-and trans_qref (ue : EcUnify.unienv) (env : EcEnv.env) (qref : plvalue) =
+and trans_qref ~disjoint (ue : EcUnify.unienv) (env : EcEnv.env) (qref : plvalue) =
   let rec convert = function
     | PreLV_var (pv, (q, ty)) ->
        if q <> `Quantum then
@@ -3096,13 +3091,18 @@ and trans_qref (ue : EcUnify.unienv) (env : EcEnv.env) (qref : plvalue) =
        QRproj (convert subqr, i)
 
     | PreLV_map _ ->
-       tyerror qref.pl_loc env (InvalidQRef `Map);
+       tyerror qref.pl_loc env (InvalidQRef `Map) in
 
-  in fst_map convert (trans_genlvalue ue env qref)
+  let qr, ty = fst_map convert (trans_genlvalue ue env qref) in
 
-and trans_qrref (ue : EcUnify.unienv) (env : EcEnv.env) qrref =
+  if disjoint then
+    check_qref_disjoint env qref.pl_loc qr;
+
+  (qr, ty)
+
+and trans_qrref ~disjoint (ue : EcUnify.unienv) (env : EcEnv.env) pqrref =
   let for1 (qr, x) =
-    let qr, ty = trans_qref ue env qr in
+    let qr, ty = trans_qref ~disjoint:false ue env qr in
     let x =
       match Option.map unloc x with
       | None -> begin
@@ -3115,9 +3115,27 @@ and trans_qrref (ue : EcUnify.unienv) (env : EcEnv.env) qrref =
 
       | Some x -> x in
 
-    (qr, EcIdent.create x, ty)
+    (qr, EcIdent.create x, ty) in
 
-  in List.map for1 qrref
+  let qrref = List.map for1 (unloc pqrref) in
+
+  let qrref, bds =
+    let qrs = List.map proj3_1 qrref in
+    let bds = List.map (fun (_, x, ty) -> (x, ty)) qrref in
+    (qrs, bds) in
+
+  let qrref = match qrref with [qr] -> qr | qrs -> QRtuple qrs in
+
+  if disjoint then
+    check_qref_disjoint env pqrref.pl_loc qrref;
+
+  (qrref, bds)
+
+and check_qref_disjoint env loc qref =
+  let norm = EcEnv.NormMp.norm_pvar env in
+
+  if not (EcModules.is_quantum_valid ~norm qref) then
+    tyerror loc env (InvalidQRef `NonDisjoint)
 
 (* -------------------------------------------------------------------- *)
 and trans_gbinding env ue decl =
