@@ -602,11 +602,16 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
             failure ();
           if not (EcReduction.EqTest.for_xp env hf1.ef_fr hf2.ef_fr) then
             failure();
+          if not (EcReduction.EqTest.for_qe env hf1.ef_pr.ec_e hf2.ef_pr.ec_e) then
+            failure ();
+          if not (EcReduction.EqTest.for_qe env hf1.ef_po.ec_e hf2.ef_po.ec_e) then
+            failure ();
+
           let mxs = Mid.add EcFol.mleft  EcFol.mleft  mxs in
           let mxs = Mid.add EcFol.mright EcFol.mright mxs in
           List.iter2
             (doit env (subst, mxs))
-            [hf1.ef_pr; hf1.ef_po] [hf2.ef_pr; hf2.ef_po]
+            [hf1.ef_pr.ec_f; hf1.ef_po.ec_f] [hf2.ef_pr.ec_f; hf2.ef_po.ec_f]
       end
 
       | Fpr pr1, Fpr pr2 -> begin
@@ -894,7 +899,7 @@ module FPosition = struct
           | FequivF es ->
               let ctxt = Sid.add EcFol.mleft  ctxt in
               let ctxt = Sid.add EcFol.mright ctxt in
-              doit pos (`WithCtxt (ctxt, [es.ef_pr; es.ef_po]))
+              doit pos (`WithCtxt (ctxt, [es.ef_pr.ec_f; es.ef_po.ec_f]))
 
           | _ -> None
         in
@@ -1060,7 +1065,9 @@ module FPosition = struct
               f_bdHoareF_r { hf with bhf_pr; bhf_po; bhf_bd; }
 
           | FequivF ef ->
-              let (ef_pr, ef_po) = as_seq2 (doit p [ef.ef_pr; ef.ef_po]) in
+              let (ef_pr, ef_po) = as_seq2 (doit p [ef.ef_pr.ec_f; ef.ef_po.ec_f]) in
+              let ef_pr = { ef.ef_pr with ec_f = ef_pr } in
+              let ef_po = { ef.ef_po with ec_f = ef_po } in
               f_equivF_r { ef with ef_pr; ef_po; }
 
           | Fcoe coe ->

@@ -24,8 +24,14 @@ val qe_hash  : quantum_equality -> int
 val qe_fv    : quantum_equality -> int Mid.t
 
 val qe_empty : quantum_equality
-
 val is_qe_empty : quantum_equality -> bool
+
+val qe_iter : (prog_var_ty -> unit) -> quantum_equality -> unit
+val qe_map : (prog_var_ty -> prog_var_ty) -> quantum_equality -> quantum_equality
+val qe_all : (prog_var_ty -> bool) -> quantum_equality -> bool
+val qe_all2 :
+  (prog_var_ty -> prog_var_ty -> bool) ->
+  quantum_equality -> quantum_equality -> bool
 
 (* -------------------------------------------------------------------- *)
 type quantif =
@@ -187,6 +193,9 @@ and call_bound = private {
 and module_type = form p_module_type
 
 type mod_restr = form p_mod_restr
+
+val is_classical_ec : equiv_cond -> bool
+val classical_ec : form -> equiv_cond
 
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty

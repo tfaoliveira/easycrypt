@@ -374,10 +374,8 @@ let subst_lv (s : subst) (lv : lvalue) =
      LvTuple (List.map (subst_pvt s) pvtys)
 
 (* -------------------------------------------------------------------- *)
-let rec subst_qr (s : subst) = function
-  | QRvar x -> qrvar (subst_pvt s x)
-  | QRtuple t -> qrtuple (List.Smart.map (subst_qr s) t)
-  | QRproj (x, i) -> qrproj (subst_qr s x, i)
+let subst_qr (s : subst) =
+  qr_map (subst_pvt s)
 
 (* -------------------------------------------------------------------- *)
 let subst_qe s qe =

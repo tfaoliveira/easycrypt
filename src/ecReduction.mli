@@ -24,11 +24,15 @@ module EqTest : sig
   val for_lv    : lvalue      eqntest
   val for_xp    : xpath       eqntest
   val for_mp    : mpath       eqntest
+  val for_qe    : quantum_equality eqntest
   val for_instr : instr       eqantest
   val for_stmt  : stmt        eqantest
   val for_expr  : expr        eqantest
   val for_msig  : module_sig  eqntest
   val for_mexpr : env -> ?norm:bool -> ?body:bool -> module_expr -> module_expr -> bool
+
+
+
 
   val is_unit : env -> ty -> bool
   val is_bool : env -> ty -> bool

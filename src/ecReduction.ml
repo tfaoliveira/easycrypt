@@ -161,17 +161,25 @@ module EqTest_base = struct
     in fun alpha e1 e2 -> aux alpha e1 e2
 
   (* ------------------------------------------------------------------ *)
+
+  let for_pvt env ~norm (pv1,_) (pv2,_) =
+    for_pv env ~norm pv1 pv2
+
   let for_lv env ~norm lv1 lv2 =
     match lv1, lv2 with
-    | LvVar(p1, _), LvVar(p2, _) ->
-        for_pv env ~norm p1 p2
+    | LvVar p1, LvVar p2 ->
+        for_pvt env ~norm p1 p2
 
     | LvTuple p1, LvTuple p2 ->
-        List.all2
-          (fun (p1, _) (p2, _) -> for_pv env ~norm p1 p2)
-          p1 p2
+        List.all2 (for_pvt env ~norm) p1 p2
 
     | _, _ -> false
+
+  let rec for_qr env ~norm qr1 qr2 =
+    qr_all2 (for_pvt env ~norm) qr1 qr2
+
+  let for_qe env ~norm qe1 qe2 = qe_all2 (for_pvt env ~norm) qe1 qe2
+
 end
 
 (* -------------------------------------------------------------------- *)
@@ -391,9 +399,13 @@ module EqTest_i = struct
   let for_pv    = fun env ?(norm = true) -> for_pv    env ~norm
   let for_xp    = fun env ?(norm = true) -> for_xp    env ~norm
   let for_mp    = fun env ?(norm = true) -> for_mp    env ~norm
+  let for_qr    = fun env ?(norm = true) -> for_qr    env ~norm
+  let for_qe    = fun env ?(norm = true) -> for_qe    env ~norm
+
   let for_instr = fun env ?(norm = true) -> for_instr env Mid.empty ~norm
   let for_stmt  = fun env ?(norm = true) -> for_stmt  env Mid.empty ~norm
   let for_expr  = fun env ?(norm = true) -> for_expr  env Mid.empty ~norm
+
 end
 
 (* -------------------------------------------------------------------- *)
@@ -511,6 +523,15 @@ let is_alpha_eq hyps f1 f2 =
     let s2 = EcSubst.subst_stmt s s2 in
     ensure (EqTest_i.for_stmt env s1 s2) in
 
+  let check_qr env s qr1 qr2 =
+    let qr2 = EcSubst.subst_qr s qr2 in
+    ensure (EqTest_i.for_qr env qr1 qr2) in
+
+  let check_qe env s qe1 qe2 =
+    ensure (qe1.qeg = qe2.qeg);
+    check_qr env s qe1.qel qe2.qel;
+    check_qr env s qe1.qer qe2.qer in
+
   let rec aux env subst f1 f2 =
     if subst = EcSubst.empty && f_equal f1 f2 then ()
     else match f1.f_node, f2.f_node with
@@ -604,15 +625,15 @@ let is_alpha_eq hyps f1 f2 =
     | FequivF ef1, FequivF ef2 ->
       check_xp env subst ef1.ef_fl ef2.ef_fl;
       check_xp env subst ef1.ef_fr ef2.ef_fr;
-      aux env subst ef1.ef_pr ef2.ef_pr;
-      aux env subst ef1.ef_po ef2.ef_po
+      aux_ec env subst ef1.ef_pr ef2.ef_pr;
+      aux_ec env subst ef1.ef_po ef2.ef_po
 
     | FequivS es1, FequivS es2 ->
       check_s env subst es1.es_sl es2.es_sl;
       check_s env subst es1.es_sr es2.es_sr;
       (* FIXME should check the memenv *)
-      aux env subst es1.es_pr es2.es_pr;
-      aux env subst es1.es_po es2.es_po
+      aux_ec env subst es1.es_pr es2.es_pr;
+      aux_ec env subst es1.es_po es2.es_po
 
     | FeagerF eg1, FeagerF eg2 ->
       check_xp env subst eg1.eg_fl eg2.eg_fl;
@@ -636,6 +657,10 @@ let is_alpha_eq hyps f1 f2 =
       aux env subst coe1.coe_pre coe2.coe_pre;
 
     | _, _ -> error ()
+
+  and aux_ec env subst ec1 ec2 =
+    aux env subst ec1.ec_f ec2.ec_f;
+    check_qe env subst ec1.ec_e ec2.ec_e
 
   and test env subst f1 f2 =
     try aux env subst f1 f2; true with
@@ -1507,9 +1532,9 @@ let zpop ri side f hd =
   | Zhl {f_node = FbdHoareS hs}, [pr;po;bd] ->
     f_bdHoareS_r {hs with bhs_pr = pr; bhs_po = po; bhs_bd = bd}
   | Zhl {f_node = FequivF hf}, [pr;po] ->
-    f_equivF_r {hf with ef_pr = pr; ef_po = po }
+    f_equivF_r {hf with ef_pr = { hf.ef_pr with ec_f = pr } ; ef_po = { hf.ef_po with ec_f = po } }
   | Zhl {f_node = FequivS hs}, [pr;po] ->
-    f_equivS_r {hs with es_pr = pr; es_po = po }
+    f_equivS_r {hs with es_pr = { hs.es_pr with ec_f = pr } ; es_po = {hs.es_po with ec_f = po } }
   | Zhl {f_node = FeagerF hs}, [pr;po] ->
     f_eagerF_r {hs with eg_pr = pr; eg_po = po }
   | Zhl {f_node = Fpr hs}, [a;ev] ->
@@ -1663,13 +1688,17 @@ let rec conv ri env f1 f2 stk =
 
   | FequivF ef1, FequivF ef2
       when EqTest_i.for_xp env ef1.ef_fl ef2.ef_fl
-        && EqTest_i.for_xp env ef1.ef_fr ef2.ef_fr ->
-    conv ri env ef1.ef_pr ef2.ef_pr (zhl f1 [ef1.ef_po] [ef2.ef_po] stk)
+        && EqTest_i.for_xp env ef1.ef_fr ef2.ef_fr
+        && EqTest_i.for_qe env ef1.ef_pr.ec_e ef2.ef_pr.ec_e
+        && EqTest_i.for_qe env ef1.ef_po.ec_e ef2.ef_po.ec_e ->
+    conv ri env ef1.ef_pr.ec_f ef2.ef_pr.ec_f (zhl f1 [ef1.ef_po.ec_f] [ef2.ef_po.ec_f] stk)
 
   | FequivS es1, FequivS es2
       when EqTest_i.for_stmt env es1.es_sl es2.es_sl
-        && EqTest_i.for_stmt env es1.es_sr es2.es_sr ->
-    conv ri env es1.es_pr es2.es_pr (zhl f1 [es1.es_po] [es2.es_po] stk)
+        && EqTest_i.for_stmt env es1.es_sr es2.es_sr
+        && EqTest_i.for_qe env es1.es_pr.ec_e es2.es_pr.ec_e
+        && EqTest_i.for_qe env es1.es_po.ec_e es2.es_po.ec_e ->
+    conv ri env es1.es_pr.ec_f es2.es_pr.ec_f (zhl f1 [es1.es_po.ec_f] [es2.es_po.ec_f] stk)
 
   | FeagerF eg1, FeagerF eg2 ->
     if    EqTest_i.for_xp env eg1.eg_fl eg2.eg_fl
@@ -2173,6 +2202,7 @@ module EqTest = struct
   let for_lv    = fun env ?(norm = true) -> for_lv    env ~norm
   let for_xp    = fun env ?(norm = true) -> for_xp    env ~norm
   let for_mp    = fun env ?(norm = true) -> for_mp    env ~norm
+  let for_qe    = fun env ?(norm = true) -> for_qe    env ~norm
   let for_instr = fun env ?(alpha = Mid.empty) ?(norm = true) -> for_instr env alpha ~norm
   let for_stmt  = fun env ?(alpha = Mid.empty) ?(norm = true) -> for_stmt  env alpha ~norm
   let for_expr  = fun env ?(alpha = Mid.empty) ?(norm = true) -> for_expr  env alpha ~norm

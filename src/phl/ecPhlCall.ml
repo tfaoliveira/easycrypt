@@ -198,17 +198,17 @@ let t_equiv_call fpre fpost tc =
   let ml = EcMemory.memory es.es_ml in
   let mr = EcMemory.memory es.es_mr in
   (* The functions satisfy their specification *)
-  let f_concl = f_equivF fpre fl fr fpost in
+  let f_concl = f_equivF (classical_ec fpre) fl fr (classical_ec fpost) in
   let modil = f_write env fl in
   let modir = f_write env fr in
   (* The wp *)
   let post =
     wp2_call env fpre fpost
       (lpl,fl,argsl) modil (lpr,fr,argsr) modir
-      ml mr es.es_po hyps
+      ml mr es.es_po.ec_f hyps
   in
   let concl =
-    f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; } in
+    f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = classical_ec post; } in
 
   FApi.xmutate1 tc `HlCall [f_concl; concl]
 
@@ -234,7 +234,7 @@ let t_equiv_call1 side fpre fpost tc =
   let pvres  = pv_res in
   let vres   = LDecl.fresh_id (FApi.tc1_hyps tc) "result" in
   let fres   = f_local vres fsig.fs_ret in
-  let post   = wp_asgn_call env me lp fres equiv.es_po in
+  let post   = wp_asgn_call env me lp fres equiv.es_po.ec_f in
   let subst  = PVM.add env pvres me fres PVM.empty in
   let msubst = Fsubst.f_bind_mem Fsubst.f_subst_id EcFol.mhr me in
   let fpost  = PVM.subst env subst (Fsubst.f_subst msubst fpost) in
@@ -248,8 +248,8 @@ let t_equiv_call1 side fpre fpost tc =
     f_anda_simpl (PVM.subst env spre (Fsubst.f_subst msubst fpre)) post in
   let concl  =
     match side with
-    | `Left  -> { equiv with es_sl = fstmt; es_po = post; }
-    | `Right -> { equiv with es_sr = fstmt; es_po = post; } in
+    | `Left  -> { equiv with es_sl = fstmt; es_po = classical_ec post; }
+    | `Right -> { equiv with es_sr = fstmt; es_po = classical_ec post; } in
   let concl  = f_equivS_r concl in
 
   FApi.xmutate1 tc `HlCall [fconcl; concl]
@@ -306,7 +306,7 @@ let t_call side ax tc =
               (EcPrinting.pp_funname ppe) ef.ef_fr
               (EcPrinting.pp_funname ppe) fl
               (EcPrinting.pp_funname ppe) fr);
-      t_equiv_call ef.ef_pr ef.ef_po tc
+      t_equiv_call ef.ef_pr.ec_f ef.ef_po.ec_f tc
 
   | FbdHoareF hf, FequivS _ ->
       let side =
@@ -333,7 +333,7 @@ let mk_inv_spec (_pf : proofenv) env inv fl fr =
     let eq_res = f_eqres sigl.fs_ret mleft sigr.fs_ret mright in
     let pre    = f_ands (eq_params::lpre) in
     let post   = f_ands [eq_res; eqglob; inv] in
-      f_equivF pre fl fr post
+      f_equivF (classical_ec pre) fl fr (classical_ec post)
 
   | false ->
       let defl = EcEnv.Fun.by_xpath fl env in
@@ -352,7 +352,7 @@ let mk_inv_spec (_pf : proofenv) env inv fl fr =
       let eq_res = f_eqres sigl.fs_ret mleft sigr.fs_ret mright in
       let pre = f_and eq_params inv in
       let post = f_and eq_res inv in
-        f_equivF pre fl fr post
+        f_equivF (classical_ec pre) fl fr (classical_ec post)
 
 let process_call side info tc =
   let process_spec tc side cost =
@@ -399,7 +399,7 @@ let process_call side info tc =
           let (_,fr,_,qrr) = fst (tc1_last_call tc es.es_sr) in
           assert (is_quantum_unit qrr);
           let penv, qenv = LDecl.equivF fl fr hyps in
-          (penv, qenv, fun pre post -> f_equivF pre fl fr post)
+          (penv, qenv, fun pre post -> f_equivF (classical_ec pre) fl fr (classical_ec post))
 
       | FequivS es, Some side, None ->
           let fstmt = sideif side es.es_sl es.es_sr in
@@ -501,7 +501,7 @@ let process_call side info tc =
         let eq_res = f_eqres sigl.fs_ret mleft sigr.fs_ret mright in
         let pre    = f_if_simpl bad2 invQ (f_ands (eq_params::lpre)) in
         let post   = f_if_simpl bad2 invQ (f_ands [eq_res;eqglob;invP]) in
-        (bad,invP,invQ, f_equivF pre fl fr post)
+        (bad,invP,invQ, f_equivF (classical_ec pre) fl fr (classical_ec post))
 
     | _ -> tc_error !!tc "the conclusion is not an equiv" in
 

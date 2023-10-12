@@ -71,6 +71,9 @@ val subst_expr  : subst -> expr -> expr
 val subst_stmt  : subst -> stmt -> stmt
 
 val subst_progvar : subst -> prog_var -> prog_var
+
+val subst_qr : subst -> quantum_ref -> quantum_ref
+
 val subst_mem : subst -> EcIdent.t -> EcIdent.t
 val subst_flocal : subst -> form -> form
 

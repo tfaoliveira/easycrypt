@@ -22,7 +22,7 @@ let pf_destr_eqobsS pf env f =
     try  Mpv2.of_form env (fst es.es_ml) (fst es.es_mr)
     with Not_found -> tc_error pf "cannot reconize a set of equalities"
   in
-    (es, es.es_sl, es.es_sr, of_form es.es_pr, of_form es.es_po)
+    (es, es.es_sl, es.es_sr, of_form es.es_pr.ec_f, of_form es.es_po.ec_f)
 
 (* -------------------------------------------------------------------- *)
 let pf_hSS pf hyps h =
@@ -101,7 +101,7 @@ let t_eager_seq_r i j eqR h tc =
   (* check (d) and (e) *)
   pf_compat !!tc env (s_write env s) (s_write env s') seqR eqIs eqXs;
 
-  let eqO2 = Mpv2.eq_refl (PV.fv env (fst eC.es_mr) eC.es_po) in
+  let eqO2 = Mpv2.eq_refl (PV.fv env (fst eC.es_mr) eC.es_po.ec_f) in
   let c1 ,c2  = s_split i c in
   let c1',c2' = s_split j c' in
 
@@ -110,19 +110,19 @@ let t_eager_seq_r i j eqR h tc =
   let a = f_equivS_r { eC with
     es_sl = stmt (s.s_node@c1);
     es_sr = stmt (c1'@s'.s_node);
-    es_po = eqR;
+    es_po = classical_ec eqR;
   }
   and b = f_equivS_r { eC with
-    es_pr = eqR;
+    es_pr = classical_ec eqR;
     es_sl = stmt (s.s_node@c2);
     es_sr = stmt (c2'@s'.s_node);
   }
   and c = f_equivS_r { eC with
     es_ml = (fst eC.es_ml, snd eC.es_mr);
-    es_pr = to_form (Mpv2.eq_fv2 seqR);
+    es_pr = classical_ec (to_form (Mpv2.eq_fv2 seqR));
     es_sl = stmt c2';
     es_sr = stmt c2';
-    es_po = to_form eqO2;
+    es_po = classical_ec (to_form eqO2);
   }
 
   in
@@ -148,7 +148,7 @@ let t_eager_if_r tc =
   let aT =
     f_forall
       [(mleft, GTmem (snd es.es_ml)); (mright, GTmem (snd es.es_mr))]
-      (f_imp es.es_pr (f_eq fel fer)) in
+      (f_imp es.es_pr.ec_f (f_eq fel fer)) in
 
   let bT =
     let b   = EcIdent.create "b1" in
@@ -156,23 +156,23 @@ let t_eager_if_r tc =
     let sub = Fsubst.f_subst_id in
     let sub = Fsubst.f_bind_mem sub mleft  mhr in
     let sub = Fsubst.f_bind_mem sub mright m2 in
-    let p   = Fsubst.f_subst sub es.es_pr in
+    let p   = Fsubst.f_subst sub es.es_pr.ec_f in
 
     f_forall
       [(m2, GTmem (snd es.es_mr)); (b, GTty tbool)]
       (f_hoareS (mhr, snd es.es_ml) (f_and p eqb) s eqb) in
 
   let cT =
-    let pre = f_and es.es_pr (f_eq fel f_true) in
+    let pre = f_and es.es_pr.ec_f (f_eq fel f_true) in
     let st  = stmt (s.s_node @ c1.s_node) in
     let st' = stmt (c1'.s_node @ s'.s_node) in
-    f_equivS es.es_ml es.es_mr pre st st' es.es_po in
+    f_equivS es.es_ml es.es_mr (classical_ec pre) st st' es.es_po in
 
   let dT =
-    let pre = f_and es.es_pr (f_eq fel f_false) in
+    let pre = f_and es.es_pr.ec_f (f_eq fel f_false) in
     let st  = stmt (s.s_node @ c2.s_node) in
     let st' = stmt (c2'.s_node @ s'.s_node) in
-    f_equivS es.es_ml es.es_mr pre st st' es.es_po in
+    f_equivS es.es_ml es.es_mr (classical_ec pre) st st' es.es_po in
 
   FApi.xmutate1 tc `EagerIf [aT; bT; cT; dT]
 
@@ -191,7 +191,7 @@ let t_eager_while_r h tc =
 
   let to_form eq =  Mpv2.to_form (fst eC.es_ml) (fst eC.es_mr) eq f_true in
 
-  let eqI  = eC.es_pr in
+  let eqI  = eC.es_pr.ec_f in
   let seqI =
     try
       Mpv2.of_form env (fst eC.es_ml) (fst eC.es_mr) eqI
@@ -214,18 +214,18 @@ let t_eager_while_r h tc =
       (f_imp eqI (f_eq e1 e2))
 
   and bT = f_equivS_r { eC with
-    es_pr = f_and_simpl eqI e1;
+    es_pr = classical_ec (f_and_simpl eqI e1);
     es_sl = stmt (s.s_node@c.s_node);
     es_sr = stmt (c'.s_node@s'.s_node);
-    es_po = eqI;
+    es_po = classical_ec eqI;
   }
 
   and cT = f_equivS_r { eC with
     es_ml = (fst eC.es_ml, snd eC.es_mr);
-    es_pr = eqI2;
+    es_pr = classical_ec eqI2;
     es_sl = c';
     es_sr = c';
-    es_po = eqI2;
+    es_po = classical_ec eqI2;
   }
 
   in
@@ -286,8 +286,8 @@ let t_eager_fun_def_r tc =
     es_mr = memr;
     es_sl = s_seq eg.eg_sl sfl;
     es_sr = s_seq sfr eg.eg_sr;
-    es_pr = pre;
-    es_po = post;
+    es_pr = classical_ec pre;
+    es_po = classical_ec post;
   } in
 
   FApi.xmutate1 tc `EagerFunDef [cond]
@@ -313,8 +313,8 @@ let t_eager_fun_abs_r eqI h tc =
         (Mpv2.eq_refl (PV.fv env mright f))
         f_true
     in
-         f_eagerF ef.ef_pr s ef.ef_fl ef.ef_fr s' ef.ef_po
-      :: f_equivF (torefl ef.ef_pr) ef.ef_fr ef.ef_fr (torefl ef.ef_po)
+         f_eagerF ef.ef_pr.ec_f s ef.ef_fl ef.ef_fr s' ef.ef_po.ec_f
+      :: f_equivF (classical_ec (torefl ef.ef_pr.ec_f)) ef.ef_fr ef.ef_fr (classical_ec (torefl ef.ef_po.ec_f))
       :: sg
   in
 
@@ -364,9 +364,9 @@ let t_eager_call_r fpre fpost tc =
   let modir = PV.union (f_write env fr) swr in
   let post  = EcPhlCall.wp2_call env fpre fpost (lvl, fl, argsl) modil
 
-     (lvr,fr,argsr) modir ml mr es.es_po hyps in
+     (lvr,fr,argsr) modir ml mr es.es_po.ec_f hyps in
   let f_concl = f_eagerF fpre sl fl fr sr fpost in
-  let concl   = f_equivS_r { es with es_sl = stmt []; es_sr = stmt []; es_po = post; } in
+  let concl   = f_equivS_r { es with es_sl = stmt []; es_sr = stmt []; es_po = classical_ec post; } in
 
   FApi.xmutate1 tc `EagerCall [f_concl; concl]
 
@@ -546,7 +546,7 @@ let t_eager_r h inv tc =
 
   let eC, c, c' = tc1_destr_eagerS tc s s' in
   let eqinv = Mpv2.of_form env mleft mright inv in
-  let eqO = Mpv2.of_form env mleft mright eC.es_po in
+  let eqO = Mpv2.of_form env mleft mright eC.es_po.ec_f in
   let c1, c1', fhyps, eqi = eager !!tc env s s' eqinv eqIs eqXs c c' eqO in
 
   if c1 <> [] || c1' <> [] then
@@ -569,7 +569,7 @@ let t_eager_r h inv tc =
   let concl =
     f_equivS_r { eC with
       es_sl = stmt []; es_sr = stmt [];
-      es_po = Mpv2.to_form mleft mright eqi f_true;
+      es_po = classical_ec (Mpv2.to_form mleft mright eqi f_true);
     }
   in
 
@@ -608,7 +608,7 @@ let process_info info tc =
     let eqXs  = process_formula eqXs in
     let s1    = TTC.tc1_process_stmt tc (snd ml) s1 in
     let s2    = TTC.tc1_process_stmt tc (snd mr) s2 in
-    let f     = f_equivS ml mr eqIs s1 s2 eqXs in
+    let f     = f_equivS ml mr (classical_ec eqIs) s1 s2 (classical_ec eqXs) in
     let h     = LDecl.fresh_id hyps (unloc h) in
     (FApi.t_last (t_intros_i [h]) (t_cut f tc), h)
 

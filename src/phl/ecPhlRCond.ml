@@ -76,7 +76,7 @@ module Low = struct
     let s1 = Fsubst.f_subst_id in
     let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory m) EcFol.mhr in
     let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory mo) mo' in
-    let pre1 = Fsubst.f_subst s1 es.es_pr in
+    let pre1 = Fsubst.f_subst s1 es.es_pr.ec_f in
     let concl1 =
       f_forall_mems [mo', EcMemory.memtype mo]
         (f_hoareS (EcFol.mhr, EcMemory.memtype m) pre1 hd e) in

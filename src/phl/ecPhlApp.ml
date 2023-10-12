@@ -107,8 +107,8 @@ let t_equiv_app (i, j) phi tc =
   let es = tc1_as_equivS tc in
   let sl1,sl2 = s_split i es.es_sl in
   let sr1,sr2 = s_split j es.es_sr in
-  let a = f_equivS_r {es with es_sl=stmt sl1; es_sr=stmt sr1; es_po=phi} in
-  let b = f_equivS_r {es with es_pr=phi; es_sl=stmt sl2; es_sr=stmt sr2} in
+  let a = f_equivS_r {es with es_sl=stmt sl1; es_sr=stmt sr1; es_po= classical_ec phi} in
+  let b = f_equivS_r {es with es_pr= classical_ec phi; es_sl=stmt sl2; es_sr=stmt sr2} in
 
   FApi.xmutate1 tc `HlApp [a; b]
 
@@ -129,7 +129,7 @@ let t_equiv_app_onesided side i pre post tc =
   let modi = EcPV.s_write env (EcModules.stmt s2) in
   let subst = Fsubst.f_subst_mem mhr (fst m) in
   let p' = subst pre and q' = subst post in
-  let r = f_and p' (generalize_mod env (fst m) modi (f_imp q' es.es_po)) in
+  let r = f_and p' (generalize_mod env (fst m) modi (f_imp q' es.es_po.ec_f)) in
   FApi.t_seqsub (t_equiv_app ij r)
     [t_id; (* s1 ~ s' : pr ==> r *)
      FApi.t_seqsub (EcPhlConseq.t_equivS_conseq_nm p' q')

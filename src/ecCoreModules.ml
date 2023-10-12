@@ -108,6 +108,29 @@ let qrproj (qr, i) =
   | QRtuple t -> List.nth t i
   | _ -> QRproj(qr, i)
 
+let rec qr_iter f = function
+  | QRvar x -> f x
+  | QRtuple t -> List.iter (qr_iter f) t
+  | QRproj(q,_) -> qr_iter f q
+
+let rec qr_map f = function
+  | QRvar x -> qrvar (f x)
+  | QRtuple t -> qrtuple (List.Smart.map (qr_map f) t)
+  | QRproj (q, i) -> qrproj (qr_map f q, i)
+
+let rec qr_all f qr =
+  match qr with
+  | QRvar x -> f x
+  | QRtuple t -> List.for_all (qr_all f) t
+  | QRproj (q, _) -> qr_all f q
+
+let rec qr_all2 f qr1 qr2 =
+  match qr1, qr2 with
+  | QRvar x1, QRvar x2 -> f x1 x2
+  | QRtuple t1, QRtuple t2 -> List.all2 (qr_all2 f) t1 t2
+  | QRproj (q1, i1), QRproj (q2,i2) -> i1 = i2 && qr_all2 f q1 q2
+  | _, _ -> false
+
 (* -------------------------------------------------------------------- *)
 type quantum_op =
   | Qinit
@@ -124,14 +147,8 @@ let qref_reduce (norm : prog_var -> prog_var) =
     | QRvar (pv, pty) ->
        qrvar (norm pv, pty)
 
-    | QRproj (subqr, i) -> begin
-        match reduce subqr with
-        | QRtuple t ->
-           List.nth t i
-
-        | subqr ->
-           qrproj (subqr, i)
-      end
+    | QRproj (subqr, i) ->
+       qrproj (reduce subqr, i)
 
     | QRtuple qrs ->
        qrtuple (List.map reduce qrs)
@@ -492,10 +509,7 @@ let pvt_subst (s : EcTypes.e_subst) (pv,ty as p) =
   let ty' = EcTypes.ty_subst s.EcTypes.es_ty ty in
   if pv == pv' && ty == ty' then p else (pv', ty')
 
-let rec qr_subst (s : EcTypes.e_subst) = function
-  | QRvar x -> qrvar (pvt_subst s x)
-  | QRtuple t -> qrtuple (List.Smart.map (qr_subst s) t)
-  | QRproj (x, i) -> qrproj (qr_subst s x, i)
+let qr_subst (s : EcTypes.e_subst) = qr_map (pvt_subst s)
 
 let rec s_subst_top (s : EcTypes.e_subst) =
   let e_subst = EcTypes.e_subst s in

@@ -2480,6 +2480,11 @@ module NormMp = struct
     let g = (norm_glob env mhr mp) in
     g.f_ty
 
+  let norm_ec aux env ec =
+    let norm_pvt (pv, ty) = norm_pvar env pv, ty in
+    { ec_f = aux ec.ec_f;
+      ec_e = qe_map norm_pvt ec.ec_e }
+
   let rec norm_form env =
     let has_mod b =
       List.exists (fun (_,gty) ->
@@ -2525,8 +2530,8 @@ module NormMp = struct
         (* TODO: missing cases: FbdHoareF and every F*HoareS *)
 
         | FequivF ef ->
-          let pre' = aux ef.ef_pr and l' = norm_xfun env ef.ef_fl
-          and r' = norm_xfun env ef.ef_fr and post' = aux ef.ef_po in
+          let pre' = norm_ec aux env ef.ef_pr and l' = norm_xfun env ef.ef_fl
+          and r' = norm_xfun env ef.ef_fr and post' = norm_ec aux env ef.ef_po in
           if ef.ef_pr == pre' && ef.ef_fl == l' &&
             ef.ef_fr == r' && ef.ef_po == post' then f else
           f_equivF pre' l' r' post'
@@ -2549,6 +2554,7 @@ module NormMp = struct
         | _ -> f)
           in
     norm_form
+
 
   let norm_op env op =
     let kind =

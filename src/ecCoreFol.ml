@@ -48,6 +48,18 @@ let qe_empty = {
 let is_qe_empty qe =
   not qe.qeg && is_quantum_unit qe.qel && is_quantum_unit qe.qer
 
+let qe_iter f qe =
+  qr_iter f qe.qel; qr_iter f qe.qer
+
+let qe_map f qe =
+  { qeg = qe.qeg; qel = qr_map f qe.qel; qer = qr_map f qe.qer }
+
+let qe_all f qe =
+   qr_all f qe.qel &&  qr_all f qe.qer
+
+let qe_all2 f qe1 qe2 =
+  qe1.qeg = qe2.qeg && qr_all2 f qe1.qel qe2.qel && qr_all2 f qe1.qer qe2.qer
+
 (* -------------------------------------------------------------------- *)
 type quantif =
   | Lforall
@@ -206,6 +218,13 @@ and call_bound = {
 and module_type = form p_module_type
 
 type mod_restr = form p_mod_restr
+
+let is_classical_ec ec =
+  (* FIXME QUANTUM: check that ec.ec_f contain only classical variable *)
+  is_qe_empty ec.ec_e
+
+let classical_ec f =
+  { ec_f = f; ec_e = qe_empty }
 
 (*-------------------------------------------------------------------- *)
 let mhr    = EcIdent.create "&hr"

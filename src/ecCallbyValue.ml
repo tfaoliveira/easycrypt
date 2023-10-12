@@ -179,15 +179,7 @@ let norm_pv st s pv =
 let norm_pvt st s (pv ,t) =
   (norm_pv st s pv, Subst.subst_ty s t)
 
-let rec norm_qr st s qr =
-  let open EcCoreModules in
-  match qr with
-  | QRvar x -> qrvar (norm_pvt st s x)
-  | QRtuple t -> qrtuple (List.Smart.map (norm_qr st s) t)
-  | QRproj (x, i) -> qrproj (norm_qr st s x, i)
-
-let norm_qe st s {qeg; qel; qer } =
-  { qeg; qel = norm_qr st s qel; qer = norm_qr st s qel }
+let norm_qe st s = qe_map (norm_pvt st s)
 
 (* -------------------------------------------------------------------- *)
 let rec norm st s f =

@@ -1894,14 +1894,14 @@ let rec prelvalue_as_qref_r (lv  : prelvalue) =
   | PreLV_var (pv, (q, ty)) -> begin
      match q with
      | `Classical -> raise (NotAQRef `CVar)
-     | `Quantum   -> QRvar (pv, ty)
+     | `Quantum   -> qrvar (pv, ty)
     end
 
   | PreLV_tuple qrs ->
-     QRtuple (List.map prelvalue_as_qref_r qrs)
+     qrtuple (List.map prelvalue_as_qref_r qrs)
 
   | PreLV_proji (subqr, i) ->
-     QRproj (prelvalue_as_qref_r subqr, i)
+     qrproj (prelvalue_as_qref_r subqr, i)
 
   | PreLV_map _ ->
      raise (NotAQRef `Map)
@@ -2038,7 +2038,7 @@ and trans_qrefs
   let qrefs, tys = List.split qrefs in
 
   if disjoint then
-    check_qref_disjoint env pqrefs.pl_loc (QRtuple qrefs);
+    check_qref_disjoint env pqrefs.pl_loc (qrtuple qrefs);
 
   (qrefs, tys)
 

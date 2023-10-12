@@ -108,7 +108,8 @@ let tc1_process_prhl_form_opt tc oty pf =
   in
 
   let hyps = LDecl.push_all [ml; mr] hyps in
-  let mv = Msym.of_list [("pre", pr); ("post", po)] in
+  (* FIXME QUANTUM maybe we need ec_e *)
+  let mv = Msym.of_list [("pre", pr.ec_f); ("post", po.ec_f)] in
   pf_process_form_opt ~mv !!tc hyps oty pf
 
 let tc1_process_prhl_form tc ty pf = tc1_process_prhl_form_opt tc (Some ty) pf

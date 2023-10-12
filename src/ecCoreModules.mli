@@ -35,6 +35,13 @@ val qrvar   : prog_var_ty -> quantum_ref
 val qrtuple : quantum_ref list -> quantum_ref
 val qrproj  : quantum_ref * int -> quantum_ref
 
+val qr_iter : (prog_var_ty -> unit) -> quantum_ref -> unit
+val qr_map : (prog_var_ty -> prog_var_ty) -> quantum_ref -> quantum_ref
+val qr_all : (prog_var_ty -> bool) -> quantum_ref -> bool
+
+val qr_all2 :
+  (prog_var_ty -> prog_var_ty -> bool) -> quantum_ref -> quantum_ref -> bool
+
 val is_quantum_valid : norm:(prog_var -> prog_var) -> quantum_ref -> bool
 
 type quantum_op =

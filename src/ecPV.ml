@@ -353,10 +353,10 @@ module PV = struct
             [fst bhs.bhs_m] [bhs.bhs_pr; bhs.bhs_po; bhs.bhs_bd]
 
       | FequivF ef ->
-          in_mem_scope env fv [mleft; mright] [ef.ef_pr; ef.ef_po]
+          in_mem_scope env fv [mleft; mright] [ef.ef_pr.ec_f; ef.ef_po.ec_f]
 
       | FequivS es ->
-          in_mem_scope env fv [fst es.es_ml; fst es.es_mr] [es.es_pr; es.es_po]
+          in_mem_scope env fv [fst es.es_ml; fst es.es_mr] [es.es_pr.ec_f; es.es_po.ec_f]
 
       | FeagerF eg ->
           in_mem_scope env fv [mhr] [eg.eg_pr; eg.eg_po]

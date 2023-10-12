@@ -246,8 +246,8 @@ let get_pre f =
   | FcHoareS hs  -> Some (hs.chs_pr)
   | FbdHoareF hf -> Some (hf.bhf_pr)
   | FbdHoareS hs -> Some (hs.bhs_pr)
-  | FequivF ef   -> Some (ef.ef_pr )
-  | FequivS es   -> Some (es.es_pr )
+  | FequivF ef   -> assert (is_qe_empty ef.ef_pr.ec_e); Some (ef.ef_pr.ec_f )
+  | FequivS es   -> assert (is_qe_empty es.es_pr.ec_e); Some (es.es_pr.ec_f )
   | _            -> None
 
 let tc1_get_pre tc =
@@ -264,8 +264,8 @@ let get_post f =
   | FcHoareS hs  -> Some (hs.chs_po )
   | FbdHoareF hf -> Some (hf.bhf_po)
   | FbdHoareS hs -> Some (hs.bhs_po)
-  | FequivF ef   -> Some (ef.ef_po )
-  | FequivS es   -> Some (es.es_po )
+  | FequivF ef   -> assert (is_qe_empty ef.ef_po.ec_e); Some (ef.ef_po.ec_f )
+  | FequivS es   -> assert (is_qe_empty es.es_po.ec_e); Some (es.es_po.ec_f )
   | _            -> None
 
 let tc1_get_post tc =
@@ -276,15 +276,20 @@ let tc1_get_post tc =
 (* -------------------------------------------------------------------- *)
 let set_pre ~pre f =
   match f.f_node with
- | FhoareF hf  -> f_hoareF pre hf.hf_f hf.hf_po
- | FhoareS hs  -> f_hoareS_r { hs with hs_pr = pre }
- | FcHoareF hf  -> f_cHoareF pre hf.chf_f hf.chf_po hf.chf_co
- | FcHoareS hs  -> f_cHoareS_r { hs with chs_pr = pre }
- | FbdHoareF hf -> f_bdHoareF pre hf.bhf_f hf.bhf_po hf.bhf_cmp hf.bhf_bd
- | FbdHoareS hs -> f_bdHoareS_r { hs with bhs_pr = pre }
- | FequivF ef   -> f_equivF pre ef.ef_fl ef.ef_fr ef.ef_po
- | FequivS es   -> f_equivS_r { es with es_pr = pre }
- | _            -> assert false
+  | FhoareF hf  -> f_hoareF pre hf.hf_f hf.hf_po
+  | FhoareS hs  -> f_hoareS_r { hs with hs_pr = pre }
+  | FcHoareF hf  -> f_cHoareF pre hf.chf_f hf.chf_po hf.chf_co
+  | FcHoareS hs  -> f_cHoareS_r { hs with chs_pr = pre }
+  | FbdHoareF hf -> f_bdHoareF pre hf.bhf_f hf.bhf_po hf.bhf_cmp hf.bhf_bd
+  | FbdHoareS hs -> f_bdHoareS_r { hs with bhs_pr = pre }
+  | FequivF _ | FequivS _ -> assert false (* FIXME QUANTUM : use set_equiv_pre *)
+  | _            -> assert false
+
+let set_equiv_pre ~pre f =
+  match f.f_node with
+  | FequivF ef   -> f_equivF pre ef.ef_fl ef.ef_fr ef.ef_po
+  | FequivS es   -> f_equivS_r { es with es_pr = pre }
+  | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
 exception InvalidSplit of codepos1
@@ -658,11 +663,12 @@ let t_code_transform
       let hyps      = FApi.tc1_hyps tc in
       let es        = tc1_as_equivS tc in
       let pre, post = es.es_pr, es.es_po in
+      assert (is_classical_ec pre && is_classical_ec post);
       let me, stmt     =
         match side with
         | `Left  -> (es.es_ml, es.es_sl)
         | `Right -> (es.es_mr, es.es_sr) in
-      let me, stmt, cs = tx (pf, hyps) cpos (pre, post) (me, stmt) in
+      let me, stmt, cs = tx (pf, hyps) cpos (pre.ec_f, post.ec_f) (me, stmt) in
       let concl =
         match side with
         | `Left  -> f_equivS_r { es with es_ml = me; es_sl = stmt; }

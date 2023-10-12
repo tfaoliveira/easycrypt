@@ -114,6 +114,10 @@ let on_pv (cb : cb) (pv : prog_var)=
   | PVglob xp -> on_xp cb xp
   | _         -> ()
 
+let on_pvt (cb : cb) ((pv, ty) : prog_var_ty)=
+  on_ty cb ty;
+  on_pv cb pv
+
 let on_lp (cb : cb) (lp : lpattern) =
   match lp with
   | LSymbol (_, ty) -> on_ty cb ty
@@ -234,15 +238,23 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     on_stmt cb hs.EcFol.hs_s;
     on_memenv cb hs.EcFol.hs_m
 
+  and on_qe cb qe =
+    qr_iter (on_pvt cb) qe.qel;
+    qr_iter (on_pvt cb) qe.qer
+
+  and on_ce cb ec =
+    on_form cb ec.ec_f;
+    on_qe cb ec.ec_e
+
   and on_ef cb ef =
-    on_form cb ef.EcFol.ef_pr;
-    on_form cb ef.EcFol.ef_po;
+    on_ce cb ef.EcFol.ef_pr;
+    on_ce cb ef.EcFol.ef_po;
     on_xp cb ef.EcFol.ef_fl;
     on_xp cb ef.EcFol.ef_fr
 
   and on_es cb es =
-    on_form cb es.EcFol.es_pr;
-    on_form cb es.EcFol.es_po;
+    on_ce cb es.EcFol.es_pr;
+    on_ce cb es.EcFol.es_po;
     on_stmt cb es.EcFol.es_sl;
     on_stmt cb es.EcFol.es_sr;
     on_memenv cb es.EcFol.es_ml;
