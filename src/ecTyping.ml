@@ -2364,107 +2364,105 @@ and transmodsig (env : EcEnv.env) (inft : pinterface) =
   { tms_sig = mis; tms_loca = inft.pi_locality }
 
 (* -------------------------------------------------------------------- *)
-and transmodsig_body
-  (env : EcEnv.env) (sa : Sm.t) (is : pmodule_sig_struct_body)
-=
-
-  let names = ref [] in
-
+and transmodsig_body (env : EcEnv.env) (sa : Sm.t) (is : pmodule_sig_struct_body) =
   let transsig1 mr = function
     | `FunctionDecl f ->
       let name = f.pfd_name in
-      names := name::!names;
-      let tyargs =
+
+      let trans_args (q : quantum) (args : (osymbol * pty) list) =
         let tyargs =
           List.map
             (fun (x, ty) -> {
-                 (* FIXME QUANTUM *)
-                 ov_quantum = `Classical;
-                 ov_name = omap unloc x.pl_desc;
-                 ov_type = transty_for_decl env ty }) f.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
+               ov_quantum = q;
+               ov_name    = omap unloc x.pl_desc;
+               ov_type    = transty_for_decl env ty
+            })
+            args
         in
 
-        let args = List.fold_left (fun names (x, _) ->
-          match unloc x with
-          | None   -> names
-          | Some x -> x :: names) [] f.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
-        in
+        let anames = List.pmap (fun (x, _) -> unloc x) args  in
 
-        Msym.odup unloc args |> oiter (fun (_, a) ->
-          tyerror name.pl_loc env
-          (InvalidModSig (MTS_DupArgName (unloc name, unloc a))));
-
-        tyargs
+        anames, tyargs
       in
 
-      let resty = transty_for_decl env f.pfd_tyresult in
+      let cnames, ctyargs = trans_args `Classical f.pfd_tyargs.fp_classical in
+      let qnames, qtyargs = trans_args `Quantum f.pfd_tyargs.fp_quantum in
 
+      oiter
+        (fun (_, a) ->
+          tyerror name.pl_loc env
+            (InvalidModSig (MTS_DupArgName (unloc name, unloc a))))
+        (Msym.odup unloc (cnames @ qnames));
+
+      let resty = transty_for_decl env f.pfd_tyresult in
       let rname, compl, calls = trans_restr_fun env env sa f.pfd_uses in
 
       assert (rname = name.pl_desc);
 
-      let oi = OI.mk calls compl in
+      let sig_ = {
+        fs_name   = name.pl_desc;
+        fs_arg    = ttuple (List.map ov_type ctyargs);
+        fs_qarg   = ttuple (List.map ov_type qtyargs);
+        fs_anames = ctyargs;
+        fs_qnames = qtyargs;
+        fs_ret    = resty;
+      } in
 
-      let sig_ = { fs_name   = name.pl_desc;
-                   fs_arg    = ttuple (List.map ov_type tyargs);
-                   (* FIXME QUANTUM *)
-                   fs_qarg = tunit;
-                   fs_anames = tyargs;
-                   (* FIXME QUANTUM *)
-                   fs_qnames = [];
-                   fs_ret    = resty; }
-      and mr = EcModules.add_oinfo mr name.pl_desc oi in
-      [Tys_function sig_], mr
+      let oi = OI.mk calls compl in
+      let mr = EcModules.add_oinfo mr name.pl_desc oi in
+
+      (mr, ([name], [Tys_function sig_]))
 
     | `Include (i,proc,restr) ->
-      let (_modty,sig_) = transmodtype env i in
-      if sig_.mis_params <> [] then
+
+      let (_modty, sig_) = transmodtype env i in
+
+      if not (List.is_empty sig_.mis_params) then
         tyerror i.pl_loc env (InvalidModType MTE_IncludeFunctor);
 
       let check_xs xs =
-        List.iter (fun x ->
-          let s = unloc x in
-          if not (List.exists (fun (Tys_function fs) ->
-                      sym_equal fs.fs_name s) sig_.mis_body) then
+        let for1 ({ pl_desc = name } as x) =
+          let test (Tys_function fs) = sym_equal fs.fs_name name in
+          if not (List.exists test sig_.mis_body) then
             let modsymb = fst (unloc i) @ [snd (unloc i)] in
-            let funsymb = unloc x in
-            tyerror (loc x) env (UnknownFunName (modsymb,funsymb))) xs in
+            tyerror (loc x) env (UnknownFunName (modsymb, name))
+        in List.iter for1 xs in
 
-      let in_xs (Tys_function fs) xs =
+      let in_xs xs (Tys_function fs) =
         List.exists (fun x -> sym_equal fs.fs_name (unloc x)) xs in
 
       let calls = trans_restr_oracle_calls env env sa restr in
 
       let update_mr mr (Tys_function fs) =
-        names := mk_loc (loc i) fs.fs_name :: !names;
-        EcModules.change_oicalls mr fs.fs_name calls
+        let name = mk_loc (loc i) fs.fs_name in
+        let mr   = EcModules.change_oicalls mr fs.fs_name calls in
+        (mr, name)
       in
 
-      let mr, body = match proc with
-        | None -> List.fold_left update_mr mr sig_.mis_body, List.rev sig_.mis_body
+      let filter p =
+        let for1 mr item =
+          if p item then
+            let mr, name = update_mr mr item in
+            Some (mr, (name, item))
+          else None
+        in List.fold_left_pmap for1 mr sig_.mis_body in
+
+      let mr, nmbd =
+        match proc with
+        | None -> filter (fun _ -> true)
+
         | Some (`MInclude xs) ->
-          check_xs xs;
-          List.fold_left
-            (fun (mr, body) fs ->
-               if in_xs fs xs then (update_mr mr fs,fs :: body)
-               else (mr, body))
-            (mr,[]) sig_.mis_body
+          check_xs xs; filter (in_xs xs)
+
         | Some (`MExclude xs) ->
-          check_xs xs;
-          List.fold_left
-            (fun (mr, body) fs ->
-               if not (in_xs fs xs) then (update_mr mr fs, fs :: body)
-               else (mr, body))
-            (mr,[]) sig_.mis_body in
+          check_xs xs; filter (fun fs -> not (in_xs xs fs)) in
 
-      body, mr in
+      (mr, List.split nmbd) in
 
-  let items, mr = List.fold_left (fun (its,mr) i ->
-      let l, mr = transsig1 mr i in
-      l @ its, mr
-    ) ([],EcModules.mr_empty) is in
-  let items = List.rev items in
-  let names = List.rev !names in
+  let names, items, mr =
+    let mr, nmit = List.fold_left_map transsig1 EcModules.mr_empty is in
+    let names, items = List.split nmit in
+    List.flatten names, List.flatten items, mr in
 
   Msym.odup unloc names |> oiter (fun (_, x) ->
     tyerror (loc x) env (InvalidModSig (MTS_DupProcName (unloc x))));
@@ -2625,20 +2623,29 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
       let ue  = UE.create (Some []) in
       let env = EcEnv.Fun.enter decl.pfd_name.pl_desc env in
 
-      (* Type-check function parameters / check for dups *)
-      let params =
-        let checked_name os =
-          match unloc os with
-          | None    -> tyerror os.pl_loc env NoConcreteAnonParams
-          | Some os -> unloc os
-        in
-        List.map (fun (s,pty) -> {
-              v_quantum = `Classical; (* FIXME QUANTUM *)
-              v_name = checked_name s;
-              v_type = transty tp_uni env ue pty}, s.pl_loc) decl.pfd_tyargs.fp_classical (* FIXME QUANTUM *)
+      (* Type-check function parameters / check for dups (FIXME: really??) *)
+      let check_name os =
+        match unloc os with
+        | None    -> tyerror os.pl_loc env NoConcreteAnonParams
+        | Some os -> unloc os
       in
+
+      let params (q : quantum) (params : (osymbol * pty) list) =
+        let params1 (s, pty) =
+          let var = {
+            v_quantum = q;
+            v_name    = check_name s;
+            v_type    = transty tp_uni env ue pty
+          } in (var, loc s) in
+
+        List.map params1 params in
+
+      let cparams = params `Classical decl.pfd_tyargs.fp_classical in
+      let qparams = params `Quantum decl.pfd_tyargs.fp_quantum in
+
       let memenv = EcMemory.empty_local ~witharg:false mhr in
-      let memenv = fundef_add_symbol env memenv params in
+      let memenv = fundef_add_symbol env memenv cparams in
+      let memenv = fundef_add_symbol env memenv qparams in
 
       (* Type-check body *)
       let retty = transty tp_uni env ue decl.pfd_tyresult in
@@ -2648,7 +2655,8 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
       (* Close all types *)
       let ts      = Tuni.subst (UE.assubst ue) in
       let retty   = fundef_check_type (ty_subst ts) env None (retty, decl.pfd_tyresult.pl_loc) in
-      let params  = List.map (fundef_check_decl (ty_subst ts) env) params in
+      let cparams = List.map (fundef_check_decl (ty_subst ts) env) cparams in
+      let qparams = List.map (fundef_check_decl (ty_subst ts) env) qparams in
       let locals  = List.map (fundef_check_decl (ty_subst ts) env) locals in
       let prelude = List.map (fundef_check_iasgn ts env) prelude in
 
@@ -2657,7 +2665,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
 
       let clsubst = { EcTypes.e_subst_id with es_ty = ts } in
       let stmt    = s_subst clsubst stmt
-      and result  = result |> omap (e_subst clsubst) in
+      and result  = omap (e_subst clsubst) result in
       let stmt    = EcModules.stmt (List.flatten prelude @ stmt.s_node) in
 
       (* Computes reads/writes/calls *)
@@ -2668,12 +2676,10 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
         { f_name   = decl.pfd_name.pl_desc;
           f_sig    = {
             fs_name   = decl.pfd_name.pl_desc;
-            fs_arg    = ttuple (List.map (fun vd -> vd.v_type) params);
-            (* FIXME QUANTUM *)
-            fs_qarg   = tunit;
-            fs_anames = List.map ovar_of_var params;
-            (* FIXME QUANTUM *)
-            fs_qnames = [];
+            fs_arg    = ttuple (List.map (fun vd -> vd.v_type) cparams);
+            fs_qarg   = ttuple (List.map (fun vd -> vd.v_type) qparams);
+            fs_anames = List.map ovar_of_var cparams;
+            fs_qnames = List.map ovar_of_var qparams;
             fs_ret    = retty;
           };
           f_def = FBdef {
@@ -2683,8 +2689,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
             f_uses   = uses;
           };
         }
-      in
-        [], [(decl.pfd_name.pl_desc, MI_Function fun_)]
+      in [], [(decl.pfd_name.pl_desc, MI_Function fun_)]
     end
 
   | Pst_alias ({pl_desc = name},f) ->
@@ -2753,12 +2758,12 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
   let prelude = ref []
   and locals  = ref [] in
 
-  (* Type-check local variables / check for dups *)
+  (* Type-check local variables / check for dups (FIXME: really??) *)
   let add_local memenv local =
     let env   = EcEnv.Memory.push_active memenv env in
-    let ty     = local.pfl_type |> omap (transty tp_uni env ue) in
-    let init   = local.pfl_init |> omap (fst -| transexp env `InProc ue) in
-    let ty =
+    let ty    = local.pfl_type |> omap (transty tp_uni env ue) in
+    let init  = local.pfl_init |> omap (fst -| transexp env `InProc ue) in
+    let ty    =
       match ty, init with
       | None   , None   -> None
       | Some ty, None   -> Some ty
@@ -2773,6 +2778,7 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
     let mode   = fst (unloc local.pfl_names) in
 
     let xsvars = List.map (fun _ -> UE.fresh ue) xs in
+
     begin
       ty |> oiter (fun ty ->
         match mode with
@@ -2782,10 +2788,16 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
 
     (* building the list of locals *)
     let xs =
-      (* FIXME QUANTUM *)
-      List.map2 (fun x ty ->
-          {v_quantum = `Classical; v_name = x.pl_desc; v_type = ty}, x.pl_loc) xs xsvars in
+      List.map2
+        (fun x ty ->
+          let var = {
+            v_quantum = local.pfl_quantum;
+            v_name    = x.pl_desc;
+            v_type    = ty;
+          } in (var, x.pl_loc)) xs xsvars in
+
     let memenv = fundef_add_symbol env memenv xs in
+
     locals := xs :: !locals;
     init |> oiter
      (fun init ->

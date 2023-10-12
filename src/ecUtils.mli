@@ -286,6 +286,8 @@ module List : sig
   val find_dup   : ?cmp:('a -> 'a -> int) -> 'a list -> 'a option
   val has_dup    : ?cmp:('a -> 'a -> int) -> 'a list -> bool
 
+  val fold_left_pmap : ('a -> 'b -> ('a * 'c) option) -> 'a -> 'b list -> 'a * 'c list
+
   (* ------------------------------------------------------------------ *)
   val ksort:
         ?stable:bool -> ?rev:bool

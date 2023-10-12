@@ -1602,12 +1602,12 @@ stmt: aout=loc(instr)* { aout }
 (* -------------------------------------------------------------------- *)
 (* Module definition                                                    *)
 
-quantum_classical :
-| QUANTUM VAR { `Quantum }
-|         VAR { `Classical }
+oquantum:
+| QUANTUM { `Quantum }
+|         { `Classical }
 
 var_decl:
-| qc=quantum_classical xs=plist1(lident, COMMA) COLON ty=loc(type_exp)
+| qc=oquantum VAR xs=plist1(lident, COMMA) COLON ty=loc(type_exp)
    { (qc, xs, ty) }
 
 loc_decl_names:
@@ -1617,16 +1617,16 @@ loc_decl_names:
 
 
 loc_decl_r:
-| q=quantum_classical x=loc(loc_decl_names)
+| q=oquantum VAR x=loc(loc_decl_names)
     { { pfl_quantum = q; pfl_names = x; pfl_type = None; pfl_init = None; } }
 
-| q=quantum_classical x=loc(loc_decl_names) COLON ty=loc(type_exp)
+| q=oquantum VAR x=loc(loc_decl_names) COLON ty=loc(type_exp)
     { { pfl_quantum = q; pfl_names = x; pfl_type = Some ty; pfl_init = None; } }
 
-| q=quantum_classical x=loc(loc_decl_names) COLON ty=loc(type_exp) LARROW e=expr
+| q=oquantum VAR x=loc(loc_decl_names) COLON ty=loc(type_exp) LARROW e=expr
     { { pfl_quantum = q; pfl_names = x; pfl_type = Some ty; pfl_init = Some e; } }
 
-| q=quantum_classical x=loc(loc_decl_names) LARROW e=expr
+| q=oquantum VAR x=loc(loc_decl_names) LARROW e=expr
     { { pfl_quantum = q; pfl_names = x; pfl_type = None; pfl_init = Some e; } }
 
 loc_decl:

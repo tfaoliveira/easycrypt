@@ -540,6 +540,9 @@ module List = struct
   let for_all2 f xs ys =
     List.length xs = List.length ys && for_all2 f xs ys
 
+  let fold_left_pmap f state xs =
+    assert false
+
   (* ------------------------------------------------------------------ *)
   let ksort ?(stable = false) ?(rev = false) ~key ~cmp xs =
     let cmp  =
