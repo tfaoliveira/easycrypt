@@ -114,6 +114,10 @@ type filter_error =
 | FE_InvalidIndex of int
 | FE_NoMatch
 
+type clvalue_error = [`QVar | `Nested | `Proj]
+
+type qref_error = [`CVar | `Map | `NonDisjoint]
+
 type tyerror =
 | UniVarNotAllowed
 | FreeTypeVariables
@@ -160,8 +164,9 @@ type tyerror =
 | InvalidMem             of symbol * mem_error
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
-| InvalidClassicalLValue of [`QVar | `Nested | `Proj]
-| InvalidQRef            of [`CVar | `Map | `NonDisjoint]
+| InvalidClassicalLValue of clvalue_error
+| InvalidQRef            of qref_error
+| InvalidCOrQLValue      of (clvalue_error * qref_error)
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar
@@ -1843,35 +1848,91 @@ type prelvalue =
   | PreLV_proji of prelvalue * int
   | PreLV_map   of (path * ty list) *  (prog_var * EcEnv.Var.t) * expr
 
-let prelvalue_as_classical_lvalue
-    (loc : EcLocation.t)
-    (env : EcEnv.env)
-    (lv  : prelvalue)
-  =
+(* ------------------------------------------------------------------- *)
+exception NotALValue of [`QVar | `Nested | `Proj]
+
+let prelvalue_as_classical_lvalue_r (lv  : prelvalue) =
   match lv with
-  | PreLV_var (pv, (q, ty)) ->
-     if q <> `Classical then
-       tyerror loc env (InvalidClassicalLValue `QVar);
-     `Lv (LvVar (pv, ty))
+  | PreLV_var (pv, (q, ty)) -> begin
+      match q with
+      | `Classical -> `Lv (LvVar (pv, ty))
+      | `Quantum   -> raise (NotALValue `QVar)
+    end
 
   | PreLV_tuple lvs ->
      let for1 = function
        | PreLV_var (pv, (q, ty)) when q = `Classical ->
           (pv, ty)
        | _ ->
-          tyerror loc env (InvalidClassicalLValue `Nested);
+          raise (NotALValue `Nested)
      in `Lv (LvTuple (List.map for1 lvs))
 
   | PreLV_map ((op, tys), (x, (q, ty)), e) ->
      if q <> `Classical then
-       tyerror loc env (InvalidClassicalLValue `QVar);
+       raise (NotALValue `QVar);
      `LvMap ((op, tys), (x, ty), e)
 
   | PreLV_proji _ ->
-     tyerror loc env (InvalidClassicalLValue `Proj)
+     raise (NotALValue `Proj)
 
-let i_asgn_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) (e : expr) =
-  match prelvalue_as_classical_lvalue loc env lv with
+let prelvalue_as_classical_lvalue
+    (loc : EcLocation.t)
+    (env : EcEnv.env)
+    (lv  : prelvalue)
+  =
+  match prelvalue_as_classical_lvalue_r lv with
+  | qref ->
+     qref
+  | exception (NotALValue reason) ->
+     tyerror loc env (InvalidClassicalLValue reason)
+
+(* ------------------------------------------------------------------- *)
+exception NotAQRef of qref_error
+
+let rec prelvalue_as_qref_r (lv  : prelvalue) =
+  match lv with
+  | PreLV_var (pv, (q, ty)) -> begin
+     match q with
+     | `Classical -> raise (NotAQRef `CVar)
+     | `Quantum   -> QRvar (pv, ty)
+    end
+
+  | PreLV_tuple qrs ->
+     QRtuple (List.map prelvalue_as_qref_r qrs)
+
+  | PreLV_proji (subqr, i) ->
+     QRproj (prelvalue_as_qref_r subqr, i)
+
+  | PreLV_map _ ->
+     raise (NotAQRef `Map)
+
+let rec prelvalue_as_qref
+    (loc : EcLocation.t)
+    (env : EcEnv.env)
+    (lv  : prelvalue)
+  =
+  match prelvalue_as_qref_r lv with
+  | qref ->
+     qref
+  | exception (NotAQRef reason) ->
+     tyerror loc env (InvalidQRef reason)
+
+(* -------------------------------------------------------------------- *)
+exception NotACOrQLValue of (clvalue_error * qref_error)
+
+let c_or_q_lvalue_of_genlvalue (lv : prelvalue) =
+  match prelvalue_as_classical_lvalue_r lv with
+  | lv -> `Classical lv
+  | exception (NotALValue creason) -> begin
+     match prelvalue_as_qref_r lv with
+     | lv -> `Quantum lv
+     | exception (NotAQRef qreason) ->
+        raise (NotACOrQLValue (creason, qreason))
+    end
+
+(* ------------------------------------------------------------------- *)
+let i_asgn_lv (loc : EcLocation.t) (env : EcEnv.env) lv e =
+  match lv with
   | `Lv lv ->
      i_asgn (lv, e)
 
@@ -1879,18 +1940,18 @@ let i_asgn_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) (e : expr)
      let op = e_op op tys (toarrow [ty; ei.e_ty; e.e_ty] ty) in
      i_asgn (LvVar (pv, ty), e_app op [e_var pv ty; ei; e] ty)
 
-let i_rnd_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) (e : expr) =
-  match prelvalue_as_classical_lvalue loc env lv with
+let i_rnd_lv (loc : EcLocation.t) (env : EcEnv.env) lv e =
+  match lv with
   | `Lv lv -> i_rnd (lv, e)
   | `LvMap _ -> tyerror loc env LvMapOnNonAssign
 
-let i_call_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) f cargs qargs =
-  match prelvalue_as_classical_lvalue loc env lv with
+let i_call_lv (loc : EcLocation.t) (env : EcEnv.env) lv f cargs qargs =
+  match lv with
   | `Lv lv -> i_call (Some lv, f, cargs, qargs)
   | `LvMap _ -> tyerror loc env LvMapOnNonAssign
 
-let i_measure_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) qr measure =
-  match prelvalue_as_classical_lvalue loc env lv with
+let i_measure_lv (loc : EcLocation.t) (env : EcEnv.env) lv qr measure =
+  match lv with
   | `Lv lv -> i_measure (lv, qr, measure)
   | `LvMap _ -> tyerror loc env LvMapOnNonAssign
 
@@ -1957,22 +2018,10 @@ let rec trans_genlvalue (ue : EcUnify.unienv) (env : EcEnv.env) (plvalue : plval
     end
 
 and trans_qref ~disjoint (ue : EcUnify.unienv) (env : EcEnv.env) (qref : plvalue) =
-  let rec convert = function
-    | PreLV_var (pv, (q, ty)) ->
-       if q <> `Quantum then
-         tyerror qref.pl_loc env (InvalidQRef `CVar);
-       QRvar (pv, ty)
-
-    | PreLV_tuple qrs ->
-       QRtuple (List.map convert qrs)
-
-    | PreLV_proji (subqr, i) ->
-       QRproj (convert subqr, i)
-
-    | PreLV_map _ ->
-       tyerror qref.pl_loc env (InvalidQRef `Map) in
-
-  let qr, ty = fst_map convert (trans_genlvalue ue env qref) in
+  let qr, ty =
+    fst_map
+      (prelvalue_as_qref qref.pl_loc env)
+      (trans_genlvalue ue env qref) in
 
   if disjoint then
     check_qref_disjoint env qref.pl_loc qr;
@@ -3117,6 +3166,9 @@ and transinstr
        e_lam bds meas, ety in
 
      unify_or_fail env ue pmeas.pl_loc ~expct:lvty ety;
+
+     let lv = prelvalue_as_classical_lvalue plv.pl_loc env lv in
+
      [ i_measure_lv plv.pl_loc env lv qref meas ]
 
   | PSunitary (plv, punitary) ->
@@ -3146,23 +3198,32 @@ and transinstr
             tyerror l e exn
       in
       unify_or_fail env ue prvalue.pl_loc ~expct:lty rty;
-      [ i_asgn_lv i.pl_loc env lvalue rvalue ]
+
+      match c_or_q_lvalue_of_genlvalue lvalue with
+      | `Classical lvalue ->
+         [ i_asgn_lv i.pl_loc env lvalue rvalue ]
+      | `Quantum lvalue ->
+         [ i_quantum (lvalue, Qinit, rvalue) ]
+      | exception (NotACOrQLValue reason) ->
+         tyerror plvalue.pl_loc env (InvalidCOrQLValue reason)
     end
 
   | PSrnd (plvalue, prvalue) ->
       let lvalue, lty = trans_genlvalue ue env plvalue in
       let rvalue, rty = transexp env `InProc ue prvalue in
       unify_or_fail env ue prvalue.pl_loc ~expct:(tdistr lty) rty;
+      let lvalue = prelvalue_as_classical_lvalue plvalue.pl_loc env lvalue in
       [ i_rnd_lv i.pl_loc env lvalue rvalue ]
 
   | PScall (None, name, args) ->
       let (fpath, (cargs, qargs), _rty) = transcall name args in
       [ i_call (None, fpath, cargs, qargs) ]
 
-  | PScall (Some lvalue, name, args) ->
-      let lvalue, lty = trans_genlvalue ue env lvalue in
+  | PScall (Some plvalue, name, args) ->
+      let lvalue, lty = trans_genlvalue ue env plvalue in
       let (fpath, (cargs, qargs), rty) = transcall name args in
       unify_or_fail env ue name.pl_loc ~expct:lty rty;
+      let lvalue = prelvalue_as_classical_lvalue plvalue.pl_loc env lvalue in
       [ i_call_lv i.pl_loc env lvalue fpath cargs qargs ]
 
   | PSif ((pe, s), cs, sel) -> begin

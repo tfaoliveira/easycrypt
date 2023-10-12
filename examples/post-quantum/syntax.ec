@@ -34,7 +34,7 @@ module M = {
     f(y){z, w};
 
     y <- true;
-(*    z <- 2; *)
+    z <- 2;
   }
 
   proc q1 {a b : int, c : bool} = { 

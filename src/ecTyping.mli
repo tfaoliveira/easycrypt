@@ -106,6 +106,10 @@ type filter_error =
 | FE_InvalidIndex of int
 | FE_NoMatch
 
+type clvalue_error = [`QVar | `Nested | `Proj]
+
+type qref_error = [`CVar | `Map | `NonDisjoint]
+
 type tyerror =
 | UniVarNotAllowed
 | FreeTypeVariables
@@ -152,8 +156,9 @@ type tyerror =
 | InvalidMem             of symbol * mem_error
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
-| InvalidClassicalLValue of [`QVar | `Nested | `Proj]
-| InvalidQRef            of [`CVar | `Map | `NonDisjoint]
+| InvalidClassicalLValue of clvalue_error
+| InvalidQRef            of qref_error
+| InvalidCOrQLValue      of (clvalue_error * qref_error)
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar

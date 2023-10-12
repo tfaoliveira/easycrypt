@@ -522,6 +522,9 @@ end = struct
     | InvalidQRef _ ->
         msg "invalid quantum reference" (* FIXME QUANTUM *)
 
+    | InvalidCOrQLValue _ ->
+        msg "invalid classical left-value / quantum reference" (* FIXME QUANTUM *)
+
     | FunNotInModParam name ->
         msg "the function %a is not provided by a module parameter. \
              Maybe you forgot a #?"
