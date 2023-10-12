@@ -3053,7 +3053,7 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
     locals := xs :: !locals;
     init |> oiter
      (fun init ->
-       let doit (v,_) = pv_loc v.v_name, v.v_type in
+       let doit (v,_) = pv_loc v.v_name, v.v_type, v.v_quantum in
        let iasgn = List.map doit xs in
        prelude := ((mode, iasgn), init, _dummy) :: !prelude);
     memenv in
@@ -3105,22 +3105,41 @@ and fundef_check_decl subst_uni env (decl, loc) =
       fundef_check_type subst_uni env (Some decl.v_name) (decl.v_type, loc) }
 
 and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
-  let pl =
-    List.map
-      (fun (p, ty) ->
-        (p, fundef_check_type (ty_subst subst_uni) env None (ty, loc)))
-      pl
+  let (hasc, hasq), pl =
+    List.fold_left_map
+      (fun (hasc, hasq) (p, ty, q) ->
+        let aout  = (p, fundef_check_type (ty_subst subst_uni) env None (ty, loc)) in
+        let flags = (hasc || q = `Classical, hasq || q = `Quantum) in
+        (flags, aout))
+      (false, false) pl
   in
-  let pl =
-    match mode with
-    | `Single -> List.map (fun xty -> LvVar xty) pl
-    | `Tuple  -> [LvTuple pl]
-  in
+
+  let q =
+    match hasc, hasq with
+    | true , false -> `Classical
+    | false, true  -> `Quantum
+    | false, false -> `Classical
+    | true , true  -> assert false (* FIXME QUANTUM *) in
 
   let clsubst = { EcTypes.e_subst_id with es_ty = subst_uni } in
   let init    = e_subst clsubst init in
 
-    List.map (fun lv -> i_asgn (lv, init)) pl
+  match q with
+  | `Classical -> begin
+      let lv =
+        match mode with
+        | `Single -> List.map (fun xty -> LvVar xty) pl
+        | `Tuple  -> [LvTuple pl] (* FIXME: singleton *)
+      in List.map (fun lv -> i_asgn (lv, init)) lv
+    end
+
+  | `Quantum -> begin
+      let qr =
+        match mode with
+        | `Single -> List.map (fun xty -> QRvar xty) pl
+        | `Tuple  -> [QRtuple (List.map (fun xty -> QRvar xty) pl)] (* FIXME: singleton *)
+      in List.map (fun qr -> i_quantum (qr, Qinit, init)) qr
+    end
 
 (* -------------------------------------------------------------------- *)
 and transstmt

@@ -21,7 +21,7 @@ module M = {
     quantum var x : int;
             var x1 : int;
     var y : bool;
-    quantum var z <- 2;
+    quantum var z : int <- 3;
     quantum var w <- 3; (* TODO: translate this to quantum init *)
     quantum var l : (int * int) * int;
     
