@@ -599,6 +599,7 @@
 %token TYPE
 %token UNDERSCORE
 %token UNDO
+%token UNITARY
 %token UNROLL
 %token VAR
 %token WHILE
@@ -607,6 +608,7 @@
 %token WLOG
 %token WP
 %token ZETA
+
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4 NUMOP
 %token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
 %token < Lexing.position> FINAL
@@ -663,26 +665,28 @@ _lident:
 | ASYNC      { "async"      }
 | DEBUG      { "debug"      }
 | DUMP       { "dump"       }
+| ECALL      { "ecall"      }
+| EXIT       { "exit"       }
+| EXLIM      { "exlim"      }
 | EXPECT     { "expect"     }
 | FIRST      { "first"      }
+| FROM       { "from"       }
 | GEN        { "gen"        }
 | INTERLEAVE { "interleave" }
 | LAST       { "last"       }
 | LEFT       { "left"       }
+| MEASURE    { "measure"    }
 | RIGHT      { "right"      }
 | SOLVE      { "solve"      }
 | STRICT     { "strict"     }
 | WLOG       { "wlog"       }
-| EXLIM      { "exlim"      }
-| ECALL      { "ecall"      }
-| FROM       { "from"       }
-| EXIT       { "exit"       }
 
 | x=RING  { match x with `Eq -> "ringeq"  | `Raw -> "ring"  }
 | x=FIELD { match x with `Eq -> "fieldeq" | `Raw -> "field" }
 
 %inline _uident:
 | x=UIDENT { x }
+| UNITARY  { "U" }
 
 %inline _tident:
 | x=TIDENT { x }
@@ -1544,9 +1548,8 @@ base_instr:
 | x=lvalue LARROW MEASURE q=qrref WITH e=expr
     { PSmeasure (x, q, e) }
 
-| x=lvalue LSARROW u=loc(_uident) LBRACKET e=expr RBRACKET
-    { if u.pl_desc <> "U" then parse_error u.pl_loc (Some "U expected");
-      PSunitary (x, e) }
+| x=lvalue LSARROW UNITARY LBRACKET e=expr RBRACKET
+    { PSunitary (x, e) }
 
 | x=lvalue LEAT f=loc(fident) es=funargs
     { PScall (Some x, f, es) }
