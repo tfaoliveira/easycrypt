@@ -201,6 +201,7 @@ val qarg_symbol : symbol
 val res_symbol : symbol
 val pv_res  : prog_var
 val pv_arg  : prog_var
+val pv_qarg : prog_var
 
 (* -------------------------------------------------------------------- *)
 module Mnpv : Map.S with type key = prog_var

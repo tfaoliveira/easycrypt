@@ -1769,9 +1769,19 @@ module Var = struct
       | [] ->
           let memenv = oget (Memory.byid side env) in
           begin match EcMemory.lookup_me (snd qname) memenv with
-          | Some (v, Some pa, _) -> Some (`Proj(pv_arg, pa), (v.v_quantum, v.v_type))
-          | Some (v, None, _)    -> Some (`Var (pv_loc v.v_name), (v.v_quantum, v.v_type))
-          | None                 -> None
+          | Some (v, Some pa, _) ->
+             let argname =
+               match v.v_quantum with
+               | `Classical -> pv_arg
+               | `Quantum   -> pv_qarg
+             in
+             Some (`Proj (argname, pa), (v.v_quantum, v.v_type))
+
+          | Some (v, None, _) ->
+             Some (`Var  (pv_loc v.v_name), (v.v_quantum, v.v_type))
+
+          | None ->
+             None
           end
       | _ -> None
     in

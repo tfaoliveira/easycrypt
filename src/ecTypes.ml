@@ -462,6 +462,7 @@ let qarg_symbol = "qarg"
 
 let res_symbol = "res"
 let pv_arg = PVloc arg_symbol
+let pv_qarg = PVloc qarg_symbol
 let pv_res =  PVloc res_symbol
 
 let xp_glob x =

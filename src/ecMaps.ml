@@ -185,8 +185,8 @@ end = struct
        true
 
     (* `p` is a prefix of a member of the set *)
-    | Split _, [] ->
-       true
+    | Split children, [] ->
+       not (Mint.is_empty children)
 
     | Split children, i :: subp ->
         (* Ah mais la, je chaine :) *)

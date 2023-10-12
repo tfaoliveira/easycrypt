@@ -312,12 +312,12 @@ let select_pv env side name ue tvi psig =
   else
     try
       let pvs = EcEnv.Var.lookup_progvar ?side name env in
-      let select (pv, (_, ty)) = (* FIXME: quantum *)
+      let select (pv, (q, ty)) =
         let subue = UE.copy ue in
         let texpected = EcUnify.tfun_expected subue psig in
           try
             EcUnify.unify env subue ty texpected;
-            [(pv, ty, subue)]
+            [(pv, q, ty, subue)]
           with EcUnify.UnificationFailure _ -> []
       in
         select pvs
@@ -331,7 +331,7 @@ module OpSelect = struct
   ]
 
   type opsel = [
-    | `Pv of EcMemory.memory option * pvsel
+    | `Pv of EcMemory.memory option * quantum * pvsel
     | `Op of (EcPath.path * ty list)
     | `Lc of EcIdent.ident
     | `Nt of EcUnify.sbody
@@ -356,8 +356,8 @@ let gen_select_op
     : OpSelect.gopsel list
 =
 
-  let fpv me (pv, ty, ue) =
-    (`Pv (me, pv), ty, ue, (pv :> opmatch))
+  let fpv me (pv, q, ty, ue) =
+    (`Pv (me, q, pv), ty, ue, (pv :> opmatch))
 
   and fop (op, ty, ue, bd) =
     match bd with
@@ -1594,7 +1594,9 @@ let expr_of_opselect
       | `Op (p, tys) -> e_op p tys ty
       | `Lc id       -> e_local id ty
 
-      | `Pv (_me, pv) -> var_or_proj e_var e_proj pv ty
+      | `Pv (_me, q, pv) ->
+         assert (q = `Classical); (* FIXME: QUANTUM *)
+         var_or_proj e_var e_proj pv ty
     in (op, args)
 
   in (e_app op args codom, codom)
@@ -2001,10 +2003,12 @@ let form_of_opselect
          in (f_lambda flam (Fsubst.f_subst subst body), args)
 
     | (`Op _ | `Lc _ | `Pv _) as sel -> let op = match sel with
-      | `Op (p, tys) -> f_op p tys ty
-      | `Lc id       -> f_local id ty
-      | `Pv (me, pv) ->
-        var_or_proj (fun x ty -> f_pvar x ty (oget me)) f_proj pv ty
+      | `Op (p, tys) ->
+         f_op p tys ty
+      | `Lc id ->
+         f_local id ty
+      | `Pv (me, _, pv) ->      (* FIXME: QUANTUM *)
+         var_or_proj (fun x ty -> f_pvar x ty (oget me)) f_proj pv ty
 
     in (op, args)
 
@@ -2752,13 +2756,12 @@ and transstruct1_alias env name f =
 
 (* -------------------------------------------------------------------- *)
 and transbody ue memenv (env : EcEnv.env) retty pbody =
-  (* FIXME quantum local decl use quantum + quantum args *)
   let { pl_loc = loc; pl_desc = pbody; } = pbody in
 
   let prelude = ref []
   and locals  = ref [] in
 
-  (* Type-check local variables / check for dups (FIXME: really??) *)
+  (* Type-check local variables / check for dups *)
   let add_local memenv local =
     let env   = EcEnv.Memory.push_active memenv env in
     let ty    = local.pfl_type |> omap (transty tp_uni env ue) in
@@ -2769,14 +2772,13 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
       | Some ty, None   -> Some ty
       | None   , Some e -> Some e.e_ty
       | Some ty, Some e -> begin
-          let loc =  (oget local.pfl_init).pl_loc in
-            unify_or_fail env ue loc ~expct:ty e.e_ty; Some ty
+          let loc = (oget local.pfl_init).pl_loc in
+          unify_or_fail env ue loc ~expct:ty e.e_ty; Some ty
       end
     in
 
     let xs     = snd (unloc local.pfl_names) in
     let mode   = fst (unloc local.pfl_names) in
-
     let xsvars = List.map (fun _ -> UE.fresh ue) xs in
 
     begin

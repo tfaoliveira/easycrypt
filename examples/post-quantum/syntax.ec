@@ -21,10 +21,11 @@ module M = {
     quantum var (x,x1): int * int;  (* Why this is useful *)
     quantum var y, z;
     quantum var w <- 3; (* TODO: translate this to quantum init *)
-    quantum var l;
-    l <* U[3];
-    l <* U[l];
-    x <* U[3]; 
+    quantum var l : int;
+    
+    l <* U[fun _ => 3];
+    l <* U[fun l => l];
+    x <* U[fun _ => 3]; 
     x <- measure q with 3;
 
     x <@ f(y){(z,(y, x.`2)), x.`1}; 
