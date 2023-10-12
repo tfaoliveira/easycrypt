@@ -2066,7 +2066,7 @@ and trans_qrref ~disjoint (ue : EcUnify.unienv) (env : EcEnv.env) (pqrref : pqrr
     let bds = List.map (fun (_, x, ty) -> (x, ty)) qrref in
     (qrs, bds) in
 
-  let qrref = match qrref with [qr] -> qr | qrs -> QRtuple qrs in
+  let qrref = match qrref with [qr] -> qr | qrs -> qrtuple qrs in
 
   if disjoint then
     check_qref_disjoint env pqrref.pl_loc qrref;
@@ -2154,7 +2154,7 @@ let transcall
             unify_or_fail env ue loc ~expct:ty qrty; qr)
           args lty in
 
-      let qref = match qref with [qr] -> qr | _ -> QRtuple qref in
+      let qref = match qref with [qr] -> qr | _ -> qrtuple qref in
       let qloc = EcLocation.mergeall (List.map EcLocation.loc args) in
 
       check_qref_disjoint env qloc qref;
@@ -3136,8 +3136,8 @@ and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
   | `Quantum -> begin
       let qr =
         match mode with
-        | `Single -> List.map (fun xty -> QRvar xty) pl
-        | `Tuple  -> [QRtuple (List.map (fun xty -> QRvar xty) pl)] (* FIXME: singleton *)
+        | `Single -> List.map (fun xty -> qrvar xty) pl
+        | `Tuple  -> [qrtuple (List.map (fun xty -> qrvar xty) pl)] (* FIXME: singleton *)
       in List.map (fun qr -> i_quantum (qr, Qinit, init)) qr
     end
 

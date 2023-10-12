@@ -1439,7 +1439,7 @@ let rec simplify ri env f =
   | FequivF ef when ri.ri.modpath ->
       let ef_fl = EcEnv.NormMp.norm_xfun env ef.ef_fl in
       let ef_fr = EcEnv.NormMp.norm_xfun env ef.ef_fr in
-      f_map (fun ty -> ty) (simplify ri env) (f_equivF_r { ef with ef_fl; ef_fr; })
+      f_map (fun ty -> ty) (simplify ri env) (f_qequivF_r { ef with ef_fl; ef_fr; })
 
   | FeagerF eg when ri.ri.modpath ->
       let eg_fl = EcEnv.NormMp.norm_xfun env eg.eg_fl in
@@ -1532,9 +1532,9 @@ let zpop ri side f hd =
   | Zhl {f_node = FbdHoareS hs}, [pr;po;bd] ->
     f_bdHoareS_r {hs with bhs_pr = pr; bhs_po = po; bhs_bd = bd}
   | Zhl {f_node = FequivF hf}, [pr;po] ->
-    f_equivF_r {hf with ef_pr = { hf.ef_pr with ec_f = pr } ; ef_po = { hf.ef_po with ec_f = po } }
+    f_qequivF_r {hf with ef_pr = { hf.ef_pr with ec_f = pr } ; ef_po = { hf.ef_po with ec_f = po } }
   | Zhl {f_node = FequivS hs}, [pr;po] ->
-    f_equivS_r {hs with es_pr = { hs.es_pr with ec_f = pr } ; es_po = {hs.es_po with ec_f = po } }
+    f_qequivS_r {hs with es_pr = { hs.es_pr with ec_f = pr } ; es_po = {hs.es_po with ec_f = po } }
   | Zhl {f_node = FeagerF hs}, [pr;po] ->
     f_eagerF_r {hs with eg_pr = pr; eg_po = po }
   | Zhl {f_node = Fpr hs}, [a;ev] ->

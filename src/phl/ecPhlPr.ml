@@ -64,11 +64,11 @@ let t_equiv_ppr_r ty phi_l phi_r tc =
   let concl_pr =
     f_forall_mems [penvl; penvr]
       (f_forall_simpl [a_id,GTty ty]
-         (f_imp_simpl ef.ef_pr.ec_f (f_eq_simpl pr1 pr2))) in
+         (f_imp_simpl ef.ef_pr (f_eq_simpl pr1 pr2))) in
   let concl_po =
     f_forall_mems [qenvl; qenvr]
       (f_forall_simpl [a_id, GTty ty]
-         (f_imps_simpl [f_eq phi_l a_f;f_eq phi_r a_f] ef.ef_po.ec_f)) in
+         (f_imps_simpl [f_eq phi_l a_f;f_eq phi_r a_f] ef.ef_po)) in
   FApi.xmutate1 tc `PPR [concl_po; concl_pr]
 
 (* -------------------------------------------------------------------- *)

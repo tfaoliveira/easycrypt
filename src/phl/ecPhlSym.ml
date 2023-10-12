@@ -14,21 +14,21 @@ let build_sym ml mr pr po =
 (*-------------------------------------------------------------------- *)
 let t_equivF_sym tc =
   let ef    = tc1_as_equivF tc in
-  let pr,po = build_sym mleft mright ef.ef_pr.ec_f ef.ef_po.ec_f in
-  let cond  = f_equivF (classical_ec pr) ef.ef_fr ef.ef_fl (classical_ec po) in
+  let pr,po = build_sym mleft mright ef.ef_pr ef.ef_po in
+  let cond  = f_equivF pr ef.ef_fr ef.ef_fl po in
   FApi.xmutate1 tc `EquivSym [cond]
 
 (*-------------------------------------------------------------------- *)
 let t_equivS_sym tc =
   let es    = tc1_as_equivS tc in
-  let pr,po = build_sym (fst es.es_ml) (fst es.es_mr) es.es_pr.ec_f es.es_po.ec_f in
+  let pr,po = build_sym (fst es.es_ml) (fst es.es_mr) es.es_pr es.es_po in
   let cond  = f_equivS_r {
     es_ml = fst es.es_ml, snd es.es_mr;
     es_mr = fst es.es_mr, snd es.es_ml;
     es_sl = es.es_sr;
     es_sr = es.es_sl;
-    es_pr = classical_ec pr;
-    es_po = classical_ec po; } in
+    es_pr = pr;
+    es_po = po; } in
 
   FApi.xmutate1 tc `EquivSym [cond]
 

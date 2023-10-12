@@ -2534,7 +2534,7 @@ module NormMp = struct
           and r' = norm_xfun env ef.ef_fr and post' = norm_ec aux env ef.ef_po in
           if ef.ef_pr == pre' && ef.ef_fl == l' &&
             ef.ef_fr == r' && ef.ef_po == post' then f else
-          f_equivF pre' l' r' post'
+          f_qequivF pre' l' r' post'
 
         | Fcoe coe ->
           let coe' = {

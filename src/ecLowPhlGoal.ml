@@ -287,8 +287,8 @@ let set_pre ~pre f =
 
 let set_equiv_pre ~pre f =
   match f.f_node with
-  | FequivF ef   -> f_equivF pre ef.ef_fl ef.ef_fr ef.ef_po
-  | FequivS es   -> f_equivS_r { es with es_pr = pre }
+  | FequivF ef   -> f_qequivF pre ef.ef_fl ef.ef_fr ef.ef_po
+  | FequivS es   -> f_qequivS_r { es with es_pr = pre }
   | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
@@ -663,12 +663,11 @@ let t_code_transform
       let hyps      = FApi.tc1_hyps tc in
       let es        = tc1_as_equivS tc in
       let pre, post = es.es_pr, es.es_po in
-      assert (is_classical_ec pre && is_classical_ec post);
       let me, stmt     =
         match side with
         | `Left  -> (es.es_ml, es.es_sl)
         | `Right -> (es.es_mr, es.es_sr) in
-      let me, stmt, cs = tx (pf, hyps) cpos (pre.ec_f, post.ec_f) (me, stmt) in
+      let me, stmt, cs = tx (pf, hyps) cpos (pre, post) (me, stmt) in
       let concl =
         match side with
         | `Left  -> f_equivS_r { es with es_ml = me; es_sl = stmt; }

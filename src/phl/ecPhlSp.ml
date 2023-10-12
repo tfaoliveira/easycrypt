@@ -278,7 +278,7 @@ let t_sp_side pos tc =
       FApi.xmutate1 tc `Sp [subgoal]
 
   | FequivS es, (None | Some (Double _))  ->
-      assert (is_classical_ec es.es_pr && is_classical_ec es.es_po);
+      let es = equivS es in
       let pos  = pos |> omap as_double in
       let posL = pos |> omap fst in
       let posR = pos |> omap snd in
@@ -288,9 +288,9 @@ let t_sp_side pos tc =
 
       let         es_pr = es.es_pr in
       let stmtL1, es_pr, _ =
-        LI.sp_stmt es.es_ml env stmtL1 es_pr.ec_f in
+        LI.sp_stmt es.es_ml env stmtL1 es_pr in
       let stmtR1, es_pr, _ =
-        LI.sp_stmt es.es_mr env stmtR1 es_pr.ec_f in
+        LI.sp_stmt es.es_mr env stmtR1 es_pr in
 
       check_sp_progress ~side:`Left  pos stmtL1;
       check_sp_progress ~side:`Right pos stmtR1;
@@ -298,7 +298,7 @@ let t_sp_side pos tc =
       let subgoal = f_equivS_r { es with
         es_sl = stmt (stmtL1@stmtL2);
         es_sr = stmt (stmtR1@stmtR2);
-        es_pr = classical_ec es_pr;
+        es_pr = es_pr;
       } in
 
       FApi.xmutate1 tc `Sp [subgoal]

@@ -1068,7 +1068,7 @@ module FPosition = struct
               let (ef_pr, ef_po) = as_seq2 (doit p [ef.ef_pr.ec_f; ef.ef_po.ec_f]) in
               let ef_pr = { ef.ef_pr with ec_f = ef_pr } in
               let ef_po = { ef.ef_po with ec_f = ef_po } in
-              f_equivF_r { ef with ef_pr; ef_po; }
+              f_qequivF_r { ef with ef_pr; ef_po; }
 
           | Fcoe coe ->
               let sub = doit p [coe.coe_pre] in

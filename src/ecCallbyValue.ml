@@ -546,7 +546,7 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let ef_po = norm_ec st s ef.ef_po in
     let ef_fl = norm_xfun st s ef.ef_fl in
     let ef_fr = norm_xfun st s ef.ef_fr in
-    f_equivF_r {ef_pr; ef_fl; ef_fr; ef_po }
+    f_qequivF_r {ef_pr; ef_fl; ef_fr; ef_po }
 
   | FequivS es ->
     assert (Args.isempty args);
@@ -558,7 +558,7 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let es_sr = norm_stmt s es.es_sr in
     let es_ml  = norm_me s es.es_ml in
     let es_mr  = norm_me s es.es_mr in
-    f_equivS_r {es_ml; es_mr; es_pr; es_sl; es_sr; es_po }
+    f_qequivS_r {es_ml; es_mr; es_pr; es_sl; es_sr; es_po }
 
   | FeagerF eg ->
     assert (Args.isempty args);

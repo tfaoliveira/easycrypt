@@ -44,20 +44,20 @@ module Low = struct
     let m1, m3 = es.es_ml, es.es_mr in
     let cond1, cond2 =
       transitivity_side_cond hyps
-        m1 m3 m1 m3 es.es_pr.ec_f es.es_po.ec_f p1 q1 mt p2 q2 in
+        m1 m3 m1 m3 es.es_pr es.es_po p1 q1 mt p2 q2 in
     let cond3 =
       f_equivS_r { es with
         es_mr = (mright,mt);
         es_sr = c2;
-        es_pr = classical_ec p1;
-        es_po = classical_ec q1;
+        es_pr = p1;
+        es_po = q1;
       } in
     let cond4 =
       f_equivS_r { es with
         es_ml = (mleft, mt);
         es_sl = c2;
-        es_pr = classical_ec p2;
-        es_po = classical_ec q2;
+        es_pr = p2;
+        es_po = q2;
       } in
 
      FApi.xmutate1 tc `Trans [cond1; cond2; cond3; cond4]
@@ -71,9 +71,9 @@ module Low = struct
     let cond1, cond2 =
       transitivity_side_cond
         hyps prml prmr poml pomr
-        ef.ef_pr.ec_f ef.ef_po.ec_f p1 q1 pomt p2 q2 in
-    let cond3 = f_equivF (classical_ec p1) ef.ef_fl f (classical_ec q1) in
-    let cond4 = f_equivF (classical_ec p2) f ef.ef_fr (classical_ec q2) in
+        ef.ef_pr ef.ef_po p1 q1 pomt p2 q2 in
+    let cond3 = f_equivF p1 ef.ef_fl f q1 in
+    let cond4 = f_equivF p2 f ef.ef_fr q2 in
 
     FApi.xmutate1 tc `Trans [cond1; cond2; cond3; cond4]
 end
@@ -150,7 +150,7 @@ let process_equiv_trans (tk, tf) tc =
         | TKparsedStmt(s,_,_) -> s in
       let es = tc1_as_equivS tc in
       let c,m = match side with `Left -> es.es_sl, es.es_ml | `Right -> es.es_sr, es.es_mr in
-      let fv  = EcPV.PV.fv env (fst m) es.es_po.ec_f in
+      let fv  = EcPV.PV.fv env (fst m) es.es_po in
       let fvr = EcPV.s_read env c in
       let mk_eqs fv =
         let vfv, gfv = EcPV.PV.elements fv in
@@ -159,8 +159,8 @@ let process_equiv_trans (tk, tf) tc =
         f_ands (veq @ geq) in
       let pre = mk_eqs (EcPV.PV.union fvr fv) in
       let post = mk_eqs fv in
-      if side = `Left then (pre, post, es.es_pr.ec_f, es.es_po.ec_f)
-      else (es.es_pr.ec_f, es.es_po.ec_f, pre, post) in
+      if side = `Left then (pre, post, es.es_pr, es.es_po)
+      else (es.es_pr, es.es_po, pre, post) in
   match tk with
   | TKfun f -> process_trans_fun f p1 q1 p2 q2 tc
   | TKstmt (s, c) -> process_trans_stmt s c p1 q1 p2 q2 tc

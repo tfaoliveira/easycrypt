@@ -105,7 +105,7 @@ let rec t_equiv_cond side tc =
       let fiff   =
         f_forall_mems
           [es.es_ml;es.es_mr]
-          (f_imp es.es_pr.ec_f (f_iff el er)) in
+          (f_imp es.es_pr (f_iff el er)) in
 
       let fresh = ["hiff";"&m1";"&m2";"h";"h";"h"] in
       let fresh = LDecl.fresh_ids hyps fresh in
@@ -210,7 +210,7 @@ let t_equiv_match s tc =
       (List.map (snd_map gtty) lvars)
       (f_equivS_r
          { (sets (stmt ((s_subst subst b).s_node @ tl.s_node)))
-             with es_pr = classical_ec (f_and_simpl cop es.es_pr.ec_f) })
+             with es_pr = f_and_simpl cop es.es_pr })
 
   in
 

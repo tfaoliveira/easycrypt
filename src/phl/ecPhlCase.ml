@@ -34,9 +34,9 @@ let t_bdhoare_case_r ?(simplify = true) f tc =
 (* --------------------------------------------------------------------- *)
 let t_equiv_case_r ?(simplify = true) f tc =
   let fand = if simplify then f_and_simpl else f_and in
-  let es = tc1_as_equivS ~q:`Quantum tc in
-  let concl1 = f_equivS_r { es with es_pr = { es.es_pr with ec_f = fand es.es_pr.ec_f f } } in
-  let concl2 = f_equivS_r { es with es_pr = { es.es_pr with ec_f = fand es.es_pr.ec_f (f_not f) } } in
+  let es = tc1_as_equivS tc in
+  let concl1 = f_equivS_r { es with es_pr = fand es.es_pr f } in
+  let concl2 = f_equivS_r { es with es_pr = fand es.es_pr (f_not f) } in
   FApi.xmutate1 tc (`HlCase f) [concl1; concl2]
 
 (* --------------------------------------------------------------------- *)

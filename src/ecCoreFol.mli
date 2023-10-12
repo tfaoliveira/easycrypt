@@ -79,8 +79,8 @@ and f_node =
   | FbdHoareF of bdHoareF (* $hr / $hr *)
   | FbdHoareS of bdHoareS (* $hr  / $hr   *)
 
-  | FequivF of equivF (* $left,$right / $left,$right *)
-  | FequivS of equivS (* $left,$right / $left,$right *)
+  | FequivF of qequivF (* $left,$right / $left,$right *)
+  | FequivS of qequivS (* $left,$right / $left,$right *)
 
   | FeagerF of eagerF
 
@@ -102,14 +102,14 @@ and equiv_cond = {
   ec_e : quantum_equality;
 }
 
-and equivF = {
+and qequivF = {
   ef_pr : equiv_cond;
   ef_fl : xpath;
   ef_fr : xpath;
   ef_po : equiv_cond;
 }
 
-and equivS = {
+and qequivS = {
   es_ml : EcMemory.memenv;
   es_mr : EcMemory.memenv;
   es_pr : equiv_cond;
@@ -191,6 +191,21 @@ and call_bound = private {
 }
 
 and module_type = form p_module_type
+
+type equivF = {
+  ef_pr : form;
+  ef_fl : EcPath.xpath;
+  ef_fr : EcPath.xpath;
+  ef_po : form;
+}
+
+type equivS = {
+  es_ml  : EcMemory.memenv;
+  es_mr  : EcMemory.memenv;
+  es_pr  : form;
+  es_sl  : stmt;
+  es_sr  : stmt;
+  es_po  : form; }
 
 type mod_restr = form p_mod_restr
 
@@ -297,11 +312,22 @@ val f_bdHoareF : form -> xpath -> form -> hoarecmp -> form -> form
 val f_bdHoareS : memenv -> form -> stmt -> form -> hoarecmp -> form -> form
 
 (* soft-constructors - equiv *)
-val f_equivS : memenv -> memenv -> equiv_cond -> stmt -> stmt -> equiv_cond -> form
-val f_equivF : equiv_cond -> xpath -> xpath -> equiv_cond -> form
+val f_equivS : memenv -> memenv -> form -> stmt -> stmt -> form -> form
+val f_equivF : form -> xpath -> xpath -> form -> form
 
 val f_equivS_r : equivS -> form
 val f_equivF_r : equivF -> form
+
+val f_qequivS : memenv -> memenv -> equiv_cond -> stmt -> stmt -> equiv_cond -> form
+val f_qequivF : equiv_cond -> xpath -> xpath -> equiv_cond -> form
+
+val f_qequivS_r : qequivS -> form
+val f_qequivF_r : qequivF -> form
+
+val qequivS : equivS -> qequivS
+val qequivF : equivF -> qequivF
+val equivS  : qequivS -> equivS
+val equivF  : qequivF -> equivF
 
 (* soft-constructors - eager *)
 val f_eagerF_r : eagerF -> form
@@ -432,6 +458,9 @@ val destr_exists1   : form -> EcIdent.t * gty * form
 val destr_exists    : form -> bindings * form
 val destr_equivF    : form -> equivF
 val destr_equivS    : form -> equivS
+val destr_qequivF   : form -> qequivF
+val destr_qequivS   : form -> qequivS
+
 val destr_eagerF    : form -> eagerF
 val destr_hoareF    : form -> sHoareF
 val destr_hoareS    : form -> sHoareS
@@ -465,6 +494,8 @@ val is_op        : form -> bool
 val is_local     : form -> bool
 val is_pvar      : form -> bool
 val is_proj      : form -> bool
+val is_qequivF   : form -> bool
+val is_qequivS   : form -> bool
 val is_equivF    : form -> bool
 val is_equivS    : form -> bool
 val is_eagerF    : form -> bool

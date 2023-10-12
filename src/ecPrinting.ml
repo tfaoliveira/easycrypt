@@ -1800,21 +1800,23 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         EcEnv.Fun.equivF_memenv eqv.ef_fl eqv.ef_fr ppe.PPEnv.ppe_env in
       let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
       let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
+      (* FIXME QUANTUM *)
       Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_funname ppe) eqv.ef_fl
         (pp_funname ppe) eqv.ef_fr
-        (pp_form ppepr) eqv.ef_pr
-        (pp_form ppepo) eqv.ef_po
+        (pp_form ppepr) eqv.ef_pr.ec_f
+        (pp_form ppepo) eqv.ef_po.ec_f
 
   | FequivS es ->
       let ppef = PPEnv.push_mems ppe [es.es_ml; es.es_mr] in
       let ppel = PPEnv.push_mem ppe ~active:true es.es_ml in
       let pper = PPEnv.push_mem ppe ~active:true es.es_mr in
+      (* FIXME QUANTUM *)
       Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_stmt_for_form ppel) es.es_sl
         (pp_stmt_for_form pper) es.es_sr
-        (pp_form ppef) es.es_pr
-        (pp_form ppef) es.es_po
+        (pp_form ppef) es.es_pr.ec_f
+        (pp_form ppef) es.es_po.ec_f
 
   | FeagerF eg ->
       let (meprl, meprr), (mepol,mepor) =
@@ -2947,19 +2949,20 @@ let pp_bdhoareS (ppe : PPEnv.t) ?prpo fmt hs =
     Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) hs.bhs_po
 
 (* -------------------------------------------------------------------- *)
-let pp_equivF (ppe : PPEnv.t) ?prpo fmt ef =
+let pp_equivF (ppe : PPEnv.t) ?prpo fmt (ef:qequivF) =
   let (meprl, meprr), (mepol,mepor) =
     EcEnv.Fun.equivF_memenv ef.ef_fl ef.ef_fr ppe.PPEnv.ppe_env in
   let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
   let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
-  Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) ef.ef_pr;
+  (* FIXME QUANTUM *)
+  Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) ef.ef_pr.ec_f;
   Format.fprintf fmt "    %a ~ %a@\n%!"
     (pp_funname ppe) ef.ef_fl
     (pp_funname ppe) ef.ef_fr;
-  Format.fprintf fmt "@\n%a%!" (pp_post ppepo ?prpo) ef.ef_po
+  Format.fprintf fmt "@\n%a%!" (pp_post ppepo ?prpo) ef.ef_po.ec_f
 
 (* -------------------------------------------------------------------- *)
-let pp_equivS (ppe : PPEnv.t) ?prpo fmt es =
+let pp_equivS (ppe : PPEnv.t) ?prpo fmt (es:qequivS) =
   let ppef = PPEnv.push_mems ppe [es.es_ml; es.es_mr] in
   let ppel = PPEnv.push_mem ppe ~active:true es.es_ml in
 
@@ -2983,18 +2986,18 @@ let pp_equivS (ppe : PPEnv.t) ?prpo fmt es =
           ppef ppnode
       in fun fmt -> pp_node `Both fmt ppnode
     end in
-
+  (* FIXME QUANTUM *)
   Format.fprintf fmt "&1 (left ) : %a%s@\n%!"
     (pp_memtype ppe) (snd es.es_ml)
     (if insync then " [programs are in sync]" else "");
   Format.fprintf fmt "&2 (right) : %a@\n%!"
     (pp_memtype ppe) (snd es.es_mr);
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_pre ppef ?prpo) es.es_pr;
+  Format.fprintf fmt "%a%!" (pp_pre ppef ?prpo) es.es_pr.ec_f;
   Format.fprintf fmt "@\n%!";
   Format.fprintf fmt "%t" ppnode;
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) es.es_po
+  Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) es.es_po.ec_f
 
 (* -------------------------------------------------------------------- *)
 let pp_rwbase ppe fmt (p, rws) =

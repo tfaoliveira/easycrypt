@@ -602,7 +602,7 @@ let rec subst_form (s : subst) (f : form) =
        (ef_pr, ef_po) in
      let ef_fl = subst_xpath s ef_fl in
      let ef_fr = subst_xpath s ef_fr in
-     f_equivF ef_pr ef_fl ef_fr ef_po
+     f_qequivF ef_pr ef_fl ef_fr ef_po
 
   | FequivS { es_ml; es_mr; es_pr; es_sl; es_sr; es_po } ->
      let (es_ml, es_mr), (es_pr, es_po) =
@@ -613,7 +613,7 @@ let rec subst_form (s : subst) (f : form) =
        (es_ml, es_mr), (es_pr, es_po) in
      let es_sl = subst_stmt s es_sl in
      let es_sr = subst_stmt s es_sr in
-     f_equivS es_ml es_mr es_pr es_sl es_sr es_po
+     f_qequivS es_ml es_mr es_pr es_sl es_sr es_po
 
   | FeagerF { eg_pr; eg_sl; eg_fl; eg_fr; eg_sr; eg_po } ->
      let eg_pr, eg_po =

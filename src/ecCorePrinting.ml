@@ -83,7 +83,7 @@ module type PrinterAPI = sig
   val pp_hoareS   : PPEnv.t -> ?prpo:prpo_display -> sHoareS  pp
   val pp_choareS  : PPEnv.t -> ?prpo:prpo_display -> cHoareS  pp
   val pp_bdhoareS : PPEnv.t -> ?prpo:prpo_display -> bdHoareS pp
-  val pp_equivS   : PPEnv.t -> ?prpo:prpo_display -> equivS  pp
+  val pp_equivS   : PPEnv.t -> ?prpo:prpo_display -> qequivS  pp
 
   val pp_cost  : PPEnv.t -> cost pp
   val pp_stmt  : ?lineno:bool -> PPEnv.t -> stmt pp

@@ -869,6 +869,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   | FhoareF _,
     Some ((_, {f_node = FequivF ef}) as nef), Some((_, f2) as nf2), _ ->
     let hf2 = pf_as_hoareF !!tc f2 in
+    let ef = equivF ef in
     FApi.t_seqsub
       (t_hoareF_conseq_equiv hf2.hf_f ef.ef_pr ef.ef_po hf2.hf_pr hf2.hf_po)
       [t_id; t_id; t_apply_r nef; t_apply_r nf2] tc
@@ -1020,6 +1021,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   | FbdHoareF _,
     Some ((_, {f_node = FequivF ef}) as nef), Some((_, f2) as nf2), _ ->
     let hf2 = pf_as_bdhoareF !!tc f2 in
+    let ef = equivF ef in
     FApi.t_seqsub
       (t_bdHoareF_conseq_equiv hf2.bhf_f ef.ef_pr ef.ef_po hf2.bhf_pr hf2.bhf_po)
       [t_id; t_id; t_apply_r nef; t_apply_r nf2] tc
@@ -1027,6 +1029,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   (* ------------------------------------------------------------------ *)
   (* equivS / equivS / ⊥ / ⊥                                            *)
   | FequivS _, Some ((_, {f_node = FequivS es}) as nf1), None, None ->
+    let es = equivS es in
     let tac = if notmod then t_equivS_conseq_nm else t_equivS_conseq in
     t_on1 2 (t_apply_r nf1) (tac es.es_pr es.es_po tc)
 
@@ -1041,6 +1044,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
     let subst2 = Fsubst.f_subst_mem mhr mright in
     let hs2    = pf_as_hoareS !!tc f2 in
     let hs3    = pf_as_hoareS !!tc f3 in
+    let es = equivS es in
     let pre    = f_ands [es.es_pr; subst1 hs2.hs_pr; subst2 hs3.hs_pr] in
     let post   = f_ands [es.es_po; subst1 hs2.hs_po; subst2 hs3.hs_po] in
     let tac    = if notmod then t_equivS_conseq_nm else t_equivS_conseq in
@@ -1058,7 +1062,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
       when is_bdHoareS f
     ->
     let tac = if notmod then t_equivS_conseq_nm else t_equivS_conseq in
-
+    let es = equivS es in
     t_on1seq 2
       (tac es.es_pr es.es_po)
       (t_hi_conseq notmod None f2 None)
@@ -1070,7 +1074,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
       when is_bdHoareS f
     ->
     let tac = if notmod then t_equivS_conseq_nm else t_equivS_conseq in
-
+    let es = equivS es in
     t_on1seq 2
       (tac es.es_pr es.es_po)
       (t_hi_conseq notmod None None f3)
@@ -1126,6 +1130,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   (* equivF / equivF / ⊥ / ⊥                                            *)
   | FequivF _, Some ((_, {f_node = FequivF ef}) as nf1), None, None ->
     let tac = if notmod then t_equivF_conseq_nm else t_equivF_conseq in
+    let ef = equivF ef in
     t_on1seq 2 (tac ef.ef_pr ef.ef_po) (t_apply_r nf1) tc
 
   (* ------------------------------------------------------------------ *)
@@ -1139,6 +1144,7 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
     let subst2 = Fsubst.f_subst_mem mhr mright in
     let hs2    = pf_as_hoareF !!tc f2 in
     let hs3    = pf_as_hoareF !!tc f3 in
+    let ef = equivF ef in
     let pre    = f_ands [ef.ef_pr; subst1 hs2.hf_pr; subst2 hs3.hf_pr] in
     let post   = f_ands [ef.ef_po; subst1 hs2.hf_po; subst2 hs3.hf_po] in
     let tac    = if notmod then t_equivF_conseq_nm else t_equivF_conseq in
@@ -1292,6 +1298,7 @@ let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) 
 
       | FequivF ef ->
         let penv, qenv = LDecl.equivF ef.ef_fl ef.ef_fr hyps in
+        let ef = equivF ef in
         let fmake pre post c_or_bd =
           ensure_none c_or_bd;
           f_equivF pre ef.ef_fl ef.ef_fr post
@@ -1299,6 +1306,7 @@ let process_conseq notmod ((info1, info2, info3) : conseq_ppterm option tuple3) 
 
       | FequivS es ->
         let env = LDecl.push_all [es.es_ml; es.es_mr] hyps in
+        let es = equivS es in
         let fmake pre post c_or_bd =
           ensure_none c_or_bd;
           f_equivS_r { es with es_pr = pre; es_po = post; }
@@ -1458,8 +1466,12 @@ let t_conseqauto ?(delta = true) ?tsolve tc =
     | FcHoareS hs  -> Some (t_cHoareS_notmod, cond_cHoareS_notmod ~mk_other tc hs.chs_po )
     | FbdHoareF hf -> Some (t_bdHoareF_notmod, cond_bdHoareF_notmod ~mk_other tc hf.bhf_po)
     | FbdHoareS hs -> Some (t_bdHoareS_notmod, cond_bdHoareS_notmod ~mk_other tc hs.bhs_po)
-    | FequivF ef   -> Some (t_equivF_notmod, cond_equivF_notmod ~mk_other tc ef.ef_po)
-    | FequivS es   -> Some (t_equivS_notmod, cond_equivS_notmod ~mk_other tc es.es_po )
+    | FequivF ef   ->
+        let ef = equivF ef in
+        Some (t_equivF_notmod, cond_equivF_notmod ~mk_other tc ef.ef_po)
+    | FequivS es   ->
+        let es = equivS es in
+        Some (t_equivS_notmod, cond_equivS_notmod ~mk_other tc es.es_po )
     | _            -> None in
 
   match todo with

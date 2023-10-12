@@ -106,8 +106,8 @@ and f_node =
   | FbdHoareF of bdHoareF (* $hr / $hr *)
   | FbdHoareS of bdHoareS
 
-  | FequivF of equivF (* $left,$right / $left,$right *)
-  | FequivS of equivS
+  | FequivF of qequivF (* $left,$right / $left,$right *)
+  | FequivS of qequivS
 
   | FeagerF of eagerF
 
@@ -129,14 +129,14 @@ and equiv_cond = {
   ec_e : quantum_equality;
 }
 
-and equivF = {
+and qequivF = {
   ef_pr : equiv_cond;
   ef_fl : EcPath.xpath;
   ef_fr : EcPath.xpath;
   ef_po : equiv_cond;
 }
 
-and equivS = {
+and qequivS = {
   es_ml  : EcMemory.memenv;
   es_mr  : EcMemory.memenv;
   es_pr  : equiv_cond;
@@ -218,6 +218,21 @@ and call_bound = {
 and module_type = form p_module_type
 
 type mod_restr = form p_mod_restr
+
+type equivF = {
+  ef_pr : form;
+  ef_fl : EcPath.xpath;
+  ef_fr : EcPath.xpath;
+  ef_po : form;
+}
+
+type equivS = {
+  es_ml  : EcMemory.memenv;
+  es_mr  : EcMemory.memenv;
+  es_pr  : form;
+  es_sl  : stmt;
+  es_sr  : stmt;
+  es_po  : form; }
 
 let is_classical_ec ec =
   (* FIXME QUANTUM: check that ec.ec_f contain only classical variable *)
@@ -387,13 +402,13 @@ let ec_equal ec1 ec2 =
      f_equal ec1.ec_f ec2.ec_f
   && qe_equal ec1.ec_e ec2.ec_e
 
-let eqf_equal ef1 ef2 =
+let eqf_equal (ef1:qequivF) (ef2:qequivF) =
      ec_equal ef1.ef_pr ef2.ef_pr
   && ec_equal ef1.ef_po ef2.ef_po
   && EcPath.x_equal ef1.ef_fl ef2.ef_fl
   && EcPath.x_equal ef1.ef_fr ef2.ef_fr
 
-let eqs_equal es1 es2 =
+let eqs_equal (es1:qequivS) (es2:qequivS) =
      ec_equal es1.es_pr es2.es_pr
   && ec_equal es1.es_po es2.es_po
   && s_equal es1.es_sl es2.es_sl
@@ -484,12 +499,12 @@ let bhs_hash bhs =
 let ec_hash ec =
   Why3.Hashcons.combine (f_hash ec.ec_f) (qe_hash ec.ec_e)
 
-let ef_hash ef =
+let ef_hash (ef:qequivF) =
   Why3.Hashcons.combine3
     (ec_hash ef.ef_pr) (ec_hash ef.ef_po)
     (EcPath.x_hash ef.ef_fl) (EcPath.x_hash ef.ef_fr)
 
-let es_hash es =
+let es_hash (es:qequivS) =
   Why3.Hashcons.combine3
     (ec_hash es.es_pr) (ec_hash es.es_po)
     (EcCoreModules.s_hash es.es_sl)
@@ -919,8 +934,53 @@ let f_bdHoareF bhf_pr bhf_f bhf_po bhf_cmp bhf_bd =
   f_bdHoareF_r { bhf_pr; bhf_f; bhf_po; bhf_cmp; bhf_bd; }
 
 (* -------------------------------------------------------------------- *)
-let f_equivS_r es = mk_form (FequivS es) tbool
-let f_equivF_r ef = mk_form (FequivF ef) tbool
+
+let f_qequivS_r es = mk_form (FequivS es) tbool
+let f_qequivF_r ef = mk_form (FequivF ef) tbool
+
+let f_qequivS es_ml es_mr es_pr es_sl es_sr es_po =
+   f_qequivS_r { es_ml; es_mr; es_pr; es_sl; es_sr; es_po; }
+
+let f_qequivF ef_pr ef_fl ef_fr ef_po =
+  f_qequivF_r{ ef_pr; ef_fl; ef_fr; ef_po; }
+
+let qequivS (es:equivS) : qequivS =
+  { es_ml = es.es_ml
+  ; es_mr = es.es_mr
+  ; es_pr = classical_ec es.es_pr
+  ; es_sl = es.es_sl
+  ; es_sr = es.es_sr
+  ; es_po = classical_ec es.es_po
+  }
+
+let qequivF (ef:equivF) : qequivF =
+  { ef_pr = classical_ec ef.ef_pr
+  ; ef_fl = ef.ef_fl
+  ; ef_fr = ef.ef_fr
+  ; ef_po = classical_ec ef.ef_po
+  }
+
+let equivS (es:qequivS) : equivS =
+  assert (is_classical_ec es.es_pr && is_classical_ec es.es_po);
+  { es_ml = es.es_ml
+  ; es_mr = es.es_mr
+  ; es_pr = es.es_pr.ec_f
+  ; es_sl = es.es_sl
+  ; es_sr = es.es_sr
+  ; es_po = es.es_po.ec_f
+  }
+
+let equivF (ef:qequivF) : equivF =
+  assert (is_classical_ec ef.ef_pr && is_classical_ec ef.ef_po);
+  { ef_pr = ef.ef_pr.ec_f
+  ; ef_fl = ef.ef_fl
+  ; ef_fr = ef.ef_fr
+  ; ef_po = ef.ef_po.ec_f
+  }
+
+
+let f_equivS_r es = f_qequivS_r (qequivS es)
+let f_equivF_r ef = f_qequivF_r (qequivF ef)
 
 let f_equivS es_ml es_mr es_pr es_sl es_sr es_po =
    f_equivS_r { es_ml; es_mr; es_pr; es_sl; es_sr; es_po; }
@@ -1133,12 +1193,12 @@ let f_map gt g fp =
   | FequivF ef ->
       let pr' = ec_map g ef.ef_pr in
       let po' = ec_map g ef.ef_po in
-        f_equivF_r { ef with ef_pr = pr'; ef_po = po'; }
+        f_qequivF_r { ef with ef_pr = pr'; ef_po = po'; }
 
   | FequivS es ->
       let pr' = ec_map g es.es_pr in
       let po' = ec_map g es.es_po in
-        f_equivS_r { es with es_pr = pr'; es_po = po'; }
+        f_qequivS_r { es with es_pr = pr'; es_po = po'; }
 
   | FeagerF eg ->
       let pr' = g eg.eg_pr in
@@ -1309,15 +1369,18 @@ let destr_let1 f =
   | Flet(LSymbol(x,ty), e1,e2) -> x,ty,e1,e2
   | _ -> destr_error "let1"
 
-let destr_equivS f =
+let destr_qequivS f =
   match f.f_node with
   | FequivS es -> es
   | _ -> destr_error "equivS"
 
-let destr_equivF f =
+let destr_qequivF f =
   match f.f_node with
   | FequivF es -> es
   | _ -> destr_error "equivF"
+
+let destr_equivS f = equivS (destr_qequivS f)
+let destr_equivF f = equivF (destr_qequivF f)
 
 let destr_eagerF f =
   match f.f_node with
@@ -1499,6 +1562,8 @@ let is_forall    f = is_from_destr destr_forall1   f
 let is_exists    f = is_from_destr destr_exists1   f
 let is_lambda    f = is_from_destr destr_lambda    f
 let is_let       f = is_from_destr destr_let1      f
+let is_qequivF   f = is_from_destr destr_qequivF   f
+let is_qequivS   f = is_from_destr destr_qequivS   f
 let is_equivF    f = is_from_destr destr_equivF    f
 let is_equivS    f = is_from_destr destr_equivS    f
 let is_eagerF    f = is_from_destr destr_eagerF    f
@@ -1923,7 +1988,7 @@ module Fsubst = struct
       let fl' = subst_xpath s ef.ef_fl in
       let fr' = subst_xpath s ef.ef_fr in
 
-      f_equivF pr' fl' fr' po'
+      f_qequivF pr' fl' fr' po'
 
     | FequivS eqs ->
       assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
@@ -1937,7 +2002,7 @@ module Fsubst = struct
       let ml' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) eqs.es_ml in
       let mr' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) eqs.es_mr in
 
-      f_equivS ml' mr' pr' sl' sr' po'
+      f_qequivS ml' mr' pr' sl' sr' po'
 
     | FeagerF eg ->
       let pr', po' =
