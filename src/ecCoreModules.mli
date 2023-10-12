@@ -4,7 +4,6 @@ open EcPath
 open EcTypes
 
 (* -------------------------------------------------------------------- *)
-
 type prog_var_ty =
   EcTypes.prog_var * EcTypes.ty
 
@@ -31,7 +30,6 @@ val is_quantum_unit : quantum_ref -> bool
 type quantum_op =
   | Qinit
   | Qunitary
-
 
 (* --------------------------------------------------------------------- *)
 type instr = private {

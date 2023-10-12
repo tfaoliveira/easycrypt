@@ -1498,8 +1498,8 @@ lvalue_u:
 
 | p=lvalue DOTTICK n=loc(word)
    { if n.pl_desc = 0 then
-       parse_error n.pl_loc (Some "tuple projection start at 1");
-     PLvProji(p,n.pl_desc - 1) }
+       parse_error n.pl_loc (Some "tuple projection starts at 1");
+     PLvProji(p, n.pl_desc - 1) }
 
 | x=loc(fident) DLBRACKET ti=tvars_app? e=expr RBRACKET
    { match lqident_of_fident x.pl_desc with

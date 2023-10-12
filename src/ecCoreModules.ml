@@ -16,7 +16,6 @@ type lvalue =
   | LvVar   of prog_var_ty
   | LvTuple of prog_var_ty list
 
-
 let pvt_equal (pv1, ty1) (pv2, ty2) =
      EcTypes.pv_equal pv1 pv2
   && EcTypes.ty_equal ty1 ty2

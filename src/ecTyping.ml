@@ -160,6 +160,7 @@ type tyerror =
 | InvalidMem             of symbol * mem_error
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
+| InvalidClassicalLValue of [`QVar | `Nested | `Proj]
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar
@@ -310,7 +311,7 @@ let select_pv env side name ue tvi psig =
   else
     try
       let pvs = EcEnv.Var.lookup_progvar ?side name env in
-      let select (pv,ty) =
+      let select (pv, (_, ty)) = (* FIXME: quantum *)
         let subue = UE.copy ue in
         let texpected = EcUnify.tfun_expected subue psig in
           try
@@ -1555,11 +1556,10 @@ let trans_if_match ~loc env ue (gindty, gind) (c, b1, b2) =
     gind.tydt_ctors
 
 (*-------------------------------------------------------------------- *)
-
 let var_or_proj fvar fproj pv ty =
   match pv with
   | `Var pv -> fvar pv ty
-  | `Proj(pv, ap) -> fproj (fvar pv ap.arg_ty) ap.arg_pos ty
+  | `Proj (pv, ap) -> fproj (fvar pv ap.arg_ty) ap.arg_pos ty
 
 let expr_of_opselect
   (env, ue) loc ((sel, ty, subue, _) : OpSelect.gopsel) args
@@ -2010,36 +2010,57 @@ let form_of_opselect
   in f_app op args codom
 
 (* -------------------------------------------------------------------- *)
+type prelvalue =
+  | PreLV_var   of prog_var * EcEnv.Var.t
+  | PreLV_tuple of prelvalue list
+  | PreLV_proji of prelvalue * int
+  | PreLV_map   of (path * ty list) *  (prog_var * EcEnv.Var.t) * expr
 
-(* LvMap (op, x, e, ty)
- * - op is the map-set operator
- * - x  is the map to be updated
- * - e  is the index to update
- * - ty is the type of the value [x] *)
-
-type lvmap = (path * ty list) *  prog_var * expr * ty
-
-type lVAl =
-  | Lval  of lvalue
-  | LvMap of lvmap
-
-let i_asgn_lv (_loc : EcLocation.t) (_env : EcEnv.env) lv e =
+let prelvalue_as_classical_lvalue
+    (loc : EcLocation.t)
+    (env : EcEnv.env)
+    (lv  : prelvalue)
+  =
   match lv with
-  | Lval lv -> i_asgn (lv, e)
-  | LvMap ((op,tys), x, ei, ty) ->
-    let op = e_op op tys (toarrow [ty; ei.e_ty; e.e_ty] ty) in
-    i_asgn (LvVar (x,ty), e_app op [e_var x ty; ei; e] ty)
+  | PreLV_var (pv, (q, ty)) ->
+     if q <> `Classical then
+       tyerror loc env (InvalidClassicalLValue `QVar);
+     `Lv (LvVar (pv, ty))
 
-let i_rnd_lv loc env lv e =
-  match lv with
-  | Lval lv -> i_rnd (lv, e)
-  | LvMap _ -> tyerror loc env LvMapOnNonAssign
+  | PreLV_tuple lvs ->
+     let for1 = function
+       | PreLV_var (pv, (q, ty)) when q = `Classical ->
+          (pv, ty)
+       | _ ->
+          tyerror loc env (InvalidClassicalLValue `Nested);
+     in `Lv (LvTuple (List.map for1 lvs))
 
-let i_call_lv loc env lv f args =
-  match lv with
-  (* FIXME QUANTUM *)
-  | Lval lv -> i_call (Some lv, f, args, quantum_unit)
-  | LvMap _ -> tyerror loc env LvMapOnNonAssign
+  | PreLV_map ((op, tys), (x, (q, ty)), e) ->
+     if q <> `Classical then
+       tyerror loc env (InvalidClassicalLValue `QVar);
+     `LvMap ((op, tys), (x, ty), e)
+
+  | PreLV_proji _ ->
+     tyerror loc env (InvalidClassicalLValue `Proj)
+
+let i_asgn_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) (e : expr) =
+  match prelvalue_as_classical_lvalue loc env lv with
+  | `Lv lv ->
+     i_asgn (lv, e)
+
+  | `LvMap ((op, tys), (pv, ty), ei) ->
+     let op = e_op op tys (toarrow [ty; ei.e_ty; e.e_ty] ty) in
+     i_asgn (LvVar (pv, ty), e_app op [e_var pv ty; ei; e] ty)
+
+let i_rnd_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) (e : expr) =
+  match prelvalue_as_classical_lvalue loc env lv with
+  | `Lv lv -> i_rnd (lv, e)
+  | `LvMap _ -> tyerror loc env LvMapOnNonAssign
+
+let i_call_lv (loc : EcLocation.t) (env : EcEnv.env) (lv : prelvalue) f args =
+  match prelvalue_as_classical_lvalue loc env lv with
+  | `Lv lv -> i_call (Some lv, f, args, quantum_unit)
+  | `LvMap _ -> tyerror loc env LvMapOnNonAssign
 
 (* -------------------------------------------------------------------- *)
 let top_is_mem_binding pf = match pf with
@@ -2545,7 +2566,7 @@ and transstruct
     let tydecl1 (x, obj) =
       match obj with
       | MI_Module   m -> (x, `Module   m)
-      | MI_Variable v -> (x, `Variable v.v_type)
+      | MI_Variable v -> (x, `Variable (v.v_quantum, v.v_type))
       | MI_Function f -> (x, `Function f)
     in
     List.fold_left
@@ -2866,9 +2887,10 @@ and transinstr
     end
 
   | PSmeasure (plvalue, prvalue, measure) (* FIXME QUANTUM *) ->
-      assert false
+     _
 
-  | PSunitary (plvalue, prvalue) (* FIXME QUANTUM *)
+  | PSunitary (plvalue, prvalue) (* FIXME QUANTUM *) ->
+     _
 
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function
@@ -2878,7 +2900,7 @@ and transinstr
         | _ -> ()
       in
 
-      let lvalue, lty = translvalue ue env plvalue in
+      let lvalue, lty = trans_genlvalue ue env plvalue in
       let rvalue, rty =
         try transexp env `InProc ue prvalue with
         | TyError (l, e, exn) ->
@@ -2886,11 +2908,11 @@ and transinstr
             tyerror l e exn
       in
       unify_or_fail env ue prvalue.pl_loc ~expct:lty rty;
-      [ i_asgn_lv i.pl_loc env lvalue rvalue ] (* FIXME QUANTUM *)
+      [ i_asgn_lv i.pl_loc env lvalue rvalue ]
     end
 
   | PSrnd (plvalue, prvalue) ->
-      let lvalue, lty = translvalue ue env plvalue in
+      let lvalue, lty = trans_genlvalue ue env plvalue in
       let rvalue, rty = transexp env `InProc ue prvalue in
       unify_or_fail env ue prvalue.pl_loc ~expct:(tdistr lty) rty;
       [ i_rnd_lv i.pl_loc env lvalue rvalue ]
@@ -2901,7 +2923,7 @@ and transinstr
       [ i_call (None, fpath, args, quantum_unit) ]
 
   | PScall (Some lvalue, name, args) ->
-      let lvalue, lty = translvalue ue env lvalue in
+      let lvalue, lty = trans_genlvalue ue env lvalue in
       let (fpath, args, rty) = transcall name args.fa_classical in (* FIXME QUANTUM *)
       unify_or_fail env ue name.pl_loc ~expct:lty rty;
       [ i_call_lv i.pl_loc env lvalue fpath args ]
@@ -2978,23 +3000,33 @@ and trans_pv env { pl_desc = x; pl_loc = loc } =
     | `Var pv -> pv, xty
     | `Proj _ -> assert false
 
-and translvalue ue (env : EcEnv.env) lvalue =
-  match lvalue.pl_desc with
+and trans_genlvalue (ue : EcUnify.unienv) (env : EcEnv.env) (plvalue : plvalue) =
+  match plvalue.pl_desc with
   | PLvSymbol x ->
-      let pty = trans_pv env x in
-      Lval (LvVar pty), snd pty
+      let pv, pty = trans_pv env x in
+      PreLV_var (pv, pty), snd pty
 
-  | PLvTuple xs ->
-      let xs = List.map (trans_pv env) xs in
-      if not (List.is_unique ~eq:(EqTest.for_pv env) (List.map fst xs)) then
-        tyerror lvalue.pl_loc env LvNonLinear;
-      let ty = ttuple (List.map snd xs) in
-      Lval (LvTuple xs), ty
+  | PLvTuple lvs ->
+     assert (List.length lvs > 1);
+     let lvs, tys = List.split (List.map (trans_genlvalue ue env) lvs) in
+     PreLV_tuple lvs, ttuple tys
 
-  | PLvMap (x, tvi, e) ->
+  | PLvProji (lv, i) -> begin
+     let lv, ty = trans_genlvalue ue env lv in
+     match (EcEnv.ty_hnorm ty env).ty_node with
+     | Ttuple tys ->
+        if i >= List.length tys then
+          tyerror plvalue.pl_loc env (AmbiguousProji (i, ty));
+        PreLV_proji (lv, i), List.nth tys i
+
+     | _ ->
+        tyerror plvalue.pl_loc env (AmbiguousProji (i, ty));
+    end
+
+  | PLvMap (x, tvi, e) -> begin
       let tvi = tvi |> omap (transtvi env ue) in
       let codomty = UE.fresh ue in
-      let pv, xty = trans_pv env x in
+      let (pv, (q, xty)) as pvty = trans_pv env x in
       let e, ety = transexp env `InProc ue e in
       let name = ([], EcCoreLib.s_set) in
       let esig = [xty; ety; codomty] in
@@ -3011,8 +3043,8 @@ and translvalue ue (env : EcEnv.env) lvalue =
           let uidmap = UE.assubst ue in
           let esig = Tuni.subst_dom uidmap esig in
           let esig = toarrow esig xty in
-          unify_or_fail env ue lvalue.pl_loc ~expct:esig opty;
-          LvMap ((p, tys), pv, e, xty), codomty
+          unify_or_fail env ue plvalue.pl_loc ~expct:esig opty;
+          PreLV_map ((p, tys), pvty, e), codomty
 
       | [_] ->
           let uidmap = UE.assubst ue in
@@ -3024,6 +3056,7 @@ and translvalue ue (env : EcEnv.env) lvalue =
           let esig = Tuni.subst_dom uidmap esig in
           let matches = List.map (fun (_, _, subue, m) -> (m, subue)) ops in
           tyerror x.pl_loc env (MultipleOpMatch (name, esig, matches))
+    end
 
 (* -------------------------------------------------------------------- *)
 and trans_gbinding env ue decl =
@@ -3364,7 +3397,7 @@ and trans_form_or_pattern
         let lookup me x =
           match EcEnv.Var.lookup_progvar_opt ~side:me (unloc x) env with
           | None -> tyerror x.pl_loc env (UnknownVarOrOp (unloc x, []))
-          | Some (x, ty) ->
+          | Some (x, (_, ty)) -> (* FIXME: QUANTUM *)
             var_or_proj (fun x ty -> f_pvar x ty me) f_proj x ty
         in
 

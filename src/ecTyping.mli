@@ -152,6 +152,7 @@ type tyerror =
 | InvalidMem             of symbol * mem_error
 | InvalidMatch           of fxerror
 | InvalidFilter          of filter_error
+| InvalidClassicalLValue of [`QVar | `Nested | `Proj]
 | FunNotInModParam       of qsymbol
 | FunNotInSignature      of symbol
 | InvalidVar

@@ -1728,18 +1728,18 @@ end
 module Var = struct
   type t = glob_var_bind
 
-    let by_xpath_r (spsc : bool) (p : xpath) (env : env) =
-    match ipath_of_xpath p with
+  let by_xpath_r (spsc : bool) (p : xpath) (env : env) =
+  match ipath_of_xpath p with
+  | None -> lookup_error (`XPath p)
+  | Some (ip, (i, _args)) ->
+    match MC.by_path (fun mc -> mc.mc_variables) ip env with
     | None -> lookup_error (`XPath p)
-    | Some (ip, (i, _args)) ->
-      match MC.by_path (fun mc -> mc.mc_variables) ip env with
-      | None -> lookup_error (`XPath p)
-      | Some (params, ty) ->
-        let ((spi, _params), _) =
-          MC._downpath_for_var ~spsc env ip params in
-        if i <> spi then
-          assert false;
-        ty
+    | Some (params, ty) ->
+      let ((spi, _params), _) =
+        MC._downpath_for_var ~spsc env ip params in
+      if i <> spi then
+        assert false;
+      ty
 
   let by_xpath (p : xpath) (env : env) =
     by_xpath_r true p env
