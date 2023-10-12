@@ -1523,15 +1523,23 @@ funargs:
  | c=classical_funargs q=quantum_funargs? { { fa_classical = c; fa_quantum = odfl [] q } }
  | q=quantum_funargs { { fa_classical = []; fa_quantum = q } }
 
+lvalue_as:
+| lv=lvalue AS x=ident
+    { (lv, x) }
+
 qrref1:
 | qr=lvalue
     { (qr, None) }
 
-| qr=lvalue AS x=lident
-    { (qr, Some x) }
+| qr=oparen(lvalue_as)
+    { snd_map some qr }
+
+%inline qrref_r:
+| qrs=plist1(qrref1, COMMA)
+    { qrs }
 
 %inline qrref:
-| qrs=plist1(qrref1, COMMA)
+| qrs=loc(oparen(qrref_r))
     { qrs }
 
 base_instr:
@@ -1544,10 +1552,10 @@ base_instr:
 | x=lvalue LARROW e=expr
     { PSasgn (x, e) }
 
-| x=lvalue LARROW MEASURE q=loc(qrref) WITH e=expr
+| x=lvalue LARROW MEASURE q=qrref WITH e=expr
     { PSmeasure (x, q, e) }
 
-| x=lvalue LSARROW UNITARY LBRACKET e=expr RBRACKET
+| x=qrref LSARROW UNITARY LBRACKET e=expr RBRACKET
     { PSunitary (x, e) }
 
 | x=lvalue LEAT f=loc(fident) es=funargs
@@ -4118,6 +4126,10 @@ __rlist1(X, S):                         (* left-recursive *)
 (* -------------------------------------------------------------------- *)
 %inline paren(X):
 | LPAREN x=X RPAREN { x }
+
+%inline oparen(X):
+| x=paren(X) { x }
+| x=X { x }
 
 %inline brace(X):
 | LBRACE x=X RBRACE { x }

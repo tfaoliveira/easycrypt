@@ -582,6 +582,9 @@ end = struct
              if you meant to call procedure `%a', assign its result using `<@' rather than `<-'"
             pp_qsymbol q
 
+    | QVarInExpr ->
+       msg "quantum variables cannot appear in expressions"
+
   let pp_restr_error env fmt (w, e) =
     let ppe = EcPrinting.PPEnv.ofenv env in
 

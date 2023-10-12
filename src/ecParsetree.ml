@@ -101,22 +101,25 @@ type plvalue_r =
 
 and plvalue = plvalue_r located
 
-type funargs = {
-  fa_classical : pexpr list;
+type 'a funargs = {
+  fa_classical : 'a list;
   fa_quantum   : plvalue list;
 }
 
 type pinstr_r =
   | PSident   of psymbol
   | PSasgn    of plvalue * pexpr
-  | PSunitary of plvalue * pexpr
-  | PSmeasure of plvalue * (plvalue * psymbol option) list located * pexpr
+  | PSunitary of pqrref * pexpr
+  | PSmeasure of plvalue * pqrref * pexpr
   | PSrnd     of plvalue * pexpr
-  | PScall    of plvalue option * pgamepath * funargs
+  | PScall    of plvalue option * pgamepath * pexpr funargs
   | PSif      of pscond * pscond list * pstmt
   | PSwhile   of pscond
   | PSmatch   of pexpr * psmatch
   | PSassert  of pexpr
+
+and pqrref =
+  (plvalue * psymbol option) list located
 
 and psmatch = [
   | `Full of (ppattern * pstmt) list

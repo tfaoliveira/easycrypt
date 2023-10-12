@@ -171,6 +171,7 @@ type tyerror =
 | LvMapOnNonAssign
 | NoDefaultMemRestr
 | ProcAssign             of qsymbol
+| QVarInExpr
 
 exception TymodCnvFailure of tymod_cnv_failure
 exception TyError of EcLocation.t * env * tyerror
@@ -269,8 +270,8 @@ val trans_args :
   -> EcUnify.unienv
   -> EcLocation.t
   -> EcModules.funsig
-  -> pexpr list
-  -> expr list * EcTypes.ty
+  -> pexpr funargs
+  -> (expr list * quantum_ref) * EcTypes.ty
 
 (* -------------------------------------------------------------------- *)
 

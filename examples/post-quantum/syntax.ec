@@ -13,31 +13,30 @@ module M = {
     z <- 2;
   }
 
-  proc f (x:bool) { z: int} = { 
+  proc f (x:bool) {z: int, z2: int} = { 
     return 3;
   }
 
   proc q () {a b : int, c : bool} = { 
-    quantum var (x,x1): int * int;  (* Why this is useful *)
-    quantum var y, z;
+    quantum var x : int;
+            var x1 : int;
+    var y : bool;
+    quantum var z <- 2;
     quantum var w <- 3; (* TODO: translate this to quantum init *)
-    quantum var l : int;
+    quantum var l : (int * int) * int;
     
-    l <* U[fun _ => 3];
-    l <* U[fun l => l];
-    x <* U[fun _ => 3]; 
-    x <- measure q with 3;
+    (l.`1 as l1), (l.`2 as l2) <* U[((l1.`2, l1.`1), l2 + 1)];
+    l <* U[l];
+    l.`2 as v <* U[v + 1]; 
+    x1 <- measure q, l.`1 as l1 with q + l1.`2;
 
-    x <@ f(y){(z,(y, x.`2)), x.`1}; 
-    x <@ f(y){z};   
-    f(y){z};
+    x1 <@ f(y){z, w};
+    f(y){z, w};
 
     y <- true;
-    z <- 2;
+(*    z <- 2; *)
   }
 
   proc q1 {a b : int, c : bool} = { 
   }
-
 }.
-
