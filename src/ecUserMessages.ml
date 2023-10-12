@@ -516,6 +516,12 @@ end = struct
     | InvalidFilter FE_NoMatch ->
         msg "invalid filter pattern (no match)"
 
+    | InvalidClassicalLValue _ ->
+        msg "invalid classical left-value" (* FIXME QUANTUM *)
+
+    | InvalidQRef _ ->
+        msg "invalid quantum reference" (* FIXME QUANTUM *)
+
     | FunNotInModParam name ->
         msg "the function %a is not provided by a module parameter. \
              Maybe you forgot a #?"

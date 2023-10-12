@@ -107,16 +107,16 @@ type funargs = {
 }
 
 type pinstr_r =
-  | PSident  of psymbol
-  | PSasgn   of plvalue * pexpr
+  | PSident   of psymbol
+  | PSasgn    of plvalue * pexpr
   | PSunitary of plvalue * pexpr
-  | PSmeasure of plvalue * plvalue * pexpr
-  | PSrnd    of plvalue * pexpr
-  | PScall   of plvalue option * pgamepath * funargs
-  | PSif     of pscond * pscond list * pstmt
-  | PSwhile  of pscond
-  | PSmatch  of pexpr * psmatch
-  | PSassert of pexpr
+  | PSmeasure of plvalue * (plvalue * psymbol option) list * pexpr
+  | PSrnd     of plvalue * pexpr
+  | PScall    of plvalue option * pgamepath * funargs
+  | PSif      of pscond * pscond list * pstmt
+  | PSwhile   of pscond
+  | PSmatch   of pexpr * psmatch
+  | PSassert  of pexpr
 
 and psmatch = [
   | `Full of (ppattern * pstmt) list

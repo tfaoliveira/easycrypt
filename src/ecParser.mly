@@ -1520,6 +1520,17 @@ funargs:
  | c=classical_funargs q=quantum_funargs? { { fa_classical = c; fa_quantum = odfl [] q } }
  | q=quantum_funargs { { fa_classical = []; fa_quantum = q } }
 
+qrref1:
+| qr=lvalue
+    { (qr, None) }
+
+| qr=lvalue AS x=lident
+    { (qr, Some x) }
+
+%inline qrref:
+| qrs=plist1(qrref1, COMMA)
+    { qrs }
+
 base_instr:
 | x=lident
     { PSident x }
@@ -1530,7 +1541,7 @@ base_instr:
 | x=lvalue LARROW e=expr
     { PSasgn (x, e) }
 
-| x=lvalue LARROW MEASURE q=lvalue WITH e=expr
+| x=lvalue LARROW MEASURE q=qrref WITH e=expr
     { PSmeasure (x, q, e) }
 
 | x=lvalue LSARROW u=loc(_uident) LBRACKET e=expr RBRACKET

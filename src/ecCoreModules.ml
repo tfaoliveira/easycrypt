@@ -70,7 +70,6 @@ let name_of_lv lv =
   | LvTuple pvs ->
      String.concat "_" (List.map (EcTypes.name_of_pvar |- fst) pvs)
 
-
 (* -------------------------------------------------------------------- *)
 type quantum_ref =
   | QRvar   of prog_var_ty
