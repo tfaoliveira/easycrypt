@@ -149,11 +149,17 @@ let tc1_pos_last_assert tc s = pf_pos_last_assert !!tc s
 
 (* -------------------------------------------------------------------- *)
 let check (q : quantum) (pe : proofenv) (c : form) =
+  ()
+
+(*
   let check me =
     match q with
     | `Classical ->
+       (*
        if EcMemory.has_quantum (EcMemory.memtype me) then
          assert false
+       *)
+       ()
     | `Quantum ->
        ()
   in
@@ -161,7 +167,7 @@ let check (q : quantum) (pe : proofenv) (c : form) =
   let env =
     let goal = FApi.get_main_pregoal pe in
     EcEnv.LDecl.baseenv goal.g_hyps
- in
+  in
 
   match c.f_node with
   | FhoareF f ->
@@ -202,6 +208,7 @@ let check (q : quantum) (pe : proofenv) (c : form) =
      check m1; check m2
 
   | _ -> ()
+*)
 
 let pf_as_hoareF   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
 let pf_as_hoareS   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe

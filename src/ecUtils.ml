@@ -230,7 +230,7 @@ let oif (test : 'a -> bool) (x : 'a option) =
 
 let oget ?exn (x : 'a option) =
   match x, exn with
-  | None  , None     -> assert false
+  | None  , None     -> Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000); assert false
   | None  , Some exn -> raise exn
   | Some x, _        -> x
 
@@ -540,8 +540,20 @@ module List = struct
   let for_all2 f xs ys =
     List.length xs = List.length ys && for_all2 f xs ys
 
-  let fold_left_pmap f state xs =
-    assert false
+  let fold_left_pmap
+        (type a b c)
+        (f     : a -> b -> (a * c) option)
+        (state : a)
+        (xs    : b list)
+    =
+    let state, acc =
+      List.fold_left (fun (state, acc) x ->
+        match f state x with
+        | None -> (state, acc)
+        | Some (state, v) -> (state, v :: acc)
+      ) (state, []) xs in
+
+    (state, List.rev acc)
 
   (* ------------------------------------------------------------------ *)
   let ksort ?(stable = false) ?(rev = false) ~key ~cmp xs =

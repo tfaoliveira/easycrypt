@@ -857,9 +857,7 @@ let process_rewrite1_r ttenv ?target ri tc =
       process_algebra `Solve `Field [] tc
 
   | RWEquiv (side, name, (argsl, resl), (argsr, resr)) ->
-      (* FIXME QUANTUM *)
-      assert false
-   (*
+      (* FIXME: quantum *)
       (* Check which direction we wish to go in *)
       let tc = match side with
         | `Left  -> tc
@@ -892,8 +890,9 @@ let process_rewrite1_r ttenv ?target ri tc =
         let subenv = EcEnv.Memory.push_active m env in
         let ue = EcUnify.UniEnv.create (Some []) in
 
-        let args, ret_ty =
-          EcTyping.trans_args subenv ue (loc args) p.f_sig (unloc args) in
+        let (args, _), ret_ty =
+          let cargs = { fa_classical = unloc args; fa_quantum = [] } in
+          EcTyping.trans_args subenv ue (loc args) p.f_sig cargs in
         let res =
           EcTyping.transexpcast subenv `InProc ue ret_ty res in
 
@@ -960,8 +959,8 @@ let process_rewrite1_r ttenv ?target ri tc =
       in
 
       (* Construct the proc calls that we want in each transitivity *)
-      let progl = EcModules.s_call (Some lvl, equiv.ef_fl, argsl) in
-      let progr = EcModules.s_call (Some lvr, equiv.ef_fr, argsr) in
+      let progl = EcModules.s_call (Some lvl, equiv.ef_fl, argsl, EcModules.quantum_unit) in
+      let progr = EcModules.s_call (Some lvr, equiv.ef_fr, argsr, EcModules.quantum_unit) in
 
       (* Here we build the chain of transitivity calls, and discharge intermediate goals when possible*)
       let tc =
@@ -1044,7 +1043,6 @@ let process_rewrite1_r ttenv ?target ri tc =
       in
 
       t_onall process_trivial tc
-*)
 
 (* -------------------------------------------------------------------- *)
 let process_rewrite1 ttenv ?target ri tc =
