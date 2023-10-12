@@ -148,26 +148,17 @@ let tc1_pos_last_while  tc s = pf_pos_last_while  !!tc s
 let tc1_pos_last_assert tc s = pf_pos_last_assert !!tc s
 
 (* -------------------------------------------------------------------- *)
-let check (q : quantum) (pe : proofenv) (c : form) =
-  ()
-
-(*
+let check (q : quantum) (tc : EcCoreGoal.tcenv1) (c : form) =
   let check me =
     match q with
     | `Classical ->
-       (*
        if EcMemory.has_quantum (EcMemory.memtype me) then
          assert false
-       *)
-       ()
     | `Quantum ->
        ()
   in
 
-  let env =
-    let goal = FApi.get_main_pregoal pe in
-    EcEnv.LDecl.baseenv goal.g_hyps
-  in
+  let env = FApi.tc1_env tc in
 
   match c.f_node with
   | FhoareF f ->
@@ -208,28 +199,27 @@ let check (q : quantum) (pe : proofenv) (c : form) =
      check m1; check m2
 
   | _ -> ()
-*)
 
-let pf_as_hoareF   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
-let pf_as_hoareS   ?(q = `Classical) pe c = check q pe c; as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe
-let pf_as_choareF  ?(q = `Classical) pe c = check q pe c; as_phl (`CHoare `Pred) (fun () -> destr_cHoareF  c) pe
-let pf_as_choareS  ?(q = `Classical) pe c = check q pe c; as_phl (`CHoare `Stmt) (fun () -> destr_cHoareS  c) pe
-let pf_as_bdhoareF ?(q = `Classical) pe c = check q pe c; as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
-let pf_as_bdhoareS ?(q = `Classical) pe c = check q pe c; as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
-let pf_as_equivF   ?(q = `Classical) pe c = check q pe c; as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
-let pf_as_equivS   ?(q = `Classical) pe c = check q pe c; as_phl (`Equiv  `Stmt) (fun () -> destr_equivS   c) pe
-let pf_as_eagerF   ?(q = `Classical) pe c = check q pe c; as_phl `Eager          (fun () -> destr_eagerF   c) pe
+let pf_as_hoareF   pe c = as_phl (`Hoare  `Pred) (fun () -> destr_hoareF   c) pe
+let pf_as_hoareS   pe c = as_phl (`Hoare  `Stmt) (fun () -> destr_hoareS   c) pe
+let pf_as_choareF  pe c = as_phl (`CHoare `Pred) (fun () -> destr_cHoareF  c) pe
+let pf_as_choareS  pe c = as_phl (`CHoare `Stmt) (fun () -> destr_cHoareS  c) pe
+let pf_as_bdhoareF pe c = as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
+let pf_as_bdhoareS pe c = as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
+let pf_as_equivF   pe c = as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
+let pf_as_equivS   pe c = as_phl (`Equiv  `Stmt) (fun () -> destr_equivS   c) pe
+let pf_as_eagerF   pe c = as_phl `Eager          (fun () -> destr_eagerF   c) pe
 
 (* -------------------------------------------------------------------- *)
-let tc1_as_hoareF   ?q tc = pf_as_hoareF   ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_hoareS   ?q tc = pf_as_hoareS   ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_choareF  ?q tc = pf_as_choareF  ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_choareS  ?q tc = pf_as_choareS  ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_bdhoareF ?q tc = pf_as_bdhoareF ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_bdhoareS ?q tc = pf_as_bdhoareS ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_equivF   ?q tc = pf_as_equivF   ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_equivS   ?q tc = pf_as_equivS   ?q !!tc (FApi.tc1_goal tc)
-let tc1_as_eagerF   ?q tc = pf_as_eagerF   ?q !!tc (FApi.tc1_goal tc)
+let tc1_as_hoareF   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_hoareF   !!tc (FApi.tc1_goal tc)
+let tc1_as_hoareS   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_hoareS   !!tc (FApi.tc1_goal tc)
+let tc1_as_choareF  ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_choareF  !!tc (FApi.tc1_goal tc)
+let tc1_as_choareS  ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_choareS  !!tc (FApi.tc1_goal tc)
+let tc1_as_bdhoareF ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_bdhoareF !!tc (FApi.tc1_goal tc)
+let tc1_as_bdhoareS ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_bdhoareS !!tc (FApi.tc1_goal tc)
+let tc1_as_equivF   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_equivF   !!tc (FApi.tc1_goal tc)
+let tc1_as_equivS   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_equivS   !!tc (FApi.tc1_goal tc)
+let tc1_as_eagerF   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_eagerF   !!tc (FApi.tc1_goal tc)
 
 (* -------------------------------------------------------------------- *)
 let tc1_get_stmt side tc =

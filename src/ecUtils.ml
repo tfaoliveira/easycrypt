@@ -230,7 +230,7 @@ let oif (test : 'a -> bool) (x : 'a option) =
 
 let oget ?exn (x : 'a option) =
   match x, exn with
-  | None  , None     -> Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000); assert false
+  | None  , None     -> assert false
   | None  , Some exn -> raise exn
   | Some x, _        -> x
 

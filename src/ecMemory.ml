@@ -442,7 +442,7 @@ let has_quantum (mt : memtype) =
      false
 
   | Lmt_concrete (Some lmem) ->
-     List.is_empty lmem.quantum_lmt.mt_decl
+     lmem.quantum_lmt.mt_ty <> tunit
 
 (* -------------------------------------------------------------------- *)
 let has_locals mt = match mt with
