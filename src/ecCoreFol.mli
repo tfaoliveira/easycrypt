@@ -27,6 +27,9 @@ type gty =
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
 
+and fbinding  = EcIdent.t * ty
+and fbindings = fbinding list
+
 and form = private {
   f_node : f_node;
   f_ty   : ty;
@@ -36,7 +39,7 @@ and form = private {
 
 and f_node =
   | Fquant  of quantif * bindings * form
-  | Flam    of bindings * form
+  | Flam    of fbindings * form
   | Fif     of form * form * form
   | Fmatch  of form * form list * ty
   | Flet    of lpattern * form * form
@@ -237,7 +240,7 @@ val f_let1   : EcIdent.t -> form -> form -> form
 val f_quant  : quantif -> bindings -> form -> form
 val f_exists : bindings -> form -> form
 val f_forall : bindings -> form -> form
-val f_lambda : bindings -> form -> form
+val f_lambda : fbindings -> form -> form
 
 val f_forall_mems : (EcIdent.t * memtype) list -> form -> form
 
@@ -396,8 +399,8 @@ val destr_let1      : form -> EcIdent.t * ty * form * form
 val destr_forall1   : form -> EcIdent.t * gty * form
 val destr_forall    : form -> bindings * form
 val decompose_forall: form -> bindings * form
-val decompose_lambda: form -> bindings * form
-val destr_lambda    : form -> bindings * form
+val decompose_lambda: form -> fbindings * form
+val destr_lambda    : form -> fbindings * form
 
 val destr_exists1   : form -> EcIdent.t * gty * form
 val destr_exists    : form -> bindings * form
@@ -450,7 +453,7 @@ val is_pr        : form -> bool
 val is_eq_or_iff : form -> bool
 
 (* -------------------------------------------------------------------- *)
-val split_fun  : form -> bindings * form
+val split_fun  : form -> fbindings * form
 val split_args : form -> form * form list
 
 (* -------------------------------------------------------------------- *)
@@ -511,6 +514,9 @@ module Fsubst : sig
 
   val add_binding  : f_subst -> binding  -> f_subst * binding
   val add_bindings : f_subst -> bindings -> f_subst * bindings
+
+  val add_fbinding  : f_subst -> fbinding  -> f_subst * fbinding
+  val add_fbindings : f_subst -> fbindings -> f_subst * fbindings
 
   val subst_lpattern : f_subst -> lpattern -> f_subst * lpattern
   val subst_xpath    : f_subst -> xpath -> xpath

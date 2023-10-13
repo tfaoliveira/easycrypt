@@ -30,6 +30,9 @@ type gty =
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
 
+and fbinding  = EcIdent.t * ty
+and fbindings = fbinding list
+
 and form = {
   f_node : f_node;
   f_ty   : ty;
@@ -39,7 +42,7 @@ and form = {
 
 and f_node =
   | Fquant  of quantif * bindings * form
-  | Flam    of bindings * form
+  | Flam    of fbindings * form
   | Fif     of form * form * form
   | Fmatch  of form * form list * ty
   | Flet    of lpattern * form * form
@@ -267,6 +270,19 @@ let b_hash (bs : bindings) =
     Why3.Hashcons.combine_list b1_hash 0 bs
 
 (* -------------------------------------------------------------------- *)
+let fb_equal (b1 : fbindings) (b2 : fbindings) =
+  let fb1_equal (x1, ty1) (x2, ty2) =
+    EcIdent.id_equal x1 x2 && ty_equal ty1 ty2
+  in
+    List.all2 fb1_equal b1 b2
+
+let fb_hash (bs : fbindings) =
+  let fb1_hash (x, ty) =
+    Why3.Hashcons.combine (EcIdent.tag x) (ty_hash ty)
+  in
+    Why3.Hashcons.combine_list fb1_hash 0 bs
+
+(* -------------------------------------------------------------------- *)
 let hcmp_hash : hoarecmp -> int = Hashtbl.hash
 
 (*-------------------------------------------------------------------- *)
@@ -458,7 +474,7 @@ module Hsform = Why3.Hashcons.Make (struct
         qt_equal q1 q2 && b_equal b1 b2 && f_equal f1 f2
 
     | Flam(b1,f1), Flam(b2,f2) ->
-        b_equal b1 b2 && f_equal f1 f2
+        fb_equal b1 b2 && f_equal f1 f2
 
     | Fif(b1,t1,f1), Fif(b2,t2,f2) ->
         f_equal b1 b2 && f_equal t1 t2 && f_equal f1 f2
@@ -518,7 +534,7 @@ module Hsform = Why3.Hashcons.Make (struct
         Why3.Hashcons.combine2 (f_hash f) (b_hash b) (qt_hash q)
 
     | Flam(b, f) ->
-        Why3.Hashcons.combine (f_hash f) (b_hash b)
+        Why3.Hashcons.combine (f_hash f) (fb_hash b)
 
     | Fif(b, t, f) ->
         Why3.Hashcons.combine2 (f_hash b) (f_hash t) (f_hash f)
@@ -594,8 +610,12 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fif (f1, f2, f3)    -> union f_fv [f1; f2; f3]
     | Fmatch (b, fs, ty)  -> fv_union ty.ty_fv (union f_fv (b :: fs))
 
-    | Fquant(_, b, f) | Flam (b, f) ->
+    | Fquant(_, b, f) ->
       let do1 (id, ty) fv = fv_union (gty_fv ty) (Mid.remove id fv) in
+      List.fold_right do1 b (f_fv f)
+
+    | Flam (b, f) ->
+      let do1 (id, ty) fv = fv_union ty.ty_fv (Mid.remove id fv) in
       List.fold_right do1 b (f_fv f)
 
     | Flet(lp, f1, f2) ->
@@ -758,7 +778,7 @@ let f_lambda b f =
       match f.f_node with
       | Flam (b', f') -> (b@b', f')
       | _ -> (b, f) in
-    let ty = toarrow (List.map (fun (_,gty) -> gty_as_ty gty) b) f.f_ty in
+    let ty = toarrow (List.snd b) f.f_ty in
     mk_form (Flam (b, f)) ty
   end
 
@@ -997,17 +1017,12 @@ let f_map gt g fp =
       f_quant q b' f'
 
   | Flam(b, f) ->
-      let map_gty ((x, gty) as b1) =
-        let gty' =
-          match gty with
-          | GTty ty ->
-              let ty' = gt ty in if ty == ty' then gty else GTty ty'
-          | _ -> gty
-        in
-          if gty == gty' then b1 else (x, gty')
+      let map_ty ((x, ty) as b1) =
+        let ty' = gt ty in
+        if ty == ty' then b1 else (x, ty')
       in
 
-      let b' = List.Smart.map map_gty b in
+      let b' = List.Smart.map map_ty b in
       let f' = g f in
 
       f_lambda b' f'
@@ -1532,9 +1547,7 @@ let rec form_of_expr mem (e : expr) =
      f_quant (quantif_of_equantif qt) b e
 
   | Elam (b, e) ->
-     let b = List.map (fun (x, ty) -> (x, GTty ty)) b in
-     let e = form_of_expr mem e in
-     f_lambda b e
+     f_lambda b (form_of_expr mem e)
 
 (* -------------------------------------------------------------------- *)
 exception CannotTranslate
@@ -1563,7 +1576,7 @@ let expr_of_form mh f =
       e_quantif (equantif_of_quantif kd) (List.map auxbd bds) (aux f)
 
     | Flam (bds, f) ->
-      e_lam (List.map auxbd bds) (aux f)
+      e_lam bds (aux f)
 
     | Fpvar (pv, m) ->
       if EcIdent.id_equal m mh
@@ -1758,7 +1771,7 @@ module Fsubst = struct
           f_quant q b' f'
 
     | Flam (b, f) ->
-        let s, b' = add_bindings ~tx s b in
+        let s, b' = add_fbindings ~tx s b in
         let f'    = f_subst ~tx s f in
           f_lambda b' f'
 
@@ -2069,7 +2082,15 @@ module Fsubst = struct
       in
         (s, (x', gty'))
 
-  and add_bindings ~tx = List.map_fold (add_binding ~tx)
+  and add_bindings ~tx s bds =
+    List.map_fold (add_binding ~tx) s bds
+
+  and add_fbinding ~tx s (x, ty) =
+    let s, (x, ty) = add_binding ~tx s (x, GTty ty) in
+    s, (x, gty_as_ty ty)
+
+  and add_fbindings ~tx s bds =
+    List.map_fold (add_fbinding ~tx) s bds
 
   (* When substituting a abstract module (i.e. a mident) by a concrete one,
      we move the module cost from [c_calls] to [c_self]. *)
@@ -2098,6 +2119,10 @@ module Fsubst = struct
   (* ------------------------------------------------------------------ *)
   let add_binding  = add_binding ~tx:(fun _ f -> f)
   let add_bindings = add_bindings ~tx:(fun _ f -> f)
+
+  (* ------------------------------------------------------------------ *)
+  let add_fbinding  = add_fbinding ~tx:(fun _ f -> f)
+  let add_fbindings = add_fbindings ~tx:(fun _ f -> f)
 
   (* ------------------------------------------------------------------ *)
   let f_subst ?(tx = fun _ f -> f) s =

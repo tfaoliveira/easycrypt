@@ -192,7 +192,7 @@ module Core = struct
       if is_post_indep && simpl then f_predT ty
       else match lv with
            | LvVar (pv,_) ->
-             f_lambda [x,GTty ty]
+             f_lambda [x, ty]
                (EcPV.PVM.subst1 env pv m (f_local x ty) bhs.bhs_po)
            | _ -> tc_error !!tc "cannot infer a valid event, it must be provided"
     in
@@ -365,7 +365,7 @@ module Core = struct
            xty
            (ttuple (List.snd wr))
            d
-           (f_lambda [(x, GTty xty)] body)
+           (f_lambda [(x, xty)] body)
 
       | _ :: _ ->
          error ()

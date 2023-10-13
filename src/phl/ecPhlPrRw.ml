@@ -83,7 +83,7 @@ let pr_sum env pr =
          EcCoreLib.CI_Sum.p_sum
          [xty]
          (EcTypes.tfun (EcTypes.tfun xty EcTypes.treal) EcTypes.treal))
-      [EcFol.f_lambda [x, GTty xty] prx]
+      [EcFol.f_lambda [x, xty] prx]
       EcTypes.treal
   in
 

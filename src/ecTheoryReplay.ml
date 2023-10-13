@@ -447,7 +447,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopd) =
                 let codom   = EcTyping.transty tp env ue opov.opov_retty in
                 let env, xs = EcTyping.trans_binding env ue opov.opov_args in
                 let body    = EcTyping.trans_form env ue opov.opov_body codom in
-                let lam     = EcFol.f_lambda (List.map (fun (x, ty) -> (x, EcFol.GTty ty)) xs) body in
+                let lam     = EcFol.f_lambda xs body in
                 (lam.f_ty, lam)
               in
               begin
@@ -558,7 +558,6 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopr) =
             let body =
               let env, xs = EcTyping.trans_binding env ue prov.prov_args in
               let body    = EcTyping.trans_form_opt env ue prov.prov_body None in
-              let xs      = List.map (fun (x, ty) -> x, EcFol.GTty ty) xs in
               let lam     = EcFol.f_lambda xs body in
               lam
             in

@@ -1274,7 +1274,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
   let pf =
     let (_, concl) = skip (Some sk) 0 concl in
     let (z, concl) = EcProofTerm.pattern_form ~name:(EcIdent.name x) hyps ~ptn:f concl in
-      Fsubst.f_subst_local pr (f_lambda [(z, GTty f.f_ty)] concl) ax
+      Fsubst.f_subst_local pr (f_lambda [(z, f.f_ty)] concl) ax
   in
 
   let pf_inst = Fsubst.f_subst_local x f pf in
@@ -1291,7 +1291,7 @@ let t_elimT_form (ind : proofterm) ?(sk = 0) (f : form) (tc : tcenv1) =
       doit pf_inst (0, sk)
   in
 
-  let pf   = f_lambda [(x, GTty f.f_ty)] (snd (skip (Some sk) 0 pf)) in
+  let pf   = f_lambda [(x, f.f_ty)] (snd (skip (Some sk) 0 pf)) in
   let args =
     (PAFormula pf :: (List.make aa1 (PASub None)) @
      PAFormula  f :: (List.make (aa2+aa3) (PASub None))) in
@@ -1793,7 +1793,7 @@ let t_rw_for_subst y togen concl side eqid tc =
   let f1', f2' = destr_eq_or_iff eq in
   let ids = List.map fst togen in
   let ty = f1'.f_ty in
-  let posty_G = f_lambda [y, GTty ty] (gen_hyps (List.rev togen) concl) in
+  let posty_G = f_lambda [y, ty] (gen_hyps (List.rev togen) concl) in
   let f1, f2 = if side = `LtoR then f2', f1' else f1', f2' in
   let postx_G = f_app posty_G [f2] tbool in
   let t_eq =
@@ -2394,7 +2394,7 @@ let t_congr (f1, f2) (args, ty) tc =
           let fx   = EcIdent.create "f" in
           let fty  = tfun aty ty in
           let body = f_app (f_local fx fty) [a1] ty in
-          let lam  = EcFol.f_lambda [(fx, GTty fty)] body in
+          let lam  = EcFol.f_lambda [(fx, fty)] body in
             FApi.t_sub
               [doit args fty]
               (t_apply_s LG.p_fcongr [ty; fty] ~args:[lam; m1; m2] ~sk:1 tc)

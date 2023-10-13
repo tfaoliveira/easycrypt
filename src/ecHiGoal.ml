@@ -1955,8 +1955,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
     let (senv, bds) = EcTyping.trans_binding env ue bds in
     let p = EcTyping.trans_pattern senv ps ue p in
     let ev = MEV.of_idents (Mid.keys !ps) `Form in
-    (ptenv !!tc hyps (ue, ev),
-     f_lambda (List.map (snd_map gtty) bds) p)
+    (ptenv !!tc hyps (ue, ev), f_lambda bds p)
   in
 
   let dopat =

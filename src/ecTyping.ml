@@ -1988,7 +1988,6 @@ let form_of_opselect
              let xs = List.map (fst_map EcIdent.fresh) xs in
              ((args @ List.map (curry f_local) xs, []), xs) in
 
-         let flam  = List.map (snd_map gtty) flam in
          let me    = odfl mhr (EcEnv.Memory.get_active env) in
          let body  = form_of_expr me body in
          let lcmap = List.map2 (fun (x, _) y -> (x, y)) bds tosub in
@@ -3484,7 +3483,7 @@ and trans_form_or_pattern
         let branches, bty = List.split (List.map (fun (lcs, s) ->
           let env  = EcEnv.Var.bind_locals lcs env in
           let bdy  = transf env s in
-          f_lambda (List.map (snd_map gtty) lcs) bdy, (bdy.f_ty, s.pl_loc)) branches) in
+          f_lambda lcs bdy, (bdy.f_ty, s.pl_loc)) branches) in
 
         let rty = EcUnify.UniEnv.fresh ue in
 
@@ -3515,7 +3514,7 @@ and trans_form_or_pattern
     | PFlambda (xs, f1) ->
         let env, xs = trans_binding env ue xs in
         let f = transf env f1 in
-          f_lambda (List.map (fun (x,ty) -> (x,GTty ty)) xs) f
+        f_lambda xs f
 
     | PFrecord (b, fields) ->
         let (ctor, fields, (rtvi, reccty)) =

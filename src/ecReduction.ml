@@ -443,6 +443,13 @@ let check_binding test (env, subst) (x1, gty1) (x2, gty2) =
 let check_bindings test env subst bd1 bd2 =
     List.fold_left2 (check_binding test) (env,subst) bd1 bd2
 
+let check_fbinding test (env, subst) (x1, ty1) (x2, ty2) =
+  let ty2 = EcSubst.subst_ty subst ty2 in
+  add_local (env, subst) (x1,ty1) (x2,ty2)
+
+let check_fbindings test env subst bd1 bd2 =
+    List.fold_left2 (check_fbinding test) (env,subst) bd1 bd2
+
 let check_cost_l env subst co1 co2 =
     let calls1 =
       EcPath.Mx.fold (fun f c calls ->
@@ -522,7 +529,7 @@ let is_alpha_eq hyps f1 f2 =
       aux env subst f1' f2'
 
     | Flam(bd1,f1'), Flam(bd2,f2') when List.length bd1 = List.length bd2 ->
-      let env, subst = check_bindings test env subst bd1 bd2 in
+      let env, subst = check_fbindings test env subst bd1 bd2 in
       aux env subst f1' f2'
 
     | Fif(a1,b1,c1), Fif(a2,b2,c2) ->
@@ -743,11 +750,7 @@ let can_eta x (f, args) =
   | _ -> false
 
 let eta_expand bd f ty =
-  let args =
-    List.map (fun (x,gty) ->
-        match gty with
-        | GTty ty -> f_local x ty
-        | _      -> assert false) bd in
+  let args = List.map (curry f_local) bd in
   (f_app f args ty)
 
 (* -------------------------------------------------------------------- *)
@@ -1229,7 +1232,7 @@ let reduce_head simplify ri env hyps f =
     if f_equal f f' then raise nohead else f'
 
     (* η-reduction *)
-  | Flam ([x, GTty _], { f_node = Fapp (fn, args) })
+  | Flam ([x, _], { f_node = Fapp (fn, args) })
       when ri.eta && can_eta x (fn, args)
     -> f_app fn (List.take (List.length args - 1) args) f.f_ty
 
@@ -1258,7 +1261,7 @@ let reduce_head simplify ri env hyps f =
 
 let rec eta_norm f =
   match f.f_node with
-  | Flam ([x, GTty _], { f_node = Fapp (fn, args) })
+  | Flam ([x, _], { f_node = Fapp (fn, args) })
       when can_eta x (fn, args)
     -> eta_norm (f_app fn (List.take (List.length args - 1) args) f.f_ty)
   | _ -> f
@@ -1359,7 +1362,6 @@ and reduce_head_sub ri env f =
       f_quant t b (reduce_head_top ri env ~onhead:false f1)
 
     | Flam (b, f1) ->
-      let env = Mod.add_mod_binding b env in
       f_lambda b (reduce_head_top ri env ~onhead:false f1)
 
     | Flet(lp, f1, f2) ->
@@ -1437,7 +1439,6 @@ let rec simplify ri env f =
     f_quant q bd (simplify ri env f)
 
   | Flam (bd, f) ->
-    let env = Mod.add_mod_binding bd env in
     f_lambda bd (simplify ri env f)
 
   | _ ->
@@ -1457,7 +1458,7 @@ let check_memenv env (x1,mt1) (x2,mt2) =
 (* -------------------------------------------------------------------- *)
 type head_sub =
   | Zquant of quantif * bindings (* in reverse order *)
-  | Zlam   of bindings           (* in reverse order *)
+  | Zlam   of fbindings          (* in reverse order *)
   | Zif
   | Zmatch of EcTypes.ty
   | Zlet   of lpattern
@@ -1747,7 +1748,7 @@ and check_fun_bindings_conv ri env bd1 bd2 f1 f2 =
   let rec aux es bd bd1 bd2 =
     match bd1, bd2 with
     | b1::bd1', b2::bd2' ->
-      begin match check_binding test es b1 b2 with
+      begin match check_fbinding test es b1 b2 with
       | es -> aux es (b1::bd) bd1' bd2'
       | exception NotConv -> es, bd, bd1, bd2
       end

@@ -1152,7 +1152,7 @@ module Op = struct
           let codom   = TT.transty TT.tp_relax eenv ue pty in
           let env, xs = TT.trans_binding eenv ue args in
           let body    = TT.trans_form env ue pf codom in
-          let lam     = f_lambda (List.map (fun (x, ty) -> (x, GTty ty)) xs) body in
+          let lam     = f_lambda xs body in
           (lam.f_ty, `Plain lam, [])
 
       | PO_case (pty, pbs) -> begin
@@ -1401,7 +1401,7 @@ module Op = struct
 
     let mode, aout = Sem.translate_s env cont body.f_body in
     let aout = form_of_expr mhr aout in (* FIXME: translate to forms directly? *)
-    let aout = f_lambda (List.map2 (fun (_, ty) x -> (x, GTty ty)) params ids) aout in
+    let aout = f_lambda (List.map2 (fun (_, ty) x -> (x, ty)) params ids) aout in
 
     let opdecl = EcDecl.{
       op_tparams  = [];
@@ -2398,7 +2398,7 @@ module Search = struct
                     let es = e_subst {e_subst_id with es_ty = tip } in
                     let xs  = List.map (snd_map (ty_subst tip)) nt.ont_args in
                     let bd  = EcFol.form_of_expr EcFol.mhr (es nt.ont_body) in
-                    let fp  = EcFol.f_lambda (List.map (snd_map EcFol.gtty) xs) bd in
+                    let fp  = EcFol.f_lambda xs bd in
 
                     match fp.f_node with
                     | Fop (pf, _) -> (pf :: paths, pts)

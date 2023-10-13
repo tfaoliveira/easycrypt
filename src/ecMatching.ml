@@ -481,7 +481,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
                      Mid.find_opt x mxs
                        |> omap (fun y -> Fsubst.f_bind_rename xsubst y nx xty)
                        |> odfl xsubst
-                   in (xsubst, (nx, GTty xty)))
+                   in (xsubst, (nx, xty)))
                 Fsubst.f_subst_id fs1 in
 
             let ssbj = Fsubst.f_subst xsubst subject in
@@ -518,7 +518,7 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
           let n1, n2 = List.length q1, List.length q2 in
           let q1, r1 = List.split_at (min n1 n2) q1 in
           let q2, r2 = List.split_at (min n1 n2) q2 in
-          let (env, subst, mxs) = doit_bindings env (subst, mxs) q1 q2 in
+          let (env, subst, mxs) = doit_fbindings env (subst, mxs) q1 q2 in
           doit env (subst, mxs) (f_lambda r1 f1) (f_lambda r2 f2)
 
       | Fpvar (pv1, m1), Fpvar (pv2, m2) ->
@@ -756,6 +756,32 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
     in
       List.fold_left2 doit_binding (env, subst, mxs) q1 q2
 
+  and doit_fbindings env (subst, mxs) q1 q2 =
+    let doit_fbinding (env, subst, mxs) (x1, ty1) (x2, ty2) =
+      let ty2 = Fsubst.subst_ty subst ty2 in
+
+      assert (not (Mid.mem x1 mxs) && not (Mid.mem x2 mxs));
+
+      let env, subst =
+        begin
+          try  EcUnify.unify env ue ty1 ty2
+          with EcUnify.UnificationFailure _ -> raise MatchFailure
+        end;
+
+        let subst =
+          if   id_equal x1 x2
+          then subst
+          else Fsubst.f_bind_rename subst x2 x1 ty2
+
+        and env = EcEnv.Var.bind_local x1 ty1 env in
+
+        (env, subst)
+
+      in
+        (env, subst, Mid.add x1 x2 mxs)
+    in
+      List.fold_left2 doit_fbinding (env, subst, mxs) q1 q2
+
   in
     doit (EcEnv.LDecl.toenv hyps) (Fsubst.f_subst_id, Mid.empty) ptn subject;
     (ue, !ev)
@@ -857,9 +883,13 @@ module FPosition = struct
           | Fmatch (b, fs, _) ->
                doit pos (`WithCtxt (ctxt, b :: fs))
 
-          | Fquant (_, b, f) | Flam (b, f) ->
+          | Fquant (_, b, f) ->
               let xs   = List.pmap (function (x, GTty _) -> Some x | _ -> None) b in
               let ctxt = List.fold_left ((^~) Sid.add) ctxt xs in
+              doit pos (`WithCtxt (ctxt, [f]))
+
+          | Flam (b, f) ->
+              let ctxt = List.fold_left ((^~) Sid.add) ctxt (List.fst b) in
               doit pos (`WithCtxt (ctxt, [f]))
 
           | Flet (lp, f1, f2) ->

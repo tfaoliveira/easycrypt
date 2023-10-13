@@ -297,7 +297,9 @@ module FunAbsLow = struct
         | Some (_,_,cost) -> cost in
       let k_cost = EcCHoare.cost_app cost [f_local k_called tint] in
       let form = f_cHoareF pr o_called po k_cost in
-      f_forall_simpl bds (f_imp_simpl call_bounds form) in
+      f_forall_simpl
+        (List.map (snd_map gtty) bds)
+        (f_imp_simpl call_bounds form) in
     (* We have the conditions for the oracles. *)
     let sg = List.map ospec ois in
 
@@ -316,7 +318,9 @@ module FunAbsLow = struct
             let max = f_int_le f cbd in
             f_anda ge0 max) xc bds in
       let call_bounds = f_ands0_simpl call_bounds in
-      f_exists bds (f_and call_bounds pr) in
+      f_exists
+        (List.map (snd_map gtty) bds)
+        (f_and call_bounds pr) in
     let fn_orcl = EcPath.xpath top f.x_sub in
     let f_cb = call_bound_r oi_self f_i1 in
     let f_cost = cost_r f_x0 (Mx.singleton fn_orcl f_cb)  in

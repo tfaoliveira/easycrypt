@@ -187,8 +187,8 @@ type sform =
   | SFtuple of form list
   | SFproj  of form * int
 
-  | SFquant of quantif * (EcIdent.t * gty) * form Lazy.t
-  | SFlam   of (EcIdent.t * gty) * form Lazy.t
+  | SFquant of quantif * binding * form Lazy.t
+  | SFlam   of fbinding * form Lazy.t
   | SFtrue
   | SFfalse
   | SFnot   of form

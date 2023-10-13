@@ -1688,7 +1688,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
       maybe_paren outer (fst outer, e_bin_prio_lambda) pp fmt ()
 
   | Flam (bd, f) ->
-      let (subppe, pp) = pp_bindings ppe ~fv:f.f_fv bd in
+      let (subppe, pp) = pp_fbindings ppe ~fv:f.f_fv bd in
       let pp fmt () =
         Format.fprintf fmt "@[<hov 2>fun %t =>@ %a@]"
           pp (pp_form subppe) f in
@@ -2104,6 +2104,10 @@ and pp_bindings ppe ?break ?fv bds =
   pp_bindings_blocks ppe ?break bds
 
 (* -------------------------------------------------------------------- *)
+and pp_fbindings ppe ?break ?fv bds =
+  pp_bindings ppe ?break (List.map (snd_map gtty) bds)
+
+(* -------------------------------------------------------------------- *)
 let pp_sform ppe fmt f =
   pp_form_r ppe ([], ((100, `Infix `NonAssoc), `NonAssoc)) fmt f
 
@@ -2212,7 +2216,6 @@ let pp_opdecl_pr (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
             | Flam (vds, f) -> (vds, f)
             | _ -> ([], f) in
 
-          let vds = List.map (snd_map EcFol.gty_as_ty) vds in
           (pp_locbinds ppe ~fv:f.f_fv vds, f)
         in
           Format.fprintf fmt "%t =@ %a" pp_vds (pp_form subppe) f
@@ -2267,7 +2270,7 @@ let pp_opdecl_op (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
           let (vds, f) =
             match f.f_node with
             | Flam (vds, f) ->
-               (List.map (snd_map gty_as_ty) vds, f)
+               (vds, f)
             | _ -> ([], f) in
           (pp_locbinds ppe ~fv:f.f_fv vds, f,
            match vds with [] -> false | _ -> true)
@@ -3004,7 +3007,7 @@ module PPGoal = struct
               | (bds, body) -> (body.f_ty, bds, body)
             in
 
-            let (subppe, pp) = pp_bindings ppe ~break:false ~fv:body.f_fv bds in
+            let (subppe, pp) = pp_fbindings ppe ~break:false ~fv:body.f_fv bds in
 
             let dk fmt =
               Format.fprintf fmt "%a@ := %a"

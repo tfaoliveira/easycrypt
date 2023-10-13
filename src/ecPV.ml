@@ -198,10 +198,7 @@ module PVM = struct
           else aux f1 in
         f_quant q b f1
       | Flam(b,f1) ->
-        let f1 =
-          if has_mod b then subst (Mod.add_mod_binding b env) s f1
-          else aux f1 in
-        f_lambda b f1
+        f_lambda b (aux f1)
 
       | _ -> EcFol.f_map (fun ty -> ty) aux f)
 
@@ -309,10 +306,13 @@ module PV = struct
 
     let rec aux env fv f =
       match f.f_node with
-      | Fquant (_, b, f1) | Flam (b, f1) ->
-        let env = Mod.add_mod_binding b env in
-        let fv1 = aux env fv f1 in
-        remove b fv1
+      | Fquant (_, b, f1) ->
+          let env = Mod.add_mod_binding b env in
+          let fv1 = aux env fv f1 in
+          remove b fv1
+
+      | Flam (b, f1) ->
+          aux env fv f1
 
       | Fif (f1, f2, f3) ->
           List.fold_left (aux env) fv [f1; f2; f3]
@@ -844,8 +844,7 @@ module Mpv2 = struct
         add_eq local eqs f1 f2
       | Flam(bd1,f1), Flam(bd2,f2) ->
         let local =
-          let toty (id,gty) = id, gty_as_ty gty in
-          enter_local env local (List.map toty bd1) (List.map toty bd2) in
+          enter_local env local bd1 bd2 in
         add_eq local eqs f1 f2
       | Fif(e1,t1,f1), Fif(e2,t2,f2) ->
         List.fold_left2 (add_eq local) eqs [e1;t1;f1] [e2;t2;f2]
@@ -884,11 +883,14 @@ module Mpv2 = struct
 
     let rec aux local eqs f =
       match f.f_node with
-      | Fquant(_,bd1,f1) | Flam(bd1,f1) ->
+      | Fquant(_,bd1,f1) ->
         let local =
           let toty (id,gty) = id, gty_as_ty gty in
           let bd = List.map toty bd1 in
           enter_local env local bd bd in
+        aux local eqs f1
+      | Flam(bd1,f1) ->
+        let local = enter_local env local bd1 bd1 in
         aux local eqs f1
       | Fif(e1,t1,f1) ->
         List.fold_left (aux local) eqs [e1;t1;f1]

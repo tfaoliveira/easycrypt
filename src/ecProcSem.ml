@@ -86,7 +86,7 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
        let body =
          let arg  = EcIdent.create "arg" in
          let body = f_let lv (f_local arg tya) body in
-         f_lambda [(arg, GTty tya)] body in
+         f_lambda [(arg, tya)] body in
 
        match mode with
        | `Det   -> f_dmap tya tyb d body
@@ -152,7 +152,7 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
               c.e_ty
               body
               (f_lambda
-                 [v, GTty tya]
+                 [v, tya]
                  (f_let lv vx (form_of_expr mhr c)))
 
           in (`Distr, expr_of_form mhr aout)
@@ -169,7 +169,7 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
               tyb
               body
               (f_lambda
-                 [v, GTty tya]
+                 [v, tya]
                  (f_let lv vx (form_of_expr mhr c)))
 
           in (`Distr, expr_of_form mhr aout)
@@ -396,7 +396,7 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
               aty c.e_ty
               (form_of_expr mhr aout)
               (f_lambda
-                 [(arg, GTty aty)]
+                 [(arg, aty)]
                  (f_let lv (f_local arg aty) (form_of_expr mhr c))) in
           (`Distr, expr_of_form mhr aout)
 

@@ -65,7 +65,7 @@ module LowInternal = struct
           List.map2
             (fun (bds, _) ((_, letsf), _) ->
               let post = mk_let_of_lv_substs env letsf in
-              f_lambda (List.map (snd_map gtty) bds) post)
+              f_lambda bds post)
             bs wps
         in
         let c =

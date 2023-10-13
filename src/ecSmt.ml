@@ -471,6 +471,8 @@ let trans_memtype ((genv, _) as env) mt =
 
 (* -------------------------------------------------------------------- *)
 exception CanNotTranslate
+
+(* -------------------------------------------------------------------- *)
 let trans_binding genv lenv (x, xty) =
   let lenv, wty =
     match xty with
@@ -487,6 +489,16 @@ let trans_binding genv lenv (x, xty) =
 (* -------------------------------------------------------------------- *)
 let trans_bindings genv lenv bds =
   List.map_fold (trans_binding genv) lenv bds
+
+(* -------------------------------------------------------------------- *)
+let trans_fbinding genv lenv (x, xty) =
+  let wty = trans_ty (genv, lenv) xty in
+  let wvs = WTerm.create_vsymbol (preid x) wty in
+  ({ lenv with le_lv = Mid.add x wvs lenv.le_lv }, wvs)
+
+(* -------------------------------------------------------------------- *)
+let trans_fbindings genv lenv bds =
+  List.map_fold (trans_fbinding genv) lenv bds
 
 (* -------------------------------------------------------------------- *)
 let trans_lvars genv lenv bds =
@@ -671,7 +683,7 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
   | Flam (bds, body) ->
     begin
       try
-        let lenv, wbds = trans_bindings genv lenv bds in
+        let lenv, wbds = trans_fbindings genv lenv bds in
         let wbody = trans_form (genv,lenv) body in
         trans_lambda genv wbds wbody
       with CanNotTranslate -> trans_gen env fp
@@ -764,7 +776,6 @@ and trans_branch (genv, lenv) (p, _dty, tvs) (f, (cname, argsty)) =
   let xs, f =
     let xs, f = decompose_lambda f in
     let xs1, xs2 = List.split_at nargs xs in
-    let xs1 = List.map (snd_map gty_as_ty) xs1 in
     (xs1, f_lambda xs2 f) in
   let csymb = EcPath.pqoname (EcPath.prefix p) cname in
   let csymb =
@@ -786,7 +797,7 @@ and trans_fun (genv, lenv) bds body args =
   let largs = List.length args in
 
   if lbds <= largs then
-    let lenv, wbds = trans_bindings genv lenv bds in
+    let lenv, wbds = trans_fbindings genv lenv bds in
     if lbds = largs then
       w_t_lets wbds args (trans_form (genv, lenv) body)
     else (* lbds < largs *)
@@ -794,7 +805,7 @@ and trans_fun (genv, lenv) bds body args =
       w_t_lets wbds args1 (trans_app (genv,lenv) body args2)
   else (* largs < lbds *)
     let bds1, bds2 = List.takedrop largs bds in
-    let lenv, wbds1 = trans_bindings genv lenv bds1 in
+    let lenv, wbds1 = trans_fbindings genv lenv bds1 in
     w_t_lets wbds1 args (trans_form (genv,lenv) (f_lambda bds2 body))
 
 (* -------------------------------------------------------------------- *)
@@ -948,7 +959,7 @@ and trans_body (genv, lenv) wdom wcodom topbody =
 
   let params, body =
     if lbds = lwdom then
-      let lenv, params = trans_bindings genv lenv bds in
+      let lenv, params = trans_fbindings genv lenv bds in
       params, trans_form (genv, lenv) body
     else
       let preid  = WIdent.id_fresh "x" in

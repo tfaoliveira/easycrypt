@@ -472,7 +472,7 @@ let rec subst_form (s : subst) (f : form) =
       f_quant q b e1
 
   | Flam (b, f1) ->
-      let s, b = fresh_glocals s b in
+      let s, b = fresh_locals s b in
       let e1 = subst_form s f1 in
       f_lambda b e1
 
@@ -795,9 +795,21 @@ and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
      let s = add_module s x (EcPath.mident xfresh) in
      s, (xfresh, gty)
 
+
+(* -------------------------------------------------------------------- *)
+and fresh_local (s : subst) ((x, ty) : EcIdent.t * ty) =
+  let xfresh = EcIdent.fresh x in
+  let ty = subst_ty s ty in
+  let s = add_flocal s x (f_local xfresh ty) in
+  s, (xfresh, ty)
+
 (* -------------------------------------------------------------------- *)
 and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
   List.fold_left_map fresh_glocal s locals
+
+(* -------------------------------------------------------------------- *)
+and fresh_locals (s : subst) (locals : (EcIdent.t * ty) list) : subst * _ =
+  List.fold_left_map fresh_local s locals
 
 (* -------------------------------------------------------------------- *)
 and subst_top_modsig (s : subst) (ms : top_module_sig) =

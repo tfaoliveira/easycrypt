@@ -2485,10 +2485,6 @@ module NormMp = struct
           f_quant q bd (aux f)
 
         | Flam(bd,f) ->
-          if has_mod bd then
-            let env = Mod.add_mod_binding bd env in
-            f_lambda bd (norm_form env f)
-          else
           f_lambda bd (aux f)
 
         | Fpvar(p,m) ->

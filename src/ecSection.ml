@@ -200,7 +200,7 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     | EcFol.Fint      _            -> ()
     | EcFol.Flocal    _            -> ()
     | EcFol.Fquant    (_, b, f)    -> on_gbindings cb b; cbrec f
-    | EcFol.Flam      (b, f)       -> on_gbindings cb b; cbrec f
+    | EcFol.Flam      (b, f)       -> on_fbindings cb b; cbrec f
     | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
     | EcFol.Fmatch    (b, fs, ty)  -> on_ty cb ty; List.iter cbrec (b :: fs)
     | EcFol.Flet      (lp, f1, f2) -> on_lp cb lp; List.iter cbrec [f1; f2]
@@ -327,6 +327,12 @@ and on_gbinding (cb : cb) (b : gty) =
 
 and on_gbindings (cb : cb) (b : (EcIdent.t * gty) list) =
   List.iter (fun (_, b) -> on_gbinding cb b) b
+
+and on_fbinding (cb : cb) (b : ty) =
+   on_ty cb b
+
+and on_fbindings (cb : cb) (b : (EcIdent.t * ty) list) =
+  List.iter (fun (_, b) -> on_fbinding cb b) b
 
 and on_module (cb : cb) (me : module_expr) =
   match me.me_body with
@@ -692,8 +698,17 @@ and fv_and_tvar_f f =
     fv := EcIdent.fv_union !fv (tvar_fv f.f_ty);
     match f.f_node with
     | Fop(_, tys) -> fv := List.fold_left (fun fv ty -> EcIdent.fv_union fv (tvar_fv ty)) !fv tys
-    | Fquant(_, d, f) | Flam (d, f) ->
-      fv := List.fold_left (fun fv (_,gty) -> EcIdent.fv_union fv (gty_fv_and_tvar gty)) !fv d;
+    | Fquant(_, d, f) ->
+      fv :=
+        List.fold_left
+          (fun fv (_,gty) -> EcIdent.fv_union fv (gty_fv_and_tvar gty))
+          !fv d;
+      aux f
+    | Flam (d, f) ->
+      fv :=
+        List.fold_left
+          (fun fv (_,ty) -> EcIdent.fv_union fv (ty_fv_and_tvar ty))
+          !fv d;
       aux f
     | _ -> EcFol.f_iter aux f
   in
@@ -905,7 +920,7 @@ let generalize_opdecl to_gen prefix (name, operator) =
           | OP_Constr _ | OP_Record _ | OP_Proj _ -> assert false
           | OP_TC -> assert false (* ??? *)
           | OP_Plain (f,nosmt) ->
-            OP_Plain (f_lambda (List.map (fun (x, ty) -> (x, GTty ty)) extra_a) f, nosmt)
+            OP_Plain (f_lambda extra_a f, nosmt)
           | OP_Fix opfix ->
             let subst = EcSubst.add_opdef EcSubst.empty path tosubst in
             let nb_extra = List.length extra_a in
@@ -941,7 +956,7 @@ let generalize_opdecl to_gen prefix (name, operator) =
         let body =
           match body with
           | PR_Plain f ->
-            PR_Plain (f_lambda (List.map (fun (x,ty) -> (x,GTty ty)) extra_a) f)
+            PR_Plain (f_lambda extra_a f)
           | PR_Ind pri ->
             let pri_args = extra_a @ pri.pri_args in
             PR_Ind { pri with pri_args }

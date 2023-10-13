@@ -174,13 +174,13 @@ let datatype_projectors (tpath, tparams, { tydt_ctors = ctors }) =
           cty2 in
 
       f_lambda
-        (List.map (fun (x, ty) -> (x, GTty ty)) lvars)
+        lvars
         (if   i = j
          then f_some (f_tuple (List.map (curry f_local) lvars))
          else f_none rty) in
 
     let body = f_match the (List.mapi do1 ctors) (toption rty) in
-    let body = f_lambda [thv, GTty thety] body in
+    let body = f_lambda [thv, thety] body in
 
     let op = Some (OP_Plain (body, false)) in
     let op = mk_op ~opaque:false tparams body.f_ty op `Global in (* FIXME *)

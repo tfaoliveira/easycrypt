@@ -498,7 +498,7 @@ module ASyncWhile = struct
          e_quantif (auxkd kd) (List.map auxbd bds) (aux f)
 
       | Flam (bds, f) ->
-         e_lam (List.map auxbd bds) (aux f)
+         e_lam bds (aux f)
 
       | Fpvar (pv, m) ->
          if EcIdent.id_equal m mh then

@@ -188,7 +188,7 @@ let f_losslessF f = f_bdHoareF f_true f f_true FHeq f_r1
 (* -------------------------------------------------------------------- *)
 let f_identity ?(name = "x") ty =
   let name  = EcIdent.create name in
-    f_lambda [name, GTty ty] (f_local name ty)
+    f_lambda [name, ty] (f_local name ty)
 
 (* -------------------------------------------------------------------- *)
 let f_ty_app (env : EcEnv.env) (f : form) (args : form list) =
@@ -799,8 +799,8 @@ type sform =
   | SFlet   of lpattern * form * form
   | SFtuple of form list
   | SFproj  of form * int
-  | SFquant of quantif * (EcIdent.t * gty) * form Lazy.t
-  | SFlam   of (EcIdent.t * gty) * form Lazy.t
+  | SFquant of quantif * binding * form Lazy.t
+  | SFlam   of fbinding * form Lazy.t
   | SFtrue
   | SFfalse
   | SFnot   of form
@@ -939,7 +939,7 @@ let f_real_lt_simpl f1 f2 =
 (* -------------------------------------------------------------------- *)
 let f_dlet_simpl tya tyb d f =
   match f.f_node with
-  | Flam (([(_, GTty _)] as bd), f') -> begin
+  | Flam (([(_, _)] as bd), f') -> begin
      match sform_of_form f' with
      | SFop ((p, _), [body])
           when EcPath.p_equal p EcCoreLib.CI_Distr.p_dunit ->

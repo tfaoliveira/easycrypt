@@ -34,6 +34,8 @@ module Subst : sig
   val bind_locals  : subst -> (ident * form) list -> subst
   val add_binding  : subst -> binding -> subst * binding
   val add_bindings : subst -> bindings -> subst * bindings
+  val add_fbinding : subst -> fbinding -> subst * fbinding
+  val add_fbindings: subst -> fbindings -> subst * fbindings
 
   val has_mem : subst -> ident -> bool
 end = struct
@@ -51,6 +53,8 @@ end = struct
   let bind_local     = Fsubst.f_bind_local
   let add_binding    = Fsubst.add_binding
   let add_bindings   = Fsubst.add_bindings
+  let add_fbinding   = Fsubst.add_fbinding
+  let add_fbindings  = Fsubst.add_fbindings
 
   let bind_locals (s : subst) xs =
     List.fold_left (fun s (x, e) -> bind_local s x e) s xs
@@ -190,8 +194,7 @@ and norm_cost st s c =
 and norm_lambda (st : state) (f : form) =
   match f.f_node with
   | Flam (b, f) ->
-    let s, b = Subst.add_bindings Subst.subst_id b in
-    let st = { st with st_env = Mod.add_mod_binding b st.st_env } in
+    let s, b = Subst.add_fbindings Subst.subst_id b in
     f_lambda b (norm st s f)
 
   | Fapp (f1, args) ->
@@ -220,8 +223,7 @@ and betared st s bd f args =
   | _, None ->
      Subst.subst s (f_lambda bd f)
 
-  | (x, gty) :: bd, Some (v, args) ->
-     let _ : ty = EcFol.as_gtty gty in
+  | (x, ty) :: bd, Some (v, args) ->
      let s = Subst.bind_local s x v in
      betared st s bd f args
 
@@ -374,7 +376,7 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     | Lexists, _          -> f_exists b f
   end
 
-  | Flam ([x, GTty _], { f_node = Fapp (fn, fnargs) })
+  | Flam ([x, _], { f_node = Fapp (fn, fnargs) })
       when st.st_ri.eta && Args.isempty args && EcReduction.can_eta x (fn, fnargs)
     ->
     let rfn = f_app fn (List.take (List.length fnargs - 1) fnargs) f.f_ty in
