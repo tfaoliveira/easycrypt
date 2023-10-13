@@ -680,7 +680,6 @@ _lident:
 | SOLVE      { "solve"      }
 | STRICT     { "strict"     }
 | WLOG       { "wlog"       }
-| GLOBAL     { "global"     }
 
 | x=RING  { match x with `Eq -> "ringeq"  | `Raw -> "ring"  }
 | x=FIELD { match x with `Eq -> "fieldeq" | `Raw -> "field" }
@@ -1424,7 +1423,7 @@ equiv_cond(P):
     { (f, odfl [] qeq) }
 
 quantum_eq:
-  | COMMA EQ LBRACE l=loc(quantum_eq1)* RBRACE { l }
+  | COMMA EQ LBRACE l=plist0(loc(quantum_eq1), COMMA) RBRACE { l }
 
 quantum_eq1:
   | GLOBAL  { QEQglobal }
