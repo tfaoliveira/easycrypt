@@ -20,9 +20,9 @@ module M = {
   proc q () {a b : int, c : bool} = { 
     quantum var x : int;
             var x1 : int;
-    var y : bool;
+            var y : bool;
     quantum var z : int <- 3;
-    quantum var w <- 3; (* TODO: translate this to quantum init *)
+    quantum var w <- 3;
     quantum var l : (int * int) * int;
     
     (l.`1 as l1), (l.`2 as l2) <* U[((l1.`2, l1.`1), l2 + 1)];
@@ -35,8 +35,11 @@ module M = {
 
     y <- true;
     z <- 2;
+    x1 <- 2;
   }
 
   proc q1 {a b : int, c : bool} = { 
   }
 }.
+
+print M.

@@ -37,7 +37,7 @@ module PPEnv = struct
 
   let ofenv (env : EcEnv.env) =
     let width =
-      EcGState.asint ~default:0
+      EcGState.asint ~default:80
         (EcGState.getvalue "PP:width" (EcEnv.gstate env)) in
 
     { ppe_env    = env;
@@ -1375,17 +1375,37 @@ let lower_left (ppe : PPEnv.t) (t_ty : form -> EcTypes.ty) (f : form)
 let rec pp_quantum_ref (ppe : PPEnv.t) fmt qr =
   match qr with
   | QRvar (p, _) ->
-    (* FIXME QUANTUM *)
     pp_pv ppe fmt p
   | QRtuple t ->
     Format.fprintf fmt "(%a)" (pp_list ",@ " (pp_quantum_ref ppe) ) t
   | QRproj (qr, i) ->
-    Format.fprintf fmt "%a.`%i" (pp_quantum_ref ppe) qr i
+    Format.fprintf fmt "%a.`%i" (pp_quantum_ref ppe) qr (i+1)
 
+(* -------------------------------------------------------------------- *)
 let pp_quantum_ref_call (ppe : PPEnv.t) fmt qr =
   if is_quantum_unit qr then ()
   else
     Format.fprintf fmt "{%a}" (pp_quantum_ref ppe) qr
+
+(* -------------------------------------------------------------------- *)
+let pp_quantum_rref (ppe : PPEnv.t) fmt qr =
+  let for1 fmt (x, qr) =
+    let print_bds =
+      match qr with
+      | QRvar (pv, _) ->
+         symbol_of_pv pv <> PPEnv.local_symb ppe x
+      | _ ->
+         true in
+
+    if print_bds then
+      Format.fprintf fmt "%a as %a"
+        (pp_quantum_ref ppe) qr
+        (pp_local ppe) x
+    else
+      Format.fprintf fmt "%a" (pp_quantum_ref ppe) qr
+  in
+
+  Format.fprintf fmt "%a" (pp_list ",@ " for1) qr
 
 (* -------------------------------------------------------------------- *)
 let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
@@ -1401,29 +1421,56 @@ let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
 and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
   match o with
   | Qinit ->
-      Format.fprintf fmt "%a <-@;<1 2>%a"
+      Format.fprintf fmt "@[<hov 2>%a <-@;<1 2>%a;@]"
         (pp_quantum_ref ppe) qr
         (pp_expr ppe) e
 
   | Qunitary ->
-      Format.fprintf fmt "%a <*@;<1 2>U[%a]"
-        (pp_quantum_ref ppe) qr
-        (pp_expr ppe) e
+     let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
+     let na = List.length qr in
+
+     let e = form_of_expr mhr e in
+     let bds, e =
+       let bds, e = decompose_lambda e in
+       let bds1, bds2 = List.split_at na bds in
+       bds1, f_lambda bds2 e in
+
+     let bds = List.map fst bds in
+
+      Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U[%a];@]"
+        (pp_quantum_rref ppe) (List.combine bds qr)
+        (pp_form ppe) e
 
 (* -------------------------------------------------------------------- *)
 and pp_i_measure (ppe : PPEnv.t) fmt (lv, qr, e) =
-  Format.fprintf fmt "%a <-@;<1 2>measure@ %a@ with@ %a"
+  (* We know that "e" is a lambda expression in eta-expanded form *)
+  let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
+  let na = List.length qr in
+
+  let e = form_of_expr mhr e in
+
+  let bds, e =
+    let bds, e = EcFol.decompose_lambda e in
+    let bds1, bds2 = List.split_at na bds in
+    List.map (snd_map gty_as_ty) bds1, (f_lambda bds2 e) in
+
+  let bds = List.fst bds in
+
+  let ppe = PPEnv.add_locals ppe bds in
+
+  Format.fprintf fmt "@[<hov 2>%a <-@;<1 2>measure@ %a@ with@ %a@]"
     (pp_lvalue ppe) lv
-    (pp_quantum_ref ppe) qr
-    (pp_expr ppe) e
+    (pp_quantum_rref ppe) (List.combine bds qr)
+    (pp_form ppe) e
 
 (* -------------------------------------------------------------------- *)
-
 and pp_instr_for_form (ppe : PPEnv.t) fmt i =
   match i.i_node with
-  | Squantum(qr, o, e) -> pp_i_quantum ppe fmt (qr, o, e)
+  | Squantum(qr, o, e) ->
+     pp_i_quantum ppe fmt (qr, o, e)
 
-  | Smeasure(lv, qr, e) -> pp_i_measure ppe fmt (lv, qr, e)
+  | Smeasure(lv, qr, e) ->
+     pp_i_measure ppe fmt (lv, qr, e)
 
   | Sasgn (lv, e) -> begin
       match lv, EcTypes.split_args e with
@@ -3188,9 +3235,14 @@ let pp_pvdecl ppe fmt v =
   Format.fprintf fmt "%s : %a" v.v_name (pp_type ppe) v.v_type
 
 let pp_funsig ppe fmt fs =
-  Format.fprintf fmt "@[<hov 2>proc %s(%a) :@ %a@]"
+  Format.fprintf fmt "@[<hov 2>proc %s(%a)%t :@ %a@]"
     fs.fs_name
     (pp_list ", " (pp_ovdecl ppe)) fs.fs_anames
+    (fun fmt ->
+      if not (List.is_empty fs.fs_qnames) then
+        Format.fprintf fmt "{%a}"
+          (pp_list ", " (pp_ovdecl ppe))
+          fs.fs_qnames)
     (pp_type ppe) fs.fs_ret
 
 let pp_sigitem moi_opt ppe fmt (Tys_function fs) =
@@ -3253,7 +3305,7 @@ let rec pp_instr_r (ppe : PPEnv.t) fmt i =
       (pp_lvalue ppe) lv (pp_expr ppe) e
 
   | Scall (None, xp, args, qr) ->
-    Format.fprintf fmt "%a(@[%a@])%a;"
+    Format.fprintf fmt "@[<hov 2>%a(@[%a@])%a@];"
       (pp_funname ppe) xp
       (pp_list ",@ " (pp_expr ppe)) args
       (pp_quantum_ref_call ppe) qr
@@ -3343,12 +3395,20 @@ and pp_moditem ppe fmt (p, i) =
       pp_modexp ppe fmt (EcPath.mqname p me.me_name, me)
 
   | MI_Variable v ->
-      Format.fprintf fmt "@[<hov 2>var %a@]" (pp_pvdecl ppe) v
+      Format.fprintf fmt "@[<hov 2>%s %a@]"
+        (match v.v_quantum with
+         | `Classical -> "var"
+         | `Quantum   -> "quantum var")
+        (pp_pvdecl ppe) v
 
   | MI_Function f ->
     let pp_item ppe fmt = function
       | `Var pv ->
-          Format.fprintf fmt "@[<hov 2>var %a;@]" (pp_pvdecl ppe) pv
+          Format.fprintf fmt "@[<hov 2>%s %a;@]"
+            (match pv.v_quantum with
+             | `Classical -> "var"
+             | `Quantum   -> "quantum var")
+            (pp_pvdecl ppe) pv
       | `Instr i ->
           Format.fprintf fmt "%a" (pp_instr ppe) i
       | `Return e ->
