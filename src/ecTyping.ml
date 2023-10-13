@@ -1836,17 +1836,20 @@ let trans_pv env { pl_desc = x; pl_loc = loc } =
   | None ->
      tyerror loc env (UnknownModVar x)
 
-  | Some (pv, xty) ->
-     match pv with
-     | `Var pv -> pv, xty
-     | `Proj _ -> assert false
+  | Some (pv, xty) -> pv, xty
+
+(* -------------------------------------------------------------------- *)
+let trans_pv_var env pv =
+  match trans_pv env pv with
+  | `Var pv, xty -> pv, xty
+  | `Proj _, _ -> assert false
 
 (* -------------------------------------------------------------------- *)
 type prelvalue =
   | PreLV_var   of prog_var * EcEnv.Var.t
   | PreLV_tuple of prelvalue list
   | PreLV_proji of prelvalue * int
-  | PreLV_map   of (path * ty list) *  (prog_var * EcEnv.Var.t) * expr
+  | PreLV_map   of (path * ty list) * (OpSelect.pvsel * EcEnv.Var.t) * expr
 
 (* ------------------------------------------------------------------- *)
 exception NotALValue of [`QVar | `Nested | `Proj]
@@ -1867,10 +1870,13 @@ let prelvalue_as_classical_lvalue_r (lv  : prelvalue) =
           raise (NotALValue `Nested)
      in `Lv (LvTuple (List.map for1 lvs))
 
-  | PreLV_map ((op, tys), (x, (q, ty)), e) ->
+  | PreLV_map ((op, tys), (`Var x, (q, ty)), e) ->
      if q <> `Classical then
        raise (NotALValue `QVar);
      `LvMap ((op, tys), (x, ty), e)
+
+  | PreLV_map _ ->
+     assert false               (* FIXME *)
 
   | PreLV_proji _ ->
      raise (NotALValue `Proj)
@@ -1959,9 +1965,16 @@ let i_measure_lv (loc : EcLocation.t) (env : EcEnv.env) lv qr measure =
 (* -------------------------------------------------------------------- *)
 let rec trans_genlvalue (ue : EcUnify.unienv) (env : EcEnv.env) (plvalue : plvalue) =
   match plvalue.pl_desc with
-  | PLvSymbol x ->
+  | PLvSymbol x -> begin
       let pv, pty = trans_pv env x in
-      PreLV_var (pv, pty), snd pty
+      let lv =
+        match pv with
+        | `Var pv ->
+           PreLV_var (pv, pty)
+        | `Proj (pv, pa) ->
+           PreLV_proji (PreLV_var (pv, (pa.arg_quantum, pa.arg_ty)), pa.arg_pos)
+      in lv, snd pty
+    end
 
   | PLvTuple lvs ->
      assert (List.length lvs > 1);
@@ -3680,7 +3693,7 @@ and trans_form_or_pattern
 
           | GVglob (gp, ex) ->
               let (m, _) = trans_msymbol env gp in
-              let ex = List.map (trans_pv env) ex in
+              let ex = List.map (trans_pv_var env) ex in
 
               let filter_pv (xp, _) =
                 let xp = pv_glob xp in
@@ -4024,6 +4037,7 @@ and trans_form_or_pattern
         end;
 
         f_coe form' memenv expr'
+
     and trans_ec opsc incost env (f, qeq) =
       let f' = transf_r opsc incost env f in
       unify_or_fail env ue f.pl_loc ~expct:tbool f'.f_ty;

@@ -1642,12 +1642,16 @@ module Fun = struct
   let adds_in_memenv memenv vd = EcMemory.bindall vd memenv
   let add_in_memenv memenv vd = adds_in_memenv memenv [vd]
 
+  let add_cparams mem fun_ =
+    adds_in_memenv mem fun_.f_sig.fs_anames
+
   let add_qparams mem fun_ =
     adds_in_memenv mem fun_.f_sig.fs_qnames
 
   let add_params mem fun_ =
-    let mem = adds_in_memenv mem fun_.f_sig.fs_anames in
-    add_qparams mem fun_
+    let mem = add_qparams mem fun_ in
+    let mem = add_cparams mem fun_ in
+    mem
 
   let actmem_pre me fun_ =
     let mem = EcMemory.empty_local ~witharg:true me in

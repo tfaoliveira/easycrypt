@@ -1,7 +1,19 @@
 require import AllCore.
 
+(*
 module M = { 
+  var f : int -> int
+  var c : int
 
+  proc o {q : bool, r : bool} = {
+    c <- c + 1;
+    (q,r) <* U[ fun qr => let (q,r) = qr in (q, r + f q)];
+  } 
+
+}.
+*)
+
+module M = { 
   quantum var q : int 
 
   proc c () = { 
@@ -41,5 +53,11 @@ module M = {
   proc q1 {a b : int, c : bool} = { 
   }
 }.
+
+lemma L : forall (x : int), equiv[M.q ~ M.q : ={a}, ={global,qarg.`1} ==> true, ={a}].
+proof.
+
+lemma L : forall (x : int), equiv[M.q ~ M.q : ={a}, ={global,a} ==> true, ={a}].
+proof.
 
 print M.

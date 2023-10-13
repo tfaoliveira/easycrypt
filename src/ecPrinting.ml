@@ -1398,7 +1398,7 @@ let pp_quantum_rref (ppe : PPEnv.t) fmt qr =
          true in
 
     if print_bds then
-      Format.fprintf fmt "%a as %a"
+      Format.fprintf fmt "(%a as %a)"
         (pp_quantum_ref ppe) qr
         (pp_local ppe) x
     else
@@ -1421,7 +1421,7 @@ let rec pp_lvalue (ppe : PPEnv.t) fmt lv =
 and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
   match o with
   | Qinit ->
-      Format.fprintf fmt "@[<hov 2>%a <-@;<1 2>%a;@]"
+      Format.fprintf fmt "@[<hov 2>%a <~@;<1 2>%a;@]"
         (pp_quantum_ref ppe) qr
         (pp_expr ppe) e
 
@@ -1847,23 +1847,21 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         EcEnv.Fun.equivF_memenv eqv.ef_fl eqv.ef_fr ppe.PPEnv.ppe_env in
       let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
       let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
-      (* FIXME QUANTUM *)
       Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_funname ppe) eqv.ef_fl
         (pp_funname ppe) eqv.ef_fr
-        (pp_form ppepr) eqv.ef_pr.ec_f
-        (pp_form ppepo) eqv.ef_po.ec_f
+        (pp_ecform ppepr) eqv.ef_pr
+        (pp_ecform ppepr) eqv.ef_po
 
   | FequivS es ->
       let ppef = PPEnv.push_mems ppe [es.es_ml; es.es_mr] in
       let ppel = PPEnv.push_mem ppe ~active:true es.es_ml in
       let pper = PPEnv.push_mem ppe ~active:true es.es_mr in
-      (* FIXME QUANTUM *)
       Format.fprintf fmt "equiv[@[<hov 2>@ %a ~@ %a :@ @[%a ==>@ %a@]@]]"
         (pp_stmt_for_form ppel) es.es_sl
         (pp_stmt_for_form pper) es.es_sr
-        (pp_form ppef) es.es_pr.ec_f
-        (pp_form ppef) es.es_po.ec_f
+        (pp_ecform ppef) es.es_pr
+        (pp_ecform ppef) es.es_po
 
   | FeagerF eg ->
       let (meprl, meprr), (mepol,mepor) =
@@ -1983,6 +1981,39 @@ and pp_tuple_expr ppe fmt e =
   | Etuple ((_ :: _ :: _) as es) ->
     pp_list ", " (pp_expr ppe) fmt es
   | _ -> pp_expr ppe fmt e
+
+and pp_ecform ppe fmt ec =
+  let qlrs =
+    let qrl = match ec.ec_e.qel with QRtuple x -> x | x -> [x] in
+    let qrr = match ec.ec_e.qer with QRtuple x -> x | x -> [x] in
+    List.combine qrl qrr in
+
+  let for1 fmt (ql, qr) =
+    Format.fprintf fmt "%a / %a"
+      (pp_quantum_ref ppe) ql
+      (pp_quantum_ref ppe) qr in
+
+  let pps =
+    let ppglob =
+      if ec.ec_e.qeg then
+        [fun fmt -> Format.fprintf fmt "global"]
+      else
+        [] in
+
+    let ppeq = List.map (fun qlr fmt -> for1 fmt qlr) qlrs in
+
+    ppglob @ ppeq
+  in
+
+  match pps with
+  | [] ->
+     Format.fprintf fmt "%a" (pp_form ppe) ec.ec_f
+
+  | _ ->
+     Format.fprintf
+       fmt "%a,@ ={%a}"
+       (pp_form ppe) ec.ec_f
+       (pp_list ",@ " (fun fmt pp -> pp fmt)) pps
 
 (* -------------------------------------------------------------------- *)
 and pp_cost ppe fmt c =

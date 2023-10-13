@@ -390,9 +390,11 @@ let rec subst_stmt (s : subst) (st : stmt) : stmt =
 (* -------------------------------------------------------------------- *)
 and subst_instr (s : subst) (i : instr) : instr =
   match i.i_node with
-  | Squantum (q,o,e) -> i_quantum (subst_qr s q, o, subst_expr s e)
+  | Squantum (q,o,e) ->
+     i_quantum (subst_qr s q, o, subst_expr s e)
 
-  | Smeasure (lv,q,e) -> i_measure (subst_lv s lv, subst_qr s q, subst_expr s e)
+  | Smeasure (lv,q,e) ->
+     i_measure (subst_lv s lv, subst_qr s q, subst_expr s e)
 
   | Sasgn (lv, e) ->
      i_asgn (subst_lv s lv, subst_expr s e)
@@ -401,10 +403,10 @@ and subst_instr (s : subst) (i : instr) : instr =
      i_rnd (subst_lv s lv, subst_expr s e)
 
   | Scall (lv, p, args, qr) ->
-     assert (is_quantum_unit qr);
      let lv = omap (subst_lv s) lv in
      let p = subst_xpath s p in
      let args = List.map (subst_expr s) args in
+     let qr = subst_qr s qr in
      i_call (lv, p, args, qr)
 
   | Sif (e, s1, s2) ->
