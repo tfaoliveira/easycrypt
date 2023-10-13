@@ -189,7 +189,7 @@ and norm_cost st s c =
 
 and norm_lambda (st : state) (f : form) =
   match f.f_node with
-  | Fquant (Llambda, b, f) ->
+  | Flam (b, f) ->
     let s, b = Subst.add_bindings Subst.subst_id b in
     let st = { st with st_env = Mod.add_mod_binding b st.st_env } in
     f_lambda b (norm st s f)
@@ -218,7 +218,7 @@ and betared st s bd f args =
      cbv st s f args
 
   | _, None ->
-     Subst.subst s (f_quant Llambda bd f)
+     Subst.subst s (f_lambda bd f)
 
   | (x, gty) :: bd, Some (v, args) ->
      let _ : ty = EcFol.as_gtty gty in
@@ -229,7 +229,7 @@ and betared st s bd f args =
 and app_red st f1 args =
   match f1.f_node with
   (* β-reduction *)
-  | Fquant (Llambda, bd, f2) when not (Args.isempty args) && st.st_ri.beta ->
+  | Flam (bd, f2) when not (Args.isempty args) && st.st_ri.beta ->
       betared st Subst.subst_id bd f2 args
 
   (* ι-reduction (records projection) *)
@@ -359,7 +359,7 @@ and cbv_init st s f =
 (* -------------------------------------------------------------------- *)
 and cbv (st : state) (s : subst) (f : form) (args : args) : form =
   match f.f_node with
-  | Fquant ((Lforall | Lexists) as q, b, f) -> begin
+  | Fquant (q, b, f) -> begin
     assert (Args.isempty args);
 
     let b, f =
@@ -372,16 +372,15 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     | Lforall, _          -> f_forall b f
     | Lexists, Some `Full -> f_exists_simpl b f
     | Lexists, _          -> f_exists b f
-    | Llambda, _          -> assert false
   end
 
-  | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, fnargs) })
+  | Flam ([x, GTty _], { f_node = Fapp (fn, fnargs) })
       when st.st_ri.eta && Args.isempty args && EcReduction.can_eta x (fn, fnargs)
     ->
     let rfn = f_app fn (List.take (List.length fnargs - 1) fnargs) f.f_ty in
     cbv st s rfn args
 
-  | Fquant (Llambda, b, f1) ->
+  | Flam (b, f1) ->
     betared st s b f1 args
 
   | Fif (f, f1, f2) ->

@@ -134,6 +134,7 @@ let rec on_expr (cb : cb) (e : expr) =
     | Eint   _            -> ()
     | Elocal _            -> ()
     | Equant (_, bds, e)  -> on_bindings cb bds; cbrec e
+    | Elam   (bds, e)     -> on_bindings cb bds; cbrec e
     | Evar   pv           -> on_pv cb pv
     | Elet   (lp, e1, e2) -> on_lp cb lp; List.iter cbrec [e1; e2]
     | Etuple es           -> List.iter cbrec es
@@ -199,6 +200,7 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     | EcFol.Fint      _            -> ()
     | EcFol.Flocal    _            -> ()
     | EcFol.Fquant    (_, b, f)    -> on_gbindings cb b; cbrec f
+    | EcFol.Flam      (b, f)       -> on_gbindings cb b; cbrec f
     | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
     | EcFol.Fmatch    (b, fs, ty)  -> on_ty cb ty; List.iter cbrec (b :: fs)
     | EcFol.Flet      (lp, f1, f2) -> on_lp cb lp; List.iter cbrec [f1; f2]
@@ -654,7 +656,7 @@ let add_declared_op to_gen path opdecl =
       let fv = EcIdent.fv_union fv (tvar_fv e.e_ty) in
       match e.e_node with
       | Eop(_, tys) -> List.fold_left (fun fv ty -> EcIdent.fv_union fv (tvar_fv ty)) fv tys
-      | Equant(_,d,e) ->
+      | Equant(_,d,e) | Elam(d,e) ->
         let fv = List.fold_left (fun fv (_,ty) -> EcIdent.fv_union fv (tvar_fv ty)) fv d in
         aux fv e
       | _ -> e_fold aux fv e
@@ -690,7 +692,7 @@ and fv_and_tvar_f f =
     fv := EcIdent.fv_union !fv (tvar_fv f.f_ty);
     match f.f_node with
     | Fop(_, tys) -> fv := List.fold_left (fun fv ty -> EcIdent.fv_union fv (tvar_fv ty)) !fv tys
-    | Fquant(_, d, f) ->
+    | Fquant(_, d, f) | Flam (d, f) ->
       fv := List.fold_left (fun fv (_,gty) -> EcIdent.fv_union fv (gty_fv_and_tvar gty)) !fv d;
       aux f
     | _ -> EcFol.f_iter aux f

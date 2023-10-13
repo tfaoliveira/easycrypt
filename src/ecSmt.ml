@@ -664,10 +664,19 @@ and trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
         let wbody = trans_form (genv,lenv) body in
         (match qt with
         | Lforall -> WTerm.t_forall_close wbds [] (Cast.force_prop wbody)
-        | Lexists -> WTerm.t_exists_close wbds [] (Cast.force_prop wbody)
-        | Llambda -> trans_lambda genv wbds wbody)
+        | Lexists -> WTerm.t_exists_close wbds [] (Cast.force_prop wbody))
       with CanNotTranslate -> trans_gen env fp
     end
+
+  | Flam (bds, body) ->
+    begin
+      try
+        let lenv, wbds = trans_bindings genv lenv bds in
+        let wbody = trans_form (genv,lenv) body in
+        trans_lambda genv wbds wbody
+      with CanNotTranslate -> trans_gen env fp
+    end
+
   | Fint n ->
       WTerm.t_int_const (BI.to_why3 n)
 
@@ -707,7 +716,7 @@ and trans_form_b env f = Cast.force_bool (trans_form env f)
 (* -------------------------------------------------------------------- *)
 and trans_app  ((genv, lenv) as env : tenv * lenv) (f : form) args =
   match f.f_node with
-  | Fquant (Llambda, bds, body) ->
+  | Flam (bds, body) ->
       trans_fun env bds body args
 
   | Fop (p, ts) ->
@@ -1387,7 +1396,8 @@ module Frequency = struct
       | Fint _ | Flocal _ | Fpvar _ | Fglob _ -> ()
       | Fop (p,_) ->
         if not (Sp.mem p unwanted_op) then sp := Sp.add p !sp
-      | Fquant (_ , _ , f1) -> doit f1
+      | Fquant   (_ , _ , f1) -> doit f1
+      | Flam     (_ , f1)     -> doit f1
       | Fif      (f1, f2, f3) -> List.iter doit [f1; f2; f3]
       | Fmatch   (b, fs, _)   -> List.iter doit (b :: fs)
       | Flet     (_, f1, f2)  -> List.iter doit [f1; f2]
@@ -1468,6 +1478,7 @@ module Frequency = struct
       match f.f_node with
       | Fop      (p,_)        -> addp p
       | Fquant   (_ , _ , f1) -> add f1
+      | Flam     (_ , f1)     -> add f1
       | Fif      (f1, f2, f3) -> List.iter add [f1; f2; f3]
       | Fmatch   (b, fs, _)   -> List.iter add (b :: fs)
       | Flet     (_, f1, f2)  -> List.iter add [f1; f2]

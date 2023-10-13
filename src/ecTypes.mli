@@ -205,13 +205,14 @@ and expr_node =
   | Eop    of EcPath.path * ty list        (* op apply to type args *)
   | Eapp   of expr * expr list             (* op. application       *)
   | Equant of equantif * ebindings * expr  (* fun/forall/exists     *)
+  | Elam   of ebindings * expr             (* functions             *)
   | Elet   of lpattern * expr * expr       (* let binding           *)
   | Etuple of expr list                    (* tuple constructor     *)
   | Eif    of expr * expr * expr           (* _ ? _ : _             *)
   | Ematch of expr * expr list * ty        (* match _ with _        *)
   | Eproj  of expr * int                   (* projection of a tuple *)
 
-and equantif  = [ `ELambda | `EForall | `EExists ]
+and equantif  = [ `EForall | `EExists ]
 and ebinding  = EcIdent.t * ty
 and ebindings = ebinding list
 

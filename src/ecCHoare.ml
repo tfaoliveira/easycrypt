@@ -177,7 +177,7 @@ let free_expr e = match e.e_node with
 
   | Eop _
   | Eproj _ | Etuple _ | Eapp _
-  | Equant _ | Elet _ | Eif _ | Ematch _ -> false
+  | Equant _ | Elam _ | Elet _ | Eif _ | Ematch _ -> false
 
 
 (* The cost of an expression evaluation in any memory of type [menv]

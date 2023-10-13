@@ -497,6 +497,9 @@ module ASyncWhile = struct
       | Fquant (kd, bds, f) ->
          e_quantif (auxkd kd) (List.map auxbd bds) (aux f)
 
+      | Flam (bds, f) ->
+         e_lam (List.map auxbd bds) (aux f)
+
       | Fpvar (pv, m) ->
          if EcIdent.id_equal m mh then
            e_var pv fp.f_ty
@@ -527,7 +530,6 @@ module ASyncWhile = struct
       match kd with
       | Lforall -> `EForall
       | Lexists -> `EExists
-      | Llambda -> `ELambda
 
     and auxbd ((x, bd) : binding) =
       match bd with

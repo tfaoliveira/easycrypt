@@ -19,7 +19,6 @@ open EcBigInt.Notations
 type quantif =
   | Lforall
   | Lexists
-  | Llambda
 
 type hoarecmp = FHle | FHeq | FHge
 
@@ -40,6 +39,7 @@ and form = {
 
 and f_node =
   | Fquant  of quantif * bindings * form
+  | Flam    of bindings * form
   | Fif     of form * form * form
   | Fmatch  of form * form list * ty
   | Flet    of lpattern * form * form
@@ -457,6 +457,9 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fquant(q1,b1,f1), Fquant(q2,b2,f2) ->
         qt_equal q1 q2 && b_equal b1 b2 && f_equal f1 f2
 
+    | Flam(b1,f1), Flam(b2,f2) ->
+        b_equal b1 b2 && f_equal f1 f2
+
     | Fif(b1,t1,f1), Fif(b2,t2,f2) ->
         f_equal b1 b2 && f_equal t1 t2 && f_equal f1 f2
 
@@ -513,6 +516,9 @@ module Hsform = Why3.Hashcons.Make (struct
     match f.f_node with
     | Fquant(q, b, f) ->
         Why3.Hashcons.combine2 (f_hash f) (b_hash b) (qt_hash q)
+
+    | Flam(b, f) ->
+        Why3.Hashcons.combine (f_hash f) (b_hash b)
 
     | Fif(b, t, f) ->
         Why3.Hashcons.combine2 (f_hash b) (f_hash t) (f_hash f)
@@ -588,7 +594,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fif (f1, f2, f3)    -> union f_fv [f1; f2; f3]
     | Fmatch (b, fs, ty)  -> fv_union ty.ty_fv (union f_fv (b :: fs))
 
-    | Fquant(_, b, f) ->
+    | Fquant(_, b, f) | Flam (b, f) ->
       let do1 (id, ty) fv = fv_union (gty_fv ty) (Mid.remove id fv) in
       List.fold_right do1 b (f_fv f)
 
@@ -736,12 +742,7 @@ let f_quant q b f =
       match f.f_node with
       | Fquant(q',b',f') when q = q' -> (q, b@b', f')
       | _ -> q, b , f in
-    let ty =
-      if   q = Llambda
-      then toarrow (List.map (fun (_,gty) -> gty_as_ty gty) b) f.f_ty
-      else tbool in
-
-    mk_form (Fquant (q, b, f)) ty
+    mk_form (Fquant (q, b, f)) tbool
 
 let f_proj   f  i  ty = mk_form (Fproj(f, i)) ty
 let f_if     f1 f2 f3 = mk_form (Fif (f1, f2, f3)) f2.f_ty
@@ -750,7 +751,16 @@ let f_let    q  f1 f2 = mk_form (Flet (q, f1, f2)) f2.f_ty (* FIXME rename bindi
 let f_let1   x  f1 f2 = f_let (LSymbol (x, f1.f_ty)) f1 f2
 let f_exists b  f     = f_quant Lexists b f
 let f_forall b  f     = f_quant Lforall b f
-let f_lambda b  f     = f_quant Llambda b f
+
+let f_lambda b f =
+  if List.is_empty b then f else begin
+    let (b, f) =
+      match f.f_node with
+      | Flam (b', f') -> (b@b', f')
+      | _ -> (b, f) in
+    let ty = toarrow (List.map (fun (_,gty) -> gty_as_ty gty) b) f.f_ty in
+    mk_form (Flam (b, f)) ty
+  end
 
 let f_forall_mems bds f =
   f_forall (List.map (fun (m, mt) -> (m, GTmem mt)) bds) f
@@ -986,6 +996,22 @@ let f_map gt g fp =
 
       f_quant q b' f'
 
+  | Flam(b, f) ->
+      let map_gty ((x, gty) as b1) =
+        let gty' =
+          match gty with
+          | GTty ty ->
+              let ty' = gt ty in if ty == ty' then gty else GTty ty'
+          | _ -> gty
+        in
+          if gty == gty' then b1 else (x, gty')
+      in
+
+      let b' = List.Smart.map map_gty b in
+      let f' = g f in
+
+      f_lambda b' f'
+
   | Fint  _ -> fp
   | Fglob _ -> fp
 
@@ -1094,6 +1120,7 @@ let f_iter g f =
   | Fop      _ -> ()
 
   | Fquant   (_ , _ , f1) -> g f1
+  | Flam     (_ , f1)     -> g f1
   | Fif      (f1, f2, f3) -> g f1;g f2; g f3
   | Fmatch   (b, fs, _)   -> List.iter g (b :: fs)
   | Flet     (_, f1, f2)  -> g f1;g f2
@@ -1124,6 +1151,7 @@ let form_exists g f =
   | Fop      _ -> false
 
   | Fquant   (_ , _ , f1) -> g f1
+  | Flam     (_ , f1)     -> g f1
   | Fif      (f1, f2, f3) -> g f1 || g f2 || g f3
   | Fmatch   (b, fs, _)   -> List.exists g (b :: fs)
   | Flet     (_, f1, f2)  -> g f1 || g f2
@@ -1153,6 +1181,7 @@ let form_forall g f =
   | Fop      _ -> true
 
   | Fquant   (_ , _ , f1) -> g f1
+  | Flam     (_ , f1)     -> g f1
   | Fif      (f1, f2, f3) -> g f1 && g f2 && g f3
   | Fmatch   (b, fs, _)   -> List.for_all g (b :: fs)
   | Flet     (_, f1, f2)  -> g f1 && g f2
@@ -1204,12 +1233,12 @@ let decompose_forall f =
 
 let destr_lambda f =
   match f.f_node with
-  | Fquant(Llambda,bd,p) -> bd, p
+  | Flam(bd,p) -> bd, p
   | _ -> destr_error "lambda"
 
 let decompose_lambda f =
   match f.f_node with
-  | Fquant(Llambda,bd,p) -> bd, p
+  | Flam(bd,p) -> bd, p
   | _ -> [], f
 
 let destr_exists1 f =
@@ -1444,20 +1473,18 @@ let split_args f =
 (* -------------------------------------------------------------------- *)
 let split_fun f =
   match f_node f with
-  | Fquant (Llambda, bds, body) -> (bds, body)
+  | Flam (bds, body) -> (bds, body)
   | _ -> ([], f)
 
 (* -------------------------------------------------------------------- *)
 let quantif_of_equantif (qt : equantif) =
   match qt with
-  | `ELambda -> Llambda
   | `EForall -> Lforall
   | `EExists -> Lexists
 
 (* -------------------------------------------------------------------- *)
 let equantif_of_quantif (qt : quantif) : equantif =
   match qt with
-  | Llambda -> `ELambda
   | Lforall -> `EForall
   | Lexists -> `EExists
 
@@ -1504,6 +1531,10 @@ let rec form_of_expr mem (e : expr) =
      let e = form_of_expr mem e in
      f_quant (quantif_of_equantif qt) b e
 
+  | Elam (b, e) ->
+     let b = List.map (fun (x, ty) -> (x, GTty ty)) b in
+     let e = form_of_expr mem e in
+     f_lambda b e
 
 (* -------------------------------------------------------------------- *)
 exception CannotTranslate
@@ -1530,6 +1561,9 @@ let expr_of_form mh f =
 
     | Fquant (kd, bds, f) ->
       e_quantif (equantif_of_quantif kd) (List.map auxbd bds) (aux f)
+
+    | Flam (bds, f) ->
+      e_lam (List.map auxbd bds) (aux f)
 
     | Fpvar (pv, m) ->
       if EcIdent.id_equal m mh
@@ -1722,6 +1756,11 @@ module Fsubst = struct
         let s, b' = add_bindings ~tx s b in
         let f'    = f_subst ~tx s f in
           f_quant q b' f'
+
+    | Flam (b, f) ->
+        let s, b' = add_bindings ~tx s b in
+        let f'    = f_subst ~tx s f in
+          f_lambda b' f'
 
     | Flet (lp, f1, f2) ->
         let f1'    = f_subst ~tx s f1 in
@@ -1919,7 +1958,7 @@ module Fsubst = struct
 
     let (sag, args, e) =
       match e.e_node with
-      | Equant (`ELambda, largs, lbody) when args <> [] ->
+      | Elam (largs, lbody) when args <> [] ->
           let largs1, largs2 = List.takedrop (List.length args  ) largs in
           let  args1,  args2 = List.takedrop (List.length largs1)  args in
             (Mid.of_list (List.combine (List.map fst largs1) args1),
@@ -1944,7 +1983,7 @@ module Fsubst = struct
 
     let (sag, args, f) =
       match f.f_node with
-      | Fquant (Llambda, largs, lbody) when args <> [] ->
+      | Flam (largs, lbody) when args <> [] ->
           let largs1, largs2 = List.takedrop (List.length args  ) largs in
           let  args1,  args2 = List.takedrop (List.length largs1)  args in
             (Mid.of_list (List.combine (List.map fst largs1) args1),

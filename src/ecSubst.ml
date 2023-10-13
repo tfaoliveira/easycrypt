@@ -342,6 +342,11 @@ let rec subst_expr (s : subst) (e : expr) =
       let e1 = subst_expr s e1 in
       e_quantif q b e1
 
+  | Elam (b, e1) ->
+      let s, b = fresh_elocals s b in
+      let e1 = subst_expr s e1 in
+      e_lam b e1
+
   | _ -> e_map (subst_ty s) (subst_expr s) e
 
 (* -------------------------------------------------------------------- *)
@@ -350,7 +355,7 @@ and subst_eop ety tys args (tyids, e) =
 
   let (s, args, e) =
     match e.e_node with
-    | Equant (`ELambda, largs, lbody) when args <> [] ->
+    | Elam (largs, lbody) when args <> [] ->
         let largs1, largs2 = List.takedrop (List.length args  ) largs in
         let  args1,  args2 = List.takedrop (List.length largs1)  args in
         (add_elocals s (List.fst largs1) args1, args2, e_lam largs2 lbody)
@@ -465,6 +470,11 @@ let rec subst_form (s : subst) (f : form) =
       let s, b = fresh_glocals s b in
       let e1 = subst_form s f1 in
       f_quant q b e1
+
+  | Flam (b, f1) ->
+      let s, b = fresh_glocals s b in
+      let e1 = subst_form s f1 in
+      f_lambda b e1
 
   | Fmatch (f, bs, ty) ->
      let f = subst_form s f in
@@ -632,7 +642,7 @@ and subst_fop fty tys args (tyids, f) =
 
   let (s, args, f) =
     match f.f_node with
-    | Fquant (Llambda, largs, lbody) when args <> [] ->
+    | Flam (largs, lbody) when args <> [] ->
         let largs1, largs2 = List.takedrop (List.length args  ) largs in
         let  args1,  args2 = List.takedrop (List.length largs1)  args in
         (add_flocals s (List.fst largs1) args1, args2, f_lambda largs2 lbody)

@@ -16,7 +16,6 @@ val mright : memory
 type quantif =
   | Lforall
   | Lexists
-  | Llambda
 
 type hoarecmp = FHle | FHeq | FHge
 
@@ -37,6 +36,7 @@ and form = private {
 
 and f_node =
   | Fquant  of quantif * bindings * form
+  | Flam    of bindings * form
   | Fif     of form * form * form
   | Fmatch  of form * form list * ty
   | Flet    of lpattern * form * form

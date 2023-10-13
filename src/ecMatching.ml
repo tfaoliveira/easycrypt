@@ -514,6 +514,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       | Fquant _, Fquant _ ->
           failure ();
 
+      | Flam (q1, f1), Flam (q2, f2) ->
+          let n1, n2 = List.length q1, List.length q2 in
+          let q1, r1 = List.split_at (min n1 n2) q1 in
+          let q2, r2 = List.split_at (min n1 n2) q2 in
+          let (env, subst, mxs) = doit_bindings env (subst, mxs) q1 q2 in
+          doit env (subst, mxs) (f_lambda r1 f1) (f_lambda r2 f2)
+
       | Fpvar (pv1, m1), Fpvar (pv2, m2) ->
           let pv1 = EcEnv.NormMp.norm_pvar env pv1 in
           let pv2 = EcEnv.NormMp.norm_pvar env pv2 in
@@ -850,7 +857,7 @@ module FPosition = struct
           | Fmatch (b, fs, _) ->
                doit pos (`WithCtxt (ctxt, b :: fs))
 
-          | Fquant (_, b, f) ->
+          | Fquant (_, b, f) | Flam (b, f) ->
               let xs   = List.pmap (function (x, GTty _) -> Some x | _ -> None) b in
               let ctxt = List.fold_left ((^~) Sid.add) ctxt xs in
               doit pos (`WithCtxt (ctxt, [f]))
@@ -997,6 +1004,10 @@ module FPosition = struct
           | Fquant (q, b, f) ->
               let f' = as_seq1 (doit p [f]) in
               f_quant q b f'
+
+          | Flam (b, f) ->
+              let f' = as_seq1 (doit p [f]) in
+              f_lambda b f'
 
           | Fif (c, f1, f2)  ->
               let (c', f1', f2') = as_seq3 (doit p [c; f1; f2]) in

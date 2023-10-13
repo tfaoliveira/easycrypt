@@ -140,6 +140,10 @@ module EqTest_base = struct
           let alpha = check_bindings env alpha b1 b2 in
           noconv (aux alpha) e1 e2
 
+      | Elam(b1,e1), Elam(b2,e2) ->
+          let alpha = check_bindings env alpha b1 b2 in
+          noconv (aux alpha) e1 e2
+
       | Eapp (f1, args1), Eapp (f2, args2) ->
           aux alpha f1 f2 && List.all2 (aux alpha) args1 args2
 
@@ -514,6 +518,10 @@ let is_alpha_eq hyps f1 f2 =
     | Fquant(q1,bd1,f1'), Fquant(q2,bd2,f2') when
         q1 = q2 && List.length bd1 = List.length bd2 ->
 
+      let env, subst = check_bindings test env subst bd1 bd2 in
+      aux env subst f1' f2'
+
+    | Flam(bd1,f1'), Flam(bd2,f2') when List.length bd1 = List.length bd2 ->
       let env, subst = check_bindings test env subst bd1 bd2 in
       aux env subst f1' f2'
 
@@ -962,8 +970,7 @@ let reduce_quant ri _env hyps f =
   | Fquant (Lexists as t, b, f1) when ri.logic = Some `Full ->
     let f' = match t with
       | Lforall -> f_forall_simpl b f1
-      | Lexists -> f_exists_simpl b f1
-      | Llambda -> assert false in
+      | Lexists -> f_exists_simpl b f1 in
     check_reduced hyps needsubterm f f'
   | _ -> raise nohead
 
@@ -1078,7 +1085,7 @@ let reduce_cost ri env coe =
 let reduce_head simplify ri env hyps f =
   match f.f_node with
     (* β-reduction *)
-  | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) when ri.beta ->
+  | Fapp ({ f_node = Flam _}, _) when ri.beta ->
       f_betared f
 
     (* ζ-reduction *)
@@ -1222,7 +1229,7 @@ let reduce_head simplify ri env hyps f =
     if f_equal f f' then raise nohead else f'
 
     (* η-reduction *)
-  | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
+  | Flam ([x, GTty _], { f_node = Fapp (fn, args) })
       when ri.eta && can_eta x (fn, args)
     -> f_app fn (List.take (List.length args - 1) args) f.f_ty
 
@@ -1239,7 +1246,7 @@ let reduce_head simplify ri env hyps f =
 
   | Fapp(_, _) -> raise needsubterm
 
-  | Fquant((Lforall | Lexists), _, _) ->
+  | Fquant _ ->
     reduce_quant ri env hyps f
 
   | Fcoe coe -> begin
@@ -1251,7 +1258,7 @@ let reduce_head simplify ri env hyps f =
 
 let rec eta_norm f =
   match f.f_node with
-  | Fquant (Llambda, [x, GTty _], { f_node = Fapp (fn, args) })
+  | Flam ([x, GTty _], { f_node = Fapp (fn, args) })
       when can_eta x (fn, args)
     -> eta_norm (f_app fn (List.take (List.length args - 1) args) f.f_ty)
   | _ -> f
@@ -1347,9 +1354,13 @@ and reduce_head_sub ri env f =
         | []       -> assert false
       end
 
-    | Fquant ((Lforall | Lexists) as t, b, f1) ->
+    | Fquant (t, b, f1) ->
       let env = Mod.add_mod_binding b env in
       f_quant t b (reduce_head_top ri env ~onhead:false f1)
+
+    | Flam (b, f1) ->
+      let env = Mod.add_mod_binding b env in
+      f_lambda b (reduce_head_top ri env ~onhead:false f1)
 
     | Flet(lp, f1, f2) ->
       curry (f_let lp) (as_seq2 (reduce_head_args ri env [f1;f2]))
@@ -1425,6 +1436,10 @@ let rec simplify ri env f =
     let env = Mod.add_mod_binding bd env in
     f_quant q bd (simplify ri env f)
 
+  | Flam (bd, f) ->
+    let env = Mod.add_mod_binding bd env in
+    f_lambda bd (simplify ri env f)
+
   | _ ->
     f_map (fun ty -> ty) (simplify ri env) f
 
@@ -1441,7 +1456,8 @@ let check_memenv env (x1,mt1) (x2,mt2) =
 
 (* -------------------------------------------------------------------- *)
 type head_sub =
-  | Zquant of quantif * bindings (* in reversed order *)
+  | Zquant of quantif * bindings (* in reverse order *)
+  | Zlam   of bindings           (* in reverse order *)
   | Zif
   | Zmatch of EcTypes.ty
   | Zlet   of lpattern
@@ -1464,6 +1480,7 @@ let zpush se_h se_common se_args1 se_args2 se_ty stk =
 (* FIXME normalize zquant *)
 
 let zquant q bd ty stk = zpush (Zquant (q, bd)) [] [] [] ty stk
+let zlam bd ty stk = zpush (Zlam bd) [] [] [] ty stk
 let zif args1 args2 ty stk = zpush Zif [] args1 args2 ty stk
 let zmatch bsty args1 args2 ty stk = zpush (Zmatch bsty) [] args1 args2 ty stk
 let zlet lp f1 f2 stk = zpush (Zlet lp) [] [f1] [f2] f1.f_ty stk
@@ -1485,9 +1502,9 @@ let zpop ri side f hd =
     | `Right -> hd.se_args2 in
   let args = List.rev_append hd.se_common (f::args) in
   match hd.se_h, args with
-  | Zquant(Llambda,bd), [f] when ri.ri.eta -> eta_norm (f_lambda bd f)
-
+  | Zlam bd, [f] when ri.ri.eta -> eta_norm (f_lambda bd f)
   | Zquant(q,bd), [f]  -> f_quant q bd f
+  | Zlam bd, [f]       -> f_lambda bd f
   | Zif, [f1;f2;f3]    -> f_if f1 f2 f3
   | Zmatch ty, c :: bs -> f_match c bs ty
   | Zlet lp, [f1;f2]   -> f_let lp f1 f2
@@ -1544,7 +1561,17 @@ let rec conv ri env f1 f2 stk =
         let x = conv ri env f1' f2' (zquant q1 (List.rev bd) f1.f_ty stk) in
         x
 
-  | Fquant(Llambda, bd, f), _ -> begin
+  | Flam (bd1, f1'), Flam (bd2, f2') ->
+    let env, bd, f1', f2' =
+      check_fun_bindings_conv ri env bd1 bd2 f1' f2'
+    in
+
+    if bd = [] then force_head ri env f1 f2 stk
+    else
+      let x = conv ri env f1' f2' (zlam (List.rev bd) f1.f_ty stk) in
+      x
+
+  | Flam (bd, f), _ -> begin
     match stk with
     | se::stk when se.se_h = Zapp && se.se_common = [] && ri.ri.beta ->
       let f1 = f_betared (zpop ri `Left  f1 se) in
@@ -1552,11 +1579,11 @@ let rec conv ri env f1 f2 stk =
       conv ri env f1 f2 stk
     | _ ->
       if ri.ri.eta then
-        conv ri env f (eta_expand bd f2 f.f_ty) (zquant Llambda bd f1.f_ty stk)
+        conv ri env f (eta_expand bd f2 f.f_ty) (zlam bd f1.f_ty stk)
       else force_head ri env f1 f2 stk
     end
 
-  | _, Fquant(Llambda, bd, f) -> begin
+  | _, Flam (bd, f) -> begin
     match stk with
     | se::stk when se.se_h = Zapp && se.se_common = [] && ri.ri.beta ->
       let f1 = zpop ri `Left  f1 se in
@@ -1564,7 +1591,7 @@ let rec conv ri env f1 f2 stk =
       conv ri env f1 f2 stk
     | _ ->
       if ri.ri.eta then
-        conv ri env (eta_expand bd f1 f.f_ty) f (zquant Llambda bd f2.f_ty stk)
+        conv ri env (eta_expand bd f1 f.f_ty) f (zlam bd f2.f_ty stk)
       else force_head ri env f1 f2 stk
     end
 
@@ -1694,7 +1721,6 @@ let rec conv ri env f1 f2 stk =
 
   | _, _ -> force_head ri env f1 f2 stk
 
-
 and check_bindings_conv ri env q bd1 bd2 f1 f2 =
   let test env subst f1 f2 =
     let f2 = EcSubst.subst_form subst f2 in
@@ -1711,6 +1737,23 @@ and check_bindings_conv ri env q bd1 bd2 f1 f2 =
     | _, _ -> es, bd, bd1, bd2 in
   let (env, subst), bd, bd1, bd2 = aux (env, EcSubst.empty) [] bd1 bd2 in
   env, bd, f_quant q bd1 f1, EcSubst.subst_form subst (f_quant q bd2 f2)
+
+and check_fun_bindings_conv ri env bd1 bd2 f1 f2 =
+  let test env subst f1 f2 =
+    let f2 = EcSubst.subst_form subst f2 in
+    conv ri env f1 f2 []
+  in
+
+  let rec aux es bd bd1 bd2 =
+    match bd1, bd2 with
+    | b1::bd1', b2::bd2' ->
+      begin match check_binding test es b1 b2 with
+      | es -> aux es (b1::bd) bd1' bd2'
+      | exception NotConv -> es, bd, bd1, bd2
+      end
+    | _, _ -> es, bd, bd1, bd2 in
+  let (env, subst), bd, bd1, bd2 = aux (env, EcSubst.empty) [] bd1 bd2 in
+  env, bd, f_lambda bd1 f1, EcSubst.subst_form subst (f_lambda bd2 f2)
 
 (* -------------------------------------------------------------------- *)
 and conv_next ri env f stk =

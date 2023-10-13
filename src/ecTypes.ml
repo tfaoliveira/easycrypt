@@ -518,14 +518,15 @@ and expr_node =
   | Evar   of prog_var                     (* module variable       *)
   | Eop    of EcPath.path * ty list        (* op apply to type args *)
   | Eapp   of expr * expr list             (* op. application       *)
-  | Equant of equantif * ebindings * expr  (* fun/forall/exists     *)
+  | Equant of equantif * ebindings * expr  (* forall/exists         *)
+  | Elam   of ebindings * expr             (* functions             *)
   | Elet   of lpattern * expr * expr       (* let binding           *)
   | Etuple of expr list                    (* tuple constructor     *)
   | Eif    of expr * expr * expr           (* _ ? _ : _             *)
   | Ematch of expr * expr list * ty        (* match _ with _        *)
   | Eproj  of expr * int                   (* projection of a tuple *)
 
-and equantif  = [ `ELambda | `EForall | `EExists ]
+and equantif  = [ `EForall | `EExists ]
 and ebinding  = EcIdent.t * ty
 and ebindings = ebinding list
 
@@ -570,7 +571,8 @@ let fv_node e =
   | Etuple es         -> union e_fv es
   | Eif (e1, e2, e3)  -> union e_fv [e1; e2; e3]
   | Ematch (e, es, _) -> union e_fv (e :: es)
-  | Equant (_, b, e)  -> List.fold_left (fun s (id, _) -> Mid.remove id s) (e_fv e) b
+  | Equant (_, b, e)
+  | Elam (b, e)       -> List.fold_left (fun s (id, _) -> Mid.remove id s) (e_fv e) b
   | Eproj (e, _)      -> e_fv e
 
 (* -------------------------------------------------------------------- *)
@@ -615,6 +617,9 @@ module Hexpr = Why3.Hashcons.Make (struct
 
     | Equant (q1, b1, e1), Equant (q2, b2, e2) ->
         qt_equal q1 q2 && e_equal e1 e2 && b_equal b1 b2
+
+    | Elam (b1, e1), Elam (b2, e2) ->
+        e_equal e1 e2 && b_equal b1 b2
 
     | Eproj(e1, i1), Eproj(e2, i2) ->
         i1 = i2 && e_equal e1 e2
@@ -663,8 +668,11 @@ module Hexpr = Why3.Hashcons.Make (struct
     | Equant (q, b, e) ->
         Why3.Hashcons.combine2 (qt_hash q) (e_hash e) (b_hash b)
 
+    | Elam (b, e) ->
+        Why3.Hashcons.combine (e_hash e) (b_hash b)
+
     | Eproj (e, i) ->
-        Why3.Hashcons.combine (e_hash e) i
+       Why3.Hashcons.combine (e_hash e) i
 
   let tag n e =
     let fv = fv_union (fv_node e.e_node) e.e_ty.ty_fv in
@@ -702,18 +710,22 @@ let e_quantif q b e =
   let b, e =
     match e.e_node with
     | Equant (q', b', e) when qt_equal q q' -> (b@b', e)
-    | _ -> b, e in
+    | _ -> b, e
 
-  let ty =
-    match q with
-    | `ELambda -> toarrow (List.map snd b) e.e_ty
-    | `EForall | `EExists -> tbool
-
-  in mk_expr (Equant (q, b, e)) ty
+  in mk_expr (Equant (q, b, e)) tbool
 
 let e_forall b e = e_quantif `EForall b e
 let e_exists b e = e_quantif `EExists b e
-let e_lam    b e = e_quantif `ELambda b e
+
+let e_lam b e =
+  if List.is_empty b then e else begin
+    let b, e =
+      match e.e_node with
+      | Elam (b', e) -> (b@b', e)
+      | _ -> b, e in
+    let ty = toarrow (List.snd b) e.e_ty in
+    mk_expr (Elam (b, e)) ty
+  end
 
 let e_app x args ty =
   if args = [] then x
@@ -825,6 +837,14 @@ let e_map fty fe e =
       let bd' = fe bd in
       e_quantif q b' bd'
 
+  | Elam (b, bd) ->
+      let dop (x, ty as xty) =
+        let ty' = fty ty in
+          if ty == ty' then xty else (x, ty') in
+      let b'  = List.Smart.map dop b in
+      let bd' = fe bd in
+      e_lam b' bd'
+
 let e_fold (fe : 'a -> expr -> 'a) (state : 'a) (e : expr) =
   match e.e_node with
   | Eint _                -> state
@@ -838,6 +858,7 @@ let e_fold (fe : 'a -> expr -> 'a) (state : 'a) (e : expr) =
   | Eif (e1, e2, e3)      -> List.fold_left fe state [e1; e2; e3]
   | Ematch (e, es, _)     -> List.fold_left fe state (e :: es)
   | Equant (_, _, e1)     -> fe state e1
+  | Elam (_, e1)          -> fe state e1
 
 let e_iter (fe : expr -> unit) (e : expr) =
   e_fold (fun () e -> fe e) () e
@@ -946,6 +967,11 @@ let rec e_subst (s: e_subst) e =
       let s, b' = add_locals s b in
       let e1' = e_subst s e1 in
         e_quantif q b' e1'
+
+  | Elam (b, e1) ->
+      let s, b' = add_locals s b in
+      let e1' = e_subst s e1 in
+        e_lam b' e1'
 
   | _ -> e_map (ty_subst s.es_ty) (e_subst s) e
 

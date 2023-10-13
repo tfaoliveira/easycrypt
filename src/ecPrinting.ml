@@ -1283,7 +1283,6 @@ let pp_locbinds ppe ?fv vs =
 let string_of_quant = function
   | Lforall -> "forall"
   | Lexists -> "exists"
-  | Llambda -> "fun"
 
 (* -------------------------------------------------------------------- *)
 let string_of_hcmp = function
@@ -1345,6 +1344,7 @@ let lower_left (ppe : PPEnv.t) (t_ty : form -> EcTypes.ty) (f : form)
   let rec l_l f onm opprec =
     match f.f_node with
     | Fquant _ -> Some (fst e_bin_prio_lambda)
+    | Flam   _ -> Some (fst e_bin_prio_lambda)
     | Fif _    -> Some (fst e_bin_prio_if)
     | Flet _   -> Some (fst e_bin_prio_letin)
     | Fapp ({f_node = Fop (op, _)}, [f1; f2])
@@ -1683,15 +1683,15 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
   | Fquant (q, bd, f) ->
       let (subppe, pp) = pp_bindings ppe ~fv:f.f_fv bd in
       let pp fmt () =
-        match q with
-        | Llambda ->
-          Format.fprintf fmt "@[<hov 2>%s %t =>@ %a@]"
-            (string_of_quant q) pp
-            (pp_form subppe) f
-        | _ ->
-          Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
-            (string_of_quant q) pp
-            (pp_form subppe) f in
+        Format.fprintf fmt "@[<hov 2>%s %t,@ %a@]"
+          (string_of_quant q) pp (pp_form subppe) f in
+      maybe_paren outer (fst outer, e_bin_prio_lambda) pp fmt ()
+
+  | Flam (bd, f) ->
+      let (subppe, pp) = pp_bindings ppe ~fv:f.f_fv bd in
+      let pp fmt () =
+        Format.fprintf fmt "@[<hov 2>fun %t =>@ %a@]"
+          pp (pp_form subppe) f in
       maybe_paren outer (fst outer, e_bin_prio_lambda) pp fmt ()
 
   | Fif (b, f1, f2) ->
@@ -2209,7 +2209,7 @@ let pp_opdecl_pr (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
         let ((subppe, pp_vds), f) =
           let (vds, f) =
             match f.f_node with
-            | Fquant (Llambda, vds, f) -> (vds, f)
+            | Flam (vds, f) -> (vds, f)
             | _ -> ([], f) in
 
           let vds = List.map (snd_map EcFol.gty_as_ty) vds in
@@ -2266,7 +2266,7 @@ let pp_opdecl_op (ppe : PPEnv.t) fmt (basename, ts, ty, op) =
         let ((subppe, pp_vds), f, has_vds) =
           let (vds, f) =
             match f.f_node with
-            | Fquant (Llambda, vds, f) ->
+            | Flam (vds, f) ->
                (List.map (snd_map gty_as_ty) vds, f)
             | _ -> ([], f) in
           (pp_locbinds ppe ~fv:f.f_fv vds, f,

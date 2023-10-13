@@ -308,7 +308,7 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, axbd) lc =
 
   let args, axbd =
     match axbd.f_node with
-    | Fquant (Llambda, bds, axbd) ->
+    | Flam (bds, axbd) ->
         let bds, flam = List.split_at nargs bds in
         (bds, f_lambda flam axbd)
     | _ -> [], axbd

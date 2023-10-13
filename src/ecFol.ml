@@ -562,17 +562,17 @@ and f_betared f =
   let tx fo fp = if f_equal fo fp || can_betared fo then fp else f_betared fp in
 
   match f.f_node with
-  | Fapp ({ f_node = Fquant (Llambda, bds, body)}, args) ->
+  | Fapp ({ f_node = Flam (bds, body)}, args) ->
       let (bds1, bds2), (args1, args2) = List.prefix2 bds args in
       let bind  = fun subst (x, _) arg -> Fsubst.f_bind_local subst x arg in
       let subst = Fsubst.f_subst_id in
       let subst = List.fold_left2 bind subst bds1 args1 in
-      f_app (f_quant Llambda bds2 (Fsubst.f_subst ~tx subst body)) args2 f.f_ty
+      f_app (f_lambda bds2 (Fsubst.f_subst ~tx subst body)) args2 f.f_ty
   | _ -> f
 
 and can_betared f =
   match f.f_node with
-  | Fapp ({ f_node = Fquant (Llambda, _, _)}, _) -> true
+  | Fapp ({ f_node = Flam _}, _) -> true
   | _ -> false
 
 let f_forall_simpl b f =
@@ -800,6 +800,7 @@ type sform =
   | SFtuple of form list
   | SFproj  of form * int
   | SFquant of quantif * (EcIdent.t * gty) * form Lazy.t
+  | SFlam   of (EcIdent.t * gty) * form Lazy.t
   | SFtrue
   | SFfalse
   | SFnot   of form
@@ -851,6 +852,10 @@ let rec sform_of_form fp =
   | Fquant (_, [ ]  , f) -> sform_of_form f
   | Fquant (q, [b]  , f) -> SFquant (q, b, lazy f)
   | Fquant (q, b::bs, f) -> SFquant (q, b, lazy (f_quant q bs f))
+
+  | Flam ([]   , f) -> sform_of_form f
+  | Flam ([b]  , f) -> SFlam (b, lazy f)
+  | Flam (b::bs, f) -> SFlam (b, lazy (f_lambda bs f))
 
   | FhoareF  hf -> SFhoareF  hf
   | FhoareS  hs -> SFhoareS  hs
@@ -934,7 +939,7 @@ let f_real_lt_simpl f1 f2 =
 (* -------------------------------------------------------------------- *)
 let f_dlet_simpl tya tyb d f =
   match f.f_node with
-  | Fquant (Llambda, ([(_, GTty _)] as bd), f') -> begin
+  | Flam (([(_, GTty _)] as bd), f') -> begin
      match sform_of_form f' with
      | SFop ((p, _), [body])
           when EcPath.p_equal p EcCoreLib.CI_Distr.p_dunit ->
@@ -1026,6 +1031,7 @@ let rec one_sided mem fp =
   | Fproj (f, _)        -> one_sided mem f
 
   | Fquant (_, _, f) -> one_sided mem f
+  | Flam (_, f) -> one_sided mem f
 
   | Fop _ -> true
   | Fapp (f, args) -> one_sided mem f && List.for_all (one_sided mem) args
@@ -1061,48 +1067,7 @@ let rec one_sided_vs mem fp =
   | Fproj (f, _)        -> one_sided_vs mem f
 
   | Fquant (_, _, f) -> one_sided_vs mem f
+  | Flam (_, f) -> one_sided_vs mem f
 
   | Fapp (f, args) -> one_sided_vs mem f @ List.concat_map (one_sided_vs mem) args
   | _ -> []
-
-let rec dump_f f =
-  let dump_quant q =
-    match q with
-    | Lforall -> "ALL"
-    | Lexists -> "EXI"
-    | Llambda -> "LAM"
-  in
-
-  match f.f_node with
-  | Fquant (q, bs, f) -> dump_quant q ^ " ( " ^ String.concat ", " (List.map EcIdent.tostring (List.fst bs)) ^ " )" ^ "." ^ dump_f f (* of quantif * bindings * form *)
-  | Fif    (c, t, f) -> "IF " ^ dump_f c ^ " THEN " ^ dump_f t ^ " ELSE " ^ dump_f f
-  | Fmatch _ -> "MATCH"
-  | Flet   (_, f, g) -> "LET _ = " ^ dump_f f ^ " IN " ^ dump_f g
-  | Fint    x -> BI.to_string x
-  | Flocal  x -> EcIdent.tostring x
-  | Fpvar   (pv, x) -> EcTypes.string_of_pvar pv ^ "{" ^ EcIdent.tostring x ^ "}"
-  | Fglob   (mp, x) -> EcIdent.tostring mp ^ "{" ^ EcIdent.tostring x ^ "}"
-  | Fop     (p, _) -> EcPath.tostring p
-  | Fapp    (f, a) -> "APP " ^ dump_f f ^ " ( " ^ String.concat ", " (List.map dump_f a) ^ " )"
-  | Ftuple  f -> " ( " ^ String.concat ", " (List.map dump_f f) ^ " )"
-  | Fproj   (f, x) -> dump_f f ^ "." ^ string_of_int x
-  | Fpr {pr_args = a; pr_event = e} -> "PR [ARG = " ^ dump_f a ^ " ; EV = " ^ dump_f e ^ "]"
-  | FhoareF _ -> "HoareF"
-  | FhoareS _ -> "HoareS"
-  | FcHoareF _ -> "cHoareF"
-  | FcHoareS _ -> "cHoareS"
-  | FbdHoareF _ -> "bdHoareF"
-  | FbdHoareS {bhs_pr = pr; bhs_po = po; bhs_bd = bd; bhs_m = (m, _)} ->
-     "bdHoareS [ ME = " ^ EcIdent.tostring m
-     ^ "; PR = " ^ dump_f pr
-     ^ "; PO = " ^ dump_f po
-     ^ "; BD = " ^ dump_f bd ^ "]"
-  | FequivF _ -> "equivF"
-  | FequivS {es_ml = (ml, _); es_mr = (mr, _); es_po = po; es_pr = pr } ->
-     "equivS [ ML = " ^ EcIdent.tostring ml
-     ^ "; MR = " ^ EcIdent.tostring mr
-     ^ "; PR = " ^ dump_f pr
-     ^ "; PO = " ^ dump_f po
-     ^ "]"
-  | FeagerF _ -> "eagerF"
-  | Fcoe _ -> "Fcoe"
