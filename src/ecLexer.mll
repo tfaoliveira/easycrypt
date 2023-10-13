@@ -39,6 +39,7 @@
     "exists"      , EXIST      ;        (* KW: prog *)
     "fun"         , FUN        ;        (* KW: prog *)
     "glob"        , GLOB       ;        (* KW: prog *)
+    "global"      , GLOBAL     ;        (* KW: prog *)
     "let"         , LET        ;        (* KW: prog *)
     "in"          , IN         ;        (* KW: prog *)
     "for"         , FOR        ;        (* KW: prog *)

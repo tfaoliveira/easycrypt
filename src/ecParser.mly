@@ -460,6 +460,7 @@
 %token FWDS
 %token GEN
 %token GLOB
+%token GLOBAL
 %token GOAL
 %token HAT
 %token HAVE
@@ -679,6 +680,7 @@ _lident:
 | SOLVE      { "solve"      }
 | STRICT     { "strict"     }
 | WLOG       { "wlog"       }
+| GLOBAL     { "global"     }
 
 | x=RING  { match x with `Eq -> "ringeq"  | `Raw -> "ring"  }
 | x=FIELD { match x with `Eq -> "fieldeq" | `Raw -> "field" }
@@ -1414,8 +1416,20 @@ coe_body(P):
 
 equiv_body(P):
   mp1=loc(fident) TILD mp2=loc(fident)
-  COLON pre=form_r(P) LONGARROW post=form_r(P)
+  COLON pre=equiv_cond(P) LONGARROW post=equiv_cond(P)
     { PFequivF (pre, (mp1, mp2), post) }
+
+equiv_cond(P):
+  f=form_r(P) qeq=quantum_eq?
+    { (f, odfl [] qeq) }
+
+quantum_eq:
+  | COMMA EQ LBRACE l=loc(quantum_eq1)* RBRACE { l }
+
+quantum_eq1:
+  | GLOBAL  { QEQglobal }
+  | q=lvalue { QEQ1 q }
+  | q1=lvalue SLASH q2=lvalue { QEQ2 (q1,q2) }
 
 eager_body(P):
 | s1=stmt COMMA  mp1=loc(fident) TILD mp2=loc(fident) COMMA s2=stmt

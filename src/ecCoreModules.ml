@@ -131,6 +131,8 @@ let rec qr_all2 f qr1 qr2 =
   | QRproj (q1, i1), QRproj (q2,i2) -> i1 = i2 && qr_all2 f q1 q2
   | _, _ -> false
 
+let qr_is_loc qr = qr_all (fun (pv,_) -> EcTypes.is_loc pv) qr
+
 (* -------------------------------------------------------------------- *)
 type quantum_op =
   | Qinit

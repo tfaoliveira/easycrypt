@@ -116,7 +116,7 @@ type filter_error =
 
 type clvalue_error = [`QVar | `Nested | `Proj]
 
-type qref_error = [`CVar | `Map | `NonDisjoint]
+type qref_error = [`CVar | `Map | `NonDisjoint | `NotLocal]
 
 type tyerror =
 | UniVarNotAllowed
@@ -1882,6 +1882,7 @@ let prelvalue_as_classical_lvalue
   =
   match prelvalue_as_classical_lvalue_r lv with
   | qref ->
+
      qref
   | exception (NotALValue reason) ->
      tyerror loc env (InvalidClassicalLValue reason)
@@ -2079,7 +2080,12 @@ and check_qref_disjoint env loc qref =
   if not (EcModules.is_quantum_valid ~norm qref) then
     tyerror loc env (InvalidQRef `NonDisjoint)
 
+let check_qref_local env loc qref =
+  if not (EcModules.qr_is_loc qref) then
+    tyerror loc env (InvalidQRef `NotLocal)
+
 (* -------------------------------------------------------------------- *)
+
 let transcall
       (transexp : 'a -> 'b * ty)
       (env      : EcEnv.env)
@@ -2158,6 +2164,7 @@ let transcall
       let qloc = EcLocation.mergeall (List.map EcLocation.loc args) in
 
       check_qref_disjoint env qloc qref;
+      check_qref_local env qloc qref;
       qref
   in
 
@@ -3941,11 +3948,9 @@ and trans_form_or_pattern
         let fpath1 = trans_gamepath env gp1 in
         let fpath2 = trans_gamepath env gp2 in
         let penv, qenv = EcEnv.Fun.equivF fpath1 fpath2 env in
-        let pre'  = transf penv pre in
-        let post' = transf qenv post in
-          unify_or_fail penv ue pre .pl_loc ~expct:tbool pre' .f_ty;
-          unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
-          f_equivF pre' fpath1 fpath2 post'
+        let pre'  = trans_ec opsc incost penv pre in
+        let post' = trans_ec opsc incost qenv post in
+        f_qequivF pre' fpath1 fpath2 post'
 
     | PFeagerF (pre, (s1,gp1,gp2,s2), post) ->
         let fpath1 = trans_gamepath env gp1 in
@@ -4019,6 +4024,42 @@ and trans_form_or_pattern
         end;
 
         f_coe form' memenv expr'
+    and trans_ec opsc incost env (f, qeq) =
+      let f' = transf_r opsc incost env f in
+      unify_or_fail env ue f.pl_loc ~expct:tbool f'.f_ty;
+
+      let envl = EcEnv.Memory.set_active mleft  env in
+      let envr = EcEnv.Memory.set_active mright env in
+
+      let do_q2 ql qr =
+        let ql',tyl = trans_qref ~disjoint:true ue envl ql in
+        let qr',tyr = trans_qref ~disjoint:true ue envr qr in
+        unify_or_fail env ue qr.pl_loc ~expct:tyl tyr;
+        Some (ql', qr') in
+
+      let global = ref false in
+
+      let doqeq qe1 =
+        match qe1.pl_desc with
+        | QEQglobal -> global := true; None
+        | QEQ1 q -> do_q2 q q
+        | QEQ2 (q1,q2) -> do_q2 q1 q2 in
+
+      let qlr = List.map doqeq qeq in
+      let qel = qrtuple (List.pmap (omap fst) qlr) in
+      let qer = qrtuple (List.pmap (omap snd) qlr) in
+      (* Types are equals, still have to check
+         - disjoint
+         - local if global *)
+      let loc = mergeall (List.map loc qeq) in
+      check_qref_disjoint envl loc qel;
+      check_qref_disjoint envr loc qer;
+      if !global then begin
+        check_qref_local envl loc qel;
+        check_qref_local envr loc qer
+      end;
+      {ec_f = f'; ec_e = { qeg = !global; qel; qer }}
+
   in
 
   let f = transf_r None false env pf in

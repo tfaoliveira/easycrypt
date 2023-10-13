@@ -213,13 +213,20 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFhoareF   of pformula * pgamepath * pformula
-  | PFequivF   of pformula * (pgamepath * pgamepath) * pformula
+  | PFequivF   of pequiv_cond * (pgamepath * pgamepath) * pequiv_cond
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
   | PFBDhoareF of pformula * pgamepath * pformula * phoarecmp * pformula
   | PFChoareF  of pformula * pgamepath * pformula * pcost
   | PFChoareFT of pgamepath * pcost
   | PFCoe      of osymbol * pmemtype option * pformula * pexpr * pty option
+
+and pequiv_cond = pformula * pqeq located list
+
+and pqeq =
+  | QEQglobal
+  | QEQ1 of plvalue
+  | QEQ2 of plvalue * plvalue
 
 and pmemtype_el = ([`Single|`Tuple] * (psymbol list)) located * pty
 and pmemtype    = pmemtype_el list

@@ -108,7 +108,7 @@ type filter_error =
 
 type clvalue_error = [`QVar | `Nested | `Proj]
 
-type qref_error = [`CVar | `Map | `NonDisjoint]
+type qref_error = [`CVar | `Map | `NonDisjoint | `NotLocal]
 
 type tyerror =
 | UniVarNotAllowed
