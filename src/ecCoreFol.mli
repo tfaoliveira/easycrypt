@@ -267,6 +267,7 @@ val f_local : EcIdent.t -> EcTypes.ty -> form
 val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> memory -> form
 val f_pvarg : EcTypes.ty -> memory -> form
 val f_pvloc : variable -> memory -> form
+val f_pvlocs : variable list -> memory -> form list
 val f_glob  : EcIdent.t -> memory -> form
 
 (* soft-constructors - common formulas constructors *)

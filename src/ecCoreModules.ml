@@ -73,7 +73,7 @@ let name_of_lv lv =
 type quantum_ref =
   | QRvar   of prog_var_ty
   | QRtuple of quantum_ref list
-  | QRproj  of quantum_ref * int  (* proj start at 0 *)
+  | QRproj  of quantum_ref * int (* proj start at 0 *)
 
 let quantum_unit =
   QRtuple []
@@ -108,6 +108,13 @@ let qrproj (qr, i) =
   | QRtuple t -> List.nth t i
   | _ -> QRproj(qr, i)
 
+let qr_pvloc v =
+  assert (v.v_quantum = `Quantum);
+  qrvar (pv_loc v.v_name, v.v_type)
+
+let qr_pvlocs vs =
+  qrtuple (List.map qr_pvloc vs)
+
 let rec qr_iter f = function
   | QRvar x -> f x
   | QRtuple t -> List.iter (qr_iter f) t
@@ -132,6 +139,12 @@ let rec qr_all2 f qr1 qr2 =
   | _, _ -> false
 
 let qr_is_loc qr = qr_all (fun (pv,_) -> EcTypes.is_loc pv) qr
+
+let rec qr_subst_pv pv qrv qr =
+  match qr with
+  | QRvar (pv', _) -> if pv_equal pv pv' then qrv else qr
+  | QRtuple t -> qrtuple (List.Smart.map (qr_subst_pv pv qrv) t)
+  | QRproj (q, i) -> qrproj (qr_subst_pv pv qrv q, i)
 
 (* -------------------------------------------------------------------- *)
 type quantum_op =

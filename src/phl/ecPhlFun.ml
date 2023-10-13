@@ -64,14 +64,27 @@ let lossless_hyps env top sub =
     f_forall bd (f_imps hyps concl)
 
 (* -------------------------------------------------------------------- *)
-let subst_pre env fs (m : memory) s =
+
+let tuple_arg quantum names =
   let fresh ov =
     match ov.ov_name with
     | None   -> assert false;
-    | Some v -> { v_quantum = `Classical; v_name = v; v_type = ov.ov_type }
+    | Some v -> { v_quantum = quantum; v_name = v; v_type = ov.ov_type }
   in
-  let v = List.map (fun v -> f_pvloc (fresh v) m) fs.fs_anames in
-  PVM.add env pv_arg m (f_tuple v) s
+  List.map fresh names
+
+let subst_arg env fs (m : memory) s =
+  let cv = f_tuple (f_pvlocs (tuple_arg `Classical fs.fs_anames) m) in
+  PVM.add env pv_arg m cv s
+
+let subst_qarg env fs (m : memory) s =
+  let qn = tuple_arg `Quantum fs.fs_qnames in
+  let qv = f_tuple (f_pvlocs qn m) in
+  let qr  = qr_pvlocs qn in
+  let s = PVM.add env pv_qarg m qv s in
+  s, qr
+
+let subst_pre = subst_arg
 
 (* ------------------------------------------------------------------ *)
 let t_hoareF_fun_def_r tc =
@@ -130,7 +143,7 @@ let t_bdhoareF_fun_def_r tc =
 (* ------------------------------------------------------------------ *)
 let t_equivF_fun_def_r tc =
   let env = FApi.tc1_env tc in
-  let ef = tc1_as_equivF tc in
+  let ef = tc1_as_qequivF tc in
   let fl = NormMp.norm_xfun env ef.ef_fl in
   let fr = NormMp.norm_xfun env ef.ef_fr in
   check_concrete !!tc env fl; check_concrete !!tc env fr;
@@ -141,13 +154,24 @@ let t_equivF_fun_def_r tc =
   let mr = EcMemory.memory menvr in
   let fresl = odfl f_tt (omap (form_of_expr ml) fdefl.f_ret) in
   let fresr = odfl f_tt (omap (form_of_expr mr) fdefr.f_ret) in
-  let s = PVM.add env pv_res ml fresl PVM.empty in
-  let s = PVM.add env pv_res mr fresr s in
-  let post = PVM.subst env s ef.ef_po in
-  let s = subst_pre env fsigl ml PVM.empty in
-  let s = subst_pre env fsigr mr s in
-  let pre = PVM.subst env s ef.ef_pr in
-  let concl' = f_equivS menvl menvr pre fdefl.f_body fdefr.f_body post in
+  let s,qrl = subst_qarg env fsigl ml PVM.empty in
+  let s,qrr = subst_qarg env fsigr mr s in
+
+  let spo = PVM.add env pv_res ml fresl s in
+  let spo = PVM.add env pv_res mr fresr spo in
+
+  let subst_ec s ec =
+    let ece = ec.ec_e in
+    { ec_f = PVM.subst env s ec.ec_f;
+      ec_e = {ece with qel = qr_subst_pv pv_qarg qrl ece.qel;
+                       qer = qr_subst_pv pv_qarg qrr ece.qer } } in
+  let post = subst_ec spo ef.ef_po in
+
+  let spr = subst_pre env fsigl ml s in
+  let spr = subst_pre env fsigr mr spr in
+  let pre = subst_ec spr ef.ef_pr in
+
+  let concl' = f_qequivS menvl menvr pre fdefl.f_body fdefr.f_body post in
   FApi.xmutate1 tc `FunDef [concl']
 
 (* -------------------------------------------------------------------- *)

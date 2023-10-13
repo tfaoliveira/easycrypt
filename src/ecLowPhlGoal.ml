@@ -182,14 +182,16 @@ let check (q : quantum) (tc : EcCoreGoal.tcenv1) (c : form) =
   | FbdHoareS s ->
      check s.bhs_m
 
-  | FequivF f ->
+  | FequivF f -> ()
+   (*
      let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.ef_fl f.ef_fr env in
      check m1; check m2; check m3; check m4
-
-  | FequivS s ->
+   *)
+  | FequivS s -> ()
+   (*
      check s.es_ml;
      check s.es_mr
-
+   *)
   | FeagerF f ->
      let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.eg_fl f.eg_fr env in
      check m1; check m2; check m3; check m4
@@ -208,6 +210,10 @@ let pf_as_bdhoareF pe c = as_phl (`PHoare `Pred) (fun () -> destr_bdHoareF c) pe
 let pf_as_bdhoareS pe c = as_phl (`PHoare `Stmt) (fun () -> destr_bdHoareS c) pe
 let pf_as_equivF   pe c = as_phl (`Equiv  `Pred) (fun () -> destr_equivF   c) pe
 let pf_as_equivS   pe c = as_phl (`Equiv  `Stmt) (fun () -> destr_equivS   c) pe
+
+let pf_as_qequivF  pe c = as_phl (`Equiv  `Pred) (fun () -> destr_qequivF  c) pe
+let pf_as_qequivS  pe c = as_phl (`Equiv  `Stmt) (fun () -> destr_qequivS  c) pe
+
 let pf_as_eagerF   pe c = as_phl `Eager          (fun () -> destr_eagerF   c) pe
 
 (* -------------------------------------------------------------------- *)
@@ -219,7 +225,11 @@ let tc1_as_bdhoareF ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_
 let tc1_as_bdhoareS ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_bdhoareS !!tc (FApi.tc1_goal tc)
 let tc1_as_equivF   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_equivF   !!tc (FApi.tc1_goal tc)
 let tc1_as_equivS   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_equivS   !!tc (FApi.tc1_goal tc)
+
 let tc1_as_eagerF   ?(q = `Classical) tc = check q tc (FApi.tc1_goal tc); pf_as_eagerF   !!tc (FApi.tc1_goal tc)
+
+let tc1_as_qequivF tc = pf_as_qequivF !!tc (FApi.tc1_goal tc)
+let tc1_as_qequivS tc = pf_as_qequivS !!tc (FApi.tc1_goal tc)
 
 (* -------------------------------------------------------------------- *)
 let tc1_get_stmt side tc =

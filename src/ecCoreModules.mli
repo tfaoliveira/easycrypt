@@ -30,10 +30,13 @@ val qr_equal : quantum_ref -> quantum_ref -> bool
 val qr_hash  : quantum_ref -> int
 val qr_fv    : quantum_ref -> int EcIdent.Mid.t
 val qr_subst : e_subst -> quantum_ref -> quantum_ref
+val qr_subst_pv : prog_var -> quantum_ref -> quantum_ref -> quantum_ref
 
 val qrvar   : prog_var_ty -> quantum_ref
 val qrtuple : quantum_ref list -> quantum_ref
 val qrproj  : quantum_ref * int -> quantum_ref
+val qr_pvloc  : variable -> quantum_ref
+val qr_pvlocs : variable list -> quantum_ref
 
 val qr_iter : (prog_var_ty -> unit) -> quantum_ref -> unit
 val qr_map : (prog_var_ty -> prog_var_ty) -> quantum_ref -> quantum_ref

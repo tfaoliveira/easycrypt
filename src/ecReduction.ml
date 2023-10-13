@@ -201,8 +201,16 @@ end) = struct
   (* ------------------------------------------------------------------ *)
   and for_instr_r env alpha ~norm i1 i2 =
     match i1.i_node, i2.i_node with
-    | Squantum _, Squantum _ -> assert false
-    | Smeasure _, Smeasure _ -> assert false
+    | Squantum (qr1,o1,e1), Squantum (qr2,o2,e2) ->
+        for_qr env ~norm qr1 qr2
+        && o1 = o2
+        && for_expr env alpha ~norm e1 e2
+
+    | Smeasure (lv1,qr1,e1), Smeasure(lv2,qr2,e2) ->
+        for_lv env ~norm lv1 lv2
+        && for_qr env ~norm qr1 qr2
+        && for_expr env alpha ~norm e1 e2
+
     | Sasgn (lv1, e1), Sasgn (lv2, e2) ->
            for_lv env ~norm lv1 lv2
         && for_expr env alpha ~norm e1 e2
@@ -212,11 +220,10 @@ end) = struct
         && for_expr env alpha ~norm e1 e2
 
     | Scall (lv1, f1, e1, qr1), Scall (lv2, f2, e2, qr2) ->
-        assert (is_quantum_unit qr1);
-        assert (is_quantum_unit qr2);
         oall2 (for_lv env ~norm) lv1 lv2
           && for_xp env ~norm f1 f2
           && List.all2 (for_expr env alpha ~norm) e1 e2
+          && for_qr env ~norm qr1 qr2
 
     | Sif (a1, b1, c1), Sif(a2, b2, c2) ->
         for_expr env alpha ~norm a1 a2
