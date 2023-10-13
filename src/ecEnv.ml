@@ -1648,37 +1648,41 @@ module Fun = struct
   let add_qparams mem fun_ =
     adds_in_memenv mem fun_.f_sig.fs_qnames
 
-  let add_params mem fun_ =
+  let add_all_params mem fun_ =
     let mem = add_qparams mem fun_ in
     let mem = add_cparams mem fun_ in
     mem
 
   let actmem_pre me fun_ =
-    let mem = EcMemory.empty_local ~witharg:true me in
-    add_params mem fun_
+    let mem = EcMemory.empty_local ~witharg:`All me in
+    add_all_params mem fun_
 
   let actmem_post me fun_ =
-    let mem = EcMemory.empty_local ~witharg:false me in
+    let mem = EcMemory.empty_local ~witharg:`Quantum me in
     let mem = add_qparams mem fun_ in
-    add_in_memenv mem
-      { ov_quantum = `Classical; ov_name = Some res_symbol; ov_type = fun_.f_sig.fs_ret}
+    let res = {
+        ov_quantum = `Classical;
+        ov_name    = Some res_symbol;
+        ov_type    = fun_.f_sig.fs_ret;
+    } in add_in_memenv mem res
 
   let actmem_body me fun_ =
     match fun_.f_def with
     | FBabs _   -> assert false (* FIXME error message *)
     | FBalias _ -> assert false (* FIXME error message *)
     | FBdef fd   ->
-      let mem = EcMemory.empty_local ~witharg:false me in
-      let mem = add_params mem fun_ in
+      let mem = EcMemory.empty_local ~witharg:`None me in
+      let mem = add_all_params mem fun_ in
       let locals = List.map ovar_of_var fd.f_locals in
       (fun_.f_sig,fd), adds_in_memenv mem locals
 
   let inv_memory side =
-    let id    = if side = `Left then EcCoreFol.mleft else EcCoreFol.mright in
-    EcMemory.abstract id
+    let id =
+      match side with `Left -> EcCoreFol.mleft | `Right -> EcCoreFol.mright
+    in EcMemory.abstract id
 
   let inv_memenv env =
-    Memory.push_all [inv_memory `Left; inv_memory `Rigth] env
+    Memory.push_all [inv_memory `Left; inv_memory `Right] env
 
   let inv_memenv1 env =
     let mem  = EcMemory.abstract EcCoreFol.mhr in

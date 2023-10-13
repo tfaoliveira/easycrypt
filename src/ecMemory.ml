@@ -179,17 +179,22 @@ exception DuplicatedMemoryBinding of symbol
 exception NoQuantumMemory
 
 (* -------------------------------------------------------------------- *)
-let empty_local_mt ~(witharg : bool) =
-  let empty (argname : symbol) =
-    let name = if witharg then Some argname else None in
+type wa = [`All | `Classical | `Quantum | `None]
+
+let empty_local_mt ~(witharg : wa) =
+  let empty (q : quantum) (argname : symbol) =
+    let name =
+      if witharg = `All || witharg = (q :> wa) then
+        Some argname
+      else None in
     mk_lmt name [] Msym.empty in
 
-  let classical_lmt = empty arg_symbol in
-  let quantum_lmt = empty qarg_symbol in
+  let classical_lmt = empty `Classical arg_symbol  in
+  let quantum_lmt   = empty `Quantum   qarg_symbol in
 
   Lmt_concrete (Some { classical_lmt; quantum_lmt; })
 
-let empty_local ~(witharg : bool) (me : memory) =
+let empty_local ~(witharg : wa) (me : memory) =
   me, empty_local_mt ~witharg
 
 (* -------------------------------------------------------------------- *)

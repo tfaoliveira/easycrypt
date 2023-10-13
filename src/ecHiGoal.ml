@@ -2000,7 +2000,7 @@ let process_pose xsym bds o p (tc : tcenv1) =
 (* -------------------------------------------------------------------- *)
 let process_memory (xsym : psymbol) tc =
   let x = EcIdent.create (unloc xsym) in
-  let m = EcMemory.empty_local_mt ~witharg:false in
+  let m = EcMemory.empty_local_mt ~witharg:`None in
 
   FApi.t_sub
     [

@@ -503,12 +503,16 @@ let get_projarg_for_var ppe x i =
   if is_glob x then raise NoProjArg;
   oget ~exn:NoProjArg (EcMemory.get_name (get_loc x) (Some i) m)
 
+let get_projarg_r ppe (x, m) i =
+  let ppe = PPEnv.enter_by_memid ppe m in
+  let s = get_projarg_for_var ppe x i in
+  (s, m)
+
 let get_f_projarg ppe e i ty =
   match e.f_node with
   | Fpvar (x, m) ->
-    let ppe = PPEnv.enter_by_memid ppe m in
-    let s = get_projarg_for_var ppe x i in
-    f_pvar (pv_loc s) ty m
+     let s, m =  get_projarg_r ppe (x, m) i in
+     f_pvar (pv_loc s) ty m
   | _ -> raise NoProjArg
 
 (* -------------------------------------------------------------------- *)
@@ -1378,8 +1382,19 @@ let rec pp_quantum_ref (ppe : PPEnv.t) fmt qr =
     pp_pv ppe fmt p
   | QRtuple t ->
     Format.fprintf fmt "(%a)" (pp_list ",@ " (pp_quantum_ref ppe) ) t
-  | QRproj (qr, i) ->
-    Format.fprintf fmt "%a.`%i" (pp_quantum_ref ppe) qr (i+1)
+  | QRproj (qr, i) -> begin
+      try
+        match qr with
+        | QRvar (p, _) ->
+           let x = get_projarg_for_var ppe p i in
+           pp_pv ppe fmt (pv_loc x)
+
+        | _ ->
+           raise NoProjArg
+
+      with NoProjArg ->
+        Format.fprintf fmt "%a.`%i" (pp_quantum_ref ppe) qr (i+1)
+    end
 
 (* -------------------------------------------------------------------- *)
 let pp_quantum_ref_call (ppe : PPEnv.t) fmt qr =
@@ -1851,7 +1866,7 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
         (pp_funname ppe) eqv.ef_fl
         (pp_funname ppe) eqv.ef_fr
         (pp_ecform ppepr) eqv.ef_pr
-        (pp_ecform ppepr) eqv.ef_po
+        (pp_ecform ppepo) eqv.ef_po
 
   | FequivS es ->
       let ppef = PPEnv.push_mems ppe [es.es_ml; es.es_mr] in
@@ -1983,19 +1998,52 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 and pp_ecform ppe fmt ec =
+  if ec.ec_e.qeg || ec.ec_e.qel <> quantum_unit then
+     Format.fprintf fmt "%a,@ ={%a}"
+       (pp_form ppe) ec.ec_f (pp_ecq ppe) ec.ec_e
+  else
+    Format.fprintf fmt "%a" (pp_form ppe) ec.ec_f
+
+and pp_ecq ppe fmt ecq =
   let qlrs =
-    let qrl = match ec.ec_e.qel with QRtuple x -> x | x -> [x] in
-    let qrr = match ec.ec_e.qer with QRtuple x -> x | x -> [x] in
+    let qrl = match ecq.qel with QRtuple x -> x | x -> [x] in
+    let qrr = match ecq.qer with QRtuple x -> x | x -> [x] in
     List.combine qrl qrr in
 
+  let ppel = PPEnv.enter_by_memid ppe EcFol.mleft  in
+  let pper = PPEnv.enter_by_memid ppe EcFol.mright in
+
+  let rec qref_eqv qr1 qr2 =
+    match qr1, qr2 with
+    | QRvar (p1, _), QRvar (p2, _) ->
+       msymbol_of_pv ppel p1 = msymbol_of_pv pper p2
+    | QRtuple t1, QRtuple t2 ->
+       List.all2 qref_eqv t1 t2
+    | QRproj (qr1, i1), QRproj (qr2, i2) -> begin
+        try
+          match qr1, qr2 with
+          | QRvar (p1, _), QRvar (p2, _) ->
+             let x1 = get_projarg_for_var ppel p1 i1 in
+             let x2 = get_projarg_for_var pper p2 i2 in
+             msymbol_of_pv ppel (pv_loc x1) = msymbol_of_pv pper (pv_loc x2)
+          | _, _ ->
+             false
+        with NoProjArg -> false
+      end
+    | _, _ ->
+       false in
+
   let for1 fmt (ql, qr) =
-    Format.fprintf fmt "%a / %a"
-      (pp_quantum_ref ppe) ql
-      (pp_quantum_ref ppe) qr in
+    if qref_eqv ql qr then
+      Format.fprintf fmt "%a" (pp_quantum_ref ppel) ql
+    else
+      Format.fprintf fmt "%a / %a"
+        (pp_quantum_ref ppel) ql
+        (pp_quantum_ref pper) qr in
 
   let pps =
     let ppglob =
-      if ec.ec_e.qeg then
+      if ecq.qeg then
         [fun fmt -> Format.fprintf fmt "global"]
       else
         [] in
@@ -2003,17 +2051,8 @@ and pp_ecform ppe fmt ec =
     let ppeq = List.map (fun qlr fmt -> for1 fmt qlr) qlrs in
 
     ppglob @ ppeq
-  in
 
-  match pps with
-  | [] ->
-     Format.fprintf fmt "%a" (pp_form ppe) ec.ec_f
-
-  | _ ->
-     Format.fprintf
-       fmt "%a,@ ={%a}"
-       (pp_form ppe) ec.ec_f
-       (pp_list ",@ " (fun fmt pp -> pp fmt)) pps
+  in pp_list ",@ " (fun fmt pp -> pp fmt) fmt pps
 
 (* -------------------------------------------------------------------- *)
 and pp_cost ppe fmt c =
@@ -2923,7 +2962,7 @@ let rec pp_prpo (ppe : PPEnv.t) tag mode fmt f =
       Format.fprintf fmt "  [%.*d]: @[<hov 2>%a@]\n%!"
         ws (i + 1) (pp_form ppe) f) fs;
   else
-    Format.fprintf fmt "@[<hov 2>%s =@ %a@]\n%!" tag (pp_form ppe) f
+    Format.fprintf fmt "@[<hov 2>%s:@ %a@]\n%!" tag (pp_form ppe) f
 
 (* -------------------------------------------------------------------- *)
 let pp_pre (ppe : PPEnv.t) ?prpo fmt pre =
@@ -2936,6 +2975,24 @@ let pp_post (ppe : PPEnv.t) ?prpo fmt post =
   pp_prpo ppe "post"
     (omap (fun x -> x.prpo_po) prpo |> odfl false)
     fmt post
+
+(* -------------------------------------------------------------------- *)
+let pp_qprpo (ppe : PPEnv.t) tag fmt eqc =
+  Format.fprintf fmt "@[<hov 2>%s:@ ={%a}@]\n%!" tag (pp_ecq ppe) eqc
+
+(* -------------------------------------------------------------------- *)
+let pp_ecpre (ppe : PPEnv.t) ?prpo fmt pre =
+  pp_prpo ppe "c-pre"
+    (omap (fun x -> x.prpo_pr) prpo |> odfl false)
+    fmt pre.ec_f;
+  pp_qprpo ppe "q-pre" fmt pre.ec_e
+
+(* -------------------------------------------------------------------- *)
+let pp_ecpost (ppe : PPEnv.t) ?prpo fmt post =
+  pp_prpo ppe "c-post"
+    (omap (fun x -> x.prpo_po) prpo |> odfl false)
+    fmt post.ec_f;
+  pp_qprpo ppe "q-post" fmt post.ec_e
 
 (* -------------------------------------------------------------------- *)
 let pp_hoareF (ppe : PPEnv.t) ?prpo fmt hf =
@@ -3033,11 +3090,11 @@ let pp_equivF (ppe : PPEnv.t) ?prpo fmt (ef:qequivF) =
   let ppepr = PPEnv.create_and_push_mems ppe [meprl; meprr] in
   let ppepo = PPEnv.create_and_push_mems ppe [mepol; mepor] in
   (* FIXME QUANTUM *)
-  Format.fprintf fmt "%a@\n%!" (pp_pre ppepr ?prpo) ef.ef_pr.ec_f;
+  Format.fprintf fmt "%a@\n%!" (pp_ecpre ppepr ?prpo) ef.ef_pr;
   Format.fprintf fmt "    %a ~ %a@\n%!"
     (pp_funname ppe) ef.ef_fl
     (pp_funname ppe) ef.ef_fr;
-  Format.fprintf fmt "@\n%a%!" (pp_post ppepo ?prpo) ef.ef_po.ec_f
+  Format.fprintf fmt "@\n%a%!" (pp_ecpost ppepo ?prpo) ef.ef_po
 
 (* -------------------------------------------------------------------- *)
 let pp_equivS (ppe : PPEnv.t) ?prpo fmt (es:qequivS) =
@@ -3064,18 +3121,17 @@ let pp_equivS (ppe : PPEnv.t) ?prpo fmt (es:qequivS) =
           ppef ppnode
       in fun fmt -> pp_node `Both fmt ppnode
     end in
-  (* FIXME QUANTUM *)
   Format.fprintf fmt "&1 (left ) : %a%s@\n%!"
     (pp_memtype ppe) (snd es.es_ml)
     (if insync then " [programs are in sync]" else "");
   Format.fprintf fmt "&2 (right) : %a@\n%!"
     (pp_memtype ppe) (snd es.es_mr);
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_pre ppef ?prpo) es.es_pr.ec_f;
+  Format.fprintf fmt "%a%!" (pp_ecpre ppef ?prpo) es.es_pr;
   Format.fprintf fmt "@\n%!";
   Format.fprintf fmt "%t" ppnode;
   Format.fprintf fmt "@\n%!";
-  Format.fprintf fmt "%a%!" (pp_post ppef ?prpo) es.es_po.ec_f
+  Format.fprintf fmt "%a%!" (pp_ecpost ppef ?prpo) es.es_po
 
 (* -------------------------------------------------------------------- *)
 let pp_rwbase ppe fmt (p, rws) =

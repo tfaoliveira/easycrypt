@@ -52,10 +52,8 @@ module M2 = {
 
 }.
 
-lemma L : forall (x : int), equiv[M.q ~ M.q : ={a}, ={global,a} ==> true, ={a}].
-proof.
-
-lemma L : forall (x : int), equiv[M.q ~ M.q : ={a}, ={global,a} ==> true, ={a}].
-proof.
+equiv L : M.q ~ M.q : ={a}, ={global,a} ==> true, ={a}.
+proof. abort.
 
 print M.
+

@@ -544,7 +544,7 @@ module ToCodeLow = struct
   (* ------------------------------------------------------------------ *)
   let to_code env f m =
     let fd = Fun.by_xpath f env in
-    let me = EcMemory.empty_local ~witharg:false m in
+    let me = EcMemory.empty_local ~witharg:`None m in
 
     let args =
       assert (fd.f_sig.fs_qnames = []);

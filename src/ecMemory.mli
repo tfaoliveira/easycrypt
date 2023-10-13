@@ -35,8 +35,10 @@ val memory   : memenv -> memory
 val memtype  : memenv -> memtype
 
 (* -------------------------------------------------------------------- *)
-val empty_local    : witharg:bool -> memory -> memenv
-val empty_local_mt : witharg:bool -> memtype
+type wa = [`All | `Classical | `Quantum | `None]
+
+val empty_local    : witharg:wa -> memory -> memenv
+val empty_local_mt : witharg:wa -> memtype
 
 val schema    : memory -> memenv
 val schema_mt : memtype

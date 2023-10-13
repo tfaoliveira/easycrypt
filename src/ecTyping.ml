@@ -2923,7 +2923,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
       let cparams = params `Classical decl.pfd_tyargs.fp_classical in
       let qparams = params `Quantum decl.pfd_tyargs.fp_quantum in
 
-      let memenv = EcMemory.empty_local ~witharg:false mhr in
+      let memenv = EcMemory.empty_local ~witharg:`None mhr in
       let memenv = fundef_add_symbol env memenv cparams in
       let memenv = fundef_add_symbol env memenv qparams in
 
@@ -4088,7 +4088,7 @@ and trans_form_or_pattern
 
 (* Type-check a memtype. *)
 and trans_memtype env ue (pmemtype : pmemtype) : memtype =
-  let mt = EcMemory.empty_local_mt ~witharg:false in
+  let mt = EcMemory.empty_local_mt ~witharg:`None in
 
   let add_decl (memtype : memtype) (vars, pty) : memtype =
     let ty = transty tp_tydecl env ue pty in
