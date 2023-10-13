@@ -2073,6 +2073,12 @@ and trans_qrref ~disjoint (ue : EcUnify.unienv) (env : EcEnv.env) (pqrref : pqrr
 
     (qr, EcIdent.create x, ty) in
 
+  let pqrref =
+    match unloc pqrref with
+    | [{ pl_loc = loc; pl_desc = PLvTuple qrs; }, None] ->
+       mk_loc loc (List.map (fun x -> (x, None)) qrs)
+    | _ -> pqrref in
+
   let qrref = List.map for1 (unloc pqrref) in
 
   let qrref, bds =
@@ -3216,9 +3222,9 @@ and transinstr
      let unitary, uty =
        let env = EcEnv.Var.bind_locals bds env in
        let unitary, uty = transexp env `InProc ue punitary in
+       unify_or_fail env ue punitary.pl_loc ~expct:(ttuple (List.snd bds)) uty;
        e_lam bds unitary, uty in
 
-     unify_or_fail env ue punitary.pl_loc ~expct:uty uty;
      [ i_quantum (qref, Qunitary, unitary) ]
 
   | PSasgn (plvalue, prvalue) -> begin
