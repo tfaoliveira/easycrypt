@@ -2966,43 +2966,36 @@ let rec pp_prpo (ppe : PPEnv.t) tag mode fmt f =
     Format.fprintf fmt "@[<hov 2>%s:@ %a@]\n%!" tag (pp_form ppe) f
 
 (* -------------------------------------------------------------------- *)
-
-let pp_pre (ppe : PPEnv.t) ?prpo fmt pre =
-  pp_prpo ppe "pre"
+let pp_prpo_f (ppe : PPEnv.t) ?prpo tag fmt f =
+  pp_prpo ppe tag
     (omap (fun x -> x.prpo_pr) prpo |> odfl false)
-    fmt pre
+    fmt f
 
-(* -------------------------------------------------------------------- *)
-let pp_post (ppe : PPEnv.t) ?prpo fmt post =
-  pp_prpo ppe "post"
-    (omap (fun x -> x.prpo_po) prpo |> odfl false)
-    fmt post
+let pp_pre (ppe : PPEnv.t) ?prpo fmt f =
+  pp_prpo_f ppe ?prpo "pre" fmt f
+
+let pp_post (ppe : PPEnv.t) ?prpo fmt f =
+  pp_prpo_f ppe ?prpo "post" fmt f
 
 (* -------------------------------------------------------------------- *)
 let pp_qprpo (ppe : PPEnv.t) tag fmt eqc =
   Format.fprintf fmt "@[<hov 2>%s:@ %a@]\n%!" tag (pp_qe ppe) eqc
 
-(* -------------------------------------------------------------------- *)
-let pp_ecpre (ppe : PPEnv.t) ?prpo fmt pre =
-  if is_qe_empty pre.ec_e then pp_pre ppe ?prpo fmt pre.ec_f
+let pp_prpo_ec (ppe : PPEnv.t) ?prpo tag fmt ec =
+  if is_qe_empty ec.ec_e then pp_prpo_f ppe ?prpo tag fmt ec.ec_f
   else
     begin
-      pp_prpo ppe "c-pre"
-        (omap (fun x -> x.prpo_pr) prpo |> odfl false)
-        fmt pre.ec_f;
-      pp_qprpo ppe "q-pre" fmt pre.ec_e
+      let ctag, qtag = "c-"^tag, "q-"^tag in
+      pp_prpo_f ppe ?prpo ctag fmt ec.ec_f;
+      pp_qprpo ppe qtag fmt ec.ec_e
     end
 
-(* -------------------------------------------------------------------- *)
-let pp_ecpost (ppe : PPEnv.t) ?prpo fmt post =
-  if is_qe_empty post.ec_e then pp_post ppe ?prpo fmt post.ec_f
-  else
-    begin
-      pp_prpo ppe "c-post"
-        (omap (fun x -> x.prpo_po) prpo |> odfl false)
-        fmt post.ec_f;
-      pp_qprpo ppe "q-post" fmt post.ec_e
-    end
+let pp_ecpre (ppe : PPEnv.t) ?prpo fmt ec =
+  pp_prpo_ec ppe ?prpo "pre" fmt ec
+
+let pp_ecpost (ppe : PPEnv.t) ?prpo fmt ec =
+  pp_prpo_ec ppe ?prpo "post" fmt ec
+
 (* -------------------------------------------------------------------- *)
 let pp_hoareF (ppe : PPEnv.t) ?prpo fmt hf =
   let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.hf_f ppe.PPEnv.ppe_env in
