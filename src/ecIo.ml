@@ -29,6 +29,9 @@ let isbinop_fun = fun () ->
 let isuniop_fun = fun () ->
     MenhirLib.Convert.Simplified.traditional2revised EcParser.is_uniop
 
+let ismident_fun = fun () ->
+    MenhirLib.Convert.Simplified.traditional2revised EcParser.is_mident
+
 (* -------------------------------------------------------------------- *)
 type 'a ecreader_gr = {
   (*---*) ecr_lexbuf  : Lexing.lexbuf;
@@ -172,11 +175,6 @@ let is_mem_ident x =
   | Some (EcParser.MIDENT _) -> true
   | _ -> false
 
-let is_mod_ident x =
-  match lex_single_token x with
-  | Some (EcParser.UIDENT _) -> true
-  | _ -> false
-
 (* -------------------------------------------------------------------- *)
 type lexer1 = {
   (*---*) l1_lexbuf : Lexing.lexbuf;
@@ -231,3 +229,11 @@ let is_binop (x : string) =
   end
 
   | _ -> `No
+
+(* -------------------------------------------------------------------- *)
+let is_mod_ident (x : string) =
+  try
+    let parse  = ismident_fun () in
+    let lexbuf = lexer1_of_lexbuf (Lexing.from_string x) in
+    parse (fun () -> lexer1 lexbuf); true
+  with EcLexer.LexicalError _  | EcParser.Error -> false

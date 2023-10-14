@@ -612,7 +612,7 @@
 
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4 NUMOP
 %token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
-%token < Lexing.position> FINAL
+%token <Lexing.position> FINAL
 
 %nonassoc prec_below_comma
 %nonassoc COMMA ELSE
@@ -654,8 +654,9 @@
 %type <unit> is_uniop
 %type <unit> is_binop
 %type <unit> is_numop
+%type <unit> is_mident
 
-%start prog global is_uniop is_binop is_numop
+%start prog global is_uniop is_binop is_numop is_mident
 %%
 
 (* -------------------------------------------------------------------- *)
@@ -728,13 +729,13 @@ bdmident_:
 
 (* -------------------------------------------------------------------- *)
 %inline namespace:
-| nm=rlist1(UIDENT, DOT)
+| nm=rlist1(_uident, DOT)
     { nm }
 
-| TOP nm=rlist0(prefix(DOT, UIDENT), empty)
+| TOP nm=rlist0(prefix(DOT, _uident), empty)
     { EcCoreLib.i_top :: nm }
 
-| SELF nm=rlist0(prefix(DOT, UIDENT), empty)
+| SELF nm=rlist0(prefix(DOT, _uident), empty)
     { EcCoreLib.i_self :: nm }
 
 _genqident(X):
@@ -883,6 +884,8 @@ inlinepat:
 is_binop: binop EOF {}
 is_uniop: uniop EOF {}
 is_numop: numop EOF {}
+
+is_mident: _uident EOF {}
 
 (* -------------------------------------------------------------------- *)
 pside_:
@@ -1544,7 +1547,7 @@ qrref1:
 | qr=lvalue
     { (qr, None) }
 
-| qr=oparen(lvalue_as)
+| qr=paren(lvalue_as)
     { snd_map some qr }
 
 %inline qrref_r:
@@ -1552,7 +1555,7 @@ qrref1:
     { qrs }
 
 %inline qrref:
-| qrs=loc(oparen(qrref_r))
+| qrs=loc(qrref_r)
     { qrs }
 
 base_instr:

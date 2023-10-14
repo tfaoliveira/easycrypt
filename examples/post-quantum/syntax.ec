@@ -1,5 +1,8 @@
 require import AllCore.
 
+module U  = {}.
+
+
 module M = { 
   quantum var q : int 
 
@@ -26,8 +29,8 @@ module M = {
     
     (l.`1 as l1), (l.`2 as l2) <* U[((l1.`2, l1.`1), l2 + 1)];
     l <* U[l];
-    l.`2 as v <* U[v + 1]; 
-    x1 <- measure q, l.`1 as l1 with q + l1.`2;
+    (l.`2 as v) <* U[v + 1]; 
+    x1 <- measure q, (l.`1 as l1) with q + l1.`2;
 
     x1 <@ f(y){z, w};
     f(y){z, w};
@@ -52,8 +55,9 @@ module M2 = {
 
 }.
 
-equiv L : M.q ~ M.q : ={a}, ={global,a} ==> true, ={a}.
-proof. abort.
+print M2.
 
-print M.
+
+equiv L : M.q ~ M.q : ={a}, ={global,a/b} ==> true, ={a}.
+proof.
 

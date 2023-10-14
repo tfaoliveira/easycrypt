@@ -21,5 +21,5 @@ val is_mem_ident : string -> bool
 val is_mod_ident : string -> bool
 
 (* -------------------------------------------------------------------- *)
-val is_binop     : string -> [`Yes | `No | `Invalid]
-val is_uniop     : string -> [`Yes | `No | `Invalid]
+val is_binop  : string -> [`Yes | `No | `Invalid]
+val is_uniop  : string -> [`Yes | `No | `Invalid]
