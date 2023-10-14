@@ -1445,31 +1445,36 @@ and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
      let na = List.length qr in
 
      let e = form_of_expr mhr e in
+     let (v, _), e = EcFol.destr_lambda1 e in
+
      let bds, e =
-       let bds, e = decompose_lambda e in
-       let bds1, bds2 = List.split_at na bds in
-       bds1, f_lambda bds2 e in
+       if na <= 1 then ([v], e) else
 
-     let bds = List.map fst bds in
+         match destr_let e with
+         | LTuple bds, _, e -> (List.fst bds, e)
+         | _ | exception (DestrError _) -> assert false in
 
-      Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U[%a];@]"
-        (pp_quantum_rref ppe) (List.combine bds qr)
-        (pp_form ppe) e
+     let ppe = PPEnv.add_locals ppe bds in
+
+     Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U[%a];@]"
+       (pp_quantum_rref ppe) (List.combine bds qr)
+       (pp_form ppe) e
 
 (* -------------------------------------------------------------------- *)
 and pp_i_measure (ppe : PPEnv.t) fmt (lv, qr, e) =
-  (* We know that "e" is a lambda expression in eta-expanded form *)
   let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
   let na = List.length qr in
 
   let e = form_of_expr mhr e in
+  let (v, _), e = EcFol.destr_lambda1 e in
 
   let bds, e =
-    let bds, e = EcFol.decompose_lambda e in
-    let bds1, bds2 = List.split_at na bds in
-    List.map (snd_map gty_as_ty) bds1, (f_lambda bds2 e) in
+    if na <= 1 then ([v], e) else
 
-  let bds = List.fst bds in
+    match destr_let e with
+    | LTuple bds, _, e -> (List.fst bds, e)
+    | _ | exception (DestrError _) -> assert false in
+
 
   let ppe = PPEnv.add_locals ppe bds in
 
@@ -3372,9 +3377,11 @@ let pp_top_modsig ppe fmt (p,ms) =
 
 let rec pp_instr_r (ppe : PPEnv.t) fmt i =
   match i.i_node with
-  | Squantum (qr, o, e) -> pp_i_quantum ppe fmt (qr, o, e)
+  | Squantum (qr, o, e) ->
+     pp_i_quantum ppe fmt (qr, o, e)
 
-  | Smeasure (lv, qr, e) -> pp_i_measure ppe fmt (lv, qr, e)
+  | Smeasure (lv, qr, e) ->
+     pp_i_measure ppe fmt (lv, qr, e)
 
   | Sasgn (lv, e) -> begin
       match lv, EcTypes.split_args e with

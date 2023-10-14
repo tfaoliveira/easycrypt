@@ -1,8 +1,5 @@
 require import AllCore.
 
-module U  = {}.
-
-
 module M = { 
   quantum var q : int 
 
@@ -55,9 +52,7 @@ module M2 = {
 
 }.
 
-print M2.
-
+print M.
 
 equiv L : M.q ~ M.q : ={a}, ={global,a/b} ==> true, ={a}.
-proof.
-
+proof. abort.

@@ -3208,7 +3208,17 @@ and transinstr
      let meas, ety =
        let env = EcEnv.Var.bind_locals bds env in
        let meas, ety = transexp env `InProc ue pmeas in
-       e_lam bds meas, ety in
+       let meas =
+         match bds with
+         | [] | [_] ->
+            e_lam bds meas
+         | _ ->
+            let vty = ttuple (List.map snd bds) in
+            let vx = EcIdent.create "values" in
+            let v = e_local vx vty in
+            e_lam [vx, vty] (e_let (LTuple bds) v meas)
+
+       in meas, ety in
 
      unify_or_fail env ue pmeas.pl_loc ~expct:lvty ety;
 
@@ -3222,8 +3232,20 @@ and transinstr
      let unitary, uty =
        let env = EcEnv.Var.bind_locals bds env in
        let unitary, uty = transexp env `InProc ue punitary in
+
        unify_or_fail env ue punitary.pl_loc ~expct:(ttuple (List.snd bds)) uty;
-       e_lam bds unitary, uty in
+
+       let unitary =
+         match bds with
+         | [] | [_] ->
+            e_lam bds unitary
+         | _ ->
+            let vty = ttuple (List.map snd bds) in
+            let vx = EcIdent.create "values" in
+            let v = e_local vx vty in
+            e_lam [vx, vty] (e_let (LTuple bds) v unitary)
+
+       in unitary, uty in
 
      [ i_quantum (qref, Qunitary, unitary) ]
 
