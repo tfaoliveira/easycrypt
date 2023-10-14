@@ -50,6 +50,7 @@ module type PrinterAPI = sig
   val pp_topmod  : PPEnv.t -> mpath pp
   val pp_expr    : PPEnv.t -> expr pp
   val pp_form    : PPEnv.t -> form pp
+  val pp_qe      : PPEnv.t -> quantum_equality pp
   val pp_type    : PPEnv.t -> ty pp
   val pp_tyname  : PPEnv.t -> path pp
   val pp_axname  : PPEnv.t -> path pp

@@ -1998,13 +1998,13 @@ and pp_tuple_expr ppe fmt e =
   | _ -> pp_expr ppe fmt e
 
 and pp_ecform ppe fmt ec =
-  if ec.ec_e.qeg || ec.ec_e.qel <> quantum_unit then
-     Format.fprintf fmt "%a,@ ={%a}"
-       (pp_form ppe) ec.ec_f (pp_ecq ppe) ec.ec_e
+  if not (is_qe_empty ec.ec_e) then
+     Format.fprintf fmt "%a,@ %a"
+       (pp_form ppe) ec.ec_f (pp_qe ppe) ec.ec_e
   else
     Format.fprintf fmt "%a" (pp_form ppe) ec.ec_f
 
-and pp_ecq ppe fmt ecq =
+and pp_qe ppe fmt ecq =
   let qlrs =
     let qrl = match ecq.qel with QRtuple x -> x | x -> [x] in
     let qrr = match ecq.qer with QRtuple x -> x | x -> [x] in
@@ -2052,7 +2052,8 @@ and pp_ecq ppe fmt ecq =
 
     ppglob @ ppeq
 
-  in pp_list ",@ " (fun fmt pp -> pp fmt) fmt pps
+  in
+  Format.fprintf fmt "={@[%a@]}" (pp_list ",@ " (fun fmt pp -> pp fmt)) pps
 
 (* -------------------------------------------------------------------- *)
 and pp_cost ppe fmt c =
@@ -2965,6 +2966,7 @@ let rec pp_prpo (ppe : PPEnv.t) tag mode fmt f =
     Format.fprintf fmt "@[<hov 2>%s:@ %a@]\n%!" tag (pp_form ppe) f
 
 (* -------------------------------------------------------------------- *)
+
 let pp_pre (ppe : PPEnv.t) ?prpo fmt pre =
   pp_prpo ppe "pre"
     (omap (fun x -> x.prpo_pr) prpo |> odfl false)
@@ -2978,22 +2980,29 @@ let pp_post (ppe : PPEnv.t) ?prpo fmt post =
 
 (* -------------------------------------------------------------------- *)
 let pp_qprpo (ppe : PPEnv.t) tag fmt eqc =
-  Format.fprintf fmt "@[<hov 2>%s:@ ={%a}@]\n%!" tag (pp_ecq ppe) eqc
+  Format.fprintf fmt "@[<hov 2>%s:@ %a@]\n%!" tag (pp_qe ppe) eqc
 
 (* -------------------------------------------------------------------- *)
 let pp_ecpre (ppe : PPEnv.t) ?prpo fmt pre =
-  pp_prpo ppe "c-pre"
-    (omap (fun x -> x.prpo_pr) prpo |> odfl false)
-    fmt pre.ec_f;
-  pp_qprpo ppe "q-pre" fmt pre.ec_e
+  if is_qe_empty pre.ec_e then pp_pre ppe ?prpo fmt pre.ec_f
+  else
+    begin
+      pp_prpo ppe "c-pre"
+        (omap (fun x -> x.prpo_pr) prpo |> odfl false)
+        fmt pre.ec_f;
+      pp_qprpo ppe "q-pre" fmt pre.ec_e
+    end
 
 (* -------------------------------------------------------------------- *)
 let pp_ecpost (ppe : PPEnv.t) ?prpo fmt post =
-  pp_prpo ppe "c-post"
-    (omap (fun x -> x.prpo_po) prpo |> odfl false)
-    fmt post.ec_f;
-  pp_qprpo ppe "q-post" fmt post.ec_e
-
+  if is_qe_empty post.ec_e then pp_post ppe ?prpo fmt post.ec_f
+  else
+    begin
+      pp_prpo ppe "c-post"
+        (omap (fun x -> x.prpo_po) prpo |> odfl false)
+        fmt post.ec_f;
+      pp_qprpo ppe "q-post" fmt post.ec_e
+    end
 (* -------------------------------------------------------------------- *)
 let pp_hoareF (ppe : PPEnv.t) ?prpo fmt hf =
   let mepr, mepo = EcEnv.Fun.hoareF_memenv hf.hf_f ppe.PPEnv.ppe_env in

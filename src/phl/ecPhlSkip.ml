@@ -70,15 +70,29 @@ module LowInternal = struct
   let t_bdhoare_skip = FApi.t_low0 "bdhoare-skip" t_bdhoare_skip_r
 
   (* ------------------------------------------------------------------ *)
+
+  let qe_implies env qe1 qe2 =
+    is_qe_empty qe2 ||
+    EcReduction.EqTest.for_qe env ~norm:true qe1 qe2
+
   let t_equiv_skip_r tc =
-    let es = tc1_as_equivS tc in
+    let es = tc1_as_qequivS tc in
 
     if not (List.is_empty es.es_sl.s_node) then
       tc_error !!tc ~who:"skip" "left instruction list is not empty";
     if not (List.is_empty es.es_sr.s_node) then
       tc_error !!tc ~who:"skip" "right instruction list is not empty";
 
-    let concl = f_imp es.es_pr es.es_po in
+    let env = FApi.tc1_env tc in
+    if not (qe_implies env es.es_pr.ec_e es.es_po.ec_e) then
+      begin
+        let open EcPrinting in
+        let ppe = PPEnv.ofenv env in
+        tc_error !!tc ~who:"skip" "@[not able to prove@ %a@ implies@ %a@]"
+        (pp_qe ppe) es.es_pr.ec_e (pp_qe ppe) es.es_po.ec_e;
+      end;
+
+    let concl = f_imp es.es_pr.ec_f es.es_po.ec_f in
     let concl = f_forall_mems [es.es_ml; es.es_mr] concl in
     FApi.xmutate1 tc `Skip [concl]
 
