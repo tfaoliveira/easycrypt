@@ -109,7 +109,7 @@ type 'a funargs = {
 type pinstr_r =
   | PSident   of psymbol
   | PSasgn    of plvalue * pexpr
-  | PSunitary of pqrref * pexpr
+  | PSunitary of pqrref * [`Expr | `Fun] * [`Plain | `Xor of pqsymbol option] * pexpr
   | PSmeasure of plvalue * pqrref * pexpr
   | PSrnd     of plvalue * pexpr
   | PScall    of plvalue option * pgamepath * pexpr funargs

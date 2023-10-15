@@ -25,15 +25,23 @@ module M = {
     quantum var l : (int * int) * int;
     
     (l.`1 as l1), (l.`2 as l2) <* U[((l1.`2, l1.`1), l2 + 1)];
+
     l <* U[l];
+
+    (l.`1, l.`2) <* U{fun (x : (_ * _) * int) => ((x.`2, x.`2), x.`1.`2)};
+
     (l.`2 as v) <* U[v + 1]; 
+
     x1 <- measure q, (l.`1 as l1) with q + l1.`2;
 
     x1 <@ f(y){z, w};
+
     f(y){z, w};
 
     y <- true;
+
     z <- 2;
+
     x1 <- 2;
   }
 
@@ -45,14 +53,17 @@ module M2 = {
   var f : int -> int
   var c : int
 
-  proc o {q r} = {
+  proc o {q, r} = {
     c <- c + 1;
+
     (q, r) <* U[(q, r + f q)];
+
+    (q, r) <* U^[q];
+
+    (q, r) <* U^/(+)[q];
   } 
 
 }.
-
-print M.
 
 equiv L : M.q ~ M.q : ={a}, ={global,a/b} ==> true, ={a}.
 proof. abort.

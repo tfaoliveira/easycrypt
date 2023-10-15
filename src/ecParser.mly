@@ -1558,6 +1558,16 @@ qrref1:
 | qrs=loc(qrref_r)
     { qrs }
 
+unitary_xor:
+| (* empty *)
+    { `Plain }
+
+| HAT
+    { `Xor None }
+
+| HAT SLASH x=qoident
+    { `Xor (Some x) }
+
 base_instr:
 | x=lident
     { PSident x }
@@ -1571,8 +1581,11 @@ base_instr:
 | x=lvalue LARROW MEASURE q=qrref WITH e=expr
     { PSmeasure (x, q, e) }
 
-| x=qrref LSARROW UNITARY LBRACKET e=expr RBRACKET
-    { PSunitary (x, e) }
+| x=qrref LSARROW UNITARY xor=unitary_xor e=bracket(expr)
+    { PSunitary (x, `Expr, xor, e) }
+
+| x=qrref LSARROW UNITARY xor=unitary_xor e=brace(expr)
+    { PSunitary (x, `Fun, xor, e) }
 
 | x=lvalue LEAT f=loc(fident) es=funargs
     { PScall (Some x, f, es) }

@@ -116,7 +116,8 @@ type filter_error =
 
 type clvalue_error = [`QVar | `Nested | `Proj]
 
-type qref_error = [`CVar | `Map | `NonDisjoint | `NotLocal]
+type qref_error =
+  [`CVar | `Map | `NonDisjoint | `NotLocal | `NotXorable]
 
 type tyerror =
 | UniVarNotAllowed
@@ -3226,28 +3227,115 @@ and transinstr
 
      [ i_measure_lv plv.pl_loc env lv qref meas ]
 
-  | PSunitary (plv, punitary) ->
+  | PSunitary (plv, mode, xor, punitary) ->
      let qref, bds = trans_qrref ~disjoint:true ue env plv in
+     let qrefty = List.snd bds in
 
-     let unitary, uty =
-       let env = EcEnv.Var.bind_locals bds env in
-       let unitary, uty = transexp env `InProc ue punitary in
+     let unitary =
+       match xor with
+       | `Plain -> begin
+           match mode with
+           | `Expr -> begin
+              let env = EcEnv.Var.bind_locals bds env in
+              let unitary, uty = transexp env `InProc ue punitary in
 
-       unify_or_fail env ue punitary.pl_loc ~expct:(ttuple (List.snd bds)) uty;
+              unify_or_fail env ue punitary.pl_loc ~expct:(ttuple qrefty) uty;
 
-       let unitary =
-         match bds with
-         | [] | [_] ->
-            e_lam bds unitary
-         | _ ->
-            let vty = ttuple (List.map snd bds) in
-            let vx = EcIdent.create "values" in
-            let v = e_local vx vty in
-            e_lam [vx, vty] (e_let (LTuple bds) v unitary)
+              let unitary =
+                match bds with
+                | [] | [_] ->
+                   e_lam bds unitary
+                | _ ->
+                   let vty = ttuple (List.map snd bds) in
+                   let vx = EcIdent.create "values" in
+                   let v = e_local vx vty in
+                   e_lam [vx, vty] (e_let (LTuple bds) v unitary)
 
-       in unitary, uty in
+              in unitary
+             end
 
-     [ i_quantum (qref, Qunitary, unitary) ]
+           | `Fun -> begin
+              let unitary, uty = transexp env `InProc ue punitary in
+
+              unify_or_fail env ue punitary.pl_loc
+                ~expct:(tfun (ttuple qrefty) (ttuple qrefty)) uty;
+              unitary
+             end
+         end
+
+       | `Xor opname -> begin
+           let (q, (qx, qty)), (r, (rx, rty)) =
+             match qref, bds with
+             | QRtuple [q; r], [qty; rty] -> ((q, qty), (r, rty))
+             | _ -> tyerror plv.pl_loc env (InvalidQRef `NotXorable)
+           in
+
+           let unitary =
+             match mode with
+             | `Expr ->
+                let env = EcEnv.Var.bind_local qx qty env in
+                let unitary, uty = transexp env `InProc ue punitary in
+
+                unify_or_fail env ue punitary.pl_loc ~expct:rty uty;
+                unitary
+
+
+             | `Fun ->
+                let unitary, uty = transexp env `InProc ue punitary in
+
+                unify_or_fail env ue punitary.pl_loc ~expct:(tfun qty rty) uty;
+                unitary
+           in
+
+           let op =
+             let opname = Option.value ~default:([], "^") (Option.map unloc opname) in
+             let opdom  = [rty; rty] in
+             let ops = select_exp_op env `InProc None opname ue None opdom in
+
+             begin match ops with
+             | [selection] ->
+                selection
+
+             | [] ->
+                tyerror punitary.pl_loc env (UnknownVarOrOp (opname, opdom))
+
+             | _ ->
+                let matches = List.map (fun (_, _, subue, m) -> (m, subue)) ops in
+                tyerror punitary.pl_loc env (MultipleOpMatch (opname, [], matches))
+             end
+
+           in
+
+           let vty = ttuple (List.map snd bds) in
+           let vx = EcIdent.create "values" in
+           let v = e_local vx vty in
+
+           match mode with
+           | `Expr ->
+              let body, bty =
+                expr_of_opselect (env, ue) punitary.pl_loc op [
+                    mk_loc plv.pl_loc (e_local rx rty, rty);
+                    mk_loc punitary.pl_loc (unitary, rty);
+                ] in
+
+              unify_or_fail env ue punitary.pl_loc ~expct:rty bty;
+              e_lam [vx, vty] (e_let (LTuple bds) v (e_tuple [e_local qx qty; body]))
+
+         | `Fun ->
+            let ql = e_proj (e_local vx vty) 0 qty in
+            let rl = e_proj (e_local vx vty) 1 rty in
+
+            let body, bty =
+              expr_of_opselect (env, ue) punitary.pl_loc op [
+                mk_loc plv.pl_loc (rl, rty);
+                mk_loc punitary.pl_loc (e_app unitary [ql] rty, rty);
+              ] in
+
+            unify_or_fail env ue punitary.pl_loc ~expct:rty bty;
+            e_lam [vx, vty] (e_tuple [ql; body])
+         end
+
+     in [ i_quantum (qref, Qunitary, unitary) ]
 
   | PSasgn (plvalue, prvalue) -> begin
       let handle_unknown_op = function

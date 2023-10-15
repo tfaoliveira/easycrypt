@@ -1441,24 +1441,32 @@ and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
         (pp_expr ppe) e
 
   | Qunitary ->
-     let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
-     let na = List.length qr in
+     let exception UnitaryAsFun in
 
      let e = form_of_expr mhr e in
-     let (v, _), e = EcFol.destr_lambda1 e in
 
-     let bds, e =
-       if na <= 1 then ([v], e) else
+     try
+       let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
+       let na = List.length qr in
 
-         match destr_let e with
-         | LTuple bds, _, e -> (List.fst bds, e)
-         | _ | exception (DestrError _) -> assert false in
+       let (v, _), e = EcFol.destr_lambda1 e in
 
-     let ppe = PPEnv.add_locals ppe bds in
+       let bds, e =
+         if na <= 1 then ([v], e) else
 
-     Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U[%a];@]"
-       (pp_quantum_rref ppe) (List.combine bds qr)
-       (pp_form ppe) e
+           match destr_let e with
+           | LTuple bds, _, e -> (List.fst bds, e)
+           | _ | exception (DestrError _) -> raise UnitaryAsFun in
+
+       let ppe = PPEnv.add_locals ppe bds in
+
+       Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U[%a];@]"
+         (pp_quantum_rref ppe) (List.combine bds qr)
+         (pp_form ppe) e
+
+     with UnitaryAsFun ->
+       Format.fprintf fmt "@[<hov 2>%a <*@;<1 2>U{%a};@]"
+         (pp_quantum_ref ppe) qr (pp_form ppe) e
 
 (* -------------------------------------------------------------------- *)
 and pp_i_measure (ppe : PPEnv.t) fmt (lv, qr, e) =
