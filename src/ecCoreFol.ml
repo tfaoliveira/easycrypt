@@ -961,7 +961,9 @@ let qequivF (ef:equivF) : qequivF =
   }
 
 let equivS (es:qequivS) : equivS =
-  assert (is_classical_ec es.es_pr && is_classical_ec es.es_po);
+  if not (is_classical_ec es.es_pr && is_classical_ec es.es_po) then (
+    Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000);
+    assert false);
   { es_ml = es.es_ml
   ; es_mr = es.es_mr
   ; es_pr = es.es_pr.ec_f
@@ -971,7 +973,9 @@ let equivS (es:qequivS) : equivS =
   }
 
 let equivF (ef:qequivF) : equivF =
-  assert (is_classical_ec ef.ef_pr && is_classical_ec ef.ef_po);
+  if not (is_classical_ec ef.ef_pr && is_classical_ec ef.ef_po) then (
+    Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000);
+    assert false);
   { ef_pr = ef.ef_pr.ec_f
   ; ef_fl = ef.ef_fl
   ; ef_fr = ef.ef_fr

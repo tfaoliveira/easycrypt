@@ -35,6 +35,7 @@ val unloc  : 'a located -> 'a
 val unlocs : ('a located) list -> 'a list
 val mk_loc : t -> 'a -> 'a located
 val lmap   : ('a -> 'b) -> 'a located -> 'b located
+val lmergeall : 'a located list -> t
 
 (* -------------------------------------------------------------------- *)
 exception LocError of t * exn

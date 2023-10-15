@@ -584,6 +584,8 @@ module Fsubst : sig
   val subst_mty      : f_subst -> module_type -> module_type
   val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t
   val subst_gty      : f_subst -> gty -> gty
+  val subst_qe       : f_subst -> quantum_equality -> quantum_equality
+
 end
 
 (* -------------------------------------------------------------------- *)

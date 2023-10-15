@@ -2783,6 +2783,10 @@ cbv:
 | CBV l=qoident+ { `Delta l  :: simplify_red  }
 | CBV DELTA      { `Delta [] :: simplify_red }
 
+conseq_form:
+| UNDERSCORE { None }
+| f=form     { Some f }
+
 conseq:
 | empty                           { None, None }
 | UNDERSCORE LONGARROW UNDERSCORE { None, None }
@@ -2793,15 +2797,22 @@ conseq:
 | UNDERSCORE LONGARROW f2=form    { None, Some f2 }
 | f1=form LONGARROW f2=form       { Some f1, Some f2 }
 
-conseq_xt:
-| c=conseq                                     { c, None }
-| c=conseq   COLON cmp=hoare_bd_cmp? bd=sform  { c, Some (CQI_bd (cmp, bd)) }
-| UNDERSCORE COLON cmp=hoare_bd_cmp? bd=sform
-                                               { (None, None),
-						 Some (CQI_bd (cmp, bd)) }
-| c=conseq   COLON TIME co=costs(none)         { c, Some (CQI_c co) }
-| UNDERSCORE COLON TIME co=costs(none)         { (None, None), Some (CQI_c co) }
+conseq_fqeq:
+| empty { None, None }
+| f=conseq_form qe=quantum_eq? { f, qe }
 
+conseq_fqe:
+| empty                           { (None, None), (None,None) }
+| f1=conseq_fqeq LONGARROW f2=conseq_fqeq { f1, f2 }
+| LONGARROW f=conseq_form qe=quantum_eq?  { (None, None), (f, qe) }
+| f=conseq_form qe=quantum_eq?  { (None, None), (f, qe) }
+
+conseq_opt:
+| COLON cmp=hoare_bd_cmp? bd=sform  { CQI_bd (cmp, bd) }
+| COLON TIME co=costs(none)         { CQI_c co }
+
+conseq_xt:
+| c=conseq_fqe o=conseq_opt?            { c, o }
 
 ci_cost_el:
 | o=loc(fident) x=ident? COLON co=costs(none) {o, x, co}

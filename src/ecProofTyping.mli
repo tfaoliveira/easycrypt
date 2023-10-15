@@ -34,6 +34,7 @@ val pf_process_cost     : proofenv -> ?mv:metavs -> LDecl.hyps -> ty list -> pco
 val pf_process_formula  : proofenv -> ?mv:metavs -> LDecl.hyps -> pformula -> form
 val pf_process_exp      : proofenv -> LDecl.hyps -> [`InProc|`InOp] -> ty option -> pexpr -> expr
 val pf_process_pattern  : proofenv -> LDecl.hyps -> pformula -> ptnenv * form
+val pf_process_qe       : proofenv -> LDecl.hyps -> EcMemory.memory -> EcMemory.memory -> pqe -> quantum_equality
 
 (* Typing in the [proofenv] implies for the [tcenv].
  * Typing exceptions are recasted in the proof env. context *)
@@ -43,6 +44,7 @@ val tc1_process_formula  : ?mv:metavs -> tcenv1 -> pformula -> form
 val tc1_process_cost     : ?mv:metavs -> tcenv1 -> ty list -> pcost -> cost
 val tc1_process_exp      : tcenv1 -> [`InProc|`InOp] -> ty option -> pexpr -> expr
 val tc1_process_pattern  : tcenv1 -> pformula -> ptnenv * form
+val tc1_process_qe       : tcenv1 -> EcMemory.memory -> EcMemory.memory -> pqe -> quantum_equality
 
 (* Same as previous functions, but for *HL contexts *)
 val tc1_process_Xhl_form     : ?side:side -> tcenv1 -> ty -> pformula -> form

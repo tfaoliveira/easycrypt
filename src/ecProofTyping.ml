@@ -60,6 +60,18 @@ let process_pattern hyps fp =
   let fp = EcTyping.trans_pattern (LDecl.toenv hyps) ps ue fp in
   ((!ps, ue), fp)
 
+let process_qe hyps ml mr pqe =
+  let env = LDecl.toenv hyps in
+  try
+    let ue  = unienv_of_hyps hyps in
+    let qe  = EcTyping.trans_qe env ue ml mr pqe in
+    let ts = Tuni.subst (EcUnify.UniEnv.close ue) in
+    let fs = EcFol.Fsubst.f_subst_init ~sty:ts () in
+    EcFol.Fsubst.subst_qe fs qe
+  with EcUnify.UninstanciateUni ->
+    let loc = EcLocation.lmergeall pqe in
+    EcTyping.tyerror loc env EcTyping.FreeTypeVariables
+
 (* ------------------------------------------------------------------ *)
 let pf_process_form_opt pe ?mv hyps oty pf =
   Exn.recast_pe pe hyps (fun () -> process_form_opt ?mv hyps pf oty)
@@ -79,6 +91,9 @@ let pf_process_exp pe hyps mode oty e =
 let pf_process_pattern pe hyps fp =
   Exn.recast_pe pe hyps (fun () -> process_pattern hyps fp)
 
+let pf_process_qe pe hyps ml mr pqe =
+  Exn.recast_pe pe hyps (fun () -> process_qe hyps ml mr pqe)
+
 (* ------------------------------------------------------------------ *)
 let tc1_process_form_opt ?mv tc oty pf =
   Exn.recast_tc1 tc (fun hyps -> process_form_opt ?mv hyps pf oty)
@@ -97,6 +112,9 @@ let tc1_process_exp tc mode oty e =
 
 let tc1_process_pattern tc fp =
   Exn.recast_tc1 tc (fun hyps -> process_pattern hyps fp)
+
+let tc1_process_qe tc ml mr pqe =
+  Exn.recast_tc1 tc (fun hyps -> process_qe hyps ml mr pqe)
 
 (* ------------------------------------------------------------------ *)
 let tc1_process_prhl_form_opt tc oty pf =

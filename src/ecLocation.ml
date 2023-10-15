@@ -89,6 +89,9 @@ let lmap f x =
 let mk_loc loc x =
   { pl_loc = loc; pl_desc = x; }
 
+let lmergeall (l: 'a located list) : t =
+  mergeall (List.map loc l)
+
 (* -------------------------------------------------------------------- *)
 exception LocError of t * exn
 

@@ -4155,46 +4155,49 @@ and trans_form_or_pattern
         f_coe form' memenv expr'
 
     and trans_ec opsc incost env (f, qeq) =
-      let f' = transf_r opsc incost env f in
-      unify_or_fail env ue f.pl_loc ~expct:tbool f'.f_ty;
-
-      let envl = EcEnv.Memory.set_active mleft  env in
-      let envr = EcEnv.Memory.set_active mright env in
-
-      let do_q2 ql qr =
-        let ql',tyl = trans_qref ~disjoint:true ue envl ql in
-        let qr',tyr = trans_qref ~disjoint:true ue envr qr in
-        unify_or_fail env ue qr.pl_loc ~expct:tyl tyr;
-        Some (ql', qr') in
-
-      let global = ref false in
-
-      let doqeq qe1 =
-        match qe1.pl_desc with
-        | QEQglobal -> global := true; None
-        | QEQ1 q -> do_q2 q q
-        | QEQ2 (q1,q2) -> do_q2 q1 q2 in
-
-      let qlr = List.map doqeq qeq in
-      let qel = qrtuple (List.pmap (omap fst) qlr) in
-      let qer = qrtuple (List.pmap (omap snd) qlr) in
-      (* Types are equals, still have to check
-         - disjoint
-         - local if global *)
-      let loc = mergeall (List.map loc qeq) in
-      check_qref_disjoint envl loc qel;
-      check_qref_disjoint envr loc qer;
-      if !global then begin
-        check_qref_local envl loc qel;
-        check_qref_local envr loc qer
-      end;
-      {ec_f = f'; ec_e = { qeg = !global; qel; qer }}
+      let ec_f = transf_r opsc incost env f in
+      unify_or_fail env ue f.pl_loc ~expct:tbool ec_f.f_ty;
+      let ec_e = trans_qe env ue mleft mright qeq in
+      {ec_f; ec_e = ec_e }
 
   in
 
   let f = transf_r None false env pf in
   tt |> oiter (fun tt -> unify_or_fail env ue pf.pl_loc ~expct:tt f.f_ty);
   f
+
+and trans_qe env ue ml mr qeq =
+  let envl = EcEnv.Memory.set_active ml  env in
+  let envr = EcEnv.Memory.set_active mr env in
+
+  let do_q2 ql qr =
+    let ql',tyl = trans_qref ~disjoint:true ue envl ql in
+    let qr',tyr = trans_qref ~disjoint:true ue envr qr in
+    unify_or_fail env ue qr.pl_loc ~expct:tyl tyr;
+    Some (ql', qr') in
+
+  let global = ref false in
+
+  let doqeq qe1 =
+    match qe1.pl_desc with
+    | QEQglobal -> global := true; None
+    | QEQ1 q -> do_q2 q q
+    | QEQ2 (q1,q2) -> do_q2 q1 q2 in
+
+  let qlr = List.map doqeq qeq in
+  let qel = qrtuple (List.pmap (omap fst) qlr) in
+  let qer = qrtuple (List.pmap (omap snd) qlr) in
+  (* Types are equals, still have to check
+     - disjoint
+     - local if global *)
+  let loc = lmergeall qeq in
+  check_qref_disjoint envl loc qel;
+  check_qref_disjoint envr loc qer;
+  if !global then begin
+    check_qref_local envl loc qel;
+    check_qref_local envr loc qer
+  end;
+  { qeg = !global; qel; qer }
 
 (* Type-check a memtype. *)
 and trans_memtype env ue (pmemtype : pmemtype) : memtype =

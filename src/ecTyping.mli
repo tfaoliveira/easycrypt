@@ -253,6 +253,8 @@ val trans_prop     :
 
 val trans_pattern  : env -> ptnmap -> EcUnify.unienv -> pformula -> EcFol.form
 
+val trans_qe : env -> EcUnify.unienv -> EcMemory.memory -> EcMemory.memory -> pqe -> quantum_equality
+
 (* -------------------------------------------------------------------- *)
 val trans_memtype :
   env -> EcUnify.unienv -> pmemtype -> EcMemory.memtype

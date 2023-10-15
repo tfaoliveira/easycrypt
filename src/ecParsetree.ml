@@ -221,7 +221,9 @@ and pformula_r =
   | PFChoareFT of pgamepath * pcost
   | PFCoe      of osymbol * pmemtype option * pformula * pexpr * pty option
 
-and pequiv_cond = pformula * pqeq located list
+and pequiv_cond = pformula * pqe
+
+and pqe = pqeq located list
 
 and pqeq =
   | QEQglobal
@@ -714,7 +716,9 @@ type conseq_info =
   | CQI_bd of phoarecmp option * pformula
   | CQI_c  of pcost
 
-type conseq_ppterm = ((pformula option pair) * (conseq_info) option) gppterm
+type conseq_pec = pformula option * pqe option
+
+type conseq_ppterm = (conseq_pec pair * (conseq_info) option) gppterm
 
 (* -------------------------------------------------------------------- *)
 type sim_info = {

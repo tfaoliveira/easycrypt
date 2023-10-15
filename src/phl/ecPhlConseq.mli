@@ -7,16 +7,22 @@ open EcCoreGoal
 (* -------------------------------------------------------------------- *)
 (* FIXME: add t_low* to all these tactics                               *)
 
+type conseq_tac = form -> form -> FApi.backward
+type qconseq_tac =
+  form -> ?qepr:quantum_equality ->
+  form -> ?qepo:quantum_equality ->
+  FApi.backward
+
 (* -------------------------------------------------------------------- *)
-val t_equivF_conseq       : form -> form -> FApi.backward
-val t_equivS_conseq       : form -> form -> FApi.backward
-val t_eagerF_conseq       : form -> form -> FApi.backward
-val t_hoareF_conseq       : form -> form -> FApi.backward
-val t_hoareS_conseq       : form -> form -> FApi.backward
-val t_cHoareF_conseq      : form -> form -> FApi.backward
-val t_cHoareS_conseq      : form -> form -> FApi.backward
-val t_bdHoareF_conseq     : form -> form -> FApi.backward
-val t_bdHoareS_conseq     : form -> form -> FApi.backward
+val t_equivF_conseq       : qconseq_tac
+val t_equivS_conseq       : qconseq_tac
+val t_eagerF_conseq       : conseq_tac
+val t_hoareF_conseq       : conseq_tac
+val t_hoareS_conseq       : conseq_tac
+val t_cHoareF_conseq      : conseq_tac
+val t_cHoareS_conseq      : conseq_tac
+val t_bdHoareF_conseq     : conseq_tac
+val t_bdHoareS_conseq     : conseq_tac
 
 val t_cHoareF_conseq_c    : cost -> FApi.backward
 val t_cHoareS_conseq_c    : cost -> FApi.backward
@@ -26,20 +32,21 @@ val t_bdHoareS_conseq_bd  : hoarecmp -> form -> FApi.backward
 val t_bdHoareF_conseq_bd  : hoarecmp -> form -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
-val t_equivF_conseq_nm    : form -> form -> FApi.backward
-val t_equivS_conseq_nm    : form -> form -> FApi.backward
-val t_hoareF_conseq_nm    : form -> form -> FApi.backward
-val t_hoareS_conseq_nm    : form -> form -> FApi.backward
-val t_cHoareF_conseq_nm   : form -> form -> FApi.backward
-val t_cHoareS_conseq_nm   : form -> form -> FApi.backward
-val t_bdHoareF_conseq_nm  : form -> form -> FApi.backward
-val t_bdHoareS_conseq_nm  : form -> form -> FApi.backward
+val t_equivF_conseq_nm    : qconseq_tac
+val t_equivS_conseq_nm    : qconseq_tac
+val t_hoareF_conseq_nm    : conseq_tac
+val t_hoareS_conseq_nm    : conseq_tac
+val t_cHoareF_conseq_nm   : conseq_tac
+val t_cHoareS_conseq_nm   : conseq_tac
+val t_bdHoareF_conseq_nm  : conseq_tac
+val t_bdHoareS_conseq_nm  : conseq_tac
 
 (* -------------------------------------------------------------------- *)
 val t_equivS_conseq_bd : side -> EcFol.form -> EcFol.form ->FApi.backward
 
 (* -------------------------------------------------------------------- *)
-val t_conseq : form -> form -> FApi.backward
+val t_conseq : conseq_tac
+
 
 (* -------------------------------------------------------------------- *)
 val process_conseq   : bool -> conseq_ppterm option tuple3 -> FApi.backward
