@@ -40,8 +40,8 @@ val qr_pvlocs : variable list -> quantum_ref
 
 val qr_iter : (prog_var_ty -> unit) -> quantum_ref -> unit
 val qr_map : (prog_var_ty -> prog_var_ty) -> quantum_ref -> quantum_ref
+val qr_fold : ('a -> prog_var_ty -> 'a) -> 'a -> quantum_ref -> 'a
 val qr_all : (prog_var_ty -> bool) -> quantum_ref -> bool
-
 val qr_all2 :
   (prog_var_ty -> prog_var_ty -> bool) -> quantum_ref -> quantum_ref -> bool
 

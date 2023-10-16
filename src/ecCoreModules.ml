@@ -125,6 +125,11 @@ let rec qr_map f = function
   | QRtuple t -> qrtuple (List.Smart.map (qr_map f) t)
   | QRproj (q, i) -> qrproj (qr_map f q, i)
 
+let rec qr_fold f a = function
+  | QRvar x -> f a x
+  | QRtuple t -> List.fold_left (qr_fold f) a t
+  | QRproj(q, _) -> qr_fold f a q
+
 let rec qr_all f qr =
   match qr with
   | QRvar x -> f x

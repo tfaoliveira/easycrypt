@@ -110,9 +110,6 @@ equiv e4_1_fail : M.qu ~ M.qu :
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
   conseq (: ={x} ==> ={n}, ={global,q}).
-  admit.
-  admit.
-  admit.
 qed.
 *)
 
@@ -150,7 +147,7 @@ qed.
 
 (* Same for statement *)
 (* More work are needed, to have it *)
-(*
+
 equiv e5_1 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
@@ -164,6 +161,7 @@ qed.
 equiv e5_1_1 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.
   conseq (: ={x} ==> ={n}, ={global,q,r}).
   admit.
   admit.
@@ -175,16 +173,15 @@ qed.
 equiv e5_1_fail : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.  
   conseq (: ={x} ==> ={n}, ={global,q}).
-  admit.
-  admit.
-  admit.
 qed.
 *)
 
 equiv e5_2 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.
   conseq (: ={x} ==>).
   admit.
   admit.
@@ -193,6 +190,7 @@ qed.
 equiv e5_3 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.
   conseq (: ==> ={n}).
   admit.
   admit.
@@ -201,6 +199,7 @@ qed.
 equiv e5_4 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.
   conseq (: ={n}).
   admit.
   admit.
@@ -209,9 +208,10 @@ qed.
 equiv e5_5 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
+  proc.
   conseq (: _).
   admit.
 qed.
-*)
+
 
 

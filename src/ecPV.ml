@@ -483,13 +483,16 @@ let get_abs_functor f =
 type 'a pvaccess = env -> PV.t -> 'a -> PV.t
 
 (* -------------------------------------------------------------------- *)
+let pvt_add env w (pv,ty) =
+  PV.add env pv ty w
+
+let qr_touch env w q =
+  qr_fold (pvt_add env) w q
+
 let lp_write_r env w lp =
-  let add w (pv, ty) = PV.add env pv ty w in
   match lp with
-  | LvVar pv ->
-      add w pv
-  | LvTuple pvs ->
-      List.fold_left add w pvs
+  | LvVar pv    -> pvt_add env w pv
+  | LvTuple pvs -> List.fold_left (pvt_add env) w pvs
 
 let rec f_write_r ?(except=Sx.empty) env w f =
   let f    = NormMp.norm_xfun env f in
@@ -523,17 +526,20 @@ and s_write_r ?(except=Sx.empty) env w s =
 
 and i_write_r ?(except=Sx.empty) env w i =
   match i.i_node with
-  | Squantum _ | Smeasure _ -> assert false
+  (* FIXME QUANTUM: is it correct ? *)
+  | Squantum(q, _, _) -> qr_touch env w q
+  | Smeasure(lp, q, _) -> lp_write_r env (qr_touch env w q) lp
 
   | Sasgn  (lp, _) -> lp_write_r env w lp
   | Srnd   (lp, _) -> lp_write_r env w lp
   | Sassert _      -> w
 
-  | Scall(lp,f,_, qr) ->
-    assert (is_quantum_unit qr);
-    if Sx.mem f except then w else
-      let w  = match lp with None -> w | Some lp -> lp_write_r env w lp in
-      f_write_r ~except env w f
+  | Scall(lp,f,_, q) ->
+    let w  = match lp with None -> w | Some lp -> lp_write_r env w lp in
+    (* FIXME QUANTUM: is it correct ? *)
+    let w = qr_touch env w q in
+    if Sx.mem f except then w
+    else f_write_r ~except env w f
 
   | Sif (_, s1, s2) ->
       List.fold_left (s_write_r ~except env) w [s1; s2]
@@ -584,13 +590,24 @@ and s_read_r env w s =
 
 and i_read_r env r i =
   match i.i_node with
-  | Squantum _ | Smeasure _ -> assert false
+  (* FIXME QUANTUM *)
+  | Squantum(q, o, e) ->
+      let r = e_read_r env r e in
+      begin match o with
+      | Qinit -> r
+      | Qunitary -> qr_touch env r q
+      end
+  (* FIXME QUANTUM *)
+  | Smeasure(_lp, q, e) ->
+      e_read_r env (qr_touch env r q) e
+
   | Sasgn   (_lp, e) -> e_read_r env r e
   | Srnd    (_lp, e) -> e_read_r env r e
   | Sassert e       -> e_read_r env r e
 
-  | Scall (_lp, f, es, qr) ->
-      assert (is_quantum_unit qr);
+  | Scall (_lp, f, es, q) ->
+      (* FIXME QUANTUM *)
+      let r = qr_touch env r q in
       let r = List.fold_left (e_read_r env) r es in
       f_read_r env r f
 
