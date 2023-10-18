@@ -150,16 +150,16 @@ let process_smt ?loc (ttenv : ttenv) pi (tc : tcenv1) =
 
 (* -------------------------------------------------------------------- *)
 
-let process_coq ~loc (ttenv : ttenv) (pi:EcCoq.mode option) (tc : tcenv1) =
+let process_coq ~loc ~name (ttenv : ttenv) (pi:EcCoq.mode option) (tc : tcenv1) =
   match ttenv.tt_smtmode with
   | `Admit ->
     t_admit tc
 
   | (`Standard | `Strict) as mode ->
-    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~mode pi) tc
+    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~name ~mode pi) tc
 
   | `Report ->
-    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~mode:(`Report (Some loc)) pi) tc
+    t_seq (t_simplify ~delta:`No) (t_coq ~loc ~name ~mode:(`Report (Some loc)) pi) tc
 
 (* -------------------------------------------------------------------- *)
 let process_clear symbols tc =

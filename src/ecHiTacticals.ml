@@ -155,7 +155,7 @@ and process1_logic (ttenv : ttenv) (t : logtactic located) (tc : tcenv1) =
     | Pwlog (ids, b, f)   -> process_wlog ~suff:b ids f
     | Pgenhave gh         -> process_genhave ttenv gh
     | Prwnormal _         -> assert false
-    | Pcoq pi             -> process_coq ~loc:(loc t) ttenv pi
+    | Pcoq (pi, name)     -> process_coq ~loc:(loc t) ~name:name.pl_desc ttenv pi
   in
     tx tc
 

@@ -422,11 +422,9 @@
 %token CONSEQ
 %token CONST
 %token COQ
-%token BATCH
-%token UPDATE
+%token CHECK
 %token EDIT
 %token FIX
-%token FIXUPDATE
 %token COST
 %token DEBUG
 %token DECLARE
@@ -2939,8 +2937,8 @@ logtactic:
 | SMT pi=smt_info
    { Psmt pi }
 
-| COQ pi=coq_info
-    { Pcoq pi}
+| COQ pi=coq_info name=loc(STRING)
+    { Pcoq (pi, name)}
 
 | SMT LPAREN dbmap=dbmap1* RPAREN
    { Psmt (SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
@@ -3887,11 +3885,9 @@ print:
 
 coq_info:
 |           { None }
-| BATCH     { Some EcCoq.Batch }
-| UPDATE    { Some EcCoq.Update }
+| CHECK    { Some EcCoq.Check }
 | EDIT      { Some EcCoq.Edit }
 | FIX       { Some EcCoq.Fix }
-| FIXUPDATE { Some EcCoq.FixUpdate }
 
 smt_info:
 | li=smt_info1* { SMT.mk_smt_option li}

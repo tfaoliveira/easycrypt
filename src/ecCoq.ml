@@ -60,17 +60,10 @@ type w3absmod = {
 }
 
 (* -------------------------------------------------------------------- *)
-type kpattern =
-  | KHole
-  | KApp  of EcPath.path * kpattern list
-  | KProj of kpattern * int
-
-(* -------------------------------------------------------------------- *)
 type tenv = {
   (*---*) te_env        : EcEnv.env;
   mutable te_th       : WTheory.theory_uc;
   (*---*) te_known_w3   : w3_known_op Hp.t;
-  mutable tk_known_w3   : (kpattern * w3_known_op) list;
   (*---*) te_ty         : w3ty Hp.t;
   (*---*) te_op         : w3op Hp.t;
   (*---*) te_lc         : w3op Hid.t;
@@ -89,7 +82,6 @@ let empty_tenv env th ts_mem ts_distr fs_witness fs_mu =
   { te_env        = env;
     te_th         = th;
     te_known_w3   = Hp.create 0;
-    tk_known_w3   = [];
     te_ty         = Hp.create 0;
     te_op         = Hp.create 0;
     te_lc         = Hid.create 0;
@@ -1250,7 +1242,6 @@ let add_equal_symbole tenv =
 
 let init ~env hyps concl =
   let eenv   = LDecl.toenv hyps in
-  let hyps  = LDecl.tohyps hyps in
 
   let ts_mem = WTy.create_tysymbol (WIdent.id_fresh "memory") [] WTy.NoDef in
   let vta = WTy.create_tvsymbol (WIdent.id_fresh "ta") in
@@ -1301,11 +1292,15 @@ let init ~env hyps concl =
   let witness = (fs_witness, witness_theory) in
   Hp.add known CI_Witness.p_witness witness;
 
+  (* lenv must be shared and no fresh generated to ensure we have the same why elements*)
+
   let init_select _ ax = ax.ax_visibility = `Visible in
   let toadd = EcEnv.Ax.all ~check:init_select eenv in
   List.iter (trans_axiom tenv) toadd;
 
+  let hyps  = LDecl.tohyps hyps in
   let lenv  = lenv_of_hyps tenv hyps in
+
   let wterm = Cast.force_prop (trans_form (tenv, lenv) concl) in
   let pr    = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
   let dec = WDecl.create_prop_decl WDecl.Pgoal pr wterm in
@@ -1446,11 +1441,9 @@ let make_output_dir dir =
   else Unix.mkdir dir 0o770 ;
 
 type mode =
-  | Batch (* Only check scripts *)
-  | Update (* Check and update scripts *)
+  | Check (* Check scripts *)
   | Edit  (* Edit then check scripts *)
   | Fix   (* Try to check script, then edit script on non-success *)
-  | FixUpdate (* Update and fix *)
 
 let editor_command pconf config =
   try
@@ -1459,16 +1452,23 @@ let editor_command pconf config =
   with Not_found ->
     Why3.Whyconf.(default_editor (get_main config))
 
-let scriptfile ~(loc:EcLocation.t) ~ext =
-  let l,r = loc.loc_start in
-  let sid = string_of_int l ^ string_of_int r in
+let scriptfile ~(loc:EcLocation.t) ~name ~ext =
   let file = loc.loc_fname in
   let path = Filename.dirname file in
   let path = path ^ "/.interactive" in
   make_output_dir path;
-  let name = Filename.basename file in
-  let name = Filename.remove_extension name in
-  Format.sprintf "%s/%s%s%s" path name sid ext
+  let name =
+    if String.is_empty name then
+      begin
+        let name = Filename.basename file in
+        let name = Filename.remove_extension name in
+        let l,r = loc.loc_start in
+        let sid = string_of_int l ^ string_of_int r in
+        name ^ sid
+      end
+    else name
+  in
+  Format.sprintf "%s/%s%s" path name ext
 
 let safe_remove f = try Unix.unlink f with Unix.Unix_error _ -> ()
 
@@ -1495,56 +1495,35 @@ let editor ~script ~merge ~config pconf driver task =
   in
   call_prover_task ~config ~timeout:None ~steps:None pconf.prover call
 
-let prepare ~coqmode ~loc driver task =
+let prepare ~name ~loc driver task =
   let ext = Filename.extension (Why3.Driver.file_of_task driver "S" "T" task) in
-  let force = coqmode <> Batch in
-  let script = scriptfile  ~loc ~ext in
-  if Sys.file_exists script then Some (script, true) else
-  if force then
+  let script = scriptfile ~loc ~name ~ext in
+  if Sys.file_exists script then (script, true) else
     begin
       pp_to_file script
         (fun fmt ->
            ignore @@ Why3.Driver.print_task_prepared driver fmt task
         );
-      Some (script, false)
+      (script, false)
     end
-  else None
 
-let interactive ~notify ~coqmode ~loc pconf ~config driver prover task =
+let interactive ~notify ~name ~coqmode ~loc pconf ~config driver prover task =
   let time = 10 in
   let timeout = if time <= 0 then None else Some (float time) in
-
-  match prepare ~coqmode ~loc driver task with
-  | None ->
-    notify |> oiter (fun notify -> notify `Critical (lazy (
-        Format.asprintf "Missing script(s) for prover %a." Why3.Whyconf.print_prover prover
-      )));
-    None
-  | Some (script, merge) ->
-    match coqmode with
-    | Batch ->
-      run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
-    | Update ->
-      if merge then updatescript ~script driver task ;
-      run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
-    | Edit ->
-      editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
-          run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task)
-    | Fix ->
-      run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
-      |> obind (fun r ->
-          if is_valid r then Some r else
-            editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
-                run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task))
-    | FixUpdate ->
-      if merge then updatescript ~script driver task ;
-      run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
-      |> obind (fun r ->
-          if is_valid r then Some r else
-            let merge = false in
-            editor ~script ~merge ~config pconf driver task
-            |> obind (fun _ ->
-                run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task))
+  let script, merge =  prepare ~name ~loc driver task in
+  if merge then updatescript ~script driver task ;
+  match coqmode with
+  | Check ->
+    run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
+  | Edit ->
+    editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
+        run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task)
+  | Fix ->
+    run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
+    |> obind (fun r ->
+        if is_valid r then Some r else
+          editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
+              run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task))
 
 let is_trivial (t : Why3.Task.task) =
   let goal = Why3.Task.task_goal_fmla t in
@@ -1556,7 +1535,7 @@ let cfg = lazy (Why3.Whyconf.init_config None)
 
 let config () = Lazy.force cfg
 
-let build_proof_task ~notify ~coqmode ~loc ~config ~env task =
+let build_proof_task ~notify ~name ~coqmode ~loc ~config ~env task =
   try
     let (prover,pconf) =
       let fp = Why3.Whyconf.parse_filter_prover "Coq" in
@@ -1587,7 +1566,7 @@ let build_proof_task ~notify ~coqmode ~loc ~config ~env task =
     if is_trivial task then
       Some valid
     else
-      interactive ~notify ~coqmode ~loc pconf ~config drv prover task
+      interactive ~notify ~name ~coqmode ~loc pconf ~config drv prover task
   with
   | CoqNotFound ->
     notify |> oiter (fun notify -> notify `Critical (lazy (
@@ -1600,7 +1579,7 @@ let build_proof_task ~notify ~coqmode ~loc ~config ~env task =
       )));
     None
 
-let check ~loc ?notify ?(coqmode=Fix) (hyps : LDecl.hyps) (concl : form) =
+let check ~loc ~name ?notify ?(coqmode=Edit) (hyps : LDecl.hyps) (concl : form) =
   let config = config () in
   let main_conf = Why3.Whyconf.get_main config in
   let ld = Why3.Whyconf.loadpath main_conf in
@@ -1610,7 +1589,7 @@ let check ~loc ?notify ?(coqmode=Fix) (hyps : LDecl.hyps) (concl : form) =
   (* let s = Format.asprintf "%a\n" Why3.Pretty.print_task task in *)
   (* print_string s; *)
 
-  match build_proof_task ~notify ~coqmode ~loc ~config ~env task with
+  match build_proof_task ~notify ~name ~coqmode ~loc ~config ~env task with
   | None -> false
   | Some r -> match r.verdict with
     | Valid -> true
