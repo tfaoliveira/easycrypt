@@ -137,13 +137,12 @@ module Theory : sig
 
   (* [enter scope mode name] start a theory in scope [scope] with
    * name [name] and mode (abstract/concrete) [mode]. *)
-  val enter : scope -> thmode -> symbol -> EcTypes.is_local -> scope
+  val enter : ?src:string -> scope -> thmode -> symbol -> EcTypes.is_local -> scope
 
   (* [exit scope] close and finalize the top-most theory and returns
    * its name. Raises [TopScope] if [scope] has not super scope. *)
   val exit :
-       ?src:string
-    -> ?pempty:[`ClearOnly | `Full | `No]
+       ?pempty:[`ClearOnly | `Full | `No]
     -> ?clears:(pqsymbol option) list
     -> scope -> symbol * scope
 

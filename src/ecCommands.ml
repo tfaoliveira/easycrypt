@@ -319,7 +319,7 @@ and process_tycinst (scope : EcScope.scope) (tci : ptycinstance located) =
 (* -------------------------------------------------------------------- *)
 and process_module ?(src : string option) (scope : EcScope.scope) m =
   EcScope.check_state `InTop "module" scope;
-  EcScope.Mod.add scope m
+  EcScope.Mod.add ?src scope m
 
 (* -------------------------------------------------------------------- *)
 and process_interface ?(src : string option) (scope : EcScope.scope) intf =
@@ -329,7 +329,7 @@ and process_interface ?(src : string option) (scope : EcScope.scope) intf =
 (* -------------------------------------------------------------------- *)
 and process_operator ?(src : string option) (scope : EcScope.scope) (pop : poperator located) =
   EcScope.check_state `InTop "operator" scope;
-  let op, axs, scope = EcScope.Op.add scope ?src pop in
+  let op, axs, scope = EcScope.Op.add ?src scope pop in
   let ppe = EcPrinting.PPEnv.ofenv (EcScope.env scope) in
   List.iter
     (fun { pl_desc = name } ->
@@ -385,9 +385,9 @@ and process_axiom ?(src : string option) (scope : EcScope.scope) (ax : paxiom lo
     scope
 
 (* -------------------------------------------------------------------- *)
-and process_th_open (scope : EcScope.scope) (loca, abs, name) =
+and process_th_open ?(src : string option) (scope : EcScope.scope) (loca, abs, name) =
   EcScope.check_state `InTop "theory" scope;
-  EcScope.Theory.enter scope (if abs then `Abstract else `Concrete) (unloc name) loca
+  EcScope.Theory.enter ?src scope (if abs then `Abstract else `Concrete) (unloc name) loca
 
 (* -------------------------------------------------------------------- *)
 and process_th_close (scope : EcScope.scope) (clears, name) =
@@ -652,7 +652,7 @@ and process ?(src : string option) (ld : Loader.loader) (scope : EcScope.scope) 
       | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
       | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
       | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      ?src scope  (mk_loc loc a))
-      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  name)
+      | GthOpen      name -> `Fct   (fun scope -> process_th_open    ?src scope  name)
       | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
       | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
       | GthRequire   name -> `Fct   (fun scope -> process_th_require ld scope name)
