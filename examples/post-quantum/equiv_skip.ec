@@ -14,7 +14,7 @@ proof.
   done.
 qed.
 
-equiv qu_qu : M.qu ~ M.qu : ={x}, ={global, q,r} ==> ={res}, ={global, q,r}.
+equiv qu_qu : M.qu ~ M.qu : ={x}, ={global, q, r} ==> ={res}, ={global, q, r}.
 proof.
   proc.
   skip.

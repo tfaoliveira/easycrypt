@@ -78,14 +78,15 @@ let t_bdhoare_swap_r p1 p2 p3 tc =
   FApi.xmutate1 tc `Swap [concl]
 
 (* -------------------------------------------------------------------- *)
+(* FIXME QUANTUM, be sure that the notion of read/write is correct in this setting *)
 let t_equiv_swap_r side p1 p2 p3 tc =
-  let es    = tc1_as_equivS tc in
+  let es    = tc1_as_qequivS tc in
   let sl,sr =
     match side with
     | `Left  -> LowInternal.swap_stmt tc p1 p2 p3 es.es_sl, es.es_sr
     | `Right -> es.es_sl, LowInternal.swap_stmt tc p1 p2 p3 es.es_sr
   in
-  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; } in
+  let concl = f_qequivS_r { es with es_sl = sl; es_sr = sr; } in
   FApi.xmutate1 tc `Swap [concl]
 
 (* -------------------------------------------------------------------- *)

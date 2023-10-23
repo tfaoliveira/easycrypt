@@ -153,8 +153,13 @@ module PrefixSet : sig
   val empty : t
 
   val conflict : t -> prefix -> bool
-
   val add : t -> prefix -> t
+
+  val is_member : t -> bool
+
+  (* Raise not found if the projection is not in the prefix set *)
+  val get_proj : t -> int -> t
+
 end = struct
   type prefix = int list
 
@@ -193,4 +198,13 @@ end = struct
         Mint.find_opt i children
         |> Option.map (fun subt -> conflict subt subp)
         |> Option.value ~default:false
+
+
+  let is_member t = t = Member
+
+  let get_proj t i =
+    match t with
+    | Member -> Member
+    | Split children -> Mint.find i children
+
 end

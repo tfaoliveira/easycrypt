@@ -176,9 +176,22 @@ module EqTest_base = struct
     | _, _ -> false
 
   let rec for_qr env ~norm qr1 qr2 =
-    qr_all2 (for_pvt env ~norm) qr1 qr2
+    match qr1, qr2 with
+    | QRvar v1, QRvar v2 -> for_pvt env ~norm v1 v2
+    | QRtuple qs1, QRtuple qs2 ->
+        List.for_all2 (for_qr env ~norm) qs1 qs2
+    | QRtuple _, _ when norm ->
+        for_qr env ~norm qr1 (qrtuple_projs env qr2)
+    | _, QRtuple _ ->
+        for_qr env ~norm (qrtuple_projs env qr1) qr2
+    | QRproj(qr1, i1), QRproj(qr2, i2) ->
+        i1 = i2 && for_qr env ~norm qr1 qr2
+    | _, _ -> false
 
-  let for_qe env ~norm qe1 qe2 = qe_all2 (for_pvt env ~norm) qe1 qe2
+  let for_qe env ~norm qe1 qe2 =
+    qe1.qeg = qe2.qeg &&
+    for_qr env ~norm qe1.qel qe2.qel &&
+    for_qr env ~norm qe1.qer qe2.qer
 
 end
 
@@ -1428,6 +1441,33 @@ and whnf ri env f =
   | exception (NotRed _) -> f
 
 (* -------------------------------------------------------------------- *)
+
+let qrtuple_merge env qs =
+  match qs with
+  | [] -> qrtuple []
+  | QRproj(q, 0) :: _ when
+      EqTest_i.for_qr env ~norm:true (qrtuple_projs env q) (qrtuple qs) ->
+    q
+  | _ -> qrtuple qs
+
+let rec norm_qr env ~norm qr =
+  match qr with
+  | QRvar (pv, ty) ->
+      if norm then qrvar(NormMp.norm_pvar env pv, ty) else qr
+  | QRtuple qs ->
+      let qs = List.map (norm_qr env ~norm) qs in
+      qrtuple_merge env qs
+  | QRproj(q, i) -> qrproj (norm_qr env ~norm q, i)
+
+let norm_qe env ~norm qe =
+  { qeg = qe.qeg
+  ; qel = norm_qr env ~norm qe.qel
+  ; qer = norm_qr env ~norm qe.qer }
+
+let norm_ec env ~norm ec =
+  { ec_f = ec.ec_f
+  ; ec_e = norm_qe env ~norm ec.ec_e }
+
 let rec simplify ri env f =
   let f = whnf ri env f in
   match f.f_node with
@@ -1443,10 +1483,17 @@ let rec simplify ri env f =
       let chf_f = EcEnv.NormMp.norm_xfun env hf.chf_f in
       f_map (fun ty -> ty) (simplify ri env) (f_cHoareF_r { hf with chf_f })
 
-  | FequivF ef when ri.ri.modpath ->
-      let ef_fl = EcEnv.NormMp.norm_xfun env ef.ef_fl in
-      let ef_fr = EcEnv.NormMp.norm_xfun env ef.ef_fr in
-      f_map (fun ty -> ty) (simplify ri env) (f_qequivF_r { ef with ef_fl; ef_fr; })
+  | FequivF ef ->
+      let ef_pr = norm_ec env ~norm:ri.ri.modpath ef.ef_pr in
+      let ef_po = norm_ec env ~norm:ri.ri.modpath ef.ef_po in
+      let ef_fl = if ri.ri.modpath then EcEnv.NormMp.norm_xfun env ef.ef_fl else ef.ef_fl in
+      let ef_fr = if ri.ri.modpath then EcEnv.NormMp.norm_xfun env ef.ef_fr else ef.ef_fr in
+      f_map (fun ty -> ty) (simplify ri env) (f_qequivF_r { ef with ef_fl; ef_fr; ef_pr; ef_po })
+
+  | FequivS es ->
+      let es_pr = norm_ec env ~norm:ri.ri.modpath es.es_pr in
+      let es_po = norm_ec env ~norm:ri.ri.modpath es.es_po in
+      f_map (fun ty -> ty) (simplify ri env) (f_qequivS_r { es with es_pr; es_po })
 
   | FeagerF eg when ri.ri.modpath ->
       let eg_fl = EcEnv.NormMp.norm_xfun env eg.eg_fl in

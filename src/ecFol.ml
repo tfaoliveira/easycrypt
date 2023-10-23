@@ -1106,3 +1106,30 @@ let rec dump_f f =
      ^ "]"
   | FeagerF _ -> "eagerF"
   | Fcoe _ -> "Fcoe"
+
+
+
+
+(* --------------------------------------------------------------------------------- *)
+
+(* Compute the type of a quantum reference *)
+
+open EcCoreModules
+
+let rec qr_ty env qr =
+  match qr with
+  | QRvar (_, ty) -> ty
+  | QRtuple qs -> ttuple (List.map (qr_ty env) qs)
+  | QRproj(q,i) ->
+    let ty = qr_ty env q in
+    match (EcEnv.Ty.hnorm ty env).ty_node with
+    | Ttuple tys -> List.nth tys i
+    | _ -> assert false
+
+
+let qrtuple_projs env qr =
+  let ty = qr_ty env qr in
+  match (EcEnv.Ty.hnorm ty env).ty_node with
+  | Ttuple tys ->
+      qrtuple (List.mapi (fun i _ -> qrproj(qr,i)) tys)
+    | _ -> qr

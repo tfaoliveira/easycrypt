@@ -245,3 +245,10 @@ val cost_app      : cost -> form list -> cost
 val cost_flatten  : cost -> form *)
 
 val dump_f : form -> string
+
+
+(* -------------------------------------------------------------------- *)
+open EcCoreModules
+
+val qr_ty : EcEnv.env -> quantum_ref -> ty
+val qrtuple_projs : EcEnv.env -> quantum_ref -> quantum_ref

@@ -214,4 +214,23 @@ proof.
 qed.
 
 
+(* --------------------------------------------------------- *)
+
+module N = { 
+  quantum var x : int * int
+  quantum var y : int * (int * int)
+
+  proc f() = {}
+
+}.
+
+import var N.
+
+equiv T : N.f ~ N.f : true, ={x,y} ==> true, ={x,y}.
+conseq (: _, ={x.`1, x.`2, y.`2.`1, y.`1, y.`2.`2}).
+conseq (: _, ={x.`1, x.`2, y.`2, y.`1}).
+conseq (: _, ={y.`1, x, y.`2}).
+(* FAIL *)
+(* conseq (: _, ={x, y.`2}). *)
+admitted.
 

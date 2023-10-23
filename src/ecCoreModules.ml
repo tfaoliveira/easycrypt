@@ -102,10 +102,20 @@ let rec qr_fv = function
   | QRproj (qr, _) -> qr_fv qr
 
 let qrvar pvt = QRvar pvt
-let qrtuple t = QRtuple t
+
+let qrtuple t =
+  match t with
+  | [qr] -> qr
+  | _ -> QRtuple t
+
 let qrproj (qr, i) =
   match qr with
-  | QRtuple t -> List.nth t i
+  | QRtuple t ->
+    (try List.nth t i
+     with Invalid_argument _ ->
+       Printexc.print_raw_backtrace Stdlib.stderr (Printexc.get_callstack 1000);
+       Format.eprintf "i = %i; size = %i@." i (List.length t);
+       assert false);
   | _ -> QRproj(qr, i)
 
 let qr_pvloc v =
@@ -145,6 +155,7 @@ let rec qr_all2 f qr1 qr2 =
 
 let qr_is_loc qr = qr_all (fun (pv,_) -> EcTypes.is_loc pv) qr
 
+(* FIXME QUANTUM: move this in EcFol, pv need to be normalized *)
 let rec qr_subst_pv pv qrv qr =
   match qr with
   | QRvar (pv', _) -> if pv_equal pv pv' then qrv else qr
@@ -205,14 +216,9 @@ let is_quantum_valid ~(norm : prog_var -> prog_var) =
     | QRproj (qr, i) ->
        validate (i :: proj) qr
 
-    | QRtuple qrs -> begin
-        match proj with
-        | [] ->
-           List.iter (validate []) qrs
-
-        | i :: proj' ->
-           validate proj' (List.nth qrs i)
-      end
+    | QRtuple qrs ->
+        assert (proj = []); (* it should be an invariant *)
+        List.iter (validate []) qrs
 
   in
 

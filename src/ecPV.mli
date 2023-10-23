@@ -111,6 +111,8 @@ end
 (* -------------------------------------------------------------------- *)
 type 'a pvaccess = env -> PV.t -> 'a -> PV.t
 
+val qr_touch   : env -> PV.t -> quantum_ref -> PV.t
+
 val lp_write_r :                 lvalue     pvaccess
 val i_write_r  : ?except:Sx.t -> instr      pvaccess
 val is_write_r : ?except:Sx.t -> instr list pvaccess

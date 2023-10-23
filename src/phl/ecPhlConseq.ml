@@ -29,17 +29,30 @@ let conseq_cost cost scost =
   and scflat =  EcCHoare.cost_flatten scost in
   f_xle scflat cflat
 
-let qe_implies env qe1 qe2 =
-  is_qe_empty qe2 ||
+
+
+let check_with_iso tc qe1 qe2 =
+  let env = FApi.tc1_env tc in
+  let iso =
+    try EcQuantum.build_iso env qe1.qel qe2.qel
+    with EcQuantum.MissingSubterm miss ->
+        tc_error !!tc ~who:"conseq" "%a"
+            (EcQuantum.pp_missing env) miss in
+  EcQuantum.check_iso env iso;
+  let qe1 = (EcQuantum.apply_iso iso qe1) in
   EcReduction.EqTest.for_qe env ~norm:true qe1 qe2
 
+let qe_implies tc qe1 qe2 =
+  is_qe_empty qe2 ||
+  EcReduction.EqTest.for_qe (FApi.tc1_env tc) ~norm:true qe1 qe2 ||
+  check_with_iso tc qe1 qe2
+
 let check_qe_implies tc qe1 qe2 =
-  let env = FApi.tc1_env tc in
-  if not (qe_implies env qe1 qe2) then
+  if not (qe_implies tc qe1 qe2) then
     begin
       let open EcPrinting in
-      let ppe = PPEnv.ofenv env in
-      tc_error !!tc ~who:"skip" "@[not able to prove@ %a@ implies@ %a@]"
+      let ppe = PPEnv.ofenv (FApi.tc1_env tc) in
+      tc_error !!tc ~who:"conseq" "@[not able to prove@ %a@ implies@ %a@]"
         (pp_qe ppe) qe1 (pp_qe ppe) qe2;
     end
 
