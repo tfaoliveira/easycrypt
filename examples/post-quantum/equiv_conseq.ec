@@ -104,14 +104,14 @@ proof.
   admit.
 qed.
 
-(* FAIL *)
-(*
-equiv e4_1_fail : M.qu ~ M.qu : 
+equiv e4_1_2 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
 proof.
-  conseq (: ={x} ==> ={n}, ={global,q}).
+  conseq [-frame] (: ={x} ==> ={n}, ={global,q}).
+  admit.
+  admit.
+  admit.
 qed.
-*)
 
 equiv e4_2 : M.qu ~ M.qu : 
   ={x} /\ m{1} = 1 /\ n{1} = 1, ={global,q,r} ==> ={n} /\ m{1} = 1, ={global,q,r}.
@@ -230,7 +230,25 @@ equiv T : N.f ~ N.f : true, ={x,y} ==> true, ={x,y}.
 conseq (: _, ={x.`1, x.`2, y.`2.`1, y.`1, y.`2.`2}).
 conseq (: _, ={x.`1, x.`2, y.`2, y.`1}).
 conseq (: _, ={y.`1, x, y.`2}).
-(* FAIL *)
-(* conseq (: _, ={x, y.`2}). *)
 admitted.
+
+op p, q : bool.
+
+equiv T1 : N.f ~ N.f : p, ={x,y} ==> q, ={x.`1,y}.
+conseq (: _, ={x,y}).
+admit.
+admit.
+qed.
+
+
+equiv T2 : N.f ~ N.f : p, ={x,y.`1} ==> q, ={x.`1,y}.
+conseq (: _, ={x,y} ==> _, ={x,y.`1}).
+admit.
+admit.
+admit.
+qed.
+
+(* The same variants exists for equivS *)
+
+
 

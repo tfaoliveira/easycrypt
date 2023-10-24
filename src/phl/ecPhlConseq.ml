@@ -21,7 +21,9 @@ type qconseq_tac =
   FApi.backward
 
 (* -------------------------------------------------------------------- *)
-let conseq_cond pre post spre spost =
+let conseq_cond ?eqpr ?eqpo pre post spre spost =
+  let spre = omap_dfl (f_and_simpl spre) spre eqpr in
+  let post = omap_dfl (f_and_simpl post) post eqpo in
   f_imp pre spre, f_imp spost post
 
 let conseq_cost cost scost =
@@ -29,37 +31,67 @@ let conseq_cost cost scost =
   and scflat =  EcCHoare.cost_flatten scost in
   f_xle scflat cflat
 
+let check_with_iso env qe1 qe2 =
+  try
+    let iso = EcQuantum.build_iso env qe1.qel qe2.qel in
+    let _ = EcQuantum.check_iso env iso in
+    let qe1 = EcQuantum.apply_iso_qe iso qe1 in
+    EcReduction.EqTest.for_qe env ~norm:true qe1 qe2
+  with EcQuantum.MissingSubterm _ | EcQuantum.NotFull _ -> false
 
-
-let check_with_iso tc qe1 qe2 =
-  let env = FApi.tc1_env tc in
-  let iso =
-    try EcQuantum.build_iso env qe1.qel qe2.qel
-    with EcQuantum.MissingSubterm miss ->
-        tc_error !!tc ~who:"conseq" "%a"
-            (EcQuantum.pp_missing env) miss in
-  EcQuantum.check_iso env iso;
-  let qe1 = (EcQuantum.apply_iso iso qe1) in
-  EcReduction.EqTest.for_qe env ~norm:true qe1 qe2
-
-let qe_implies tc qe1 qe2 =
+let qe_implies env qe1 qe2 =
   is_qe_empty qe2 ||
-  EcReduction.EqTest.for_qe (FApi.tc1_env tc) ~norm:true qe1 qe2 ||
-  check_with_iso tc qe1 qe2
+  EcReduction.EqTest.for_qe env ~norm:true qe1 qe2 ||
+  check_with_iso env qe1 qe2
 
-let check_qe_implies tc qe1 qe2 =
-  if not (qe_implies tc qe1 qe2) then
-    begin
-      let open EcPrinting in
-      let ppe = PPEnv.ofenv (FApi.tc1_env tc) in
-      tc_error !!tc ~who:"conseq" "@[not able to prove@ %a@ implies@ %a@]"
-        (pp_qe ppe) qe1 (pp_qe ppe) qe2;
-    end
+let destr_qr_pair qr =
+  match qr with
+  | QRtuple [q1; q2] -> q1, q2
+  | _ -> assert false
 
-let conseq_eqcond tc pre post spre spost =
-  check_qe_implies tc pre.ec_e spre.ec_e;
-  check_qe_implies tc spost.ec_e post.ec_e;
-  conseq_cond pre.ec_f post.ec_f spre.ec_f spost.ec_f
+let cond_eq_conseq_qe env ml mr qe1 qe2 =
+  assert (qe1.qeg = qe2.qeg);
+  let (r1l, q1l), (r1r, q1r) = destr_qr_pair qe1.qel, destr_qr_pair qe1.qer in
+  let (r2l, q2l), (r2r, q2r) = destr_qr_pair qe2.qel, destr_qr_pair qe2.qer in
+  assert (EcReduction.EqTest.for_qr env ~norm:true r1l r2l);
+  assert (EcReduction.EqTest.for_qr env ~norm:true r1r r2r);
+  let f1l = form_of_qr env q1l (fst ml) in
+  let f1r = form_of_qr env q1r (fst mr) in
+  let f2l = form_of_qr env q2l (fst ml) in
+  let f2r = form_of_qr env q2r (fst mr) in
+  assert (EcReduction.EqTest.for_type env f1l.f_ty f1r.f_ty);
+  assert (EcReduction.EqTest.for_type env f2l.f_ty f2r.f_ty);
+  f_and_simpl (f_eq_simpl f1l f1r) (f_eq_simpl f2l f2r)
+
+(*
+     P => q1 = q2 /\ q1' = q2'
+     -----------------------------------------------
+     P, (r1, q1 = r2, q2) |=> P, (r1, q1' = r2, q2')
+               qe1                       qe2
+*)
+let qe_implies_cond tc ml mr qe1 qe2 =
+  let env = FApi.tc1_env tc in
+  if qe_implies env qe1 qe2 then None
+  else
+    if qe1.qeg <> qe2.qeg then
+      begin
+        let open EcPrinting in
+          let ppe = PPEnv.ofenv (FApi.tc1_env tc) in
+            tc_error !!tc ~who:"conseq" "@[not able to prove@ %a@ implies@ %a@]"
+              (pp_qe ppe) qe1 (pp_qe ppe) qe2;
+      end
+    else
+      let qe1', qe2' =
+        try EcQuantum.build_partial_iso env qe1 qe2
+        with EcQuantum.MissingSubterm _ -> assert false in
+      assert (check_with_iso env qe1 qe1');
+      assert (check_with_iso env qe2 qe2');
+      Some (cond_eq_conseq_qe env ml mr qe1' qe2')
+
+let conseq_eqcond tc mprl mprr mpol mpor pre post spre spost =
+  let eqpr = qe_implies_cond tc mprl mprr pre.ec_e spre.ec_e in
+  let eqpo = qe_implies_cond tc mpol mpor spost.ec_e post.ec_e in
+  conseq_cond ?eqpr ?eqpo pre.ec_f post.ec_f spre.ec_f spost.ec_f
 
 let bd_goal_r fcmp fbd cmp bd =
   match fcmp, cmp with
@@ -225,7 +257,7 @@ let t_equivF_conseq_core pre post tc =
   let ef  = tc1_as_qequivF tc in
   let (mprl,mprr), (mpol,mpor) =
     EcEnv.Fun.equivF_memenv ef.ef_fl ef.ef_fr env in
-  let cond1, cond2 = conseq_eqcond tc ef.ef_pr ef.ef_po pre post in
+  let cond1, cond2 = conseq_eqcond tc mprl mprr mpol mpor ef.ef_pr ef.ef_po pre post in
   let concl1 = f_forall_mems [mprl;mprr] cond1 in
   let concl2 = f_forall_mems [mpol;mpor] cond2 in
   let concl3 = f_qequivF pre ef.ef_fl ef.ef_fr post in
@@ -238,6 +270,7 @@ let t_equivF_conseq pre ?qepr post ?qepo tc =
   let ef  = tc1_as_qequivF tc in
   let pre, post = ec_dfl pre ~qe:qepr ef.ef_pr, ec_dfl post ~qe:qepo ef.ef_po in
   t_equivF_conseq_core pre post tc
+
 
 (* -------------------------------------------------------------------- *)
 let t_eagerF_conseq pre post tc =
@@ -254,9 +287,10 @@ let t_eagerF_conseq pre post tc =
 (* -------------------------------------------------------------------- *)
 let t_equivS_conseq_core pre post tc =
   let es = tc1_as_qequivS tc in
-  let cond1, cond2 = conseq_eqcond tc es.es_pr es.es_po pre post in
-  let concl1 = f_forall_mems [es.es_ml;es.es_mr] cond1 in
-  let concl2 = f_forall_mems [es.es_ml;es.es_mr] cond2 in
+  let ml, mr = es.es_ml, es.es_mr in
+  let cond1, cond2 = conseq_eqcond tc ml mr ml mr es.es_pr es.es_po pre post in
+  let concl1 = f_forall_mems [ml;mr] cond1 in
+  let concl2 = f_forall_mems [ml;mr] cond2 in
   let concl3 = f_qequivS_r { es with es_pr = pre; es_po = post } in
   FApi.xmutate1 tc `HlConseq [concl1; concl2; concl3]
 
@@ -320,11 +354,19 @@ let cond_equivF_notmod ?(mk_other=false) tc cond =
     else [] in
   cond, bmem, bother
 
-let t_equivF_notmod post tc =
+let t_equivF_notmod_core post tc =
   let ef = tc1_as_qequivF tc in
-  let cond1, _, _ = cond_equivF_notmod tc (f_imp post ef.ef_po.ec_f) in
-  let cond2 = f_qequivF_r {ef with ef_po = ec_dfl post ef.ef_po} in
+  let (mprl,mprr), (mpol,mpor) =
+    EcEnv.Fun.equivF_memenv ef.ef_fl ef.ef_fr (FApi.tc1_env tc) in
+  let _, condp = conseq_eqcond tc mprl mprr mpol mpor ef.ef_pr ef.ef_po ef.ef_pr post in
+  let cond1, _, _ = cond_equivF_notmod tc condp in
+  let cond2 = f_qequivF_r {ef with ef_po = post} in
   FApi.xmutate1 tc `HlNotmod [cond1; cond2]
+
+let t_equivF_notmod post ?qepo tc =
+  let ef = tc1_as_qequivF tc in
+  let post = ec_dfl post ~qe:qepo ef.ef_po in
+  t_equivF_notmod_core post tc
 
 (* -------------------------------------------------------------------- *)
 let cond_equivS_notmod ?(mk_other=false) tc cond =
@@ -344,11 +386,17 @@ let cond_equivS_notmod ?(mk_other=false) tc cond =
     else [] in
   cond, bmem, bother
 
-let t_equivS_notmod post tc =
+let t_equivS_notmod_core post tc =
   let es = tc1_as_qequivS tc in
-  let cond1,_,_ = cond_equivS_notmod tc (f_imp post es.es_po.ec_f) in
-  let cond2 = f_qequivS_r {es with es_po = ec_dfl post es.es_po} in
+  let _, condp = conseq_eqcond tc es.es_ml es.es_mr es.es_ml es.es_mr es.es_pr es.es_po es.es_pr post in
+  let cond1,_,_ = cond_equivS_notmod tc condp in
+  let cond2 = f_qequivS_r {es with es_po = post} in
   FApi.xmutate1 tc `HlNotmod [cond1; cond2]
+
+let t_equivS_notmod post ?qepo tc =
+  let es = tc1_as_qequivS tc in
+  let post = ec_dfl post ~qe:qepo es.es_po in
+  t_equivS_notmod_core post tc
 
 (* -------------------------------------------------------------------- *)
 let cond_hoareF_notmod ?(mk_other=false) tc cond =
@@ -532,20 +580,21 @@ let gen_conseq_nm tnm tc pre post =
 let gen_qconseq_nm tnm tc pre ?qepr post ?qepo =
   FApi.t_internal ~info:"generic-conseq-nm" (fun g ->
     let gs =
-      (tnm post @+
+      (tnm post ?qepo @+
         [ t_id;
           tc pre ?qepr post ?qepo @+ [t_id; t_trivial; t_id] ]) g in
     FApi.t_swap_goals 0 1 gs
   )
 
-let t_hoareF_conseq_nm   = gen_conseq_nm t_hoareF_notmod   t_hoareF_conseq
-let t_hoareS_conseq_nm   = gen_conseq_nm t_hoareS_notmod   t_hoareS_conseq
+let t_hoareF_conseq_nm   = gen_conseq_nm t_hoareF_notmod t_hoareF_conseq
+let t_hoareS_conseq_nm   = gen_conseq_nm t_hoareS_notmod t_hoareS_conseq
 
-let t_equivF_conseq_nm_core = gen_conseq_nm (fun ec -> t_equivF_notmod ec.ec_f) t_equivF_conseq_core
-let t_equivS_conseq_nm_core = gen_conseq_nm (fun ec -> t_equivS_notmod ec.ec_f) t_equivS_conseq_core
+let t_equivF_conseq_nm_core = gen_conseq_nm t_equivF_notmod_core t_equivF_conseq_core
+let t_equivS_conseq_nm_core = gen_conseq_nm t_equivS_notmod_core t_equivS_conseq_core
 
-let t_equivF_conseq_nm   = gen_qconseq_nm t_equivF_notmod  t_equivF_conseq
-let t_equivS_conseq_nm   = gen_qconseq_nm t_equivS_notmod  t_equivS_conseq
+let t_equivF_conseq_nm   = gen_qconseq_nm t_equivF_notmod t_equivF_conseq
+let t_equivS_conseq_nm   = gen_qconseq_nm t_equivS_notmod t_equivS_conseq
+
 let t_cHoareF_conseq_nm  = gen_conseq_nm t_cHoareF_notmod  t_cHoareF_conseq
 let t_cHoareS_conseq_nm  = gen_conseq_nm t_cHoareS_notmod  t_cHoareS_conseq
 let t_bdHoareF_conseq_nm = gen_conseq_nm t_bdHoareF_notmod t_bdHoareF_conseq
@@ -1563,10 +1612,10 @@ let t_conseqauto ?(delta = true) ?tsolve tc =
     | FbdHoareS hs -> Some (t_bdHoareS_notmod, cond_bdHoareS_notmod ~mk_other tc hs.bhs_po)
     | FequivF ef   ->
         let ef = equivF ef in
-        Some (t_equivF_notmod, cond_equivF_notmod ~mk_other tc ef.ef_po)
+        Some (t_equivF_notmod ?qepo:None, cond_equivF_notmod ~mk_other tc ef.ef_po)
     | FequivS es   ->
         let es = equivS es in
-        Some (t_equivS_notmod, cond_equivS_notmod ~mk_other tc es.es_po )
+        Some (t_equivS_notmod ?qepo:None, cond_equivS_notmod ~mk_other tc es.es_po )
     | _            -> None in
 
   match todo with

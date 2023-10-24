@@ -24,6 +24,7 @@ module EqTest : sig
   val for_lv    : lvalue      eqntest
   val for_xp    : xpath       eqntest
   val for_mp    : mpath       eqntest
+  val for_qr    : quantum_ref eqntest
   val for_qe    : quantum_equality eqntest
   val for_instr : instr       eqantest
   val for_stmt  : stmt        eqantest

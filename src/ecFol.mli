@@ -252,3 +252,4 @@ open EcCoreModules
 
 val qr_ty : EcEnv.env -> quantum_ref -> ty
 val qrtuple_projs : EcEnv.env -> quantum_ref -> quantum_ref
+val form_of_qr : EcEnv.env -> quantum_ref -> memory -> form

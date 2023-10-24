@@ -1132,4 +1132,13 @@ let qrtuple_projs env qr =
   match (EcEnv.Ty.hnorm ty env).ty_node with
   | Ttuple tys ->
       qrtuple (List.mapi (fun i _ -> qrproj(qr,i)) tys)
-    | _ -> qr
+  | _ -> raise Not_found
+
+let form_of_qr env qr m =
+  let rec aux qr =
+    match qr with
+    | QRvar (x,ty) -> f_pvar x ty m
+    | QRtuple qs -> f_tuple (List.map aux qs)
+    | QRproj(q,i) ->
+        f_proj (aux q) i (qr_ty env qr) in
+    aux qr

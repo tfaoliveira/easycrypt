@@ -151,14 +151,20 @@ module PrefixSet : sig
   type t
 
   val empty : t
+  val is_empty : t -> bool
+
+  val member : t
 
   val conflict : t -> prefix -> bool
   val add : t -> prefix -> t
 
   val is_member : t -> bool
 
-  (* Raise not found if the projection is not in the prefix set *)
   val get_proj : t -> int -> t
+
+  val of_list : t list -> t
+
+  val to_list : t -> (int * t) list option
 
 end = struct
   type prefix = int list
@@ -169,6 +175,13 @@ end = struct
 
   let empty : t =
     Split Mint.empty
+
+  let member : t =
+    Member
+
+  let is_empty = function
+    | Member -> false
+    | Split children -> Mint.is_empty children
 
   let rec add (t : t) (p : prefix) : t =
     match t, p with
@@ -205,6 +218,16 @@ end = struct
   let get_proj t i =
     match t with
     | Member -> Member
-    | Split children -> Mint.find i children
+    | Split children -> try Mint.find i children with Not_found -> empty
+
+  let of_list ch =
+    let children =
+      List.fold_lefti (fun children i child -> Mint.add i child children) Mint.empty ch in
+    Split children
+
+  let to_list t =
+    match t with
+    | Member -> None
+    | Split children -> Some (Mint.bindings children)
 
 end

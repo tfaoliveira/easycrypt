@@ -175,18 +175,18 @@ module EqTest_base = struct
 
     | _, _ -> false
 
-  let rec for_qr env ~norm qr1 qr2 =
-    match qr1, qr2 with
-    | QRvar v1, QRvar v2 -> for_pvt env ~norm v1 v2
-    | QRtuple qs1, QRtuple qs2 ->
-        List.for_all2 (for_qr env ~norm) qs1 qs2
-    | QRtuple _, _ when norm ->
-        for_qr env ~norm qr1 (qrtuple_projs env qr2)
-    | _, QRtuple _ ->
-        for_qr env ~norm (qrtuple_projs env qr1) qr2
-    | QRproj(qr1, i1), QRproj(qr2, i2) ->
-        i1 = i2 && for_qr env ~norm qr1 qr2
-    | _, _ -> false
+  let for_qr env ~norm qr1 qr2 =
+    let rec aux qr1 qr2 =
+      match qr1, qr2 with
+      | QRvar v1, QRvar v2 -> for_pvt env ~norm v1 v2
+      | QRtuple qs1, QRtuple qs2 ->
+          List.for_all2 aux qs1 qs2
+      | QRtuple _, _ when norm -> aux qr1 (qrtuple_projs env qr2)
+      | _, QRtuple _ when norm -> aux (qrtuple_projs env qr1) qr2
+      | QRproj(qr1, i1), QRproj(qr2, i2) ->
+          i1 = i2 && aux qr1 qr2
+      | _, _ -> false in
+    try aux qr1 qr2 with Not_found -> false (* qrtuple_projs failed *)
 
   let for_qe env ~norm qe1 qe2 =
     qe1.qeg = qe2.qeg &&
@@ -2256,6 +2256,7 @@ module EqTest = struct
   let for_lv    = fun env ?(norm = true) -> for_lv    env ~norm
   let for_xp    = fun env ?(norm = true) -> for_xp    env ~norm
   let for_mp    = fun env ?(norm = true) -> for_mp    env ~norm
+  let for_qr    = fun env ?(norm = true) -> for_qr    env ~norm
   let for_qe    = fun env ?(norm = true) -> for_qe    env ~norm
   let for_instr = fun env ?(alpha = Mid.empty) ?(norm = true) -> for_instr env alpha ~norm
   let for_stmt  = fun env ?(alpha = Mid.empty) ?(norm = true) -> for_stmt  env alpha ~norm
