@@ -169,7 +169,7 @@ let wp_equiv_disj_init (side:side) tc =
       | `Left  -> f_qequivS_r { es with es_sl=s; es_po; }
       | `Right -> f_qequivS_r { es with es_sr=s; es_po; }
   in
-  FApi.xmutate1 tc `Unitary [concl]
+  FApi.xmutate1 tc `Init [concl]
 
 
 (*
@@ -244,7 +244,7 @@ let wp_equiv_init_core g1 g2 r1 r2 tc =
     ; ec_e = {qe with qel = r1; qer = r2 } } in
   let concl = f_qequivS_r { es with es_sl; es_sr; es_po } in
 
-  FApi.xmutate1 tc `Unitary [concl]
+  FApi.xmutate1 tc `Init [concl]
 
 let wp_equiv_init tc =
   let env = FApi.tc1_env tc in
@@ -277,3 +277,49 @@ let process_init (side:oside) =
   match side with
   | None -> wp_equiv_init
   | Some side -> wp_equiv_disj_init side
+
+
+(* ------------------------------------------------------------------------- *)
+(* Quantum Measurement                                                       *)
+
+let qsubst_init env s m qr e =
+  EcQuantum.build_subst env s (fst m) qr e
+
+(*
+q disjoint r1
+----------------------------------------------
+x <- measure q with f ~ skip : P{(x/f q)<1>, r1 = r2 ==> P, r1 = r2
+*)
+let wp_equiv_disj_measure (side:side) tc =
+  let env = FApi.tc1_env tc in
+  let es  = tc1_as_qequivS tc in
+  let m,s =
+    match side with
+    | `Left  -> es.es_ml, es.es_sl
+    | `Right -> es.es_mr, es.es_sr
+  in
+
+  let (x, qr, f), s = tc1_last_measure tc s in
+
+  EcQuantum.check_disjoint_qe ~who:"qinit" tc side qr es.es_po.ec_e;
+
+  let fqr = form_of_qr env qr (fst m) in
+  let f = form_of_expr (fst m) f in
+  let ec_f =
+    subst_form_lv env (fst m)
+      x (f_app_simpl f [fqr] (ty_of_lv x))
+      es.es_po.ec_f in
+
+  let es_po = { es.es_po with ec_f } in
+  let concl =
+    match side with
+      | `Left  -> f_qequivS_r { es with es_sl=s; es_po; }
+      | `Right -> f_qequivS_r { es with es_sr=s; es_po; }
+  in
+  FApi.xmutate1 tc `Measure [concl]
+
+
+let process_measure (side:oside) tc =
+  match side with
+  | None -> tc_error !!tc "two sided measure rule not implemented"
+  | Some side -> wp_equiv_disj_measure side tc

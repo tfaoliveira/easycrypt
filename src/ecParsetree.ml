@@ -768,6 +768,7 @@ type phltactic =
   | Prndsem        of oside * codepos1
   | Punitary       of oside
   | Pqinit         of oside
+  | Pmeasure       of oside
   | Palias         of (oside * codepos * osymbol_r)
   | Pset           of (oside * codepos * bool * psymbol * pexpr)
   | Pconseq        of (pcqoptions * (conseq_ppterm option tuple3))

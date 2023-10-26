@@ -3302,6 +3302,9 @@ phltactic:
 | QINIT s=side?
     { Pqinit s }
 
+| MEASURE s=side?
+    { Pmeasure s }
+
 | INLINE s=side? u=inlineopt? o=occurences?
   { Pinline (`ByName(s, u, ([], o))) }
 

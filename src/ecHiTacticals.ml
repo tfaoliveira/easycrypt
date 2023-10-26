@@ -198,6 +198,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Prndsem (side, pos)       -> EcPhlRnd.process_rndsem side pos
     | Punitary side             -> EcPhlQuantum.process_unitary side
     | Pqinit side               -> EcPhlQuantum.process_init side
+    | Pmeasure side             -> EcPhlQuantum.process_measure side
     | Pconseq (opt, info)       -> EcPhlConseq.process_conseq_opt opt info
     | Pconseqauto cm            -> process_conseqauto cm
     | Phrex_elim                -> EcPhlExists.t_hr_exists_elim
