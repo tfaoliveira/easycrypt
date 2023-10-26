@@ -76,14 +76,14 @@ let s_last proj s =
       with Not_found -> None
 
 (* -------------------------------------------------------------------- *)
-let pf_first_gen _kind proj pe s =
+let pf_first_gen kind proj pe s =
   match s_first proj s with
-  | None   -> tc_error pe "invalid first instruction"
+  | None   -> tc_error pe "invalid first instruction, %s expected" kind
   | Some x -> x
 
-let pf_last_gen _kind proj pe s =
+let pf_last_gen kind proj pe s =
   match s_last proj s with
-  | None   -> tc_error pe "invalid last instruction"
+  | None   -> tc_error pe "invalid last instruction, %s expected" kind
   | Some x -> x
 
 (* -------------------------------------------------------------------- *)
@@ -104,6 +104,10 @@ let pf_last_match  pe st = pf_last_gen  "match"  destr_match  pe st
 let pf_last_while  pe st = pf_last_gen  "while"  destr_while  pe st
 let pf_last_assert pe st = pf_last_gen  "assert" destr_assert pe st
 
+let pf_last_unitary pe st = pf_last_gen "unitary" destr_unitary pe st
+let pf_last_init    pe st = pf_last_gen "qinit"   destr_init    pe st
+let pf_last_measure pe st = pf_last_gen "measure" destr_measure pe st
+
 (* -------------------------------------------------------------------- *)
 let tc1_first_asgn   tc st = pf_first_asgn   !!tc st
 let tc1_first_rnd    tc st = pf_first_rnd    !!tc st
@@ -121,6 +125,10 @@ let tc1_last_if     tc st = pf_last_if     !!tc st
 let tc1_last_match  tc st = pf_last_match  !!tc st
 let tc1_last_while  tc st = pf_last_while  !!tc st
 let tc1_last_assert tc st = pf_last_assert !!tc st
+
+let tc1_last_unitary tc st = pf_last_unitary !!tc st
+let tc1_last_init    tc st = pf_last_init    !!tc st
+let tc1_last_measure tc st = pf_last_measure !!tc st
 
 (* -------------------------------------------------------------------- *)
 (* TODO: use in change pos *)

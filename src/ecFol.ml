@@ -1116,15 +1116,21 @@ let rec dump_f f =
 
 open EcCoreModules
 
+let f_proj_ty env ty i =
+  match (EcEnv.Ty.hnorm ty env).ty_node with
+  | Ttuple tys -> List.nth tys i
+  | _ -> assert false
+
+let f_proj_env ?(simpl=false) env f i =
+  let ty = f_proj_ty env f.f_ty i in
+  if simpl then f_proj_simpl f i ty
+  else f_proj f i ty
+
 let rec qr_ty env qr =
   match qr with
   | QRvar (_, ty) -> ty
   | QRtuple qs -> ttuple (List.map (qr_ty env) qs)
-  | QRproj(q,i) ->
-    let ty = qr_ty env q in
-    match (EcEnv.Ty.hnorm ty env).ty_node with
-    | Ttuple tys -> List.nth tys i
-    | _ -> assert false
+  | QRproj(q,i) -> f_proj_ty env (qr_ty env q) i
 
 
 let qrtuple_projs env qr =
@@ -1138,7 +1144,7 @@ let form_of_qr env qr m =
   let rec aux qr =
     match qr with
     | QRvar (x,ty) -> f_pvar x ty m
-    | QRtuple qs -> f_tuple (List.map aux qs)
-    | QRproj(q,i) ->
-        f_proj (aux q) i (qr_ty env qr) in
-    aux qr
+    | QRtuple qs   -> f_tuple (List.map aux qs)
+    | QRproj(q,i)  -> f_proj_env env (aux q) i
+  in
+  aux qr

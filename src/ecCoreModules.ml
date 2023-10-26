@@ -468,6 +468,14 @@ let get_quantum = function
   | { i_node = Squantum(lv,o,e) } -> Some (lv,o,e)
   | _ -> None
 
+let get_unitary = function
+  | { i_node = Squantum(lv,Qunitary,e) } -> Some (lv,e)
+  | _ -> None
+
+let get_init = function
+  | { i_node = Squantum(lv,Qinit,e) } -> Some (lv,e)
+  | _ -> None
+
 let get_measure = function
   | { i_node = Smeasure(lv,qa,e) } -> Some (lv,qa,e)
   | _ -> None
@@ -505,6 +513,8 @@ let _destr_of_get (get : instr -> 'a option) (i : instr) =
   match get i with Some x -> x | None -> raise Not_found
 
 let destr_quantum = _destr_of_get get_quantum
+let destr_init    = _destr_of_get get_init
+let destr_unitary = _destr_of_get get_unitary
 let destr_measure = _destr_of_get get_measure
 let destr_asgn    = _destr_of_get get_asgn
 let destr_rnd     = _destr_of_get get_rnd
@@ -519,6 +529,8 @@ let _is_of_get (get : instr -> 'a option) (i : instr) =
   EcUtils.is_some (get i)
 
 let is_quantum = _is_of_get get_quantum
+let is_init    = _is_of_get get_init
+let is_unitary = _is_of_get get_unitary
 let is_measure = _is_of_get get_measure
 let is_asgn    = _is_of_get get_asgn
 let is_rnd     = _is_of_get get_rnd

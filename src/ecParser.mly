@@ -529,6 +529,7 @@
 %token PROOF
 %token PROVER
 %token QED
+%token QINIT
 %token QUANTUM
 %token QUESTION
 %token RARROW
@@ -3294,6 +3295,12 @@ phltactic:
 
 | RNDSEM s=side? c=codepos1
     { Prndsem (s, c) }
+
+| UNITARY s=side?
+    { Punitary s }
+
+| QINIT s=side?
+    { Pqinit s }
 
 | INLINE s=side? u=inlineopt? o=occurences?
   { Pinline (`ByName(s, u, ([], o))) }

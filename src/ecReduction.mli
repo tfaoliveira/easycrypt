@@ -33,8 +33,6 @@ module EqTest : sig
   val for_mexpr : env -> ?norm:bool -> ?body:bool -> module_expr -> module_expr -> bool
 
 
-
-
   val is_unit : env -> ty -> bool
   val is_bool : env -> ty -> bool
   val is_int  : env -> ty -> bool
@@ -107,6 +105,8 @@ val simplify : reduction_info -> LDecl.hyps -> form -> form
 
 val is_conv    : ?ri:reduction_info -> LDecl.hyps -> form -> form -> bool
 val check_conv : ?ri:reduction_info -> LDecl.hyps -> form -> form -> unit
+
+val is_conv_ec : ?ri:reduction_info -> LDecl.hyps -> equiv_cond -> equiv_cond -> bool
 
 val check_bindings :
   exn -> EcDecl.ty_params -> EcEnv.env -> EcSubst.subst ->

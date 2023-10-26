@@ -250,6 +250,8 @@ val dump_f : form -> string
 (* -------------------------------------------------------------------- *)
 open EcCoreModules
 
+val f_proj_env : ?simpl:bool -> EcEnv.env -> form -> int -> form
+
 val qr_ty : EcEnv.env -> quantum_ref -> ty
 val qrtuple_projs : EcEnv.env -> quantum_ref -> quantum_ref
 val form_of_qr : EcEnv.env -> quantum_ref -> memory -> form

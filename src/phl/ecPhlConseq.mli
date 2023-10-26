@@ -13,7 +13,12 @@ type qconseq_tac =
   form -> ?qepo:quantum_equality ->
   FApi.backward
 
+type qconseq_core_tac = equiv_cond -> equiv_cond -> FApi.backward
+
 (* -------------------------------------------------------------------- *)
+
+val t_equivS_conseq_core  : ?witheq:bool -> qconseq_core_tac
+
 val t_equivF_conseq       : qconseq_tac
 val t_equivS_conseq       : qconseq_tac
 val t_eagerF_conseq       : conseq_tac

@@ -85,20 +85,26 @@ let check_qe_implies tc qe1 qe2 =
         (pp_qe ppe) qe1 (pp_qe ppe) qe2;
     end
 
-  let t_equiv_skip_r tc =
+  let t_equiv_skip_core tc =
     let es = tc1_as_qequivS tc in
 
     if not (List.is_empty es.es_sl.s_node) then
       tc_error !!tc ~who:"skip" "left instruction list is not empty";
     if not (List.is_empty es.es_sr.s_node) then
       tc_error !!tc ~who:"skip" "right instruction list is not empty";
+    if not (EcReduction.is_conv_ec (FApi.tc1_hyps tc) es.es_pr es.es_po) then
+      tc_error !!tc ~who:"skip" "the pre is not equal to the post";
+    FApi.xmutate1 tc `Skip []
 
-    check_qe_implies tc es.es_pr.ec_e es.es_po.ec_e;
-    let concl = f_imp es.es_pr.ec_f es.es_po.ec_f in
-    let concl = f_forall_mems [es.es_ml; es.es_mr] concl in
-    FApi.xmutate1 tc `Skip [concl]
 
-  let t_equiv_skip = FApi.t_low0 "equiv-skip" t_equiv_skip_r
+
+  let t_equiv_skip tc =
+    let es = tc1_as_qequivS tc in
+    (EcPhlConseq.t_equivS_conseq_core ~witheq:false es.es_po es.es_po @+
+      [ t_id;
+        t_trivial;
+        t_equiv_skip_core ]) tc
+
 end
 
 (* -------------------------------------------------------------------- *)

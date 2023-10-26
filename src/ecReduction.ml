@@ -1874,6 +1874,10 @@ let check_conv ?ri hyps f1 f2 =
   if is_conv ?ri hyps f1 f2 then ()
   else raise (IncompatibleForm ((LDecl.toenv hyps), (f1, f2)))
 
+let is_conv_ec ?(ri = full_red) hyps ec1 ec2 =
+  is_conv ~ri hyps ec1.ec_f ec2.ec_f &&
+  EqTest_i.for_qe (LDecl.toenv hyps) ec1.ec_e ec2.ec_e
+
 (* -------------------------------------------------------------------- *)
 let h_red ri hyps f =
   try

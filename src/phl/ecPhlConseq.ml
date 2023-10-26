@@ -20,6 +20,7 @@ type qconseq_tac =
   form -> ?qepo:quantum_equality ->
   FApi.backward
 
+type qconseq_core_tac = equiv_cond -> equiv_cond -> FApi.backward
 (* -------------------------------------------------------------------- *)
 let conseq_cond ?eqpr ?eqpo pre post spre spost =
   let spre = omap_dfl (f_and_simpl spre) spre eqpr in
@@ -31,28 +32,15 @@ let conseq_cost cost scost =
   and scflat =  EcCHoare.cost_flatten scost in
   f_xle scflat cflat
 
-let check_with_iso env qe1 qe2 =
-  try
-    let iso = EcQuantum.build_iso env qe1.qel qe2.qel in
-    let _ = EcQuantum.check_iso env iso in
-    let qe1 = EcQuantum.apply_iso_qe iso qe1 in
-    EcReduction.EqTest.for_qe env ~norm:true qe1 qe2
-  with EcQuantum.MissingSubterm _ | EcQuantum.NotFull _ -> false
-
 let qe_implies env qe1 qe2 =
   is_qe_empty qe2 ||
   EcReduction.EqTest.for_qe env ~norm:true qe1 qe2 ||
-  check_with_iso env qe1 qe2
-
-let destr_qr_pair qr =
-  match qr with
-  | QRtuple [q1; q2] -> q1, q2
-  | _ -> assert false
+  EcQuantum.has_iso env qe1 qe2
 
 let cond_eq_conseq_qe env ml mr qe1 qe2 =
   assert (qe1.qeg = qe2.qeg);
-  let (r1l, q1l), (r1r, q1r) = destr_qr_pair qe1.qel, destr_qr_pair qe1.qer in
-  let (r2l, q2l), (r2r, q2r) = destr_qr_pair qe2.qel, destr_qr_pair qe2.qer in
+  let (r1l, q1l), (r1r, q1r) = EcQuantum.destr_qr_pair qe1.qel, EcQuantum.destr_qr_pair qe1.qer in
+  let (r2l, q2l), (r2r, q2r) = EcQuantum.destr_qr_pair qe2.qel, EcQuantum.destr_qr_pair qe2.qer in
   assert (EcReduction.EqTest.for_qr env ~norm:true r1l r2l);
   assert (EcReduction.EqTest.for_qr env ~norm:true r1r r2r);
   let f1l = form_of_qr env q1l (fst ml) in
@@ -69,11 +57,11 @@ let cond_eq_conseq_qe env ml mr qe1 qe2 =
      P, (r1, q1 = r2, q2) |=> P, (r1, q1' = r2, q2')
                qe1                       qe2
 *)
-let qe_implies_cond tc ml mr qe1 qe2 =
+let qe_implies_cond ?(witheq=true) tc ml mr qe1 qe2 =
   let env = FApi.tc1_env tc in
   if qe_implies env qe1 qe2 then None
   else
-    if qe1.qeg <> qe2.qeg then
+    if not witheq || qe1.qeg <> qe2.qeg then
       begin
         let open EcPrinting in
           let ppe = PPEnv.ofenv (FApi.tc1_env tc) in
@@ -81,16 +69,14 @@ let qe_implies_cond tc ml mr qe1 qe2 =
               (pp_qe ppe) qe1 (pp_qe ppe) qe2;
       end
     else
-      let qe1', qe2' =
-        try EcQuantum.build_partial_iso env qe1 qe2
-        with EcQuantum.MissingSubterm _ -> assert false in
-      assert (check_with_iso env qe1 qe1');
-      assert (check_with_iso env qe2 qe2');
+      let qe1', qe2' = EcQuantum.build_partial_iso env qe1 qe2 in
+      EcQuantum.ensure_iso ~who:"conseq" tc qe1 qe1';
+      EcQuantum.ensure_iso ~who:"conseq" tc qe2 qe2';
       Some (cond_eq_conseq_qe env ml mr qe1' qe2')
 
-let conseq_eqcond tc mprl mprr mpol mpor pre post spre spost =
-  let eqpr = qe_implies_cond tc mprl mprr pre.ec_e spre.ec_e in
-  let eqpo = qe_implies_cond tc mpol mpor spost.ec_e post.ec_e in
+let conseq_eqcond ?witheq tc mprl mprr mpol mpor pre post spre spost =
+  let eqpr = qe_implies_cond ?witheq tc mprl mprr pre.ec_e spre.ec_e in
+  let eqpo = qe_implies_cond ?witheq tc mpol mpor spost.ec_e post.ec_e in
   conseq_cond ?eqpr ?eqpo pre.ec_f post.ec_f spre.ec_f spost.ec_f
 
 let bd_goal_r fcmp fbd cmp bd =
@@ -285,10 +271,11 @@ let t_eagerF_conseq pre post tc =
   FApi.xmutate1 tc `HlConseq [concl1; concl2; concl3]
 
 (* -------------------------------------------------------------------- *)
-let t_equivS_conseq_core pre post tc =
+let t_equivS_conseq_core ?witheq pre post tc =
   let es = tc1_as_qequivS tc in
   let ml, mr = es.es_ml, es.es_mr in
-  let cond1, cond2 = conseq_eqcond tc ml mr ml mr es.es_pr es.es_po pre post in
+  let cond1, cond2 =
+    conseq_eqcond ?witheq tc ml mr ml mr es.es_pr es.es_po pre post in
   let concl1 = f_forall_mems [ml;mr] cond1 in
   let concl2 = f_forall_mems [ml;mr] cond2 in
   let concl3 = f_qequivS_r { es with es_pr = pre; es_po = post } in
@@ -1142,7 +1129,8 @@ let rec t_hi_conseq notmod f1 f2 f3 tc =
   (* ------------------------------------------------------------------ *)
   (* equivS / equivS / ⊥ / ⊥                                            *)
   | FequivS _, Some ((_, {f_node = FequivS es}) as nf1), None, None ->
-    let tac = if notmod then t_equivS_conseq_nm_core else t_equivS_conseq_core in
+    let tac = if notmod then t_equivS_conseq_nm_core else
+                (t_equivS_conseq_core ~witheq:true) in
     t_on1 2 (t_apply_r nf1) (tac es.es_pr es.es_po tc)
 
   (* ------------------------------------------------------------------ *)

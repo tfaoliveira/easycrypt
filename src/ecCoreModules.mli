@@ -124,6 +124,8 @@ val rstmt : instr list -> stmt
 
 (* the following functions raise Not_found if the argument does not match *)
 val destr_quantum : instr -> quantum_ref * quantum_op * expr
+val destr_init    : instr -> quantum_ref * expr
+val destr_unitary : instr -> quantum_ref * expr
 val destr_measure : instr -> lvalue * quantum_ref * expr
 val destr_asgn   : instr -> lvalue * expr
 val destr_rnd    : instr -> lvalue * expr
@@ -134,6 +136,8 @@ val destr_match  : instr -> expr * ((EcIdent.t * ty) list * stmt) list
 val destr_assert : instr -> expr
 
 val is_quantum : instr -> bool
+val is_init    : instr -> bool
+val is_unitary : instr -> bool
 val is_measure : instr -> bool
 val is_asgn   : instr -> bool
 val is_rnd    : instr -> bool
