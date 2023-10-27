@@ -494,19 +494,21 @@ and process_sct_close (scope : EcScope.scope) name =
   EcScope.Section.exit scope name
 
 (* -------------------------------------------------------------------- *)
-and process_tactics (scope : EcScope.scope) t =
+(* Add and store src for proofs *)
+and process_tactics ?(src : string option) (scope : EcScope.scope) t =
   let mode = (Pragma.get ()).pm_check in
   match t with
-  | `Actual t  -> snd (EcScope.Tactics.process scope mode t)
-  | `Proof  pm -> EcScope.Tactics.proof   scope mode pm.pm_strict
+  | `Actual t  -> snd (EcScope.Tactics.process ?src scope mode t)
+  | `Proof  pm -> EcScope.Tactics.proof ?src scope mode pm.pm_strict
 
 (* -------------------------------------------------------------------- *)
-and process_save (scope : EcScope.scope) ed =
+(* Add and store src for proofs *)
+and process_save ?(src : string option) (scope : EcScope.scope) ed =
   let (oname, scope) =
     match unloc ed with
-    | `Qed   -> EcScope.Ax.save  scope
-    | `Admit -> EcScope.Ax.admit scope
-    | `Abort -> (None, EcScope.Ax.abort scope)
+    | `Qed   -> EcScope.Ax.save ?src scope
+    | `Admit -> EcScope.Ax.admit ?src scope
+    | `Abort -> (None, EcScope.Ax.abort ?src scope)
   in
     oname |> EcUtils.oiter
       (fun x -> EcScope.notify scope `Info "added lemma: `%s'" x);
@@ -665,11 +667,11 @@ and process ?(src : string option) (ld : Loader.loader) (scope : EcScope.scope) 
       | Gprint       p    -> `Fct   (fun scope -> process_print      scope  p; scope)
       | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
       | Glocate      x    -> `Fct   (fun scope -> process_locate     scope  x; scope)
-      | Gtactics     t    -> `Fct   (fun scope -> process_tactics    scope  t)
+      | Gtactics     t    -> `Fct   (fun scope -> process_tactics    ?src scope  t)
       | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
       | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
       | Gprover_info pi   -> `Fct   (fun scope -> process_proverinfo scope  pi)
-      | Gsave        ed   -> `Fct   (fun scope -> process_save       scope  ed)
+      | Gsave        ed   -> `Fct   (fun scope -> process_save       ?src scope  ed)
       | Gpragma      opt  -> `State (fun scope -> process_pragma     scope  opt)
       | Goption      opt  -> `Fct   (fun scope -> process_option     scope  opt)
       | Gaddrw       hint -> `Fct   (fun scope -> process_addrw      scope hint)

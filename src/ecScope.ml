@@ -728,7 +728,7 @@ module Tactics = struct
 
   let pi scope pi = Prover.do_prover_info scope pi
 
-  let proof (scope : scope) mode (strict : bool) =
+  let proof ?(src : string option) (scope : scope) mode (strict : bool) =
     check_state `InActiveProof "proof script" scope;
 
     match (oget scope.sc_pr_uc).puc_active with
@@ -747,10 +747,11 @@ module Tactics = struct
         | None   -> { pac with puc_mode = Some strict }
         | Some _ -> hierror "[proof] can only be used at beginning of a proof script"
       in
-        { scope with sc_pr_uc =
-            Some { (oget scope.sc_pr_uc) with puc_active = Some (pac, pct); } }
+        { scope with 
+            sc_pr_uc = Some { (oget scope.sc_pr_uc) with puc_active = Some (pac, pct) };
+            sc_locdoc = DocState.push_srcbl scope.sc_locdoc (odfl "proof." src); }
 
-  let process_r ?reloc mark mode (scope : scope) (tac : ptactic list) =
+  let process_r ?(src : string option) ?reloc mark mode (scope : scope) (tac : ptactic list) =
     check_state `InProof "proof script" scope;
 
     let scope =
@@ -808,7 +809,9 @@ module Tactics = struct
 
         let pac = { pac with puc_jdg = PSCheck juc } in
         let puc = { puc with puc_active = Some (pac, pct); } in
-        let scope = { scope with sc_pr_uc = Some puc } in
+        let scope = { scope with 
+                        sc_pr_uc = Some puc;
+                        sc_locdoc = DocState.push_srcbl scope.sc_locdoc (odfl "tactic" src); } in
         Some (penv, hds), scope
 
   let process1_r mark mode scope t =
@@ -818,8 +821,8 @@ module Tactics = struct
     let ts = List.map (fun t -> { pt_core = t; pt_intros = []; }) ts in
     snd (process_r mark mode scope ts)
 
-  let process scope mode tac =
-    process_r true mode scope tac
+  let process ?(src : string option) scope mode tac =
+    process_r ?src true mode scope tac
 end
 
 (* -------------------------------------------------------------------- *)
@@ -1114,18 +1117,35 @@ module Ax = struct
     save_r scope
 
   (* ------------------------------------------------------------------ *)
-  let save scope =
+  let save ?(src : string option) scope =
     check_state `InProof "save" scope;
+    
+    let scope = 
+      { scope with
+          sc_locdoc = DocState.push_srcbl scope.sc_locdoc (odfl "qed." src);}
+    in
     save_r ~mode:`Save scope
 
   (* ------------------------------------------------------------------ *)
-  let admit scope =
+  let admit ?(src : string option) scope =
     check_state `InProof "admitted" scope;
+
+    let scope = 
+      { scope with
+          sc_locdoc = DocState.push_srcbl scope.sc_locdoc (odfl "admit." src);}
+    in
+
     save_r ~mode:`Admit scope
 
   (* ------------------------------------------------------------------ *)
-  let abort scope =
+  let abort ?(src : string option) scope =
     check_state `InProof "abort" scope;
+
+    let scope = 
+      { scope with
+          sc_locdoc = DocState.push_srcbl scope.sc_locdoc (odfl "abort." src);}
+    in
+
     snd (save_r ~mode:`Abort scope)
 
   (* ------------------------------------------------------------------ *)

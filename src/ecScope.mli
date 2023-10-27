@@ -103,9 +103,9 @@ module Ax : sig
   type mode = [`WeakCheck | `Check | `Report]
 
   val add     : ?src:string -> scope -> mode -> paxiom located -> symbol option * scope
-  val save    : scope -> string option * scope
-  val admit   : scope -> string option * scope
-  val abort   : scope -> scope
+  val save    : ?src:string -> scope -> string option * scope
+  val admit   : ?src:string -> scope -> string option * scope
+  val abort   : ?src:string -> scope -> scope
   val realize : scope -> mode -> prealize located -> symbol option * scope
 end
 
@@ -179,8 +179,8 @@ module Tactics : sig
 
   type prinfos = proofenv * (handle * handle list)
 
-  val process : scope -> Ax.mode -> ptactic list -> prinfos option * scope
-  val proof   : scope -> Ax.mode -> bool -> scope
+  val process : ?src:string -> scope -> Ax.mode -> ptactic list -> prinfos option * scope
+  val proof   : ?src:string -> scope -> Ax.mode -> bool -> scope
 end
 
 (* -------------------------------------------------------------------- *)

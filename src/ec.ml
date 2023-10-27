@@ -218,7 +218,7 @@ let main () =
   begin let open EcUserMessages in register () end;
 
   (* Initialize I/O + interaction module *)
-  let (prvopts, input, terminal, interactive, eco) =
+  let (prvopts, input, terminal, interactive, eco, doc) =
     match options.o_command with
     | `Config ->
         let config = {
@@ -262,7 +262,7 @@ let main () =
           then lazy (T.from_emacs ())
           else lazy (T.from_tty ())
 
-        in (cliopts.clio_provers, None, terminal, true, false)
+        in (cliopts.clio_provers, None, terminal, true, false, false)
     end
 
     | `Compile cmpopts -> begin
@@ -283,13 +283,14 @@ let main () =
           lazy (T.from_channel ~name ~gcstats ~progress (open_in name))
         in
           ({cmpopts.cmpo_provers with prvo_iterate = true},
-           Some name, terminal, false, cmpopts.cmpo_noeco)
+           Some name, terminal, false, cmpopts.cmpo_noeco, cmpopts.cmpo_doc)
 
       end
 
     | `Runtest _ ->
         (* Eagerly executed *)
         assert false
+
   in
 
   (match input with
@@ -340,6 +341,12 @@ let main () =
 
     | None -> ()
   in
+
+   (* input = input name, scope contains all documenation items *)
+  let generate_doc input scope =
+    (* Generate HTML file  *)
+    () 
+  in 
 
   let tstats : EcLocation.t -> float option -> unit =
     match options.o_command with
@@ -460,6 +467,8 @@ let main () =
             T.finalize terminal;
             if not eco then
               finalize_input input (EcCommands.current ());
+            if doc then
+              generate_doc input (EcCommands.current ());
             exit 0
           end;
       with
