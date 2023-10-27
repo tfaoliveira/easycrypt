@@ -3080,7 +3080,7 @@ and transbody ue memenv (env : EcEnv.env) retty pbody =
     locals := xs :: !locals;
     init |> oiter
      (fun init ->
-       let doit (v,_) = pv_loc v.v_name, v.v_type, v.v_quantum in
+       let doit (v,_) = pv_var v, v.v_type, v.v_quantum in
        let iasgn = List.map doit xs in
        prelude := ((mode, iasgn), init, _dummy) :: !prelude);
     memenv in

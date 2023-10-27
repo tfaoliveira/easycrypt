@@ -49,7 +49,7 @@ let rec translate_i (env : senv) (cont : senv -> mode * expr) (i : instr) =
     let do1 (pv, ty) =
       match pv with
       | PVglob _ -> raise SemNotSupported
-      | PVloc  x -> (x, ty) in
+      | PVloc  (_,x) -> (x, ty) in
 
     let wr, mods = EcPV.PV.elements (EcPV.i_write env.env i) in
 
@@ -215,7 +215,7 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
   let module ET = EcReduction.EqTest in
 
   match s.s_node with
-  | { i_node = Sasgn (LvVar (PVloc x, xty), e) } :: { i_node = Swhile (c, body) } :: s_tail ->
+  | { i_node = Sasgn (LvVar (PVloc (_,x), xty), e) } :: { i_node = Swhile (c, body) } :: s_tail ->
      if not (ET.for_type env.env xty tint) then
        raise SemNotSupported;
 
@@ -229,12 +229,12 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
          | _ -> raise SemNotSupported in
 
        match inc.i_node with
-       | Sasgn (LvVar (PVloc y, _), ic) ->
+       | Sasgn (LvVar (PVloc (_,y), _), ic) ->
           if x <> y then
             raise SemNotSupported
           else begin
             match ic.e_node with
-            | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar (PVloc y') }; { e_node = Eint inc }])
+            | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar (PVloc (_,y')) }; { e_node = Eint inc }])
                  when    y = y'
                       && EcBigInt.lt EcBigInt.zero inc
                       && EcPath.p_equal op EcCoreLib.CI_Int.p_int_add
@@ -248,21 +248,21 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
          let mx =
            e_app
              (e_op EcCoreLib.CI_Int.p_int_mul [] (toarrow [tint; tint] tint))
-             [e_int inc; e_var (pv_loc x) tint] tint in
-         let subst = EcPV.Mpv.add env.env (pv_loc x) mx EcPV.Mpv.empty in
+             [e_int inc; e_var (pv_cloc x) tint] tint in
+         let subst = EcPV.Mpv.add env.env (pv_cloc x) mx EcPV.Mpv.empty in
          EcPV.Mpv.issubst env.env subst body
        end else body in
 
      let bd =
        match c.e_node with
-       | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar (PVloc y) }; bd])
+       | Eapp ({ e_node = Eop (op, []) }, [{ e_node = Evar (PVloc (_,y)) }; bd])
             when    x = y
                  && EcPath.p_equal op EcCoreLib.CI_Int.p_int_lt -> bd
        | _ -> raise SemNotSupported in
 
      let wr = EcPV.s_write env.env (EcModules.stmt body) in
 
-     if EcPV.PV.mem_pv env.env (pv_loc x) wr then
+     if EcPV.PV.mem_pv env.env (pv_cloc x) wr then
        raise SemNotSupported;
 
      if not (EcPV.PV.indep env.env (EcPV.e_read env.env bd) wr) then
@@ -277,7 +277,7 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
        let do1 (pv, ty) =
          match pv with
          | PVglob _ -> raise SemNotSupported
-         | PVloc  z -> (z, ty) in
+         | PVloc  (_,z) -> (z, ty) in
 
        let wr, mods = EcPV.PV.elements (EcPV.is_write env.env body) in
 
@@ -411,7 +411,7 @@ and translate_forloop (env : senv) (cont : senv -> mode * expr) (s : stmt) =
 (* -------------------------------------------------------------------- *)
 and translate_e (env : senv) (e : expr) =
   match e.e_node with
-  | Evar (PVloc x) ->
+  | Evar (PVloc (_, x)) ->
      e_local (oget (Msym.find_opt x env.subst)) e.e_ty
 
   | Evar (PVglob _) ->
@@ -436,5 +436,6 @@ and translate_pv (env : senv) (pv : prog_var) =
   match pv with
   | PVglob _ ->
      raise SemNotSupported
-  | PVloc x ->
+  | PVloc (k,x) ->
+      assert (k=`Classical);
       oget (Msym.find_opt x env.subst)

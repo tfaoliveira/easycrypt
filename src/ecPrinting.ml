@@ -463,7 +463,7 @@ let pp_funname (ppe : PPEnv.t) fmt p =
 (* -------------------------------------------------------------------- *)
 let msymbol_of_pv (ppe : PPEnv.t) p =
   match p with
-  | PVloc name -> [(name,[])]
+  | PVloc (_,name) -> [(name,[])]
 
   | PVglob xp ->
     let mem =
@@ -512,7 +512,7 @@ let get_f_projarg ppe e i ty =
   match e.f_node with
   | Fpvar (x, m) ->
      let s, m =  get_projarg_r ppe (x, m) i in
-     f_pvar (pv_loc s) ty m
+     f_pvar (pv_cloc s) ty m
   | _ -> raise NoProjArg
 
 (* -------------------------------------------------------------------- *)
@@ -1387,7 +1387,7 @@ let rec pp_quantum_ref (ppe : PPEnv.t) fmt qr =
         match qr with
         | QRvar (p, _) ->
            let x = get_projarg_for_var ppe p i in
-           pp_pv ppe fmt (pv_loc x)
+           pp_pv ppe fmt (pv_qloc x)
 
         | _ ->
            raise NoProjArg
@@ -2040,7 +2040,7 @@ and pp_qe ppe fmt ecq =
           | QRvar (p1, _), QRvar (p2, _) ->
              let x1 = get_projarg_for_var ppel p1 i1 in
              let x2 = get_projarg_for_var pper p2 i2 in
-             msymbol_of_pv ppel (pv_loc x1) = msymbol_of_pv pper (pv_loc x2)
+             msymbol_of_pv ppel (pv_qloc x1) = msymbol_of_pv pper (pv_qloc x2)
           | _, _ ->
              false
         with NoProjArg -> false

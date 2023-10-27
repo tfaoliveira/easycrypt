@@ -179,7 +179,7 @@ module LowMatch = struct
     let subst, pvs =
       let s, pvs =
         List.fold_left_map (fun s ((x, xty), name) ->
-            let pv = pv_loc (oget name.ov_name) in
+            let pv = pv_ovar name in
             let s  = Mid.add x (e_var pv xty) s in
             (s, (pv, xty)))
           Mid.empty (List.combine cvars pvs) in

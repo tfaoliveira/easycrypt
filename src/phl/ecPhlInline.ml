@@ -110,26 +110,26 @@ module LowInternal = struct
         let for1 mx v x =
           let p =
             assert (v.ov_quantum = x.ov_quantum);
-            let xpv = pv_loc (oget x.ov_name) in
+            let xpv = pv_ovar x in
             if v.ov_quantum = `Classical then `Class xpv
             else `Quant (qrvar (xpv, x.ov_type)) in
-          PVMap.add (pv_loc (oget v.ov_name)) p mx
+          PVMap.add (pv_ovar v) p mx
         in
         let mx = PVMap.create env in
         let mx = List.fold_left2 for1 mx f.f_sig.fs_anames anames in
         let mx =
           match f.f_sig.fs_qnames with
-          | [q] -> PVMap.add (pv_loc (oget q.ov_name)) (`Quant qargs) mx
+          | [q] -> PVMap.add (pv_ovar q) (`Quant qargs) mx
           | _ ->
             List.fold_lefti (fun mx i q ->
-              PVMap.add (pv_loc (oget q.ov_name))
+              PVMap.add (pv_ovar q)
                 (`Quant (qrproj(qargs,i))) mx) mx f.f_sig.fs_qnames in
         let mx = List.fold_left2 for1 mx (List.map ovar_of_var fdef.f_locals) lnames in
         mx
       in
 
       let prelude =
-        let newpv = List.map (fun x -> pv_loc (oget x.ov_name), x.ov_type) anames in
+        let newpv = List.map (fun x -> pv_ovar x, x.ov_type) anames in
         if List.length newpv = List.length args then
           List.map2 (fun npv e -> i_asgn (LvVar npv, e)) newpv args
         else
@@ -149,7 +149,7 @@ module LowInternal = struct
           let vlvs =
             List.map (fun (x,ty) -> { ov_quantum = `Classical; ov_name = Some (symbol_of_pv x); ov_type = ty}) lvs in
           let me, auxs = EcMemory.bindall_fresh vlvs me in
-          let auxs = List.map (fun v -> pv_loc (oget v.ov_name), v.ov_type) auxs in
+          let auxs = List.map (fun v -> pv_ovar v, v.ov_type) auxs in
           let s1 =
             let doit i auxi = i_asgn(LvVar auxi, e_proj_simpl r i (snd auxi)) in
             List.mapi doit auxs in

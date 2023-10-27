@@ -84,7 +84,7 @@ let alias_stmt env id (pf, _) me i =
     let id       = { ov_quantum = `Classical; ov_name = Some id; ov_type = ty; } in
     let (me, id) = EcMemory.bind_fresh id me in
     (* oget cannot fail — Some in, Some out *)
-    let pv       = pv_loc (oget id.ov_name)  in
+    let pv       = pv_ovar id  in
     me, pv in
 
   match i.i_node with
@@ -118,7 +118,7 @@ let set_stmt (fresh, id) e =
     let  v       = { ov_quantum = `Classical; ov_name = Some id; ov_type = e.e_ty } in
     let (me, id) = EcMemory.bind_fresh v me in
     (* oget cannot fail — Some in, Some out *)
-    let pv       = pv_loc (oget id.ov_name) in
+    let pv       = pv_ovar id in
 
     (me, i_asgn (LvVar (pv, e.e_ty), e))
   in

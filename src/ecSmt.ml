@@ -829,7 +829,7 @@ and trans_pvar ((genv, lenv) as env) pv ty mem =
   let pv = NormMp.norm_pvar genv.te_env pv in
   let mt = get_memtype lenv mem in
   match pv with
-  | PVloc x ->
+  | PVloc (_,x) ->
     let m = trans_mem env ~forglobal:false mem in
     begin match EcMemory.lookup x mt with
     | Some (_,_,Some i) -> wproj_tuple genv m i

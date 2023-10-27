@@ -27,11 +27,11 @@ let extend_body fsig body =
     match args with
     | []  -> []
     | [v] ->
-        [i_asgn (LvVar (pv_loc v.v_name, v.v_type),
+        [i_asgn (LvVar (pv_cloc v.v_name, v.v_type),
                  e_var arg fsig.fs_arg)]
 
     | lv ->
-        let lv = List.map (fun v -> pv_loc v.v_name, v.v_type) lv in
+        let lv = List.map (fun v -> pv_cloc v.v_name, v.v_type) lv in
         [i_asgn (LvTuple lv, e_var arg fsig.fs_arg)]
 
   in

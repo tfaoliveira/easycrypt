@@ -787,6 +787,8 @@ let is_logical_op op =
 
   | _ -> false
 
+
+
 (* -------------------------------------------------------------------- *)
 type sform =
   | SFint   of BI.zint
@@ -944,60 +946,6 @@ let f_dlet_simpl tya tyb d f =
     end
   | _ ->
      f_dlet tya tyb d f
-
-(* -------------------------------------------------------------------- *)
-(* destr_exists_prenex destructs recursively existentials in a formula
- *  whenever possible.
- * For instance:
- * - E x p1 /\ E y p2 -> [x,y] (p1 /\ p2)
- * - E x p1 /\ E x p2 -> [] (E x p1 /\ E x p2)
- * - p1 => E x p2 -> [x] (p1 => p2)
- * - E x p1 => p2 -> [] (E x p1 => p2)
- *)
-let destr_exists_prenex f =
-  let disjoint bds1 bds2 =
-    List.for_all
-      (fun (id1, _) -> List.for_all (fun (id2, _) -> id1 <> id2) bds2)
-      bds1
-  in
-
-  let rec prenex_exists bds p =
-    match sform_of_form p with
-    | SFand (`Sym, (f1, f2)) ->
-        let (bds1, f1) = prenex_exists [] f1 in
-        let (bds2, f2) = prenex_exists [] f2 in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_and f1 f2)
-          else (bds, p)
-
-    | SFor (`Sym, (f1, f2)) ->
-        let (bds1, f1) = prenex_exists [] f1 in
-        let (bds2, f2) = prenex_exists [] f2 in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_or f1 f2)
-          else (bds, p)
-
-    | SFimp (f1, f2) ->
-        let (bds2, f2) = prenex_exists bds f2 in
-          (bds2@bds, f_imp f1 f2)
-
-    | SFquant (Lexists, bd, lazy p) ->
-        let (bds, p) = prenex_exists bds p in
-          (bd::bds, p)
-
-    | SFif (f, ft, fe) ->
-        let (bds1, f1) = prenex_exists [] ft in
-        let (bds2, f2) = prenex_exists [] fe in
-          if   disjoint bds1 bds2
-          then (bds1@bds2@bds, f_if f f1 f2)
-          else (bds, p)
-
-    | _ -> (bds, p)
-  in
-    (* Make it fail as with destr_exists *)
-    match prenex_exists [] f with
-    | [] , _ -> destr_error "exists"
-    | bds, f -> (bds, f)
 
 (* -------------------------------------------------------------------- *)
 let destr_ands ~deep =

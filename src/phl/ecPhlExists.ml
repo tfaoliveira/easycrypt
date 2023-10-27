@@ -14,6 +14,64 @@ module TTC = EcProofTyping
 module PT  = EcProofTerm
 
 (* -------------------------------------------------------------------- *)
+(* destr_exists_prenex destructs recursively existentials in a formula
+ *  whenever possible.
+ * For instance:
+ * - E x p1 /\ E y p2 -> [x,y] (p1 /\ p2)
+ * - E x p1 /\ E x p2 -> [] (E x p1 /\ E x p2)
+ * - p1 => E x p2 -> [x] (p1 => p2)
+ * - E x p1 => p2 -> [] (E x p1 => p2)
+ *)
+let destr_exists_prenex env on f =
+  let disjoint bds1 bds2 =
+    List.for_all
+      (fun (id1, _) -> List.for_all (fun (id2, _) -> id1 <> id2) bds2)
+      bds1
+  in
+
+  let rec prenex_exists bds p =
+    match sform_of_form p with
+    | SFand (`Sym, (f1, f2)) ->
+        let (bds1, f1) = prenex_exists [] f1 in
+        let (bds2, f2) = prenex_exists [] f2 in
+          if   disjoint bds1 bds2
+          then (bds1@bds2@bds, f_and f1 f2)
+          else (bds, p)
+
+    | SFor (`Sym, (f1, f2)) ->
+        let (bds1, f1) = prenex_exists [] f1 in
+        let (bds2, f2) = prenex_exists [] f2 in
+          if   disjoint bds1 bds2
+          then (bds1@bds2@bds, f_or f1 f2)
+          else (bds, p)
+
+    | SFimp (f1, f2) ->
+        let (bds2, f2) = prenex_exists bds f2 in
+          (bds2@bds, f_imp f1 f2)
+
+    | SFquant (Lexists, bd, lazy p) ->
+
+        if EcQuantum.is_classical_form env ~on p then
+          let (bds, p) = prenex_exists bds p in
+          (bd::bds, p)
+        else
+          (bds, p)
+
+    | SFif (f, ft, fe) ->
+        let (bds1, f1) = prenex_exists [] ft in
+        let (bds2, f2) = prenex_exists [] fe in
+          if   disjoint bds1 bds2
+          then (bds1@bds2@bds, f_if f f1 f2)
+          else (bds, p)
+
+    | _ -> (bds, p)
+  in
+    (* Make it fail as with destr_exists *)
+    match prenex_exists [] f with
+    | [] , _ -> destr_error "exists"
+    | bds, f -> (bds, f)
+
+(* -------------------------------------------------------------------- *)
 let get_to_gens fs =
   let do_id f =
     let id =
@@ -25,9 +83,16 @@ let get_to_gens fs =
 
 (* -------------------------------------------------------------------- *)
 let t_hr_exists_elim_r ?bound tc =
+  let only_classical =
+    (* FIXME QUANTUM : all logic need this restriction or only equiv *)
+    (*let concl = FApi.tc1_goal tc in
+      is_equivS concl || is_equivF concl *)
+    true
+  in
   let pre = tc1_get_pre tc in
+  let on = if only_classical then tc1_get_mem tc else [] in
   let bd, pre =
-    try  destr_exists_prenex pre
+    try  destr_exists_prenex (FApi.tc1_env tc) on pre
     with DestrError _ -> [], pre in
   let bd, pre =
     bound
@@ -52,7 +117,7 @@ let t_hr_exists_intro_r fs tc =
   let gen   = get_to_gens fs in
   let eqs   = List.map (fun (id, f) -> f_eq (f_local id f.f_ty) f) gen in
   let bd    = List.map (fun (id, f) -> (id, GTty f.f_ty)) gen in
-  let pre   = f_exists bd (f_and (f_ands eqs) pre) in
+  let pre   = f_and (f_exists bd (f_ands eqs)) pre in
 
   let h = LDecl.fresh_id hyps "h" in
   let ms, subst =
@@ -78,13 +143,13 @@ let t_hr_exists_intro_r fs tc =
 
   let tactic =
     FApi.t_seqsub (EcPhlConseq.t_conseq pre post)
-      [ FApi.t_seqs [
-          t_intros_i (ms@[h]);
-          t_exists_intro_s args;
-          t_apply_hyp h;
-        ];
-        t_trivial;
-        t_id]
+      [ t_intros_i (ms@[h]) @!
+        t_and_intro @+ [
+           t_exists_intro_s args @! t_trivial;
+           t_apply_hyp h
+        ]
+      ; t_trivial
+      ; t_id ]
   in
   FApi.t_internal tactic tc
 

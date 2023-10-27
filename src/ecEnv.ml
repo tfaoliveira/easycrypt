@@ -1791,7 +1791,7 @@ module Var = struct
              Some (`Proj (argname, pa), (v.v_quantum, v.v_type))
 
           | Some (v, None, _) ->
-             Some (`Var  (pv_loc v.v_name), (v.v_quantum, v.v_type))
+             Some (`Var  (pv_var v), (v.v_quantum, v.v_type))
 
           | None ->
              None

@@ -120,7 +120,7 @@ let qrproj (qr, i) =
 
 let qr_pvloc v =
   assert (v.v_quantum = `Quantum);
-  qrvar (pv_loc v.v_name, v.v_type)
+  qrvar (pv_qloc v.v_name, v.v_type)
 
 let qr_pvlocs vs =
   qrtuple (List.map qr_pvloc vs)
@@ -621,7 +621,7 @@ module Uninit = struct    (* FIXME: generalize this for use in ecPV *)
     let rec e_pv sid e =
       match e.e_node with
       | Evar (PVglob _) -> sid
-      | Evar (PVloc id) -> Ssym.add id sid
+      | Evar (PVloc (_,id)) -> Ssym.add id sid
       | _               -> e_fold e_pv sid e in
 
     e_pv Ssym.empty e
@@ -629,7 +629,7 @@ end
 
 let rec lv_get_uninit_read (w : Ssym.t) (lv : lvalue) =
   let sx_of_pv pv = match pv with
-    | PVloc v -> Ssym.singleton v
+    | PVloc (_,v) -> Ssym.singleton v
     | PVglob _ -> Ssym.empty
   in
 

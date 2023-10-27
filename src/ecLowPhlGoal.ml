@@ -256,25 +256,44 @@ let tc1_get_stmt side tc =
       tc_error_noXhl ~kinds:(hlkinds_Xhl_r `Stmt) !!tc
 
 (* -------------------------------------------------------------------- *)
-let get_pre f =
+let get_pre ?(qeq=false) f =
   match f.f_node with
-  | FhoareF hf  -> Some (hf.hf_pr)
-  | FhoareS hs  -> Some (hs.hs_pr)
+  | FhoareF hf   -> Some (hf.hf_pr)
+  | FhoareS hs   -> Some (hs.hs_pr)
   | FcHoareF hf  -> Some (hf.chf_pr)
   | FcHoareS hs  -> Some (hs.chs_pr)
   | FbdHoareF hf -> Some (hf.bhf_pr)
   | FbdHoareS hs -> Some (hs.bhs_pr)
-  | FequivF ef   -> assert (is_qe_empty ef.ef_pr.ec_e); Some (ef.ef_pr.ec_f )
-  | FequivS es   -> assert (is_qe_empty es.es_pr.ec_e); Some (es.es_pr.ec_f )
+  | FequivF ef   -> assert (qeq || is_qe_empty ef.ef_pr.ec_e); Some (ef.ef_pr.ec_f )
+  | FequivS es   -> assert (qeq || is_qe_empty es.es_pr.ec_e); Some (es.es_pr.ec_f )
   | _            -> None
 
-let tc1_get_pre tc =
-  match get_pre (FApi.tc1_goal tc) with
+let get_mem f =
+  match f.f_node with
+  | FhoareF hf   -> [mhr]
+  | FhoareS hs   -> [fst hs.hs_m]
+  | FcHoareF hf  -> [mhr]
+  | FcHoareS hs  -> [fst hs.chs_m]
+  | FbdHoareF hf -> [mhr]
+  | FbdHoareS hs -> [fst hs.bhs_m]
+  | FequivF ef   -> [mleft; mright]
+  | FequivS es   -> [fst es.es_ml; fst es.es_mr]
+  | FeagerF eg   -> [mleft; mright]
+  | Fcoe coe     -> [fst coe.coe_mem]
+  | Fpr pr       -> [mhr]
+  | _            -> assert false
+
+let tc1_get_mem tc =
+  get_mem  (FApi.tc1_goal tc)
+
+(* if qeq then qeq are allowed in the pre of equiv *)
+let tc1_get_pre ?qeq tc =
+  match get_pre ?qeq (FApi.tc1_goal tc) with
   | None   -> tc_error_noXhl ~kinds:hlkinds_Xhl !!tc
   | Some f -> f
 
 (* -------------------------------------------------------------------- *)
-let get_post f =
+let get_post ?(qeq=false) f =
   match f.f_node with
   | FhoareF hf  -> Some (hf.hf_po )
   | FhoareS hs  -> Some (hs.hs_po )
@@ -282,12 +301,13 @@ let get_post f =
   | FcHoareS hs  -> Some (hs.chs_po )
   | FbdHoareF hf -> Some (hf.bhf_po)
   | FbdHoareS hs -> Some (hs.bhs_po)
-  | FequivF ef   -> assert (is_qe_empty ef.ef_po.ec_e); Some (ef.ef_po.ec_f )
-  | FequivS es   -> assert (is_qe_empty es.es_po.ec_e); Some (es.es_po.ec_f )
+  | FequivF ef   -> assert (qeq || is_qe_empty ef.ef_po.ec_e); Some (ef.ef_po.ec_f )
+  | FequivS es   -> assert (qeq || is_qe_empty es.es_po.ec_e); Some (es.es_po.ec_f )
   | _            -> None
 
-let tc1_get_post tc =
-  match get_post (FApi.tc1_goal tc) with
+(* if qeq then qeq are allowed in the pre of equiv *)
+let tc1_get_post ?qeq tc =
+  match get_post ?qeq (FApi.tc1_goal tc) with
   | None   -> tc_error_noXhl ~kinds:hlkinds_Xhl !!tc
   | Some f -> f
 

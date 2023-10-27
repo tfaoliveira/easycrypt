@@ -163,11 +163,11 @@ val ovar_of_var: variable -> ovariable
 (* -------------------------------------------------------------------- *)
 type pvar_kind =
   | PVKglob
-  | PVKloc
+  | PVKloc of quantum
 
 type prog_var = private
   | PVglob of EcPath.xpath
-  | PVloc of EcSymbols.symbol
+  | PVloc of (quantum * EcSymbols.symbol)
 
 val pv_equal       : prog_var -> prog_var -> bool
 val pv_compare     : prog_var -> prog_var -> int
@@ -191,7 +191,13 @@ val name_of_pvar   : prog_var -> string
 
 val pv_subst : (EcPath.xpath -> EcPath.xpath) -> prog_var -> prog_var
 
-val pv_loc  : EcSymbols.symbol -> prog_var
+val pv_loc  : quantum * EcSymbols.symbol -> prog_var
+val pv_var  : variable -> prog_var
+val pv_ovar : ovariable -> prog_var
+
+val pv_cloc : EcSymbols.symbol -> prog_var
+val pv_qloc : EcSymbols.symbol -> prog_var
+
 val pv_glob : EcPath.xpath -> prog_var
 val xp_glob : EcPath.xpath -> EcPath.xpath
 

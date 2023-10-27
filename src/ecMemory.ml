@@ -228,7 +228,7 @@ let is_bound (x : symbol) (mt : memtype) =
 let is_bound_pv (pv : prog_var) (mt : memtype) =
   match pv with
   | PVglob _ -> false
-  | PVloc id -> is_bound id mt
+  | PVloc (_,id) -> is_bound id mt
 
 (* -------------------------------------------------------------------- *)
 type lookup = (variable * proj_arg option * int option) option

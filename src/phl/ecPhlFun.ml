@@ -585,23 +585,23 @@ module ToCodeLow = struct
 
     let me, res = EcMemory.bind_fresh res me in
 
-    let eargs = List.map (fun v -> e_var (pv_loc (oget v.ov_name)) v.ov_type) args in
+    let eargs = List.map (fun v -> e_var (pv_ovar v) v.ov_type) args in
     let args =
       let var ov = { v_quantum = `Classical; v_name = oget ov.ov_name; v_type = ov.ov_type } in
       List.map var args
     in
 
     let icall =
-      i_call (Some (LvVar (pv_loc (oget res.ov_name), res.ov_type)), f, eargs, quantum_unit)
+      i_call (Some (LvVar (pv_ovar res, res.ov_type)), f, eargs, quantum_unit)
       (* FIXME QUANTUM quantum_unit *)
     in (me, stmt [icall], res, args)
 
   let add_var env vfrom mfrom v me s =
-    PVM.add env vfrom mfrom (f_pvar (pv_loc (oget v.ov_name)) v.ov_type (fst me)) s
+    PVM.add env vfrom mfrom (f_pvar (pv_ovar v) v.ov_type (fst me)) s
 
   let add_var_tuple env vfrom mfrom vs me s =
     let vs =
-      List.map (fun v -> f_pvar (pv_loc v.v_name) v.v_type (fst me)) vs
+      List.map (fun v -> f_pvar (pv_var v) v.v_type (fst me)) vs
     in PVM.add env vfrom mfrom (f_tuple vs) s
 end
 

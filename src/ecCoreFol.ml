@@ -792,7 +792,7 @@ let f_app f args ty =
 (* -------------------------------------------------------------------- *)
 let f_local  x ty   = mk_form (Flocal x) ty
 let f_pvar   x ty m = mk_form (Fpvar(x, m)) ty
-let f_pvloc  v  m = f_pvar (pv_loc v.v_name) v.v_type m
+let f_pvloc  v  m = f_pvar (pv_var v) v.v_type m
 
 let f_pvarg  ty m = f_pvar pv_arg ty m
 

@@ -1,5 +1,6 @@
 open EcMaps
 open EcUtils
+open EcIdent
 open EcTypes
 open EcModules
 open EcFol
@@ -53,12 +54,76 @@ let qrprojs qr projs =
 
 let qrpvprojs pv ty projs = qrprojs (qrvar (pv, ty)) projs
 
-let iso_qrvar iso = qrvar (pv_loc iso.iso_var, iso.iso_ty)
+let iso_qrvar iso = qrvar (pv_qloc iso.iso_var, iso.iso_ty)
 
 let destr_qr_pair qr =
   match qr with
   | QRtuple [q1; q2] -> q1, q2
   | _ -> assert false
+
+
+exception NotClassical of prog_var
+
+let test_classical_form env ~(on:EcIdent.t list) f =
+  let check_pv pv =
+    let k =
+      match pv with
+      | PVglob x -> fst (EcEnv.Var.by_xpath x env)
+      | PVloc (k, _) -> k
+    in
+    if k = `Quantum then raise (NotClassical pv)
+  in
+
+  let add_binding on (id, gty) =
+    match gty with
+    | GTmem _ -> Sid.remove id on
+    | _ -> on in
+
+  let add_bindings = List.fold_left add_binding in
+
+  let removes = List.fold_left (fun on id -> Sid.remove id on) in
+
+  let rec check on f =
+    match f.f_node with
+    | Fquant(_, bd, f) -> check_on (add_bindings on bd) f
+
+    | Fif _ | Fmatch _  | Flet _
+    | Fapp _ | Ftuple _ | Fproj _ -> f_iter (check on) f
+    | Fint _ | Flocal _ | Fop _ -> ()
+
+    | Fpvar (pv, m) ->
+        if Sid.mem m on then check_pv pv
+
+    | Fglob (id, m) -> () (* FIXME QUANTUM *)
+
+    | Fpr pr ->
+      check on pr.pr_args;
+      check_on (removes on (EcLowPhlGoal.get_mem f)) pr.pr_event
+
+    | FhoareF _ | FhoareS _ | FcHoareF _ | FcHoareS _  | FbdHoareF _ | FbdHoareS _
+    | FequivF _ | FequivS _ | FeagerF _ | Fcoe _ ->
+        f_iter (check_on (removes on  (EcLowPhlGoal.get_mem f))) f
+
+
+  and check_on on f =
+    if not (Sid.is_empty on) then check on f
+
+  in
+  check_on (Sid.of_list on) f
+
+let is_classical_form env ~(on:EcIdent.t list) f =
+  try test_classical_form env ~on f; true
+  with NotClassical pv -> false
+
+let check_classical ~(on:EcIdent.t list) f tc =
+  let env = FApi.tc1_env tc in
+  try test_classical_form env ~on f
+  with NotClassical pv ->
+    let open EcPrinting in
+    let ppe = PPEnv.ofenv env in
+    tc_error !!tc "@[<v>only classical formula is allowed@ %a@ depends on %a@]"
+      (pp_form ppe) f (pp_pv ppe) pv
+
 
 (* ---------------------------------------------------------------------- *)
 (* Trusted code                                                           *)
@@ -137,7 +202,7 @@ end
 (*  forall k:t1, k = fi (f k), and f k is valid              *)
 
 let init_check_iso env iso =
-  let pv_iso = pv_loc iso.iso_var in
+  let pv_iso = pv_qloc iso.iso_var in
 
   let ps = ref PS.empty in
 
@@ -173,10 +238,10 @@ let check_iso env iso =
           if not (EcReduction.EqTest.for_type env ty tunit) then
           raise (NotFull {iso with iso_def = proj})
   in
-  check_full ps (qrvar (pv_loc iso.iso_var, iso.iso_ty)) iso.iso_ty
+  check_full ps (qrvar (pv_qloc iso.iso_var, iso.iso_ty)) iso.iso_ty
 
 let apply_iso iso qr =
-  qr_subst_pv (pv_loc iso.iso_var) qr iso.iso_def
+  qr_subst_pv (pv_qloc iso.iso_var) qr iso.iso_def
 
 let apply_iso_qe iso qe =
   { qeg = qe.qeg
@@ -248,7 +313,7 @@ let qr_glob env qr =
   let iso_ty = qr_ty env qr in
 
   let glob = ref [] in
-  let x = qrvar (pv_loc iso_var, iso_ty) in
+  let x = qrvar (pv_qloc iso_var, iso_ty) in
   let rec aux x qr =
     match qr with
     | QRvar (v, ty) ->
@@ -260,6 +325,10 @@ let qr_glob env qr =
 
   let iso_def = qrtuple !glob in
   { iso_var; iso_ty; iso_def }
+
+(*let check_classical tc f =
+  let env = FApi.tc1_env tc in
+  let error   *)
 
 (* ---------------------------------------------------------------------- *)
 (* Untrusted code                                                         *)
@@ -283,7 +352,7 @@ let compact_iso env iso =
         let doit (i,t) = if PS.is_empty t then None else Some (build (qrproj (proj,i)) (PS.get_proj ps i)) in
         qrtuple (List.filter_map doit l) in
 
-  build (qrvar (pv_loc iso.iso_var, iso.iso_ty)) ps
+  build (qrvar (pv_qloc iso.iso_var, iso.iso_ty)) ps
 
 let compact_iso1 env iso =
   { iso with iso_def = compact_iso env iso }
@@ -318,7 +387,7 @@ let init_build_iso env qr1 qr2 =
 
   let iso_var = "k" in
   let iso_ty = qr_ty env qr1 in
-  let k = qrvar (pv_loc iso_var, iso_ty) in
+  let k = qrvar (pv_qloc iso_var, iso_ty) in
   (* Build the map of accessible projection form qr1 *)
   let map = ref BatMap.empty in
   let add pv proj q =
@@ -362,7 +431,7 @@ let build_iso env qr1 qr2 =
 let complete_iso env iso =
   let q1 = ref [] in
   let ps = init_check_iso env iso in
-  let var = pv_loc iso.iso_var in
+  let var = pv_qloc iso.iso_var in
   let add_q1 proj =
     q1 := proj :: !q1 in
   let rec complete ps proj ty =

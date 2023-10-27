@@ -264,7 +264,7 @@ let t_eager_fun_def_r tc =
       let v = { ov_quantum = `Classical; ov_name = Some "result"; ov_type = e.e_ty } in
       let mem, s = EcMemory.bind_fresh v mem in
       (* oget cannot fail — Some in, Some out *)
-      let x = EcTypes.pv_loc (oget s.ov_name) in
+      let x = EcTypes.pv_ovar s in
       f_pvar x e.e_ty (fst mem), mem,
       s_seq fdef.f_body (stmt [i_asgn(LvVar(x,e.e_ty), e)])
   in
