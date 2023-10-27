@@ -65,5 +65,19 @@ module M2 = {
 
 }.
 
+module K = { 
+  proc f () = { 
+    quantum var x, y: int * int;
+    x <- (0,1);
+    y <- (0,1);
+    x.`1 <* U{fun x => x};
+    (x.`1,y.`1) <* U{fun x => x};
+    (x.`1, x.`2) <* U{fun x => x};
+    (x,y).`1 <* U{fun x => x};
+    (* (x,x) <* U{fun x => x}; *)
+    (* (x.`1, x.`1) <* U{fun x => x}; *)
+  }
+}.
+
 equiv L : M.q ~ M.q : ={a}, ={global,a/b} ==> true, ={a}.
 proof. abort.
