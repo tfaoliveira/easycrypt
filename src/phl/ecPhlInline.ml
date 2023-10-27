@@ -27,8 +27,22 @@ and s_pat = (int * i_pat) list
 (* FIXME QUANTUM *)
 
 module LowSubst = struct
+
+  let classical p =
+    match p with
+    | `Class pv -> pv
+    | _ -> assert false
+
+  let quantum p =
+    match p with
+    | `Quant qr -> qr
+    | _ -> assert false
+
   let pvsubst m pv =
-    odfl pv (PVMap.find pv m)
+    odfl pv (omap classical (PVMap.find pv m))
+
+  let qpvsubst m (pv,ty) =
+    odfl (qrvar (pv,ty)) (omap quantum (PVMap.find pv m))
 
   let rec esubst m e =
     match e.e_node with
@@ -37,20 +51,26 @@ module LowSubst = struct
 
   let lvsubst m lv =
     match lv with
-    | LvVar   (pv, ty)       -> LvVar (pvsubst m pv, ty)
-    | LvTuple pvs            -> LvTuple (List.map (fst_map (pvsubst m)) pvs)
+    | LvVar   (pv, ty) -> LvVar (pvsubst m pv, ty)
+    | LvTuple pvs      -> LvTuple (List.map (fst_map (pvsubst m)) pvs)
+
+  let rec qrsubst m qr =
+    match qr with
+    | QRvar q -> qpvsubst m q
+    | QRtuple qs -> qrtuple (List.map (qrsubst m) qs)
+    | QRproj(qr,i) -> qrproj (qrsubst m qr, i)
 
   let rec isubst m (i : instr) =
     let esubst = esubst m in
     let ssubst = ssubst m in
 
     match i.i_node with
-    | Squantum _ | Smeasure _ -> assert false
+    | Squantum (q, o, e) -> i_quantum (qrsubst m q, o, esubst e)
+    | Smeasure(lv, q, e) -> i_measure (lvsubst m lv, qrsubst m q, esubst e)
     | Sasgn  (lv, e)     -> i_asgn   (lvsubst m lv, esubst e)
     | Srnd   (lv, e)     -> i_rnd    (lvsubst m lv, esubst e)
     | Scall  (lv, f, es, qr) ->
-        assert (is_quantum_unit qr);
-        i_call  (omap (lvsubst m) lv, f, List.map esubst es, qr)
+        i_call  (omap (lvsubst m) lv, f, List.map esubst es, qrsubst m qr)
     | Sif    (c, s1, s2) -> i_if     (esubst c, ssubst s1, ssubst s2)
     | Swhile (e, stmt)   -> i_while  (esubst e, ssubst stmt)
     | Smatch (e, bs)     -> i_match  (esubst e, List.Smart.map (snd_map ssubst) bs)
@@ -70,7 +90,7 @@ module LowInternal = struct
     let hyps = FApi.tc1_hyps tc in
     let env  = LDecl.toenv hyps in
 
-    let inline1 me lv p args =
+    let inline1 me lv p args qargs =
       let p = EcEnv.NormMp.norm_xfun env p in
       let f = EcEnv.Fun.by_xpath p env in
       let fdef =
@@ -84,21 +104,26 @@ module LowInternal = struct
                   (EcPrinting.pp_funname ppe) p)
         end
       in
-      let _params =
-        let named_arg ov =
-          match ov.ov_name with
-          | None   -> assert false
-          | Some v -> { v_quantum = `Classical; v_name = v; v_type = ov.ov_type }
-        in List.map named_arg f.f_sig.fs_anames
-      in
       let me, anames = EcMemory.bindall_fresh f.f_sig.fs_anames me in
       let me, lnames = EcMemory.bindall_fresh (List.map ovar_of_var fdef.f_locals) me in
       let subst =
         let for1 mx v x =
-          PVMap.add (pv_loc (oget v.ov_name)) (pv_loc (oget x.ov_name)) mx
+          let p =
+            assert (v.ov_quantum = x.ov_quantum);
+            let xpv = pv_loc (oget x.ov_name) in
+            if v.ov_quantum = `Classical then `Class xpv
+            else `Quant (qrvar (xpv, x.ov_type)) in
+          PVMap.add (pv_loc (oget v.ov_name)) p mx
         in
         let mx = PVMap.create env in
         let mx = List.fold_left2 for1 mx f.f_sig.fs_anames anames in
+        let mx =
+          match f.f_sig.fs_qnames with
+          | [q] -> PVMap.add (pv_loc (oget q.ov_name)) (`Quant qargs) mx
+          | _ ->
+            List.fold_lefti (fun mx i q ->
+              PVMap.add (pv_loc (oget q.ov_name))
+                (`Quant (qrproj(qargs,i))) mx) mx f.f_sig.fs_qnames in
         let mx = List.fold_left2 for1 mx (List.map ovar_of_var fdef.f_locals) lnames in
         mx
       in
@@ -141,8 +166,7 @@ module LowInternal = struct
     let rec inline_i me ip i =
       match ip, i.i_node with
       | IPpat, Scall (lv, p, args, qr) ->
-          assert (is_quantum_unit qr);
-          inline1 me lv p args
+          inline1 me lv p args qr
       | IPif (sp1, sp2), Sif (e, s1, s2) ->
           let me, s1 = inline_s me sp1 s1.s_node in
           let me, s2 = inline_s me sp2 s2.s_node in
@@ -198,15 +222,15 @@ let t_inline_bdhoare_r ~use_tuple sp tc =
 
 (* -------------------------------------------------------------------- *)
 let t_inline_equiv_r ~use_tuple side sp tc =
-  let equiv = tc1_as_equivS tc in
+  let equiv = tc1_as_qequivS tc in
   let concl =
     match side with
     | `Left  ->
         let (me, stmt) = LowInternal.inline ~use_tuple tc equiv.es_ml sp equiv.es_sl in
-          f_equivS_r { equiv with es_ml = me; es_sl = stmt; }
+          f_qequivS_r { equiv with es_ml = me; es_sl = stmt; }
     | `Right ->
         let (me, stmt) = LowInternal.inline ~use_tuple tc equiv.es_mr sp equiv.es_sr in
-          f_equivS_r { equiv with es_mr = me; es_sr = stmt; }
+          f_qequivS_r { equiv with es_mr = me; es_sr = stmt; }
   in
 
   FApi.xmutate1 tc `Inline [concl]
@@ -230,8 +254,7 @@ module HiInternal = struct
 
     let rec aux_i i =
       match i.i_node with
-      | Scall (_, f, _, qr) ->
-          assert (is_quantum_unit qr);
+      | Scall (_, f, _, _) ->
           if test f then Some IPpat else None
 
       | Sif (_, s1, s2) ->
@@ -269,8 +292,7 @@ module HiInternal = struct
 
     let rec aux_i occ i =
       match i.i_node with
-      | Scall (_,f,_, qr) ->
-          assert (is_quantum_unit qr);
+      | Scall (_,f,_, _) ->
         if cond f then
           let occ = 1 + occ in
           if Sint.mem occ !occs then begin

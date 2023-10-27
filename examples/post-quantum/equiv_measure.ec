@@ -77,15 +77,11 @@ qed.
 equiv ro2_ro3 : QRO.ro2 ~ QRO.ro3 : ={QRO.fro, t} ==> ={QRO.fro, res}.
 proof.
   proc.
-  (* FIXME QUANTUM: inline *) 
-admitted.
-(*
-  inline QRO.qro.  
+  inline QRO.qro.
   measure{1}; U{1}; qinit{1}; qinit{1}.
   measure{2}; U{2}; qinit{2}; qinit{2}.
   by skip => /> &m.
 qed.
-*)
 
 equiv qro_qro : QRO.qro ~ QRO.qro : ={QRO.fro}, ={t, u} ==> ={QRO.fro}, ={t,u}.
 proof.
