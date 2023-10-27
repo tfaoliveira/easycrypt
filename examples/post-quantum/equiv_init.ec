@@ -45,7 +45,7 @@ proof.
   conseq (: ={q}, ={q,r}).
   U => /=.
   qinit. 
-  skip. move => /= -[??] [??] />.
+  skip => //. 
 qed.
 
 
