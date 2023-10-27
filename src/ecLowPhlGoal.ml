@@ -190,16 +190,14 @@ let check (q : quantum) (tc : EcCoreGoal.tcenv1) (c : form) =
   | FbdHoareS s ->
      check s.bhs_m
 
-  | FequivF f -> ()
-   (*
+  | FequivF f ->
      let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.ef_fl f.ef_fr env in
      check m1; check m2; check m3; check m4
-   *)
-  | FequivS s -> ()
-   (*
+
+  | FequivS s ->
      check s.es_ml;
      check s.es_mr
-   *)
+
   | FeagerF f ->
      let (m1, m2), (m3, m4) = EcEnv.Fun.equivF_memenv f.eg_fl f.eg_fr env in
      check m1; check m2; check m3; check m4

@@ -66,7 +66,7 @@ module Low = struct
 
   (* ------------------------------------------------------------------ *)
   let t_equiv_rcond_r side b at_pos tc =
-    let es = tc1_as_equivS tc in
+    let es = tc1_as_qequivS tc in
     let m,mo,s =
       match side with
       | `Left  -> es.es_ml,es.es_mr, es.es_sl
@@ -76,12 +76,12 @@ module Low = struct
     let s1 = Fsubst.f_subst_id in
     let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory m) EcFol.mhr in
     let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory mo) mo' in
-    let pre1 = Fsubst.f_subst s1 es.es_pr in
+    let pre1 = Fsubst.f_subst s1 es.es_pr.ec_f in
     let concl1 =
       f_forall_mems [mo', EcMemory.memtype mo]
         (f_hoareS (EcFol.mhr, EcMemory.memtype m) pre1 hd e) in
     let sl,sr = match side with `Left -> s, es.es_sr | `Right -> es.es_sl, s in
-    let concl2 = f_equivS_r { es with es_sl = sl; es_sr = sr } in
+    let concl2 = f_qequivS_r { es with es_sl = sl; es_sr = sr } in
     FApi.xmutate1 tc `RCond [concl1; concl2]
 
   (* ------------------------------------------------------------------ *)
@@ -270,7 +270,7 @@ module LowMatch = struct
 
   (* ------------------------------------------------------------------ *)
   let t_equiv_rcond_match_r side c at_pos tc =
-    let es = tc1_as_equivS tc in
+    let es = tc1_as_qequivS tc in
 
     let m, mo, s =
       match side with
@@ -284,7 +284,7 @@ module LowMatch = struct
     let s1   = Fsubst.f_subst_id in
     let s1   = Fsubst.f_bind_mem s1 (EcMemory.memory m) EcFol.mhr in
     let s1   = Fsubst.f_bind_mem s1 (EcMemory.memory mo) mo' in
-    let pre1 = Fsubst.f_subst s1 es.es_pr in
+    let pre1 = Fsubst.f_subst s1 es.es_pr.ec_f in
 
     let epr  = omap (fun epr ->
       let se = Fsubst.f_subst_id in
@@ -305,9 +305,10 @@ module LowMatch = struct
           (es.es_ml, (fst es.es_mr, snd me)),
           (es.es_sl, full) in
 
+    let es_pr = es.es_pr in
     let concl2 =
-      f_equivS_r { es with
-        es_pr = ofold f_and es.es_pr epr;
+      f_qequivS_r { es with
+        es_pr = {es_pr with ec_f = ofold f_and es_pr.ec_f epr} ;
         es_ml = ml; es_mr = mr; es_sl = sl; es_sr = sr } in
     FApi.xmutate1 tc `RCond [concl1; concl2]
 
