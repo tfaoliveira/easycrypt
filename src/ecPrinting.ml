@@ -1449,7 +1449,8 @@ and pp_i_quantum (ppe : PPEnv.t) fmt (qr, o, e) =
        let qr = match qr with QRtuple qr -> qr | _ -> [qr] in
        let na = List.length qr in
 
-       let (v, _), e = EcFol.destr_lambda1 e in
+       let (v, _), e =
+         try EcFol.destr_lambda1 e with DestrError _ -> raise UnitaryAsFun in
 
        let bds, e =
          if na <= 1 then ([v], e) else
@@ -2019,9 +2020,10 @@ and pp_ecform ppe fmt ec =
 
 and pp_qe ppe fmt ecq =
   let qlrs =
-    let qrl = match ecq.qel with QRtuple x -> x | x -> [x] in
-    let qrr = match ecq.qer with QRtuple x -> x | x -> [x] in
-    List.combine qrl qrr in
+    match ecq.qel, ecq.qer with
+    | QRtuple qrl, QRtuple qrr ->
+      (try List.combine qrl qrr with _ -> assert false)
+    | q1, q2 -> [q1, q2] in
 
   let ppel = PPEnv.enter_by_memid ppe EcFol.mleft  in
   let pper = PPEnv.enter_by_memid ppe EcFol.mright in
