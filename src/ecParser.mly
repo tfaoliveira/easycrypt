@@ -2789,22 +2789,17 @@ conseq_form:
 | f=form     { Some f }
 
 conseq:
-| empty                           { None, None }
-| UNDERSCORE LONGARROW UNDERSCORE { None, None }
-| f1=form LONGARROW               { Some f1, None }
-| f1=form LONGARROW UNDERSCORE    { Some f1, None }
-| f2=form                         { None, Some f2 }
-| LONGARROW f2=form               { None, Some f2 }
-| UNDERSCORE LONGARROW f2=form    { None, Some f2 }
-| f1=form LONGARROW f2=form       { Some f1, Some f2 }
+| f1=option(conseq_form) LONGARROW f2=option(conseq_form) { odfl None f1, odfl None f2 }
+| f2=option(conseq_form)                  { None, odfl None f2 }
 
 conseq_fqeq:
 | empty { None, None }
 | f=conseq_form qe=option(quantum_eq) { f, qe }
 
 conseq_fqe:
+| empty                                   { (None, None), (None,None) }
 | f1=conseq_fqeq LONGARROW f2=conseq_fqeq { f1, f2 }
-| f=conseq_form qe=option(quantum_eq)  { (None, None), (f, qe) }
+| f=conseq_form qe=option(quantum_eq)     { (None, None), (f, qe) }
 
 conseq_opt:
 | COLON cmp=hoare_bd_cmp? bd=sform  { CQI_bd (cmp, bd) }
