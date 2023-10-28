@@ -533,9 +533,11 @@ type preduction = {
 }
 
 (* -------------------------------------------------------------------- *)
-type 'a doption =
+type ('a,'b) doption_ =
   | Single of 'a
-  | Double of ('a * 'a)
+  | Double of ('b * 'b)
+
+type 'a doption = ('a, 'a) doption_
 
 (* -------------------------------------------------------------------- *)
 type cp_match = [ `If | `While | `Assign | `Sample | `Call ]
@@ -659,7 +661,8 @@ type fun_info = [
 
 (* -------------------------------------------------------------------- *)
 type app_info =
-  oside * tac_dir * codepos1 doption * pformula doption * p_app_xt_info
+  oside * tac_dir * codepos1 doption *
+   (pformula * pqe option, pformula) doption_ * p_app_xt_info
 
 (* -------------------------------------------------------------------- *)
 type pcond_info = [

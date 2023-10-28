@@ -44,7 +44,6 @@ val tc1_process_formula  : ?mv:metavs -> tcenv1 -> pformula -> form
 val tc1_process_cost     : ?mv:metavs -> tcenv1 -> ty list -> pcost -> cost
 val tc1_process_exp      : tcenv1 -> [`InProc|`InOp] -> ty option -> pexpr -> expr
 val tc1_process_pattern  : tcenv1 -> pformula -> ptnenv * form
-val tc1_process_qe       : tcenv1 -> EcMemory.memory -> EcMemory.memory -> pqe -> quantum_equality
 
 (* Same as previous functions, but for *HL contexts *)
 val tc1_process_Xhl_form     : ?side:side -> tcenv1 -> ty -> pformula -> form
@@ -54,6 +53,8 @@ val tc1_process_Xhl_exp      : tcenv1 -> oside -> ty option -> pexpr -> expr
 val tc1_process_prhl_form_opt: tcenv1 -> ty option -> pformula -> form
 val tc1_process_prhl_form    : tcenv1 -> ty -> pformula -> form
 val tc1_process_prhl_formula : tcenv1 -> pformula -> form
+val tc1_process_prhl_qe      : tcenv1 -> pqe -> quantum_equality
+
 
 val tc1_process_stmt :
      ?map:EcTyping.ismap -> tcenv1 -> EcMemory.memtype

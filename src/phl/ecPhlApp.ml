@@ -103,14 +103,18 @@ let t_bdhoare_app_r i info tc =
 let t_bdhoare_app = FApi.t_low2 "bdhoare-app" t_bdhoare_app_r
 
 (* -------------------------------------------------------------------- *)
-let t_equiv_app (i, j) phi tc =
-  let es = tc1_as_equivS tc in
+let t_qequiv_app (i, j) phi tc =
+  let es = tc1_as_qequivS tc in
   let sl1,sl2 = s_split i es.es_sl in
   let sr1,sr2 = s_split j es.es_sr in
-  let a = f_equivS_r {es with es_sl=stmt sl1; es_sr=stmt sr1; es_po= phi} in
-  let b = f_equivS_r {es with es_pr= phi; es_sl=stmt sl2; es_sr=stmt sr2} in
+  let a = f_qequivS_r {es with es_sl=stmt sl1; es_sr=stmt sr1; es_po= phi} in
+  let b = f_qequivS_r {es with es_pr= phi; es_sl=stmt sl2; es_sr=stmt sr2} in
 
   FApi.xmutate1 tc `HlApp [a; b]
+
+let t_equiv_app (i, j) phi tc =
+  let _ = tc1_as_equivS tc in
+  t_qequiv_app (i,j) { ec_f = phi; ec_e = qe_empty } tc
 
 let t_equiv_app_onesided side i pre post tc =
   let env = FApi.tc1_env tc in
@@ -216,10 +220,15 @@ let process_phl_bd_info dir bd_info tc =
 let process_app (side, dir, k, phi, bd_info) tc =
   let concl = FApi.tc1_goal tc in
 
-  let get_single phi =
+  let get_single_qe phi =
     match phi with
     | Single phi -> phi
     | Double _   -> tc_error !!tc "seq: a single formula is expected" in
+
+  let get_single phi =
+    let (phi, qe) = get_single_qe phi in
+    if is_some qe then tc_error !!tc "seq: no quantum equality is expected";
+    phi in
 
   let check_side side =
     if EcUtils.is_some side then
@@ -255,9 +264,12 @@ let process_app (side, dir, k, phi, bd_info) tc =
       let (ra, f1, f2, f3, f4) = process_phl_bd_info dir bd_info tc in
       t_bdhoare_app i (ra, pia, f1, f2, f3, f4) tc
 
-  | Double (i, j), PAppNone when is_equivS concl ->
-      let phi = TTC.tc1_process_prhl_formula tc (get_single phi) in
-      t_equiv_app (i, j) phi tc
+  | Double (i, j), PAppNone when is_qequivS concl ->
+      let es = EcLowPhlGoal.tc1_as_qequivS tc in
+      let phi, qeq = get_single_qe phi in
+      let phi = TTC.tc1_process_prhl_formula tc phi in
+      let ec_e = omap_dfl (TTC.tc1_process_prhl_qe tc) es.es_po.ec_e qeq in
+      t_qequiv_app (i, j) {ec_f = phi; ec_e} tc
 
   | Single _, PAppNone
   | Double _, PAppNone ->

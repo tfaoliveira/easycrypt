@@ -1423,7 +1423,7 @@ equiv_body(P):
     { PFequivF (pre, (mp1, mp2), post) }
 
 equiv_cond(P):
-  f=form_r(P) qeq=quantum_eq?
+  f=form_r(P) qeq=option(quantum_eq)
     { (f, odfl [] qeq) }
 
 quantum_eq:
@@ -2800,13 +2800,11 @@ conseq:
 
 conseq_fqeq:
 | empty { None, None }
-| f=conseq_form qe=quantum_eq? { f, qe }
+| f=conseq_form qe=option(quantum_eq) { f, qe }
 
 conseq_fqe:
-| empty                           { (None, None), (None,None) }
 | f1=conseq_fqeq LONGARROW f2=conseq_fqeq { f1, f2 }
-| LONGARROW f=conseq_form qe=quantum_eq?  { (None, None), (f, qe) }
-| f=conseq_form qe=quantum_eq?  { (None, None), (f, qe) }
+| f=conseq_form qe=option(quantum_eq)  { (None, None), (f, qe) }
 
 conseq_opt:
 | COLON cmp=hoare_bd_cmp? bd=sform  { CQI_bd (cmp, bd) }
@@ -3159,13 +3157,6 @@ eager_tac:
 | info=eager_info COLON p=sform
     { Peager (info, p) }
 
-form_or_double_form:
-| f=sform
-    { Single f }
-
-| LPAREN UNDERSCORE COLON f1=form LONGARROW f2=form RPAREN
-    { Double (f1, f2) }
-
 %inline if_cost_option:
 | CEQ f=sform    {f}
 
@@ -3217,6 +3208,16 @@ interleavepos:
 interleave_info:
 | s=side? c1=interleavepos c2=interleavepos c3=interleavepos* k=word
    { (s, c1, c2 :: c3, k) }
+
+form_or_double_form:
+| f=sform
+   { Single(f, None) }
+(* FIXME QUANTUM : this is durty but else we have a problem clone proof bla with tactic, *)
+| LPAREN COLON f=form qeq=quantum_eq RPAREN
+    { Single (f, Some qeq) }
+
+| LPAREN UNDERSCORE COLON f1=form LONGARROW f2=form RPAREN
+    { Double (f1, f2) }
 
 phltactic:
 | PROC

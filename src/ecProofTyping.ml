@@ -113,16 +113,12 @@ let tc1_process_exp tc mode oty e =
 let tc1_process_pattern tc fp =
   Exn.recast_tc1 tc (fun hyps -> process_pattern hyps fp)
 
-let tc1_process_qe tc ml mr pqe =
-  Exn.recast_tc1 tc (fun hyps -> process_qe hyps ml mr pqe)
-
 (* ------------------------------------------------------------------ *)
 let tc1_process_prhl_form_opt tc oty pf =
-  let hyps, concl = FApi.tc1_flat tc in
+  let hyps = FApi.tc1_hyps tc in
   let ml, mr, (pr, po) =
-    match concl.f_node with
-    | FequivS es -> (es.es_ml, es.es_mr, (es.es_pr, es.es_po))
-    | _ -> assert false
+    let es = EcLowPhlGoal.tc1_as_qequivS tc in
+    (es.es_ml, es.es_mr, (es.es_pr, es.es_po))
   in
 
   let hyps = LDecl.push_all [ml; mr] hyps in
@@ -135,6 +131,17 @@ let tc1_process_prhl_form tc ty pf = tc1_process_prhl_form_opt tc (Some ty) pf
 (* ------------------------------------------------------------------ *)
 let tc1_process_prhl_formula tc pf =
   tc1_process_prhl_form tc tbool pf
+
+(* ------------------------------------------------------------------ *)
+let tc1_process_prhl_qe tc pqe =
+  let hyps = FApi.tc1_hyps tc in
+  let ml, mr =
+    let es = EcLowPhlGoal.tc1_as_qequivS tc in
+    (es.es_ml, es.es_mr)
+  in
+
+  let hyps = LDecl.push_all [ml; mr] hyps in
+  pf_process_qe !!tc hyps (fst ml) (fst mr) pqe
 
 (* ------------------------------------------------------------------ *)
 let tc1_process_stmt  ?map tc mt c =

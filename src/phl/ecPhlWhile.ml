@@ -368,7 +368,7 @@ let t_equiv_while_disj_r side vrnt inv tc =
 (* -------------------------------------------------------------------- *)
 let t_equiv_while_r inv tc =
   let env = FApi.tc1_env tc in
-  let es = tc1_as_equivS tc in
+  let es = tc1_as_qequivS tc in
   let (el, cl), sl = tc1_last_while tc es.es_sl in
   let (er, cr), sr = tc1_last_while tc es.es_sr in
   let ml = EcMemory.memory es.es_ml in
@@ -380,16 +380,18 @@ let t_equiv_while_r inv tc =
   (* 1. The body preserves the invariant *)
   let b_pre  = f_ands_simpl [inv; el] er in
   let b_post = f_and_simpl inv sync_cond in
-  let b_concl = f_equivS es.es_ml es.es_mr b_pre cl cr b_post in
+
+  let ec f = { ec_f = f; ec_e = es.es_po.ec_e } in
+  let b_concl = f_qequivS es.es_ml es.es_mr (ec b_pre) cl cr (ec b_post) in
 
   (* 2. WP of the while *)
-  let post = f_imps_simpl [f_not_simpl el;f_not_simpl er; inv] es.es_po in
+  let post = f_imps_simpl [f_not_simpl el;f_not_simpl er; inv] es.es_po.ec_f in
   let modil = s_write env cl in
   let modir = s_write env cr in
   let post = generalize_mod env mr modir post in
   let post = generalize_mod env ml modil post in
   let post = f_and_simpl b_post post in
-  let concl = f_equivS_r { es with es_sl = sl; es_sr = sr; es_po = post; } in
+  let concl = f_qequivS_r { es with es_sl = sl; es_sr = sr; es_po = ec post; } in
 
   FApi.xmutate1 tc `While [b_concl; concl]
 
