@@ -342,12 +342,6 @@ let main () =
     | None -> ()
   in
 
-   (* input = input name, scope contains all documenation items *)
-  let generate_doc input scope =
-    (* Generate HTML file  *)
-    () 
-  in 
-
   let tstats : EcLocation.t -> float option -> unit =
     match options.o_command with
     | `Compile { cmpo_tstats = Some out } ->
@@ -468,7 +462,7 @@ let main () =
             if not eco then
               finalize_input input (EcCommands.current ());
             if doc then
-              generate_doc input (EcCommands.current ());
+              EcDoc.generate_html input (EcCommands.current ());
             exit 0
           end;
       with

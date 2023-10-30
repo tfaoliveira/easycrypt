@@ -350,7 +350,9 @@ and docentity =
   | SubDoc    of docentity list
 
 and docitem =
-  string list                      (* raw definition *)
+  itemkind * string list (* raw definition *)
+
+and itemkind = [`Type | `Operator | `Axiom | `ModuleType | `Module | `Theory]
 
 (* -------------------------------------------------------------------- *)
 (* let extend_globdoc (sc : scope) (doc : string) : scope =
@@ -371,9 +373,9 @@ module DocState = struct
   let push_srcbl (state : docstate) (srcs : string) : docstate =
     { state with srcstringbl = state.srcstringbl @ [srcs] }
   
-  let add_item (state : docstate) : docstate =
+  let add_item (state : docstate) (ik : itemkind) : docstate =
     { state with
-        docentities = state.docentities @ [ItemDoc (state.docstringbl, state.srcstringbl)];
+        docentities = state.docentities @ [ItemDoc (state.docstringbl, (ik, state.srcstringbl))];
         docstringbl = [];
         srcstringbl = []; }
 
@@ -883,7 +885,7 @@ module Ax = struct
     let item = EcTheory.mkitem import (EcTheory.Th_axiom (x, ax)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc }
+        sc_locdoc = DocState.add_item scope.sc_locdoc `Axiom}
   
   (* ------------------------------------------------------------------ *)
   let start_lemma scope (cont, axflags) check ?name (axd, ctxt) =
@@ -1214,7 +1216,7 @@ module Op = struct
     let item = EcTheory.mkitem import (EcTheory.Th_operator (x, op)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc; }
+        sc_locdoc = DocState.add_item scope.sc_locdoc `Operator; }
 
   let add ?(src : string option) (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
@@ -1554,7 +1556,7 @@ module Mod = struct
     let item = EcTheory.mkitem import (EcTheory.Th_module m) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc }
+        sc_locdoc = DocState.add_item scope.sc_locdoc `Module}
 
   let add_concrete (scope : scope) lc (ptm : pmodule_def) =
     assert (scope.sc_pr_uc = None);
@@ -1622,7 +1624,7 @@ module ModType = struct
     let item = EcTheory.mkitem import (EcTheory.Th_modtype (x, tysig)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc }
+        sc_locdoc = DocState.add_item scope.sc_locdoc `ModuleType}
 
   let add ?(src : string option) (scope : scope) (intf : pinterface) =
     assert (scope.sc_pr_uc = None);
@@ -1657,7 +1659,7 @@ module Ty = struct
     let item = EcTheory.mkitem import (EcTheory.Th_type (x, tydecl)) in
     { scope with
         sc_env = EcSection.add_item item scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc }
+        sc_locdoc = DocState.add_item scope.sc_locdoc `Type}
 
   (* ------------------------------------------------------------------ *)
   let add ?(src : string option) scope (tyd : ptydecl located) =
@@ -2072,7 +2074,7 @@ module Theory = struct
     assert (scope.sc_pr_uc = None);
     { scope with
         sc_env = EcSection.add_th ~import:EcTheory.import0 x cth scope.sc_env;
-        sc_locdoc = DocState.add_item scope.sc_locdoc}
+        sc_locdoc = DocState.add_item scope.sc_locdoc `Theory}
 
   (* ------------------------------------------------------------------ *)
   let required (scope : scope) (name : required_info) =
