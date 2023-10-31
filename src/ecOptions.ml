@@ -238,7 +238,7 @@ let specs = {
       `Spec  ("tstats" , `String, "Save timing statistics to <file>");
       `Spec  ("script" , `Flag  , "Computer-friendly output");
       `Spec  ("no-eco" , `Flag  , "Do not cache verification results");
-      `Spec  ("doc"    , `Flag  , "Generate documenations")]);
+      `Spec  ("doc"    , `Flag  , "Generate documentation")]);
 
     ("cli", "Run EasyCrypt top-level", [
       `Group "loader";
