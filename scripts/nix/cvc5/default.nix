@@ -7,15 +7,22 @@ stdenv.mkDerivation rec {
   version = "1.0.6";
 
   src = fetchFromGitHub {
-    owner  = "cvc5";
-    repo   = "cvc5";
-    rev    = "cvc5-${version}";
-    hash  = "sha256-pZiXAO92cwnYtaVMDFBEmk+NzDf4eKdc0eY0RltofPA=";
+    owner = "cvc5";
+    repo = "cvc5";
+    rev = "cvc5-${version}";
+    hash = "sha256-pZiXAO92cwnYtaVMDFBEmk+NzDf4eKdc0eY0RltofPA=";
   };
 
   nativeBuildInputs = [ pkg-config cmake flex ];
   buildInputs = [
-    cadical.dev symfpu gmp gtest libantlr3c antlr3_4 boost jdk
+    cadical.dev
+    symfpu
+    gmp
+    gtest
+    libantlr3c
+    antlr3_4
+    boost
+    jdk
     (python3.withPackages (ps: with ps; [ pyparsing tomli ]))
   ];
 
@@ -31,9 +38,9 @@ stdenv.mkDerivation rec {
 
   meta = with lib; {
     description = "A high-performance theorem prover and SMT solver";
-    homepage    = "https://cvc5.github.io";
-    license     = licenses.gpl3Only;
-    platforms   = platforms.unix;
+    homepage = "https://cvc5.github.io";
+    license = licenses.gpl3Only;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ shadaj ];
   };
 }

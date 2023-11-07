@@ -5,9 +5,9 @@ with import nixpkgs { };
 let python = python3; in
 
 stdenv.mkDerivation rec {
-  pname   = "z3";
+  pname = "z3";
   version = "4.12.2";
-  sha256  = "sha256-DTgpKEG/LtCGZDnicYvbxG//JMLv25VHn/NaF307JYA=";
+  sha256 = "sha256-DTgpKEG/LtCGZDnicYvbxG//JMLv25VHn/NaF307JYA=";
 
   src = fetchFromGitHub {
     owner = "Z3Prover";
