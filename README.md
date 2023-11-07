@@ -210,12 +210,7 @@ following prover versions:
  * Z3 4.12.1
 
 `alt-ergo` can be installed using opam, if you do you can use pins to
-select a specific version (e.g, `opam pin alt-ergo 2.4.1`).
-
-Development branches use `dune-3.x` and which is incompatible with
-`alt-ergo-2.4.1`. In this case, you can use `alt-ergo-2.4.2`. The
-warning "Prover Alt-Ergo version 2.4.2 is not recognized." upon
-configuration (see below) can be [safely ignored](https://gitlab.inria.fr/why3/why3/-/commit/f2863d84f65824f21afd75546117becbf453efcc).
+select a specific version (e.g, `opam pin alt-ergo 2.4.2`).
 
 Installing/Compiling EasyCrypt
 ====================================================================
