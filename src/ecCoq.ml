@@ -69,6 +69,7 @@ type tenv = {
   (*---*) te_lc         : w3op Hid.t;
   mutable te_lam        : WTerm.term Mta.t;
   mutable count_lam     : int;
+  mutable count_ho      : int;
   (*---*) te_gen        : WTerm.term Hf.t;
   (*---*) te_xpath      : WTerm.lsymbol Hx.t;  (* proc and global var *)
   (*---*) te_absmod     : w3absmod Hid.t;      (* abstract module     *)
@@ -87,6 +88,7 @@ let empty_tenv env th ts_mem ts_distr fs_witness fs_mu =
     te_lc         = Hid.create 0;
     te_lam        = Mta.empty;
     count_lam     = 0;
+    count_ho      = 0;
     te_gen        = Hf.create 0;
     te_xpath      = Hx.create 0;
     te_absmod     = Hid.create 0;
@@ -454,15 +456,18 @@ let trans_lvars genv lenv bds =
 
 (* -------------------------------------------------------------------- *)
 (* build the higher-order symbol and add the corresponding axiom.       *)
-let mk_highorder_symb ids dom codom =
-  let pid = WIdent.id_fresh (ids ^ "_ho") in
+let mk_highorder_symb genv ids dom codom =
+  let name = ids ^ "_ho_" ^ string_of_int genv.count_ho in
+  let pid = WIdent.id_fresh name in
   let ty = List.fold_right WTy.ty_func dom (odfl WTy.ty_bool codom) in
   WTerm.create_fsymbol pid [] ty, ty
 
-let mk_highorder_func ids dom codom mk =
-  let ls', ty = mk_highorder_symb ids dom codom in
+let mk_highorder_func genv ids dom codom mk =
+  let ls', ty = mk_highorder_symb genv ids dom codom in
   let decl' = WDecl.create_param_decl ls' in
-  let pid_spec = WIdent.id_fresh (ids ^ "_ho_spec") in
+  let name = ids ^ "_ho_spec" ^ string_of_int genv.count_ho in
+  genv.count_ho <- genv.count_ho + 1;
+  let pid_spec = WIdent.id_fresh name in
   let pr = WDecl.create_prsymbol pid_spec in
   let preid = WIdent.id_fresh "x" in
   let params = List.map (WTerm.create_vsymbol preid) dom in
@@ -484,7 +489,7 @@ let w3op_ho_lsymbol genv wop =
   | `HO_DONE ls -> ls
 
   | `HO_TODO (id, dom, codom) ->
-    let ls, decl, decl_s = mk_highorder_func id dom codom (w3op_fo wop) in
+    let ls, decl, decl_s = mk_highorder_func genv id dom codom (w3op_fo wop) in
     genv.te_th <- WTheory.add_decl genv.te_th decl;
     genv.te_th <- WTheory.add_decl genv.te_th decl_s;
     wop.w3op_ho <- `HO_DONE ls; ls
@@ -971,7 +976,7 @@ and trans_op ?(body = true) (genv : tenv) p =
       let w3op_ho =
         if EcDecl.is_fix op then
           let ls, decl, decl_s =
-            mk_highorder_func name (textra@wdom) wcodom (WTerm.t_app ls)
+            mk_highorder_func genv name (textra@wdom) wcodom (WTerm.t_app ls)
           in
           `HO_FIX (ls, decl, decl_s, ref false)
         else
@@ -1137,7 +1142,11 @@ let add_core_ops tenv =
       Hp.add tenv.te_op p (prop_w3op ~name:id arity fo))
     core_ops
 
-let add_core_theory ~env tenv =
+let add_core_theory env task ((file,thy), _) =
+  let thy = Why3.Env.read_theory env file thy in
+  use task thy
+
+let add_core_theories ~env tenv =
   let core_theories = [
     ((["int"], "Int"),
      [(CI_Int.p_int_opp, "prefix -");
@@ -1172,24 +1181,18 @@ let add_core_theory ~env tenv =
   ]
   in
 
-  (* Remove te_know_w3 and ty_know_w3*)
+  tenv.te_th <- List.fold_left (add_core_theory env) tenv.te_th core_theories;
 
-  let add_core_theory task ((file,thy), _) =
-    let thy = Why3.Env.read_theory env file thy in
-    use task thy
-  in
-  tenv.te_th <- List.fold_left add_core_theory tenv.te_th core_theories;
-
-  let add_core_theory tbl ((file,thy), operators) =
+  let add_core_func tbl ((file,thy), operators) =
     let theory = Why3.Env.read_theory env file thy in
     let namesp = theory.WTheory.th_export in
     List.iter (fun (p, name) ->
         Hp.add tbl p (WTheory.ns_find_ls namesp [name], theory))
       operators
   in
-  List.iter (add_core_theory tenv.te_known_w3) core_theories
+  List.iter (add_core_func tenv.te_known_w3) core_theories
 
-let add_core_ty_theories ~env tenv =
+let add_core_tys ~env tenv =
   let core_ty_theories = [
     ((["map"], "Map"),
      [(CI_Map.p_map, "map")]);
@@ -1204,11 +1207,7 @@ let add_core_ty_theories ~env tenv =
   ]
   in
 
-  let add_core_theory task ((file,thy), _) =
-    let thy = Why3.Env.read_theory env file thy in
-    use task thy
-  in
-  tenv.te_th <- List.fold_left add_core_theory tenv.te_th core_ty_theories;
+  tenv.te_th <- List.fold_left (add_core_theory env) tenv.te_th core_ty_theories;
 
   let add_core_ty tbl ((file,thy), tys) =
     let theory = Why3.Env.read_theory env file thy in
@@ -1270,18 +1269,15 @@ let init ~env hyps concl =
     WTheory.close_theory th
   in
 
-  let my_theory = WTheory.create_theory (WIdent.id_fresh "EC_theory") in
-  let tenv  = empty_tenv eenv my_theory ts_mem ts_distr fs_witness fs_mu in
+  let ec_theory = WTheory.create_theory (WIdent.id_fresh "EC_theory") in
+  let tenv  = empty_tenv eenv ec_theory ts_mem ts_distr fs_witness fs_mu in
 
-  add_core_theory ~env tenv;
-  add_core_ty_theories ~env tenv;
-  (* Core operators *)
+  add_core_theories ~env tenv;
+  add_core_tys ~env tenv;
   add_core_ops tenv;
-  (* Add symbol for equality *)
   add_equal_symbole tenv;
-  (* Add modules stuff *)
-  tenv.te_th <- WTheory.add_ty_decl tenv.te_th tenv.ts_mem;
 
+  tenv.te_th <- WTheory.add_ty_decl tenv.te_th tenv.ts_mem;
   tenv.te_th <- WTheory.use_export tenv.te_th distr_theory;
   tenv.te_th <- WTheory.use_export tenv.te_th witness_theory;
 
@@ -1292,22 +1288,20 @@ let init ~env hyps concl =
   let witness = (fs_witness, witness_theory) in
   Hp.add known CI_Witness.p_witness witness;
 
-  (* lenv must be shared and no fresh generated to ensure we have the same why elements*)
-
   let init_select _ ax = ax.ax_visibility = `Visible in
   let toadd = EcEnv.Ax.all ~check:init_select eenv in
   List.iter (trans_axiom tenv) toadd;
 
-  let hyps  = LDecl.tohyps hyps in
-  let lenv  = lenv_of_hyps tenv hyps in
+  let hyps = LDecl.tohyps hyps in
+  let lenv = lenv_of_hyps tenv hyps in
 
   let wterm = Cast.force_prop (trans_form (tenv, lenv) concl) in
-  let pr    = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
+  let pr = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
   let dec = WDecl.create_prop_decl WDecl.Pgoal pr wterm in
-  let my_theory = WTheory.add_decl tenv.te_th dec in
-  let my_theory = WTheory.close_theory my_theory in
+  let ec_theory = WTheory.add_decl tenv.te_th dec in
+  let ec_theory = WTheory.close_theory ec_theory in
 
-  let task = WTask.split_theory my_theory None None in
+  let task = WTask.split_theory ec_theory None None in
   List.hd task
 
 (*---------------------------------------------------------------------------------*)
@@ -1549,6 +1543,7 @@ let build_proof_task ~notify ~name ~coqmode ~loc ~config ~env task =
                 let s = Format.sprintf " %s\n" k.prover_version in
                 print_string s;
               )) provers;
+
             let prover = Why3.Whyconf.Mprover.max_binding provers in
             let s = Format.sprintf "Take Coq %s\n" (fst prover).prover_version in
             print_string s;
