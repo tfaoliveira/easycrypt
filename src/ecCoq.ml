@@ -60,10 +60,18 @@ type w3absmod = {
 }
 
 (* -------------------------------------------------------------------- *)
+
+type kpattern =
+  | KHole
+  | KApp  of EcPath.path * kpattern list
+  | KProj of kpattern * int
+
+(* -------------------------------------------------------------------- *)
 type tenv = {
   (*---*) te_env        : EcEnv.env;
-  mutable te_th       : WTheory.theory_uc;
+  mutable te_th         : WTheory.theory_uc;
   (*---*) te_known_w3   : w3_known_op Hp.t;
+  mutable tk_known_w3   : (kpattern * w3_known_op) list;
   (*---*) te_ty         : w3ty Hp.t;
   (*---*) te_op         : w3op Hp.t;
   (*---*) te_lc         : w3op Hid.t;
@@ -83,6 +91,7 @@ let empty_tenv env th ts_mem ts_distr fs_witness fs_mu =
   { te_env        = env;
     te_th         = th;
     te_known_w3   = Hp.create 0;
+    tk_known_w3   = [];
     te_ty         = Hp.create 0;
     te_op         = Hp.create 0;
     te_lc         = Hid.create 0;
@@ -567,7 +576,66 @@ let trans_lambda genv wvs wbody =
     flam_app
 
 (* -------------------------------------------------------------------- *)
+module E = struct
+  exception MFailure
+
+  let kmatch k f =
+    let rec doit (acc : form list) (k : kpattern) (f : form) =
+      match k, fst_map f_node (destr_app f) with
+      | KHole, _ ->
+        f :: acc
+
+      | KProj (sk, i), (Fproj (sf, j), []) when i = j ->
+        doit acc sk sf
+
+      | KApp (sp, ks), (Fop (p, _), fs)
+        when EcPath.p_equal sp p && List.length ks = List.length fs
+        -> List.fold_left2 doit acc ks fs
+
+      | _, _ -> raise MFailure
+    in
+    try Some (List.rev (doit [] k f)) with MFailure -> None
+
+  let trans_kpattern env (k, (ls, wth)) f =
+    match kmatch k f with
+    | Some args ->
+      let dom, codom = List.map f_ty args, f.f_ty in
+
+      let wdom   = trans_tys env dom in
+      let wcodom =
+        if   ER.EqTest.is_bool (fst env).te_env codom
+        then None
+        else Some (trans_ty env codom) in
+
+      let w3op =
+        let name = ls.WTerm.ls_name.WIdent.id_string in
+        { w3op_fo = `LDecl ls;
+          w3op_ta = instantiate [] ~textra:[] wdom wcodom;
+          w3op_ho = `HO_TODO (name, wdom, wcodom); }
+      in
+      Some (w3op,args)
+    | None -> None
+
+  let trans_kpatterns env (ks : (kpattern * w3_known_op) list) (f : form) trans_form =
+    let w3op,args =
+      EcUtils.oget ~exn:CanNotTranslate
+        (List.Exceptionless.find_map (fun k -> trans_kpattern env k f) ks)
+    in
+    let wargs = List.map (trans_form env) args in
+    apply_wop (fst env) w3op [] wargs
+end
+
+(* -------------------------------------------------------------------- *)
 let rec trans_form ((genv, lenv) as env : tenv * lenv) (fp : form) =
+  try
+    let w3op,args =
+      EcUtils.oget ~exn:CanNotTranslate
+        (List.Exceptionless.find_map (fun k -> E.trans_kpattern env k fp)
+           genv.tk_known_w3)
+    in
+    let wargs = List.map (trans_form env) args in
+    apply_wop (fst env) w3op [] wargs
+  with CanNotTranslate ->
   match fp.f_node with
   | Fquant (qt, bds, body) ->
     begin
@@ -1155,8 +1223,8 @@ let add_core_theories ~env tenv =
       (CI_Int.p_int_lt , "infix <" );
       (CI_Int.p_int_le , "infix <=")]);
 
-    ((["int"], "EuclideanDivision"),
-     [(CI_Int.p_int_edivz, "div")]);
+    (* ((["int"], "EuclideanDivision"), *)
+    (*  [(CI_Int.p_int_edivz, "div")]); *)
 
     ((["real"], "Real"),
      [(CI_Real.p_real0,    "zero");
@@ -1237,6 +1305,26 @@ let add_equal_symbole tenv =
     }
     in Hp.add tenv.te_op CI_Bool.p_eq w3o_eq
 
+let kwk ~env tenv =
+  let core_match_theories = [
+    ((["int"], "EuclideanDivision"),
+     [(KProj (KApp (CI_Int.p_int_edivz, [KHole; KHole]), 0), "div");
+      (KProj (KApp (CI_Int.p_int_edivz, [KHole; KHole]), 1), "mod")])
+  ]
+  in
+
+  tenv.te_th <- List.fold_left (add_core_theory env) tenv.te_th core_match_theories;
+
+  let add_kwk (file,thy) (k,name) =
+    let theory = Why3.Env.read_theory env file thy in
+    let namesp = theory.WTheory.th_export in
+    (k, (WTheory.ns_find_ls namesp [name], theory))
+  in
+  List.rev (List.flatten
+              (List.map
+                 (fun (wth, syms) -> List.map (add_kwk wth) syms)
+                 core_match_theories))
+
 (* -------------------------------------------------------------------- *)
 
 let init ~env hyps concl =
@@ -1276,6 +1364,8 @@ let init ~env hyps concl =
   add_core_tys ~env tenv;
   add_core_ops tenv;
   add_equal_symbole tenv;
+
+  tenv.tk_known_w3 <- kwk ~env tenv;
 
   tenv.te_th <- WTheory.add_ty_decl tenv.te_th tenv.ts_mem;
   tenv.te_th <- WTheory.use_export tenv.te_th distr_theory;
