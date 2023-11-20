@@ -10,13 +10,13 @@ val dump_why3 : env -> string -> unit
 
 type tenv
 
-val tenv_task : tenv -> Why3.Task.task
+val select : EcEnv.env -> EcProvers.prover_infos -> EcBaseLogic.hyps ->
+  EcFol.form -> ((EcPath.path * EcDecl.axiom) list -> bool option) -> bool
 
-val init : EcEnv.LDecl.hyps ->
-  EcFol.form ->
-  EcEnv.env * EcBaseLogic.hyps * tenv * Why3.Decl.decl
+val make_task : tenv -> EcBaseLogic.hyps -> EcFol.form ->
+  (EcPath.path * EcDecl.axiom) list -> Why3.Task.task
 
-val trans_axiom : tenv -> EcPath.path * EcDecl.axiom -> unit
+val init :env: Why3.Env.env -> EcEnv.env -> tenv
 
 module Frequency : sig
 

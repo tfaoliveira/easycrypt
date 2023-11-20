@@ -2436,7 +2436,7 @@ let t_smt ~(mode:smtmode) pi tc =
 
 (* -------------------------------------------------------------------- *)
 
-let t_coq ~loc ~name ~(mode:smtmode) (coqmode:EcCoq.mode option) tc =
+let t_coq ~loc ~name ~(mode:smtmode) coqmode pi tc =
   let error () =
     match mode with
     | `Standard ->
@@ -2453,7 +2453,7 @@ let t_coq ~loc ~name ~(mode:smtmode) (coqmode:EcCoq.mode option) tc =
   let env, hyps, concl = FApi.tc1_eflat tc in
   let notify = (fun lvl (lazy s) -> EcEnv.notify env lvl "%s" s) in
 
-  if   EcCoq.check ~loc ~name ~notify ?coqmode hyps concl
+  if   EcCoq.check ~loc ~name ~notify ?coqmode pi hyps concl
   then FApi.xmutate1 tc `Smt []
   else error ()
 

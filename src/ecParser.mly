@@ -2937,8 +2937,8 @@ logtactic:
 | SMT pi=smt_info
    { Psmt pi }
 
-| COQ pi=coq_info name=loc(STRING)
-    { Pcoq (pi, name)}
+| COQ mode=coq_info name=loc(STRING) pi=smt_info
+    { Pcoq (mode, name, pi)}
 
 | SMT LPAREN dbmap=dbmap1* RPAREN
    { Psmt (SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
@@ -3885,9 +3885,9 @@ print:
 
 coq_info:
 |           { None }
-| CHECK    { Some EcCoq.Check }
-| EDIT      { Some EcCoq.Edit }
-| FIX       { Some EcCoq.Fix }
+| CHECK    { Some EcProvers.Check }
+| EDIT      { Some EcProvers.Edit }
+| FIX       { Some EcProvers.Fix }
 
 smt_info:
 | li=smt_info1* { SMT.mk_smt_option li}
