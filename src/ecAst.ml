@@ -952,7 +952,7 @@ module Hsty = Why3.Hashcons.Make (struct
     match ty with
     | Tglob m          -> EcIdent.fv_add m Mid.empty
     | Tunivar _        -> Mid.empty
-    | Tvar    _        -> Mid.empty (* FIXME: section *)
+    | Tvar v           -> Mid.empty (* EcIdent.fv_add v Mid.empty *)
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]

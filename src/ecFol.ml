@@ -13,7 +13,28 @@ module CI = EcCoreLib
 include EcCoreFol
 
 (* -------------------------------------------------------------------- *)
-let f_bind_mod s x mp env = Fsubst.f_bind_mod s x mp (fun mem -> EcEnv.NormMp.norm_glob env mem mp)
+type f_subst = EcCoreSubst.f_subst
+
+module Fsubst = struct
+
+  include EcCoreSubst.Fsubst
+
+  let bind_mod s x mp env =
+    let fv =
+      let mem = EcIdent.create "mem" in
+      let f = EcEnv.NormMp.norm_glob env mem mp in
+      Mid.remove mem f.f_fv in
+    let ty = EcEnv.NormMp.norm_tglob env mp in
+    bind_mod s x mp
+      { mex_tglob = ty;
+        mex_glob  = (fun mem -> EcEnv.NormMp.norm_glob env mem mp);
+        mex_fv    = fv_union fv ty.ty_fv; }
+
+end
+
+module Tvar = EcCoreSubst.Tvar
+
+module Tuni = EcCoreSubst.Tuni
 
 (* -------------------------------------------------------------------- *)
 let f_eqparams ty1 vs1 m1 ty2 vs2 m2 =
@@ -546,7 +567,7 @@ let rec f_let_simpl lp f1 f2 =
       | Some i ->
           if   i = 1 || can_subst f1
           then
-            let s = Fsubst.f_bind_local Fsubst.f_subst_id id f1 in
+            let s = Fsubst.bind_local Fsubst.subst_id id f1 in
             Fsubst.f_subst s f2
           else
             f_let lp f1 f2
@@ -561,9 +582,9 @@ let rec f_let_simpl lp f1 f2 =
               | None   -> (d, s)
               | Some i ->
                   if   i = 1 || can_subst f1
-                  then (d, Fsubst.f_bind_local s id f1)
+                  then (d, Fsubst.bind_local s id f1)
                   else (((id, ty), f1) :: d, s))
-              ([], Fsubst.f_subst_id) ids fs
+              ([], Fsubst.subst_id) ids fs
           in
             List.fold_left
               (fun f2 (id, f1) -> f_let (LSymbol id) f1 f2)
@@ -595,8 +616,8 @@ and f_betared f =
   match f.f_node with
   | Fapp ({ f_node = Fquant (Llambda, bds, body)}, args) ->
       let (bds1, bds2), (args1, args2) = List.prefix2 bds args in
-      let bind  = fun subst (x, _) arg -> Fsubst.f_bind_local subst x arg in
-      let subst = Fsubst.f_subst_id in
+      let bind  = fun subst (x, _) arg -> Fsubst.bind_local subst x arg in
+      let subst = Fsubst.subst_id in
       let subst = List.fold_left2 bind subst bds1 args1 in
       f_app (f_quant Llambda bds2 (Fsubst.f_subst ~tx subst body)) args2 f.f_ty
   | _ -> f
@@ -1004,7 +1025,7 @@ let destr_exists_prenex f =
 
     | SFquant (Lexists, bd, lazy p) ->
       let bd, p   =
-        let s = Fsubst.f_subst_init ~freshen:true () in
+        let s = Fsubst.subst_init ~freshen:true () in
         let s, bd = Fsubst.add_binding s bd in
         bd, Fsubst.f_subst s p in
       let bds = bd::bds in
@@ -1135,3 +1156,9 @@ let rec dump_f f =
      ^ "]"
   | FeagerF _ -> "eagerF"
   | Fcoe _ -> "Fcoe"
+
+
+let is_record env f =
+  match destr_app f with
+  | { f_node = Fop (p, _) }, _ -> EcEnv.Op.is_record_ctor env p
+  | _ -> false

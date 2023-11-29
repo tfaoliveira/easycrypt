@@ -59,7 +59,7 @@ let t_core_phoare_deno pre post tc =
 
   (* building the substitution for the pre *)
   let sargs = PVM.add env pv_arg mhr pr.pr_args PVM.empty in
-  let smem = Fsubst.f_bind_mem Fsubst.f_subst_id mhr pr.pr_mem in
+  let smem = Fsubst.bind_mem Fsubst.subst_id mhr pr.pr_mem in
   let concl_pr = Fsubst.f_subst smem (PVM.subst env sargs pre) in
 
   (* building the substitution for the post *)
@@ -102,12 +102,12 @@ let t_ehoare_deno_r pre post tc =
   (* pre <= bd *)
   (* building the substitution for the pre *)
   let sargs = PVM.add env pv_arg (fst mpr) pr.pr_args PVM.empty in
-  let smem = Fsubst.f_bind_mem Fsubst.f_subst_id (fst mpr) pr.pr_mem in
+  let smem = Fsubst.bind_mem Fsubst.subst_id (fst mpr) pr.pr_mem in
   let pre = Fsubst.f_subst smem (PVM.subst env sargs pre) in
   let concl_pr = f_xreal_le pre (f_r2xr bd) in
 
   (* forall m, ev%r%xr <= post *)
-  let smem = Fsubst.f_bind_mem Fsubst.f_subst_id mhr (fst mpo) in
+  let smem = Fsubst.bind_mem Fsubst.subst_id mhr (fst mpo) in
   let ev = Fsubst.f_subst smem pr.pr_event in
   let concl_po = f_xreal_le (f_b2xr ev) post in
   let concl_po = f_forall_mems [mpo] concl_po in
@@ -120,9 +120,9 @@ let cond_pre env prl prr pre =
   (* we substitute param by args and left by ml and right by mr *)
   let sargs = PVM.add env pv_arg mleft  prl.pr_args PVM.empty in
   let sargs = PVM.add env pv_arg mright prr.pr_args sargs in
-  let smem  = Fsubst.f_subst_id in
-  let smem  = Fsubst.f_bind_mem smem mleft  prl.pr_mem in
-  let smem  = Fsubst.f_bind_mem smem mright prr.pr_mem in
+  let smem  = Fsubst.subst_id in
+  let smem  = Fsubst.bind_mem smem mleft  prl.pr_mem in
+  let smem  = Fsubst.bind_mem smem mright prr.pr_mem in
   Fsubst.f_subst smem (PVM.subst env sargs pre)
 
 let t_equiv_deno_r pre post tc =
@@ -154,8 +154,8 @@ let t_equiv_deno_r pre post tc =
   let concl_pr = cond_pre env prl prr pre in
 
   (* building the substitution for the post *)
-  let smeml = Fsubst.f_bind_mem Fsubst.f_subst_id mhr mleft in
-  let smemr = Fsubst.f_bind_mem Fsubst.f_subst_id mhr mright in
+  let smeml = Fsubst.bind_mem Fsubst.subst_id mhr mleft in
+  let smemr = Fsubst.bind_mem Fsubst.subst_id mhr mright in
   let evl   = Fsubst.f_subst smeml prl.pr_event in
   let evr   = Fsubst.f_subst smemr prr.pr_event in
   let cmp   =
@@ -237,7 +237,7 @@ let process_ehoare_deno info tc =
 
     let { pr_fun = f; pr_mem = m; pr_event = event; } = destr_pr f in
     let penv, qenv = LDecl.hoareF f hyps in
-    let smem = Fsubst.f_bind_mem Fsubst.f_subst_id m mhr in
+    let smem = Fsubst.bind_mem Fsubst.subst_id m mhr in
     let dpre = f_r2xr (Fsubst.f_subst smem bd) in
 
     let pre  = pre  |> omap_dfl (fun p -> TTC.pf_process_xreal !!tc penv p) dpre  in

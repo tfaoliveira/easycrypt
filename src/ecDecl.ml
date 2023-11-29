@@ -3,6 +3,7 @@ open EcUtils
 open EcAst
 open EcTypes
 open EcCoreFol
+open EcCoreSubst
 
 module Sp   = EcPath.Sp
 module TC   = EcTypeClass
@@ -63,8 +64,8 @@ let abs_tydecl ?(resolve = true) ?(tc = Sp.empty) ?(params = `Int 0) lc =
 
 (* -------------------------------------------------------------------- *)
 let ty_instanciate (params : ty_params) (args : ty list) (ty : ty) =
-  let subst = EcTypes.Tvar.init (List.map fst params) args in
-  EcTypes.Tvar.subst subst ty
+  let subst = Tvar.init (List.map fst params) args in
+  Tvar.ty_subst subst ty
 
 (* -------------------------------------------------------------------- *)
 type locals = EcIdent.t list
@@ -162,41 +163,31 @@ type ax_schema = {
 let sc_instantiate
     ty_params pr_params sc_params
     ty_args memtype (pr_args : mem_pr list) sc_args f =
-  let fs = EcTypes.Tvar.init (List.map fst ty_params) ty_args in
-  let sty = { ty_subst_id with ts_v = fs } in
-
+  let sty = Tvar.init (List.map fst ty_params) ty_args in
 
   (* We substitute the predicate variables. *)
   let preds = List.map2 (fun (mem,p) id ->
       id, (mem,p)) pr_args pr_params in
-  let mpreds = EcIdent.Mid.of_list preds in
+  let mempred = EcIdent.Mid.of_list preds in
 
   let exprs =
     List.map2 (fun e (id,_ty) ->
         id, e
       ) sc_args sc_params in
   let mexpr = EcIdent.Mid.of_list exprs in
-
-  (* FIXME: instantiating and substituting in schema is ugly. *)
-  (* We instantiate the variables. *)
+  let m = EcIdent.create "m" in
   (* For cost judgement, we also need to substitute the expression variables
      in the precondition. *)
-  let tx f_old f_new = match f_old.f_node, f_new.f_node with
-    | Fcoe coe_old, Fcoe coe_new
-      when EcMemory.is_schema (snd coe_old.coe_mem) ->
-      let fs =
-        List.fold_left (fun s (id,e) ->
-            let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
-            Fsubst.f_bind_local s id f)
-          (Fsubst.f_subst_init ()) exprs in
-
-      EcCoreFol.f_coe_r { coe_new with
-                          coe_pre = Fsubst.f_subst fs coe_new.coe_pre }
-    | _ -> f_new in
-
-  let fs = Fsubst.f_subst_init ~sty ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
-
-  Fsubst.f_subst ~tx fs f
+  let mempred =
+    List.fold_left (fun mp (id, e) ->
+        EcIdent.Mid.add id (m, form_of_expr m e) mp)
+      mempred exprs in
+  let schema =
+    { sc_memtype = memtype;
+      sc_mempred = mempred;
+      sc_expr    = mexpr; } in
+  let fs = Fsubst.subst_init ~sty ~schema () in
+  Fsubst.f_subst fs f
 
 (* -------------------------------------------------------------------- *)
 let op_ty op = op.op_ty
@@ -301,9 +292,8 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, axbd) lc =
   let axbd, axpm =
     let bdpm = List.map fst tparams in
     let axpm = List.map EcIdent.fresh bdpm in
-      (EcCoreFol.Fsubst.subst_tvar
-         (EcTypes.Tvar.init bdpm (List.map EcTypes.tvar axpm))
-         axbd,
+    let sty = Tvar.init bdpm (List.map EcTypes.tvar axpm) in
+      (Fsubst.f_subst (Fsubst.subst_init ~sty ()) axbd,
        List.combine axpm (List.map snd tparams))
   in
 

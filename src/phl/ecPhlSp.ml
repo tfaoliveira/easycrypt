@@ -93,11 +93,10 @@ module LowInternal = struct
           let do_subst_or_accum (assoc, bds, pre) (a, f) =
           match a with
           | [ALocal (id, _)] ->
-              let subst = EcFol.Fsubst.f_subst_id in
-              let subst = EcFol.Fsubst.f_bind_local subst id f in
-              (List.map (snd_map (EcFol.Fsubst.f_subst subst)) assoc,
+              let subst = Fsubst.f_subst_local id f in
+              (List.map (snd_map subst) assoc,
                List.filter ((<>) id |- fst) bds,
-               EcFol.Fsubst.f_subst subst pre)
+               subst pre)
 
           | _ -> ((a, f) :: assoc, bds, pre)
         in
@@ -147,10 +146,9 @@ module LowInternal = struct
         in
         let a,assoc = partition_on_x assoc in
         let a       = f_tuple (List.map f_assoc a) in
-        let subst   = EcFol.Fsubst.f_subst_id in
-        let subst   = EcFol.Fsubst.f_bind_local subst x_id a in
-        let f       = EcFol.Fsubst.f_subst subst f in
-        let assoc   = List.map (snd_map (EcFol.Fsubst.f_subst subst)) assoc in
+        let subst   = Fsubst.f_subst_local x_id a in
+        let f       = subst f in
+        let assoc   = List.map (snd_map subst) assoc in
         (assoc, f)
 
       with Not_found -> (assoc, f)

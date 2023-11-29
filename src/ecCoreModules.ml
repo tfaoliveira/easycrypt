@@ -150,6 +150,7 @@ let is_match  = _is_of_get get_match
 let is_assert = _is_of_get get_assert
 
 (* -------------------------------------------------------------------- *)
+(*
 let rec s_subst_top (s : EcTypes.e_subst) =
   let e_subst = EcTypes.e_subst s in
 
@@ -214,7 +215,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
   in s_subst
 
 let s_subst = s_subst_top
-
+*)
 (* -------------------------------------------------------------------- *)
 module Uninit = struct    (* FIXME: generalize this for use in ecPV *)
   let e_pv e =

@@ -154,16 +154,16 @@ module LowApply = struct
 
     and check_arg (sbt, ax) arg =
       let check_binder (x, xty) f =
-        let xty = Fsubst.subst_gty sbt xty in
+        let xty = Fsubst.gty_subst sbt xty in
 
         match xty, arg with
         | GTty xty, PAFormula arg ->
             if not (EcReduction.EqTest.for_type env xty arg.f_ty) then
               raise InvalidProofTerm;
-            (Fsubst.f_bind_local sbt x arg, f)
+            (Fsubst.bind_local sbt x arg, f)
 
         | GTmem _, PAMemory m ->
-            (Fsubst.f_bind_mem sbt x m, f)
+            (Fsubst.bind_mem sbt x m, f)
 
         | GTmodty emt, PAModule (mp, mt) -> begin
           (* FIXME: poor API ==> poor error recovery *)
@@ -176,7 +176,7 @@ module LowApply = struct
                 if mode = `Elim then f_imps obl f
                 else f_and (f_ands obl) f
             in
-            (EcFol.f_bind_mod sbt x mp env, f)
+            (Fsubst.bind_mod sbt x mp env, f)
           with _ -> raise InvalidProofTerm
         end
 
@@ -204,7 +204,7 @@ module LowApply = struct
           | _, _ ->
               if Fsubst.is_subst_id sbt then
                 raise InvalidProofTerm;
-              check_arg (Fsubst.f_subst_id, Fsubst.f_subst sbt ax) arg
+              check_arg (Fsubst.subst_id, Fsubst.f_subst sbt ax) arg
       end
 
       | `Intro -> begin
@@ -213,12 +213,12 @@ module LowApply = struct
           | None ->
               if Fsubst.is_subst_id sbt then
                 raise InvalidProofTerm;
-              check_arg (Fsubst.f_subst_id, Fsubst.f_subst sbt ax) arg
+              check_arg (Fsubst.subst_id, Fsubst.f_subst sbt ax) arg
       end
     in
 
     let (nhd, ax) = check_pthead pt.pt_head tc in
-    let ax, nargs = check_args (Fsubst.f_subst_id, ax, []) pt.pt_args in
+    let ax, nargs = check_args (Fsubst.subst_id, ax, []) pt.pt_args in
 
     ({ pt_head = nhd; pt_args = nargs }, ax)
 end
@@ -457,7 +457,7 @@ end
 (* -------------------------------------------------------------------- *)
 let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
   let add_local hyps id sbt x gty =
-    let gty = Fsubst.subst_gty sbt gty in
+    let gty = Fsubst.gty_subst sbt gty in
     let id  = tg_map (function
       | Some id -> id
       | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)) id
@@ -468,13 +468,13 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
     match gty with
     | GTty ty ->
         LowIntro.check_name_validity !!tc `Value name;
-        (id, LD_var (ty, None), Fsubst.f_bind_rename sbt x (tg_val id) ty)
+        (id, LD_var (ty, None), Fsubst.bind_rename sbt x (tg_val id) ty)
     | GTmem me ->
         LowIntro.check_name_validity !!tc `Memory name;
-        (id, LD_mem me, Fsubst.f_bind_mem sbt x (tg_val id))
+        (id, LD_mem me, Fsubst.bind_mem sbt x (tg_val id))
     | GTmodty i ->
         LowIntro.check_name_validity !!tc `Module name;
-        (id, LD_modty i, Fsubst.f_bind_absmod sbt x (tg_val id))
+        (id, LD_modty i, Fsubst.bind_absmod sbt x (tg_val id))
   in
 
   let add_ld id ld hyps =
@@ -502,15 +502,15 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         let id = tg_map (function
           | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)
           | Some id -> id) id in
-        let xty  = ty_subst sbt.fs_ty xty in
+        let xty  = Fsubst.ty_subst sbt xty in
         let xe   = Fsubst.f_subst sbt xe in
-        let sbt  = Fsubst.f_bind_rename sbt x (tg_val id) xty in
+        let sbt  = Fsubst.bind_rename sbt x (tg_val id) xty in
         let hyps = add_ld id (LD_var (xty, Some xe)) hyps in
         ((hyps, concl), sbt), id
 
-    | _ when sbt !=(*φ*) Fsubst.f_subst_id ->
+    | _ when not (Fsubst.is_subst_id sbt) ->
         let concl = Fsubst.f_subst sbt concl in
-        intro1 ((hyps, concl), Fsubst.f_subst_id) id
+        intro1 ((hyps, concl), Fsubst.subst_id) id
 
     | _ ->
         match h_red_opt full_red hyps concl with
@@ -521,7 +521,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
   let tc = FApi.tcenv_of_tcenv1 tc in
 
   if List.is_empty ids then (tc, []) else begin
-    let sbt = Fsubst.f_subst_id in
+    let sbt = Fsubst.subst_id in
     let ((hyps, concl), sbt), ids =
       List.fold_left_map intro1 (FApi.tc_flat tc, sbt) ids in
     let concl = Fsubst.f_subst sbt concl in
@@ -796,28 +796,28 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
       match LDecl.ld_subst s (LDecl.by_id id hyps) with
       | LD_var (ty, Some body) when letin ->
           let x    = fresh id in
-          let s    = Fsubst.f_bind_rename s id x ty in
+          let s    = Fsubst.bind_rename s id x ty in
           let bds  = `LetIn (x, GTty ty, body) :: bds in
           let args = args in
           (s, bds, args, cls)
 
       | LD_var (ty, _) ->
           let x    = fresh id in
-          let s    = Fsubst.f_bind_rename s id x ty in
+          let s    = Fsubst.bind_rename s id x ty in
           let bds  = `Forall (x, GTty ty) :: bds in
           let args = PAFormula (f_local id ty) :: args in
           (s, bds, args, cls)
 
       | LD_mem mt ->
         let x    = fresh id in
-        let s    = Fsubst.f_bind_mem s id x in
+        let s    = Fsubst.bind_mem s id x in
         let bds  = `Forall (x, GTmem mt) :: bds in
         let args = PAMemory id :: args in
         (s, bds, args, cls)
 
       | LD_modty mt ->
         let x    = fresh id in
-        let s    = Fsubst.f_bind_absmod s id x in
+        let s    = Fsubst.bind_absmod s id x in
         let mp   = EcPath.mident id in
         let sig_ = EcEnv.NormMp.sig_of_mp env mp in
         let bds  = `Forall (x, GTmodty mt) :: bds in
@@ -836,7 +836,7 @@ let t_generalize_hyps_x ?(missing = false) ?naming ?(letin = false) ids tc =
 
   in
 
-  let (s, bds, args, cls) = (Fsubst.f_subst_id, [], [], []) in
+  let (s, bds, args, cls) = (Fsubst.subst_id, [], [], []) in
   let (s, bds, args, cls) = List.fold_left for1 (s, bds, args, cls) ids in
 
   let cltry, cldo = List.partition fst cls in
@@ -1218,7 +1218,7 @@ let t_elim_eq_tuple ?reduce goal = t_elim_r ?reduce [t_elim_eq_tuple_r] goal
 let t_elim_exists_r ((f, _) : form * sform) concl tc =
   match f.f_node with
   | Fquant (Lexists, bd, body) ->
-      let subst = Fsubst.f_subst_init ~freshen:true () in
+      let subst = Fsubst.subst_init ~freshen:true () in
       let subst, bd = Fsubst.add_bindings subst bd in
       let newc  = f_forall bd (f_imp (Fsubst.f_subst subst body) concl) in
       let tc    = FApi.mutate1 tc (fun hd -> VExtern (`Exists, [hd])) newc in
@@ -1651,7 +1651,10 @@ module LowSubst = struct
   let is_member_for_subst ?kind hyps var f =
     let kind = odfl default_subst_kind kind in
     let env = LDecl.toenv hyps in
-    let is_let x = match LDecl.by_id x hyps with LD_var (_, Some _) -> true | _ -> false in
+    let is_let x =
+      match LDecl.by_id x hyps with
+      | LD_var (_, Some _) -> true
+      | _ | exception LDecl.LookupTvar -> false in
     match f.f_node, var with
     (* Substitution of logical variables *)
     | Flocal x, None when kind.sk_local && not (is_let x) ->
@@ -1736,10 +1739,11 @@ module LowSubst = struct
         else
           (* check if x is a declared module *)
           let fv = Sid.add x fv in
+
           if EcEnv.Mod.by_mpath_opt (EcPath.mident x) env <> None then fv
           else match LDecl.by_id x hyps with
           | LD_var (_, Some f) -> add_f fv f
-          | _ -> fv
+          | _ | exception LDecl.LookupTvar -> fv
       and add_f fv f = Mid.fold_left add fv f.f_fv in
       Some(side,v,f, add_f Sid.empty f)
 
@@ -1904,7 +1908,7 @@ let t_subst_x ?kind ?(except = Sid.empty) ?(clear = SCall) ?var ?tside ?eqid (tc
               | `Local x ->
                 begin match LDecl.by_id x hyps with
                 | LD_var (_, None) -> [x; id]
-                | _ -> [id]
+                | _ | exception LDecl.LookupTvar -> [id]
                 end
               | _ -> [id]
           in

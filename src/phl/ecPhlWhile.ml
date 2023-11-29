@@ -369,9 +369,9 @@ let t_equiv_while_disj_r side vrnt inv tc =
 
   let m_other' = (EcIdent.create "&m", EcMemory.memtype m_other) in
 
-  let smem = Fsubst.f_subst_id in
-  let smem = Fsubst.f_bind_mem smem (EcMemory.memory m_side ) mhr in
-  let smem = Fsubst.f_bind_mem smem (EcMemory.memory m_other) (EcMemory.memory m_other') in
+  let smem = Fsubst.subst_id in
+  let smem = Fsubst.bind_mem smem (EcMemory.memory m_side ) mhr in
+  let smem = Fsubst.bind_mem smem (EcMemory.memory m_other) (EcMemory.memory m_other') in
 
   let b_pre   = f_and_simpl (f_and_simpl inv e) vrnt_eq_k in
   let b_pre   = Fsubst.f_subst smem b_pre in
@@ -641,7 +641,7 @@ let process_async_while (winfos : EP.async_while_info) tc =
 
   let hr1, hr2 =
     let hr1 =
-      let subst = Fsubst.f_bind_mem Fsubst.f_subst_id ml mhr in
+      let subst = Fsubst.bind_mem Fsubst.subst_id ml mhr in
       let inv   = Fsubst.f_subst subst inv in
       let p0    = Fsubst.f_subst subst p0  in
       let p1    = Fsubst.f_subst subst p1  in
@@ -651,7 +651,7 @@ let process_async_while (winfos : EP.async_while_info) tc =
         (f_hoareS (mhr, EcMemory.memtype evs.es_ml) pre cl inv)
 
     and hr2 =
-      let subst = Fsubst.f_bind_mem Fsubst.f_subst_id mr mhr in
+      let subst = Fsubst.bind_mem Fsubst.subst_id mr mhr in
       let inv   = Fsubst.f_subst subst inv in
       let p0    = Fsubst.f_subst subst p0  in
       let p1    = Fsubst.f_subst subst p1  in
@@ -686,7 +686,7 @@ let process_async_while (winfos : EP.async_while_info) tc =
   let (c1, ll1), (c2, ll2) =
     try
       let ll1 =
-        let subst   = Fsubst.f_bind_mem Fsubst.f_subst_id ml mhr in
+        let subst   = Fsubst.bind_mem Fsubst.subst_id ml mhr in
         let inv     = Fsubst.f_subst subst inv in
         let test    = f_ands [fe1; f_not p0; p1] in
         let test, m = ASyncWhile.form_of_expr env (EcMemory.memory evs.es_mr) ml test in
@@ -695,7 +695,7 @@ let process_async_while (winfos : EP.async_while_info) tc =
           (f_bdHoareS (mhr, EcMemory.memtype evs.es_ml) inv c f_true FHeq f_r1)
 
       and ll2 =
-        let subst   = Fsubst.f_bind_mem Fsubst.f_subst_id mr mhr in
+        let subst   = Fsubst.bind_mem Fsubst.subst_id mr mhr in
         let inv     = Fsubst.f_subst subst inv in
         let test    = f_ands [fe1; f_not p0; f_not p1] in
         let test, m = ASyncWhile.form_of_expr env (EcMemory.memory evs.es_ml) mr test in

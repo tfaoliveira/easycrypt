@@ -65,15 +65,15 @@ let t_hr_exists_intro_r fs tc =
     match side with
     | true ->
         let ml, mr = as_seq2 (LDecl.fresh_ids hyps ["&ml"; "&mr"]) in
-        let s = Fsubst.f_subst_id in
-        let s = Fsubst.f_bind_mem s mleft ml in
-        let s = Fsubst.f_bind_mem s mright mr in
+        let s = Fsubst.subst_id in
+        let s = Fsubst.bind_mem s mleft ml in
+        let s = Fsubst.bind_mem s mright mr in
         ([ml; mr], s)
 
     | false ->
         let m = LDecl.fresh_id hyps "&m" in
-        let s = Fsubst.f_subst_id in
-        let s = Fsubst.f_bind_mem s mhr m in
+        let s = Fsubst.subst_id in
+        let s = Fsubst.bind_mem s mhr m in
         ([m], s)
   in
 
@@ -200,9 +200,7 @@ let process_ecall oside (l, tvi, fs) tc =
     let sub = oget (get_post (FApi.tc_goal sub)) in
 
     let subst =
-      List.fold_left2
-        (fun s id f -> Fsubst.f_bind_local s id f)
-        Fsubst.f_subst_id (List.fst ids) fs in
+      Fsubst.bind_locals Fsubst.subst_id ids fs in
 
     (nms, Fsubst.f_subst subst sub) in
 

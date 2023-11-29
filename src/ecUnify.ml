@@ -6,6 +6,7 @@ open EcUtils
 open EcUid
 open EcAst
 open EcTypes
+open EcCoreSubst
 open EcDecl
 
 module Sp = EcPath.Sp
@@ -212,7 +213,7 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
                                  (uf, Mid.add v uid s))
                              (uf, Mid.empty) typ
                          in
-                           (uf, Tvar.subst subst gty)
+                           (uf, Tvar.ty_subst subst gty)
                        in
                          try  Some (unify_core env tvtc uf (`TyUni (gty, ty)))
                          with UnificationFailure _ -> raise E.Failure
@@ -355,16 +356,16 @@ module UniEnv = struct
     List.map (fun (tv, _) -> subst (tvar tv)) params
 
   let openty_r ue params tvi =
-    let subst = { ty_subst_id with ts_v = (opentvi ue params tvi) } in
-      (subst, subst_tv (ty_subst subst) params)
+    let subst = Fsubst.subst_init ~sty:(opentvi ue params tvi) () in
+      (subst, subst_tv (Fsubst.ty_subst subst) params)
 
   let opentys ue params tvi tys =
     let (subst, tvs) = openty_r ue params tvi in
-      (List.map (ty_subst subst) tys, tvs)
+      (List.map (Fsubst.ty_subst subst) tys, tvs)
 
   let openty ue params tvi ty =
     let (subst, tvs) = openty_r ue params tvi in
-      (ty_subst subst ty, tvs)
+      (Fsubst.ty_subst subst ty, tvs)
 
   let repr (ue : unienv) (t : ty) : ty =
     match t.ty_node with
@@ -455,7 +456,7 @@ let select_op ?(hidden = false) ?(filter = fun _ _ -> true) tvi env name ue psig
       end;
 
       let (tip, tvs) = UniEnv.openty_r subue op.D.op_tparams tvi in
-      let top = ty_subst tip op.D.op_ty in
+      let top = Fsubst.ty_subst tip op.D.op_ty in
       let texpected = tfun_expected subue psig in
 
       (try  unify env subue top texpected
@@ -465,8 +466,8 @@ let select_op ?(hidden = false) ?(filter = fun _ _ -> true) tvi env name ue psig
         match op.D.op_kind with
         | OB_nott nt ->
            let substnt () =
-             let xs = List.map (snd_map (ty_subst tip)) nt.D.ont_args in
-             let es = e_subst { e_subst_id with es_ty = tip } in
+             let xs = List.map (snd_map (Fsubst.ty_subst tip)) nt.D.ont_args in
+             let es = Fsubst.e_subst tip in
              let bd = es nt.D.ont_body in
              (xs, bd)
            in Some (Lazy.from_fun substnt)

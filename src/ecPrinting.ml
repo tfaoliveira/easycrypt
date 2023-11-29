@@ -422,7 +422,7 @@ let pp_topmod ppe fmt p =
 
 (* -------------------------------------------------------------------- *)
 let pp_tyvar ppe fmt x =
-  Format.fprintf fmt "%s" (PPEnv.tyvar ppe x)
+  Format.fprintf fmt "%s.%i" (PPEnv.tyvar ppe x) (EcIdent.id_hash x)
 
 (* -------------------------------------------------------------------- *)
 let pp_tyunivar ppe fmt x =
@@ -975,7 +975,6 @@ let pp_opapp
              doit args (pp_sub ppe (fst outer, (e_app_prio, `IRight))) a
 
       in fun () -> doit fmt es
-
     with E.PrintAsPlain ->
       fun () ->
         match es with
@@ -1216,7 +1215,7 @@ let pp_opapp
                     try_pp_as_binop;
                     try_pp_as_post ;
                     try_pp_record  ;
-                    try_pp_proj    ;])) fmt ()
+                    try_pp_proj    ;] )) fmt ()
 
 (* -------------------------------------------------------------------- *)
 let pp_chained_orderings (ppe : PPEnv.t) t_ty pp_sub outer fmt (f, fs) =
@@ -1587,11 +1586,11 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
       let ev   = MEV.of_idents (List.map fst nt.ont_args) `Form in
       let ue   = EcUnify.UniEnv.create None in
       let ov   = EcUnify.UniEnv.opentvi ue tv None in
-      let ti   = Tvar.subst ov in
+      let ti   = Tvar.ty_subst ov in
       let hy   = EcEnv.LDecl.init ppe.PPEnv.ppe_env [] in
       let mr   = odfl mhr (EcEnv.Memory.get_active ppe.PPEnv.ppe_env) in
       let bd   = form_of_expr mr nt.ont_body in
-      let bd   = Fsubst.subst_tvar ov bd in
+      let bd   = Tvar.f_subst ov bd in
 
       try
         let (ue, ev) =

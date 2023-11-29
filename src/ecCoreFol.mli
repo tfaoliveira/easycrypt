@@ -355,6 +355,7 @@ val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
 (* A predicate on memory: λ mem. -> pred *)
 type mem_pr = EcMemory.memory * form
 
+(*
 (* -------------------------------------------------------------------- *)
 type f_subst = private {
   fs_freshen  : bool; (* true means realloc local *)
@@ -413,7 +414,7 @@ module Fsubst : sig
   val subst_oi       : f_subst -> PreOI.t -> PreOI.t
   val subst_gty      : f_subst -> gty -> gty
 end
-
+*)
 (* -------------------------------------------------------------------- *)
 val can_subst : form -> bool
 

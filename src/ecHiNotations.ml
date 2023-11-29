@@ -4,6 +4,7 @@ open EcSymbols
 open EcLocation
 open EcParsetree
 open EcTypes
+open EcCoreSubst
 open EcEnv
 
 module TT = EcTyping
@@ -83,10 +84,10 @@ let trans_abbrev_r (env : env) (at : pabbrev located) =
     nterror gloc env NTE_TyNotClosed;
 
   let ts = Tuni.subst (EcUnify.UniEnv.close ue) in
-  let es = e_subst { e_subst_id with es_ty = ts } in
+  let es = Fsubst.e_subst ts in
   let body    = es body in
-  let codom   = ty_subst ts codom in
-  let xs      = List.map (snd_map (ty_subst ts)) xs in
+  let codom   = Fsubst.ty_subst ts codom in
+  let xs      = List.map (snd_map (Fsubst.ty_subst ts)) xs in
   let tparams = EcUnify.UniEnv.tparams ue in
   let ponly   = trans_abbrev_opts at.ab_opts in
   let tyat    = EcDecl.mk_abbrev ~ponly

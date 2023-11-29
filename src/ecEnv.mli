@@ -5,8 +5,10 @@ open EcTypes
 open EcMemory
 open EcDecl
 open EcCoreFol
+open EcCoreSubst
 open EcModules
 open EcTheory
+
 
 (* -------------------------------------------------------------------- *)
 type 'a suspension = {
@@ -480,6 +482,9 @@ module LDecl : sig
   val add_local : EcIdent.t -> local_kind -> hyps -> hyps
 
   val by_name : symbol    -> hyps -> l_local
+
+  exception LookupTvar
+  (* raise LookupTvar if the ident is a type variable declared in hyps *)
   val by_id   : EcIdent.t -> hyps -> local_kind
 
   val has_name : symbol    -> hyps -> bool

@@ -5,6 +5,7 @@ open EcLocation
 open EcParsetree
 open EcAst
 open EcTypes
+open EcCoreSubst
 open EcDecl
 open EcModules
 open EcTheory
@@ -57,7 +58,7 @@ let tparams_compatible rtyvars ntyvars =
 let ty_compatible env ue (rtyvars, rty) (ntyvars, nty) =
   tparams_compatible rtyvars ntyvars;
   let subst = Tvar.init rtyvars (List.map tvar ntyvars) in
-  let rty   = Tvar.subst subst rty in
+  let rty   = Tvar.ty_subst subst rty in
   try  EcUnify.unify env ue rty nty
   with EcUnify.UnificationFailure _ ->
     raise (Incompatible (DifferentType (rty, nty)))
@@ -373,11 +374,11 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, otyd
                   let newtparams = List.fst newtyd.tyd_params in
                   let newtparams_ty = List.map tvar newtparams in
                   let newdtype = tconstr np newtparams_ty in
-                  let tysubst = EcTypes.Tvar.init (List.fst otyd.tyd_params) newtparams_ty in
+                  let tysubst = Tvar.init (List.fst otyd.tyd_params) newtparams_ty in
 
                   List.fold_left (fun subst (name, tyargs) ->
                       let np = EcPath.pqoname (EcPath.prefix np) name in
-                      let newtyargs = List.map (Tvar.subst tysubst) tyargs in
+                      let newtyargs = List.map (Tvar.ty_subst tysubst) tyargs in
                       EcSubst.add_opdef subst
                         (xpath ove name)
                         (newtparams, e_op np newtparams_ty (toarrow newtyargs newdtype)))
@@ -464,8 +465,8 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopd) =
                   ~loc "this operator body contains free type variables";
 
               let sty     = Tuni.subst (EcUnify.UniEnv.close ue) in
-              let body    = EcFol.Fsubst.f_subst (EcFol.Fsubst.f_subst_init ~sty ()) body in
-              let ty      = ty_subst sty ty in
+              let body    = Fsubst.f_subst sty body in
+              let ty      = Fsubst.ty_subst sty ty in
               let tparams = EcUnify.UniEnv.tparams ue in
               let newop   =
                 mk_op
@@ -578,9 +579,8 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopr) =
               ove.ovre_hooks.herr
                 ~loc "this predicate body contains free type variables";
 
-            let ts = Tuni.subst (EcUnify.UniEnv.close ue) in
-            let fs = EcFol.Fsubst.f_subst_init ~sty:ts () in
-            let body    = EcFol.Fsubst.f_subst fs body in
+            let fs = Tuni.subst (EcUnify.UniEnv.close ue) in
+            let body    = Fsubst.f_subst fs body in
             let tparams = EcUnify.UniEnv.tparams ue in
             let newpr   =
               { op_tparams  = tparams;

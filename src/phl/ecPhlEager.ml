@@ -154,9 +154,9 @@ let t_eager_if_r tc =
   let bT =
     let b   = EcIdent.create "b1" in
     let eqb = f_eq fe (f_local b tbool) in
-    let sub = Fsubst.f_subst_id in
-    let sub = Fsubst.f_bind_mem sub mleft  mhr in
-    let sub = Fsubst.f_bind_mem sub mright m2 in
+    let sub = Fsubst.subst_id in
+    let sub = Fsubst.bind_mem sub mleft  mhr in
+    let sub = Fsubst.bind_mem sub mright m2 in
     let p   = Fsubst.f_subst sub es.es_pr in
 
     f_forall

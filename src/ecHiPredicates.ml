@@ -3,7 +3,7 @@ open EcUtils
 open EcSymbols
 open EcLocation
 open EcTypes
-open EcCoreFol
+open EcCoreSubst
 open EcParsetree
 open EcDecl
 
@@ -21,22 +21,19 @@ let tperror loc env e = raise (TransPredError (loc, env, e))
 
 (* -------------------------------------------------------------------- *)
 let close_pr_body (uni : ty EcUid.Muid.t) (body : prbody) =
-  let sty = { ty_subst_id with ts_u = uni } in
-  let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
-  let fsubst = fs in
-  let tsubst = ty_subst sty in
+  let subst  = Fsubst.subst_init ~suid:uni () in
 
   match body with
   | PR_Plain body ->
-     PR_Plain (Fsubst.f_subst fsubst body)
+     PR_Plain (Fsubst.f_subst subst body)
 
   | PR_Ind pri ->
      let for1 ctor =
        { prc_ctor = ctor.prc_ctor;
-         prc_bds  = List.map (snd_map (Fsubst.subst_gty fsubst)) ctor.prc_bds;
-         prc_spec = List.map (Fsubst.f_subst fsubst) ctor.prc_spec; } in
+         prc_bds  = List.map (snd_map (Fsubst.gty_subst subst)) ctor.prc_bds;
+         prc_spec = List.map (Fsubst.f_subst subst) ctor.prc_spec; } in
      PR_Ind
-       { pri_args  = List.map (snd_map tsubst) pri.pri_args;
+       { pri_args  = List.map (snd_map (Fsubst.ty_subst subst)) pri.pri_args;
          pri_ctors = List.map for1 pri.pri_ctors; }
 
 (* -------------------------------------------------------------------- *)

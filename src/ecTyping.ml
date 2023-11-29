@@ -201,7 +201,7 @@ let unify_or_fail (env : EcEnv.env) ue loc ~expct:ty1 ty2 =
     match pb with
     | `TyUni (t1, t2)->
        let uidmap = UE.assubst ue in
-       let tyinst = ty_subst (Tuni.subst uidmap) in
+       let tyinst = Fsubst.ty_subst (Tuni.subst uidmap) in
        tyerror loc env (TypeMismatch ((tyinst ty1, tyinst ty2),
                                       (tyinst  t1, tyinst  t2)))
     | `TcCtt _ ->
@@ -1430,7 +1430,7 @@ let trans_record env ue (subtt, proj) (loc, b, fields) =
       | None ->
           match dflrec with
           | None   -> tyerror loc env (MissingRecField name)
-          | Some _ -> `Dfl (Tvar.subst tysopn rty, name)
+          | Some _ -> `Dfl (Tvar.ty_subst tysopn rty, name)
     in List.mapi (fun i (name, rty) -> get_field i name rty) rec_
   in
 
@@ -1582,10 +1582,9 @@ let expr_of_opselect
              let xs = snd (List.split_at nargs bds) in
              let xs = List.map (fst_map EcIdent.fresh) xs in
              ((args @ List.map (curry e_local) xs, []), xs) in
-         let lcmap = List.map2 (fun (x, _) y -> (x, y)) bds tosub in
-         let subst = { EcTypes.e_subst_id with es_freshen = true; } in
-         let subst = { subst with es_loc = Mid.of_list lcmap; } in
-         let body  = EcTypes.e_subst subst body in
+         let lcmap =  Mid.of_list(List.map2 (fun (x, _) y -> (x, y)) bds tosub) in
+         let subst = Fsubst.subst_init ~freshen:true ~esloc:lcmap () in
+         let body  = Fsubst.e_subst subst body in
          (e_lam elam body, args)
 
     | (`Op _ | `Lc _ | `Pv _) as sel -> let op = match sel with
@@ -1695,7 +1694,7 @@ let transexp (env : EcEnv.env) mode ue e =
     | PEmatch (pce, pb) ->
         let ce, ety = transexp env pce in
         let uidmap = EcUnify.UniEnv.assubst ue in
-        let ety = ty_subst (Tuni.subst uidmap) ety in
+        let ety = Fsubst.ty_subst (Tuni.subst uidmap) ety in
         let inddecl =
           match (EcEnv.ty_hnorm ety env).ty_node with
           | Tconstr (indp, _) -> begin
@@ -1773,7 +1772,7 @@ let transexp (env : EcEnv.env) mode ue e =
     | PEproji (sube, i) -> begin
       let sube', ety = transexp env sube in
       let uidmap = EcUnify.UniEnv.assubst ue in
-      let ty = ty_subst (Tuni.subst uidmap) ety in
+      let ty = Fsubst.ty_subst (Tuni.subst uidmap) ety in
       match (EcEnv.ty_hnorm ty env).ty_node with
       | Ttuple l when i < List.length l ->
         let ty = List.nth l i in
@@ -1993,9 +1992,9 @@ let form_of_opselect
          let me    = odfl mhr (EcEnv.Memory.get_active env) in
          let body  = form_of_expr me body in
          let lcmap = List.map2 (fun (x, _) y -> (x, y)) bds tosub in
-         let subst = Fsubst.f_subst_init ~freshen:true () in
+         let subst = Fsubst.subst_init ~freshen:true () in
          let subst =
-           List.fold_left (fun s -> curry (Fsubst.f_bind_local s)) subst lcmap
+           List.fold_left (fun s -> curry (Fsubst.bind_local s)) subst lcmap
          in (f_lambda flam (Fsubst.f_subst subst body), args)
 
     | (`Op _ | `Lc _ | `Pv _) as sel -> let op = match sel with
@@ -2211,8 +2210,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) =
     let subs = try EcUnify.UniEnv.close ue with
       | EcUnify.UninstanciateUni ->
         tyerror (loc form) env FreeTypeVariables in
-    let sty = { ty_subst_id with ts_u = subs } in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
+    let fs = Tuni.subst subs in
     EcFol.Fsubst.f_subst fs tform in
 
   match r_compl with
@@ -2612,17 +2610,16 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
       in
       (* Close all types *)
       let ts      = Tuni.subst (UE.assubst ue) in
-      let retty   = fundef_check_type (ty_subst ts) env None (retty, decl.pfd_tyresult.pl_loc) in
-      let params  = List.map (fundef_check_decl (ty_subst ts) env) params in
-      let locals  = List.map (fundef_check_decl (ty_subst ts) env) locals in
+      let retty   = fundef_check_type (Fsubst.ty_subst ts) env None (retty, decl.pfd_tyresult.pl_loc) in
+      let params  = List.map (fundef_check_decl (Fsubst.ty_subst ts) env) params in
+      let locals  = List.map (fundef_check_decl (Fsubst.ty_subst ts) env) locals in
       let prelude = List.map (fundef_check_iasgn ts env) prelude in
 
       if not (UE.closed ue) then
         tyerror st.pl_loc env (OnlyMonoTypeAllowed None);
 
-      let clsubst = { EcTypes.e_subst_id with es_ty = ts } in
-      let stmt    = s_subst clsubst stmt
-      and result  = result |> omap (e_subst clsubst) in
+      let stmt    = Fsubst.s_subst ts stmt
+      and result  = result |> omap (Fsubst.e_subst ts) in
       let stmt    = EcModules.stmt (List.flatten prelude @ stmt.s_node) in
 
       (* Computes reads/writes/calls *)
@@ -2801,7 +2798,7 @@ and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
   let pl =
     List.map
       (fun (p, ty) ->
-        (p, fundef_check_type (ty_subst subst_uni) env None (ty, loc)))
+        (p, fundef_check_type (Fsubst.ty_subst subst_uni) env None (ty, loc)))
       pl
   in
   let pl =
@@ -2810,9 +2807,7 @@ and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
     | `Tuple  -> [LvTuple pl]
   in
 
-  let clsubst = { EcTypes.e_subst_id with es_ty = subst_uni } in
-  let init    = e_subst clsubst init in
-
+  let init    = Fsubst.e_subst subst_uni init in
     List.map (fun lv -> i_asgn (lv, init)) pl
 
 (* -------------------------------------------------------------------- *)
@@ -2906,7 +2901,7 @@ and transinstr
   | PSmatch (pe, pbranches) -> begin
       let e, ety = transexp env `InProc ue pe in
       let uidmap = EcUnify.UniEnv.assubst ue in
-      let ety = ty_subst (Tuni.subst uidmap) ety in
+      let ety = Fsubst.ty_subst (Tuni.subst uidmap) ety in
 
       let inddecl =
         match (EcEnv.ty_hnorm ety env).ty_node with
@@ -3463,7 +3458,7 @@ and trans_form_or_pattern
     | PFmatch (pcf, pb) ->
        let cf = transf env pcf in
        let ts = Tuni.subst (UE.assubst ue) in
-       let cfty = ty_subst ts cf.f_ty in
+       let cfty = Fsubst.ty_subst ts cf.f_ty in
 
         let inddecl =
           match (EcEnv.ty_hnorm cfty env).ty_node with
@@ -3552,7 +3547,7 @@ and trans_form_or_pattern
     | PFproji (psubf, i) -> begin
       let subf = transf env psubf in
       let ts   = Tuni.subst (UE.assubst ue) in
-      let ty   = ty_subst ts subf.f_ty in
+      let ty   = Fsubst.ty_subst ts subf.f_ty in
       match (EcEnv.ty_hnorm ty env).ty_node with
       | Ttuple l when i < List.length l ->
           f_proj subf i (List.nth l i)
@@ -3788,7 +3783,7 @@ let get_instances (tvi, bty) env =
       try
         EcUnify.unify env ue bty gty;
         let ts = Tuni.subst (UE.close ue) in
-        Some (inst, ty_subst ts gty, cr)
+        Some (inst, Fsubst.ty_subst ts gty, cr)
       with EcUnify.UnificationFailure _ -> None)
     inst
 

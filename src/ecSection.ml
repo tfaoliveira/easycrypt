@@ -662,8 +662,9 @@ let add_declared_op to_gen path opdecl =
       | OB_pred _ ->  EcSubst.add_pddef to_gen.tg_subst path ([], f_local id ty)
       | _ -> assert false }
 
-  let tvar_fv ty = Mid.map (fun () -> 1) (Tvar.fv ty)
-  let fv_and_tvar_e e =
+let tvar_fv ty = Mid.map (fun () -> 1) (EcTypes.ftvar ty)
+
+let fv_and_tvar_e e =
     let rec aux fv e =
       let fv = EcIdent.fv_union fv (tvar_fv e.e_ty) in
       match e.e_node with

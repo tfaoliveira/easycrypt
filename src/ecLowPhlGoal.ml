@@ -392,7 +392,7 @@ let mk_let_of_lv_substs_let env (lets, f) =
       | None   -> (accu, s)
       | Some i ->
         if   i = 1 || can_subst f1
-        then accu, Fsubst.f_bind_local s id f1
+        then accu, Fsubst.bind_local s id f1
         else (LSymbol(id,ty), f1)::accu, s in
 
     let rlets, s =
@@ -424,7 +424,7 @@ let mk_let_of_lv_substs_let env (lets, f) =
               List.fold_lefti (fun accus i (_,ty as idt) ->
                 add_id fv accus idt (f_proj fx i ty)) (rlet, s) ids in
         (c_pre, rlet) :: rlets, s)
-        ([],Fsubst.f_subst_id) fvlets in
+        ([],Fsubst.subst_id) fvlets in
     List.fold_left (fun f2 (c_pre, lpf) ->
       let f2 = List.fold_left (fun f2 (lp,f1) -> f_let lp f1 f2) f2 lpf in
       let c_pre = odfl f_true c_pre in

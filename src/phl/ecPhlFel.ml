@@ -159,7 +159,7 @@ let t_failure_event_r (at_pos, cntr, ash, q, f_event, pred_specs, inv) tc =
   (* we must quantify over memories *)
   let mo = EcIdent.create "&m" in
   let post_goal =
-    let subst = Fsubst.f_bind_mem Fsubst.f_subst_id mhr mo in
+    let subst = Fsubst.bind_mem Fsubst.subst_id mhr mo in
     let p = f_imps [ev;inv] (f_and f_event (f_int_le cntr q)) in
     let p = Fsubst.f_subst subst p in
     f_forall_mems [mo, EcMemory.memtype m] p

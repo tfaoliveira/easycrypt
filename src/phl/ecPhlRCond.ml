@@ -89,9 +89,9 @@ module Low = struct
       | `Right -> es.es_mr,es.es_ml, es.es_sr in
     let hd,_,e,s = gen_rcond !!tc b EcFol.mhr at_pos s in
     let mo' = EcIdent.create "&m" in
-    let s1 = Fsubst.f_subst_id in
-    let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory m) EcFol.mhr in
-    let s1 = Fsubst.f_bind_mem s1 (EcMemory.memory mo) mo' in
+    let s1 = Fsubst.subst_id in
+    let s1 = Fsubst.bind_mem s1 (EcMemory.memory m) EcFol.mhr in
+    let s1 = Fsubst.bind_mem s1 (EcMemory.memory mo) mo' in
     let pre1 = Fsubst.f_subst s1 es.es_pr in
     let concl1 =
       f_forall_mems [mo', EcMemory.memtype mo]
@@ -203,7 +203,7 @@ module LowMatch = struct
             let s  = Mid.add x (e_var pv xty) s in
             (s, (pv, xty)))
           Mid.empty (List.combine cvars pvs) in
-      ({ e_subst_id with es_loc = s; }, pvs) in
+      (Fsubst.subst_init ~esloc:s (), pvs) in
 
     let frame =
       EcPV.PV.indep env
@@ -235,7 +235,7 @@ module LowMatch = struct
       None, otolist asgn, None
     end in
 
-    (epr, hd, po1, cost_opt), (me, stmt (hd.s_node @ asgn @ (s_subst subst s).s_node @ tl))
+    (epr, hd, po1, cost_opt), (me, stmt (hd.s_node @ asgn @ (Fsubst.s_subst subst s).s_node @ tl))
 
   (* ------------------------------------------------------------------ *)
   let t_hoare_rcond_match_r c at_pos tc =
@@ -314,14 +314,14 @@ module LowMatch = struct
       gen_rcond_full (!!tc, FApi.tc1_env tc) c (EcFol.mhr, snd m) at_pos s in
 
     let mo'  = EcIdent.create "&m" in
-    let s1   = Fsubst.f_subst_id in
-    let s1   = Fsubst.f_bind_mem s1 (EcMemory.memory m) EcFol.mhr in
-    let s1   = Fsubst.f_bind_mem s1 (EcMemory.memory mo) mo' in
+    let s1   = Fsubst.subst_id in
+    let s1   = Fsubst.bind_mem s1 (EcMemory.memory m) EcFol.mhr in
+    let s1   = Fsubst.bind_mem s1 (EcMemory.memory mo) mo' in
     let pre1 = Fsubst.f_subst s1 es.es_pr in
 
     let epr  = omap (fun epr ->
-      let se = Fsubst.f_subst_id in
-      let se = Fsubst.f_bind_mem se EcFol.mhr (EcMemory.memory m)  in
+      let se = Fsubst.subst_id in
+      let se = Fsubst.bind_mem se EcFol.mhr (EcMemory.memory m)  in
       Fsubst.f_subst se epr) epr in
 
     let concl1 =

@@ -7,8 +7,22 @@ open EcMemory
 (* -------------------------------------------------------------------- *)
 include module type of struct include EcCoreFol end
 
+type f_subst = EcCoreSubst.f_subst
+
 (* -------------------------------------------------------------------- *)
-val f_bind_mod : f_subst -> EcIdent.t -> EcPath.mpath -> EcEnv.env -> f_subst
+module Fsubst : sig
+  include module type of struct include EcCoreSubst.Fsubst end
+  val bind_mod : f_subst -> EcIdent.t -> EcPath.mpath -> EcEnv.env -> f_subst
+end
+
+module Tvar : sig
+  include module type of struct include EcCoreSubst.Tvar end
+end
+
+module Tuni : sig
+  include module type of struct include EcCoreSubst.Tuni end
+end
+
 
 (* -------------------------------------------------------------------- *)
 val f_losslessF: xpath -> form
@@ -259,3 +273,9 @@ val cost_app      : cost -> form list -> cost
 val cost_flatten  : cost -> form *)
 
 val dump_f : form -> string
+
+
+
+(* ------------------------------------------------------------------- *)
+
+val is_record : EcEnv.env -> form -> bool

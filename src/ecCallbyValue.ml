@@ -26,38 +26,43 @@ module Subst : sig
   val subst_ty       : subst -> ty -> ty
   val subst_xpath    : subst -> EcPath.xpath -> EcPath.xpath
   val subst_m        : subst -> ident -> ident
-  val subst_me       : subst -> EcMemory.memenv -> EcMemory.memenv
-  val subst_lpattern : subst -> lpattern -> subst * lpattern
+
   val subst_stmt     : subst -> EcModules.stmt -> EcModules.stmt
   val subst_e        : subst -> expr -> expr
 
   val bind_local   : subst -> ident -> form -> subst
-  val bind_locals  : subst -> (ident * form) list -> subst
+  val bind_locals  : subst -> (ident * 'a) list -> form list -> subst
+  val bind_olocals : subst -> (ident option * 'a) list -> form list -> subst
+
   val add_binding  : subst -> binding -> subst * binding
   val add_bindings : subst -> bindings -> subst * bindings
+  val add_memenv   : subst -> memenv -> subst * memenv
+  val add_lpattern : subst -> lpattern -> subst * lpattern
 
-  val has_mem : subst -> ident -> bool
+  val remove_predef_mem : subst -> memory -> subst
+
 end = struct
   type subst = f_subst
 
-  let subst_id       = Fsubst.f_subst_id
-  let subst          = Fsubst.f_subst ?tx:None
-  let subst_ty       = Fsubst.subst_ty
-  let subst_xpath    = Fsubst.subst_xpath
-  let subst_m        = Fsubst.subst_m
-  let subst_me       = Fsubst.subst_me
-  let subst_lpattern = Fsubst.subst_lpattern
-  let subst_stmt     = Fsubst.subst_stmt
-  let subst_e        = Fsubst.subst_e
-  let bind_local     = Fsubst.f_bind_local
-  let add_binding    = Fsubst.add_binding
-  let add_bindings   = Fsubst.add_bindings
+  let subst_id     = Fsubst.subst_id
+  let subst        = Fsubst.f_subst ?tx:None
+  let subst_ty     = Fsubst.ty_subst
+  let subst_xpath  = Fsubst.x_subst
+  let subst_m      = Fsubst.mem_subst
 
-  let bind_locals (s : subst) xs =
-    List.fold_left (fun s (x, e) -> bind_local s x e) s xs
+  let subst_stmt   = Fsubst.s_subst
+  let subst_e      = Fsubst.e_subst
+  let bind_local   = Fsubst.bind_local
+  let add_binding  = Fsubst.add_binding
+  let add_bindings = Fsubst.add_bindings
+  let add_memenv   = Fsubst.add_memenv
+  let add_lpattern = Fsubst.add_lpattern ~where:`Form
 
-  let has_mem (s : subst) (x : ident) =
-    Mid.mem x s.fs_mem
+  let bind_locals  = Fsubst.bind_locals
+  let bind_olocals = Fsubst.bind_olocals
+
+  let remove_predef_mem = Fsubst.remove_predef_mem
+
 end
 
 type subst = Subst.subst
@@ -166,7 +171,6 @@ let norm_xfun st s f =
   if st.st_ri.modpath then EcEnv.NormMp.norm_xfun st.st_env f else f
 
 let norm_stmt s c  = Subst.subst_stmt s c
-let norm_me   s me = Subst.subst_me s me
 let norm_e    s e  = Subst.subst_e s e
 
 (* -------------------------------------------------------------------- *)
@@ -309,8 +313,8 @@ and app_red st f1 args =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        EcFol.Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
+        Tvar.f_subst
+          (Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
 
       cbv st subst body (Args.create ty eargs)
     with E.NoCtor ->
@@ -427,15 +431,21 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
       let s = Subst.bind_local s x f1 in
       cbv st s f2 args
 
-    (* ζ-reduction *)
+    (* ι-reduction *)
     | LTuple ids, Ftuple es when st.st_ri.zeta ->
-      let s = Subst.bind_locals s (List.combine (List.fst ids) es) in
+      let s = Subst.bind_locals s ids es in
+      cbv st s f2 args
+
+    (* ι-reduction *)
+    | LRecord (_, ids), _ when st.st_ri.iota && is_record st.st_env f1 ->
+      let rargs  = snd (EcFol.destr_app f1) in
+      let s = Subst.bind_olocals s ids rargs in
       cbv st s f2 args
 
     (* FIXME: LRecord *)
     | _, _ ->
       let f1 = norm_lambda st f1 in
-      let s, p = Subst.subst_lpattern s p in
+      let s, p = Subst.add_lpattern s p in
       let f2 = norm st s f2 in
       app_red st (f_let p f1 f2) args
     end
@@ -475,116 +485,113 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
 
   | FhoareF hf ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mhr));
+    let hf_f  = norm_xfun st s hf.hf_f in
+    let s = Subst.remove_predef_mem s mhr in
     let hf_pr = norm st s hf.hf_pr in
     let hf_po = norm st s hf.hf_po in
-    let hf_f  = norm_xfun st s hf.hf_f in
+
     f_hoareF_r { hf_pr; hf_f; hf_po }
 
   | FhoareS hs ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst hs.hs_m)));
+    let hs_s  = norm_stmt s hs.hs_s in
+    let s, hs_m = Subst.add_memenv s hs.hs_m in
     let hs_pr = norm st s hs.hs_pr in
     let hs_po = norm st s hs.hs_po in
-    let hs_s  = norm_stmt s hs.hs_s in
-    let hs_m  = norm_me s hs.hs_m in
     f_hoareS_r { hs_pr; hs_po; hs_s; hs_m }
 
   | FeHoareF hf ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mhr));
+    let ehf_f   = norm_xfun st s hf.ehf_f in
+    let s = Subst.remove_predef_mem s mhr in
     let ehf_pr  = norm st s hf.ehf_pr  in
     let ehf_po  = norm st s hf.ehf_po  in
-    let ehf_f   = norm_xfun st s hf.ehf_f in
     f_eHoareF_r { ehf_pr; ehf_f; ehf_po; }
 
   | FeHoareS hs ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst hs.ehs_m)));
+    let ehs_s   = norm_stmt s hs.ehs_s in
+    let s, ehs_m = Subst.add_memenv s hs.ehs_m in
     let ehs_pr  = norm st s hs.ehs_pr in
     let ehs_po  = norm st s hs.ehs_po in
-    let ehs_s   = norm_stmt s hs.ehs_s in
-    let ehs_m   = norm_me s hs.ehs_m in
     f_eHoareS_r { ehs_pr; ehs_po; ehs_s; ehs_m }
 
   | FcHoareF chf ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mhr));
+    let chf_f  = norm_xfun st s chf.chf_f in
+    let s = Subst.remove_predef_mem s mhr in
     let chf_pr = norm st s chf.chf_pr in
     let chf_po = norm st s chf.chf_po in
-    let chf_f  = norm_xfun st s chf.chf_f in
     let chf_c  = norm_cost st s chf.chf_co in
     f_cHoareF_r { chf_pr; chf_f; chf_po; chf_co = chf_c; }
 
   | FcHoareS chs ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst chs.chs_m)));
+    let chs_s  = norm_stmt s chs.chs_s in
+    let s, chs_m = Subst.add_memenv s chs.chs_m in
     let chs_pr = norm st s chs.chs_pr in
     let chs_po = norm st s chs.chs_po in
-    let chs_s  = norm_stmt s chs.chs_s in
-    let chs_m  = norm_me s chs.chs_m in
     let chs_c  = norm_cost st s chs.chs_co in
     f_cHoareS_r { chs_pr; chs_po; chs_s; chs_m; chs_co = chs_c; }
 
   | FbdHoareF hf ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mhr));
+    let bhf_f  = norm_xfun st s hf.bhf_f in
+    let s = Subst.remove_predef_mem s mhr in
     let bhf_pr = norm st s hf.bhf_pr in
     let bhf_po = norm st s hf.bhf_po in
-    let bhf_f  = norm_xfun st s hf.bhf_f in
     let bhf_bd = norm st s hf.bhf_bd in
     f_bdHoareF_r { hf with bhf_pr; bhf_po; bhf_f; bhf_bd }
 
   | FbdHoareS bhs ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst bhs.bhs_m)));
+    let bhs_s  = norm_stmt s bhs.bhs_s in
+    let s, bhs_m = Subst.add_memenv s bhs.bhs_m in
     let bhs_pr = norm st s bhs.bhs_pr in
     let bhs_po = norm st s bhs.bhs_po in
-    let bhs_s  = norm_stmt s bhs.bhs_s in
     let bhs_bd = norm st s bhs.bhs_bd in
-    let bhs_m  = norm_me s bhs.bhs_m in
     f_bdHoareS_r { bhs with bhs_m; bhs_pr; bhs_po; bhs_s; bhs_bd }
 
   | FequivF ef ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mleft));
-    assert (not (Subst.has_mem s mright));
-    let ef_pr = norm st s ef.ef_pr in
-    let ef_po = norm st s ef.ef_po in
     let ef_fl = norm_xfun st s ef.ef_fl in
     let ef_fr = norm_xfun st s ef.ef_fr in
+    let s = Subst.remove_predef_mem s mleft in
+    let s = Subst.remove_predef_mem s mright in
+    let ef_pr = norm st s ef.ef_pr in
+    let ef_po = norm st s ef.ef_po in
     f_equivF_r {ef_pr; ef_fl; ef_fr; ef_po }
 
   | FequivS es ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst es.es_ml)));
-    assert (not (Subst.has_mem s (fst es.es_mr)));
-    let es_pr = norm st s es.es_pr in
-    let es_po = norm st s es.es_po in
     let es_sl = norm_stmt s es.es_sl in
     let es_sr = norm_stmt s es.es_sr in
-    let es_ml  = norm_me s es.es_ml in
-    let es_mr  = norm_me s es.es_mr in
+    let s, es_ml = Subst.add_memenv s es.es_ml in
+    let s, es_mr = Subst.add_memenv s es.es_mr in
+    let es_pr = norm st s es.es_pr in
+    let es_po = norm st s es.es_po in
     f_equivS_r {es_ml; es_mr; es_pr; es_sl; es_sr; es_po }
 
   | FeagerF eg ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mleft));
-    assert (not (Subst.has_mem s mright));
-    let eg_pr = norm st s eg.eg_pr in
-    let eg_po = norm st s eg.eg_po in
     let eg_fl = norm_xfun st s eg.eg_fl in
     let eg_fr = norm_xfun st s eg.eg_fr in
     let eg_sl = norm_stmt s eg.eg_sl in
     let eg_sr = norm_stmt s eg.eg_sr in
+    let s = Subst.remove_predef_mem s mleft in
+    let s = Subst.remove_predef_mem s mright in
+    let eg_pr = norm st s eg.eg_pr in
+    let eg_po = norm st s eg.eg_po in
+
     f_eagerF_r {eg_pr; eg_sl; eg_fl; eg_fr; eg_sr; eg_po }
 
   | Fcoe coe ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s (fst coe.coe_mem)));
+
+    let s, coe_mem = Subst.add_memenv s coe.coe_mem in
+
     let coe_pre = norm st s coe.coe_pre in
-    let coe_e   = norm_e s coe.coe_e in
-    let coe_mem = norm_me s coe.coe_mem in
+    let coe_e   = norm_e  s coe.coe_e   in
 
     let coe = { coe_pre; coe_e; coe_mem } in
 
@@ -596,10 +603,11 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
 
   | Fpr pr ->
     assert (Args.isempty args);
-    assert (not (Subst.has_mem s mhr));
+
     let pr_mem   = Subst.subst_m s pr.pr_mem in
     let pr_fun   = norm_xfun st s pr.pr_fun in
     let pr_args  = norm st s pr.pr_args in
+    let s = Subst.remove_predef_mem s mhr in
     let pr_event = norm st s pr.pr_event in
     f_pr_r { pr_mem; pr_fun; pr_args; pr_event; }
 

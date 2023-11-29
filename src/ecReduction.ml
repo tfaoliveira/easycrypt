@@ -736,11 +736,6 @@ let reduce_op ri env nargs p tys =
        Op.reduce ~mode ~nargs env p tys
      with NotReducible -> raise nohead
 
-let is_record env f =
-  match EcFol.destr_app f with
-  | { f_node = Fop (p, _) }, _ -> EcEnv.Op.is_record_ctor env p
-  | _ -> false
-
 (* -------------------------------------------------------------------- *)
 let can_eta x (f, args) =
   match List.rev args with
@@ -829,11 +824,11 @@ let reduce_user_gen simplify ri env hyps f =
         | Some (m',f') ->
           (* We freshen the memory. *)
           (* FIXME: use inner function of check_alpha_equal *)
-          let mf = EcIdent.fresh m in
-          let fs  = Fsubst.f_bind_mem Fsubst.f_subst_id m  mf in
-          let fs' = Fsubst.f_bind_mem Fsubst.f_subst_id m' mf in
-          let f  = Fsubst.f_subst fs  f
-          and f' = Fsubst.f_subst fs' f' in
+          let mf  = EcIdent.fresh m in
+          let fs  = Fsubst.bind_mem Fsubst.subst_id m  mf in
+          let fs' = Fsubst.bind_mem Fsubst.subst_id m' mf in
+          let f   = Fsubst.f_subst fs  f
+          and f'  = Fsubst.f_subst fs' f' in
           check_alpha_eq f f' in
 
       (* infered memtype, for schema application *)
@@ -844,7 +839,7 @@ let reduce_user_gen simplify ri env hyps f =
         | ({ f_node = Fop (p, tys) }, args), R.Rule (`Op (p', tys'), args')
               when EcPath.p_equal p p' && List.length args = List.length args' ->
 
-          let tys' = List.map (EcTypes.Tvar.subst tvi) tys' in
+          let tys' = List.map (Tvar.ty_subst tvi) tys' in
 
           begin
             try  List.iter2 (EcUnify.unify env ue) tys tys'
@@ -873,7 +868,7 @@ let reduce_user_gen simplify ri env hyps f =
           else
             begin match
                 EcMemory.mt_equal_gen (fun ty1 ty2 ->
-                    let ty2 = EcTypes.Tvar.subst tvi ty2 in
+                    let ty2 = Tvar.ty_subst tvi ty2 in
                     EcUnify.unify env ue ty1 ty2; true
                   ) (snd coe.coe_mem) (snd menv)
               with
@@ -920,19 +915,19 @@ let reduce_user_gen simplify ri env hyps f =
 
       let subst f =
         let uidmap = EcUnify.UniEnv.assubst ue in
-        let ts = Tuni.subst uidmap in
 
         if (Mid.is_empty !e_pv) && (Mid.is_empty !p_pv)
         then   (* axiom case *)
-          let subst   = Fsubst.f_subst_init ~sty:ts () in
+          let subst   = Fsubst.subst_init ~suid:uidmap ~sty:tvi () in
           let subst   =
-            Mid.fold (fun x f s -> Fsubst.f_bind_local s x f) !pv subst in
-          Fsubst.f_subst subst (Fsubst.subst_tvar tvi f)
+            Mid.fold (fun x f s -> Fsubst.bind_local s x f) !pv subst in
+          Fsubst.f_subst subst f
 
         else   (* schema case, which is more complicated *)
+          let ts = Tuni.subst uidmap in
           let typ =
             List.map (fun (a, _) -> Mid.find a tvi) rule.R.rl_tyd in
-          let typ = List.map (EcTypes.ty_subst ts) typ in
+          let typ = List.map (Fsubst.ty_subst ts) typ in
 
           let es = List.map (fun (a,_ty) ->
               let e = Mid.find a !e_pv in
@@ -952,9 +947,9 @@ let reduce_user_gen simplify ri env hyps f =
 
           let subst =
             Mid.fold (fun x f s ->
-                Fsubst.f_bind_local s x f
-              ) !pv (Fsubst.f_subst_init ()) in
-          Fsubst.f_subst subst (Fsubst.subst_tvar tvi f) in
+                Fsubst.bind_local s x f
+              ) !pv (Fsubst.subst_init ~sty:tvi ()) in
+          Fsubst.f_subst subst f in
 
       List.iter (fun cond ->
         if not (f_equal (simplify (subst cond)) f_true) then
@@ -1112,26 +1107,16 @@ let reduce_head simplify ri env hyps f =
   | Flet (LTuple ids, e1, e2) when ri.iota ->
     if is_tuple e1 then
       let es = destr_tuple e1 in
-      let s =
-        List.fold_left2
-          (fun s (x,_) e -> Fsubst.f_bind_local s x e)
-          Fsubst.f_subst_id ids es
-      in
-        Fsubst.f_subst s e2
+      let s = Fsubst.bind_locals Fsubst.subst_id ids es in
+      Fsubst.f_subst s e2
     else raise needsubterm
 
     (* ι-reduction (let-records) *)
   | Flet (LRecord (_, ids), f1, f2) when ri.iota ->
     if is_record env f1 then
       let args  = snd (EcFol.destr_app f1) in
-      let subst =
-        List.fold_left2 (fun subst (x, _) e ->
-          match x with
-          | None   -> subst
-          | Some x -> Fsubst.f_bind_local subst x e)
-          Fsubst.f_subst_id ids args
-      in
-        Fsubst.f_subst subst f2
+      let subst = Fsubst.bind_olocals Fsubst.subst_id ids args in
+      Fsubst.f_subst subst f2
     else raise nohead
 
     (* ι-reduction (records projection) *)
@@ -1208,24 +1193,13 @@ let reduce_head simplify ri env hyps f =
         | _ -> assert false
       in
 
+      let sty = Tvar.init (List.map fst op.EcDecl.op_tparams) tys in
+      let subst = Fsubst.subst_init ~sty () in
       let subst =
-        List.fold_left2
-          (fun subst (x, _) fa -> Fsubst.f_bind_local subst x fa)
-          Fsubst.f_subst_id fix.EcDecl.opf_args fargs in
-
+        Fsubst.bind_locals subst fix.EcDecl.opf_args fargs in
       let subst =
-        List.fold_left2
-          (fun subst bds cargs ->
-            List.fold_left2
-              (fun subst (x, _) fa -> Fsubst.f_bind_local subst x fa)
-              subst bds cargs)
-          subst bds pargs in
-
+        List.fold_left2 Fsubst.bind_locals subst bds pargs in
       let body = EcFol.form_of_expr EcFol.mhr body in
-      let body =
-        EcFol.Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
-
       f_app (Fsubst.f_subst subst body) eargs f.f_ty
 
     (* μ-reduction *)
@@ -2184,8 +2158,8 @@ module EqTest = struct
         let subst =
           Mid.fold
             (fun x (y, ty) subst ->
-              Fsubst.f_bind_local subst x (f_local y ty))
-          alpha Fsubst.f_subst_id
+              Fsubst.bind_local subst x (f_local y ty))
+          alpha Fsubst.subst_id
 
         in Fsubst.f_subst subst f in
 

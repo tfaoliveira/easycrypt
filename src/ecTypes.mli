@@ -2,8 +2,6 @@
 open EcBigInt
 open EcMaps
 open EcSymbols
-open EcUid
-open EcIdent
 
 (* -------------------------------------------------------------------- *)
 (* FIXME: section: move me *)
@@ -23,6 +21,10 @@ module Hty : EcMaps.EHashtbl.S with type key = ty
 
 type dom = ty list
 
+(* Return the free type variable in ty *)
+val ftvar   : ty -> EcIdent.Sid.t
+val ty_fv_and_tvar : ty -> int EcIdent.Mid.t
+
 val dump_ty : ty -> string
 
 val ty_equal : ty -> ty -> bool
@@ -35,8 +37,6 @@ val tconstr : EcPath.path -> ty list -> ty
 val tfun    : ty -> ty -> ty
 val tglob   : EcIdent.t -> ty
 val tpred   : ty -> ty
-
-val ty_fv_and_tvar : ty -> int Mid.t
 
 (* -------------------------------------------------------------------- *)
 val tunit   : ty
@@ -63,37 +63,6 @@ val as_tdistr : ty -> ty option
 exception FoundUnivar
 
 val ty_check_uni : ty -> unit
-
-(* -------------------------------------------------------------------- *)
-type ty_subst = {
-  ts_absmod    : EcIdent.t Mid.t;
-  ts_cmod      : EcPath.mpath Mid.t;
-  ts_modtglob  : ty Mid.t;
-  ts_u  : ty Muid.t;
-  ts_v  : ty Mid.t;
-}
-
-val ty_subst_id    : ty_subst
-val is_ty_subst_id : ty_subst -> bool
-
-val ty_subst : ty_subst -> ty -> ty
-
-module Tuni : sig
-  val univars : ty -> Suid.t
-
-  val subst1    : (uid * ty) -> ty_subst
-  val subst     : ty Muid.t -> ty_subst
-  val subst_dom : ty Muid.t -> dom -> dom
-  val occurs    : uid -> ty -> bool
-  val fv        : ty -> Suid.t
-end
-
-module Tvar : sig
-  val subst1  : (EcIdent.t * ty) -> ty -> ty
-  val subst   : ty Mid.t -> ty -> ty
-  val init    : EcIdent.t list -> ty list -> ty Mid.t
-  val fv      : ty -> Sid.t
-end
 
 (* -------------------------------------------------------------------- *)
 (* [map f t] applies [f] on strict subterms of [t] (not recursive) *)
@@ -238,30 +207,3 @@ val e_fold :
   ('state -> expr -> 'state) -> 'state -> expr -> 'state
 
 val e_iter : (expr -> unit) -> expr -> unit
-
-(* -------------------------------------------------------------------- *)
-type e_subst = {
-  es_freshen : bool; (* true means realloc local *)
-  es_ty      : ty_subst;
-  es_loc     : expr Mid.t;
-}
-
-val e_subst_id : e_subst
-
-val is_e_subst_id : e_subst -> bool
-
-val e_subst_init :
-     bool
-  -> ty_subst
-  -> expr Mid.t
-  -> e_subst
-
-val add_local  : e_subst -> EcIdent.t * ty -> e_subst * (EcIdent.t * ty)
-val add_locals : e_subst -> (EcIdent.t * ty) list -> e_subst * (EcIdent.t * ty) list
-
-val e_subst_closure : e_subst -> closure -> closure
-val e_subst : e_subst -> expr -> expr
-
-(* val e_mapty : (ty -> ty) -> expr -> expr *)
-
-(* val e_uni   : (uid -> ty option) -> expr -> expr *)

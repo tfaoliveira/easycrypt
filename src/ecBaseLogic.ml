@@ -14,5 +14,6 @@ type l_local = EcIdent.t * local_kind
 
 type hyps = {
   h_tvar  : EcDecl.ty_params;
+  h_tvar_s: EcIdent.Sid.t;  (* the set h_tvar *)
   h_local : l_local list;
 }

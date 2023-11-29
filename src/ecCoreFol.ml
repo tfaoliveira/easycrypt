@@ -1,9 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcIdent
 open EcAst
 open EcTypes
-open EcCoreModules
 
 type memory = EcMemory.memory
 
@@ -1076,6 +1074,7 @@ let expr_of_form mh f =
 (* A predicate on memory: λ mem. -> pred *)
 type mem_pr = EcMemory.memory * form
 
+(*
 (* -------------------------------------------------------------------- *)
 type f_subst = {
   fs_freshen  : bool; (* true means freshen locals *)
@@ -1632,7 +1631,7 @@ module Fsubst = struct
   let subst_tvar ?es_loc s =
     f_subst (init_subst_tvar ?es_loc s)
 end
-
+*)
 (* -------------------------------------------------------------------- *)
 let can_subst f =
   match f.f_node with

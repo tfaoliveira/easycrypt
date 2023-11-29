@@ -911,7 +911,7 @@ module Ax = struct
       hierror "the formula contains free type variables";
 
     let uidmap = EcUnify.UniEnv.close ue in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
+    let fs = EcFol.Tuni.subst uidmap in
     let concl   = EcFol.Fsubst.f_subst fs concl in
     let tparams = EcUnify.UniEnv.tparams ue in
 
@@ -1191,8 +1191,8 @@ module Op = struct
 
     let uidmap  = EcUnify.UniEnv.close ue in
     let ts      = Tuni.subst uidmap in
-    let fs      = Fsubst.f_subst (Fsubst.f_subst_init ~sty:ts ()) in
-    let ty      = ty_subst ts ty in
+    let fs      = Fsubst.f_subst ts in
+    let ty      = Fsubst.ty_subst ts ty in
     let tparams = EcUnify.UniEnv.tparams ue in
     let body    =
       match body with
@@ -1264,7 +1264,7 @@ module Op = struct
             let ax      = f_forall (List.map (snd_map gtty) xs) ax in
 
             let uidmap  = EcUnify.UniEnv.close ue in
-            let subst   = Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
+            let subst   = Tuni.subst uidmap in
             let ax      = Fsubst.f_subst subst ax in
 
             ax
@@ -1273,8 +1273,7 @@ module Op = struct
           let ax, axpm =
             let bdpm = List.map fst tparams in
             let axpm = List.map EcIdent.fresh bdpm in
-              (EcCoreFol.Fsubst.subst_tvar
-                 (EcTypes.Tvar.init bdpm (List.map EcTypes.tvar axpm))
+              (Tvar.f_subst (Tvar.init bdpm (List.map EcTypes.tvar axpm))
                  ax,
                List.combine axpm (List.map snd tparams)) in
           let ax =
@@ -1297,7 +1296,7 @@ module Op = struct
           let subst = Tvar.init
             (List.map fst tparams)
             (List.map (tvar |- fst) nparams) in
-          let rop = EcDecl.mk_op ~opaque:false nparams (Tvar.subst subst ty) None lc in
+          let rop = EcDecl.mk_op ~opaque:false nparams (Tvar.ty_subst subst ty) None lc in
           bind scope (unloc name, rop)
         in List.fold_left addnew scope op.po_aliases
 
@@ -1315,7 +1314,7 @@ module Op = struct
       let oppath   = EcPath.pqname (path scope) (unloc op.po_name) in
       let nparams  = List.map (EcIdent.fresh |- fst) tyop.op_tparams in
       let subst    = Tvar.init (List.fst tyop.op_tparams) (List.map tvar nparams) in
-      let ty       = Tvar.subst subst tyop.op_ty in
+      let ty       = Tvar.ty_subst subst tyop.op_ty in
       let aty, rty = EcTypes.tyfun_flat ty in
 
       let dty =
@@ -1734,7 +1733,7 @@ module Ty = struct
           let ue = EcUnify.UniEnv.create (Some []) in
           let ty = transty tp_tydecl scenv ue ty in
           let uidmap = EcUnify.UniEnv.close ue in
-          let ty = ty_subst (Tuni.subst uidmap) ty in
+          let ty = EcFol.Fsubst.ty_subst (EcFol.Tuni.subst uidmap) ty in
             (EcIdent.create (unloc x), ty)
         in
           tcd.ptc_ops |> List.map check1 in
@@ -1746,7 +1745,7 @@ module Ty = struct
           let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let uidmap = EcUnify.UniEnv.close ue in
-          let fs = EcFol.Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
+          let fs = EcFol.Tuni.subst uidmap in
           let ax = EcFol.Fsubst.f_subst fs ax in
             (unloc x, ax)
         in
@@ -1783,8 +1782,8 @@ module Ty = struct
           | [((p, _), _, _, _)] ->
               let op   = EcEnv.Op.by_path p env in
               let opty =
-                Tvar.subst
-                  (Tvar.init (List.map fst op.op_tparams) tvi)
+                EcFol.Tvar.ty_subst
+                  (EcFol.Tvar.init (List.map fst op.op_tparams) tvi)
                   op.op_ty
               in
                 (p, opty)
@@ -1900,7 +1899,7 @@ module Ty = struct
       let ty = transty tp_tydecl env ue (snd tci.pti_type) in
       assert (EcUnify.UniEnv.closed ue);
       let uidmap = EcUnify.UniEnv.close ue in
-        (EcUnify.UniEnv.tparams ue, ty_subst (Tuni.subst uidmap) ty)
+        (EcUnify.UniEnv.tparams ue, EcFol.Fsubst.ty_subst (EcFol.Tuni.subst uidmap) ty)
     in
     if not (List.is_empty (fst ty)) then
       hierror "ring instances cannot be polymorphic";
@@ -1943,7 +1942,7 @@ module Ty = struct
       let ty = transty tp_tydecl env ue (snd tci.pti_type) in
       assert (EcUnify.UniEnv.closed ue);
       let uidmap = EcUnify.UniEnv.close ue in
-        (EcUnify.UniEnv.tparams ue, ty_subst (Tuni.subst uidmap) ty)
+        (EcUnify.UniEnv.tparams ue, EcFol.Fsubst.ty_subst (EcFol.Tuni.subst uidmap) ty)
     in
     if not (List.is_empty (fst ty)) then
       hierror "field instances cannot be polymorphic";
@@ -2395,9 +2394,10 @@ module Search = struct
                     let ps  = ref Mid.empty in
                     let ue  = EcUnify.UniEnv.create None in
                     let tip = EcUnify.UniEnv.opentvi ue decl.op_tparams None in
-                    let tip = {ty_subst_id with ts_v = tip} in
-                    let es = e_subst {e_subst_id with es_ty = tip } in
-                    let xs  = List.map (snd_map (ty_subst tip)) nt.ont_args in
+                    let tip = EcFol.Fsubst.subst_init ~sty:tip () in
+                    let es  = EcFol.Fsubst.e_subst tip in
+                    let xs  =
+                      List.map (snd_map (EcFol.Fsubst.ty_subst tip)) nt.ont_args in
                     let bd  = EcFol.form_of_expr EcFol.mhr (es nt.ont_body) in
                     let fp  = EcFol.f_lambda (List.map (snd_map EcFol.gtty) xs) bd in
 

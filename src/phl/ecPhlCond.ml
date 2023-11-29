@@ -1,6 +1,5 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcIdent
 open EcTypes
 open EcModules
 open EcFol
@@ -159,7 +158,7 @@ let t_hoare_match tc =
 
   let do1 ((ids, b), (cname, _)) =
     let subst, lvars =
-      add_locals e_subst_id ids in
+      Fsubst.add_elocals Fsubst.subst_id ids in
 
     let cop = EcPath.pqoname (EcPath.prefix indp) cname in
     let cop = f_op cop tyinst (toarrow (List.snd ids) f.f_ty) in
@@ -171,7 +170,7 @@ let t_hoare_match tc =
     f_forall
       (List.map (snd_map gtty) lvars)
       (f_hoareS_r
-         { (sets (stmt ((s_subst subst b).s_node @ tl.s_node)))
+         { (sets (stmt ((Fsubst.s_subst subst b).s_node @ tl.s_node)))
              with hs_pr = f_and_simpl cop hs.hs_pr })
 
   in
@@ -203,7 +202,7 @@ let t_equiv_match s tc =
 
   let do1 ((ids, b), (cname, _)) =
     let subst, lvars =
-      add_locals e_subst_id ids in
+      Fsubst.add_elocals Fsubst.subst_id ids in
 
     let cop = EcPath.pqoname (EcPath.prefix indp) cname in
     let cop = f_op cop tyinst (toarrow (List.snd ids) f.f_ty) in
@@ -215,7 +214,7 @@ let t_equiv_match s tc =
     f_forall
       (List.map (snd_map gtty) lvars)
       (f_equivS_r
-         { (sets (stmt ((s_subst subst b).s_node @ tl.s_node)))
+         { (sets (stmt ((Fsubst.s_subst subst b).s_node @ tl.s_node)))
              with es_pr = f_and_simpl cop es.es_pr })
 
   in
@@ -259,9 +258,9 @@ let t_equiv_match_same_constr tc =
     f_forall_mems [es.es_ml; es.es_mr] (f_imp_simpl es.es_pr (f_iff lhs rhs)) in
 
   let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
-    let sb      = EcTypes.e_subst_id in
-    let sb, bhl = EcTypes.add_locals sb cl in
-    let sb, bhr = EcTypes.add_locals sb cr in
+    let sb      = Fsubst.subst_id in
+    let sb, bhl = Fsubst.add_elocals sb cl in
+    let sb, bhr = Fsubst.add_elocals sb cr in
     let cop     = EcPath.pqoname (EcPath.prefix pl) c in
     let copl    = f_op cop tyl (toarrow (List.snd cl) fl.f_ty) in
     let copr    = f_op cop tyr (toarrow (List.snd cr) fr.f_ty) in
@@ -275,8 +274,8 @@ let t_equiv_match_same_constr tc =
         (List.map (snd_map gtty) bhr) )
       ( f_equivS_r
           { es with
-              es_sl = EcModules.stmt ((s_subst sb bl).s_node @ sl.s_node);
-              es_sr = EcModules.stmt ((s_subst sb br).s_node @ sr.s_node);
+              es_sl = EcModules.stmt ((Fsubst.s_subst sb bl).s_node @ sl.s_node);
+              es_sr = EcModules.stmt ((Fsubst.s_subst sb br).s_node @ sr.s_node);
               es_pr = pre; } )
 
   in
@@ -316,14 +315,13 @@ let t_equiv_match_eq tc =
       (f_imp_simpl es.es_pr (f_eq fl fr)) in
 
   let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
-    let sb     = { EcTypes.e_subst_id with es_freshen = true; } in
-    let sb, bh = EcTypes.add_locals sb cl in
+    let sb     = Fsubst.subst_init ~freshen:true () in
+    let sb, bh = Fsubst.add_elocals sb cl in
 
     let sb =
       List.fold_left2
-        (fun sb (x, _) (y, _) ->
-          { sb with es_loc =
-              Mid.add y (oget (Mid.find_opt x sb.es_loc)) sb.es_loc })
+        (fun sb (x, ty) (y, _) ->
+          Fsubst.bind_elocal sb y (Fsubst.e_subst sb (e_local x ty)))
         sb cl cr in
 
     let cop    = EcPath.pqoname (EcPath.prefix pl) c in
@@ -338,8 +336,8 @@ let t_equiv_match_eq tc =
       (List.map (snd_map gtty) bh)
       (f_equivS_r
          { es with
-             es_sl = EcModules.stmt ((s_subst sb bl).s_node @ sl.s_node);
-             es_sr = EcModules.stmt ((s_subst sb br).s_node @ sr.s_node);
+             es_sl = EcModules.stmt ((Fsubst.s_subst sb bl).s_node @ sl.s_node);
+             es_sr = EcModules.stmt ((Fsubst.s_subst sb br).s_node @ sr.s_node);
              es_pr = pre; } )
 
   in

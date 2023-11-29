@@ -1797,9 +1797,9 @@ let t_conseqauto ?(delta = true) ?tsolve tc =
       else
         let concl = FApi.tc_goal tc' in
         (* Build the inversion substitution *)
-        let s = Fsubst.f_subst_id in
-        let s = List.fold_left2 Fsubst.f_bind_mem s ms bdm in
-        let s = List.fold_left2 Fsubst.f_bind_local s other (List.map snd bdo) in
+        let s = Fsubst.subst_id in
+        let s = List.fold_left2 Fsubst.bind_mem s ms bdm in
+        let s = List.fold_left2 Fsubst.bind_local s other (List.map snd bdo) in
         Fsubst.f_subst s concl in
 
     let t_end = FApi.t_try (t_crush ~delta ?tsolve @! t_fail) in

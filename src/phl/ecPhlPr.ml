@@ -55,8 +55,8 @@ let t_equiv_ppr_r ty phi_l phi_r tc =
   let argsr = to_args funr (f_pvarg funr.f_sig.fs_arg (fst penvr)) in
   let a_id = EcIdent.create "a" in
   let a_f = f_local a_id ty in
-  let smem1 = Fsubst.f_bind_mem Fsubst.f_subst_id mleft mhr in
-  let smem2 = Fsubst.f_bind_mem Fsubst.f_subst_id mright mhr in
+  let smem1 = Fsubst.bind_mem Fsubst.subst_id mleft mhr in
+  let smem2 = Fsubst.bind_mem Fsubst.subst_id mright mhr in
   let phi1 = Fsubst.f_subst smem1 phi_l in
   let phi2 = Fsubst.f_subst smem2 phi_r in
   let pr1 = f_pr (fst penvl) fl argsl (f_eq phi1 a_f) in
@@ -147,10 +147,10 @@ let t_prfalse tc =
   let is_zero = f_real_le bd f_r0 in
 
   (* the event is false *)
-  let smem  = Fsubst.f_bind_mem Fsubst.f_subst_id mhr mhr in
-  let ev    = Fsubst.f_subst smem ev in
+  let m     = EcIdent.fresh mhr in
+  let ev    = Fsubst.f_subst_mem mhr m ev in
   let fun_  = EcEnv.Fun.by_xpath f env in
-  let me    = EcEnv.Fun.actmem_post mhr fun_ in
+  let me    = EcEnv.Fun.actmem_post m fun_ in
   let concl_po = f_forall_mems [me] (f_imp f_false ev) in
 
   FApi.xmutate1 tc `PrFalse [is_zero; concl_po]

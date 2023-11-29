@@ -399,7 +399,7 @@ end = struct
         List.iteri (fun i ty -> msg "  [%d]: @[%a@]@\n" (i+1) pp_type ty) tys
 
     | MultipleOpMatch (name, tys, matches) -> begin
-        let uvars = List.map EcTypes.Tuni.univars tys in
+        let uvars = List.map EcFol.Tuni.univars tys in
         let uvars = List.fold_left Suid.union Suid.empty uvars in
 
         begin match tys with
@@ -418,7 +418,7 @@ end = struct
 
         let pp_op fmt ((op, inst), subue) =
           let uidmap = EcUnify.UniEnv.assubst subue in
-          let inst = Tuni.subst_dom uidmap inst in
+          let inst = EcFol.Tuni.subst_dom uidmap inst in
 
           begin match inst with
           | [] ->
@@ -430,12 +430,12 @@ end = struct
               (EcPrinting.pp_list ",@ " pp_type) inst
           end;
 
-          let myuvars = List.map EcTypes.Tuni.univars inst in
+          let myuvars = List.map EcFol.Tuni.univars inst in
           let myuvars = List.fold_left Suid.union uvars myuvars in
           let myuvars = Suid.elements myuvars in
 
           let uidmap = EcUnify.UniEnv.assubst subue in
-          let tysubst = ty_subst (Tuni.subst uidmap) in
+          let tysubst = EcFol.Fsubst.ty_subst (EcFol.Tuni.subst uidmap) in
           let myuvars = List.pmap
             (fun uid ->
               match tysubst (tuni uid) with
@@ -802,7 +802,7 @@ end = struct
     | AE_InvalidArgForm (IAF_Mismatch (src, dst)) ->
        let ppe = EcPrinting.PPEnv.ofenv (LDecl.toenv hyps) in
        let uidmap = EcUnify.UniEnv.assubst ue in
-       let dst = ty_subst (Tuni.subst uidmap) dst in
+       let dst = EcFol.Fsubst.ty_subst (EcFol.Tuni.subst uidmap) dst in
 
        msg "This expression has type@\n";
        msg "  @[<hov 2>%a@]@\n@\n" (EcPrinting.pp_type ppe) src;

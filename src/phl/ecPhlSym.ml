@@ -5,9 +5,9 @@ open EcLowPhlGoal
 
 (*-------------------------------------------------------------------- *)
 let build_sym ml mr pr po =
-  let s = Fsubst.f_subst_id in
-  let s = Fsubst.f_bind_mem s ml mr in
-  let s = Fsubst.f_bind_mem s mr ml in
+  let s = Fsubst.subst_id in
+  let s = Fsubst.bind_mem s ml mr in
+  let s = Fsubst.bind_mem s mr ml in
   let s = Fsubst.f_subst s in
   (s pr, s po)
 

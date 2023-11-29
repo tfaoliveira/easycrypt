@@ -22,8 +22,7 @@ let process_form_opt ?mv hyps pf oty =
   try
     let ue  = unienv_of_hyps hyps in
     let ff  = EcTyping.trans_form_opt ?mv (LDecl.toenv hyps) ue pf oty in
-    let ts = Tuni.subst (EcUnify.UniEnv.close ue) in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:ts () in
+    let fs = Tuni.subst (EcUnify.UniEnv.close ue) in
     EcFol.Fsubst.f_subst fs ff
 
   with EcUnify.UninstanciateUni ->
@@ -62,8 +61,7 @@ let process_exp hyps mode oty e =
   let ue  = unienv_of_hyps hyps in
   let e   = EcTyping.transexpcast_opt env mode ue oty e in
   let ts  = Tuni.subst (EcUnify.UniEnv.close ue)  in
-  let es  = e_subst { e_subst_id with es_ty = ts } in
-    es e
+  Fsubst.e_subst ts e
 
 let process_pattern hyps fp =
   let ps = ref Mid.empty in
@@ -142,9 +140,8 @@ let tc1_process_stmt  ?map tc mt c =
   let ue     = unienv_of_hyps hyps in
   let c      = Exn.recast_pe !!tc hyps (fun () -> EcTyping.transstmt ?map env ue c) in
   let uidmap = Exn.recast_pe !!tc hyps (fun () -> EcUnify.UniEnv.close ue) in
-  let es     = { e_subst_id with es_ty = Tuni.subst uidmap } in
-  EcModules.s_subst es c
-
+  let es     = Tuni.subst uidmap in
+  Fsubst.s_subst es c
 
 let tc1_process_prhl_stmt ?map tc side c =
   let concl = FApi.tc1_goal tc in

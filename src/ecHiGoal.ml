@@ -674,8 +674,8 @@ let process_delta ~und_delta ?target (s, o, p) tc =
             match sform_of_form fp with
             | SFop ((_, tvi), []) -> begin
               (* FIXME: TC HOOK *)
-              let subst = EcTypes.Tvar.init (List.map fst tparams) tvi in
-              let body  = EcFol.Fsubst.subst_tvar subst body in
+              let subst = Tvar.init (List.map fst tparams) tvi in
+              let body  = Tvar.f_subst subst body in
               let body  = f_app body args topfp.f_ty in
                 try  EcReduction.h_red EcReduction.beta_red hyps body
                 with EcEnv.NotReducible -> body
@@ -698,8 +698,8 @@ let process_delta ~und_delta ?target (s, o, p) tc =
   | `RtoL ->
     let fp =
       (* FIXME: TC HOOK *)
-      let subst = EcTypes.Tvar.init (List.map fst tparams) tvi in
-      let body  = EcFol.Fsubst.subst_tvar subst body in
+      let subst = Tvar.init (List.map fst tparams) tvi in
+      let body  = Tvar.f_subst subst body in
       let fp    = f_app body args p.f_ty in
         try  EcReduction.h_red EcReduction.beta_red hyps fp
         with EcEnv.NotReducible -> fp
@@ -899,8 +899,8 @@ let process_rewrite1_r ttenv ?target ri tc =
           | EcUnify.UninstanciateUni ->
             EcTyping.tyerror ri.pl_loc env EcTyping.FreeTypeVariables in
 
-        let sty = { ty_subst_id with ts_u = subs } in
-        let es = e_subst { e_subst_id with es_ty = sty } in
+        let sty = Tuni.subst subs in
+        let es = Fsubst.e_subst sty in
         (List.map es args, es res)
       in
 
@@ -1221,7 +1221,7 @@ let process_view1 pe tc =
 
                         let y, yty =
                           let CPTEnv subst = PT.concretize_env pe.PT.ptev_env in
-                          snd_map (ty_subst subst.fs_ty) (oget pre) in
+                          snd_map (Fsubst.ty_subst subst) (oget pre) in
                         let fy = EcIdent.fresh y in
 
                         pe.PT.ptev_env.pte_ev := MEV.set

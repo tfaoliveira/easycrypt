@@ -120,7 +120,7 @@ let concretize_e_form (CPTEnv subst) f =
 let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
   match arg with
   | PAFormula f        -> PAFormula (Fsubst.f_subst subst f)
-  | PAMemory  m        -> PAMemory (Mid.find_def m m subst.fs_mem)
+  | PAMemory  m        -> PAMemory (Fsubst.mem_subst subst m)
   | PAModule  (mp, ms) -> PAModule (mp, ms)
   | PASub     pt       -> PASub (pt |> omap (concretize_e_pt cptenv))
 
@@ -130,7 +130,7 @@ and concretize_e_head (CPTEnv subst) head =
   | PTCut    f        -> PTCut    (Fsubst.f_subst subst f)
   | PTHandle h        -> PTHandle h
   | PTLocal  x        -> PTLocal  x
-  | PTGlobal (p, tys) -> PTGlobal (p, List.map (ty_subst subst.fs_ty) tys)
+  | PTGlobal (p, tys) -> PTGlobal (p, List.map (Fsubst.ty_subst subst) tys)
   | PTSchema _ -> assert false
 
 and concretize_e_pt cptenv { pt_head; pt_args } =
@@ -204,7 +204,7 @@ let pt_of_uglobal_r ptenv p =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi ptenv.pte_ue typ None in
-  let ax  = Fsubst.subst_tvar fs ax in
+  let ax  = Tvar.f_subst fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
   { ptev_env = ptenv;
@@ -483,7 +483,7 @@ let process_named_pterm pe (tvi, fp) =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi pe.pte_ue typ tvi in
-  let ax  = Fsubst.subst_tvar fs ax in
+  let ax  = Tvar.f_subst fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
   (p, (typ, ax))
@@ -507,13 +507,13 @@ let process_named_schema pe (tvi, sn) =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi pe.pte_ue typ tvi in
-  let sty = { ty_subst_id with ts_v = fs } in
+  let sty = Fsubst.subst_init ~sty:fs () in
 
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
   let e_params =
     List.map (fun (id, ty) ->
-        id, EcTypes.ty_subst sty ty) sc.EcDecl.axs_params in
+        id, Fsubst.ty_subst sty ty) sc.EcDecl.axs_params in
 
   (* When substituting in a schema's formula, we have to rebind the schema's
      expression variables. *)
@@ -523,9 +523,8 @@ let process_named_schema pe (tvi, sn) =
       ) e_params
     |> Mid.of_list in
   let sc_i =
-    Fsubst.subst_tvar
-      ~es_loc:rebind
-      fs sc.EcDecl.axs_spec in
+    let s = Fsubst.subst_init ~sty:fs ~esloc:rebind () in
+    Fsubst.f_subst s sc.EcDecl.axs_spec in
 
   (p, typ, sc.EcDecl.axs_pparams, e_params, sc_i)
 
@@ -578,39 +577,25 @@ let process_sc_instantiation pe inst =
 
   let uidmap = EcUnify.UniEnv.assubst pe.pte_ue in
   let ts = Tuni.subst uidmap in
-  let es = e_subst { e_subst_id with es_ty = ts } in
 
-  let typ = List.map (ty_subst ts) typ in
-  let memtype = EcMemory.mt_subst (ty_subst ts) memtype in
+  let typ = List.map (Fsubst.ty_subst ts) typ in
+  let memtype = EcMemory.mt_subst (Fsubst.ty_subst ts) memtype in
   let mpreds = List.map (fun (id, (m,p)) ->
-      let fs = Fsubst.f_subst_init ~sty:ts () in
-      let p = Fsubst.f_subst fs p in
+      let p = Fsubst.f_subst ts p in
       id, (m,p)) mpreds in
-  let exprs = List.map (fun (id, e) -> id, es e) exprs in
+  let exprs = List.map (fun (id, e) -> id, Fsubst.e_subst ts e) exprs in
 
   (* We instantiate the schema. *)
-  (* FIXME: instantiating and substituting in schema is ugly. *)
-  (* For cost judgement, we also need to substitue the expression variables
-     in the precondition. *)
-  let tx f_old f_new = match f_old.f_node, f_new.f_node with
-    | Fcoe coe_old, Fcoe coe_new when EcMemory.is_schema (snd coe_old.coe_mem) ->
-      let fs =
-        List.fold_left (fun s (id,e) ->
-            let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
-            Fsubst.f_bind_local s id f)
-          (Fsubst.f_subst_init ()) exprs in
-
-      EcCoreFol.f_coe_r { coe_new with
-                          coe_pre = Fsubst.f_subst fs coe_new.coe_pre }
-    | _ -> f_new in
+  let schema =
+     EcCoreSubst.
+     { sc_memtype = memtype;
+       sc_mempred = Mid.of_list mpreds;
+       sc_expr    = Mid.of_list exprs } in
 
   let fs =
-    Fsubst.f_subst_init ~sty:ts
-      ~esloc:(Mid.of_list exprs)
-      ~mempred:(Mid.of_list mpreds)
-      ~mt:memtype () in
+    Fsubst.subst_init ~suid:uidmap ~schema () in
 
-  (p, typ, memtype, mpreds, exprs, Fsubst.f_subst ~tx fs sc_i)
+  (p, typ, memtype, mpreds, exprs, Fsubst.f_subst fs sc_i)
 
 (* ------------------------------------------------------------------ *)
 let process_pterm_cut ~prcut pe pt =
@@ -813,7 +798,7 @@ and check_pterm_oarg ?loc pe (x, xty) f arg =
       | PVAModule (mp, mt) -> begin
           try
             let obl = EcTyping.check_modtype env mp mt emt in
-            let ms = EcFol.f_bind_mod Fsubst.f_subst_id x mp env in
+            let ms = EcFol.Fsubst.bind_mod Fsubst.subst_id x mp env in
             let f = Fsubst.f_subst ms f in
             let f = match obl with
               | `Ok ->  f
