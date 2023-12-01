@@ -228,16 +228,15 @@ let build_proof_task ~notify ~name ~coqmode ~loc ~config ~env task =
         match Why3.Whyconf.Mprover.is_empty provers with
         | false ->
           begin
-            print_string "Versions of Coq found:\n";
-            Why3.Whyconf.(Mprover.iter (fun k _ ->
-                let s = Format.sprintf " %s\n" k.prover_version in
-                print_string s;
-              )) provers;
+            (* Format.eprintf "Versions of Coq found:\n"; *)
+            (* Why3.Whyconf.(Mprover.iter (fun k _ -> *)
+            (*     Format.printf " %s\n" k.prover_version *)
+            (*   )) provers; *)
 
             let prover = Why3.Whyconf.Mprover.max_binding provers in
-            notify |> oiter (fun notify -> notify `Debug (lazy (
-                Format.sprintf "Take Coq %s\n" (fst prover).prover_version
-              )));
+
+            (* Format.eprintf "Take Coq %s\n" (fst prover).prover_version; *)
+
             prover
           end
         | true -> raise CoqNotFound
@@ -255,7 +254,7 @@ let build_proof_task ~notify ~name ~coqmode ~loc ~config ~env task =
   with
   | CoqNotFound ->
     notify |> oiter (fun notify -> notify `Critical (lazy (
-        Format.asprintf "Prover Coq not installed or not configured@"
+        Format.asprintf "Prover Coq not installed or not configured"
       )));
     None
   | exn ->
