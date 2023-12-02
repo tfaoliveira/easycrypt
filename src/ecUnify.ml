@@ -6,6 +6,7 @@ open EcUtils
 open EcUid
 open EcAst
 open EcTypes
+open EcCoreSubst
 open EcDecl
 
 module Sp = EcPath.Sp

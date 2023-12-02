@@ -9,6 +9,7 @@ open EcAst
 open EcTypes
 open EcDecl
 open EcModules
+open EcFol
 open EcTyping
 open EcHiInductive
 open EcBigInt.Notations
@@ -911,8 +912,8 @@ module Ax = struct
       hierror "the formula contains free type variables";
 
     let uidmap = EcUnify.UniEnv.close ue in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
-    let concl   = EcFol.Fsubst.f_subst fs concl in
+    let fs = Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
+    let concl   = Fsubst.f_subst fs concl in
     let tparams = EcUnify.UniEnv.tparams ue in
 
     if ax.pa_kind <> PSchema then
@@ -1273,8 +1274,8 @@ module Op = struct
           let ax, axpm =
             let bdpm = List.map fst tparams in
             let axpm = List.map EcIdent.fresh bdpm in
-              (EcCoreFol.Fsubst.subst_tvar
-                 (EcTypes.Tvar.init bdpm (List.map EcTypes.tvar axpm))
+              (Fsubst.subst_tvar
+                 (Tvar.init bdpm (List.map EcTypes.tvar axpm))
                  ax,
                List.combine axpm (List.map snd tparams)) in
           let ax =
@@ -1746,8 +1747,8 @@ module Ty = struct
           let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let uidmap = EcUnify.UniEnv.close ue in
-          let fs = EcFol.Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
-          let ax = EcFol.Fsubst.f_subst fs ax in
+          let fs = Fsubst.f_subst_init ~sty:(Tuni.subst uidmap) () in
+          let ax = Fsubst.f_subst fs ax in
             (unloc x, ax)
         in
           tcd.ptc_axs |> List.map check1 in

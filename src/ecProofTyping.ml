@@ -143,7 +143,7 @@ let tc1_process_stmt  ?map tc mt c =
   let c      = Exn.recast_pe !!tc hyps (fun () -> EcTyping.transstmt ?map env ue c) in
   let uidmap = Exn.recast_pe !!tc hyps (fun () -> EcUnify.UniEnv.close ue) in
   let es     = { e_subst_id with es_ty = Tuni.subst uidmap } in
-  EcModules.s_subst es c
+  s_subst es c
 
 
 let tc1_process_prhl_stmt ?map tc side c =

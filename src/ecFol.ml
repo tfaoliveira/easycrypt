@@ -11,6 +11,7 @@ module CI = EcCoreLib
 
 (* -------------------------------------------------------------------- *)
 include EcCoreFol
+include EcCoreSubst
 
 (* -------------------------------------------------------------------- *)
 let f_bind_mod s x mp env = Fsubst.f_bind_mod s x mp (fun mem -> EcEnv.NormMp.norm_glob env mem mp)

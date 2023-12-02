@@ -525,7 +525,7 @@ let process_named_schema pe (tvi, sn) =
 
   let e_params =
     List.map (fun (id, ty) ->
-        id, EcTypes.ty_subst sty ty) sc.EcDecl.axs_params in
+        id, ty_subst sty ty) sc.EcDecl.axs_params in
 
   (* When substituting in a schema's formula, we have to rebind the schema's
      expression variables. *)

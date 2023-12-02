@@ -5,6 +5,7 @@ open EcPath
 open EcAst
 open EcTypes
 open EcCoreFol
+open EcCoreSubst
 open EcMemory
 open EcDecl
 open EcModules
@@ -2716,8 +2717,8 @@ module Ty = struct
   let unfold (name : EcPath.path) (args : EcTypes.ty list) (env : env) =
     match by_path_opt name env with
     | Some ({ tyd_type = `Concrete body } as tyd) ->
-        EcTypes.Tvar.subst
-          (EcTypes.Tvar.init (List.map fst tyd.tyd_params) args)
+        Tvar.subst
+          (Tvar.init (List.map fst tyd.tyd_params) args)
           body
     | _ -> raise (LookupFailure (`Path name))
 
@@ -2880,8 +2881,8 @@ module Op = struct
 
   let reduce ?mode ?nargs env p tys =
     let op, f = core_reduce ?mode ?nargs env p in
-    EcCoreFol.Fsubst.subst_tvar
-      (EcTypes.Tvar.init (List.map fst op.op_tparams) tys) f
+    Fsubst.subst_tvar
+      (Tvar.init (List.map fst op.op_tparams) tys) f
 
   let is_projection env p =
     try  EcDecl.is_proj (by_path p env)
@@ -2976,7 +2977,7 @@ module Ax = struct
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
         Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst ax.ax_tparams) tys) f
+          (Tvar.init (List.map fst ax.ax_tparams) tys) f
     | _ -> raise (LookupFailure (`Path p))
 
   let iter ?name f (env : env) =

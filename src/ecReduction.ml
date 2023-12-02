@@ -850,7 +850,7 @@ let reduce_user_gen simplify ri env hyps f =
         | ({ f_node = Fop (p, tys) }, args), R.Rule (`Op (p', tys'), args')
               when EcPath.p_equal p p' && List.length args = List.length args' ->
 
-          let tys' = List.map (EcTypes.Tvar.subst tvi) tys' in
+          let tys' = List.map (Tvar.subst tvi) tys' in
 
           begin
             try  List.iter2 (EcUnify.unify env ue) tys tys'
@@ -879,7 +879,7 @@ let reduce_user_gen simplify ri env hyps f =
           else
             begin match
                 EcMemory.mt_equal_gen (fun ty1 ty2 ->
-                    let ty2 = EcTypes.Tvar.subst tvi ty2 in
+                    let ty2 = Tvar.subst tvi ty2 in
                     EcUnify.unify env ue ty1 ty2; true
                   ) (snd coe.coe_mem) (snd menv)
               with
@@ -938,7 +938,7 @@ let reduce_user_gen simplify ri env hyps f =
         else   (* schema case, which is more complicated *)
           let typ =
             List.map (fun (a, _) -> Mid.find a tvi) rule.R.rl_tyd in
-          let typ = List.map (EcTypes.ty_subst ts) typ in
+          let typ = List.map (ty_subst ts) typ in
 
           let es = List.map (fun (a,_ty) ->
               let e = Mid.find a !e_pv in
@@ -1229,8 +1229,8 @@ let reduce_head simplify ri env hyps f =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        EcFol.Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
+        Fsubst.subst_tvar
+          (Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
 
       f_app (Fsubst.f_subst subst body) eargs f.f_ty
 

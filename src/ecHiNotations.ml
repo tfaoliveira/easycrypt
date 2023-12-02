@@ -4,6 +4,7 @@ open EcSymbols
 open EcLocation
 open EcParsetree
 open EcTypes
+open EcCoreSubst
 open EcEnv
 
 module TT = EcTyping

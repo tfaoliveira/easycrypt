@@ -5,7 +5,9 @@ open EcSymbols
 open EcIdent
 open EcUtils
 open EcTypes
+open EcCoreSubst
 open EcDecl
+
 
 module TT = EcTyping
 module EI = EcInductive
