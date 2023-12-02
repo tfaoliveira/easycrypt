@@ -1992,7 +1992,7 @@ let form_of_opselect
          let me    = odfl mhr (EcEnv.Memory.get_active env) in
          let body  = form_of_expr me body in
          let lcmap = List.map2 (fun (x, _) y -> (x, y)) bds tosub in
-         let subst = Fsubst.f_subst_init ~freshen:true () in
+         let subst = Fsubst.f_subst_init_rm ~freshen:true () in
          let subst =
            List.fold_left (fun s -> curry (Fsubst.f_bind_local s)) subst lcmap
          in (f_lambda flam (Fsubst.f_subst subst body), args)
@@ -2210,8 +2210,8 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) =
     let subs = try EcUnify.UniEnv.close ue with
       | EcUnify.UninstanciateUni ->
         tyerror (loc form) env FreeTypeVariables in
-    let sty = ty_subst_init ~tu:subs () in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
+    let sty = f_subst_init ~tu:subs () in
+    let fs = EcFol.Fsubst.f_subst_init_rm ~sty:sty () in
     EcFol.Fsubst.f_subst fs tform in
 
   match r_compl with

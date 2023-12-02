@@ -48,25 +48,34 @@ let f_subst_id = {
   fs_mempred  = Mid.empty;
 }
 
-(* -------------------------------------------------------------------- *)
-type ty_subst = f_subst
+let f_subst_init
+      ?(freshen=false)
+      ?(tu=Muid.empty)
+      ?(tv=Mid.empty)
+      ?(esloc=Mid.empty)
+      ?mt
+      ?(mempred=Mid.empty) () = {
+  fs_freshen  = freshen;
 
-(* {
-  ts_absmod    : EcIdent.t Mid.t;
-  ts_cmod      : EcPath.mpath Mid.t;
-  ts_modtglob  : ty Mid.t;
-  ts_u         : ty Muid.t;
-  ts_v         : ty Mid.t;
+  fs_u        = tu;
+  fs_v        = tv;
+
+  fs_absmod    = Mid.empty;
+  fs_cmod      = Mid.empty;
+  fs_modtglob  = Mid.empty;
+  fs_modglob  = Mid.empty;
+
+  fs_loc      = Mid.empty;
+  fs_eloc     = esloc;
+  fs_mem      = Mid.empty;
+
+  fs_memtype  = mt;
+  fs_mempred  = mempred;
 }
-*)
+
+(* -------------------------------------------------------------------- *)
 
 let ty_subst_id = f_subst_id
-
-let ty_subst_init ?(tu=Muid.empty) ?(tv=Mid.empty) () =
-  { f_subst_id with
-    fs_u = tu;
-    fs_v = tv;
-  }
 
 let is_ty_subst_id s =
   Mid.is_empty s.fs_absmod
@@ -98,7 +107,7 @@ let ty_subst (s : f_subst) =
 module Tuni = struct
 
   let subst (uidmap : ty Muid.t) =
-    { ty_subst_id with fs_u = uidmap }
+    f_subst_init ~tu:uidmap ()
 
   let subst1 ((id, t) : uid * ty) =
     subst (Muid.singleton id t)
@@ -132,7 +141,7 @@ end
 (* -------------------------------------------------------------------- *)
 module Tvar = struct
   let subst (s : ty Mid.t) =
-    ty_subst { ty_subst_id with fs_v = s}
+    ty_subst { f_subst_id with fs_v = s}
 
   let subst1 (id,t) =
     subst (Mid.singleton id t)
@@ -332,6 +341,8 @@ let s_subst = s_subst_top
 (* -------------------------------------------------------------------- *)
 module Fsubst = struct
 
+  let f_subst_init = f_subst_init
+
   let f_subst_id = f_subst_id
 
   let is_subst_id s =
@@ -343,7 +354,8 @@ module Fsubst = struct
     && Mid.is_empty   s.fs_eloc
     && s.fs_memtype = None
 
-  let f_subst_init ?freshen ?sty ?esloc ?mt ?mempred () =
+  let f_subst_init_rm
+     ?freshen ?sty ?esloc ?mt ?mempred () =
     let sty = odfl ty_subst_id sty in
     { sty with
       fs_freshen  = odfl false freshen;

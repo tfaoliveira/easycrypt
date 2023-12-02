@@ -356,7 +356,7 @@ module UniEnv = struct
     List.map (fun (tv, _) -> subst (tvar tv)) params
 
   let openty_r ue params tvi =
-    let subst = ty_subst_init ~tv:(opentvi ue params tvi) () in
+    let subst = f_subst_init ~tv:(opentvi ue params tvi) () in
       (subst, subst_tv (ty_subst subst) params)
 
   let opentys ue params tvi tys =

@@ -10,7 +10,14 @@ open EcCoreFol
 type f_subst
 
 (* -------------------------------------------------------------------- *)
-val ty_subst_init : ?tu:ty Muid.t -> ?tv:ty Mid.t -> unit -> f_subst
+val f_subst_init :
+       ?freshen:bool
+    -> ?tu:ty Muid.t
+    -> ?tv:ty Mid.t
+    -> ?esloc:expr Mid.t
+    -> ?mt:EcMemory.memtype
+    -> ?mempred:(mem_pr Mid.t)
+    -> unit -> f_subst
 
 val ty_subst : f_subst -> ty -> ty
 
@@ -60,6 +67,16 @@ module Fsubst : sig
 
   val f_subst_init :
        ?freshen:bool
+    -> ?tu:ty Muid.t
+    -> ?tv:ty Mid.t
+    -> ?esloc:expr Mid.t
+    -> ?mt:EcMemory.memtype
+    -> ?mempred:(mem_pr Mid.t)
+    -> unit -> f_subst
+
+  (* FIXME: remove *)
+  val f_subst_init_rm :
+       ?freshen:bool
     -> ?sty:f_subst
     -> ?esloc:expr Mid.t
     -> ?mt:EcMemory.memtype
@@ -73,9 +90,6 @@ module Fsubst : sig
   val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
 
   val has_mem : f_subst -> EcAst.memory -> bool
-
-  (* FIXME: remove this *)
-  val to_ty_subst : f_subst -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 

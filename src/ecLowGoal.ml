@@ -502,7 +502,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         let id = tg_map (function
           | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)
           | Some id -> id) id in
-        let xty  = ty_subst (Fsubst.to_ty_subst sbt) xty in
+        let xty  = ty_subst sbt xty in
         let xe   = Fsubst.f_subst sbt xe in
         let sbt  = Fsubst.f_bind_rename sbt x (tg_val id) xty in
         let hyps = add_ld id (LD_var (xty, Some xe)) hyps in
@@ -1218,7 +1218,7 @@ let t_elim_eq_tuple ?reduce goal = t_elim_r ?reduce [t_elim_eq_tuple_r] goal
 let t_elim_exists_r ((f, _) : form * sform) concl tc =
   match f.f_node with
   | Fquant (Lexists, bd, body) ->
-      let subst = Fsubst.f_subst_init ~freshen:true () in
+      let subst = Fsubst.f_subst_init_rm ~freshen:true () in
       let subst, bd = Fsubst.add_bindings subst bd in
       let newc  = f_forall bd (f_imp (Fsubst.f_subst subst body) concl) in
       let tc    = FApi.mutate1 tc (fun hd -> VExtern (`Exists, [hd])) newc in

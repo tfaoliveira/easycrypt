@@ -164,7 +164,7 @@ let sc_instantiate
     ty_params pr_params sc_params
     ty_args memtype (pr_args : mem_pr list) sc_args f =
   let fs = CS.Tvar.init (List.map fst ty_params) ty_args in
-  let sty = CS.ty_subst_init ~tv:fs () in
+  let sty = CS.f_subst_init ~tv:fs () in
 
 
   (* We substitute the predicate variables. *)
@@ -189,13 +189,13 @@ let sc_instantiate
         List.fold_left (fun s (id,e) ->
             let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
             CS.Fsubst.f_bind_local s id f)
-          (CS.Fsubst.f_subst_init ()) exprs in
+          (CS.Fsubst.f_subst_init_rm ()) exprs in
 
       EcCoreFol.f_coe_r { coe_new with
                           coe_pre = CS.Fsubst.f_subst fs coe_new.coe_pre }
     | _ -> f_new in
 
-  let fs = CS.Fsubst.f_subst_init ~sty ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
+  let fs = CS.Fsubst.f_subst_init_rm ~sty ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
 
   CS.Fsubst.f_subst ~tx fs f
 
