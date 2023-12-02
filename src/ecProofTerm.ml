@@ -595,8 +595,7 @@ let process_sc_instantiation pe inst =
   let typ = List.map (ty_subst ts) typ in
   let memtype = EcMemory.mt_subst (ty_subst ts) memtype in
   let mpreds = List.map (fun (id, (m,p)) ->
-      let fs = Fsubst.f_subst_init_rm ~sty:ts () in
-      let p = Fsubst.f_subst fs p in
+      let p = Fsubst.f_subst ts p in
       id, (m,p)) mpreds in
   let exprs = List.map (fun (id, e) -> id, es e) exprs in
 
@@ -610,7 +609,7 @@ let process_sc_instantiation pe inst =
         List.fold_left (fun s (id,e) ->
             let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
             Fsubst.f_bind_local s id f)
-          (Fsubst.f_subst_init_rm ()) exprs in
+          Fsubst.f_subst_id exprs in
 
       EcCoreFol.f_coe_r { coe_new with
                           coe_pre = Fsubst.f_subst fs coe_new.coe_pre }

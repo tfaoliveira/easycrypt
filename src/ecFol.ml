@@ -1005,7 +1005,7 @@ let destr_exists_prenex f =
 
     | SFquant (Lexists, bd, lazy p) ->
       let bd, p   =
-        let s = Fsubst.f_subst_init_rm ~freshen:true () in
+        let s = Fsubst.f_subst_init ~freshen:true () in
         let s, bd = Fsubst.add_binding s bd in
         bd, Fsubst.f_subst s p in
       let bds = bd::bds in

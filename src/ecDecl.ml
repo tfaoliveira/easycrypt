@@ -189,7 +189,7 @@ let sc_instantiate
         List.fold_left (fun s (id,e) ->
             let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
             CS.Fsubst.f_bind_local s id f)
-          (CS.Fsubst.f_subst_init_rm ()) exprs in
+          CS.Fsubst.f_subst_id exprs in
 
       EcCoreFol.f_coe_r { coe_new with
                           coe_pre = CS.Fsubst.f_subst fs coe_new.coe_pre }

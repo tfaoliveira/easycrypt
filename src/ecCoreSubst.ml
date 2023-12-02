@@ -181,7 +181,7 @@ let add_elocal s ((x, t) as xt) =
 let add_elocals = List.Smart.map_fold add_elocal
 
 (* -------------------------------------------------------------------- *)
-let subst_lpattern (s: e_subst) (lp:lpattern) =
+let subst_lpattern (s: f_subst) (lp:lpattern) =
   match lp with
   | LSymbol x ->
       let (s, x') = add_elocal s x in
@@ -209,7 +209,7 @@ let subst_lpattern (s: e_subst) (lp:lpattern) =
         (s, LRecord (p, xs'))
 
 (* -------------------------------------------------------------------- *)
-let rec e_subst (s: e_subst) e =
+let rec e_subst (s: f_subst) e =
   match e.e_node with
   | Elocal id -> begin
       match Mid.find_opt id s.fs_eloc with
@@ -258,7 +258,7 @@ let e_subst s =
 (* -------------------------------------------------------------------- *)
 (* Statement                                                            *)
 (* -------------------------------------------------------------------- *)
-let rec s_subst_top (s : e_subst) =
+let rec s_subst_top (s : f_subst) =
   let e_subst = e_subst s in
 
   if e_subst == identity then identity else

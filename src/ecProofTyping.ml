@@ -23,8 +23,7 @@ let process_form_opt ?mv hyps pf oty =
     let ue  = unienv_of_hyps hyps in
     let ff  = EcTyping.trans_form_opt ?mv (LDecl.toenv hyps) ue pf oty in
     let ts = Tuni.subst (EcUnify.UniEnv.close ue) in
-    let fs = EcFol.Fsubst.f_subst_init_rm ~sty:ts () in
-    EcFol.Fsubst.f_subst fs ff
+    EcFol.Fsubst.f_subst ts ff
 
   with EcUnify.UninstanciateUni ->
     EcTyping.tyerror pf.EcLocation.pl_loc

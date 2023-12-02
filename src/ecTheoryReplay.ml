@@ -465,7 +465,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopd) =
                   ~loc "this operator body contains free type variables";
 
               let sty     = CS.Tuni.subst (EcUnify.UniEnv.close ue) in
-              let body    = EcFol.Fsubst.f_subst (EcFol.Fsubst.f_subst_init_rm ~sty ()) body in
+              let body    = EcFol.Fsubst.f_subst sty body in
               let ty      = CS.ty_subst sty ty in
               let tparams = EcUnify.UniEnv.tparams ue in
               let newop   =
@@ -579,8 +579,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (import, x, oopr) =
               ove.ovre_hooks.herr
                 ~loc "this predicate body contains free type variables";
 
-            let ts = CS.Tuni.subst (EcUnify.UniEnv.close ue) in
-            let fs = EcFol.Fsubst.f_subst_init_rm ~sty:ts () in
+            let fs = CS.Tuni.subst (EcUnify.UniEnv.close ue) in
             let body    = EcFol.Fsubst.f_subst fs body in
             let tparams = EcUnify.UniEnv.tparams ue in
             let newpr   =
