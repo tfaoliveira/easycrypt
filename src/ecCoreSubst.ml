@@ -450,7 +450,7 @@ module Fsubst = struct
 
   let m_subst s m = Mid.find_def m m s.fs_mem
 
-  let subst_ty s ty = ty_subst s ty
+  let ty_subst = ty_subst
 
   (* ------------------------------------------------------------------ *)
   let rec f_subst ~tx s fp =

@@ -42,7 +42,7 @@ end = struct
 
   let subst_id       = Fsubst.f_subst_id
   let subst          = Fsubst.f_subst ?tx:None
-  let subst_ty       = Fsubst.subst_ty
+  let subst_ty       = Fsubst.ty_subst
   let subst_xpath    = Fsubst.subst_xpath
   let subst_m        = Fsubst.m_subst
   let subst_me       = Fsubst.subst_me

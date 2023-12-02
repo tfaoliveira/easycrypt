@@ -95,7 +95,7 @@ module Fsubst : sig
   val e_subst        : f_subst -> expr  -> expr
   val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
   val m_subst        : f_subst -> EcIdent.t -> EcIdent.t
-  val subst_ty       : f_subst -> ty -> ty
+  val ty_subst       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
   val subst_oi       : f_subst -> PreOI.t -> PreOI.t
   val subst_gty      : f_subst -> gty -> gty
