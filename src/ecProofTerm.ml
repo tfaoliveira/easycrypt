@@ -126,7 +126,7 @@ let concretize_e_form cptenv f =
 let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
   match arg with
   | PAFormula f        -> PAFormula (Fsubst.f_subst subst f)
-  | PAMemory  m        -> PAMemory (Fsubst.subst_m subst m)
+  | PAMemory  m        -> PAMemory (Fsubst.m_subst subst m)
   | PAModule  (mp, ms) -> PAModule (mp, ms)
   | PASub     pt       -> PASub (pt |> omap (concretize_e_pt cptenv))
 

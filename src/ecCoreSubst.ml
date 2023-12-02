@@ -448,7 +448,7 @@ module Fsubst = struct
   let subst_me s me =
     EcMemory.me_subst s.fs_mem (ty_subst s) me
 
-  let subst_m s m = Mid.find_def m m s.fs_mem
+  let m_subst s m = Mid.find_def m m s.fs_mem
 
   let subst_ty s ty = ty_subst s ty
 
@@ -481,12 +481,12 @@ module Fsubst = struct
 
     | Fpvar (pv, m) ->
         let pv' = pv_subst (subst_xpath s) pv in
-        let m'  = Mid.find_def m m s.fs_mem in
+        let m'  = m_subst s m in
         let ty' = ty_subst s fp.f_ty in
         f_pvar pv' ty' m'
 
     | Fglob (mid, m) ->
-        let m'  = Mid.find_def m m s.fs_mem in
+        let m'  = m_subst s m in
         let mid = Mid.find_def mid mid s.fs_absmod in
         begin
           (* Have we computed the globals for this module *)
