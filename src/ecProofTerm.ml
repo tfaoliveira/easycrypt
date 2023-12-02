@@ -126,7 +126,7 @@ let concretize_e_form cptenv f =
 let rec concretize_e_arg ((CPTEnv subst) as cptenv) arg =
   match arg with
   | PAFormula f        -> PAFormula (Fsubst.f_subst subst f)
-  | PAMemory  m        -> PAMemory (Mid.find_def m m subst.fs_mem)
+  | PAMemory  m        -> PAMemory (Fsubst.subst_m subst m)
   | PAModule  (mp, ms) -> PAModule (mp, ms)
   | PASub     pt       -> PASub (pt |> omap (concretize_e_pt cptenv))
 
@@ -136,7 +136,7 @@ and concretize_e_head (CPTEnv subst) head =
   | PTCut    f        -> PTCut    (Fsubst.f_subst subst f)
   | PTHandle h        -> PTHandle h
   | PTLocal  x        -> PTLocal  x
-  | PTGlobal (p, tys) -> PTGlobal (p, List.map (ty_subst subst.fs_ty) tys)
+  | PTGlobal (p, tys) -> PTGlobal (p, List.map (ty_subst (Fsubst.to_ty_subst subst)) tys)
   | PTSchema _ -> assert false
 
 and concretize_e_pt cptenv { pt_head; pt_args } =

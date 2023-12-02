@@ -56,18 +56,7 @@ val s_subst   : e_subst -> stmt -> stmt
 
 
 (* -------------------------------------------------------------------- *)
-type f_subst = private {
-  fs_freshen  : bool; (* true means realloc local *)
-  fs_loc      : form Mid.t;
-  fs_esloc    : expr Mid.t;
-  fs_ty       : ty_subst;
-  fs_mem      : EcIdent.t Mid.t;
-  fs_modglob  : (EcIdent.t -> form) Mid.t;
-  fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
-}
-
+type f_subst
 
 (* -------------------------------------------------------------------- *)
 module Fsubst : sig
@@ -87,6 +76,11 @@ module Fsubst : sig
   val f_bind_absmod : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> (EcIdent.t -> form) -> f_subst
   val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
+
+  val has_mem : f_subst -> EcAst.memory -> bool
+
+  (* FIXME: remove this *)
+  val to_ty_subst : f_subst -> ty_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 

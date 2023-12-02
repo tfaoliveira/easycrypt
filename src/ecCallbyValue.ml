@@ -56,8 +56,8 @@ end = struct
   let bind_locals (s : subst) xs =
     List.fold_left (fun s (x, e) -> bind_local s x e) s xs
 
-  let has_mem (s : subst) (x : ident) =
-    Mid.mem x s.fs_mem
+  let has_mem = Fsubst.has_mem
+
 end
 
 type subst = Subst.subst

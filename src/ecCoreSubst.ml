@@ -346,6 +346,11 @@ module Fsubst = struct
     let merger o = assert (o = None); Some m2 in
       { s with fs_mem = Mid.change merger m1 s.fs_mem }
 
+  let has_mem (s : f_subst) (x : ident) =
+    Mid.mem x s.fs_mem
+
+  let to_ty_subst (s : f_subst) = s.fs_ty
+
   let f_rebind_mem s m1 m2 =
     let merger _ = Some m2 in
     { s with fs_mem = Mid.change merger m1 s.fs_mem }

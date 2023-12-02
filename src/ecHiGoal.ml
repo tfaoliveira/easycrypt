@@ -1221,7 +1221,7 @@ let process_view1 pe tc =
 
                         let y, yty =
                           let CPTEnv subst = PT.concretize_env pe.PT.ptev_env in
-                          snd_map (ty_subst subst.fs_ty) (oget pre) in
+                          snd_map (ty_subst (Fsubst.to_ty_subst subst)) (oget pre) in
                         let fy = EcIdent.fresh y in
 
                         pe.PT.ptev_env.pte_ev := MEV.set

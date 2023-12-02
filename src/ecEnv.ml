@@ -3512,10 +3512,10 @@ module LDecl = struct
   let ld_subst s ld =
     match ld with
     | LD_var (ty, body) ->
-        LD_var (ty_subst s.fs_ty ty, body |> omap (Fsubst.f_subst s))
+        LD_var (ty_subst (Fsubst.to_ty_subst s) ty, body |> omap (Fsubst.f_subst s))
 
     | LD_mem mt ->
-        let mt = EcMemory.mt_subst (ty_subst s.fs_ty) mt
+        let mt = EcMemory.mt_subst (ty_subst (Fsubst.to_ty_subst s)) mt
         in LD_mem mt
 
     | LD_modty p ->
