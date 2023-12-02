@@ -91,7 +91,7 @@ module Fsubst : sig
 
   val lp_subst : f_subst -> lpattern -> f_subst * lpattern
   val subst_xpath    : f_subst -> xpath -> xpath
-  val subst_stmt     : f_subst -> stmt  -> stmt
+  val s_subst        : f_subst -> stmt  -> stmt
   val subst_e        : f_subst -> expr  -> expr
   val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
   val subst_m        : f_subst -> EcIdent.t -> EcIdent.t

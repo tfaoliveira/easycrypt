@@ -441,7 +441,7 @@ module Fsubst = struct
   let subst_xpath s f =
     EcPath.x_subst_abs s.fs_cmod f
 
-  let subst_stmt s c = s_subst s c
+  let s_subst = s_subst
 
   let subst_e s e = e_subst s e
 
@@ -509,7 +509,7 @@ module Fsubst = struct
         assert (not (Mid.mem (fst hs.hs_m) s.fs_mem));
         let pr' = f_subst ~tx s hs.hs_pr in
         let po' = f_subst ~tx s hs.hs_po in
-        let st' = subst_stmt s hs.hs_s in
+        let st' = s_subst s hs.hs_s in
         let me' = EcMemory.me_subst s.fs_mem (ty_subst s) hs.hs_m in
 
         f_hoareS me' pr' st' po'
@@ -526,7 +526,7 @@ module Fsubst = struct
         assert (not (Mid.mem (fst hs.ehs_m) s.fs_mem));
         let ehs_pr  = f_subst ~tx s hs.ehs_pr in
         let ehs_po  = f_subst ~tx s hs.ehs_po in
-        let ehs_s  = subst_stmt s hs.ehs_s in
+        let ehs_s  = s_subst s hs.ehs_s in
         let ehs_m = EcMemory.me_subst s.fs_mem (ty_subst s) hs.ehs_m in
         f_eHoareS ehs_m ehs_pr ehs_s ehs_po
 
@@ -543,7 +543,7 @@ module Fsubst = struct
       assert (not (Mid.mem (fst chs.chs_m) s.fs_mem));
       let pr' = f_subst ~tx s chs.chs_pr in
       let po' = f_subst ~tx s chs.chs_po in
-      let st' = subst_stmt s chs.chs_s in
+      let st' = s_subst s chs.chs_s in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s) chs.chs_m in
       let c'  = cost_subst ~tx s chs.chs_co in
 
@@ -565,7 +565,7 @@ module Fsubst = struct
       assert (not (Mid.mem (fst bhs.bhs_m) s.fs_mem));
       let pr' = f_subst ~tx s bhs.bhs_pr in
       let po' = f_subst ~tx s bhs.bhs_po in
-      let st' = subst_stmt s bhs.bhs_s in
+      let st' = s_subst s bhs.bhs_s in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s) bhs.bhs_m in
       let bd' = f_subst ~tx s bhs.bhs_bd in
 
@@ -589,8 +589,8 @@ module Fsubst = struct
                 not (Mid.mem (fst eqs.es_mr) s.fs_mem));
       let pr' = f_subst ~tx s eqs.es_pr in
       let po' = f_subst ~tx s eqs.es_po in
-      let sl' = subst_stmt s eqs.es_sl in
-      let sr' = subst_stmt s eqs.es_sr in
+      let sl' = s_subst s eqs.es_sl in
+      let sr' = s_subst s eqs.es_sr in
       let ml' = EcMemory.me_subst s.fs_mem (ty_subst s) eqs.es_ml in
       let mr' = EcMemory.me_subst s.fs_mem (ty_subst s) eqs.es_mr in
 
@@ -606,8 +606,8 @@ module Fsubst = struct
       let fl' = subst_xpath s eg.eg_fl in
       let fr' = subst_xpath s eg.eg_fr in
 
-      let sl' = subst_stmt s eg.eg_sl in
-      let sr' = subst_stmt s eg.eg_sr in
+      let sl' = s_subst s eg.eg_sl in
+      let sr' = s_subst s eg.eg_sr in
 
       f_eagerF pr' sl' fl' fr' sr' po'
 
