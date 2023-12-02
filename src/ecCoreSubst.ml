@@ -443,7 +443,7 @@ module Fsubst = struct
 
   let s_subst = s_subst
 
-  let subst_e s e = e_subst s e
+  let e_subst = e_subst
 
   let subst_me s me =
     EcMemory.me_subst s.fs_mem (ty_subst s) me
@@ -629,7 +629,7 @@ module Fsubst = struct
       (* Then we substitute *)
       let pr' = f_subst ~tx s coe.coe_pre in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s) coe.coe_mem in
-      let e' = subst_e s coe.coe_e in
+      let e' = e_subst s coe.coe_e in
 
       (* If necessary, we substitute the memtype. *)
       let me' =
