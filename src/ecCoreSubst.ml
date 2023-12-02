@@ -117,11 +117,13 @@ type e_subst = {
     es_loc     : expr Mid.t;
 }
 
-let e_subst_id = {
-    es_freshen = false;
-    es_ty     = ty_subst_id;
-    es_loc     = Mid.empty;
+let e_subst_init ?(freshen=false) ?(ty=ty_subst_id) ?(eloc=Mid.empty) () = {
+    es_freshen = freshen;
+    es_ty = ty;
+    es_loc = eloc
 }
+
+let e_subst_id = e_subst_init ()
 
 (* -------------------------------------------------------------------- *)
 let is_e_subst_id s =
@@ -130,12 +132,10 @@ let is_e_subst_id s =
   && Mid.is_empty s.es_loc
 
 (* -------------------------------------------------------------------- *)
-let e_subst_init freshen on_ty esloc =
-  { es_freshen = freshen;
-    es_ty      = on_ty;
-    es_loc     = esloc; }
 
-(* -------------------------------------------------------------------- *)
+let bind_elocal s x e =
+  { s with es_loc = Mid.add x e s.es_loc }
+
 let add_elocal s ((x, t) as xt) =
   let x' = if s.es_freshen then EcIdent.fresh x else x in
   let t' = ty_subst s.es_ty t in
@@ -436,13 +436,15 @@ module Fsubst = struct
   let subst_xpath s f =
     EcPath.x_subst_abs s.fs_ty.ts_cmod f
 
+  let to_e_subst s =
+    e_subst_init ~freshen:s.fs_freshen ~ty:s.fs_ty ~eloc:s.fs_esloc ()
+
   let subst_stmt s c =
-    let es =
-      e_subst_init s.fs_freshen s.fs_ty s.fs_esloc
-    in s_subst es c
+    let es = to_e_subst s in
+    s_subst es c
 
   let subst_e s e =
-    let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
+    let es = to_e_subst s in
     e_subst es e
 
   let subst_me s me =
@@ -507,10 +509,9 @@ module Fsubst = struct
 
     | FhoareS hs ->
         assert (not (Mid.mem (fst hs.hs_m) s.fs_mem));
-        let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
         let pr' = f_subst ~tx s hs.hs_pr in
         let po' = f_subst ~tx s hs.hs_po in
-        let st' = s_subst es hs.hs_s in
+        let st' = subst_stmt s hs.hs_s in
         let me' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) hs.hs_m in
 
         f_hoareS me' pr' st' po'
@@ -525,10 +526,9 @@ module Fsubst = struct
 
     | FeHoareS hs ->
         assert (not (Mid.mem (fst hs.ehs_m) s.fs_mem));
-        let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
         let ehs_pr  = f_subst ~tx s hs.ehs_pr in
         let ehs_po  = f_subst ~tx s hs.ehs_po in
-        let ehs_s  = s_subst es hs.ehs_s in
+        let ehs_s  = subst_stmt s hs.ehs_s in
         let ehs_m = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) hs.ehs_m in
         f_eHoareS ehs_m ehs_pr ehs_s ehs_po
 
@@ -543,10 +543,9 @@ module Fsubst = struct
 
     | FcHoareS chs ->
       assert (not (Mid.mem (fst chs.chs_m) s.fs_mem));
-      let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
       let pr' = f_subst ~tx s chs.chs_pr in
       let po' = f_subst ~tx s chs.chs_po in
-      let st' = s_subst es chs.chs_s in
+      let st' = subst_stmt s chs.chs_s in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) chs.chs_m in
       let c'  = cost_subst ~tx s chs.chs_co in
 
@@ -566,10 +565,9 @@ module Fsubst = struct
 
     | FbdHoareS bhs ->
       assert (not (Mid.mem (fst bhs.bhs_m) s.fs_mem));
-      let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
       let pr' = f_subst ~tx s bhs.bhs_pr in
       let po' = f_subst ~tx s bhs.bhs_po in
-      let st' = s_subst es bhs.bhs_s in
+      let st' = subst_stmt s bhs.bhs_s in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) bhs.bhs_m in
       let bd' = f_subst ~tx s bhs.bhs_bd in
 
@@ -591,12 +589,10 @@ module Fsubst = struct
     | FequivS eqs ->
       assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
                 not (Mid.mem (fst eqs.es_mr) s.fs_mem));
-      let es = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
-      let s_subst = s_subst es in
       let pr' = f_subst ~tx s eqs.es_pr in
       let po' = f_subst ~tx s eqs.es_po in
-      let sl' = s_subst eqs.es_sl in
-      let sr' = s_subst eqs.es_sr in
+      let sl' = subst_stmt s eqs.es_sl in
+      let sr' = subst_stmt s eqs.es_sr in
       let ml' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) eqs.es_ml in
       let mr' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) eqs.es_mr in
 
@@ -612,10 +608,8 @@ module Fsubst = struct
       let fl' = subst_xpath s eg.eg_fl in
       let fr' = subst_xpath s eg.eg_fr in
 
-      let es = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
-      let s_subst = s_subst es in
-      let sl' = s_subst eg.eg_sl in
-      let sr' = s_subst eg.eg_sr in
+      let sl' = subst_stmt s eg.eg_sl in
+      let sr' = subst_stmt s eg.eg_sr in
 
       f_eagerF pr' sl' fl' fr' sr' po'
 
@@ -635,10 +629,9 @@ module Fsubst = struct
 
 
       (* Then we substitute *)
-      let es  = e_subst_init s.fs_freshen s.fs_ty s.fs_esloc in
       let pr' = f_subst ~tx s coe.coe_pre in
       let me' = EcMemory.me_subst s.fs_mem (ty_subst s.fs_ty) coe.coe_mem in
-      let e' = e_subst es coe.coe_e in
+      let e' = subst_e s coe.coe_e in
 
       (* If necessary, we substitute the memtype. *)
       let me' =

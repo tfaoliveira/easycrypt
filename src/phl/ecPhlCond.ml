@@ -1,6 +1,5 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcIdent
 open EcTypes
 open EcModules
 open EcFol
@@ -316,14 +315,13 @@ let t_equiv_match_eq tc =
       (f_imp_simpl es.es_pr (f_eq fl fr)) in
 
   let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
-    let sb     = { e_subst_id with es_freshen = true; } in
+    let sb     = e_subst_init ~freshen:true () in
     let sb, bh = add_elocals sb cl in
 
     let sb =
       List.fold_left2
-        (fun sb (x, _) (y, _) ->
-          { sb with es_loc =
-              Mid.add y (oget (Mid.find_opt x sb.es_loc)) sb.es_loc })
+        (fun sb (x, xty) (y, _) ->
+          bind_elocal sb y (e_subst sb (e_local x xty)))
         sb cl cr in
 
     let cop    = EcPath.pqoname (EcPath.prefix pl) c in

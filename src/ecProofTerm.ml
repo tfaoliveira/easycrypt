@@ -590,7 +590,7 @@ let process_sc_instantiation pe inst =
 
   let uidmap = EcUnify.UniEnv.assubst pe.pte_ue in
   let ts = Tuni.subst uidmap in
-  let es = e_subst { e_subst_id with es_ty = ts } in
+  let es = e_subst (e_subst_init ~ty:ts ()) in
 
   let typ = List.map (ty_subst ts) typ in
   let memtype = EcMemory.mt_subst (ty_subst ts) memtype in

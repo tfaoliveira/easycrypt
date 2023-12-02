@@ -35,24 +35,18 @@ end
 
 (* -------------------------------------------------------------------- *)
 type e_subst
- = {
-  es_freshen : bool; (* true means realloc local *)
-  es_ty      : ty_subst;
-  es_loc     : expr Mid.t;
-}
+
+val e_subst_init :
+  ?freshen:bool -> ?ty:ty_subst -> ?eloc:expr Mid.t -> unit -> e_subst
 
 val e_subst_id : e_subst
 
 val is_e_subst_id : e_subst -> bool
 
-val e_subst_init :
-     bool
-  -> ty_subst
-  -> expr Mid.t
-  -> e_subst
-
 val add_elocal  : e_subst -> EcIdent.t * ty -> e_subst * (EcIdent.t * ty)
 val add_elocals : e_subst -> (EcIdent.t * ty) list -> e_subst * (EcIdent.t * ty) list
+
+val bind_elocal : e_subst -> EcIdent.t -> expr -> e_subst
 
 val e_subst_closure : e_subst -> closure -> closure
 val e_subst : e_subst -> expr -> expr

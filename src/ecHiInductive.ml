@@ -403,8 +403,8 @@ let trans_matchfix
       let opexpr   = e_op opexpr (List.map (tvar |- fst) tparams)
                        (toarrow (List.map snd args) codom) in
       let ebsubst  =
-        let lcmap = Mid.add opname opexpr e_subst_id.es_loc in
-        { e_subst_id with es_freshen = false; es_ty = ts; es_loc = lcmap; }
+        let ebsubst = e_subst_init ~freshen:false ~ty:ts () in
+        bind_elocal ebsubst opname opexpr
       in
 
       let branches =
