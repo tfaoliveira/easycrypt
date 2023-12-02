@@ -351,8 +351,6 @@ module Fsubst = struct
   let has_mem (s : f_subst) (x : ident) =
     Mid.mem x s.fs_mem
 
-  let to_ty_subst (s : f_subst) = s
-
   let f_rebind_mem s m1 m2 =
     let merger _ = Some m2 in
     { s with fs_mem = Mid.change merger m1 s.fs_mem }
@@ -820,12 +818,6 @@ module Fsubst = struct
   let f_subst_mem m1 m2 =
     let s = f_bind_mem f_subst_id m1 m2 in
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
-
-  (* ------------------------------------------------------------------ *)
-  let fty_subst sty = sty
-
-  let mapty sty =
-    f_subst (fty_subst sty)
 
   (* ------------------------------------------------------------------ *)
   let init_subst_tvar ?es_loc s =
