@@ -733,7 +733,7 @@ module Fsubst = struct
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
     { mt_params; mt_name; mt_args; mt_restr; }
 
-  and subst_gty ~tx s gty =
+  and gty_subst ~tx s gty =
     if is_subst_id s then gty else
 
     match gty with
@@ -753,7 +753,7 @@ module Fsubst = struct
         if mt == mt' then gty else GTmem mt'
 
   and add_binding ~tx s (x, gty as xt) =
-    let gty' = subst_gty ~tx s gty in
+    let gty' = gty_subst ~tx s gty in
     let x'   = if s.fs_freshen then EcIdent.fresh x else x in
 
     if x == x' && gty == gty' then
@@ -805,7 +805,7 @@ module Fsubst = struct
   let f_subst ?(tx = fun _ f -> f) s =
     if is_subst_id s then identity else f_subst ~tx s
 
-  let subst_gty = subst_gty ~tx:(fun _ f -> f)
+  let gty_subst = gty_subst ~tx:(fun _ f -> f)
   let subst_mty = subst_mty ~tx:(fun _ f -> f)
   let oi_subst  = oi_subst ~tx:(fun _ f -> f)
 

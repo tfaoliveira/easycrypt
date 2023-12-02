@@ -3519,7 +3519,7 @@ module LDecl = struct
         in LD_mem mt
 
     | LD_modty p ->
-        let p = gty_as_mod (Fsubst.subst_gty s (GTmodty p))
+        let p = gty_as_mod (Fsubst.gty_subst s (GTmodty p))
         in LD_modty p
 
     | LD_hyp f ->

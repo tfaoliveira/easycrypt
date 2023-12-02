@@ -97,5 +97,5 @@ module Fsubst : sig
   val m_subst        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_mty      : f_subst -> module_type -> module_type
   val oi_subst       : f_subst -> PreOI.t -> PreOI.t
-  val subst_gty      : f_subst -> gty -> gty
+  val gty_subst      : f_subst -> gty -> gty
 end
