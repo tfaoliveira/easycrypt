@@ -39,25 +39,17 @@ end
 
 
 (* -------------------------------------------------------------------- *)
-type e_subst
 
-val e_subst_init :
-  ?freshen:bool -> ?ty:f_subst -> ?eloc:expr Mid.t -> unit -> e_subst
+val add_elocal  : f_subst -> EcIdent.t * ty -> f_subst * (EcIdent.t * ty)
+val add_elocals : f_subst -> (EcIdent.t * ty) list -> f_subst * (EcIdent.t * ty) list
 
-val e_subst_id : e_subst
+val bind_elocal : f_subst -> EcIdent.t -> expr -> f_subst
 
-val is_e_subst_id : e_subst -> bool
-
-val add_elocal  : e_subst -> EcIdent.t * ty -> e_subst * (EcIdent.t * ty)
-val add_elocals : e_subst -> (EcIdent.t * ty) list -> e_subst * (EcIdent.t * ty) list
-
-val bind_elocal : e_subst -> EcIdent.t -> expr -> e_subst
-
-val e_subst_closure : e_subst -> closure -> closure
-val e_subst : e_subst -> expr -> expr
+val e_subst_closure : f_subst -> closure -> closure
+val e_subst : f_subst -> expr -> expr
 
 (* -------------------------------------------------------------------- *)
-val s_subst   : e_subst -> stmt -> stmt
+val s_subst   : f_subst -> stmt -> stmt
 
 
 (* -------------------------------------------------------------------- *)

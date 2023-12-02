@@ -157,21 +157,6 @@ end
 (* Expressions                                                          *)
 (* -------------------------------------------------------------------- *)
 
-type e_subst = f_subst
-(*{
-    es_freshen : bool; (* true means realloc local *)
-    es_ty      : ty_subst;
-    es_loc     : expr Mid.t;
-}
-*)
-let e_subst_init ?(freshen=false) ?(ty=ty_subst_id) ?(eloc=Mid.empty) () =
-  { ty with
-    fs_freshen  = freshen;
-    fs_eloc    = eloc;
-  }
-
-let e_subst_id = e_subst_init ()
-
 (* -------------------------------------------------------------------- *)
 let is_e_subst_id s =
      not s.fs_freshen

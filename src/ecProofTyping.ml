@@ -62,8 +62,7 @@ let process_exp hyps mode oty e =
   let ue  = unienv_of_hyps hyps in
   let e   = EcTyping.transexpcast_opt env mode ue oty e in
   let ts  = Tuni.subst (EcUnify.UniEnv.close ue)  in
-  let es  = e_subst (e_subst_init ~ty:ts ()) in
-    es e
+  e_subst ts e
 
 let process_pattern hyps fp =
   let ps = ref Mid.empty in
@@ -142,7 +141,7 @@ let tc1_process_stmt  ?map tc mt c =
   let ue     = unienv_of_hyps hyps in
   let c      = Exn.recast_pe !!tc hyps (fun () -> EcTyping.transstmt ?map env ue c) in
   let uidmap = Exn.recast_pe !!tc hyps (fun () -> EcUnify.UniEnv.close ue) in
-  let es     = e_subst_init ~ty:(Tuni.subst uidmap) () in
+  let es     = Tuni.subst uidmap in
   s_subst es c
 
 

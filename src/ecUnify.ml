@@ -467,7 +467,7 @@ let select_op ?(hidden = false) ?(filter = fun _ _ -> true) tvi env name ue psig
         | OB_nott nt ->
            let substnt () =
              let xs = List.map (snd_map (ty_subst tip)) nt.D.ont_args in
-             let es = e_subst (e_subst_init ~ty:tip ()) in
+             let es = e_subst tip in
              let bd = es nt.D.ont_body in
              (xs, bd)
            in Some (Lazy.from_fun substnt)

@@ -900,7 +900,7 @@ let process_rewrite1_r ttenv ?target ri tc =
             EcTyping.tyerror ri.pl_loc env EcTyping.FreeTypeVariables in
 
         let sty = f_subst_init ~tu:subs () in
-        let es = e_subst (e_subst_init ~ty:sty ()) in
+        let es = e_subst sty in
         (List.map es args, es res)
       in
 

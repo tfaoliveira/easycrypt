@@ -196,7 +196,7 @@ module LowMatch = struct
       EcMemory.bindall_fresh cvars me0 in
 
     let subst, pvs =
-      let s = e_subst_id in
+      let s = Fsubst.f_subst_id in
       let s, pvs =
         List.fold_left_map (fun s ((x, xty), name) ->
             let pv = pv_loc (oget name.ov_name) in
