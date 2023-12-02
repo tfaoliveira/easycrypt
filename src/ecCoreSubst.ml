@@ -450,8 +450,6 @@ module Fsubst = struct
 
   let m_subst s m = Mid.find_def m m s.fs_mem
 
-  let ty_subst = ty_subst
-
   (* ------------------------------------------------------------------ *)
   let rec f_subst ~tx s fp =
     tx fp (match fp.f_node with
@@ -699,7 +697,7 @@ module Fsubst = struct
     let sag = { f_subst_id with fs_loc = sag } in
     f_app (f_subst ~tx sag f) args fty
 
-  and subst_oi ~(tx : form -> form -> form) (s : f_subst) (oi : PreOI.t) =
+  and oi_subst ~(tx : form -> form -> form) (s : f_subst) (oi : PreOI.t) =
     let costs = match PreOI.costs oi with
       | `Unbounded -> `Unbounded
       | `Bounded (self,calls) ->
@@ -723,7 +721,7 @@ module Fsubst = struct
           Sx.add (sx m) rx) s Sx.empty) mr.mr_xpaths;
       mr_mpaths = ur_app (fun s -> Sm.fold (fun m r ->
           Sm.add (sm m) r) s Sm.empty) mr.mr_mpaths;
-      mr_oinfos = EcSymbols.Msym.map (subst_oi ~tx s) mr.mr_oinfos;
+      mr_oinfos = EcSymbols.Msym.map (oi_subst ~tx s) mr.mr_oinfos;
     }
 
   and subst_mty ~tx s mty =
@@ -809,7 +807,7 @@ module Fsubst = struct
 
   let subst_gty = subst_gty ~tx:(fun _ f -> f)
   let subst_mty = subst_mty ~tx:(fun _ f -> f)
-  let subst_oi  = subst_oi ~tx:(fun _ f -> f)
+  let oi_subst  = oi_subst ~tx:(fun _ f -> f)
 
   let f_subst_local x t =
     let s = f_bind_local f_subst_id x t in
