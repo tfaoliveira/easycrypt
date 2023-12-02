@@ -7,20 +7,18 @@ open EcCoreModules
 open EcCoreFol
 
 (* -------------------------------------------------------------------- *)
-type ty_subst
+type f_subst
 
-val ty_subst_id    : ty_subst
-val is_ty_subst_id : ty_subst -> bool
+(* -------------------------------------------------------------------- *)
+val ty_subst_init : ?tu:ty Muid.t -> ?tv:ty Mid.t -> unit -> f_subst
 
-val ty_subst_init : ?tu:ty Muid.t -> ?tv:ty Mid.t -> unit -> ty_subst
-
-val ty_subst : ty_subst -> ty -> ty
+val ty_subst : f_subst -> ty -> ty
 
 module Tuni : sig
   val univars : ty -> Suid.t
 
-  val subst1    : (uid * ty) -> ty_subst
-  val subst     : ty Muid.t -> ty_subst
+  val subst1    : (uid * ty) -> f_subst
+  val subst     : ty Muid.t -> f_subst
   val subst_dom : ty Muid.t -> dom -> dom
   val occurs    : uid -> ty -> bool
   val fv        : ty -> Suid.t
@@ -37,7 +35,7 @@ end
 type e_subst
 
 val e_subst_init :
-  ?freshen:bool -> ?ty:ty_subst -> ?eloc:expr Mid.t -> unit -> e_subst
+  ?freshen:bool -> ?ty:f_subst -> ?eloc:expr Mid.t -> unit -> e_subst
 
 val e_subst_id : e_subst
 
@@ -56,16 +54,13 @@ val s_subst   : e_subst -> stmt -> stmt
 
 
 (* -------------------------------------------------------------------- *)
-type f_subst
-
-(* -------------------------------------------------------------------- *)
 module Fsubst : sig
   val f_subst_id  : f_subst
   val is_subst_id : f_subst -> bool
 
   val f_subst_init :
        ?freshen:bool
-    -> ?sty:ty_subst
+    -> ?sty:f_subst
     -> ?esloc:expr Mid.t
     -> ?mt:EcMemory.memtype
     -> ?mempred:(mem_pr Mid.t)
@@ -80,7 +75,7 @@ module Fsubst : sig
   val has_mem : f_subst -> EcAst.memory -> bool
 
   (* FIXME: remove this *)
-  val to_ty_subst : f_subst -> ty_subst
+  val to_ty_subst : f_subst -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
