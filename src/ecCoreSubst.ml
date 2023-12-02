@@ -181,7 +181,7 @@ let add_elocal s ((x, t) as xt) =
 let add_elocals = List.Smart.map_fold add_elocal
 
 (* -------------------------------------------------------------------- *)
-let subst_lpattern (s: f_subst) (lp:lpattern) =
+let elp_subst (s: f_subst) (lp:lpattern) =
   match lp with
   | LSymbol x ->
       let (s, x') = add_elocal s x in
@@ -232,7 +232,7 @@ let rec e_subst (s: f_subst) e =
 
   | Elet (lp, e1, e2) ->
       let e1' = e_subst s e1 in
-      let s, lp' = subst_lpattern s lp in
+      let s, lp' = elp_subst s lp in
       let e2' = e_subst s e2 in
         e_let lp' e1' e2'
 
@@ -410,7 +410,7 @@ module Fsubst = struct
 
   let add_locals = List.Smart.map_fold add_local
 
-  let subst_lpattern (s: f_subst) (lp:lpattern) =
+  let lp_subst (s: f_subst) (lp:lpattern) =
     match lp with
     | LSymbol x ->
         let (s, x') = add_local s x in
@@ -462,7 +462,7 @@ module Fsubst = struct
 
     | Flet (lp, f1, f2) ->
         let f1'    = f_subst ~tx s f1 in
-        let s, lp' = subst_lpattern s lp in
+        let s, lp' = lp_subst s lp in
         let f2'    = f_subst ~tx s f2 in
           f_let lp' f1' f2'
 
