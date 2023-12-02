@@ -339,15 +339,6 @@ module Fsubst = struct
     && Mid.is_empty   s.fs_eloc
     && s.fs_memtype = None
 
-  let f_subst_init_rm
-     ?freshen ?sty ?esloc ?mt ?mempred () =
-    let sty = odfl ty_subst_id sty in
-    { sty with
-      fs_freshen  = odfl false freshen;
-      fs_eloc    = odfl Mid.empty esloc;
-      fs_mempred  = odfl Mid.empty mempred;
-      fs_memtype  = mt; }
-
   (* ------------------------------------------------------------------ *)
   let f_bind_local s x t =
     let merger o = assert (o = None); Some t in

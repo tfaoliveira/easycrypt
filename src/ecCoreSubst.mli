@@ -66,15 +66,6 @@ module Fsubst : sig
     -> ?mempred:(mem_pr Mid.t)
     -> unit -> f_subst
 
-  (* FIXME: remove *)
-  val f_subst_init_rm :
-       ?freshen:bool
-    -> ?sty:f_subst
-    -> ?esloc:expr Mid.t
-    -> ?mt:EcMemory.memtype
-    -> ?mempred:(mem_pr Mid.t)
-    -> unit -> f_subst
-
   val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
   val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
   val f_bind_absmod : f_subst -> EcIdent.t -> EcIdent.t -> f_subst

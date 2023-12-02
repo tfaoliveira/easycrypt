@@ -164,8 +164,6 @@ let sc_instantiate
     ty_params pr_params sc_params
     ty_args memtype (pr_args : mem_pr list) sc_args f =
   let fs = CS.Tvar.init (List.map fst ty_params) ty_args in
-  let sty = CS.f_subst_init ~tv:fs () in
-
 
   (* We substitute the predicate variables. *)
   let preds = List.map2 (fun (mem,p) id ->
@@ -195,7 +193,7 @@ let sc_instantiate
                           coe_pre = CS.Fsubst.f_subst fs coe_new.coe_pre }
     | _ -> f_new in
 
-  let fs = CS.Fsubst.f_subst_init_rm ~sty ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
+  let fs = CS.Fsubst.f_subst_init ~tv:fs ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
 
   CS.Fsubst.f_subst ~tx fs f
 

@@ -930,7 +930,7 @@ let reduce_user_gen simplify ri env hyps f =
 
         if (Mid.is_empty !e_pv) && (Mid.is_empty !p_pv)
         then   (* axiom case *)
-          let subst   = Fsubst.f_subst_init_rm ~sty:ts () in
+          let subst   = ts in
           let subst   =
             Mid.fold (fun x f s -> Fsubst.f_bind_local s x f) !pv subst in
           Fsubst.f_subst subst (Fsubst.subst_tvar tvi f)
@@ -959,7 +959,7 @@ let reduce_user_gen simplify ri env hyps f =
           let subst =
             Mid.fold (fun x f s ->
                 Fsubst.f_bind_local s x f
-              ) !pv (Fsubst.f_subst_init_rm ()) in
+              ) !pv Fsubst.f_subst_id in
           Fsubst.f_subst subst (Fsubst.subst_tvar tvi f) in
 
       List.iter (fun cond ->

@@ -912,7 +912,7 @@ module Ax = struct
       hierror "the formula contains free type variables";
 
     let uidmap = EcUnify.UniEnv.close ue in
-    let fs = Fsubst.f_subst_init_rm ~sty:(Tuni.subst uidmap) () in
+    let fs = Tuni.subst uidmap in
     let concl   = Fsubst.f_subst fs concl in
     let tparams = EcUnify.UniEnv.tparams ue in
 
@@ -1192,7 +1192,7 @@ module Op = struct
 
     let uidmap  = EcUnify.UniEnv.close ue in
     let ts      = Tuni.subst uidmap in
-    let fs      = Fsubst.f_subst (Fsubst.f_subst_init_rm ~sty:ts ()) in
+    let fs      = Fsubst.f_subst ts in
     let ty      = ty_subst ts ty in
     let tparams = EcUnify.UniEnv.tparams ue in
     let body    =
@@ -1265,7 +1265,7 @@ module Op = struct
             let ax      = f_forall (List.map (snd_map gtty) xs) ax in
 
             let uidmap  = EcUnify.UniEnv.close ue in
-            let subst   = Fsubst.f_subst_init_rm ~sty:(Tuni.subst uidmap) () in
+            let subst   = Tuni.subst uidmap in
             let ax      = Fsubst.f_subst subst ax in
 
             ax
@@ -1747,7 +1747,7 @@ module Ty = struct
           let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let uidmap = EcUnify.UniEnv.close ue in
-          let fs = Fsubst.f_subst_init_rm ~sty:(Tuni.subst uidmap) () in
+          let fs = Tuni.subst uidmap in
           let ax = Fsubst.f_subst fs ax in
             (unloc x, ax)
         in

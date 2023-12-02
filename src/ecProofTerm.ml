@@ -616,7 +616,7 @@ let process_sc_instantiation pe inst =
     | _ -> f_new in
 
   let fs =
-    Fsubst.f_subst_init_rm ~sty:ts
+    Fsubst.f_subst_init ~tu:uidmap
       ~esloc:(Mid.of_list exprs)
       ~mempred:(Mid.of_list mpreds)
       ~mt:memtype () in
