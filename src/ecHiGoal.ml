@@ -899,7 +899,7 @@ let process_rewrite1_r ttenv ?target ri tc =
           | EcUnify.UninstanciateUni ->
             EcTyping.tyerror ri.pl_loc env EcTyping.FreeTypeVariables in
 
-        let sty = { ty_subst_id with ts_u = subs } in
+        let sty = ty_subst_init ~tu:subs () in
         let es = e_subst { e_subst_id with es_ty = sty } in
         (List.map es args, es res)
       in

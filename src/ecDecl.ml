@@ -164,7 +164,7 @@ let sc_instantiate
     ty_params pr_params sc_params
     ty_args memtype (pr_args : mem_pr list) sc_args f =
   let fs = CS.Tvar.init (List.map fst ty_params) ty_args in
-  let sty = CS.{ ty_subst_id with ts_v = fs } in
+  let sty = CS.ty_subst_init ~tv:fs () in
 
 
   (* We substitute the predicate variables. *)

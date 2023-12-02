@@ -519,7 +519,7 @@ let process_named_schema pe (tvi, sn) =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi pe.pte_ue typ tvi in
-  let sty = { ty_subst_id with ts_v = fs } in
+  let sty = ty_subst_init ~tv:fs () in
 
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 

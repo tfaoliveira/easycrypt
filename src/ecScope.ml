@@ -2396,7 +2396,7 @@ module Search = struct
                     let ps  = ref Mid.empty in
                     let ue  = EcUnify.UniEnv.create None in
                     let tip = EcUnify.UniEnv.opentvi ue decl.op_tparams None in
-                    let tip = {ty_subst_id with ts_v = tip} in
+                    let tip = ty_subst_init ~tv:tip () in
                     let es = e_subst {e_subst_id with es_ty = tip } in
                     let xs  = List.map (snd_map (ty_subst tip)) nt.ont_args in
                     let bd  = EcFol.form_of_expr EcFol.mhr (es nt.ont_body) in

@@ -21,7 +21,7 @@ let tperror loc env e = raise (TransPredError (loc, env, e))
 
 (* -------------------------------------------------------------------- *)
 let close_pr_body (uni : ty EcUid.Muid.t) (body : prbody) =
-  let sty = { ty_subst_id with ts_u = uni } in
+  let sty = ty_subst_init ~tu:uni () in
   let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
   let fsubst = fs in
   let tsubst = ty_subst sty in

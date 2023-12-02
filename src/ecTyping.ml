@@ -2211,7 +2211,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) =
     let subs = try EcUnify.UniEnv.close ue with
       | EcUnify.UninstanciateUni ->
         tyerror (loc form) env FreeTypeVariables in
-    let sty = { ty_subst_id with ts_u = subs } in
+    let sty = ty_subst_init ~tu:subs () in
     let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
     EcFol.Fsubst.f_subst fs tform in
 

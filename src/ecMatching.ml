@@ -317,7 +317,7 @@ module MEV = struct
     v
 
   let assubst ue ev env =
-    let tysubst = { ty_subst_id with ts_u = EcUnify.UniEnv.assubst ue } in
+    let tysubst = ty_subst_init ~tu:(EcUnify.UniEnv.assubst ue) () in
     let subst = Fsubst.f_subst_init ~sty:tysubst () in
     let subst = EV.fold (fun x m s -> Fsubst.f_bind_mem s x m) ev.evm_mem subst in
     let subst = EV.fold (fun x mp s -> EcFol.f_bind_mod s x mp env) ev.evm_mod subst in
