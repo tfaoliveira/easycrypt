@@ -89,13 +89,13 @@ module Fsubst : sig
   val add_binding  : f_subst -> binding  -> f_subst * binding
   val add_bindings : f_subst -> bindings -> f_subst * bindings
 
-  val lp_subst : f_subst -> lpattern -> f_subst * lpattern
-  val subst_xpath    : f_subst -> xpath -> xpath
-  val s_subst        : f_subst -> stmt  -> stmt
-  val e_subst        : f_subst -> expr  -> expr
-  val me_subst       : f_subst -> EcMemory.memenv -> EcMemory.memenv
-  val m_subst        : f_subst -> EcIdent.t -> EcIdent.t
-  val mty_subst      : f_subst -> module_type -> module_type
-  val oi_subst       : f_subst -> PreOI.t -> PreOI.t
-  val gty_subst      : f_subst -> gty -> gty
+  val lp_subst  : f_subst -> lpattern -> f_subst * lpattern
+  val x_subst   : f_subst -> xpath -> xpath
+  val s_subst   : f_subst -> stmt  -> stmt
+  val e_subst   : f_subst -> expr  -> expr
+  val me_subst  : f_subst -> EcMemory.memenv -> EcMemory.memenv
+  val m_subst   : f_subst -> EcIdent.t -> EcIdent.t
+  val mty_subst : f_subst -> module_type -> module_type
+  val oi_subst  : f_subst -> PreOI.t -> PreOI.t
+  val gty_subst : f_subst -> gty -> gty
 end

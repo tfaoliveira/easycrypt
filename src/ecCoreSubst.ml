@@ -438,7 +438,7 @@ module Fsubst = struct
           if xs == xs' then (s, lp) else (s, LRecord (p, xs'))
 
   (* ------------------------------------------------------------------ *)
-  let subst_xpath s f =
+  let x_subst s f =
     EcPath.x_subst_abs s.fs_cmod f
 
   let s_subst = s_subst
@@ -478,7 +478,7 @@ module Fsubst = struct
         f_op p tys' ty'
 
     | Fpvar (pv, m) ->
-        let pv' = pv_subst (subst_xpath s) pv in
+        let pv' = pv_subst (x_subst s) pv in
         let m'  = m_subst s m in
         let ty' = ty_subst s fp.f_ty in
         f_pvar pv' ty' m'
@@ -499,7 +499,7 @@ module Fsubst = struct
         let pr' = f_subst ~tx s hf.hf_pr in
         let po' = f_subst ~tx s hf.hf_po in
         (pr', po') in
-      let mp' = subst_xpath s hf.hf_f in
+      let mp' = x_subst s hf.hf_f in
 
       f_hoareF pr' mp' po'
 
@@ -517,7 +517,7 @@ module Fsubst = struct
         assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
         let ehf_pr  = f_subst ~tx s hf.ehf_pr in
         let ehf_po  = f_subst ~tx s hf.ehf_po in
-        let ehf_f  = subst_xpath s hf.ehf_f in
+        let ehf_f  = x_subst s hf.ehf_f in
         f_eHoareF ehf_pr ehf_f ehf_po
 
     | FeHoareS hs ->
@@ -532,7 +532,7 @@ module Fsubst = struct
       assert (not (Mid.mem mhr s.fs_mem));
       let pr' = f_subst ~tx s chf.chf_pr in
       let po' = f_subst ~tx s chf.chf_po in
-      let mp' = subst_xpath s chf.chf_f in
+      let mp' = x_subst s chf.chf_f in
       let c'  = cost_subst ~tx s chf.chf_co in
 
       f_cHoareF pr' mp' po' c'
@@ -554,7 +554,7 @@ module Fsubst = struct
         let po' = f_subst ~tx s bhf.bhf_po in
         let bd' = f_subst ~tx s bhf.bhf_bd in
         (pr', po', bd') in
-      let mp' = subst_xpath s bhf.bhf_f in
+      let mp' = x_subst s bhf.bhf_f in
 
       f_bdHoareF_r { bhf with bhf_pr = pr'; bhf_po = po';
                               bhf_f  = mp'; bhf_bd = bd'; }
@@ -577,8 +577,8 @@ module Fsubst = struct
         let pr' = f_subst ~tx s ef.ef_pr in
         let po' = f_subst ~tx s ef.ef_po in
         (pr', po') in
-      let fl' = subst_xpath s ef.ef_fl in
-      let fr' = subst_xpath s ef.ef_fr in
+      let fl' = x_subst s ef.ef_fl in
+      let fr' = x_subst s ef.ef_fr in
 
       f_equivF pr' fl' fr' po'
 
@@ -601,8 +601,8 @@ module Fsubst = struct
         let pr' = f_subst ~tx s eg.eg_pr in
         let po' = f_subst ~tx s eg.eg_po in
         (pr', po') in
-      let fl' = subst_xpath s eg.eg_fl in
-      let fr' = subst_xpath s eg.eg_fr in
+      let fl' = x_subst s eg.eg_fl in
+      let fr' = x_subst s eg.eg_fr in
 
       let sl' = s_subst s eg.eg_sl in
       let sr' = s_subst s eg.eg_sr in
@@ -639,7 +639,7 @@ module Fsubst = struct
 
     | Fpr pr ->
       let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
-      let pr_fun   = subst_xpath s pr.pr_fun in
+      let pr_fun   = x_subst s pr.pr_fun in
       let pr_args  = f_subst ~tx s pr.pr_args in
       let s = f_rem_mem s mhr in
       let pr_event = f_subst ~tx s pr.pr_event in
@@ -704,18 +704,18 @@ module Fsubst = struct
         let calls = EcPath.Mx.fold (fun x a calls ->
             EcPath.Mx.change
               (fun old -> assert (old = None); Some (f_subst ~tx s a))
-              (subst_xpath s x)
+              (x_subst s x)
               calls
           ) calls EcPath.Mx.empty in
         let self = f_subst ~tx s self in
         `Bounded (self,calls) in
 
     PreOI.mk
-      (List.map (subst_xpath s) (PreOI.allowed oi))
+      (List.map (x_subst s) (PreOI.allowed oi))
       costs
 
   and mr_subst ~tx s mr : mod_restr =
-    let sx = subst_xpath s in
+    let sx = x_subst s in
     let sm = EcPath.m_subst_abs s.fs_cmod in
     { mr_xpaths = ur_app (fun s -> Sx.fold (fun m rx ->
           Sx.add (sx m) rx) s Sx.empty) mr.mr_xpaths;
@@ -778,7 +778,7 @@ module Fsubst = struct
   and cost_subst ~tx s cost =
     let c_self = f_subst ~tx s cost.c_self
     and self', c_calls = EcPath.Mx.fold (fun x cb (self',calls) ->
-        let x' = subst_xpath s x in
+        let x' = x_subst s x in
         let cb_cost'   = f_subst ~tx s cb.cb_cost in
         let cb_called' = f_subst ~tx s cb.cb_called in
         match x'.x_top.m_top with

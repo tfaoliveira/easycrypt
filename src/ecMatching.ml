@@ -575,13 +575,13 @@ let f_match_core opts hyps (ue, ev) ~ptn subject =
       end
 
       | FcHoareF hf1, FcHoareF hf2 -> begin
-          let x2 = EcFol.Fsubst.subst_xpath subst hf2.chf_f in
+          let x2 = Fsubst.x_subst subst hf2.chf_f in
 
           if not (EcReduction.EqTest.for_xp env hf1.chf_f x2) then
             failure ();
           let mxs = Mid.add EcFol.mhr EcFol.mhr mxs in
 
-          let calls2 = EcPath.Mx.translate (EcFol.Fsubst.subst_xpath subst) hf2.chf_co.c_calls in
+          let calls2 = EcPath.Mx.translate (Fsubst.x_subst subst) hf2.chf_co.c_calls in
 
           EcPath.Mx.fold2_union (fun _ cb1 cb2 () ->
               match cb1, cb2 with
