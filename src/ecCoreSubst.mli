@@ -51,7 +51,6 @@ val e_subst : f_subst -> expr -> expr
 (* -------------------------------------------------------------------- *)
 val s_subst   : f_subst -> stmt -> stmt
 
-
 (* -------------------------------------------------------------------- *)
 module Fsubst : sig
   val f_subst_id  : f_subst
@@ -79,9 +78,8 @@ module Fsubst : sig
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
 
-  (* val uni_subst : (EcUid.uid -> ty option) -> f_subst *)
-  (* val uni : (EcUid.uid -> ty option) -> form -> form *)
-  val subst_tvar :
+  (* FIXME try to remove es_loc *)
+  val f_subst_tvar :
     ?es_loc:(EcTypes.expr EcIdent.Mid.t) ->
     EcTypes.ty EcIdent.Mid.t ->
     form -> form

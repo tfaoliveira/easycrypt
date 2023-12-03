@@ -21,7 +21,7 @@ type f_subst = {
   fs_modglob  : (EcIdent.t -> form) Mid.t; (* Mappings between abstract modules and their globals *)
 
   fs_loc      : form Mid.t;
-  fs_eloc    : expr Mid.t;
+  fs_eloc     : expr Mid.t;
   fs_mem      : EcIdent.t Mid.t;
 
   fs_memtype  : memtype option; (* Only substituted in Fcoe *)
@@ -35,13 +35,13 @@ let f_subst_id = {
   fs_u        = Muid.empty;
   fs_v        = Mid.empty;
 
-  fs_absmod    = Mid.empty;
-  fs_cmod      = Mid.empty;
-  fs_modtglob  = Mid.empty;
+  fs_absmod   = Mid.empty;
+  fs_cmod     = Mid.empty;
+  fs_modtglob = Mid.empty;
   fs_modglob  = Mid.empty;
 
   fs_loc      = Mid.empty;
-  fs_eloc    = Mid.empty;
+  fs_eloc     = Mid.empty;
   fs_mem      = Mid.empty;
 
   fs_memtype  = None;
@@ -60,9 +60,9 @@ let f_subst_init
   fs_u        = tu;
   fs_v        = tv;
 
-  fs_absmod    = Mid.empty;
-  fs_cmod      = Mid.empty;
-  fs_modtglob  = Mid.empty;
+  fs_absmod   = Mid.empty;
+  fs_cmod     = Mid.empty;
+  fs_modtglob = Mid.empty;
   fs_modglob  = Mid.empty;
 
   fs_loc      = Mid.empty;
@@ -74,8 +74,6 @@ let f_subst_init
 }
 
 (* -------------------------------------------------------------------- *)
-
-let ty_subst_id = f_subst_id
 
 let is_ty_subst_id s =
   Mid.is_empty s.fs_absmod
@@ -102,55 +100,6 @@ let rec ty_subst (s : f_subst) ty =
 let ty_subst (s : f_subst) =
   if is_ty_subst_id s then identity
   else ty_subst s
-
-(* -------------------------------------------------------------------- *)
-module Tuni = struct
-
-  let subst (uidmap : ty Muid.t) =
-    f_subst_init ~tu:uidmap ()
-
-  let subst1 ((id, t) : uid * ty) =
-    subst (Muid.singleton id t)
-
-  let subst_dom uidmap dom =
-    List.map (ty_subst (subst uidmap)) dom
-
-  let occurs u =
-    let rec aux t =
-      match t.ty_node with
-      | Tunivar u' -> uid_equal u u'
-      | _ -> ty_sub_exists aux t in
-    aux
-
-  let univars =
-    let rec doit univars t =
-      match t.ty_node with
-      | Tunivar uid -> Suid.add uid univars
-      | _ -> ty_fold doit univars t
-
-    in fun t -> doit Suid.empty t
-
-  let rec fv_rec fv t =
-    match t.ty_node with
-    | Tunivar id -> Suid.add id fv
-    | _ -> ty_fold fv_rec fv t
-
-  let fv = fv_rec Suid.empty
-end
-
-(* -------------------------------------------------------------------- *)
-module Tvar = struct
-  let subst (s : ty Mid.t) =
-    ty_subst { f_subst_id with fs_v = s}
-
-  let subst1 (id,t) =
-    subst (Mid.singleton id t)
-
-  let init lv lt =
-    assert (List.length lv = List.length lt);
-    List.fold_left2 (fun s v t -> Mid.add v t s) Mid.empty lv lt
-
-end
 
 
 (* -------------------------------------------------------------------- *)
@@ -649,54 +598,6 @@ module Fsubst = struct
     | _ ->
       f_map (ty_subst s) (f_subst ~tx s) fp)
 
-  and f_subst_op ~tx freshen fty tys args (tyids, e) =
-    (* FIXME: factor this out *)
-    (* FIXME: is [mhr] good as a default? *)
-
-    let e =
-      let sty = Tvar.init tyids tys in
-      let sty = { ty_subst_id with fs_freshen = freshen; fs_v = sty} in
-      e_subst sty e
-    in
-
-    let (sag, args, e) =
-      match e.e_node with
-      | Equant (`ELambda, largs, lbody) when args <> [] ->
-          let largs1, largs2 = List.takedrop (List.length args  ) largs in
-          let  args1,  args2 = List.takedrop (List.length largs1)  args in
-            (Mid.of_list (List.combine (List.map fst largs1) args1),
-             args2, e_lam largs2 lbody)
-
-      | _ -> (Mid.of_list [], args, e)
-    in
-
-    let sag = { f_subst_id with fs_loc = sag } in
-      f_app (f_subst ~tx sag (form_of_expr mhr e)) args fty
-
-  and f_subst_pd ~tx fty tys args (tyids, f) =
-    (* FIXME: factor this out *)
-    (* FIXME: is fd_freshen value correct? *)
-
-    let f =
-      let sty = Tvar.init tyids tys in
-      let sty = { ty_subst_id with fs_freshen = true; fs_v = sty} in
-      f_subst ~tx sty f
-    in
-
-    let (sag, args, f) =
-      match f.f_node with
-      | Fquant (Llambda, largs, lbody) when args <> [] ->
-          let largs1, largs2 = List.takedrop (List.length args  ) largs in
-          let  args1,  args2 = List.takedrop (List.length largs1)  args in
-            (Mid.of_list (List.combine (List.map fst largs1) args1),
-             args2, f_lambda largs2 lbody)
-
-      | _ -> (Mid.of_list [], args, f)
-    in
-
-    let sag = { f_subst_id with fs_loc = sag } in
-    f_app (f_subst ~tx sag f) args fty
-
   and oi_subst ~(tx : form -> form -> form) (s : f_subst) (oi : PreOI.t) =
     let costs = match PreOI.costs oi with
       | `Unbounded -> `Unbounded
@@ -824,6 +725,55 @@ module Fsubst = struct
       fs_v = s;
       fs_eloc = odfl Mid.empty es_loc; }
 
-  let subst_tvar ?es_loc s =
+  let f_subst_tvar ?es_loc s =
     f_subst (init_subst_tvar ?es_loc s)
+end
+
+(* -------------------------------------------------------------------- *)
+module Tuni = struct
+
+  let subst (uidmap : ty Muid.t) =
+    f_subst_init ~tu:uidmap ()
+
+  let subst1 ((id, t) : uid * ty) =
+    subst (Muid.singleton id t)
+
+  let subst_dom uidmap dom =
+    List.map (ty_subst (subst uidmap)) dom
+
+  let occurs u =
+    let rec aux t =
+      match t.ty_node with
+      | Tunivar u' -> uid_equal u u'
+      | _ -> ty_sub_exists aux t in
+    aux
+
+  let univars =
+    let rec doit univars t =
+      match t.ty_node with
+      | Tunivar uid -> Suid.add uid univars
+      | _ -> ty_fold doit univars t
+
+    in fun t -> doit Suid.empty t
+
+  let rec fv_rec fv t =
+    match t.ty_node with
+    | Tunivar id -> Suid.add id fv
+    | _ -> ty_fold fv_rec fv t
+
+  let fv = fv_rec Suid.empty
+end
+
+(* -------------------------------------------------------------------- *)
+module Tvar = struct
+  let subst (s : ty Mid.t) =
+    ty_subst { f_subst_id with fs_v = s}
+
+  let subst1 (id,t) =
+    subst (Mid.singleton id t)
+
+  let init lv lt =
+    assert (List.length lv = List.length lt);
+    List.fold_left2 (fun s v t -> Mid.add v t s) Mid.empty lv lt
+
 end

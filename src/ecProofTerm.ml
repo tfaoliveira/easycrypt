@@ -216,7 +216,7 @@ let pt_of_uglobal_r ptenv p =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi ptenv.pte_ue typ None in
-  let ax  = Fsubst.subst_tvar fs ax in
+  let ax  = Fsubst.f_subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
   { ptev_env = ptenv;
@@ -495,7 +495,7 @@ let process_named_pterm pe (tvi, fp) =
 
   (* FIXME: TC HOOK *)
   let fs  = EcUnify.UniEnv.opentvi pe.pte_ue typ tvi in
-  let ax  = Fsubst.subst_tvar fs ax in
+  let ax  = Fsubst.f_subst_tvar fs ax in
   let typ = List.map (fun (a, _) -> EcIdent.Mid.find a fs) typ in
 
   (p, (typ, ax))
@@ -535,7 +535,7 @@ let process_named_schema pe (tvi, sn) =
       ) e_params
     |> Mid.of_list in
   let sc_i =
-    Fsubst.subst_tvar
+    Fsubst.f_subst_tvar
       ~es_loc:rebind
       fs sc.EcDecl.axs_spec in
 

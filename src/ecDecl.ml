@@ -300,7 +300,7 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, axbd) lc =
   let axbd, axpm =
     let bdpm = List.map fst tparams in
     let axpm = List.map EcIdent.fresh bdpm in
-      (CS.Fsubst.subst_tvar
+      (CS.Fsubst.f_subst_tvar
          (CS.Tvar.init bdpm (List.map EcTypes.tvar axpm))
          axbd,
        List.combine axpm (List.map snd tparams))

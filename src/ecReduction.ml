@@ -933,7 +933,7 @@ let reduce_user_gen simplify ri env hyps f =
           let subst   = ts in
           let subst   =
             Mid.fold (fun x f s -> Fsubst.f_bind_local s x f) !pv subst in
-          Fsubst.f_subst subst (Fsubst.subst_tvar tvi f)
+          Fsubst.f_subst subst (Fsubst.f_subst_tvar tvi f)
 
         else   (* schema case, which is more complicated *)
           let typ =
@@ -960,7 +960,7 @@ let reduce_user_gen simplify ri env hyps f =
             Mid.fold (fun x f s ->
                 Fsubst.f_bind_local s x f
               ) !pv Fsubst.f_subst_id in
-          Fsubst.f_subst subst (Fsubst.subst_tvar tvi f) in
+          Fsubst.f_subst subst (Fsubst.f_subst_tvar tvi f) in
 
       List.iter (fun cond ->
         if not (f_equal (simplify (subst cond)) f_true) then
@@ -1229,7 +1229,7 @@ let reduce_head simplify ri env hyps f =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        Fsubst.subst_tvar
+        Fsubst.f_subst_tvar
           (Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
 
       f_app (Fsubst.f_subst subst body) eargs f.f_ty

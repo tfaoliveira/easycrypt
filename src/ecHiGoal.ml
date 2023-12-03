@@ -675,7 +675,7 @@ let process_delta ~und_delta ?target (s, o, p) tc =
             | SFop ((_, tvi), []) -> begin
               (* FIXME: TC HOOK *)
               let subst = Tvar.init (List.map fst tparams) tvi in
-              let body  = Fsubst.subst_tvar subst body in
+              let body  = Fsubst.f_subst_tvar subst body in
               let body  = f_app body args topfp.f_ty in
                 try  EcReduction.h_red EcReduction.beta_red hyps body
                 with EcEnv.NotReducible -> body
@@ -699,7 +699,7 @@ let process_delta ~und_delta ?target (s, o, p) tc =
     let fp =
       (* FIXME: TC HOOK *)
       let subst = Tvar.init (List.map fst tparams) tvi in
-      let body  = Fsubst.subst_tvar subst body in
+      let body  = Fsubst.f_subst_tvar subst body in
       let fp    = f_app body args p.f_ty in
         try  EcReduction.h_red EcReduction.beta_red hyps fp
         with EcEnv.NotReducible -> fp
