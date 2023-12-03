@@ -2,12 +2,19 @@
 open EcUid
 open EcIdent
 open EcPath
+open EcAst
 open EcTypes
 open EcCoreModules
 open EcCoreFol
 
 (* -------------------------------------------------------------------- *)
 type f_subst
+
+type 'a substitute = f_subst -> 'a -> 'a
+(* form before subst -> form after -> resulting form *)
+type tx = form -> form -> form
+type 'a tx_substitute = ?tx:tx -> 'a substitute
+type 'a subst_binder = f_subst -> 'a -> f_subst * 'a
 
 (* -------------------------------------------------------------------- *)
 val f_subst_init :
@@ -19,7 +26,7 @@ val f_subst_init :
     -> ?mempred:(mem_pr Mid.t)
     -> unit -> f_subst
 
-val ty_subst : f_subst -> ty -> ty
+val ty_subst : ty substitute
 
 module Tuni : sig
   val univars : ty -> Suid.t
@@ -43,16 +50,16 @@ end
 
 (* -------------------------------------------------------------------- *)
 
-val add_elocal  : f_subst -> EcIdent.t * ty -> f_subst * (EcIdent.t * ty)
-val add_elocals : f_subst -> (EcIdent.t * ty) list -> f_subst * (EcIdent.t * ty) list
+val add_elocal  : (EcIdent.t * ty) subst_binder
+val add_elocals : (EcIdent.t * ty) list subst_binder
 
 val bind_elocal : f_subst -> EcIdent.t -> expr -> f_subst
 
-val e_subst_closure : f_subst -> closure -> closure
-val e_subst : f_subst -> expr -> expr
+val e_subst_closure : closure substitute
+val e_subst : expr substitute
 
 (* -------------------------------------------------------------------- *)
-val s_subst   : f_subst -> stmt -> stmt
+val s_subst   : stmt substitute
 
 (* -------------------------------------------------------------------- *)
 module Fsubst : sig
@@ -76,7 +83,7 @@ module Fsubst : sig
 
   val has_mem : f_subst -> EcAst.memory -> bool
 
-  val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
+  val f_subst   : form tx_substitute
 
   val f_subst_local : EcIdent.t -> form -> form -> form
   val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
@@ -87,16 +94,16 @@ module Fsubst : sig
     EcTypes.ty EcIdent.Mid.t ->
     form -> form
 
-  val add_binding  : f_subst -> binding  -> f_subst * binding
-  val add_bindings : f_subst -> bindings -> f_subst * bindings
+  val add_binding  : binding subst_binder
+  val add_bindings : bindings subst_binder
 
-  val lp_subst  : f_subst -> lpattern -> f_subst * lpattern
-  val x_subst   : f_subst -> xpath -> xpath
-  val s_subst   : f_subst -> stmt  -> stmt
-  val e_subst   : f_subst -> expr  -> expr
-  val me_subst  : f_subst -> EcMemory.memenv -> EcMemory.memenv
-  val m_subst   : f_subst -> EcIdent.t -> EcIdent.t
-  val mty_subst : f_subst -> module_type -> module_type
-  val oi_subst  : f_subst -> PreOI.t -> PreOI.t
-  val gty_subst : f_subst -> gty -> gty
+  val lp_subst  : lpattern    subst_binder
+  val x_subst   : xpath       substitute
+  val s_subst   : stmt        substitute
+  val e_subst   : expr        substitute
+  val me_subst  : memenv      substitute
+  val m_subst   : EcIdent.t   substitute
+  val mty_subst : module_type substitute
+  val oi_subst  : PreOI.t     substitute
+  val gty_subst : gty         substitute
 end

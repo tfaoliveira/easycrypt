@@ -29,6 +29,14 @@ type f_subst = {
                                  only substituted in Fcoe *)
 }
 
+type 'a substitute = f_subst -> 'a -> 'a
+(* form before subst -> form after -> resulting form *)
+type tx = form -> form -> form
+type 'a tx_substitute = ?tx:tx -> 'a substitute
+type 'a subst_binder = f_subst -> 'a -> f_subst * 'a
+
+(* -------------------------------------------------------------------- *)
+
 let f_subst_id = {
   fs_freshen  = false;
 
@@ -75,6 +83,69 @@ let f_subst_init
 
 (* -------------------------------------------------------------------- *)
 
+let bind_elocal s x e =
+  { s with fs_eloc = Mid.add x e s.fs_eloc }
+
+let f_bind_local s x t =
+  let merger o = assert (o = None); Some t in
+    { s with fs_loc = Mid.change merger x s.fs_loc }
+
+let f_bind_mem s m1 m2 =
+  let merger o = assert (o = None); Some m2 in
+    { s with fs_mem = Mid.change merger m1 s.fs_mem }
+
+let f_rebind_mem s m1 m2 =
+  let merger _ = Some m2 in
+  { s with fs_mem = Mid.change merger m1 s.fs_mem }
+
+let f_bind_absmod s m1 m2 =
+  let merger o = assert (o = None); Some m2 in
+  { s with
+    fs_absmod = Mid.change merger m1 s.fs_absmod;
+    fs_cmod = Mid.add m1 (EcPath.mident m2) s.fs_cmod }
+
+let f_bind_cmod s m mp =
+  let merger o = assert (o = None); Some mp in
+  { s with
+    fs_cmod = Mid.change merger m s.fs_cmod }
+
+let f_bind_mod s x mp norm_mod =
+  match EcPath.mget_ident_opt mp with
+  | Some id ->
+       f_bind_absmod s x id
+  | None ->
+     let nm_ty = (norm_mod mhr).f_ty in
+     let s = f_bind_cmod s x mp in
+     { s with
+       fs_modtglob = Mid.add x nm_ty s.fs_modtglob;
+       fs_modglob = Mid.add x norm_mod s.fs_modglob }
+
+let f_bind_rename s xfrom xto ty =
+  let xf = f_local xto ty in
+  (* FIXME: This work just by luck ... *)
+  let xe = e_local xto ty in
+  let s  = f_bind_local s xfrom xf in
+  let merger o = assert (o = None); Some xe in
+  { s with fs_eloc = Mid.change merger xfrom s.fs_eloc }
+
+(* ------------------------------------------------------------------ *)
+let f_rem_local s x =
+  { s with fs_loc  = Mid.remove x s.fs_loc;
+           fs_eloc = Mid.remove x s.fs_eloc; }
+
+let f_rem_mem s m =
+  { s with fs_mem = Mid.remove m s.fs_mem }
+
+let f_rem_mod s x =
+  { s with
+    fs_absmod = Mid.remove x s.fs_absmod;
+    fs_modtglob = Mid.remove x s.fs_modtglob;
+    fs_cmod = Mid.remove x s.fs_cmod;
+    fs_modglob = Mid.remove x s.fs_modglob; }
+
+
+(* -------------------------------------------------------------------- *)
+
 let is_ty_subst_id s =
   Mid.is_empty s.fs_absmod
   && Mid.is_empty s.fs_cmod
@@ -114,8 +185,6 @@ let is_e_subst_id s =
 
 (* -------------------------------------------------------------------- *)
 
-let bind_elocal s x e =
-  { s with fs_eloc = Mid.add x e s.fs_eloc }
 
 let add_elocal s ((x, t) as xt) =
   let x' = if s.fs_freshen then EcIdent.fresh x else x in
@@ -275,9 +344,8 @@ let s_subst = s_subst_top
 (* -------------------------------------------------------------------- *)
 module Fsubst = struct
 
-  let f_subst_init = f_subst_init
-
-  let f_subst_id = f_subst_id
+  let has_mem (s : f_subst) (x : ident) =
+    Mid.mem x s.fs_mem
 
   let is_subst_id s =
        s.fs_freshen = false
@@ -289,65 +357,6 @@ module Fsubst = struct
     && s.fs_memtype = None
 
   (* ------------------------------------------------------------------ *)
-  let f_bind_local s x t =
-    let merger o = assert (o = None); Some t in
-      { s with fs_loc = Mid.change merger x s.fs_loc }
-
-  let f_bind_mem s m1 m2 =
-    let merger o = assert (o = None); Some m2 in
-      { s with fs_mem = Mid.change merger m1 s.fs_mem }
-
-  let has_mem (s : f_subst) (x : ident) =
-    Mid.mem x s.fs_mem
-
-  let f_rebind_mem s m1 m2 =
-    let merger _ = Some m2 in
-    { s with fs_mem = Mid.change merger m1 s.fs_mem }
-
-  let f_bind_absmod s m1 m2 =
-    let merger o = assert (o = None); Some m2 in
-    { s with
-      fs_absmod = Mid.change merger m1 s.fs_absmod;
-      fs_cmod = Mid.add m1 (EcPath.mident m2) s.fs_cmod }
-
-  let f_bind_cmod s m mp =
-    let merger o = assert (o = None); Some mp in
-    { s with
-      fs_cmod = Mid.change merger m s.fs_cmod }
-
-  let f_bind_mod s x mp norm_mod =
-    match EcPath.mget_ident_opt mp with
-    | Some id ->
-         f_bind_absmod s x id
-    | None ->
-       let nm_ty = (norm_mod mhr).f_ty in
-       let s = f_bind_cmod s x mp in
-       { s with
-         fs_modtglob = Mid.add x nm_ty s.fs_modtglob;
-         fs_modglob = Mid.add x norm_mod s.fs_modglob }
-
-  let f_bind_rename s xfrom xto ty =
-    let xf = f_local xto ty in
-    let xe = e_local xto ty in
-    let s  = f_bind_local s xfrom xf in
-
-    let merger o = assert (o = None); Some xe in
-    { s with fs_eloc = Mid.change merger xfrom s.fs_eloc }
-
-  (* ------------------------------------------------------------------ *)
-  let f_rem_local s x =
-    { s with fs_loc = Mid.remove x s.fs_loc;
-             fs_eloc = Mid.remove x s.fs_eloc; }
-
-  let f_rem_mem s m =
-    { s with fs_mem = Mid.remove m s.fs_mem }
-
-  let f_rem_mod s x =
-    { s with
-      fs_absmod = Mid.remove x s.fs_absmod;
-      fs_modtglob = Mid.remove x s.fs_modtglob;
-      fs_cmod = Mid.remove x s.fs_cmod;
-      fs_modglob = Mid.remove x s.fs_modglob; }
 
   (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
@@ -390,14 +399,11 @@ module Fsubst = struct
   let x_subst s f =
     EcPath.x_subst_abs s.fs_cmod f
 
-  let s_subst = s_subst
+  let m_subst s m = Mid.find_def m m s.fs_mem
 
-  let e_subst = e_subst
-
+  (* -------------------------------------------------------------------- *)
   let me_subst s me =
     EcMemory.me_subst s.fs_mem (ty_subst s) me
-
-  let m_subst s m = Mid.find_def m m s.fs_mem
 
   (* ------------------------------------------------------------------ *)
   let rec f_subst ~tx s fp =
@@ -699,12 +705,27 @@ module Fsubst = struct
     cost_r c_self c_calls
 
   (* ------------------------------------------------------------------ *)
+  (* Wrapper functions                                                  *)
+  (* ------------------------------------------------------------------ *)
+
+  let f_subst_init  = f_subst_init
+  let f_subst_id    = f_subst_id
+
+  let f_bind_local  = f_bind_local
+  let f_bind_mem    = f_bind_mem
+  let f_bind_absmod = f_bind_absmod
+  let f_bind_mod    = f_bind_mod
+  let f_bind_rename = f_bind_rename
+
   let add_binding  = add_binding ~tx:(fun _ f -> f)
   let add_bindings = add_bindings ~tx:(fun _ f -> f)
 
   (* ------------------------------------------------------------------ *)
   let f_subst ?(tx = fun _ f -> f) s =
     if is_subst_id s then identity else f_subst ~tx s
+
+  let e_subst = e_subst
+  let s_subst = s_subst
 
   let gty_subst = gty_subst ~tx:(fun _ f -> f)
   let mty_subst = mty_subst ~tx:(fun _ f -> f)
