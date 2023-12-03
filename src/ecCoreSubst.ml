@@ -776,4 +776,6 @@ module Tvar = struct
     assert (List.length lv = List.length lt);
     List.fold_left2 (fun s v t -> Mid.add v t s) Mid.empty lv lt
 
+  let f_subst lv lt =
+    Fsubst.f_subst_tvar (init lv lt)
 end

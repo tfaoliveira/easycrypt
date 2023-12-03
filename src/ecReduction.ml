@@ -1229,8 +1229,7 @@ let reduce_head simplify ri env hyps f =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        Fsubst.f_subst_tvar
-          (Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
+        Tvar.f_subst (List.map fst op.EcDecl.op_tparams) tys body in
 
       f_app (Fsubst.f_subst subst body) eargs f.f_ty
 

@@ -1274,9 +1274,7 @@ module Op = struct
           let ax, axpm =
             let bdpm = List.map fst tparams in
             let axpm = List.map EcIdent.fresh bdpm in
-              (Fsubst.f_subst_tvar
-                 (Tvar.init bdpm (List.map EcTypes.tvar axpm))
-                 ax,
+              (Tvar.f_subst bdpm (List.map EcTypes.tvar axpm) ax,
                List.combine axpm (List.map snd tparams)) in
           let ax =
             { ax_tparams    = axpm;

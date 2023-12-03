@@ -309,8 +309,7 @@ and app_red st f1 args =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        Fsubst.f_subst_tvar
-          (Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
+        Tvar.f_subst (List.map fst op.EcDecl.op_tparams) tys body in
 
       cbv st subst body (Args.create ty eargs)
     with E.NoCtor ->

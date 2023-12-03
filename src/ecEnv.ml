@@ -2881,8 +2881,7 @@ module Op = struct
 
   let reduce ?mode ?nargs env p tys =
     let op, f = core_reduce ?mode ?nargs env p in
-    Fsubst.f_subst_tvar
-      (Tvar.init (List.map fst op.op_tparams) tys) f
+    Tvar.f_subst (List.map fst op.op_tparams) tys f
 
   let is_projection env p =
     try  EcDecl.is_proj (by_path p env)
@@ -2976,8 +2975,7 @@ module Ax = struct
   let instanciate p tys env =
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
-        Fsubst.f_subst_tvar
-          (Tvar.init (List.map fst ax.ax_tparams) tys) f
+        Tvar.f_subst (List.map fst ax.ax_tparams) tys f
     | _ -> raise (LookupFailure (`Path p))
 
   let iter ?name f (env : env) =

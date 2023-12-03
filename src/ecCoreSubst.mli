@@ -35,6 +35,9 @@ module Tvar : sig
   val subst1  : (EcIdent.t * ty) -> ty -> ty
   val subst   : ty Mid.t -> ty -> ty
   val init    : EcIdent.t list -> ty list -> ty Mid.t
+
+  val f_subst : EcIdent.t list -> ty list -> form -> form
+
 end
 
 
