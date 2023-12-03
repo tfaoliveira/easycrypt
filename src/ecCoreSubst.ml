@@ -445,7 +445,7 @@ module Fsubst = struct
 
   let e_subst = e_subst
 
-  let subst_me s me =
+  let me_subst s me =
     EcMemory.me_subst s.fs_mem (ty_subst s) me
 
   let m_subst s m = Mid.find_def m m s.fs_mem
@@ -724,10 +724,10 @@ module Fsubst = struct
       mr_oinfos = EcSymbols.Msym.map (oi_subst ~tx s) mr.mr_oinfos;
     }
 
-  and subst_mty ~tx s mty =
+  and mty_subst ~tx s mty =
     let sm = EcPath.m_subst_abs s.fs_cmod in
 
-    let mt_params = List.map (snd_map (subst_mty ~tx s)) mty.mt_params in
+    let mt_params = List.map (snd_map (mty_subst ~tx s)) mty.mt_params in
     let mt_name   = mty.mt_name in
     let mt_args   = List.map sm mty.mt_args in
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
@@ -742,7 +742,7 @@ module Fsubst = struct
         if ty == ty' then gty else GTty ty'
 
     | GTmodty p ->
-        let p' = subst_mty ~tx s p in
+        let p' = mty_subst ~tx s p in
 
         if   p == p'
         then gty
@@ -806,7 +806,7 @@ module Fsubst = struct
     if is_subst_id s then identity else f_subst ~tx s
 
   let gty_subst = gty_subst ~tx:(fun _ f -> f)
-  let subst_mty = subst_mty ~tx:(fun _ f -> f)
+  let mty_subst = mty_subst ~tx:(fun _ f -> f)
   let oi_subst  = oi_subst ~tx:(fun _ f -> f)
 
   let f_subst_local x t =

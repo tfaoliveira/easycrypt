@@ -93,9 +93,9 @@ module Fsubst : sig
   val subst_xpath    : f_subst -> xpath -> xpath
   val s_subst        : f_subst -> stmt  -> stmt
   val e_subst        : f_subst -> expr  -> expr
-  val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
+  val me_subst       : f_subst -> EcMemory.memenv -> EcMemory.memenv
   val m_subst        : f_subst -> EcIdent.t -> EcIdent.t
-  val subst_mty      : f_subst -> module_type -> module_type
+  val mty_subst      : f_subst -> module_type -> module_type
   val oi_subst       : f_subst -> PreOI.t -> PreOI.t
   val gty_subst      : f_subst -> gty -> gty
 end
