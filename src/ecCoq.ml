@@ -94,13 +94,15 @@ let call_prover_task ~timeout ~steps ~config prover call =
 
 let run_batch pconf driver ~config ?script ~timeout ~steplimit prover task =
   let config = Why3.Whyconf.get_main config in
+  let config_mem = Why3.Whyconf.memlimit config in
   let steps = match steplimit with Some 0 -> None | _ -> steplimit in
+  let config_time = Why3.Whyconf.timelimit config in
+  let config_steps = Why3.Call_provers.empty_limit.limit_steps in
   let limit =
-    let memlimit = Why3.Whyconf.memlimit config in
-    let def = Why3.Call_provers.empty_limit in
-    { Why3.Call_provers.limit_time = Why3.Opt.get_def def.limit_time timeout;
-      Why3.Call_provers.limit_steps = Why3.Opt.get_def def.limit_steps steps;
-      Why3.Call_provers.limit_mem = memlimit;
+    Why3.Call_provers.{
+      limit_time = Option.value ~default:config_time timeout;
+      limit_steps = Option.value ~default:config_steps steps;
+      limit_mem = config_mem;
     }
   in
   let with_steps = match steps, pconf.Why3.Whyconf.command_steps with
