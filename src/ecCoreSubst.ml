@@ -9,6 +9,12 @@ open EcCoreFol
 open EcCoreModules
 
 (* -------------------------------------------------------------------- *)
+type sc_instanciate =
+  { sc_memtype : memtype;
+    sc_mempred : mem_pr Mid.t;
+    sc_expr    : expr Mid.t;
+  }
+
 type f_subst = {
   fs_freshen  : bool; (* true means freshen locals *)
 
@@ -24,9 +30,11 @@ type f_subst = {
   fs_eloc     : expr Mid.t;
   fs_mem      : EcIdent.t Mid.t;
 
-  fs_memtype  : memtype option; (* Only substituted in Fcoe *)
-  fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
+  fs_schema   : sc_instanciate option;
+
+(*  fs_memtype  : memtype option; (* Only substituted in Fcoe *)
+    fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
+                                 only substituted in Fcoe *) *)
 }
 
 type 'a substitute = f_subst -> 'a -> 'a
@@ -52,8 +60,9 @@ let f_subst_id = {
   fs_eloc     = Mid.empty;
   fs_mem      = Mid.empty;
 
-  fs_memtype  = None;
-  fs_mempred  = Mid.empty;
+  fs_schema   = None;
+(*  fs_memtype  = None;
+    fs_mempred  = Mid.empty; *)
 }
 
 let f_subst_init
@@ -61,8 +70,8 @@ let f_subst_init
       ?(tu=Muid.empty)
       ?(tv=Mid.empty)
       ?(esloc=Mid.empty)
-      ?mt
-      ?(mempred=Mid.empty) () = {
+      ?schema
+      () = {
   fs_freshen  = freshen;
 
   fs_u        = tu;
@@ -77,14 +86,21 @@ let f_subst_init
   fs_eloc     = esloc;
   fs_mem      = Mid.empty;
 
-  fs_memtype  = mt;
-  fs_mempred  = mempred;
+  fs_schema   = schema;
+
 }
 
 (* -------------------------------------------------------------------- *)
 
 let bind_elocal s x e =
   { s with fs_eloc = Mid.add x e s.fs_eloc }
+
+let bind_elocals s esloc =
+  let merger _ oe1 oe2 =
+    if oe2 = None then oe1
+    else (assert (oe1 = None); oe2) in
+  let fs_eloc =  Mid.merge merger s.fs_eloc esloc in
+  { s with fs_eloc }
 
 let f_bind_local s x t =
   let merger o = assert (o = None); Some t in
@@ -354,7 +370,7 @@ module Fsubst = struct
     && Mid.is_empty   s.fs_mem
     && Mid.is_empty   s.fs_modglob
     && Mid.is_empty   s.fs_eloc
-    && s.fs_memtype = None
+    && s.fs_schema = None
 
   (* ------------------------------------------------------------------ *)
 
@@ -565,6 +581,38 @@ module Fsubst = struct
       f_eagerF pr' sl' fl' fr' sr' po'
 
     | Fcoe coe ->
+      let m' = (* refresh s (fst coe.coe_mem) in *)
+                 EcIdent.fresh (fst coe.coe_mem) in
+
+      if EcMemory.is_schema (snd coe.coe_mem) && s.fs_schema <> None then
+        (* We instanciate the schema *)
+        let sc = oget s.fs_schema in
+        let me' = m', sc.sc_memtype in
+        (* We add the memory in the subst *)
+        let s = f_rebind_mem s (fst coe.coe_mem) m' in
+        (* We add the predicates in the subst *)
+        let doit id (m, p) s =
+          let fs_mem = f_bind_mem f_subst_id m m' in
+          let p = f_subst ~tx:(fun _ f -> f) fs_mem p in
+          f_bind_local s id p in
+        (* FIXME:                                      why None ? *)
+        let s = Mid.fold doit sc.sc_mempred {s with fs_schema = None } in
+        (* We add the expressions in the subst *)
+        let s   = bind_elocals s sc.sc_expr in
+        let s   = Mid.fold (fun id e s ->
+                      f_bind_local s id (form_of_expr m' e)) sc.sc_expr s in
+        let pr' = f_subst ~tx s coe.coe_pre in
+        let e'  = e_subst s coe.coe_e in
+        f_coe pr' me' e'
+      else
+        let me' = me_subst s (m', snd coe.coe_mem) in
+        let s = f_rebind_mem s (fst coe.coe_mem) m' in
+        let pr'    = f_subst ~tx s coe.coe_pre in
+        let e'     = e_subst s coe.coe_e in
+        f_coe pr' me' e'
+
+(*
+
       (* We freshen the binded memory. *)
       let m = fst coe.coe_mem in
       let m' = EcIdent.fresh m in
@@ -591,7 +639,7 @@ module Fsubst = struct
         else me' in
 
       f_coe pr' me' e'
-
+*)
     | Fpr pr ->
       let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
       let pr_fun   = x_subst s pr.pr_fun in

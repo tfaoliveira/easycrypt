@@ -176,26 +176,14 @@ let sc_instantiate
       ) sc_args sc_params in
   let mexpr = EcIdent.Mid.of_list exprs in
 
-  (* FIXME: instantiating and substituting in schema is ugly. *)
-  (* We instantiate the variables. *)
-  (* For cost judgement, we also need to substitute the expression variables
-     in the precondition. *)
-  let tx f_old f_new = match f_old.f_node, f_new.f_node with
-    | Fcoe coe_old, Fcoe coe_new
-      when EcMemory.is_schema (snd coe_old.coe_mem) ->
-      let fs =
-        List.fold_left (fun s (id,e) ->
-            let f = EcCoreFol.form_of_expr (fst coe_new.coe_mem) e in
-            CS.Fsubst.f_bind_local s id f)
-          CS.Fsubst.f_subst_id exprs in
+  let sci =
+    CS.{ sc_memtype = memtype;
+         sc_mempred = mpreds;
+         sc_expr    = mexpr; } in
 
-      EcCoreFol.f_coe_r { coe_new with
-                          coe_pre = CS.Fsubst.f_subst fs coe_new.coe_pre }
-    | _ -> f_new in
+  let fs = CS.Fsubst.f_subst_init ~tv:fs ~schema:sci () in
 
-  let fs = CS.Fsubst.f_subst_init ~tv:fs ~esloc:mexpr ~mt:memtype ~mempred:mpreds () in
-
-  CS.Fsubst.f_subst ~tx fs f
+  CS.Fsubst.f_subst fs f
 
 (* -------------------------------------------------------------------- *)
 let op_ty op = op.op_ty

@@ -7,6 +7,12 @@ open EcTypes
 open EcCoreModules
 open EcCoreFol
 
+type sc_instanciate =
+  { sc_memtype : memtype;
+    sc_mempred : mem_pr Mid.t;
+    sc_expr    : expr Mid.t;
+  }
+
 (* -------------------------------------------------------------------- *)
 type f_subst
 
@@ -22,8 +28,7 @@ val f_subst_init :
     -> ?tu:ty Muid.t
     -> ?tv:ty Mid.t
     -> ?esloc:expr Mid.t
-    -> ?mt:EcMemory.memtype
-    -> ?mempred:(mem_pr Mid.t)
+    -> ?schema:sc_instanciate
     -> unit -> f_subst
 
 val ty_subst : ty substitute
@@ -71,8 +76,7 @@ module Fsubst : sig
     -> ?tu:ty Muid.t
     -> ?tv:ty Mid.t
     -> ?esloc:expr Mid.t
-    -> ?mt:EcMemory.memtype
-    -> ?mempred:(mem_pr Mid.t)
+    -> ?schema:sc_instanciate
     -> unit -> f_subst
 
   val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
