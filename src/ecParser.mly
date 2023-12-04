@@ -2940,8 +2940,8 @@ logtactic:
 | SMT pi=smt_info
    { Psmt pi }
 
-| COQ mode=coq_info name=loc(STRING) pi=smt_info
-    { Pcoq (mode, name, pi)}
+| COQ mode=coq_info name=loc(STRING) LPAREN dbmap=dbmap1* RPAREN
+    { Pcoq (mode, name, SMT.mk_smt_option [`WANTEDLEMMAS dbmap])}
 
 | SMT LPAREN dbmap=dbmap1* RPAREN
    { Psmt (SMT.mk_smt_option [`WANTEDLEMMAS dbmap]) }
