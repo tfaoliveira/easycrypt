@@ -92,25 +92,20 @@ let call_prover_task ~timeout ~steps ~config prover call =
   in
   ping_prover_call ~config pcall
 
-let run_batch pconf driver ~config ?script ~timeout ~steplimit prover task =
+let run_batch pconf driver ~config ?script ~timeout prover task =
   let config = Why3.Whyconf.get_main config in
   let config_mem = Why3.Whyconf.memlimit config in
-  let steps = match steplimit with Some 0 -> None | _ -> steplimit in
+  let steps = None in
   let config_time = Why3.Whyconf.timelimit config in
   let config_steps = Why3.Call_provers.empty_limit.limit_steps in
   let limit =
     Why3.Call_provers.{
       limit_time = Option.value ~default:config_time timeout;
-      limit_steps = Option.value ~default:config_steps steps;
+      limit_steps = config_steps;
       limit_mem = config_mem;
     }
   in
-  let with_steps = match steps, pconf.Why3.Whyconf.command_steps with
-    | None, _ -> false
-    | Some _, Some _ -> true
-    | Some _, None -> false
-  in
-  let steps = if with_steps then steps else None in
+  let with_steps = false in
   let command = Why3.Whyconf.get_complete_command pconf ~with_steps in
   let inplace = if script <> None then Some true else None in
   let call =
@@ -204,16 +199,16 @@ let interactive ~notify ~name ~coqmode ~loc pconf ~config driver prover task =
   if merge then updatescript ~script driver task ;
   match coqmode with
   | Check ->
-    run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
+    run_batch ~script ~timeout ~config pconf driver prover task
   | Edit ->
     editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
-        run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task)
+        run_batch ~script ~timeout ~config pconf driver prover task)
   | Fix ->
-    run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task
+    run_batch ~script ~timeout ~config pconf driver prover task
     |> obind (fun r ->
         if is_valid r then Some r else
           editor ~script ~merge ~config pconf driver task |> obind (fun _ ->
-              run_batch ~script ~timeout ~config pconf driver ~steplimit:None prover task))
+              run_batch ~script ~timeout ~config pconf driver prover task))
 
 let is_trivial (t : Why3.Task.task) =
   let goal = Why3.Task.task_goal_fmla t in
