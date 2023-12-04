@@ -9,6 +9,12 @@ open EcCoreFol
 open EcCoreModules
 
 (* -------------------------------------------------------------------- *)
+
+type mod_extra =
+  { mex_tglob : ty;
+    mex_glob  : memory -> form;
+  }
+
 type sc_instanciate =
   { sc_memtype : memtype;
     sc_mempred : mem_pr Mid.t;
@@ -21,20 +27,15 @@ type f_subst = {
   fs_u         : ty Muid.t;
   fs_v         : ty Mid.t;
 
-  fs_absmod    : EcIdent.t Mid.t;
-  fs_cmod      : EcPath.mpath Mid.t;
-  fs_modtglob  : ty Mid.t;
-  fs_modglob  : (EcIdent.t -> form) Mid.t; (* Mappings between abstract modules and their globals *)
+  fs_mod     : EcPath.mpath Mid.t;
+  fs_modex   : mod_extra Mid.t;
+
 
   fs_loc      : form Mid.t;
   fs_eloc     : expr Mid.t;
   fs_mem      : EcIdent.t Mid.t;
 
   fs_schema   : sc_instanciate option;
-
-(*  fs_memtype  : memtype option; (* Only substituted in Fcoe *)
-    fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *) *)
 }
 
 type 'a substitute = f_subst -> 'a -> 'a
@@ -44,26 +45,6 @@ type 'a tx_substitute = ?tx:tx -> 'a substitute
 type 'a subst_binder = f_subst -> 'a -> f_subst * 'a
 
 (* -------------------------------------------------------------------- *)
-
-let f_subst_id = {
-  fs_freshen  = false;
-
-  fs_u        = Muid.empty;
-  fs_v        = Mid.empty;
-
-  fs_absmod   = Mid.empty;
-  fs_cmod     = Mid.empty;
-  fs_modtglob = Mid.empty;
-  fs_modglob  = Mid.empty;
-
-  fs_loc      = Mid.empty;
-  fs_eloc     = Mid.empty;
-  fs_mem      = Mid.empty;
-
-  fs_schema   = None;
-(*  fs_memtype  = None;
-    fs_mempred  = Mid.empty; *)
-}
 
 let f_subst_init
       ?(freshen=false)
@@ -77,10 +58,8 @@ let f_subst_init
   fs_u        = tu;
   fs_v        = tv;
 
-  fs_absmod   = Mid.empty;
-  fs_cmod     = Mid.empty;
-  fs_modtglob = Mid.empty;
-  fs_modglob  = Mid.empty;
+  fs_mod      = Mid.empty;
+  fs_modex    = Mid.empty;
 
   fs_loc      = Mid.empty;
   fs_eloc     = esloc;
@@ -89,6 +68,8 @@ let f_subst_init
   fs_schema   = schema;
 
 }
+
+let f_subst_id = f_subst_init ()
 
 (* -------------------------------------------------------------------- *)
 
@@ -114,27 +95,26 @@ let f_rebind_mem s m1 m2 =
   let merger _ = Some m2 in
   { s with fs_mem = Mid.change merger m1 s.fs_mem }
 
-let f_bind_absmod s m1 m2 =
-  let merger o = assert (o = None); Some m2 in
-  { s with
-    fs_absmod = Mid.change merger m1 s.fs_absmod;
-    fs_cmod = Mid.add m1 (EcPath.mident m2) s.fs_cmod }
 
-let f_bind_cmod s m mp =
+let bind_mod s x mp ex =
   let merger o = assert (o = None); Some mp in
   { s with
-    fs_cmod = Mid.change merger m s.fs_cmod }
+    fs_mod   = Mid.change merger x s.fs_mod;
+    fs_modex = Mid.add x ex s.fs_modex; }
+
+let f_bind_absmod s m1 m2 =
+  bind_mod s m1 (EcPath.mident m2)
+    { mex_tglob = tglob m2; mex_glob = (fun m -> f_glob m2 m); }
 
 let f_bind_mod s x mp norm_mod =
   match EcPath.mget_ident_opt mp with
   | Some id ->
        f_bind_absmod s x id
   | None ->
-     let nm_ty = (norm_mod mhr).f_ty in
-     let s = f_bind_cmod s x mp in
-     { s with
-       fs_modtglob = Mid.add x nm_ty s.fs_modtglob;
-       fs_modglob = Mid.add x norm_mod s.fs_modglob }
+     let ex = {
+       mex_tglob = (norm_mod mhr).f_ty;
+       mex_glob  = norm_mod } in
+     bind_mod s x mp ex
 
 let f_bind_rename s xfrom xto ty =
   let xf = f_local xto ty in
@@ -154,31 +134,23 @@ let f_rem_mem s m =
 
 let f_rem_mod s x =
   { s with
-    fs_absmod = Mid.remove x s.fs_absmod;
-    fs_modtglob = Mid.remove x s.fs_modtglob;
-    fs_cmod = Mid.remove x s.fs_cmod;
-    fs_modglob = Mid.remove x s.fs_modglob; }
-
+    fs_mod   = Mid.remove x s.fs_mod;
+    fs_modex = Mid.remove x s.fs_modex; }
 
 (* -------------------------------------------------------------------- *)
 
 let is_ty_subst_id s =
-  Mid.is_empty s.fs_absmod
-  && Mid.is_empty s.fs_cmod
-  && Mid.is_empty s.fs_modtglob
+     Mid.is_empty s.fs_mod
   && Muid.is_empty s.fs_u
   && Mid.is_empty s.fs_v
 
 let rec ty_subst (s : f_subst) ty =
   match ty.ty_node with
-  | Tglob m -> begin
-      let m' = Mid.find_def m m s.fs_absmod in
-        begin
-          match Mid.find_opt m' s.fs_modtglob with
-          | None -> tglob m'
-          | Some ty -> ty_subst s ty
-        end
-    end
+  | Tglob m ->
+      begin match Mid.find_opt m s.fs_modex with
+      | None -> ty
+      | Some ex -> ex.mex_tglob
+      end
   | Tunivar id    -> Muid.find_def ty id s.fs_u
   | Tvar id       -> Mid.find_def ty id s.fs_v
   | _ -> ty_map (ty_subst s) ty
@@ -255,7 +227,7 @@ let rec e_subst (s: f_subst) e =
   end
 
   | Evar pv ->
-      let pv' = pv_subst (x_subst_abs s.fs_cmod) pv in
+      let pv' = pv_subst (x_subst_abs s.fs_mod) pv in
       let ty' = ty_subst s e.e_ty in
         e_var pv' ty'
 
@@ -298,7 +270,7 @@ let rec s_subst_top (s : f_subst) =
   if e_subst == identity then identity else
 
   let pvt_subst (pv,ty as p) =
-    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.fs_cmod) pv in
+    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.fs_mod) pv in
     let ty' = ty_subst s ty in
 
     if pv == pv' && ty == ty' then p else (pv', ty') in
@@ -324,7 +296,7 @@ let rec s_subst_top (s : f_subst) =
 
     | Scall (olv, mp, args) ->
         let olv'  = olv |> OSmart.omap lv_subst in
-        let mp'   = EcPath.x_subst_abs s.fs_cmod mp in
+        let mp'   = EcPath.x_subst_abs s.fs_mod mp in
         let args' = List.Smart.map e_subst args in
 
         i_call (olv', mp', args')
@@ -368,7 +340,6 @@ module Fsubst = struct
     && is_ty_subst_id s
     && Mid.is_empty   s.fs_loc
     && Mid.is_empty   s.fs_mem
-    && Mid.is_empty   s.fs_modglob
     && Mid.is_empty   s.fs_eloc
     && s.fs_schema = None
 
@@ -413,7 +384,7 @@ module Fsubst = struct
 
   (* ------------------------------------------------------------------ *)
   let x_subst s f =
-    EcPath.x_subst_abs s.fs_cmod f
+    EcPath.x_subst_abs s.fs_mod f
 
   let m_subst s m = Mid.find_def m m s.fs_mem
 
@@ -456,12 +427,9 @@ module Fsubst = struct
 
     | Fglob (mid, m) ->
         let m'  = m_subst s m in
-        let mid = Mid.find_def mid mid s.fs_absmod in
-        begin
-          (* Have we computed the globals for this module *)
-          match Mid.find_opt mid s.fs_modglob with
-          | None -> f_glob mid m'
-          | Some f -> f m'
+        begin match Mid.find_opt mid s.fs_mod with
+        | None -> f_glob mid m'
+        | Some _ -> (Mid.find mid s.fs_modex).mex_glob m'
         end
 
     | FhoareF hf ->
@@ -611,35 +579,6 @@ module Fsubst = struct
         let e'     = e_subst s coe.coe_e in
         f_coe pr' me' e'
 
-(*
-
-      (* We freshen the binded memory. *)
-      let m = fst coe.coe_mem in
-      let m' = EcIdent.fresh m in
-      let s = f_rebind_mem s m m' in
-
-      (* We bind the memory of all memory predicates with the fresh memory
-         we just created, and add them as local variable substitutions. *)
-      let s = Mid.fold (fun id (pmem,p) s ->
-          let fs_mem = f_bind_mem f_subst_id pmem m' in
-          let p = f_subst ~tx:(fun _ f -> f) fs_mem p in
-          f_bind_local s id p
-        ) s.fs_mempred { s with fs_mempred = Mid.empty; } in
-
-
-      (* Then we substitute *)
-      let pr' = f_subst ~tx s coe.coe_pre in
-      let me' = EcMemory.me_subst s.fs_mem (ty_subst s) coe.coe_mem in
-      let e' = e_subst s coe.coe_e in
-
-      (* If necessary, we substitute the memtype. *)
-      let me' =
-        if EcMemory.is_schema (snd me') && s.fs_memtype <> None
-        then (fst me', oget s.fs_memtype)
-        else me' in
-
-      f_coe pr' me' e'
-*)
     | Fpr pr ->
       let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
       let pr_fun   = x_subst s pr.pr_fun in
@@ -671,7 +610,7 @@ module Fsubst = struct
 
   and mr_subst ~tx s mr : mod_restr =
     let sx = x_subst s in
-    let sm = EcPath.m_subst_abs s.fs_cmod in
+    let sm = EcPath.m_subst_abs s.fs_mod in
     { mr_xpaths = ur_app (fun s -> Sx.fold (fun m rx ->
           Sx.add (sx m) rx) s Sx.empty) mr.mr_xpaths;
       mr_mpaths = ur_app (fun s -> Sm.fold (fun m r ->
@@ -680,7 +619,7 @@ module Fsubst = struct
     }
 
   and mty_subst ~tx s mty =
-    let sm = EcPath.m_subst_abs s.fs_cmod in
+    let sm = EcPath.m_subst_abs s.fs_mod in
 
     let mt_params = List.map (snd_map (mty_subst ~tx s)) mty.mt_params in
     let mt_name   = mty.mt_name in
