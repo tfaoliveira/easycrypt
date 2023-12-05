@@ -1,9 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
-open EcIdent
 open EcAst
 open EcTypes
-open EcCoreModules
 
 module BI = EcBigInt
 module Mp = EcPath.Mp
