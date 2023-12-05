@@ -36,6 +36,9 @@ type f_subst = {
   fs_mem      : EcIdent.t Mid.t;
 
   fs_schema   : sc_instanciate option;
+
+  (* free variables in the codom of the substitution *)
+  fs_fv       : int Mid.t;
 }
 
 type 'a substitute = f_subst -> 'a -> 'a
@@ -46,13 +49,33 @@ type 'a subst_binder = f_subst -> 'a -> f_subst * 'a
 
 (* -------------------------------------------------------------------- *)
 
+let mex_fv mp ex =
+  let m = EcIdent.create "m" in
+  fv_union (m_fv (ty_fv ex.mex_tglob) mp)
+    (Mid.remove m (f_fv (ex.mex_glob m)))
+
+let fv_Mid fv m s =
+  Mid.fold (fun _ t s -> fv_union s (fv t)) m s
+
 let f_subst_init
       ?(freshen=false)
       ?(tu=Muid.empty)
       ?(tv=Mid.empty)
       ?(esloc=Mid.empty)
       ?schema
-      () = {
+      () =
+  let fv = Mid.empty in
+  let fv = Muid.fold (fun _ t s -> fv_union s (ty_fv t)) tu fv in
+  let fv = fv_Mid ty_fv tv fv in
+  let fv = fv_Mid e_fv esloc fv in
+  let fv =
+    ofold (fun sc s ->
+        let fv = fv_union s (mt_fv sc.sc_memtype) in
+        let fv = fv_Mid e_fv sc.sc_expr fv in
+        fv_Mid (fun (m,f) -> Mid.remove m (f_fv f)) sc.sc_mempred fv)
+      fv schema in
+
+  {
   fs_freshen  = freshen;
 
   fs_u        = tu;
@@ -67,6 +90,8 @@ let f_subst_init
 
   fs_schema   = schema;
 
+  fs_fv       = fv;
+
 }
 
 let f_subst_id = f_subst_init ()
@@ -74,33 +99,39 @@ let f_subst_id = f_subst_init ()
 (* -------------------------------------------------------------------- *)
 
 let bind_elocal s x e =
-  { s with fs_eloc = Mid.add x e s.fs_eloc }
+  { s with fs_eloc = Mid.add x e s.fs_eloc;
+           fs_fv = fv_union (e_fv e) s.fs_fv}
 
 let bind_elocals s esloc =
   let merger _ oe1 oe2 =
     if oe2 = None then oe1
     else (assert (oe1 = None); oe2) in
-  let fs_eloc =  Mid.merge merger s.fs_eloc esloc in
-  { s with fs_eloc }
+  let fs_eloc = Mid.merge merger s.fs_eloc esloc in
+  let fs_fv = fv_Mid e_fv esloc s.fs_fv in
+  { s with fs_eloc; fs_fv }
 
 let f_bind_local s x t =
   let merger o = assert (o = None); Some t in
-    { s with fs_loc = Mid.change merger x s.fs_loc }
+    { s with fs_loc = Mid.change merger x s.fs_loc;
+             fs_fv = fv_union (f_fv t) s.fs_fv }
 
 let f_bind_mem s m1 m2 =
   let merger o = assert (o = None); Some m2 in
-    { s with fs_mem = Mid.change merger m1 s.fs_mem }
+    { s with fs_mem = Mid.change merger m1 s.fs_mem;
+             fs_fv  = fv_add m2 s.fs_fv }
 
 let f_rebind_mem s m1 m2 =
   let merger _ = Some m2 in
-  { s with fs_mem = Mid.change merger m1 s.fs_mem }
-
+  { s with fs_mem = Mid.change merger m1 s.fs_mem;
+           fs_fv  = fv_add m2 s.fs_fv }
 
 let bind_mod s x mp ex =
   let merger o = assert (o = None); Some mp in
   { s with
     fs_mod   = Mid.change merger x s.fs_mod;
-    fs_modex = Mid.add x ex s.fs_modex; }
+    fs_modex = Mid.add x ex s.fs_modex;
+    fs_fv    = fv_union (mex_fv mp ex) s.fs_fv;
+}
 
 let f_bind_absmod s m1 m2 =
   bind_mod s m1 (EcPath.mident m2)
@@ -122,7 +153,8 @@ let f_bind_rename s xfrom xto ty =
   let xe = e_local xto ty in
   let s  = f_bind_local s xfrom xf in
   let merger o = assert (o = None); Some xe in
-  { s with fs_eloc = Mid.change merger xfrom s.fs_eloc }
+  (* Free variable already added by f_bind_local *)
+  { s with fs_eloc = Mid.change merger xfrom s.fs_eloc; }
 
 (* ------------------------------------------------------------------ *)
 let f_rem_local s x =
@@ -172,17 +204,17 @@ let is_e_subst_id s =
   && Mid.is_empty s.fs_eloc
 
 (* -------------------------------------------------------------------- *)
+let refresh s x =
+  if s.fs_freshen (* || Mid.mem x s.fs_fv *) then
+    EcIdent.fresh x
+  else x
 
-
+(* -------------------------------------------------------------------- *)
 let add_elocal s ((x, t) as xt) =
-  let x' = if s.fs_freshen then EcIdent.fresh x else x in
+  let x' = refresh s x in
   let t' = ty_subst s t in
-
-  if   x == x' && t == t'
-  then (s, xt)
-  else
-    let merger o = assert (o = None); Some (e_local x' t') in
-      ({ s with fs_eloc = Mid.change merger x s.fs_eloc }, (x', t'))
+  if   x == x' && t == t' then (s, xt)
+  else bind_elocal s x (e_local x' t'), (x',t')
 
 let add_elocals = List.Smart.map_fold add_elocal
 
@@ -344,14 +376,11 @@ module Fsubst = struct
     && s.fs_schema = None
 
   (* ------------------------------------------------------------------ *)
-
-  (* ------------------------------------------------------------------ *)
   let add_local s (x,t as xt) =
-    let x' = if s.fs_freshen then EcIdent.fresh x else x in
+    let x' = refresh s x in
     let t' = ty_subst s t in
-      if   x == x' && t == t'
-      then (s, xt)
-      else (f_bind_rename s x x' t'), (x',t')
+    if x == x' && t == t' then (s, xt)
+    else f_bind_rename s x x' t', (x',t')
 
   let add_locals = List.Smart.map_fold add_local
 
@@ -564,7 +593,7 @@ module Fsubst = struct
           let p = f_subst ~tx:(fun _ f -> f) fs_mem p in
           f_bind_local s id p in
         (* FIXME:                                      why None ? *)
-        let s = Mid.fold doit sc.sc_mempred {s with fs_schema = None } in
+        let s   = Mid.fold doit sc.sc_mempred {s with fs_schema = None } in
         (* We add the expressions in the subst *)
         let s   = bind_elocals s sc.sc_expr in
         let s   = Mid.fold (fun id e s ->
@@ -574,9 +603,9 @@ module Fsubst = struct
         f_coe pr' me' e'
       else
         let me' = me_subst s (m', snd coe.coe_mem) in
-        let s = f_rebind_mem s (fst coe.coe_mem) m' in
-        let pr'    = f_subst ~tx s coe.coe_pre in
-        let e'     = e_subst s coe.coe_e in
+        let s   = f_rebind_mem s (fst coe.coe_mem) m' in
+        let pr' = f_subst ~tx s coe.coe_pre in
+        let e'  = e_subst s coe.coe_e in
         f_coe pr' me' e'
 
     | Fpr pr ->
@@ -648,7 +677,7 @@ module Fsubst = struct
 
   and add_binding ~tx s (x, gty as xt) =
     let gty' = gty_subst ~tx s gty in
-    let x'   = if s.fs_freshen then EcIdent.fresh x else x in
+    let x'   = refresh s x in
 
     if x == x' && gty == gty' then
       let s = match gty with
@@ -728,10 +757,7 @@ module Fsubst = struct
 
   (* ------------------------------------------------------------------ *)
   let init_subst_tvar ?es_loc s =
-    { f_subst_id with
-      fs_freshen = true;
-      fs_v = s;
-      fs_eloc = odfl Mid.empty es_loc; }
+    f_subst_init ~freshen:true ~tv:s ?esloc:es_loc ()
 
   let f_subst_tvar ?es_loc s =
     f_subst (init_subst_tvar ?es_loc s)
