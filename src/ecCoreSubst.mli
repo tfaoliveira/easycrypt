@@ -93,7 +93,6 @@ module Fsubst : sig
 
   (* FIXME try to remove es_loc *)
   val f_subst_tvar :
-    ?es_loc:(EcTypes.expr EcIdent.Mid.t) ->
     EcTypes.ty EcIdent.Mid.t ->
     form -> form
 

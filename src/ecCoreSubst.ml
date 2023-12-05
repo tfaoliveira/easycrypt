@@ -751,11 +751,12 @@ module Fsubst = struct
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
 
   (* ------------------------------------------------------------------ *)
-  let init_subst_tvar ?es_loc s =
-    f_subst_init ~freshen:true ~tv:s ?esloc:es_loc ()
+  let init_subst_tvar s =
+    f_subst_init ~freshen:true ~tv:s ()
 
-  let f_subst_tvar ?es_loc s =
-    f_subst (init_subst_tvar ?es_loc s)
+  let f_subst_tvar s =
+    f_subst (init_subst_tvar s)
+
 end
 
 (* -------------------------------------------------------------------- *)

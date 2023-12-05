@@ -527,17 +527,8 @@ let process_named_schema pe (tvi, sn) =
     List.map (fun (id, ty) ->
         id, ty_subst sty ty) sc.EcDecl.axs_params in
 
-  (* When substituting in a schema's formula, we have to rebind the schema's
-     expression variables. *)
-  let rebind =
-    List.map (fun (id,ty) ->
-        id, EcTypes.e_local id ty
-      ) e_params
-    |> Mid.of_list in
   let sc_i =
-    Fsubst.f_subst_tvar
-      ~es_loc:rebind
-      fs sc.EcDecl.axs_spec in
+    Fsubst.f_subst_tvar fs sc.EcDecl.axs_spec in
 
   (p, typ, sc.EcDecl.axs_pparams, e_params, sc_i)
 
