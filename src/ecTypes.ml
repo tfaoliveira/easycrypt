@@ -2,7 +2,6 @@
 open EcUtils
 open EcIdent
 open EcPath
-open EcUid
 open EcAst
 
 module BI = EcBigInt
