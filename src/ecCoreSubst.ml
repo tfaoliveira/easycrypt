@@ -282,11 +282,6 @@ let rec e_subst (s: f_subst) e =
   | _ -> e_map (ty_subst s) (e_subst s) e
 
 (* -------------------------------------------------------------------- *)
-let e_subst_closure s (args, e) =
-  let (s, args) = add_elocals s args in
-    (args, e_subst s e)
-
-(* -------------------------------------------------------------------- *)
 let e_subst s =
   if is_e_subst_id s then identity
   else

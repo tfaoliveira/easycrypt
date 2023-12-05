@@ -60,7 +60,6 @@ val add_elocals : (EcIdent.t * ty) list subst_binder
 
 val bind_elocal : f_subst -> EcIdent.t -> expr -> f_subst
 
-val e_subst_closure : closure substitute
 val e_subst : expr substitute
 
 (* -------------------------------------------------------------------- *)
