@@ -115,7 +115,7 @@ let concretize_env pe =
 (* -------------------------------------------------------------------- *)
 let concretize_e_form_gen (CPTEnv subst) ids f =
   let f = Fsubst.f_subst subst f in
-  let ids = List.map (snd_map (Fsubst.subst_gty subst)) ids in
+  let ids = List.map (snd_map (Fsubst.gty_subst subst)) ids in
   f_forall ids f
 
 (* -------------------------------------------------------------------- *)
