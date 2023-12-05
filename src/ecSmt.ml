@@ -471,7 +471,7 @@ and trans_tydecl genv (p, tydecl) =
 
   in
 
-  genv.te_th <- WTheory.add_decl genv.te_th decl;
+  genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl;
   Hp.add genv.te_ty p ts;
   List.iter (fun (p, wop) -> Hp.add genv.te_op p wop) opts;
   ts
@@ -547,8 +547,8 @@ let w3op_ho_lsymbol genv wop =
 
   | `HO_TODO (id, dom, codom) ->
     let ls, decl, decl_s = mk_highorder_func genv id dom codom (w3op_fo wop) in
-    genv.te_th <- WTheory.add_decl genv.te_th decl;
-    genv.te_th <- WTheory.add_decl genv.te_th decl_s;
+    genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl;
+    genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl_s;
     wop.w3op_ho <- `HO_DONE ls; ls
 
   | `HO_FIX (ls, _, _, r) ->
@@ -618,8 +618,8 @@ let trans_lambda genv wvs wbody =
     let spec_sym =
       WDecl.create_prsymbol (WIdent.id_fresh name) in
     let decl_spec = WDecl.create_prop_decl WDecl.Paxiom spec_sym spec in
-    genv.te_th <- WTheory.add_decl genv.te_th decl_sym;
-    genv.te_th <- WTheory.add_decl genv.te_th decl_spec;
+    genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl_sym;
+    genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl_spec;
     genv.te_lam  <- Mta.add (wvs,wbody) flam_app genv.te_lam;
     flam_app
 
@@ -1127,18 +1127,18 @@ and create_op ?(body = false) (genv : tenv) p =
       | `HO_FIX (ls, ho_decl, ho_decl_s, r) -> begin
           if !r then begin
             List.iter
-              (fun d -> genv.te_th <- WTheory.add_decl genv.te_th d)
+              (fun d -> genv.te_th <- WTheory.add_decl ~warn:false genv.te_th d)
               [ho_decl; decl; ho_decl_s];
             w3op.w3op_ho <- `HO_DONE ls
           end else begin
-            genv.te_th <- WTheory.add_decl genv.te_th decl;
+            genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl;
             w3op.w3op_ho <-
               let name = ls.WTerm.ls_name.WIdent.id_string in
               `HO_TODO (name, textra@wdom, wcodom)
           end
         end
       | _ ->
-          genv.te_th <- WTheory.add_decl genv.te_th decl
+          genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl
   end;
 
   w3op
@@ -1177,7 +1177,7 @@ let trans_hyp ((genv, lenv) as env) (x, ty) =
         WDecl.create_logic_decl [ld]
 
     in
-    genv.te_th <- WTheory.add_decl genv.te_th decl;
+    genv.te_th <- WTheory.add_decl ~warn:false genv.te_th decl;
     Hid.add genv.te_lc x w3op;
     env
 
@@ -1713,7 +1713,7 @@ let make_task tenv hyps concl toadd =
     let wterm = Cast.force_prop (trans_form (tenv, lenv) concl) in
     let pr = WDecl.create_prsymbol (WIdent.id_fresh "goal") in
     let dec = WDecl.create_prop_decl WDecl.Pgoal pr wterm in
-    let ec_theory = WTheory.add_decl tenv.te_th dec in
+    let ec_theory = WTheory.add_decl ~warn:false tenv.te_th dec in
     let ec_theory = WTheory.close_theory ec_theory in
 
     let task = WTask.split_theory ec_theory None None in
