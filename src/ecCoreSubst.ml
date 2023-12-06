@@ -183,7 +183,13 @@ let rec ty_subst (s : f_subst) ty =
       | None -> ty
       | Some ex -> ex.mex_tglob
       end
-  | Tunivar id    -> Muid.find_def ty id s.fs_u
+  | Tunivar id    ->
+      begin match Muid.find_opt id s.fs_u with
+      | None ->
+          ty
+      | Some ty ->
+          ty_subst s ty
+      end
   | Tvar id       -> Mid.find_def ty id s.fs_v
   | _ -> ty_map (ty_subst s) ty
 
