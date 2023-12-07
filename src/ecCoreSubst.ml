@@ -258,6 +258,11 @@ let elp_subst (s: f_subst) (lp:lpattern) =
         (s, LRecord (p, xs'))
 
 (* -------------------------------------------------------------------- *)
+let x_subst s x =
+    EcPath.x_subst_abs s.fs_mod x
+
+let pv_subst s = pv_subst (x_subst s)
+
 let rec e_subst (s: f_subst) e =
   match e.e_node with
   | Elocal id -> begin
@@ -270,7 +275,7 @@ let rec e_subst (s: f_subst) e =
   end
 
   | Evar pv ->
-      let pv' = pv_subst (x_subst_abs s.fs_mod) pv in
+      let pv' = pv_subst s pv in
       let ty' = ty_subst s e.e_ty in
         e_var pv' ty'
 
@@ -308,7 +313,7 @@ let rec s_subst_top (s : f_subst) =
   if e_subst == identity then identity else
 
   let pvt_subst (pv,ty as p) =
-    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.fs_mod) pv in
+    let pv' = pv_subst s pv in
     let ty' = ty_subst s ty in
 
     if pv == pv' && ty == ty' then p else (pv', ty') in
@@ -418,9 +423,6 @@ module Fsubst = struct
           if xs == xs' then (s, lp) else (s, LRecord (p, xs'))
 
   (* ------------------------------------------------------------------ *)
-  let x_subst s f =
-    EcPath.x_subst_abs s.fs_mod f
-
   let m_subst s m = Mid.find_def m m s.fs_mem
 
   (* -------------------------------------------------------------------- *)
@@ -455,7 +457,7 @@ module Fsubst = struct
         f_op p tys' ty'
 
     | Fpvar (pv, m) ->
-        let pv' = pv_subst (x_subst s) pv in
+        let pv' = pv_subst s pv in
         let m'  = m_subst s m in
         let ty' = ty_subst s fp.f_ty in
         f_pvar pv' ty' m'
@@ -623,12 +625,12 @@ module Fsubst = struct
       mr_oinfos = EcSymbols.Msym.map (oi_subst ~tx s) mr.mr_oinfos;
     }
 
-  and mty_subst ~tx s mty =
-    let sm = EcPath.m_subst_abs s.fs_mod in
+  and mp_subst s = EcPath.m_subst_abs s.fs_mod
 
+  and mty_subst ~tx s mty =
     let mt_params = List.map (snd_map (mty_subst ~tx s)) mty.mt_params in
     let mt_name   = mty.mt_name in
-    let mt_args   = List.map sm mty.mt_args in
+    let mt_args   = List.map (mp_subst s) mty.mt_args in
     let mt_restr  = mr_subst ~tx s mty.mt_restr in
     { mt_params; mt_name; mt_args; mt_restr; }
 
@@ -710,6 +712,9 @@ module Fsubst = struct
   (* ------------------------------------------------------------------ *)
   (* Wrapper functions                                                  *)
   (* ------------------------------------------------------------------ *)
+
+  let x_subst = x_subst
+  let pv_subst = pv_subst
 
   let f_subst_init  = f_subst_init
   let f_subst_id    = f_subst_id
