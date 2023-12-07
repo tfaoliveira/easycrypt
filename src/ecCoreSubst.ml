@@ -162,6 +162,7 @@ let f_rem_local s x =
            fs_eloc = Mid.remove x s.fs_eloc; }
 
 let f_rem_mem s m =
+  assert (not (Mid.mem m s.fs_fv));
   { s with fs_mem = Mid.remove m s.fs_mem }
 
 let f_rem_mod s x =
@@ -211,8 +212,12 @@ let is_e_subst_id s =
 
 (* -------------------------------------------------------------------- *)
 let refresh s x =
-  if s.fs_freshen (* || Mid.mem x s.fs_fv *) then
+  if s.fs_freshen || Mid.mem x s.fs_fv then
     EcIdent.fresh x
+  else x
+
+let refresh1 s x =
+  if Mid.mem x s.fs_fv then EcIdent.fresh x
   else x
 
 (* -------------------------------------------------------------------- *)
@@ -463,126 +468,97 @@ module Fsubst = struct
         end
 
     | FhoareF hf ->
-      let pr', po' =
-        let s   = f_rem_mem s mhr in
-        let pr' = f_subst ~tx s hf.hf_pr in
-        let po' = f_subst ~tx s hf.hf_po in
-        (pr', po') in
-      let mp' = x_subst s hf.hf_f in
-
-      f_hoareF pr' mp' po'
+        let hf_f  = x_subst s hf.hf_f in
+        let s     = f_rem_mem s mhr in
+        let hf_pr = f_subst ~tx s hf.hf_pr in
+        let hf_po = f_subst ~tx s hf.hf_po in
+        f_hoareF hf_pr hf_f hf_po
 
     | FhoareS hs ->
-        assert (not (Mid.mem (fst hs.hs_m) s.fs_mem));
-        let pr' = f_subst ~tx s hs.hs_pr in
-        let po' = f_subst ~tx s hs.hs_po in
-        let st' = s_subst s hs.hs_s in
-        let me' = EcMemory.me_subst s.fs_mem (ty_subst s) hs.hs_m in
-
-        f_hoareS me' pr' st' po'
-
+        let hs_s    = s_subst s hs.hs_s in
+        let s, hs_m = add_me_binding s hs.hs_m in
+        let hs_pr   = f_subst ~tx s hs.hs_pr in
+        let hs_po   = f_subst ~tx s hs.hs_po in
+        f_hoareS hs_m hs_pr hs_s hs_po
 
     | FeHoareF hf ->
-        assert (not (Mid.mem mhr s.fs_mem) && not (Mid.mem mhr s.fs_mem));
-        let ehf_pr  = f_subst ~tx s hf.ehf_pr in
-        let ehf_po  = f_subst ~tx s hf.ehf_po in
-        let ehf_f  = x_subst s hf.ehf_f in
-        f_eHoareF ehf_pr ehf_f ehf_po
+        let hf_f  = x_subst s hf.ehf_f in
+        let s     = f_rem_mem s mhr in
+        let hf_pr = f_subst ~tx s hf.ehf_pr in
+        let hf_po = f_subst ~tx s hf.ehf_po in
+        f_eHoareF hf_pr hf_f hf_po
 
     | FeHoareS hs ->
-        assert (not (Mid.mem (fst hs.ehs_m) s.fs_mem));
-        let ehs_pr  = f_subst ~tx s hs.ehs_pr in
-        let ehs_po  = f_subst ~tx s hs.ehs_po in
-        let ehs_s  = s_subst s hs.ehs_s in
-        let ehs_m = EcMemory.me_subst s.fs_mem (ty_subst s) hs.ehs_m in
-        f_eHoareS ehs_m ehs_pr ehs_s ehs_po
+        let hs_s    = s_subst s hs.ehs_s in
+        let s, hs_m = add_me_binding s hs.ehs_m in
+        let hs_pr   = f_subst ~tx s hs.ehs_pr in
+        let hs_po   = f_subst ~tx s hs.ehs_po in
+        f_eHoareS hs_m hs_pr hs_s hs_po
 
-    | FcHoareF chf ->
-      assert (not (Mid.mem mhr s.fs_mem));
-      let pr' = f_subst ~tx s chf.chf_pr in
-      let po' = f_subst ~tx s chf.chf_po in
-      let mp' = x_subst s chf.chf_f in
-      let c'  = cost_subst ~tx s chf.chf_co in
+    | FcHoareF hf ->
+        let hf_f  = x_subst s hf.chf_f in
+        let s     = f_rem_mem s mhr in
+        let hf_pr = f_subst ~tx s hf.chf_pr in
+        let hf_po = f_subst ~tx s hf.chf_po in
+        let hf_co = cost_subst ~tx s hf.chf_co in
+        f_cHoareF hf_pr hf_f hf_po hf_co
 
-      f_cHoareF pr' mp' po' c'
+    | FcHoareS hs ->
+        let hs_s    = s_subst s hs.chs_s in
+        let s, hs_m = add_me_binding s hs.chs_m in
+        let hs_pr   = f_subst ~tx s hs.chs_pr in
+        let hs_po   = f_subst ~tx s hs.chs_po in
+        let hs_co   = cost_subst ~tx s hs.chs_co in
+        f_cHoareS hs_m hs_pr hs_s hs_po hs_co
 
-    | FcHoareS chs ->
-      assert (not (Mid.mem (fst chs.chs_m) s.fs_mem));
-      let pr' = f_subst ~tx s chs.chs_pr in
-      let po' = f_subst ~tx s chs.chs_po in
-      let st' = s_subst s chs.chs_s in
-      let me' = EcMemory.me_subst s.fs_mem (ty_subst s) chs.chs_m in
-      let c'  = cost_subst ~tx s chs.chs_co in
+    | FbdHoareF hf ->
+        let hf_f  = x_subst s hf.bhf_f in
+        let s     = f_rem_mem s mhr in
+        let hf_pr = f_subst ~tx s hf.bhf_pr in
+        let hf_po = f_subst ~tx s hf.bhf_po in
+        let hf_bd = f_subst ~tx s hf.bhf_bd in
+        f_bdHoareF hf_pr hf_f hf_po hf.bhf_cmp hf_bd
 
-      f_cHoareS me' pr' st' po' c'
-
-    | FbdHoareF bhf ->
-      let pr', po', bd' =
-        let s = f_rem_mem s mhr in
-        let pr' = f_subst ~tx s bhf.bhf_pr in
-        let po' = f_subst ~tx s bhf.bhf_po in
-        let bd' = f_subst ~tx s bhf.bhf_bd in
-        (pr', po', bd') in
-      let mp' = x_subst s bhf.bhf_f in
-
-      f_bdHoareF_r { bhf with bhf_pr = pr'; bhf_po = po';
-                              bhf_f  = mp'; bhf_bd = bd'; }
-
-    | FbdHoareS bhs ->
-      assert (not (Mid.mem (fst bhs.bhs_m) s.fs_mem));
-      let pr' = f_subst ~tx s bhs.bhs_pr in
-      let po' = f_subst ~tx s bhs.bhs_po in
-      let st' = s_subst s bhs.bhs_s in
-      let me' = EcMemory.me_subst s.fs_mem (ty_subst s) bhs.bhs_m in
-      let bd' = f_subst ~tx s bhs.bhs_bd in
-
-      f_bdHoareS_r { bhs with bhs_pr = pr'; bhs_po = po'; bhs_s = st';
-                              bhs_bd = bd'; bhs_m  = me'; }
+    | FbdHoareS hs ->
+        let hs_s = s_subst s hs.bhs_s in
+        let s, hs_m = add_me_binding s hs.bhs_m in
+        let hs_pr = f_subst ~tx s hs.bhs_pr in
+        let hs_po = f_subst ~tx s hs.bhs_po in
+        let hs_bd = f_subst ~tx s hs.bhs_bd in
+        f_bdHoareS hs_m hs_pr hs_s hs_po hs.bhs_cmp hs_bd
 
     | FequivF ef ->
-      let pr', po' =
+        let ef_fl = x_subst s ef.ef_fl in
+        let ef_fr = x_subst s ef.ef_fr in
         let s = f_rem_mem s mleft in
         let s = f_rem_mem s mright in
-        let pr' = f_subst ~tx s ef.ef_pr in
-        let po' = f_subst ~tx s ef.ef_po in
-        (pr', po') in
-      let fl' = x_subst s ef.ef_fl in
-      let fr' = x_subst s ef.ef_fr in
+        let ef_pr = f_subst ~tx s ef.ef_pr in
+        let ef_po = f_subst ~tx s ef.ef_po in
+        f_equivF ef_pr ef_fl ef_fr ef_po
 
-      f_equivF pr' fl' fr' po'
-
-    | FequivS eqs ->
-      assert (not (Mid.mem (fst eqs.es_ml) s.fs_mem) &&
-                not (Mid.mem (fst eqs.es_mr) s.fs_mem));
-      let pr' = f_subst ~tx s eqs.es_pr in
-      let po' = f_subst ~tx s eqs.es_po in
-      let sl' = s_subst s eqs.es_sl in
-      let sr' = s_subst s eqs.es_sr in
-      let ml' = EcMemory.me_subst s.fs_mem (ty_subst s) eqs.es_ml in
-      let mr' = EcMemory.me_subst s.fs_mem (ty_subst s) eqs.es_mr in
-
-      f_equivS ml' mr' pr' sl' sr' po'
+    | FequivS es ->
+        let es_sl = s_subst s es.es_sl in
+        let es_sr = s_subst s es.es_sr in
+        let s, es_ml = add_me_binding s es.es_ml in
+        let s, es_mr = add_me_binding s es.es_mr in
+        let es_pr = f_subst ~tx s es.es_pr in
+        let es_po = f_subst ~tx s es.es_po in
+        f_equivS es_ml es_mr es_pr es_sl es_sr es_po
 
     | FeagerF eg ->
-      let pr', po' =
+        let eg_fl = x_subst s eg.eg_fl in
+        let eg_fr = x_subst s eg.eg_fr in
+        let eg_sl = s_subst s eg.eg_sl in
+        let eg_sr = s_subst s eg.eg_sr in
         let s = f_rem_mem s mleft in
         let s = f_rem_mem s mright in
-        let pr' = f_subst ~tx s eg.eg_pr in
-        let po' = f_subst ~tx s eg.eg_po in
-        (pr', po') in
-      let fl' = x_subst s eg.eg_fl in
-      let fr' = x_subst s eg.eg_fr in
-
-      let sl' = s_subst s eg.eg_sl in
-      let sr' = s_subst s eg.eg_sr in
-
-      f_eagerF pr' sl' fl' fr' sr' po'
+        let eg_pr = f_subst ~tx s eg.eg_pr in
+        let eg_po = f_subst ~tx s eg.eg_po in
+        f_eagerF eg_pr eg_sl eg_fl eg_fr eg_sr eg_po
 
     | Fcoe coe ->
-      let m' = (* refresh s (fst coe.coe_mem) in *)
-                 EcIdent.fresh (fst coe.coe_mem) in
-
       if EcMemory.is_schema (snd coe.coe_mem) && s.fs_schema <> None then
+        let m' = refresh s (fst coe.coe_mem) in
         (* We instanciate the schema *)
         let sc = oget s.fs_schema in
         let me' = m', sc.sc_memtype in
@@ -603,14 +579,13 @@ module Fsubst = struct
         let e'  = e_subst s coe.coe_e in
         f_coe pr' me' e'
       else
-        let me' = me_subst s (m', snd coe.coe_mem) in
-        let s   = f_rebind_mem s (fst coe.coe_mem) m' in
+        let s, me' = add_me_binding s coe.coe_mem in
         let pr' = f_subst ~tx s coe.coe_pre in
         let e'  = e_subst s coe.coe_e in
         f_coe pr' me' e'
 
     | Fpr pr ->
-      let pr_mem   = Mid.find_def pr.pr_mem pr.pr_mem s.fs_mem in
+      let pr_mem   = m_subst s pr.pr_mem in
       let pr_fun   = x_subst s pr.pr_fun in
       let pr_args  = f_subst ~tx s pr.pr_args in
       let s = f_rem_mem s mhr in
@@ -696,6 +671,17 @@ module Fsubst = struct
         (s, (x', gty'))
 
   and add_bindings ~tx = List.map_fold (add_binding ~tx)
+
+  and add_me_binding s (x, mt as me) =
+    let mt' = EcMemory.mt_subst (ty_subst s) mt in
+    (* FIXME : it would be better to use refresh instead *)
+    let x'  = refresh1 s x in
+    if x == x' && mt == mt' then
+      let s = f_rem_mem s x in
+      (s, me)
+    else
+      let s = f_bind_mem s x x' in
+      (s, (x', mt'))
 
   (* When substituting a abstract module (i.e. a mident) by a concrete one,
      we move the module cost from [c_calls] to [c_self]. *)
