@@ -4,7 +4,6 @@ open EcIdent
 open EcPath
 open EcAst
 open EcTypes
-open EcDecl
 open EcModules
 open EcFol
 open EcEnv
@@ -933,7 +932,7 @@ let reduce_user_gen simplify ri env hyps f =
           let subst   = ts in
           let subst   =
             Mid.fold (fun x f s -> Fsubst.f_bind_local s x f) !pv subst in
-          Fsubst.f_subst subst (Fsubst.f_subst_tvar tvi f)
+          Fsubst.f_subst subst (Fsubst.f_subst_tvar ~freshen:true tvi f)
 
         else   (* schema case, which is more complicated *)
           let typ =
@@ -960,7 +959,8 @@ let reduce_user_gen simplify ri env hyps f =
             Mid.fold (fun x f s ->
                 Fsubst.f_bind_local s x f
               ) !pv Fsubst.f_subst_id in
-          Fsubst.f_subst subst (Fsubst.f_subst_tvar tvi f) in
+          (* FIXME can we do that in one substitution *)
+          Fsubst.f_subst subst (Fsubst.f_subst_tvar ~freshen:true tvi f) in
 
       List.iter (fun cond ->
         if not (f_equal (simplify (subst cond)) f_true) then
@@ -1229,7 +1229,7 @@ let reduce_head simplify ri env hyps f =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        Tvar.f_subst (List.map fst op.EcDecl.op_tparams) tys body in
+        Tvar.f_subst ~freshen:true (List.map fst op.EcDecl.op_tparams) tys body in
 
       f_app (Fsubst.f_subst subst body) eargs f.f_ty
 

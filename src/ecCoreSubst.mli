@@ -48,7 +48,7 @@ module Tvar : sig
   val subst   : ty Mid.t -> ty -> ty
   val init    : EcIdent.t list -> ty list -> ty Mid.t
 
-  val f_subst : EcIdent.t list -> ty list -> form -> form
+  val f_subst : freshen:bool -> EcIdent.t list -> ty list -> form -> form
 
 end
 
@@ -93,6 +93,7 @@ module Fsubst : sig
 
   (* FIXME try to remove es_loc *)
   val f_subst_tvar :
+    freshen:bool ->
     EcTypes.ty EcIdent.Mid.t ->
     form -> form
 

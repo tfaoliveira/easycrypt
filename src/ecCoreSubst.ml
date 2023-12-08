@@ -216,10 +216,6 @@ let refresh s x =
     EcIdent.fresh x
   else x
 
-let refresh1 s x =
-  if Mid.mem x s.fs_fv then EcIdent.fresh x
-  else x
-
 (* -------------------------------------------------------------------- *)
 let add_elocal s ((x, t) as xt) =
   let x' = refresh s x in
@@ -677,7 +673,7 @@ module Fsubst = struct
   and add_me_binding s (x, mt as me) =
     let mt' = EcMemory.mt_subst (ty_subst s) mt in
     (* FIXME : it would be better to use refresh instead *)
-    let x'  = refresh1 s x in
+    let x'  = refresh s x in
     if x == x' && mt == mt' then
       let s = f_rem_mem s x in
       (s, me)
@@ -748,11 +744,11 @@ module Fsubst = struct
     fun f -> if Mid.mem m1 f.f_fv then f_subst s f else f
 
   (* ------------------------------------------------------------------ *)
-  let init_subst_tvar s =
-    f_subst_init ~freshen:true ~tv:s ()
+  let init_subst_tvar ~freshen s =
+    f_subst_init ~freshen ~tv:s ()
 
-  let f_subst_tvar s =
-    f_subst (init_subst_tvar s)
+  let f_subst_tvar ~freshen s =
+    f_subst (init_subst_tvar ~freshen s)
 
 end
 
@@ -803,6 +799,6 @@ module Tvar = struct
     assert (List.length lv = List.length lt);
     List.fold_left2 (fun s v t -> Mid.add v t s) Mid.empty lv lt
 
-  let f_subst lv lt =
-    Fsubst.f_subst_tvar (init lv lt)
+  let f_subst ~freshen lv lt =
+    Fsubst.f_subst_tvar ~freshen (init lv lt)
 end

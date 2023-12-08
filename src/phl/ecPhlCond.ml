@@ -315,7 +315,7 @@ let t_equiv_match_eq tc =
       (f_imp_simpl es.es_pr (f_eq fl fr)) in
 
   let get_eqv_goal ((c, _), ((cl, bl), (cr, br))) =
-    let sb     = f_subst_init ~freshen:true () in
+    let sb     = f_subst_init () in
     let sb, bh = add_elocals sb cl in
 
     let sb =

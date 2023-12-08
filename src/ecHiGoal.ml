@@ -674,7 +674,7 @@ let process_delta ~und_delta ?target (s, o, p) tc =
             match sform_of_form fp with
             | SFop ((_, tvi), []) -> begin
               (* FIXME: TC HOOK *)
-              let body  = Tvar.f_subst (List.map fst tparams) tvi body in
+              let body  = Tvar.f_subst ~freshen:true (List.map fst tparams) tvi body in
               let body  = f_app body args topfp.f_ty in
                 try  EcReduction.h_red EcReduction.beta_red hyps body
                 with EcEnv.NotReducible -> body
@@ -697,7 +697,7 @@ let process_delta ~und_delta ?target (s, o, p) tc =
   | `RtoL ->
     let fp =
       (* FIXME: TC HOOK *)
-      let body  = Tvar.f_subst (List.map fst tparams) tvi body in
+      let body  = Tvar.f_subst ~freshen:true (List.map fst tparams) tvi body in
       let fp    = f_app body args p.f_ty in
         try  EcReduction.h_red EcReduction.beta_red hyps fp
         with EcEnv.NotReducible -> fp
