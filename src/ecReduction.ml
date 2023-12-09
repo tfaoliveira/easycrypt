@@ -959,7 +959,7 @@ let reduce_user_gen simplify ri env hyps f =
             Mid.fold (fun x f s ->
                 Fsubst.f_bind_local s x f
               ) !pv Fsubst.f_subst_id in
-          (* FIXME can we do that in one substitution *)
+          (* FIXME subst-refact can we do that in one substitution *)
           Fsubst.f_subst subst (Fsubst.f_subst_tvar ~freshen:true tvi f) in
 
       List.iter (fun cond ->
@@ -1228,6 +1228,7 @@ let reduce_head simplify ri env hyps f =
           subst bds pargs in
 
       let body = EcFol.form_of_expr EcFol.mhr body in
+      (* FIXME subst-refact can we do both subst in once *)
       let body =
         Tvar.f_subst ~freshen:true (List.map fst op.EcDecl.op_tparams) tys body in
 
