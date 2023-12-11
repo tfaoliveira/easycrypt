@@ -105,33 +105,25 @@ let bind_elocal s x e =
 let bind_elocals s esloc =
   let merger _ oe1 oe2 =
     if oe2 = None then oe1
-    else (assert (oe1 = None); oe2) in
+    else oe2 in
   let fs_eloc = Mid.merge merger s.fs_eloc esloc in
   let fs_fv = fv_Mid e_fv esloc s.fs_fv in
   { s with fs_eloc; fs_fv }
 
 let f_bind_local s x t =
-  let merger o = assert (o = None); Some t in
-    { s with fs_loc = Mid.change merger x s.fs_loc;
-             fs_fv = fv_union (f_fv t) s.fs_fv }
+  { s with fs_loc = Mid.add x t s.fs_loc;
+           fs_fv = fv_union (f_fv t) s.fs_fv }
 
 let f_bind_mem s m1 m2 =
-  let merger o = assert (o = None); Some m2 in
-    { s with fs_mem = Mid.change merger m1 s.fs_mem;
-             fs_fv  = fv_add m2 s.fs_fv }
-
-let f_rebind_mem s m1 m2 =
-  let merger _ = Some m2 in
-  { s with fs_mem = Mid.change merger m1 s.fs_mem;
+  { s with fs_mem = Mid.add m1 m2 s.fs_mem;
            fs_fv  = fv_add m2 s.fs_fv }
 
 let bind_mod s x mp ex =
-  let merger o = assert (o = None); Some mp in
   { s with
-    fs_mod   = Mid.change merger x s.fs_mod;
+    fs_mod   = Mid.add x mp s.fs_mod;
     fs_modex = Mid.add x ex s.fs_modex;
     fs_fv    = fv_union (mex_fv mp ex) s.fs_fv;
-}
+  }
 
 let f_bind_absmod s m1 m2 =
   bind_mod s m1 (EcPath.mident m2)
@@ -152,9 +144,8 @@ let f_bind_rename s xfrom xto ty =
   (* FIXME: This work just by luck ... *)
   let xe = e_local xto ty in
   let s  = f_bind_local s xfrom xf in
-  let merger o = assert (o = None); Some xe in
   (* Free variable already added by f_bind_local *)
-  { s with fs_eloc = Mid.change merger xfrom s.fs_eloc; }
+  { s with fs_eloc = Mid.add xfrom xe s.fs_eloc; }
 
 (* ------------------------------------------------------------------ *)
 let f_rem_local s x =
@@ -262,13 +253,10 @@ let pv_subst s = pv_subst (x_subst s)
 let rec e_subst (s: f_subst) e =
   match e.e_node with
   | Elocal id -> begin
-      match Mid.find_opt id s.fs_eloc with
-      | Some e' -> e'
-      | None    ->
-(* FIXME schema *)
-(*        assert (not s.es_freshen); *)
-        e_local id (ty_subst s e.e_ty)
-  end
+    match Mid.find_opt id s.fs_eloc with
+    | Some e' -> e'
+    | None    -> e_local id (ty_subst s e.e_ty)
+    end
 
   | Evar pv ->
       let pv' = pv_subst s pv in
@@ -561,7 +549,7 @@ module Fsubst = struct
         let sc = oget s.fs_schema in
         let me' = m', sc.sc_memtype in
         (* We add the memory in the subst *)
-        let s = f_rebind_mem s (fst coe.coe_mem) m' in
+        let s = f_bind_mem s (fst coe.coe_mem) m' in
         (* We add the predicates in the subst *)
         let doit id (m, p) s =
           let fs_mem = f_bind_mem f_subst_id m m' in
