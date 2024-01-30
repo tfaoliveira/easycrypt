@@ -93,23 +93,10 @@ type mc = {
   mc_components : ipath MMsym.t;
 }
 
-type use = {
-  us_pv : ty Mx.t;
-  us_gl : Sid.t;
-}
-
-let use_union us1 us2 =
-  { us_pv = Mx.union  (fun _ ty _ -> Some ty) us1.us_pv us2.us_pv;
-    us_gl = Sid.union us1.us_gl us2.us_gl; }
-
-let use_empty = { us_pv = Mx.empty; us_gl = Sid.empty; }
-
 type env_norm = {
   norm_mp       : EcPath.mpath Mm.t;
   norm_xpv      : EcPath.xpath Mx.t;   (* for global program variable *)
   norm_xfun     : EcPath.xpath Mx.t;   (* for fun and local program variable *)
-  mod_use       : use Mm.t;
-  get_restr_use : (use EcModules.use_restr) Mm.t;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -281,8 +268,7 @@ let empty_norm_cache =
   { norm_mp   = Mm.empty;
     norm_xpv  = Mx.empty;
     norm_xfun = Mx.empty;
-    mod_use   = Mm.empty;
-    get_restr_use = Mm.empty; }
+  }
 
 (* -------------------------------------------------------------------- *)
 let empty gstate =
@@ -1638,41 +1624,38 @@ module Fun = struct
     let obj = by_xpath path env in
     let ip = fst (oget (ipath_of_xpath path)) in
       MC.import_fun ip obj env
-
+(*
   let adds_in_memenv memenv vd = EcMemory.bindall vd memenv
   let add_in_memenv memenv vd = adds_in_memenv memenv [vd]
 
   let add_params mem fun_ =
     adds_in_memenv mem fun_.f_sig.fs_anames
+*)
 
-  let actmem_pre me fun_ =
-    let mem = EcMemory.empty_local ~witharg:true me in
-    add_params mem fun_
+  let actmem_pre id fun_ =
+    id, mt_all (lmt_add_proj lmt_init arg_symbol fun_.f_sig.fs_anames)
 
-  let actmem_post me fun_ =
-    let mem = EcMemory.empty_local ~witharg:false me in
-    add_in_memenv mem { ov_name = Some res_symbol; ov_type = fun_.f_sig.fs_ret}
+  let actmem_post id fun_ =
+    id, mt_all (lmt_add lmt_init res_symbol fun_.f_sig.fs_ret)
 
-  let actmem_body me fun_ =
+  let actmem_body id fun_ =
     match fun_.f_def with
     | FBabs _   -> assert false (* FIXME error message *)
     | FBalias _ -> assert false (* FIXME error message *)
     | FBdef fd   ->
-      let mem = EcMemory.empty_local ~witharg:false me in
-      let mem = add_params mem fun_ in
-      let locals = List.map ovar_of_var fd.f_locals in
-      (fun_.f_sig,fd), adds_in_memenv mem locals
+      let lmt = lmt_oadds lmt_init fun_.f_sig.fs_anames in
+      let lmt = lmt_adds lmt fd.f_locals in
+      (fun_.f_sig, fd), (id, mt_all lmt)
 
   let inv_memory side =
     let id    = if side = `Left then EcCoreFol.mleft else EcCoreFol.mright in
-    EcMemory.abstract id
+    (id, mt_glob)
 
   let inv_memenv env =
     Memory.push_all [inv_memory `Left; inv_memory `Rigth] env
 
   let inv_memenv1 env =
-    let mem  = EcMemory.abstract EcCoreFol.mhr in
-    Memory.push_active mem env
+    Memory.push_active (EcCoreFol.mhr, mt_glob) env
 
   let prF_memenv m path env =
     let fun_ = by_xpath path env in
@@ -1767,10 +1750,10 @@ module Var = struct
       match fst qname with
       | [] ->
           let memenv = oget (Memory.byid side env) in
-          begin match EcMemory.lookup_me (snd qname) memenv with
-          | Some (v, Some pa, _) -> Some (`Proj(pv_arg, pa), v.v_type)
-          | Some (v, None, _)    -> Some (`Var (pv_loc v.v_name), v.v_type)
-          | None                 -> None
+          begin match EcMemory.me_lookup memenv (snd qname) with
+          | Some (Some (a,ty,i), tyi) -> Some (`Proj(pv_loc a, ty, i), ty)
+          | Some (None, ty)           -> Some (`Var (pv_loc (snd qname)), ty)
+          | None                      -> None
           end
       | _ -> None
     in
@@ -1921,7 +1904,7 @@ module Mod = struct
         match me.me_body with
         | ME_Decl ({ mt_restr } as mt) ->
           let mt_restr =
-            mr_add_restr mt_restr (ur_empty xs) (ur_empty Sm.empty) in
+            mr_add_restr mt_restr xs in
           { me with me_body = ME_Decl { mt with mt_restr } }
         | _ -> me
       in
@@ -1937,8 +1920,7 @@ module Mod = struct
               with mc_modules =
         Sid.fold update_id env.env_modlcs
           env.env_current.mc_modules; } in
-    let en = !(env.env_norm) in
-    let norm = { en with get_restr_use = Mm.empty } in
+    let norm = !(env.env_norm) in
     { env with env_current = envc;
       env_norm = ref norm; }
 
@@ -1961,7 +1943,7 @@ module Mod = struct
       let p = pqname p me.tme_expr.me_name in
       let mp = EcPath.mpath_crt p [] None in
       let xs = vars_mb mp Sx.empty me.tme_expr.me_body  in
-      add_xs_to_declared xs env
+      add_xs_to_declared (gvs_set xs) env
     else env
 
   let bind ?(import = import0) name me env =
@@ -2013,6 +1995,7 @@ module Mod = struct
     { (bind_local id modty env) with
         env_modlcs = Sid.add id env.env_modlcs; }
 
+(*
   let add_restr_to_locals (rx : Sx.t use_restr) (rm : Sm.t use_restr) env =
 
     let update_id id mods =
@@ -2040,7 +2023,7 @@ module Mod = struct
     let norm = { en with get_restr_use = Mm.empty } in
     { env with env_current = envc;
       env_norm = ref norm; }
-
+*)
   let is_declared id env = Sid.mem id env.env_modlcs
 
   let bind_locals bindings env =
@@ -2208,6 +2191,32 @@ module NormMp = struct
         let en = !(env.env_norm) in
         env.env_norm := { en with norm_xpv = Mx.add p res en.norm_xpv };
         res
+
+
+
+  let rec norm_funglob (xp:xpath) : gvar_set =
+    let m = m_functor xp.x_top in
+
+    let m = norm_mpath
+
+    let env =
+      if Sid.is_empty ff.ff_params then env
+      else
+        let mp = m_functor xp.x_top in
+        let m,_ = Mod.by_mpath mp env in
+        List.fold_left2 (fun env param arg ->
+
+
+
+
+    let env = List.fold_left (fun env (x,mt) ->
+          Mod.bind_local x mt env
+        ) env me.me_params in
+
+
+  let rec mod_use
+
+
 
   let use_equal us1 us2 =
     Mx.equal (fun _ _ -> true) us1.us_pv us2.us_pv &&

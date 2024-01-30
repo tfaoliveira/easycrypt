@@ -135,6 +135,8 @@ val otolist    : 'a option -> 'a list
 val oeq        : ('a -> 'a -> bool) -> ('a option -> 'a option -> bool)
 val ocompare   : 'a cmp -> 'a option cmp
 val omap_dfl   : ('a -> 'b) -> 'b -> 'a option -> 'b
+val ohash      : ('a -> int) -> 'a option -> int
+val oexists    : ('a -> bool) -> 'a option -> bool
 
 module OSmart : sig
   val omap : ('a -> 'a) -> 'a option -> 'a option

@@ -253,6 +253,10 @@ let ocompare f o1 o2 =
   | Some _ , None    -> 1
   | Some x1, Some x2 -> f x1 x2
 
+let ohash hash o = omap_dfl (fun a -> Why3.Hashcons.combine 1 (hash a)) 0 o
+
+let oexists f o = omap_dfl f false o
+
 module OSmart = struct
   let omap (f : 'a -> 'b) (x : 'a option) =
     match x with

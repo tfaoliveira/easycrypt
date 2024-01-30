@@ -43,14 +43,17 @@ type top_module_sig    = form p_top_module_sig
 type top_module_expr   = form p_top_module_expr
 
 (* Careful, the available oracles are empty in both [mr_empty] and [mr_full]. *)
+(* No memory restriction *)
 val mr_empty : mod_restr
+
+(* Full memory restriction *)
 val mr_full  : mod_restr
 
 val mr_hash  : mod_restr -> int
 val mr_equal : mod_restr -> mod_restr -> bool
 
 val mr_add_restr :
-  mod_restr -> EcPath.Sx.t use_restr -> EcPath.Sm.t use_restr -> mod_restr
+  mod_restr -> EcTypes.gvar_set -> mod_restr
 
 val add_oinfo : mod_restr -> string -> OI.t -> mod_restr
 val change_oicalls : mod_restr -> string -> xpath list -> mod_restr

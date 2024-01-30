@@ -23,7 +23,6 @@ type hoarecmp = FHle | FHeq | FHge
 type gty =
   | GTty    of EcTypes.ty
   | GTmodty of module_type
-  | GTmem   of EcMemory.memtype
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
@@ -42,8 +41,12 @@ and f_node =
   | Flet    of lpattern * form * form
   | Fint    of zint
   | Flocal  of EcIdent.t
-  | Fpvar   of EcTypes.prog_var * memory
-  | Fglob   of EcIdent.t * memory
+
+  | Fpvar   of EcTypes.prog_var * form        (* x{m} *)
+  | Fmrestr of form * EcTypes.memtype         (* (m|X) *)
+  | Fupdvar of form * EcTypes.prog_var * form (* m[x<-v] *)
+  | Fupdmem of form * EcTypes.var_set * form  (* m[X<- m'] *)
+
   | Fop     of path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
@@ -157,7 +160,7 @@ and coe = {
 }
 
 and pr = {
-  pr_mem   : memory;
+  pr_mem   : form;
   pr_fun   : xpath;
   pr_args  : form;
   pr_event : form;
@@ -186,12 +189,6 @@ type mod_restr = form p_mod_restr
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
 val gtmodty : module_type -> gty
-val gtmem   : EcMemory.memtype -> gty
-
-(* -------------------------------------------------------------------- *)
-val as_gtty  : gty -> EcTypes.ty
-val as_modty : gty -> module_type
-val as_mem   : gty -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val gty_equal : gty -> gty -> bool
@@ -229,16 +226,22 @@ val form_forall: (form -> bool) -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
-val gty_as_mem : gty -> EcMemory.memtype
 val gty_as_mod : gty -> module_type
 val kind_of_gty: gty -> [`Form | `Mem | `Mod]
 
 (* soft-constructors - common leaves *)
 val f_local : EcIdent.t -> EcTypes.ty -> form
-val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> memory -> form
-val f_pvarg : EcTypes.ty -> memory -> form
-val f_pvloc : variable -> memory -> form
-val f_glob  : EcIdent.t -> memory -> form
+
+val f_mem   : memenv -> form
+
+val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> form -> form
+
+val f_pvarg : EcTypes.ty -> form -> form
+val f_pvloc : variable -> form -> form
+
+val f_mrestr : form -> EcTypes.memtype -> form
+val f_updvar : form -> EcTypes.prog_var -> form -> form
+val f_updmem : form -> EcTypes.var_set  -> form -> form
 
 (* soft-constructors - common formulas constructors *)
 val f_op     : path -> EcTypes.ty list -> EcTypes.ty -> form
@@ -306,7 +309,7 @@ val f_coe   : form -> memenv -> expr -> form
 
 (* soft-constructors - Pr *)
 val f_pr_r : pr -> form
-val f_pr   : memory -> xpath -> form -> form -> form
+val f_pr   : form -> xpath -> form -> form -> form
 
 (* soft-constructors - unit *)
 val f_tt : form
@@ -397,7 +400,10 @@ val destr_app2_eq : name:string -> path -> form -> form * form
 
 val destr_op        : form -> EcPath.path * ty list
 val destr_local     : form -> EcIdent.t
-val destr_pvar      : form -> prog_var * memory
+val destr_pvar      : form -> prog_var * form
+val destr_mrestr    : form -> form * memtype
+val destr_updvar    : form -> form * prog_var * form
+val destr_updmem    : form -> form * var_set * form
 val destr_proj      : form -> form * int
 val destr_tuple     : form -> form list
 val destr_app       : form -> form * form list
@@ -439,8 +445,7 @@ val destr_pr        : form -> pr
 val destr_programS  : [`Left | `Right] option -> form -> memenv * stmt
 val destr_int       : form -> zint
 
-val destr_glob      : form -> EcIdent.t        * memory
-val destr_pvar      : form -> EcTypes.prog_var * memory
+
 
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool
@@ -480,12 +485,12 @@ val split_fun  : form -> bindings * form
 val split_args : form -> form * form list
 
 (* -------------------------------------------------------------------- *)
-val form_of_expr : EcMemory.memory -> EcTypes.expr -> form
+val form_of_expr : ?mem:form -> EcTypes.expr -> form
 
 (* -------------------------------------------------------------------- *)
 exception CannotTranslate
 
-val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
+val expr_of_form : form -> form -> EcTypes.expr
 
 (* -------------------------------------------------------------------- *)
 (* A predicate on memory: λ mem. -> pred *)
@@ -497,11 +502,6 @@ type f_subst = private {
   fs_loc      : form Mid.t;
   fs_esloc    : expr Mid.t;
   fs_ty       : ty_subst;
-  fs_mem      : EcIdent.t Mid.t;
-  fs_modglob  : (EcIdent.t -> form) Mid.t;
-  fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
 }
 
 (* -------------------------------------------------------------------- *)
@@ -513,20 +513,18 @@ module Fsubst : sig
        ?freshen:bool
     -> ?sty:ty_subst
     -> ?esloc:expr Mid.t
-    -> ?mt:EcMemory.memtype
-    -> ?mempred:(mem_pr Mid.t)
     -> unit -> f_subst
 
   val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_mem    : f_subst -> EcIdent.t -> form -> f_subst
   val f_bind_absmod : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> (EcIdent.t -> form) -> f_subst
+  val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> f_subst
   val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
 
   val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
 
   val f_subst_local : EcIdent.t -> form -> form -> form
-  val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
+  val f_subst_mem   : EcIdent.t -> form -> form -> form
 
   (* val uni_subst : (EcUid.uid -> ty option) -> f_subst *)
   (* val uni : (EcUid.uid -> ty option) -> form -> form *)
@@ -542,8 +540,6 @@ module Fsubst : sig
   val subst_xpath    : f_subst -> xpath -> xpath
   val subst_stmt     : f_subst -> stmt  -> stmt
   val subst_e        : f_subst -> expr  -> expr
-  val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
-  val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
   val subst_ty       : f_subst -> ty -> ty
   val subst_mty      : f_subst -> module_type -> module_type
   val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t

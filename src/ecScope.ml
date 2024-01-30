@@ -1529,7 +1529,7 @@ end
 (* -------------------------------------------------------------------- *)
 module Mod = struct
   module TT = EcTyping
-
+(*
   let add_local_restr env path m =
     let mpath = EcPath.pqname path m.me_name in
     match m.me_body with
@@ -1550,7 +1550,7 @@ module Mod = struct
         { (ur_empty Sx.empty) with ur_neg = rx }
         (ur_empty Sm.empty)
         env
-
+*)
   let bind ?(import = EcTheory.import0) (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
     let item = EcTheory.mkitem import (EcTheory.Th_module m) in

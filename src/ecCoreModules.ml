@@ -331,7 +331,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
   if e_subst == identity then identity else
 
   let pvt_subst (pv,ty as p) =
-    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.es_ty.ts_cmod) pv in
+    let pv' = EcTypes.pv_subst (EcPath.x_subst_abs s.es_ty.ts_mod) pv in
     let ty' = EcTypes.ty_subst s.EcTypes.es_ty ty in
 
     if pv == pv' && ty == ty' then p else (pv', ty') in
@@ -357,7 +357,7 @@ let rec s_subst_top (s : EcTypes.e_subst) =
 
     | Scall (olv, mp, args) ->
         let olv'  = olv |> OSmart.omap lv_subst in
-        let mp'   = EcPath.x_subst_abs s.es_ty.ts_cmod mp in
+        let mp'   = EcPath.x_subst_abs s.es_ty.ts_mod mp in
         let args' = List.Smart.map e_subst args in
 
         i_call (olv', mp', args')
@@ -462,6 +462,7 @@ let get_uninit_read (s : stmt) =
   snd (s_get_uninit_read Ssym.empty s)
 
 (* -------------------------------------------------------------------- *)
+(*
 type 'a use_restr = {
   ur_pos : 'a option;   (* If not None, can use only element in this set. *)
   ur_neg : 'a;          (* Cannot use element in this set. *)
@@ -505,7 +506,7 @@ let ur_inter union inter ur1 ur2 =
 
   { ur_pos = ur_pos;
     ur_neg = inter ur1.ur_neg ur2.ur_neg; }
-
+*)
 (* -------------------------------------------------------------------- *)
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
@@ -605,19 +606,16 @@ end = struct
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcPath.Sx.t use_restr
 
-type mr_mpaths = EcPath.Sm.t use_restr
-
+(* TODO: the module restriction is still attach to the module
+   we can add attach it to each function *)
 type 'a p_mod_restr = {
-  mr_xpaths : mr_xpaths;
-  mr_mpaths : mr_mpaths;
+  mr_mem    : gvar_set;  (* The set of allowed global variables *)
   mr_oinfos : 'a PreOI.t Msym.t;
 }
 
 let p_mr_equal a_equal mr1 mr2 =
-  ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
-  && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
+  gvs_equal mr1.mr_mem mr2.mr_mem
   && Msym.equal (PreOI.equal a_equal) mr1.mr_oinfos mr2.mr_oinfos
 
 let has_compl_restriction mr =
@@ -627,21 +625,6 @@ let mr_is_empty mr =
      not (has_compl_restriction mr)
   && Msym.for_all (fun _ oi -> [] = PreOI.allowed oi) mr.mr_oinfos
 
-let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
-  EcPath.Sx.fold
-    (fun xp fv -> EcPath.x_fv fv xp)
-    (Sx.union
-       m.ur_neg
-       (EcUtils.odfl Sx.empty m.ur_pos))
-    EcIdent.Mid.empty
-
-let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
-  EcPath.Sm.fold
-    (fun mp fv -> EcPath.m_fv fv mp)
-    (Sm.union
-       m.ur_neg
-       (EcUtils.odfl Sm.empty m.ur_pos))
-    EcIdent.Mid.empty
 
 (* -------------------------------------------------------------------- *)
 type funsig = {
@@ -708,7 +691,7 @@ let sig_smpl_sig_coincide msig smpl_sig =
 
 (* -------------------------------------------------------------------- *)
 type uses = {
-  us_calls  : xpath list;
+  us_calls  : Sx.t;
   us_reads  : Sx.t;
   us_writes : Sx.t;
 }
@@ -794,6 +777,7 @@ type 'a p_top_module_expr = {
 }
 
 (* -------------------------------------------------------------------- *)
+(*
 let ur_hash elems el_hash ur =
   Why3.Hashcons.combine
     (Why3.Hashcons.combine_option
@@ -801,11 +785,10 @@ let ur_hash elems el_hash ur =
        ur.ur_pos)
     (Why3.Hashcons.combine_list el_hash 0
        (elems ur.ur_neg))
-
+*)
 let p_mr_hash a_hash mr =
-  Why3.Hashcons.combine2
-    (ur_hash EcPath.Sx.ntr_elements EcPath.x_hash mr.mr_xpaths)
-    (ur_hash EcPath.Sm.ntr_elements EcPath.m_hash mr.mr_mpaths)
+  Why3.Hashcons.combine
+    (gvs_hash mr.mr_mem)
     (Why3.Hashcons.combine_list
        (Why3.Hashcons.combine_pair Hashtbl.hash (PreOI.hash a_hash)) 0
        (EcSymbols.Msym.bindings mr.mr_oinfos

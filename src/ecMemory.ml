@@ -1,7 +1,8 @@
 (* -------------------------------------------------------------------- *)
-open EcSymbols
+(*open EcSymbols *)
 open EcUtils
 open EcTypes
+
 
 module Msym = EcSymbols.Msym
 
@@ -11,89 +12,29 @@ type memory = EcIdent.t
 let mem_equal = EcIdent.id_equal
 
 (* -------------------------------------------------------------------- *)
-type proj_arg =
-  { arg_ty  : ty; (* type of the procedure argument "arg" *)
-    arg_pos : int;       (* projection *)
-  }
 
-type local_memtype = {
-    mt_name : symbol option;      (* provides access to the full local memory *)
-    mt_decl : ovariable list;
-    mt_proj : (int * ty) Msym.t;  (* where to find the symbol in mt_decl and its type *)
-    mt_ty   : ty;                 (* ttuple (List.map v_type mt_decl) *)
-    mt_n    : int;                (* List.length mt_decl *)
-  }
+type local_memtype = EcTypes.local_memtype
 
-let mk_lmt mt_name mt_decl mt_proj =
-  { mt_name;
-    mt_decl;
-    mt_proj;
-    mt_ty = ttuple (List.map ov_type mt_decl);
-    mt_n  = List.length mt_decl;
-  }
-
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
-   memory type when the axiom schema is.  *)
-type memtype =
-  | Lmt_concrete of local_memtype option
-  | Lmt_schema
-
-let lmem_hash lmem =
-  let el_hash (s,(i,ty)) =
-    Why3.Hashcons.combine2
-      (Hashtbl.hash s)
-      i (EcTypes.ty_hash ty) in
-  let mt_proj_hash =
-    Why3.Hashcons.combine_list el_hash 0 (Msym.bindings lmem.mt_proj) in
-  let mt_name_hash = Why3.Hashcons.combine_option Hashtbl.hash lmem.mt_name in
-  let mt_decl_hash = Why3.Hashcons.combine_list EcTypes.ov_hash 0 lmem.mt_decl in
-  Why3.Hashcons.combine_list
-    (fun i -> i)
-    (EcTypes.ty_hash lmem.mt_ty)
-    [ lmem.mt_n;
-      mt_name_hash;
-      mt_decl_hash;
-      mt_proj_hash; ]
-
-let mt_fv = function
-  | Lmt_schema              -> EcIdent.Mid.empty
-  | Lmt_concrete None       -> EcIdent.Mid.empty
-  | Lmt_concrete (Some lmt) ->
-    List.fold_left (fun fv v ->
-        EcIdent.fv_union fv v.ov_type.ty_fv
-      ) EcIdent.Mid.empty lmt.mt_decl
+type memtype = EcTypes.memtype
 
 let lmt_equal ty_equal mt1 mt2 =
-  mt1.mt_name = mt2.mt_name
-  &&
-    if mt1.mt_name = None
-    then
-      Msym.equal (fun (_,ty1) (_,ty2) ->
-          ty_equal ty1 ty2
-        ) mt1.mt_proj mt2.mt_proj
-    else
-      List.all2 ov_equal mt1.mt_decl mt2.mt_decl
-
-let mt_equal_gen ty_equal mt1 mt2 =
-  match mt1, mt2 with
-  | Lmt_schema,     Lmt_schema -> true
-
-  | Lmt_schema,     Lmt_concrete _
-  | Lmt_concrete _, Lmt_schema -> false
-
-  | Lmt_concrete mt1, Lmt_concrete mt2 ->
-    oeq (lmt_equal ty_equal) mt1 mt2
-
-let mt_equal = mt_equal_gen ty_equal
-
-let mt_iter_ty f mt = match mt with
-  | Lmt_schema -> ()
-  | Lmt_concrete mt ->
-    oiter (fun lmt -> List.iter (fun v -> f v.ov_type) lmt.mt_decl) mt
+  Msym.equal (fun (o1, ty1) (o2,ty2) ->
+      ty_equal ty1 ty2 &&
+      opt_equal (fun (s1, ty1, i1) (s2, ty2, i2) ->
+          i1 == i2 && ty_equal ty1 ty2 && s1 = s2) o1 o2) mt1.lmt_symb mt2.lmt_symb
 
 (* -------------------------------------------------------------------- *)
 type memenv = memory * memtype
 
+let me_equal (m1,mt1) (m2, mt2) =
+  EcIdent.id_equal m1 m2 && EcTypes.mt_equal mt1 mt2
+
+let me_hash (mem,mt) =
+  Why3.Hashcons.combine
+      (EcIdent.id_hash mem)
+      (mt_hash mt)
+
+(*
 let mem_hash (mem,mt) = match mt with
   | Lmt_schema -> 0
   | Lmt_concrete mt ->
@@ -105,13 +46,15 @@ let me_equal_gen ty_equal (m1,mt1) (m2,mt2) =
   mem_equal m1 m2 && mt_equal_gen ty_equal mt1 mt2
 
 let me_equal = me_equal_gen ty_equal
+*)
 
 (* -------------------------------------------------------------------- *)
 let memory   (m,_) = m
 let memtype  (_,mt) = mt
 
+let me_lookup (_, mt) x = EcTypes.mt_lookup mt x
 (* -------------------------------------------------------------------- *)
-exception DuplicatedMemoryBinding of symbol
+(*exception DuplicatedMemoryBinding of symbol
 
 (* -------------------------------------------------------------------- *)
 let empty_local_mt ~witharg =
@@ -239,7 +182,7 @@ let mt_subst st o =
 
 let me_subst sm st (m,mt as me) =
   let m' = EcIdent.Mid.find_def m m sm in
-  let mt' = mt_subst st mt in
+  let mt' = EcTypes.mt_subst st mt in
   if m' == m && mt' == mt then me else
     (m', mt')
 
@@ -257,18 +200,6 @@ let rec pp_list sep pp fmt xs =
     | []      -> ()
     | [x]     -> Format.fprintf fmt "%a" pp x
     | x :: xs -> Format.fprintf fmt "%a%(%)%a" pp x sep pp_list xs
-
-let dump_memtype mt =
-  match mt with
-  | Lmt_schema        -> "schema"
-  | Lmt_concrete None -> "abstract"
-  | Lmt_concrete (Some mt) ->
-    let pp_vd fmt v =
-      Format.fprintf fmt "@[%s: %s@]"
-        (odfl "_" v.ov_name)
-        (EcTypes.dump_ty v.ov_type)
-    in
-    Format.asprintf "@[{@[%a@]}@]" (pp_list ",@ " pp_vd) mt.mt_decl
 
 (* -------------------------------------------------------------------- *)
 let get_name s p (_,mt) =
@@ -296,3 +227,4 @@ let has_locals mt = match mt with
   | Lmt_concrete (Some _) -> true
   | Lmt_concrete None -> false
   | Lmt_schema -> assert false
+*)

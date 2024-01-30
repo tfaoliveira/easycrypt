@@ -1,5 +1,6 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
+open EcSymbols
 open EcIdent
 open EcPath
 open EcUid
@@ -16,6 +17,230 @@ let local_of_locality = function
   | `Declare -> `Local
 
 (* -------------------------------------------------------------------- *)
+type pvar_kind =
+  | PVKglob
+  | PVKloc
+
+type prog_var =
+  | PVglob of EcPath.xpath
+  | PVloc of EcSymbols.symbol
+
+(* FIXME: this function should always returns empty *)
+let pv_fv = function
+  | PVglob x -> EcPath.x_fv Mid.empty x
+  | PVloc _ -> Mid.empty
+
+let pv_equal v1 v2 = match v1, v2 with
+  | PVglob x1, PVglob x2 ->
+    EcPath.x_equal x1 x2
+  | PVloc i1, PVloc i2 -> EcSymbols.sym_equal i1 i2
+  | PVloc _, PVglob _ | PVglob _, PVloc _ -> false
+
+let pv_kind = function
+  | PVglob _ -> PVKglob
+  | PVloc _ -> PVKloc
+
+let pv_hash v =
+  let h = match v with
+    | PVglob x -> EcPath.x_hash x
+    | PVloc i -> Hashtbl.hash i in
+
+  Why3.Hashcons.combine
+    h (if pv_kind v = PVKglob then 1 else 0)
+
+let pv_compare v1 v2 =
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_compare x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+
+let pv_compare_p v1 v2 =
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_compare_na x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+
+let pv_ntr_compare v1 v2 =
+  match v1, v2 with
+  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
+  | PVglob x1, PVglob x2 -> EcPath.x_ntr_compare x1 x2
+  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+
+let is_loc  = function PVloc _ -> true  | PVglob _ -> false
+let is_glob = function PVloc _ -> false | PVglob _ -> true
+
+let get_loc = function PVloc id -> id | PVglob _ -> assert false
+let get_glob = function PVloc _ -> assert false | PVglob xp -> xp
+
+let symbol_of_pv = function
+  | PVglob x -> x.EcPath.x_sub
+  | PVloc id -> id
+
+let string_of_pvar_kind = function
+  | PVKglob -> "PVKglob"
+  | PVKloc  -> "PVKloc"
+
+let string_of_pvar (p : prog_var) =
+  let sp = match p with
+    | PVglob x -> EcPath.x_tostring x
+    | PVloc id -> id in
+
+  Printf.sprintf "%s[%s]"
+    sp (string_of_pvar_kind (pv_kind p))
+
+let name_of_pvar pv =
+  match pv with
+  | PVloc x -> x
+  | PVglob xp -> EcPath.xbasename xp
+
+let pv_loc id = PVloc id
+
+let arg_symbol = "arg"
+let res_symbol = "res"
+let pv_arg = PVloc arg_symbol
+let pv_res =  PVloc res_symbol
+
+let xp_glob x =
+  let top = x.EcPath.x_top in
+  if top.EcPath.m_args = [] then x else
+    (* remove the functor argument *)
+    let ntop = EcPath.mpath top.m_top [] in
+    EcPath.xpath ntop x.EcPath.x_sub
+
+let pv_glob x = PVglob (xp_glob x)
+
+let pv_subst m_subst px = match px with
+  | PVglob x ->
+    let mp' = m_subst x in
+    if x == mp' then px else pv_glob mp'
+  | PVloc _ -> px
+
+(* -------------------------------------------------------------------- *)
+
+(*
+type functor_fun = {
+  ff_params : Sid.t;
+  ff_fun : xpath;
+   (* The xpath is fully applied, argument can be abstract module in Sid.t; *)
+}
+*)
+
+type gvar_set_node =
+  | Empty                              (* The empty memory                           *)
+  | All                                (* The memory of All global                   *)
+  | Set       of Sx.t                  (* The memory restricted to the variable in s *)
+  | GlobFun   of xpath                 (* The global memory used by the function     *)
+  | Union     of gvar_set * gvar_set   (* Union                                      *)
+  | Diff      of gvar_set * gvar_set   (* Difference                                 *)
+  | Inter     of gvar_set * gvar_set   (* Intersection                               *)
+
+and gvar_set =
+  { gvs_node : gvar_set_node;
+    gvs_tag  : int;
+    gvs_fv   : int EcIdent.Mid.t;
+  }
+
+let gvs_equal : gvar_set -> gvar_set -> bool = (==)
+let gvs_hash gvs = gvs.gvs_tag
+let gvs_fv gvs = gvs.gvs_fv
+(*
+let ff_equal ff1 ff2 =
+  x_equal ff1.ff_fun ff2.ff_fun && Sid.equal ff1.ff_params ff2.ff_params
+*)
+
+module Hsgvs = Why3.Hashcons.Make (struct
+  type t = gvar_set
+
+  let equal gvs1 gvs2 =
+    match gvs1.gvs_node, gvs2.gvs_node with
+    | Empty, Empty -> true
+    | All  , All   -> true
+    | Set x, Set y -> Sx.equal x y
+    | GlobFun f1, GlobFun f2 -> x_equal f1 f2
+    | Union(s11,s12), Union(s21,s22)
+    | Diff (s11,s12), Diff (s21,s22)
+    | Inter(s11,s12), Inter(s21,s22) -> gvs_equal s11 s21 && gvs_equal s12 s22
+    | _, _ -> false
+
+  let hash gvs =
+    match gvs.gvs_node with
+    | Empty        -> 0
+    | All          -> 1
+    | Set s        -> Sx.fold (fun x h -> Why3.Hashcons.combine (x_hash x) h) s 2
+    | GlobFun f    -> x_hash f
+    | Union(s1,s2) -> Why3.Hashcons.combine_list gvs_hash 3 [s1; s2]
+    | Diff (s1,s2) -> Why3.Hashcons.combine_list gvs_hash 4 [s1; s2]
+    | Inter(s1,s2) -> Why3.Hashcons.combine_list gvs_hash 5 [s1; s2]
+
+  let fv gvs =
+    match gvs with
+    | Empty | All  -> Mid.empty
+    | Set x        -> Mid.empty (* global variable path has not ident *)
+    | GlobFun f    -> x_fv Mid.empty f
+    | Union(s1,s2) | Diff (s1,s2) | Inter(s1,s2) ->
+        fv_union (gvs_fv s1) (gvs_fv s2)
+
+  let tag n gvs = { gvs with gvs_tag = n; gvs_fv = fv gvs.gvs_node; }
+end)
+
+let mk_gvs node =
+  Hsgvs.hashcons { gvs_node = node; gvs_tag = -1; gvs_fv = Mid.empty }
+
+let gvs_empty = mk_gvs Empty
+let gvs_all = mk_gvs All
+let gvs_set s = mk_gvs (Set s)
+let gvs_fun f = mk_gvs (GlobFun f)
+
+let gvs_union s1 s2 =
+  match s1.gvs_node, s2.gvs_node with
+  | All, _ | _, All -> gvs_all
+  | Empty, _ -> s2
+  | _, Empty -> s1
+  | Set s1, Set s2 -> gvs_set (Sx.union s1 s2)
+  | _, _ -> mk_gvs (Union(s1,s2))
+
+let gvs_diff s1 s2 =
+  match s1.gvs_node, s2.gvs_node with
+  | Empty, _ | _, All -> gvs_empty
+  | _, Empty -> s1
+  | Set s1, Set s2 -> gvs_set (Sx.diff s1 s2)
+  | _, _ -> mk_gvs  (Diff (s1,s2))
+
+let gvs_inter s1 s2 =
+  match s1.gvs_node, s2.gvs_node with
+  | All, _ -> s2
+  | _, All -> s1
+  | Empty, _ | _, Empty -> gvs_empty
+  | Set s1, Set s2 -> gvs_set (Sx.inter s1 s2)
+  | _, _ -> mk_gvs (Inter(s1,s2))
+
+(* -------------------------------------------------------------------- *)
+
+type var_set = {
+  lvs : Ssym.t;
+  gvs : gvar_set;
+}
+
+let vs_hash vs = gvs_hash vs.gvs
+let vs_equal vs1 vs2 = gvs_equal vs1.gvs vs2.gvs && Ssym.equal vs1.lvs vs2.lvs
+let vs_fv vs = vs.gvs.gvs_fv
+
+let vs_empty = { lvs = Ssym.empty; gvs = gvs_empty }
+let vs_all lvs = { lvs; gvs = gvs_all }
+
+let vs_globfun f = { lvs = Ssym.empty; gvs = gvs_fun f }
+
+let vs_union s1 s2 =
+  { lvs = Ssym.union s1.lvs s2.lvs; gvs = gvs_union s1.gvs s2.gvs }
+
+let vs_diff s1 s2 =
+  { lvs = Ssym.diff s1.lvs s2.lvs; gvs = gvs_diff s1.gvs s2.gvs }
+
+let vs_inter s1 s2 =
+  { lvs = Ssym.inter s1.lvs s2.lvs; gvs = gvs_inter s1.gvs s2.gvs }
+
+
+(* -------------------------------------------------------------------- *)
 type ty = {
   ty_node : ty_node;
   ty_fv   : int EcIdent.Mid.t; (* only ident appearing in path *)
@@ -23,25 +248,53 @@ type ty = {
 }
 
 and ty_node =
-  | Tglob   of EcIdent.t (* The tuple of global variable of the module *)
+  | Tmem    of memtype
   | Tunivar of EcUid.uid
   | Tvar    of EcIdent.t
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
 
+and local_memtype =
+  { lmt_symb : ((EcSymbols.symbol * ty * int) option * ty) Msym.t;
+    lmt_proj : EcSymbols.symbol EcMaps.Mint.t Msym.t;
+    lmt_fv   : int EcIdent.Mid.t;
+    lmt_tag  : int;
+  }
+
+(* The type of memory restricted to a gvar_set *)
+(* [lmt = None] is for an axiom schema, and is instantiated to a concrete
+   memory type when the axiom schema is.  *)
+and memtype = {
+  lmt : local_memtype option;
+  gvs : gvar_set;
+  mt_fv : int EcIdent.Mid.t;
+  mt_tag : int;
+}
+
+let is_schema mt = mt.lmt = None
+
 type dom = ty list
 
 let ty_equal : ty -> ty -> bool = (==)
 let ty_hash ty = ty.ty_tag
+let ty_fv ty = ty.ty_fv
+
+let lmt_equal : local_memtype -> local_memtype -> bool = (==)
+let lmt_hash lmt = lmt.lmt_tag
+let lmt_fv lmt = lmt.lmt_fv
+
+let mt_equal : memtype -> memtype -> bool = (==)
+let mt_hash mt = mt.mt_tag
+let mt_fv mt = mt.mt_fv
 
 module Hsty = Why3.Hashcons.Make (struct
   type t = ty
 
   let equal ty1 ty2 =
     match ty1.ty_node, ty2.ty_node with
-    | Tglob m1, Tglob m2 ->
-        EcIdent.id_equal m1 m2
+    | Tmem mt1, Tmem mt2 ->
+        mt_equal mt1 mt2
 
     | Tunivar u1, Tunivar u2 ->
         uid_equal u1 u2
@@ -62,7 +315,7 @@ module Hsty = Why3.Hashcons.Make (struct
 
   let hash ty =
     match ty.ty_node with
-    | Tglob m          -> EcIdent.id_hash m
+    | Tmem mt          -> mt_hash mt
     | Tunivar u        -> u
     | Tvar    id       -> EcIdent.tag id
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
@@ -74,7 +327,7 @@ module Hsty = Why3.Hashcons.Make (struct
       List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty in
 
     match ty with
-    | Tglob m          -> EcIdent.fv_add m Mid.empty
+    | Tmem mt          -> mt.mt_fv
     | Tunivar _        -> Mid.empty
     | Tvar    _        -> Mid.empty (* FIXME: section *)
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
@@ -97,33 +350,117 @@ module Sty = MSHty.S
 module Hty = MSHty.H
 
 (* -------------------------------------------------------------------- *)
-let rec dump_ty ty =
-  match ty.ty_node with
-  | Tglob p ->
-      EcIdent.tostring p
+module Hslmt = Why3.Hashcons.Make (struct
 
-  | Tunivar i ->
-      Printf.sprintf "#%d" i
+  type t = local_memtype
+  (*
+  { lmt_symb : ((EcSymbols.symbol * ty * int) option * ty) EcSymbols.Msym.t;
+    lmt_proj : EcSymbols.symbol EcMaps.Mint.t EcSymbols.Msym.t;
+    lmt_fv   : int EcIdent.Mid.t;
+    lmt_tag  : int;
+  } *)
 
-  | Tvar id ->
-      EcIdent.tostring id
+  let equal lmt1 lmt2 =
+    Msym.equal
+       (fun (o1, ty1) (o2, ty2) ->
+         ty_equal ty1 ty2 &&
+         opt_equal (fun (s1,ty1,i1) (s2,ty2, i2) ->
+             i1 == i2 && ty_equal ty1 ty2 && sym_equal s1 s2) o1 o2)
+       lmt1.lmt_symb lmt2.lmt_symb
 
-  | Ttuple tys ->
-      Printf.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
+  let hash lmt =
+    Msym.fold
+      (fun s (_,ty) hash -> Why3.Hashcons.combine2 (Hashtbl.hash s) (ty_hash ty) hash)
+      lmt.lmt_symb 0
 
-  | Tconstr (p, tys) ->
-      Printf.sprintf "%s[%s]" (EcPath.tostring p)
-        (String.concat ", " (List.map dump_ty tys))
+  let fv lmt =
+    (* Remark no need to take the type in the first componant since the variable is declared *)
+    Msym.fold (fun _ (_, ty) fv -> fv_union fv (ty.ty_fv))
+      lmt.lmt_symb Mid.empty
 
-  | Tfun (t1, t2) ->
-      Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
+  let tag n lmt =
+    { lmt with
+      lmt_tag = n; lmt_fv = fv lmt }
+end)
+
+let mk_lmt lmt_symb lmt_proj =
+  Hslmt.hashcons { lmt_symb; lmt_proj; lmt_tag = -1; lmt_fv = Mid.empty}
+
+let lmt_map_ty (f:ty -> ty) lmt =
+  let lmt_sym =
+    Msym.map (fun (o, ty) -> omap (fun (s,ty,i) -> s, f ty, i) o, f ty) lmt.lmt_symb in
+  mk_lmt lmt_sym lmt.lmt_proj
+
+let lmt_iter_ty (f:ty -> unit) lmt =
+  (* We do not do o since the variable occurs in another declaration *)
+  Msym.iter (fun _ (o,ty) -> f ty) lmt.lmt_symb
+
+let lmt_fold_ty (f:'a -> ty -> 'a) a lmt =
+  Msym.fold (fun _ (_, ty) a -> f a ty) lmt.lmt_symb a
+
+let lmt_sub_exists_ty f lmt =
+  Msym.exists (fun _ (_, ty) -> f ty) lmt.lmt_symb
+
+(* -------------------------------------------------------------------- *)
+module Hsmt = Why3.Hashcons.Make (struct
+
+  type t = memtype
+  (*
+  {
+    lmt : local_memtype;
+    gvs : gvar_set;
+    mt_fv : int EcIdent.Mid.t;
+    mt_tag : int;
+  }
+  *)
+
+  let equal mt1 mt2 =
+    opt_equal lmt_equal mt1.lmt mt2.lmt && gvs_equal mt1.gvs mt2.gvs
+
+  let hash mt =
+    Why3.Hashcons.combine (ohash lmt_hash mt.lmt) (gvs_hash mt.gvs)
+
+  let tag n mt =
+    { mt with
+      mt_tag = n; mt_fv = fv_union (omap_dfl lmt_fv Mid.empty mt.lmt) (gvs_fv mt.gvs) }
+end)
+
+let mk_mto lmt gvs =
+  Hsmt.hashcons { lmt; gvs; mt_tag = -1; mt_fv = Mid.empty}
+
+let mt_map_ty (f:ty -> ty) mt =
+  mk_mto (omap (lmt_map_ty f) mt.lmt) mt.gvs
+
+let mt_iter_ty (f:ty -> unit) mt = oiter (lmt_iter_ty f) mt.lmt
+
+let mt_fold_ty (f:'a -> ty -> 'a) a mt =
+  ofold (fun lmt a -> lmt_fold_ty f a lmt) a mt.lmt
+
+let mt_sub_exists_ty f mt = oexists (lmt_sub_exists_ty f) mt.lmt
+
+let lmt_concrete (mt:memtype) = ofdfl (fun _ -> assert false) mt.lmt
+
+let mt_schema = mk_mto None gvs_all
+
+let mk_mt lmt gvs = mk_mto (Some lmt) gvs
 
 (* -------------------------------------------------------------------- *)
 let tuni uid     = mk_ty (Tunivar uid)
 let tvar id      = mk_ty (Tvar id)
 let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
-let tglob m      = mk_ty (Tglob m)
+let tmem mt      = mk_ty (Tmem mt)
+
+let tmrestr (mt:memtype) (s:var_set) =
+  let lmt = lmt_concrete mt in
+  let lmt_symb = ref (Msym.set_diff lmt.lmt_symb s.lvs) in
+  let lmt_proj =
+    Msym.diff (fun x mp _ ->
+        let sp = EcMaps.Mint.fold (fun _ x sp -> Ssym.add x sp) mp Ssym.empty in
+        lmt_symb := Msym.set_diff !lmt_symb sp;
+        None) lmt.lmt_proj s.lvs in
+  let lmt = mk_lmt !lmt_symb lmt_proj in
+  tmem (mk_mt lmt (gvs_inter mt.gvs s.gvs))
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
@@ -175,7 +512,10 @@ let is_tdistr (ty : ty) = as_tdistr ty <> None
 (* -------------------------------------------------------------------- *)
 let ty_map f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> t
+  | Tmem mt ->
+      tmem (mt_map_ty f mt)
+
+  | Tunivar _ | Tvar _ -> t
 
   | Ttuple lty ->
      ttuple (List.Smart.map f lty)
@@ -189,21 +529,24 @@ let ty_map f t =
 
 let ty_fold f s ty =
   match ty.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> s
+  | Tmem mt -> mt_fold_ty f s mt
+  | Tunivar _ | Tvar _ -> s
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
   | Tfun(t1,t2) -> f (f s t1) t2
 
 let ty_sub_exists f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> false
+  | Tmem mt -> mt_sub_exists_ty f mt
+  | Tunivar _ | Tvar _ -> false
   | Ttuple lty -> List.exists f lty
   | Tconstr (_, lty) -> List.exists f lty
   | Tfun (t1, t2) -> f t1 || f t2
 
 let ty_iter f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> ()
+  | Tmem mt -> mt_iter_ty f mt
+  | Tunivar _ | Tvar _ -> ()
   | Ttuple lty -> List.iter f lty
   | Tconstr (_, lty) -> List.iter f lty
   | Tfun (t1,t2) -> f t1; f t2
@@ -218,7 +561,7 @@ let rec ty_check_uni t =
 (* -------------------------------------------------------------------- *)
 let symbol_of_ty (ty : ty) =
   match ty.ty_node with
-  | Tglob   _      -> "g"
+  | Tmem   _      -> "g"
   | Tunivar _      -> "u"
   | Tvar    _      -> "x"
   | Ttuple  _      -> "x"
@@ -239,44 +582,106 @@ let fresh_id_of_ty (ty : ty) =
 
 (* -------------------------------------------------------------------- *)
 type ty_subst = {
-  ts_absmod    : EcIdent.t Mid.t;
-  ts_cmod      : EcPath.mpath Mid.t;
-  ts_modtglob  : ty Mid.t;
+  ts_mod       : EcPath.mpath Mid.t;
   ts_u         : ty Muid.t;
   ts_v         : ty Mid.t;
+  ts_memtype   : local_memtype option;
 }
 
 let ty_subst_id =
-  { ts_absmod = Mid.empty;
-    ts_cmod = Mid.empty;
-    ts_modtglob = Mid.empty;
+  { ts_mod = Mid.empty;
     ts_u  = Muid.empty;
     ts_v  = Mid.empty;
+    ts_memtype = None;
   }
 
 let is_ty_subst_id s =
-  Mid.is_empty s.ts_absmod
-  && Mid.is_empty s.ts_cmod
-  && Mid.is_empty s.ts_modtglob
+  Mid.is_empty s.ts_mod
   && Muid.is_empty s.ts_u
   && Mid.is_empty s.ts_v
+  && is_none s.ts_memtype
 
-let rec ty_subst s =
-  if is_ty_subst_id s then identity
-  else
-    fun ty ->
-      match ty.ty_node with
-      | Tglob m -> begin
-          let m' = Mid.find_def m m s.ts_absmod in
-          begin
-            match Mid.find_opt m' s.ts_modtglob with
-            | None -> tglob m'
-            | Some ty -> ty_subst s ty
-          end
-        end
-      | Tunivar id    -> Muid.find_def ty id s.ts_u
-      | Tvar id       -> Mid.find_def ty id s.ts_v
-      | _ -> ty_map (ty_subst s) ty
+
+module type SubstXp = sig
+  type t
+  val bind : t -> EcIdent.ident -> EcIdent.ident * t
+  val subst : t -> xpath -> xpath
+end
+
+module SubstGvs(X:SubstXp) = struct
+(*  let ff_subst s ff =
+    let s = ref s in
+    let ff_params =
+      Sid.map (fun x ->
+        let x', s' = X.bind !s x in
+        s := s';
+        x') ff.ff_params in
+    { ff_params; ff_fun = X.subst !s ff.ff_fun } *)
+
+  let rec gvs_subst s gvs =
+    match gvs.gvs_node with
+    | Empty | All  -> gvs
+    | Set x        -> gvs_set   (Sx.map (X.subst s) x)
+    | GlobFun f    -> gvs_fun   (X.subst s f)
+    | Union(s1,s2) -> gvs_union (gvs_subst s s1) (gvs_subst s s2)
+    | Diff (s1,s2) -> gvs_diff  (gvs_subst s s1) (gvs_subst s s2)
+    | Inter(s1,s2) -> gvs_inter (gvs_subst s s1) (gvs_subst s s2)
+
+end
+
+module SubstXp :
+  SubstXp with type t = ty_subst
+= struct
+  type t = ty_subst
+  let bind s x = x, {s with ts_mod = Mid.remove x s.ts_mod }
+  let subst s xp = x_subst_abs s.ts_mod xp
+end
+
+module SGvs = SubstGvs(SubstXp)
+
+let rec gvs_subst (s:ty_subst) gvs =
+  match gvs.gvs_node with
+  | Empty | All  -> gvs
+  | Set x        -> gvs       (* no mod_ident in x *)
+  | GlobFun f    -> gvs_fun   (SubstXp.subst s f)
+  | Union(s1,s2) -> gvs_union (gvs_subst s s1) (gvs_subst s s2)
+  | Diff (s1,s2) -> gvs_diff  (gvs_subst s s1) (gvs_subst s s2)
+  | Inter(s1,s2) -> gvs_inter (gvs_subst s s1) (gvs_subst s s2)
+
+let gvs_subst s gvs =
+  if Mid.is_empty s.ts_mod then gvs
+  else gvs_subst s gvs
+
+let vs_subst s vs =
+  if Mid.is_empty s.ts_mod then vs
+  else { lvs = vs.lvs; gvs = gvs_subst s vs.gvs }
+
+let rec ty_subst s ty =
+  match ty.ty_node with
+  | Tmem mt    -> tmem (mt_subst s mt)
+  | Tunivar id -> Muid.find_def ty id s.ts_u
+  | Tvar id    -> Mid.find_def ty id s.ts_v
+  | _          -> ty_map (ty_subst s) ty
+
+and mt_subst s (mt:memtype) =
+  mk_mto
+    (omap_dfl (fun lmt -> Some (lmt_subst s lmt)) s.ts_memtype mt.lmt)
+    (gvs_subst s mt.gvs)
+
+and lmt_subst s (lmt:local_memtype) =
+  lmt_map_ty (ty_subst s) lmt
+
+let restr_subst s fv =
+  { s with ts_mod = Mid.set_diff s.ts_mod fv}
+
+let mk_restr_subst fv subst s x =
+  let s = restr_subst s (fv x) in
+  if is_ty_subst_id s then x
+  else subst s x
+
+let ty_subst = mk_restr_subst ty_fv ty_subst
+let mt_subst = mk_restr_subst mt_fv mt_subst
+let lmt_subst = mk_restr_subst lmt_fv lmt_subst
 
 (* -------------------------------------------------------------------- *)
 module Tuni = struct
@@ -375,98 +780,63 @@ let ty_fv_and_tvar (ty : ty) =
   EcIdent.fv_union ty.ty_fv (Mid.map (fun () -> 1) (Tvar.fv ty))
 
 (* -------------------------------------------------------------------- *)
-type pvar_kind =
-  | PVKglob
-  | PVKloc
+(* Basic operations on local_memtype                                    *)
 
-type prog_var =
-  | PVglob of EcPath.xpath
-  | PVloc of EcSymbols.symbol
+let lmt_init = mk_lmt Msym.empty Msym.empty
 
-let pv_equal v1 v2 = match v1, v2 with
-  | PVglob x1, PVglob x2 ->
-    EcPath.x_equal x1 x2
-  | PVloc i1, PVloc i2 -> EcSymbols.sym_equal i1 i2
-  | PVloc _, PVglob _ | PVglob _, PVloc _ -> false
+let lmt_lookup lmt x =
+  Msym.find_opt x lmt.lmt_symb
 
-let pv_kind = function
-  | PVglob _ -> PVKglob
-  | PVloc _ -> PVKloc
+let lmt_lookup_proj lmt x i =
+  obind (fun mp -> EcMaps.Mint.find_opt i mp)
+    (Msym.find_opt x lmt.lmt_proj)
 
-let pv_hash v =
-  let h = match v with
-    | PVglob x -> EcPath.x_hash x
-    | PVloc i -> Hashtbl.hash i in
+let mt_lookup mt x =
+  obind (fun lmt -> lmt_lookup lmt x) mt.lmt
 
-  Why3.Hashcons.combine
-    h (if pv_kind v = PVKglob then 1 else 0)
+let mt_lookup_proj mt x i =
+  obind (fun lmt -> lmt_lookup_proj lmt x i) mt.lmt
 
-let pv_compare v1 v2 =
-  match v1, v2 with
-  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
-  | PVglob x1, PVglob x2 -> EcPath.x_compare x1 x2
-  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+exception DuplicatedMemoryBinding of symbol
 
-let pv_compare_p v1 v2 =
-  match v1, v2 with
-  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
-  | PVglob x1, PVglob x2 -> EcPath.x_compare_na x1 x2
-  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+let lmt_symb_add lmt_symb v =
+  let merger o =
+    if o <> None then raise (DuplicatedMemoryBinding v.v_name);
+    Some (None, v.v_type) in
+  Msym.change merger v.v_name lmt_symb
 
-let pv_ntr_compare v1 v2 =
-  match v1, v2 with
-  | PVloc i1,  PVloc i2  -> EcSymbols.sym_compare i1 i2
-  | PVglob x1, PVglob x2 -> EcPath.x_ntr_compare x1 x2
-  | _, _ -> Stdlib.compare (pv_kind v1) (pv_kind v2)
+let lmt_adds lmt (xs : variable list) =
+  let lmt_symb =
+    List.fold_left lmt_symb_add lmt.lmt_symb xs in
+  mk_lmt lmt_symb lmt.lmt_proj
 
-let is_loc  = function PVloc _ -> true  | PVglob _ -> false
-let is_glob = function PVloc _ -> false | PVglob _ -> true
+let lmt_add lmt x ty =
+  mk_lmt (lmt_symb_add lmt.lmt_symb {v_name = x; v_type = ty} ) (lmt.lmt_proj)
 
-let get_loc = function PVloc id -> id | PVglob _ -> assert false
-let get_glob = function PVloc _ -> assert false | PVglob xp -> xp
+let lmt_oadds lmt (xs : ovariable list) =
+  let lmt_symb =
+    List.fold_left (fun lmt_symb ov ->
+        omap_dfl (fun v -> lmt_symb_add lmt_symb {v_name = v; v_type = ov.ov_type})
+                 lmt_symb ov.ov_name) lmt.lmt_symb xs in
+  mk_lmt lmt_symb lmt.lmt_proj
 
-let symbol_of_pv = function
-  | PVglob x -> x.EcPath.x_sub
-  | PVloc id -> id
+let lmt_add_proj lmt x (l: ovariable list) =
+  let ty = ttuple (List.map ov_type l) in
+  let lmt_symb = ref (lmt_symb_add lmt.lmt_symb { v_name = x; v_type = ty}) in
+  let x_proj = ref EcMaps.Mint.empty in
+  let doit i ov =
+    oiter (fun p ->
+      let merger o =
+         if o <> None then raise (DuplicatedMemoryBinding p);
+         Some (Some(x,ty,i), ov.ov_type) in
+      lmt_symb := Msym.change merger p !lmt_symb;
+      x_proj := EcMaps.Mint.add i p !x_proj) ov.ov_name in
+  List.iteri doit l;
+  let lmt_proj = Msym.add x !x_proj lmt.lmt_proj in
+  mk_lmt !lmt_symb lmt_proj
 
-let string_of_pvar_kind = function
-  | PVKglob -> "PVKglob"
-  | PVKloc  -> "PVKloc"
-
-let string_of_pvar (p : prog_var) =
-  let sp = match p with
-    | PVglob x -> EcPath.x_tostring x
-    | PVloc id -> id in
-
-  Printf.sprintf "%s[%s]"
-    sp (string_of_pvar_kind (pv_kind p))
-
-let name_of_pvar pv =
-  match pv with
-  | PVloc x -> x
-  | PVglob xp -> EcPath.xbasename xp
-
-let pv_loc id = PVloc id
-
-let arg_symbol = "arg"
-let res_symbol = "res"
-let pv_arg = PVloc arg_symbol
-let pv_res =  PVloc res_symbol
-
-let xp_glob x =
-  let top = x.EcPath.x_top in
-  if top.EcPath.m_args = [] then x else
-    (* remove the functor argument *)
-    let ntop = EcPath.mpath top.m_top [] in
-    EcPath.xpath ntop x.EcPath.x_sub
-
-let pv_glob x = PVglob (xp_glob x)
-
-let pv_subst m_subst px = match px with
-  | PVglob x ->
-    let mp' = m_subst x in
-    if x == mp' then px else pv_glob mp'
-  | PVloc _ -> px
+let mt_all lmt = mk_mt lmt gvs_all
+let mt_glob = mt_all lmt_init
 
 (* -------------------------------------------------------------------- *)
 type lpattern =
@@ -553,10 +923,6 @@ let lp_fv = function
       List.fold_left
         (fun s (id, _) -> ofold Sid.add s id)
         Sid.empty ids
-
-let pv_fv = function
-  | PVglob x -> EcPath.x_fv Mid.empty x
-  | PVloc _ -> Mid.empty
 
 let fv_node e =
   let union ex =
@@ -930,7 +1296,7 @@ let rec e_subst (s: e_subst) e =
   end
 
   | Evar pv ->
-      let pv' = pv_subst (x_subst_abs s.es_ty.ts_cmod) pv in
+      let pv' = pv_subst (x_subst_abs s.es_ty.ts_mod) pv in
       let ty' = ty_subst s.es_ty e.e_ty in
         e_var pv' ty'
 
@@ -1009,3 +1375,7 @@ let split_args e =
   match e.e_node with
   | Eapp (e, args) -> (e, args)
   | _ -> (e, [])
+
+
+
+(* -------------------------------------------------------------------- *)

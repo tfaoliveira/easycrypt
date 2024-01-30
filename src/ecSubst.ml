@@ -28,7 +28,6 @@ type subst = {
   sb_tyvar    : ty Mid.t;
   sb_elocal   : expr Mid.t;
   sb_flocal   : EcCoreFol.form Mid.t;
-  sb_fmem     : EcIdent.t Mid.t;
   sb_tydef    : (EcIdent.t list * ty) Mp.t;
   sb_def      : (EcIdent.t list * [`Op of  expr | `Pred of form]) Mp.t;
   sb_moddef   : EcPath.path Mp.t;
@@ -41,7 +40,6 @@ let empty : subst = {
   sb_tyvar    = Mid.empty;
   sb_elocal   = Mid.empty;
   sb_flocal   = Mid.empty;
-  sb_fmem     = Mid.empty;
   sb_tydef    = Mp.empty;
   sb_def      = Mp.empty;
   sb_moddef   = Mp.empty;
@@ -53,7 +51,6 @@ let is_empty s =
   && Mid.is_empty s.sb_tyvar
   && Mid.is_empty s.sb_elocal
   && Mid.is_empty s.sb_flocal
-  && Mid.is_empty s.sb_fmem
   && Mp.is_empty s.sb_tydef
   && Mp.is_empty s.sb_def
   && Mp.is_empty s.sb_moddef
@@ -94,10 +91,6 @@ let subst_xpath (s : subst) (xp : EcPath.xpath) =
   EcPath.xpath (subst_mpath s xp.x_top) xp.x_sub
 
 (* -------------------------------------------------------------------- *)
-let subst_mem (s : subst) (m : EcIdent.t) =
-  Mid.find_def m m s.sb_fmem
-
-(* -------------------------------------------------------------------- *)
 let get_opdef (s : subst) (p : EcPath.path) =
   match Mp.find_opt p s.sb_def with
   | Some (ids, `Op f) -> Some (ids, f) | _ -> None
@@ -112,7 +105,7 @@ let get_def (s : subst) (p : EcPath.path) =
   | Some (ids, body) ->
      let body =
        match body with
-       | `Op   e -> form_of_expr mhr e
+       | `Op   e -> form_of_expr e
        | `Pred f -> f in
      Some (ids, body)
 
@@ -136,10 +129,27 @@ let add_tyvars (s : subst) (xs : EcIdent.t list) (tys : ty list) =
   List.fold_left2 add_tyvar s xs tys
 
 (* -------------------------------------------------------------------- *)
+let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
+    { s with sb_module = Mid.add x m s.sb_module }
+
+module SubstXp : SubstXp with type t = subst
+= struct
+  type t = subst
+  let bind s x =
+    let x' = EcIdent.fresh x in
+    let s = add_module s x (EcPath.mident x') in
+    x', s
+  let subst = subst_xpath
+end
+
+module SGvs = SubstGvs(SubstXp)
+
+let subst_gvs = SGvs.gvs_subst
+
+(* -------------------------------------------------------------------- *)
 let rec subst_ty (s : subst) (ty : ty) =
   match ty.ty_node with
-  | Tglob mp ->
-     tglob (EcPath.mget_ident (subst_mpath s (EcPath.mident mp)))
+  | Tmem mt -> tmem (subst_mt s mt)
 
   | Tunivar _ ->
      ty                         (* FIXME *)
@@ -165,17 +175,22 @@ let rec subst_ty (s : subst) (ty : ty) =
   | Tfun (t1, t2) ->
      tfun (subst_ty s t1) (subst_ty s t2)
 
-(* -------------------------------------------------------------------- *)
 and subst_tys (s : subst) (tys : ty list) =
   List.map (subst_ty s) tys
 
+and subst_mt (s : subst) (mt : memtype) =
+  mk_mto
+    (omap (subst_lmt s) mt.lmt)
+    (subst_gvs s mt.gvs)
+
+and subst_lmt s (lmt:local_memtype) =
+  lmt_map_ty (subst_ty s) lmt
+
 (* -------------------------------------------------------------------- *)
-let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
-  let merger = function
-    | None   -> Some m
-    | Some _ -> raise (SubstNameClash (`Ident x))
-  in
-    { s with sb_module = Mid.change merger x s.sb_module }
+let subst_vs s (vs:var_set) =
+  { lvs = vs.lvs; gvs = subst_gvs s vs.gvs }
+
+(* -------------------------------------------------------------------- *)
 
 let add_elocal (s : subst) (x : EcIdent.t) (e : expr) =
   { s with sb_elocal = Mid.add x e s.sb_elocal }
@@ -233,21 +248,8 @@ let rename_flocal (s : subst) xfrom xto ty =
   let merger o = assert (o = None); Some xe in
   { s with sb_elocal = Mid.change merger xfrom s.sb_elocal }
 
-let add_memory (s : subst) (m : EcIdent.t) (target : EcIdent.t) =
-  { s with sb_fmem = Mid.add m target s.sb_fmem }
-
-let fresh_memory (s : subst) (m : EcIdent.t) =
-  let mfresh = EcIdent.fresh m in
-  (add_memory s m mfresh, mfresh)
-
-let fresh_memtype (s : subst) ((m, mt) : EcMemory.memenv) =
-  let mt = EcMemory.mt_subst (subst_ty s) mt in
-  let s, mfresh = fresh_memory s m in
-  (s, (mfresh, mt))
-
-let subst_memtype (s : subst) ((m, mt) : EcMemory.memenv) =
-  let mt = EcMemory.mt_subst (subst_ty s) mt in
-  (s, (m, mt))
+let remove_flocal (s : subst) (x: EcIdent.t) =
+  { s with sb_flocal = Mid.remove x s.sb_flocal }
 
 let add_path (s : subst) ~src ~dst =
   assert (Mp.find_opt src s.sb_path = None);
@@ -427,7 +429,7 @@ let subst_variable (s : subst) (x : variable) =
 (* -------------------------------------------------------------------- *)
 let subst_fun_uses (s : subst) (u : uses) =
   let x_subst = subst_xpath s in
-  let calls  = List.map x_subst u.us_calls
+  let calls  = Sx.map x_subst u.us_calls
   and reads  = Sx.fold (fun p m -> Sx.add (x_subst p) m) u.us_reads Sx.empty
   and writes = Sx.fold (fun p m -> Sx.add (x_subst p) m) u.us_writes Sx.empty in
   EcModules.mk_uses calls reads writes
@@ -487,13 +489,25 @@ let rec subst_form (s : subst) (f : form) =
   | Fpvar (pv, m) ->
      let pv = subst_progvar s pv in
      let ty = subst_ty s f.f_ty in
-     let m = subst_mem s m in
+     let m = subst_form s m in
      f_pvar pv ty m
 
-  | Fglob (mp, m) ->
-     let mp = EcPath.mget_ident (subst_mpath s (EcPath.mident mp)) in
-     let m = subst_mem s m in
-     f_glob mp m
+  | Fmrestr (m, mt) ->
+     let m' = subst_form s m in
+     let mt' = subst_mt s mt in
+     f_mrestr m' mt'
+
+  | Fupdvar(m, x, v) ->
+     let m' = subst_form s m in
+     let x' = subst_progvar s x in
+     let v' = subst_form s v in
+     f_updvar m' x' v'
+
+  | Fupdmem(m1, on, m2) ->
+     let m1' = subst_form s m1 in
+     let on' = subst_vs s on in
+     let m2' = subst_form s m2 in
+     f_updmem m1' on' m2'
 
   | Fapp ({ f_node = Fop (p, tys) }, args) when has_def s p ->
       let tys  = subst_tys s tys in
@@ -516,7 +530,7 @@ let rec subst_form (s : subst) (f : form) =
 
   | FhoareF { hf_pr; hf_f; hf_po } ->
      let hf_pr, hf_po =
-       let s = add_memory s mhr mhr in
+       let s = remove_flocal s mhr in
        let hf_pr = subst_form s hf_pr in
        let hf_po = subst_form s hf_po in
        (hf_pr, hf_po) in
@@ -534,7 +548,7 @@ let rec subst_form (s : subst) (f : form) =
 
   | FcHoareF { chf_pr; chf_f; chf_po; chf_co } ->
      let chf_pr, chf_po =
-       let s = add_memory s mhr mhr in
+       let s = remove_flocal s mhr in
        let chf_pr = subst_form s chf_pr in
        let chf_po = subst_form s chf_po in
        (chf_pr, chf_po) in
@@ -554,7 +568,7 @@ let rec subst_form (s : subst) (f : form) =
 
   | FbdHoareF { bhf_pr; bhf_f; bhf_po; bhf_cmp; bhf_bd } ->
      let bhf_pr, bhf_po =
-       let s = add_memory s mhr mhr in
+       let s = remove_flocal s mhr in
        let bhf_pr = subst_form s bhf_pr in
        let bhf_po = subst_form s bhf_po in
        (bhf_pr, bhf_po) in
@@ -574,7 +588,7 @@ let rec subst_form (s : subst) (f : form) =
 
    | FeHoareF { ehf_pr; ehf_f; ehf_po } ->
      let ehf_pr, ehf_po =
-       let s = add_memory s mhr mhr in
+       let s = remove_flocal s mhr in
        let ehf_pr = subst_form s ehf_pr in
        let ehf_po = subst_form s ehf_po in
        (ehf_pr, ehf_po) in
@@ -592,8 +606,8 @@ let rec subst_form (s : subst) (f : form) =
 
   | FequivF { ef_pr; ef_fl; ef_fr; ef_po } ->
      let ef_pr, ef_po =
-       let s = add_memory s mleft mleft in
-       let s = add_memory s mright mright in
+       let s = remove_flocal s mleft  in
+       let s = remove_flocal s mright in
        let ef_pr = subst_form s ef_pr in
        let ef_po = subst_form s ef_po in
        (ef_pr, ef_po) in
@@ -614,8 +628,8 @@ let rec subst_form (s : subst) (f : form) =
 
   | FeagerF { eg_pr; eg_sl; eg_fl; eg_fr; eg_sr; eg_po } ->
      let eg_pr, eg_po =
-       let s = add_memory s mleft  mleft  in
-       let s = add_memory s mright mright in
+       let s = remove_flocal s mleft  in
+       let s = remove_flocal s mright in
        let eg_pr = subst_form s eg_pr in
        let eg_po = subst_form s eg_po in
        (eg_pr, eg_po) in
@@ -633,11 +647,11 @@ let rec subst_form (s : subst) (f : form) =
      f_coe coe_pre coe_mem coe_e
 
   | Fpr { pr_mem; pr_fun; pr_args; pr_event } ->
-     let pr_mem = subst_mem s pr_mem in
+     let pr_mem = subst_form s pr_mem in
      let pr_fun = subst_xpath s pr_fun in
      let pr_args = subst_form s pr_args in
      let pr_event =
-       let s = add_memory s mhr mhr in
+       let s = remove_flocal s mhr in
        subst_form s pr_event in
      f_pr pr_mem pr_fun pr_args pr_event
 
@@ -714,15 +728,9 @@ and subst_oracle_info (s : subst) (oi : OI.t) =
 
 (* -------------------------------------------------------------------- *)
 and subst_mod_restr (s : subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (subst_xpath s x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (subst_mpath s x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
   let ois = EcSymbols.Msym.map (fun oi ->
       subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
+  { mr_mem = subst_gvs s mr.mr_mem ; mr_oinfos = ois }
 
 (* -------------------------------------------------------------------- *)
 and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
@@ -786,9 +794,6 @@ and subst_gty (s : subst) (ty : gty) =
   | GTmodty mty ->
      GTmodty (subst_modtype s mty)
 
-  | GTmem m ->
-     GTmem (EcMemory.mt_subst (subst_ty s) m)
-
 (* -------------------------------------------------------------------- *)
 and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
   let xfresh = EcIdent.fresh x in
@@ -797,8 +802,7 @@ and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
   | GTty ty ->
      let s = add_flocal s x (f_local xfresh ty) in
      s, (xfresh, gty)
-  | GTmem _ ->
-     s, (x, gty)
+
   | GTmodty _ ->
      let s = add_module s x (EcPath.mident xfresh) in
      s, (xfresh, gty)
@@ -806,6 +810,12 @@ and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
 (* -------------------------------------------------------------------- *)
 and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
   List.fold_left_map fresh_glocal s locals
+
+(* -------------------------------------------------------------------- *)
+and subst_memtype (s : subst) ((m,mt):EcMemory.memenv) =
+  let s, (x,gty) = fresh_glocal s (m, GTty (tmem mt)) in
+  let mt = match gty with GTty {ty_node = Tmem mt} -> mt | _ -> assert false in
+   s, (m, mt)
 
 (* -------------------------------------------------------------------- *)
 and subst_top_modsig (s : subst) (ms : top_module_sig) =
@@ -916,10 +926,6 @@ let fresh_pparam (s : subst) (x : EcIdent.t) =
   let s = add_elocal s x (e_local newx tbool) in
   let s = add_flocal s x (f_local newx tbool) in
   (s, newx)
-
-(* -------------------------------------------------------------------- *)
-let fresh_pparams (s : subst) (pparams : pr_params) =
-  List.fold_left_map fresh_pparam s pparams
 
 (* -------------------------------------------------------------------- *)
 let subst_genty (s : subst) (tparams, ty) =
@@ -1069,13 +1075,11 @@ let fresh_scparams (s : subst) (xtys : (EcIdent.t * ty) list) =
 let subst_schema (s : subst) (ax : ax_schema) =
   (* FIXME: SCHEMA *)
   let s, tparams = fresh_tparams s ax.axs_tparams in
-  let s, pparams = fresh_pparams s ax.axs_pparams in
-  let s, params  = fresh_scparams s ax.axs_params in
+  let s, eparams = fresh_scparams s ax.axs_eparams in
   let spec       = subst_form s ax.axs_spec in
 
   { axs_tparams = tparams;
-    axs_pparams = pparams;
-    axs_params  = params;
+    axs_eparams = eparams;
     axs_loca    = ax.axs_loca;
     axs_spec    = spec; }
 

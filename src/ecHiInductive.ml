@@ -115,7 +115,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
 
     and isempty (ty : ty) =
       match ty.ty_node with
-      | Tglob   _ -> false
+      | Tmem    _ -> false
       | Tvar    _ -> false
       | Tunivar _ -> false
 

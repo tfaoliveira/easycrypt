@@ -7,32 +7,38 @@ type memory = EcIdent.t
 val mem_equal : memory -> memory -> bool
 
 (* -------------------------------------------------------------------- *)
-type proj_arg =
+(*type proj_arg =
   { arg_ty  : ty; (* type of the procedure argument "arg" *)
     arg_pos : int;       (* projection *)
-  }
+  } *)
 
-type memtype
 
-val mt_equal_gen : (ty -> ty -> bool) -> memtype -> memtype -> bool
+type memtype = EcTypes.memtype
+
+(* val mt_equal_gen : (ty -> ty -> bool) -> memtype -> memtype -> bool
 val mt_equal    : memtype -> memtype -> bool
+
 val mt_fv       : memtype -> int EcIdent.Mid.t
 
 val mt_iter_ty : (ty -> unit) -> memtype -> unit
-
+*)
 (* -------------------------------------------------------------------- *)
 type memenv = memory * memtype
 
-val mem_hash : memenv -> int
-val me_equal_gen : (ty -> ty -> bool) -> memenv -> memenv -> bool
+val me_hash : memenv -> int
+(* val me_equal_gen : (ty -> ty -> bool) -> memenv -> memenv -> bool *)
 val me_equal : memenv -> memenv -> bool
 
 (* -------------------------------------------------------------------- *)
 val memory   : memenv -> memory
 val memtype  : memenv -> memtype
 
+val me_lookup :
+  memenv -> symbol -> ((EcSymbols.symbol * ty * int) option * ty) option
+
 (* -------------------------------------------------------------------- *)
 (* [empty_local witharg id] if witharg then allows to use symbol "arg"  *)
+(*
 val empty_local    : witharg:bool -> memory -> memenv
 val empty_local_mt : witharg:bool -> memtype
 
@@ -78,3 +84,4 @@ val dump_memtype : memtype -> string
 (* -------------------------------------------------------------------- *)
 val local_type : memtype -> ty option
 val has_locals : memtype -> bool
+*)

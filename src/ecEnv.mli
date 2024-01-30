@@ -130,10 +130,10 @@ module Var : sig
   val lookup_local_opt : symbol -> env -> (EcIdent.t * EcTypes.ty) option
 
   val lookup_progvar     : ?side:memory -> qsymbol -> env ->
-    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] *
+    ([`Proj of EcTypes.prog_var * EcTypes.ty * int | `Var of EcTypes.prog_var ] *
      EcTypes.ty)
   val lookup_progvar_opt : ?side:memory -> qsymbol -> env ->
-    ([`Proj of EcTypes.prog_var * proj_arg | `Var of EcTypes.prog_var ] *
+    ([`Proj of EcTypes.prog_var * EcTypes.ty * int | `Var of EcTypes.prog_var ] *
      EcTypes.ty) option
 
   exception DuplicatedLocalBinding of EcIdent.t
@@ -215,7 +215,7 @@ module Mod : sig
   val declare_local : EcIdent.t -> module_type -> env -> env
   val is_declared   : EcIdent.t -> env -> bool
 
-  val add_restr_to_locals : Sx.t use_restr -> Sm.t use_restr -> env -> env
+(*  val add_restr_to_locals : Sx.t use_restr -> Sm.t use_restr -> env -> env *)
 
   val import_vars : env -> mpath -> env
 
@@ -247,13 +247,12 @@ module ModTy : sig
 end
 
 (* -------------------------------------------------------------------- *)
-type use = {
-  us_pv : ty EcPath.Mx.t;
-  us_gl : EcIdent.Sid.t;
-}
+type use = gvar_set
 
+(*
 val use_empty : use
 val use_union : use -> use -> use
+*)
 
 module NormMp : sig
   val norm_mpath    : env -> mpath -> mpath
@@ -262,19 +261,22 @@ module NormMp : sig
   val norm_form     : env -> form -> form
   val mod_use       : env -> mpath -> use
   val fun_use       : env -> xpath -> use
+(*
   val restr_use     : env -> mod_restr -> use use_restr
   val get_restr_use : env -> mpath -> use use_restr
   val get_restr_me  : env -> module_expr -> mpath -> mod_restr
   val get_restr     : env -> mpath -> mod_restr
-
+*)
   val sig_of_mp     : env -> mpath -> module_sig
 
   (* Return [true] if [x] is forbidden in [restr]. *)
+(*
   val use_mem_xp    : xpath -> use use_restr -> bool
   val use_mem_gl    : mpath -> use use_restr -> bool
 
   val norm_glob     : env -> EcMemory.memory -> mpath -> form
   val norm_tglob    : env -> mpath -> EcTypes.ty
+*)
 
   val is_abstract_fun : xpath -> env -> bool
   val x_equal         : env -> xpath -> xpath -> bool

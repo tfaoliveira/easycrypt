@@ -223,7 +223,7 @@ and betared st s bd f args =
      Subst.subst s (f_quant Llambda bd f)
 
   | (x, gty) :: bd, Some (v, args) ->
-     let _ : ty = EcFol.as_gtty gty in
+     let _ : ty = EcFol.gty_as_ty gty in
      let s = Subst.bind_local s x v in
      betared st s bd f args
 

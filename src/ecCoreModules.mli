@@ -106,6 +106,7 @@ type funsig = {
 val fs_equal : funsig -> funsig -> bool
 
 (* -------------------------------------------------------------------- *)
+(*
 type 'a use_restr = {
   ur_pos : 'a option;   (* If not None, can use only element in this set. *)
   ur_neg : 'a;          (* Cannot use element in this set. *)
@@ -122,7 +123,7 @@ val ur_union :
   ('a -> 'a -> 'a) ->
   ('a -> 'a -> 'a) ->
   'a use_restr -> 'a use_restr -> 'a use_restr
-
+*)
 (* -------------------------------------------------------------------- *)
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
@@ -145,13 +146,9 @@ module PreOI : sig
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcPath.Sx.t use_restr
-
-type mr_mpaths = EcPath.Sm.t use_restr
 
 type 'a p_mod_restr = {
-  mr_xpaths : mr_xpaths;
-  mr_mpaths : mr_mpaths;
+  mr_mem    : gvar_set;
   mr_oinfos : 'a PreOI.t Msym.t;
 }
 
@@ -166,9 +163,6 @@ val p_mr_hash : ('a -> int) -> 'a p_mod_restr -> int
 val has_compl_restriction : 'a p_mod_restr -> bool
 
 val mr_is_empty : 'a p_mod_restr -> bool
-
-val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
-val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
 (* An oracle in a function provided by a module parameter of a functor *)
@@ -205,12 +199,12 @@ val sig_smpl_sig_coincide : 'a p_module_sig -> 'b p_module_smpl_sig -> bool
 
 (* -------------------------------------------------------------------- *)
 type uses = {
-  us_calls  : xpath list;
+  us_calls  : Sx.t;
   us_reads  : Sx.t;
   us_writes : Sx.t;
 }
 
-val mk_uses : xpath list -> Sx.t -> Sx.t -> uses
+val mk_uses : Sx.t -> Sx.t -> Sx.t -> uses
 
 type function_def = {
   f_locals : variable list;

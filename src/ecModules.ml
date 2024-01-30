@@ -59,21 +59,23 @@ type module_comps_item = form p_module_comps_item
 type top_module_sig    = form p_top_module_sig
 type top_module_expr   = form p_top_module_expr
 
+(* TODO : rename
+   No memory restriction *)
 let mr_empty = {
-  mr_xpaths = ur_empty EcPath.Sx.empty;
-  mr_mpaths = ur_empty EcPath.Sm.empty;
+  mr_mem = EcTypes.gvs_all;  (* All global are allowed *)
   mr_oinfos = Msym.empty;
 }
 
+(* TODO : rename
+   Full memory restriction *)
 let mr_full = {
-  mr_xpaths = ur_full EcPath.Sx.empty;
-  mr_mpaths = ur_full EcPath.Sm.empty;
+  mr_mem = EcTypes.gvs_empty;  (* Nothing is allowed *)
   mr_oinfos = Msym.empty;
 }
 
-let mr_add_restr mr (rx : Sx.t use_restr) (rm : Sm.t use_restr) =
-  { mr_xpaths = ur_union Sx.union Sx.inter mr.mr_xpaths rx;
-    mr_mpaths = ur_union Sm.union Sm.inter mr.mr_mpaths rm;
+(* The intersection of what is allowed *)
+let mr_add_restr mr gvs =
+  { mr_mem = EcTypes.gvs_diff mr.mr_mem gvs;
     mr_oinfos = mr.mr_oinfos; }
 
 let change_oinfo restr f oi =
