@@ -79,17 +79,15 @@ module Fsubst : sig
     -> unit -> f_subst
 
   val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
+  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> memtype -> f_subst
   val f_bind_absmod : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> (EcIdent.t -> form) -> f_subst
+  val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> f_subst
   val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
-
-  val has_mem : f_subst -> EcAst.memory -> bool
 
   val f_subst   : form tx_substitute
 
   val f_subst_local : EcIdent.t -> form -> form -> form
-  val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
+  val f_subst_mem   : memory -> memory -> memtype -> form -> form
 
   (* FIXME try to remove es_loc *)
   val f_subst_tvar :
@@ -106,8 +104,7 @@ module Fsubst : sig
   val pv_subst  : prog_var    substitute
   val s_subst   : stmt        substitute
   val e_subst   : expr        substitute
-  val me_subst  : memenv      substitute
-  val m_subst   : EcIdent.t   substitute
+  val mt_subst  : memtype     substitute
   val mty_subst : module_type substitute
   val oi_subst  : PreOI.t     substitute
   val gty_subst : gty         substitute

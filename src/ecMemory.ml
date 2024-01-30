@@ -12,39 +12,18 @@ type memory = EcAst.memory
 let mem_equal = EcAst.mem_equal
 
 (* -------------------------------------------------------------------- *)
-type proj_arg = EcAst.proj_arg
 
-let mk_lmt lmt_name lmt_decl lmt_proj =
-  { lmt_name;
-    lmt_decl;
-    lmt_proj;
-    lmt_ty = ttuple (List.map ov_type lmt_decl);
-    lmt_n  = List.length lmt_decl;
-  }
-
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
-   memory type when the axiom schema is.  *)
 type memtype = EcAst.memtype
-
-let lmt_hash = EcAst.lmt_hash
 
 let mt_fv = EcAst.mt_fv
 
 let lmt_equal = EcAst.lmt_equal
 
-let mt_equal_gen = EcAst.mt_equal_gen
-
 let mt_equal = EcAst.mt_equal
-
-let mt_iter_ty f mt = match mt with
-  | Lmt_schema -> ()
-  | Lmt_concrete mt ->
-    oiter (fun lmt -> List.iter (fun v -> f v.ov_type) lmt.lmt_decl) mt
 
 (* -------------------------------------------------------------------- *)
 type memenv = EcAst.memenv
 
-let me_equal_gen = EcAst.me_equal_gen
 let me_equal = EcAst.me_equal
 
 (* -------------------------------------------------------------------- *)
@@ -54,6 +33,108 @@ let memtype  (_,mt) = mt
 (* -------------------------------------------------------------------- *)
 exception DuplicatedMemoryBinding of symbol
 
+(* -------------------------------------------------------------------- *)
+let lmt_empty =
+  mk_lmt Msym.empty Msym.empty
+
+let mt_global =
+  mk_mt (Some lmt_empty) gvs_all
+
+let lmt_add_params lmt arg params =
+  let lmt_symb = lmt.lmt_symb in
+  let ty = ttuple (List.map ov_type params) in
+  (* Add arg *)
+  let lmt_symb = Msym.add arg (None, ty) lmt_symb in
+
+
+  (* Add projs *)
+  let lmt_symb, lmt_proj =
+    match params with
+    | [{ov_name = Some s}] ->
+      let lmt_symb =
+        let change o =
+          if o <> None then raise (DuplicatedMemoryBinding s);
+          Some (Some(arg, ty, None), ty) in
+        Msym.change change s lmt_symb in
+      let lmt_proj = Msym.add arg (Ptbl_direct s) lmt.lmt_proj in
+      lmt_symb, lmt_proj
+    | _ ->
+      let add_proj lmt_symb i ov =
+        ofold (fun s m ->
+            let change o =
+              if o <> None then raise (DuplicatedMemoryBinding s);
+              Some (Some(arg, ty, Some i), ov_type ov) in
+            Msym.change change s m) lmt_symb ov.ov_name in
+      let lmt_symb =
+        List.fold_lefti add_proj lmt_symb params in
+      let add_proji ma i ov =
+        ofold (fun s m -> EcMaps.Mint.add i s m) ma ov.ov_name in
+      let projs = List.fold_lefti add_proji EcMaps.Mint.empty params in
+      let lmt_proj = Msym.add arg (Ptbl_proj projs) lmt.lmt_proj in
+      lmt_symb, lmt_proj
+  in
+  (* Build the result *)
+  mk_lmt lmt_symb lmt_proj
+
+let mt_add_params mt arg params =
+  mk_mt (Some (lmt_add_params (oget mt.mt_lmt) arg params)) mt.mt_gvs
+
+let mt_init_params params =
+  mt_add_params mt_global arg_symbol params
+
+let mt_init_res ty =
+  mt_add_params mt_global res_symbol [{ ov_name = None; ov_type = ty }]
+
+let lmt_add_ovars lmt vs =
+  let add lmt_symb ov =
+    ofold
+      (fun s m ->
+        let change o =
+          if o <> None then raise (DuplicatedMemoryBinding s);
+          Some (None, ov_type ov)
+        in
+        Msym.change change s m)
+      lmt_symb ov.ov_name
+  in
+  let lmt_symb =
+    List.fold_left add lmt.lmt_symb vs in
+  mk_lmt lmt_symb lmt.lmt_proj
+
+let mt_add_ovars mt vs =
+  mk_mt (Some (lmt_add_ovars (oget mt.mt_lmt) vs)) mt.mt_gvs
+
+let mt_add_vars mt vs =
+  mt_add_ovars mt (List.map ovar_of_var vs)
+
+let lmt_lookup x lmt =
+  Msym.find_opt x lmt.lmt_symb
+
+let lmt_lookup_pp lmt x i =
+  match Msym.find_opt x lmt.lmt_proj, i with
+  | Some (Ptbl_direct z), None -> Some z
+  | Some (Ptbl_proj m), Some i -> EcMaps.Mint.find_opt i m
+  | _, None -> Some x
+  | _, Some _ -> None
+
+let mt_lookup mt x =
+  omap_dfl (lmt_lookup x) None mt.mt_lmt
+
+let mt_lookup_pp mt x i =
+  match mt.mt_lmt with
+  | None -> if i = None then Some x else None
+  | Some lmt -> lmt_lookup_pp lmt x i
+
+let me_lookup (_,mt) x = mt_lookup mt x
+
+let me_lookup_pp (_, mt) x i = mt_lookup_pp mt x i
+
+let is_bound mt x = mt_lookup mt x <> None
+
+
+
+
+
+(*
 (* -------------------------------------------------------------------- *)
 let empty_local_mt ~witharg =
   let lmt = mk_lmt (if witharg then Some arg_symbol else None) [] Msym.empty in
@@ -237,3 +318,4 @@ let has_locals mt = match mt with
   | Lmt_concrete (Some _) -> true
   | Lmt_concrete None -> false
   | Lmt_schema -> assert false
+*)

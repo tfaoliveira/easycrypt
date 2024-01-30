@@ -36,33 +36,11 @@ module Sty = MSHty.S
 module Hty = MSHty.H
 
 (* -------------------------------------------------------------------- *)
-let rec dump_ty ty =
-  match ty.ty_node with
-  | Tglob p ->
-      EcIdent.tostring p
-
-  | Tunivar i ->
-      Printf.sprintf "#%d" i
-
-  | Tvar id ->
-      EcIdent.tostring id
-
-  | Ttuple tys ->
-      Printf.sprintf "(%s)" (String.concat ", " (List.map dump_ty tys))
-
-  | Tconstr (p, tys) ->
-      Printf.sprintf "%s[%s]" (EcPath.tostring p)
-        (String.concat ", " (List.map dump_ty tys))
-
-  | Tfun (t1, t2) ->
-      Printf.sprintf "(%s) -> (%s)" (dump_ty t1) (dump_ty t2)
-
-(* -------------------------------------------------------------------- *)
 let tuni uid     = mk_ty (Tunivar uid)
 let tvar id      = mk_ty (Tvar id)
 let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
-let tglob m      = mk_ty (Tglob m)
+let tmem m       = mk_ty (Tmem m)
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
@@ -111,10 +89,28 @@ let as_tdistr (ty : ty) =
 
 let is_tdistr (ty : ty) = as_tdistr ty <> None
 
+let destr_tmem (ty : ty) =
+  match ty.ty_node with
+  | Tmem mt -> mt
+  | _ -> assert false
+
 (* -------------------------------------------------------------------- *)
+
+let lmt_map_ty f lmt =
+  let lmt_symb =
+    EcSymbols.Msym.map (fun (o,ty) ->
+         omap (fun(s,ty,i) -> s, f ty, i) o, f ty) lmt.lmt_symb in
+  mk_lmt lmt_symb lmt.lmt_proj
+
+let mt_map_ty f mt =
+  let mt_lmt = omap (lmt_map_ty f) mt.mt_lmt in
+  mk_mt mt_lmt mt.mt_gvs
+
 let ty_map f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> t
+  | Tunivar _ | Tvar _ -> t
+
+  | Tmem mt -> tmem (mt_map_ty f mt)
 
   | Ttuple lty ->
      ttuple (List.Smart.map f lty)
@@ -126,23 +122,46 @@ let ty_map f t =
   | Tfun (t1, t2) ->
       tfun (f t1) (f t2)
 
+
+let ty_fold_lmt f s lmt =
+  (* We do not fold on the type in _o because they are subterms of ty *)
+  EcSymbols.Msym.fold (fun _ (_o, ty) s -> f s ty) lmt.lmt_symb s
+
+let ty_fold_mt f s mt = ofold (fun lmt s -> ty_fold_lmt f s lmt) s mt.mt_lmt
+
 let ty_fold f s ty =
   match ty.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> s
+  | Tunivar _ | Tvar _ -> s
+  | Tmem mt -> ty_fold_mt f s mt
   | Ttuple lty -> List.fold_left f s lty
   | Tconstr(_, lty) -> List.fold_left f s lty
   | Tfun(t1,t2) -> f (f s t1) t2
 
+let ty_sub_exists_lmt f lmt =
+  (* We do not fold on the type in _o because they are subterms of ty *)
+  EcSymbols.Msym.exists (fun _ (_o, ty) -> f ty) lmt.lmt_symb
+
+let ty_sub_exists_mt f mt =
+  omap_dfl (ty_sub_exists_lmt f) false mt.mt_lmt
+
 let ty_sub_exists f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> false
+  | Tunivar _ | Tvar _ -> false
+  | Tmem mt -> ty_sub_exists_mt f mt
   | Ttuple lty -> List.exists f lty
   | Tconstr (_, lty) -> List.exists f lty
   | Tfun (t1, t2) -> f t1 || f t2
 
+let ty_iter_lmt f lmt =
+  (* We do not fold on the type in _o because they are subterms of ty *)
+  EcSymbols.Msym.iter (fun _ (_o, ty) -> f ty) lmt.lmt_symb
+
+let ty_iter_mt f mt = oiter (ty_iter_lmt f) mt.mt_lmt
+
 let ty_iter f t =
   match t.ty_node with
-  | Tglob _ | Tunivar _ | Tvar _ -> ()
+  | Tunivar _ | Tvar _ -> ()
+  | Tmem mt -> ty_iter_mt f mt
   | Ttuple lty -> List.iter f lty
   | Tconstr (_, lty) -> List.iter f lty
   | Tfun (t1,t2) -> f t1; f t2
@@ -157,7 +176,7 @@ let rec ty_check_uni t =
 (* -------------------------------------------------------------------- *)
 let symbol_of_ty (ty : ty) =
   match ty.ty_node with
-  | Tglob   _      -> "g"
+  | Tmem    _      -> "g"
   | Tunivar _      -> "u"
   | Tvar    _      -> "x"
   | Ttuple  _      -> "x"
@@ -175,6 +194,17 @@ let symbol_of_ty (ty : ty) =
 
 let fresh_id_of_ty (ty : ty) =
   EcIdent.create (symbol_of_ty ty)
+
+
+(* -------------------------------------------------------------------- *)
+let gvs_empty = mk_gvs Empty
+let gvs_all = mk_gvs All
+let gvs_set s = mk_gvs (Set s)
+let gvs_globfun ff = mk_gvs (GlobFun ff)
+let gvs_union g1 g2 = mk_gvs (Union(g1,g2))
+let gvs_diff  g1 g2 = mk_gvs (Diff(g1,g2))
+let gvs_inter g1 g2 = mk_gvs (Inter(g1,g2))
+
 
 (* -------------------------------------------------------------------- *)
 type ovariable = EcAst.ovariable

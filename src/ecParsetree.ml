@@ -36,6 +36,29 @@ type osymbol_r   = psymbol option
 type osymbol     = osymbol_r located
 
 (* -------------------------------------------------------------------- *)
+(*
+interp {}   -> empty
+interp {S1, S} -> interp_union_diff (interp S1) S
+interp -S      -> All \ interp S
+interp +S      -> interp S
+interp x       -> {x}
+interp f       -> glob f
+interp mod     -> glob M  if M is abstract then U glob M.f if M is concrete then U var M U glob M.f
+
+interp_union_diff s {} -> s
+interp_union_diff s {+S1, S} -> interp_union_diff (s U interp S1) S
+interp_union_diff s {-S1, S} -> interp_union_diff (s \ interp S1) S
+*)
+
+(* A memory restricition. *)
+type pmod_restr_mem =
+  | PMplus  of pmod_restr_mem
+  | PMminus of pmod_restr_mem
+  | PMlist  of pmod_restr_mem list
+  | PMmod   of pmsymbol located
+  | PMfunOrVar of pgamepath
+
+(* -------------------------------------------------------------------- *)
 type pty_r =
   | PTunivar
   | PTtuple  of pty list
@@ -43,7 +66,8 @@ type pty_r =
   | PTvar    of psymbol
   | PTapp    of pqsymbol * pty list
   | PTfun    of pty * pty
-  | PTglob   of pmsymbol located
+  | PTglob   of pmod_restr_mem
+
 and pty = pty_r located
 
 type ptyannot_r =
@@ -148,20 +172,6 @@ and pdatatype = (psymbol * pty list) list
 and precord = (psymbol * pty) list
 
 (* -------------------------------------------------------------------- *)
-type f_or_mod_ident =
-  | FM_FunOrVar of pgamepath
-  | FM_Mod of pmsymbol located
-
-
-type pmod_restr_mem_el =
-  | PMPlus    of f_or_mod_ident
-  | PMMinus   of f_or_mod_ident
-  | PMDefault of f_or_mod_ident
-
-(* A memory restricition. *)
-type pmod_restr_mem = pmod_restr_mem_el list
-
-(* -------------------------------------------------------------------- *)
 type pmemory   = psymbol
 
 type phoarecmp = EcFol.hoarecmp
@@ -252,7 +262,7 @@ and pcost  = PC_costs of pformula * pcost_calls
    empty restriction.  *)
 and pmodule_type_restr =
   { pmty_pq  : pqsymbol;
-    pmty_mem : pmod_restr option; }
+    pmty_mem : pmod_restr; }
 
 (* -------------------------------------------------------------------- *)
 (* qident optionally taken in a (implicit) module parameters. *)
@@ -270,8 +280,8 @@ and pmod_restr_el = {
 }
 
 and pmod_restr = {
-  pmr_mem   : pmod_restr_mem;
-	pmr_procs : pmod_restr_el list;
+  pmr_mem   : pmod_restr_mem option;
+	pmr_procs : pmod_restr_el list option;
  }
 
 (* -------------------------------------------------------------------- *)

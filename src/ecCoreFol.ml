@@ -44,8 +44,6 @@ type call_bound  = EcAst.call_bound
 
 type module_type = EcAst.module_type
 
-type mod_restr = EcAst.mod_restr
-
 (*-------------------------------------------------------------------- *)
 let mhr    = EcAst.mhr
 let mleft  = EcAst.mleft
@@ -65,18 +63,10 @@ let f_ty f = f.f_ty
 let mty_equal = EcAst.mty_equal
 let mty_hash  = EcAst.mty_hash
 
-let mr_equal = EcAst.mr_equal
-let mr_hash  = EcAst.mr_hash
-
 (*-------------------------------------------------------------------- *)
 let gty_equal = EcAst.gty_equal
 let gty_hash  = EcAst.gty_hash
-
-(* -------------------------------------------------------------------- *)
-let mr_fv = EcAst.mr_fv
-
-(* -------------------------------------------------------------------- *)
-let gty_fv = EcAst.gty_fv
+let gty_fv    = EcAst.gty_fv
 
 (* -------------------------------------------------------------------- *)
 let gtty (ty : EcTypes.ty) =
@@ -85,13 +75,9 @@ let gtty (ty : EcTypes.ty) =
 let gtmodty (mt : module_type) =
   GTmodty mt
 
-let gtmem (mt : EcMemory.memtype) =
-  GTmem mt
-
 (* -------------------------------------------------------------------- *)
 let as_gtty  = function GTty ty  -> ty  | _ -> assert false
 let as_modty = function GTmodty mty -> mty | _ -> assert false
-let as_mem   = function GTmem m -> m | _ -> assert false
 
 (*-------------------------------------------------------------------- *)
 let b_equal = EcAst.b_equal
@@ -149,14 +135,11 @@ let pr_hash   = EcAst.pr_hash
 let gty_as_ty =
   function GTty ty -> ty | _ -> assert false
 
-let gty_as_mem =
-  function GTmem m -> m  | _ -> assert false
 
 let gty_as_mod = function GTmodty mt -> mt | _ -> assert false
 
 let kind_of_gty = function
   | GTty    _ -> `Form
-  | GTmem   _ -> `Mem
   | GTmodty _ -> `Mod
 
 (* -------------------------------------------------------------------- *)
@@ -186,13 +169,18 @@ let f_app f args ty =
 
 (* -------------------------------------------------------------------- *)
 let f_local  x ty   = mk_form (Flocal x) ty
+let f_mem    (m,mt) = f_local m (tmem mt)
+
 let f_pvar   x ty m = mk_form (Fpvar(x, m)) ty
 let f_pvloc  v  m = f_pvar (pv_loc v.v_name) v.v_type m
 
 let f_pvarg  ty m = f_pvar pv_arg ty m
 
 let f_pvlocs vs menv = List.map (fun v -> f_pvloc v menv) vs
-let f_glob   m mem   = mk_form (Fglob (m, mem)) (tglob m)
+
+let f_mrestr m mt    = mk_form (Fmrestr(m,mt)) (tmem mt)
+let f_updvar m x f  = mk_form (Fupdvar(m,x,f))  m.f_ty
+let f_updmem m s m' = mk_form (Fupdmem(m,s,m')) m.f_ty
 
 (* -------------------------------------------------------------------- *)
 let f_tt     = f_op EcCoreLib.CI_Unit.p_tt    [] tunit
@@ -230,7 +218,7 @@ let f_forall b  f     = f_quant Lforall b f
 let f_lambda b  f     = f_quant Llambda b f
 
 let f_forall_mems bds f =
-  f_forall (List.map (fun (m, mt) -> (m, GTmem mt)) bds) f
+  f_forall (List.map (fun (m, mt) -> (m, GTty (tmem mt))) bds) f
 
 (* -------------------------------------------------------------------- *)
 let ty_fbool1 = toarrow (List.make 1 tbool) tbool
@@ -474,7 +462,6 @@ let f_map gt g fp =
       f_quant q b' f'
 
   | Fint  _ -> fp
-  | Fglob _ -> fp
 
   | Fif (f1, f2, f3) ->
       f_if (g f1) (g f2) (g f3)
@@ -489,9 +476,18 @@ let f_map gt g fp =
       let ty' = gt fp.f_ty in
         f_local id ty'
 
-  | Fpvar (id, s) ->
+  | Fpvar (x, m) ->
       let ty' = gt fp.f_ty in
-        f_pvar id ty' s
+      f_pvar x ty' (g m)
+
+  | Fmrestr (m, mt) ->
+      f_mrestr (g m) (EcTypes.mt_map_ty gt mt)
+
+  | Fupdvar(m,x,v) ->
+      f_updvar (g m) x (g v)
+
+  | Fupdmem(m, s, m') ->
+      f_updmem (g m) s (g m')
 
   | Fop (p, tys) ->
       let tys' = List.Smart.map gt tys in
@@ -586,9 +582,12 @@ let f_iter g f =
   match f.f_node with
   | Fint     _
   | Flocal   _
-  | Fpvar    _
-  | Fglob    _
   | Fop      _ -> ()
+
+  | Fpvar(_x, m) -> g m
+  | Fmrestr (m, _mt) -> g m
+  | Fupdvar(m, _x, v) -> g m; g v
+  | Fupdmem(m, _s, m') -> g m; g m'
 
   | Fquant   (_ , _ , f1) -> g f1
   | Fif      (f1, f2, f3) -> g f1;g f2; g f3
@@ -618,9 +617,12 @@ let form_exists g f =
   match f.f_node with
   | Fint     _
   | Flocal   _
-  | Fpvar    _
-  | Fglob    _
   | Fop      _ -> false
+
+  | Fpvar(_x, m) -> g m
+  | Fmrestr (m, _mt) -> g m
+  | Fupdvar(m, _x, v) -> g m || g v
+  | Fupdmem(m, _s, m') -> g m || g m'
 
   | Fquant   (_ , _ , f1) -> g f1
   | Fif      (f1, f2, f3) -> g f1 || g f2 || g f3
@@ -649,9 +651,12 @@ let form_forall g f =
   match f.f_node with
   | Fint     _
   | Flocal   _
-  | Fpvar    _
-  | Fglob    _
   | Fop      _ -> true
+
+  | Fpvar(_x, m) -> g m
+  | Fmrestr (m, _mt) -> g m
+  | Fupdvar(m, _x, v) -> g m && g v
+  | Fupdmem(m, _s, m') -> g m && g m'
 
   | Fquant   (_ , _ , f1) -> g f1
   | Fif      (f1, f2, f3) -> g f1 && g f2 && g f3
@@ -827,10 +832,20 @@ let destr_pvar f =
   | Fpvar(x,m) -> (x,m)
   | _ -> destr_error "destr_pvar"
 
-let destr_glob f =
+let destr_mrestr f =
   match f.f_node with
-  | Fglob(m , mem) -> (m, mem)
-  | _ -> destr_error "destr_glob"
+  | Fmrestr (m, mt) -> (m, mt)
+  | _ -> destr_error "destr_mrestr"
+
+let destr_updvar f =
+  match f.f_node with
+  | Fupdvar(m,x,v) -> (m,x,v)
+  | _ -> destr_error "destr_updvar"
+
+let destr_updmem f =
+  match f.f_node with
+  | Fupdmem(m,x,m') -> (m,x,m')
+  | _ -> destr_error "destr_updmem"
 
 (* -------------------------------------------------------------------- *)
 let is_op_and_sym  p = EcPath.p_equal EcCoreLib.CI_Bool.p_and p
@@ -924,7 +939,9 @@ let is_tuple     f = is_from_destr destr_tuple     f
 let is_op        f = is_from_destr destr_op        f
 let is_local     f = is_from_destr destr_local     f
 let is_pvar      f = is_from_destr destr_pvar      f
-let is_glob      f = is_from_destr destr_glob      f
+let is_mrestr    f = is_from_destr destr_mrestr    f
+let is_updvar    f = is_from_destr destr_updvar    f
+let is_updmem    f = is_from_destr destr_updmem    f
 let is_proj      f = is_from_destr destr_proj      f
 let is_and       f = is_from_destr destr_and       f
 let is_or        f = is_from_destr destr_or        f
@@ -978,7 +995,7 @@ let equantif_of_quantif (qt : quantif) : equantif =
   | Lexists -> `EExists
 
 (* -------------------------------------------------------------------- *)
-let rec form_of_expr mem (e : expr) =
+let rec form_of_expr ?mem (e : expr) =
   match e.e_node with
   | Eint n ->
      f_int n
@@ -987,44 +1004,45 @@ let rec form_of_expr mem (e : expr) =
      f_local id e.e_ty
 
   | Evar pv ->
+     let mem = match mem with Some m -> m | _ -> assert false in
      f_pvar pv e.e_ty mem
 
   | Eop (op, tys) ->
      f_op op tys e.e_ty
 
   | Eapp (ef, es) ->
-     f_app (form_of_expr mem ef) (List.map (form_of_expr mem) es) e.e_ty
+     f_app (form_of_expr ?mem ef) (List.map (form_of_expr ?mem) es) e.e_ty
 
   | Elet (lpt, e1, e2) ->
-     f_let lpt (form_of_expr mem e1) (form_of_expr mem e2)
+     f_let lpt (form_of_expr ?mem e1) (form_of_expr ?mem e2)
 
   | Etuple es ->
-     f_tuple (List.map (form_of_expr mem) es)
+     f_tuple (List.map (form_of_expr ?mem) es)
 
   | Eproj (e1, i) ->
-     f_proj (form_of_expr mem e1) i e.e_ty
+     f_proj (form_of_expr ?mem e1) i e.e_ty
 
   | Eif (e1, e2, e3) ->
-     let e1 = form_of_expr mem e1 in
-     let e2 = form_of_expr mem e2 in
-     let e3 = form_of_expr mem e3 in
+     let e1 = form_of_expr ?mem e1 in
+     let e2 = form_of_expr ?mem e2 in
+     let e3 = form_of_expr ?mem e3 in
      f_if e1 e2 e3
 
   | Ematch (b, fs, ty) ->
-     let b'  = form_of_expr mem b in
-     let fs' = List.map (form_of_expr mem) fs in
+     let b'  = form_of_expr ?mem b in
+     let fs' = List.map (form_of_expr ?mem) fs in
      f_match b' fs' ty
 
   | Equant (qt, b, e) ->
      let b = List.map (fun (x, ty) -> (x, GTty ty)) b in
-     let e = form_of_expr mem e in
+     let e = form_of_expr ?mem e in
      f_quant (quantif_of_equantif qt) b e
 
 
 (* -------------------------------------------------------------------- *)
 exception CannotTranslate
 
-let expr_of_form mh f =
+let expr_of_form ~mem f =
   let rec aux fp =
     match fp.f_node with
     | Fint   z -> e_int z
@@ -1048,12 +1066,13 @@ let expr_of_form mh f =
       e_quantif (equantif_of_quantif kd) (List.map auxbd bds) (aux f)
 
     | Fpvar (pv, m) ->
-      if EcIdent.id_equal m mh
+      if f_equal m mem
       then e_var pv fp.f_ty
       else raise CannotTranslate
 
+    | Fmrestr   _
+    | Fupdvar   _ | Fupdmem   _
     | Fcoe      _
-    | Fglob     _
     | FhoareF   _ | FhoareS   _
     | FcHoareF  _ | FcHoareS  _
     | FeHoareF  _ | FeHoareS  _

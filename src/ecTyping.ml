@@ -28,7 +28,7 @@ type opmatch = [
   | `Op   of EcPath.path * EcTypes.ty list
   | `Lc   of EcIdent.t
   | `Var  of EcTypes.prog_var
-  | `Proj of EcTypes.prog_var * EcMemory.proj_arg
+  | `Proj of EcTypes.prog_var * ty * int
 ]
 
 type 'a mismatch_sets = [`Eq of 'a * 'a | `Sub of 'a ]
@@ -323,7 +323,7 @@ let select_pv env side name ue tvi psig =
 (* -------------------------------------------------------------------- *)
 module OpSelect = struct
   type pvsel = [
-    | `Proj of EcTypes.prog_var * EcMemory.proj_arg
+    | `Proj of EcTypes.prog_var * ty * int
     | `Var  of EcTypes.prog_var
   ]
 
@@ -523,8 +523,9 @@ let check_item_compatible ~proof_obl env mode (fin,oin) (fout,oout) =
   let norm_costs = function
     | `Unbounded -> `Unbounded
     | `Bounded (self,calls) ->
-      let calls = Mx.map (EcEnv.NormMp.norm_form env) calls in
-      let self  = EcEnv.NormMp.norm_form env self in
+(* FIXME *)
+(*      let calls = Mx.map (EcEnv.NormMp.norm_form env) calls in
+      let self  = EcEnv.NormMp.norm_form env self in *)
       `Bounded (self,calls) in
 
   (* We check complexity compatibility. *)
@@ -606,6 +607,7 @@ let to_unit_map sx = Mx.map (fun _ -> ()) sx
 let to_sm sid =
   EcIdent.Sid.fold (fun m sm -> Sm.add (EcPath.mident m) sm) sid Sm.empty
 
+(*
 let support env (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
   let memo : Sx.t EcIdent.Hid.t = EcIdent.Hid.create 16 in
 
@@ -630,8 +632,9 @@ let support env (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
 
   let supp = EcUtils.omap_dfl (use_support Sx.empty) Sx.empty pr in
   ur_support supp r
-
+*)
 (* Is [x] allowed in a positive restriction [pr]. *)
+(*
 let rec p_allowed env (x : EcPath.xpath) (pr : EcEnv.use option) =
   match pr with
   | None -> true
@@ -675,12 +678,14 @@ let all_allowed_gen env (sx : 'a EcPath.Mx.t)
 let all_allowed_p env (sx : 'a EcPath.Mx.t) (pr : EcEnv.use option) =
   all_allowed env sx { ur_pos = pr; ur_neg = EcEnv.use_empty }
 
+*)
 
 (* Are all variables allowed in the union of the positive restriction [pr]
    and the positive and negative restriction [r].
    I.e. is [pr] union [r] forbidding nothing.
    Remark: we cannot compute directly the union of [pr] and [r], because
    A union (B \ C) <> (A union B) \ C *)
+(*
 let rec everything_allowed env
     (pr : EcEnv.use option) (r : EcEnv.use use_restr) : unit =
   match pr, r.ur_pos with
@@ -777,8 +782,9 @@ and use_allowed env
   | Some urm ->
     all_allowed_gen env urm.EcEnv.us_pv pr r;
     all_mod_allowed env urm.EcEnv.us_gl pr r
-
+*)
 (* This only checks the memory restrictions. *)
+(*
 let _check_mem_restr env (use : EcEnv.use) (restr : mod_restr) =
   let r : EcEnv.use use_restr = NormMp.restr_use env restr in
   use_allowed env (Some use) (Some EcEnv.use_empty) r
@@ -808,7 +814,7 @@ let check_mem_restr_mode mode env sym mr1 mr2 =
     | `Sub -> _check_mem_restr_sub env mr1 mr2
     | `Eq  -> _check_mem_restr_eq  env mr1 mr2
   with RestrErr err -> tymod_cnv_failure (E_TyModCnv_MismatchRestr (sym,err))
-
+*)
 let recast env who f =
   let re x = raise (RestrictionError (env, (who, x))) in
   try f () with
@@ -817,6 +823,7 @@ let recast env who f =
   | RestrErr (`RevSub e) -> re (`RevSub e)
 
 (* This only checks the memory restrictions. *)
+(*
 let check_mem_restr env mp (use : EcEnv.use) (restr : mod_restr) =
   recast env (RW_mod mp) (fun () -> _check_mem_restr env use restr)
 
@@ -824,7 +831,7 @@ let check_mem_restr env mp (use : EcEnv.use) (restr : mod_restr) =
 let check_mem_restr_fun env xp restr =
   let use = NormMp.fun_use env xp in
   recast env (RW_fun xp) (fun () ->_check_mem_restr env use restr)
-
+*)
 (* -------------------------------------------------------------------- *)
 let rec check_sig_cnv
     ~proof_obl mode env sym_in (sin:module_sig) (sout:module_sig) =

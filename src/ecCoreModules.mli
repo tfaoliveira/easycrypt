@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcSymbols
 open EcPath
+open EcAst
 open EcTypes
 
 (* -------------------------------------------------------------------- *)
@@ -87,27 +88,12 @@ type funsig = {
 val fs_equal : funsig -> funsig -> bool
 
 (* -------------------------------------------------------------------- *)
-type 'a use_restr = 'a EcAst.use_restr
-
-val ur_empty : 'a -> 'a use_restr
-val ur_full  : 'a -> 'a use_restr
-val ur_app   : ('a -> 'b) -> 'a use_restr -> 'b use_restr
-val ur_equal : ('a -> 'a -> bool) -> 'a use_restr -> 'a use_restr -> bool
-
-(* Correctly handles the [None] cases for subset comparison. *)
-val ur_pos_subset : ('a -> 'a -> bool) -> 'a option -> 'a option -> bool
-val ur_union :
-  ('a -> 'a -> 'a) ->
-  ('a -> 'a -> 'a) ->
-  'a use_restr -> 'a use_restr -> 'a use_restr
-
-(* -------------------------------------------------------------------- *)
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
   type t = EcAst.oracle_info
 
   val hash : t -> int
-  val equal : (EcAst.form -> EcAst.form -> bool) -> t -> t -> bool
+(*  val equal : (EcAst.form -> EcAst.form -> bool) -> t -> t -> bool *)
 
   val cost_self : t -> [`Bounded of EcAst.form | `Unbounded]
   val cost : t -> xpath -> [`Bounded of EcAst.form | `Zero | `Unbounded]
@@ -122,27 +108,6 @@ module PreOI : sig
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcAst.mr_xpaths
-
-type mr_mpaths = EcAst.mr_mpaths
-
-type mod_restr = EcAst.mod_restr
-
-val mr_equal :
-  mod_restr ->
-  mod_restr ->
-  bool
-
-val mr_hash : mod_restr -> int
-
-val has_compl_restriction : mod_restr -> bool
-
-val mr_is_empty : mod_restr -> bool
-
-val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
-val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
-
-(* -------------------------------------------------------------------- *)
 (* An oracle in a function provided by a module parameter of a functor *)
 type module_type = EcAst.module_type
 
@@ -151,9 +116,11 @@ type module_sig_body_item = Tys_function of funsig
 type module_sig_body = module_sig_body_item list
 
 type module_sig = {
+  (* params does not occurs in restr *)
+  mis_restr  : gvar_set;
   mis_params : (EcIdent.t * module_type) list;
   mis_body   : module_sig_body;
-  mis_restr  : mod_restr;
+  mis_oi     : oracle_info Msym.t;
 }
 
 type top_module_sig = {

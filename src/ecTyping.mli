@@ -19,7 +19,7 @@ type opmatch = [
   | `Op   of EcPath.path * EcTypes.ty list
   | `Lc   of EcIdent.t
   | `Var  of EcTypes.prog_var
-  | `Proj of EcTypes.prog_var * EcMemory.proj_arg
+  | `Proj of EcTypes.prog_var * EcTypes.ty * int
 ]
 
 type 'a mismatch_sets = [`Eq of 'a * 'a | `Sub of 'a ]

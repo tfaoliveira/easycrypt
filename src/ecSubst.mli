@@ -28,7 +28,6 @@ val add_tydef    : subst -> path -> (EcIdent.t list * ty) -> subst
 val add_opdef    : subst -> path -> (EcIdent.t list * expr) -> subst
 val add_pddef    : subst -> path -> (EcIdent.t list * form) -> subst
 val add_moddef   : subst -> src:path -> dst:path -> subst
-val add_memory   : subst -> EcIdent.t -> EcIdent.t -> subst
 
 val add_flocal : subst -> EcIdent.t -> form -> subst
 val add_elocals : subst -> EcIdent.t list -> expr list -> subst
@@ -60,7 +59,6 @@ val subst_modtype      : subst -> module_type -> module_type
 val subst_modsig       : ?params:(ident list) -> subst -> module_sig -> module_sig
 val subst_top_modsig   : subst -> top_module_sig -> top_module_sig
 val subst_modsig_body  : subst -> module_sig_body -> module_sig_body
-val subst_mod_restr    : subst -> mod_restr -> mod_restr
 
 (* -------------------------------------------------------------------- *)
 val subst_gty   : subst -> gty -> gty
@@ -71,7 +69,6 @@ val subst_expr  : subst -> expr -> expr
 val subst_stmt  : subst -> stmt -> stmt
 
 val subst_progvar : subst -> prog_var -> prog_var
-val subst_mem : subst -> EcIdent.t -> EcIdent.t
 val subst_flocal : subst -> form -> form
 
 (* -------------------------------------------------------------------- *)

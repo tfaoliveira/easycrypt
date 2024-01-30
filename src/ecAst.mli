@@ -27,17 +27,6 @@ type quantif =
 type hoarecmp = FHle | FHeq | FHge
 
 (* -------------------------------------------------------------------- *)
-
-type 'a use_restr = {
-  ur_pos : 'a option;   (* If not None, can use only element in this set. *)
-  ur_neg : 'a;          (* Cannot use element in this set. *)
-}
-
-type mr_xpaths = EcPath.Sx.t use_restr
-
-type mr_mpaths = EcPath.Sm.t use_restr
-
-(* -------------------------------------------------------------------- *)
 type ty = private {
   ty_node : ty_node;
   ty_fv   : int Mid.t; (* only ident appearing in path *)
@@ -45,12 +34,81 @@ type ty = private {
 }
 
 and ty_node =
-  | Tglob   of EcIdent.t (* The tuple of global variable of the module *)
+  | Tmem    of memtype
   | Tunivar of EcUid.uid
   | Tvar    of EcIdent.t
   | Ttuple  of ty list
   | Tconstr of EcPath.path * ty list
   | Tfun    of ty * ty
+
+(* -------------------------------------------------------------------- *)
+(* lmt_symb :
+   A map associating to a symbol is type
+   furthermore for function argument we also associate the projection
+   with respect to arg
+   proc f (x1:t1, _: t2)
+   lmt_symb[x1] -> (arg, t1*t2, Some 0), t1
+   Particular case when the procedure has only one argument:
+   proc f (x1:t1)
+   lmt_symb[x1] -> (arg, t1, None), t1
+
+   lmt_proj :
+   It is the inverse map of lmt_symb, it is used for printing
+
+   We can look in EcMemory for a better understanding
+*)
+
+and proj_tbl =
+  | Ptbl_direct of EcSymbols.symbol
+  | Ptbl_proj   of EcSymbols.symbol EcMaps.Mint.t
+
+and local_memtype = private {
+  lmt_symb : ((EcSymbols.symbol * ty * int option) option * ty) Msym.t;
+  lmt_proj : proj_tbl Msym.t;
+  lmt_fv   : int EcIdent.Mid.t;
+  lmt_tag  : int;
+}
+
+(* The type of memory restricted to a gvar_set *)
+(* [lmt = None] is for an axiom schema, and is instantiated to a concrete
+   memory type when the axiom schema is.  *)
+and memtype = private {
+  mt_lmt : local_memtype option;
+  mt_gvs : gvar_set;
+  mt_fv  : int Mid.t;
+  mt_tag : int;
+}
+
+and memenv = memory * memtype
+
+(* -------------------------------------------------------------------- *)
+and functor_fun = private {
+  ff_params : (EcIdent.t * module_type) list;
+  ff_xp     : xpath;  (* The xpath is fully applied *)
+  ff_fv     : int Mid.t;
+  ff_tag    : int;
+}
+
+and gvar_set_node =
+  | Empty                              (* The empty memory                           *)
+  | All                                (* The memory of All global                   *)
+  | Set       of Sx.t                  (* The memory restricted to the variable in s *)
+  | GlobFun   of functor_fun           (* The global memory used by the function     *)
+  | Union     of gvar_set * gvar_set   (* Union                                      *)
+  | Diff      of gvar_set * gvar_set   (* Difference                                 *)
+  | Inter     of gvar_set * gvar_set   (* Intersection                               *)
+
+and gvar_set = private {
+  gvs_node : gvar_set_node;
+  gvs_tag  : int;
+  gvs_fv   : int EcIdent.Mid.t;
+}
+
+and var_set = private {
+  lvs : Ssym.t;
+  gvs : gvar_set;
+  vs_tag : int;
+}
 
 (* -------------------------------------------------------------------- *)
 and ovariable = {
@@ -122,51 +180,28 @@ and stmt = private {
 
 (* -------------------------------------------------------------------- *)
 
-and oracle_info = {
+and oracle_info = private {
   oi_calls : xpath list;
   oi_costs : (form * form Mx.t) option;
+  oi_fv    : int Mid.t;
+  oi_tag   : int;
 }
 
-and mod_restr = {
-  mr_xpaths : mr_xpaths;
-  mr_mpaths : mr_mpaths;
-  mr_oinfos : oracle_info Msym.t;
-}
-
-and module_type = {
+and module_type = private {
+  mt_restr  : gvar_set;  (* The set of allowed global variables *)
+  (* params are unbound in restr *)
   mt_params : (EcIdent.t * module_type) list;
   mt_name   : EcPath.path;
   mt_args   : EcPath.mpath list;
-  mt_restr  : mod_restr;
+  mt_oi     : oracle_info Msym.t;
+  mty_fv    : int Mid.t;
+  mty_tag   : int;
 }
-
-(* -------------------------------------------------------------------- *)
-and proj_arg =
-  { arg_ty  : ty; (* type of the procedure argument "arg" *)
-    arg_pos : int;       (* projection *)
-  }
-
-and local_memtype = {
-  lmt_name : symbol option;      (* provides access to the full local memory *)
-  lmt_decl : ovariable list;
-  lmt_proj : (int * ty) Msym.t;  (* where to find the symbol in mt_decl and its type *)
-  lmt_ty   : ty;                 (* ttuple (List.map v_type mt_decl) *)
-  lmt_n    : int;                (* List.length mt_decl *)
-}
-
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
-   memory type when the axiom schema is.  *)
-and memtype =
-  | Lmt_concrete of local_memtype option
-  | Lmt_schema
-
-and memenv = memory * memtype
 
 (* -------------------------------------------------------------------- *)
 and gty =
   | GTty    of ty
   | GTmodty of module_type
-  | GTmem   of memtype
 
 and binding  = (EcIdent.t * gty)
 and bindings = binding list
@@ -185,8 +220,12 @@ and f_node =
   | Flet    of lpattern * form * form
   | Fint    of BI.zint
   | Flocal  of EcIdent.t
-  | Fpvar   of prog_var * memory
-  | Fglob   of EcIdent.t * memory
+
+  | Fpvar   of prog_var * form        (* x{m} *)
+  | Fmrestr of form * memtype         (* (m|X) *)
+  | Fupdvar of form * prog_var * form (* m[x<-v] *)
+  | Fupdmem of form * var_set * form  (* m[X<- m'] *)
+
   | Fop     of EcPath.path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
@@ -295,7 +334,7 @@ and bdHoareS = {
 }
 
 and pr = {
-  pr_mem   : memory;
+  pr_mem   : form;
   pr_fun   : EcPath.xpath;
   pr_args  : form;
   pr_event : form;
@@ -382,8 +421,9 @@ val f_fv    : form fv
 
 (* -------------------------------------------------------------------- *)
 
-val oi_equal : form equality -> oracle_info equality
-val oi_hash : oracle_info hash
+val oi_equal : oracle_info equality
+val oi_hash  : oracle_info hash
+val oi_fv    : oracle_info fv
 
 (* -------------------------------------------------------------------- *)
 val hcmp_hash : hoarecmp hash
@@ -395,33 +435,42 @@ val ov_hash  : ovariable hash
 val v_equal : variable equality
 val v_hash : variable hash
 
-(* -------------------------------------------------------------------- *)
-val ur_equal : 'a equality -> 'a use_restr equality
-val ur_hash  : ('a -> 'b list) -> 'b hash -> 'a use_restr hash
-
-val mr_xpaths_fv : mr_xpaths fv
-val mr_mpaths_fv : mr_mpaths fv
-
-val mr_equal : mod_restr equality
-val mr_hash  : mod_restr hash
-val mr_fv    : mod_restr fv
-
+(* ----------------------------------------------------------------- *)
 val mty_equal : module_type equality
 val mty_hash  : module_type hash
+val mty_fv    : module_type fv
+
+(* ----------------------------------------------------------------- *)
+val ff_equal : functor_fun equality
+val ff_hash  : functor_fun hash
+val ff_fv    : functor_fun fv
+
+(*-------------------------------------------------------------------- *)
+val gvs_equal : gvar_set equality
+val gvs_hash  : gvar_set hash
+val gvs_fv    : gvar_set fv
+
+(*-------------------------------------------------------------------- *)
+val vs_equal : var_set equality
+val vs_hash  : var_set hash
+val vs_fv    : var_set fv
 
 (* -------------------------------------------------------------------- *)
-val lmt_equal : ty equality -> local_memtype equality
-val lmt_hash : local_memtype hash
+val lmt_equal : local_memtype equality
+val lmt_hash  : local_memtype hash
+val lmt_fv    : local_memtype fv
 
-val mt_equal_gen : ty equality -> memtype equality
+(* -------------------------------------------------------------------- *)
 val mt_equal : memtype equality
-val mt_fv : memtype fv
+val mt_hash  : memtype hash
+val mt_fv    : memtype fv
+
+val is_schema : memtype -> bool
 
 val mem_equal : memory equality
 
-val me_equal_gen : ty equality -> memenv equality
 val me_equal : memenv equality
-val me_hash : memenv hash
+val me_hash  : memenv hash
 
 (*-------------------------------------------------------------------- *)
 val gty_equal : gty equality
@@ -501,6 +550,29 @@ val mright : memory
 (* ----------------------------------------------------------------- *)
 
 val mk_ty : ty_node -> ty
+
+val mk_lmt :
+  ((EcSymbols.symbol * ty * int option) option * ty) Msym.t ->
+  proj_tbl Msym.t ->
+  local_memtype
+
+val mk_mt : local_memtype option -> gvar_set -> memtype
+
+val mk_oi : xpath list -> (form * form Mx.t) option -> oracle_info
+
+val mk_mty :
+  gvar_set ->
+  (EcIdent.t * module_type) list ->
+  EcPath.path ->
+  EcPath.mpath list ->
+  oracle_info Msym.t ->
+  module_type
+
+val mk_ff : (memory * module_type) list -> xpath -> functor_fun
+
+val mk_gvs: gvar_set_node -> gvar_set
+val mk_vs : Ssym.t -> gvar_set -> var_set
+
 val mk_expr : expr_node -> ty -> expr
 val mk_form : f_node -> ty -> form
 val mk_instr : instr_node -> instr

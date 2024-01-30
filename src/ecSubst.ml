@@ -29,7 +29,6 @@ type subst = {
   sb_tyvar    : ty Mid.t;
   sb_elocal   : expr Mid.t;
   sb_flocal   : EcCoreFol.form Mid.t;
-  sb_fmem     : EcIdent.t Mid.t;
   sb_tydef    : (EcIdent.t list * ty) Mp.t;
   sb_def      : (EcIdent.t list * [`Op of  expr | `Pred of form]) Mp.t;
   sb_moddef   : EcPath.path Mp.t;
@@ -42,7 +41,6 @@ let empty : subst = {
   sb_tyvar    = Mid.empty;
   sb_elocal   = Mid.empty;
   sb_flocal   = Mid.empty;
-  sb_fmem     = Mid.empty;
   sb_tydef    = Mp.empty;
   sb_def      = Mp.empty;
   sb_moddef   = Mp.empty;
@@ -54,7 +52,6 @@ let is_empty s =
   && Mid.is_empty s.sb_tyvar
   && Mid.is_empty s.sb_elocal
   && Mid.is_empty s.sb_flocal
-  && Mid.is_empty s.sb_fmem
   && Mp.is_empty s.sb_tydef
   && Mp.is_empty s.sb_def
   && Mp.is_empty s.sb_moddef
@@ -95,10 +92,6 @@ let subst_xpath (s : subst) (xp : EcPath.xpath) =
   EcPath.xpath (subst_mpath s xp.x_top) xp.x_sub
 
 (* -------------------------------------------------------------------- *)
-let subst_mem (s : subst) (m : EcIdent.t) =
-  Mid.find_def m m s.sb_fmem
-
-(* -------------------------------------------------------------------- *)
 let get_opdef (s : subst) (p : EcPath.path) =
   match Mp.find_opt p s.sb_def with
   | Some (ids, `Op f) -> Some (ids, f) | _ -> None
@@ -113,11 +106,27 @@ let get_def (s : subst) (p : EcPath.path) =
   | Some (ids, body) ->
      let body =
        match body with
-       | `Op   e -> form_of_expr mhr e
+       | `Op   e -> form_of_expr e
        | `Pred f -> f in
      Some (ids, body)
 
   | None -> None
+
+(* -------------------------------------------------------------------- *)
+let subst_flocal (s : subst) (f : form) =
+  match f.f_node with
+  | Flocal id -> begin
+      match Mid.find id s.sb_flocal with
+      | f -> f
+      | exception Not_found -> f
+      end
+  | _ -> assert false
+
+(* -------------------------------------------------------------------- *)
+let subst_progvar (s : subst) (pv : prog_var) =
+  match pv with
+  | PVloc _ -> pv
+  | PVglob xp -> pv_glob (subst_xpath s xp)
 
 (* -------------------------------------------------------------------- *)
 let has_def (s : subst) (p : EcPath.path) =
@@ -137,10 +146,65 @@ let add_tyvars (s : subst) (xs : EcIdent.t list) (tys : ty list) =
   List.fold_left2 add_tyvar s xs tys
 
 (* -------------------------------------------------------------------- *)
+let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
+  let merger = function
+    | None   -> Some m
+    | Some _ -> raise (SubstNameClash (`Ident x))
+  in
+    { s with sb_module = Mid.change merger x s.sb_module }
+
+let add_path (s : subst) ~src ~dst =
+  assert (Mp.find_opt src s.sb_path = None);
+  { s with sb_path = Mp.add src dst s.sb_path }
+
+(* -------------------------------------------------------------------- *)
+let add_tydef (s : subst) p (ids, ty) =
+  assert (Mp.find_opt p s.sb_tydef = None);
+  { s with sb_tydef = Mp.add p (ids, ty) s.sb_tydef }
+
+let add_opdef (s : subst) p (ids, f) =
+  assert (Mp.find_opt p s.sb_def = None);
+  { s with sb_def = Mp.add p (ids, (`Op f)) s.sb_def }
+
+let add_pddef (s : subst) p (ids, f) =
+  assert (Mp.find_opt p s.sb_def = None);
+  { s with sb_def = Mp.add p (ids, `Pred f) s.sb_def }
+
+let add_moddef (s : subst) ~(src : EcPath.path) ~(dst : EcPath.path) =
+  assert (Mp.find_opt src s.sb_moddef = None);
+  { s with sb_moddef = Mp.add src dst s.sb_moddef }
+
+(* -------------------------------------------------------------------- *)
+let add_elocal (s : subst) (x : EcIdent.t) (e : expr) =
+  { s with sb_elocal = Mid.add x e s.sb_elocal }
+
+let add_elocals (s : subst) (xs : EcIdent.t list) (es : expr list) =
+  List.fold_left2 add_elocal s xs es
+
+(* -------------------------------------------------------------------- *)
+let add_flocal (s : subst) (x : EcIdent.t) (f : EcCoreFol.form) =
+  { s with sb_flocal = Mid.add x f s.sb_flocal }
+
+let add_flocals (s : subst) (xs : EcIdent.t list) (fs : EcCoreFol.form list) =
+  List.fold_left2 add_flocal s xs fs
+
+let remove_flocal (s : subst) (x : EcIdent.t) =
+  { s with sb_flocal = Mid.remove x s.sb_flocal }
+
+(* -------------------------------------------------------------------- *)
+let rename_flocal (s : subst) xfrom xto ty =
+  let xf = EcCoreFol.f_local xto ty in
+  let xe = EcTypes.e_local xto ty in
+  let s  = add_flocal s xfrom xf in
+
+  let merger o = assert (o = None); Some xe in
+  { s with sb_elocal = Mid.change merger xfrom s.sb_elocal }
+
+(* -------------------------------------------------------------------- *)
 let rec subst_ty (s : subst) (ty : ty) =
   match ty.ty_node with
-  | Tglob mp ->
-     tglob (EcPath.mget_ident (subst_mpath s (EcPath.mident mp)))
+  | Tmem mt ->
+     tmem (subst_memtype s mt)
 
   | Tunivar _ ->
      ty                         (* FIXME *)
@@ -171,123 +235,117 @@ and subst_tys (s : subst) (tys : ty list) =
   List.map (subst_ty s) tys
 
 (* -------------------------------------------------------------------- *)
-let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
-  let merger = function
-    | None   -> Some m
-    | Some _ -> raise (SubstNameClash (`Ident x))
+and subst_memtype (s : subst) (mt : memtype) =
+  mk_mt (omap (subst_local_memtype s) mt.mt_lmt) (subst_gvar_set s mt.mt_gvs)
+
+and subst_local_memtype (s : subst) (lmt : local_memtype) =
+  lmt_map_ty (subst_ty s) lmt
+
+and subst_gvar_set (s : subst) (gvs : gvar_set) =
+  let node =
+    match gvs.gvs_node with
+    | (Empty | All | Set _) as x -> x
+    | GlobFun ff -> GlobFun (subst_functor_fun s ff)
+    | Union(g1,g2) -> Union(subst_gvar_set s g1, subst_gvar_set s g2)
+    | Diff(g1,g2)  -> Diff(subst_gvar_set s g1, subst_gvar_set s g2)
+    | Inter(g1,g2) -> Inter(subst_gvar_set s g1, subst_gvar_set s g2)
   in
-    { s with sb_module = Mid.change merger x s.sb_module }
+  mk_gvs node
 
-let add_elocal (s : subst) (x : EcIdent.t) (e : expr) =
-  { s with sb_elocal = Mid.add x e s.sb_elocal }
+and subst_functor_fun (s : subst) (ff : functor_fun) =
+  let s, params = fresh_lmodules s ff.ff_params in
+  let xp = subst_xpath s ff.ff_xp in
+  mk_ff params xp
 
-let add_elocals (s : subst) (xs : EcIdent.t list) (es : expr list) =
-  List.fold_left2 add_elocal s xs es
+and subst_var_set (s : subst) (vs : var_set) =
+  mk_vs vs.lvs (subst_gvar_set s vs.gvs)
 
-let fresh_elocal (s : subst) ((x, ty) : EcIdent.t * ty) =
+(* -------------------------------------------------------------------- *)
+and subst_modtype (s : subst) (modty : module_type) =
+  (* params are unbound in restr *)
+  let mt_restr  = subst_gvar_set s modty.mt_restr in
+
+  let s, mt_params = fresh_lmodules s modty.mt_params in
+  let mt_name   = modty.mt_name in
+  let mt_args   = List.map (subst_mpath s) modty.mt_args in
+  let mt_oi     = EcSymbols.Msym.map (subst_oracle_info s) modty.mt_oi in
+
+  mk_mty mt_restr mt_params mt_name mt_args mt_oi
+
+(* -------------------------------------------------------------------- *)
+
+and subst_oracle_info (s : subst) (oi : oracle_info) =
+  let costs = match PreOI.costs oi with
+    | `Unbounded -> `Unbounded
+    | `Bounded (self,calls) ->
+       let calls = EcPath.Mx.fold (fun x a calls ->
+            EcPath.Mx.change
+              (fun old -> assert (old = None); Some (subst_form s a))
+              (subst_xpath s x)
+              calls
+          ) calls EcPath.Mx.empty in
+        let self = subst_form s self in
+       `Bounded (self,calls) in
+  PreOI.mk
+    (List.map (subst_xpath s) (PreOI.allowed oi))
+    costs
+
+(* -------------------------------------------------------------------- *)
+and subst_gty (s : subst) (ty : gty) =
+  match ty with
+  | GTty ty ->
+     GTty (subst_ty s ty)
+
+  | GTmodty mty ->
+     GTmodty (subst_modtype s mty)
+
+(* -------------------------------------------------------------------- *)
+
+and fresh_lmodule (s : subst) ((x,mty) : EcIdent.t * module_type) =
+  let mty = subst_modtype s mty in
+  let xfresh = EcIdent.fresh x in
+  let s = add_module s x (EcPath.mident xfresh) in
+  s, (xfresh, mty)
+
+and fresh_lmodules (s : subst) (locals : (EcIdent.t * module_type) list) : subst * _ =
+  List.fold_left_map fresh_lmodule s locals
+
+(* -------------------------------------------------------------------- *)
+and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
+  let xfresh = EcIdent.fresh x in
+  let gty = subst_gty s ty in
+  match gty with
+  | GTty ty ->
+     let s = add_flocal s x (f_local xfresh ty) in
+     s, (xfresh, gty)
+
+  | GTmodty _ ->
+     let s = add_module s x (EcPath.mident xfresh) in
+     s, (xfresh, gty)
+
+and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
+  List.fold_left_map fresh_glocal s locals
+
+(* -------------------------------------------------------------------- *)
+and fresh_elocal (s : subst) ((x, ty) : EcIdent.t * ty) =
   let xfresh = EcIdent.fresh x in
   let ty = subst_ty s ty in
   let s = add_elocal s x (e_local xfresh ty) in
   (s, (xfresh, ty))
 
-let fresh_elocals (s : subst) (locals : (EcIdent.t * ty) list) =
+and fresh_elocals (s : subst) (locals : (EcIdent.t * ty) list) =
   List.fold_left_map fresh_elocal s locals
 
-let fresh_elocal_opt (s : subst) ((x, ty) : EcIdent.t option * ty) =
+and fresh_elocal_opt (s : subst) ((x, ty) : EcIdent.t option * ty) =
   match x with
   | None -> (s, (None, subst_ty s ty))
   | Some x ->
      let s, (x, ty) = fresh_elocal s (x, ty) in (s, (Some x, ty))
 
-let fresh_elocals_opt (s : subst) (locals : (EcIdent.t option * ty) list) =
+and fresh_elocals_opt (s : subst) (locals : (EcIdent.t option * ty) list) =
   List.fold_left_map fresh_elocal_opt s locals
 
-let add_flocal (s : subst) (x : EcIdent.t) (f : EcCoreFol.form) =
-  { s with sb_flocal = Mid.add x f s.sb_flocal }
-
-let add_flocals (s : subst) (xs : EcIdent.t list) (fs : EcCoreFol.form list) =
-  List.fold_left2 add_flocal s xs fs
-
-let fresh_flocal (s : subst) ((x, ty) : EcIdent.t * ty) =
-  let xfresh = EcIdent.fresh x in
-  let ty = subst_ty s ty in
-  let s = add_flocal s x (EcCoreFol.f_local xfresh ty) in
-  (s, (xfresh, ty))
-
-let fresh_flocals (s : subst) (locals : (EcIdent.t * ty) list) =
-  List.fold_left_map fresh_flocal s locals
-
-let fresh_flocal_opt (s : subst) ((x, ty) : EcIdent.t option * ty) =
-  match x with
-  | None -> (s, (None, subst_ty s ty))
-  | Some x ->
-     let s, (x, ty) = fresh_flocal s (x, ty) in (s, (Some x, ty))
-
-let fresh_flocals_opt (s : subst) (locals : (EcIdent.t option * ty) list) =
-  List.fold_left_map fresh_flocal_opt s locals
-
-let rename_flocal (s : subst) xfrom xto ty =
-  let xf = EcCoreFol.f_local xto ty in
-  let xe = EcTypes.e_local xto ty in
-  let s  = add_flocal s xfrom xf in
-
-  let merger o = assert (o = None); Some xe in
-  { s with sb_elocal = Mid.change merger xfrom s.sb_elocal }
-
-let add_memory (s : subst) (m : EcIdent.t) (target : EcIdent.t) =
-  { s with sb_fmem = Mid.add m target s.sb_fmem }
-
-let fresh_memory (s : subst) (m : EcIdent.t) =
-  let mfresh = EcIdent.fresh m in
-  (add_memory s m mfresh, mfresh)
-
-let fresh_memtype (s : subst) ((m, mt) : EcMemory.memenv) =
-  let mt = EcMemory.mt_subst (subst_ty s) mt in
-  let s, mfresh = fresh_memory s m in
-  (s, (mfresh, mt))
-
-let subst_memtype (s : subst) ((m, mt) : EcMemory.memenv) =
-  let mt = EcMemory.mt_subst (subst_ty s) mt in
-  (s, (m, mt))
-
-let add_path (s : subst) ~src ~dst =
-  assert (Mp.find_opt src s.sb_path = None);
-  { s with sb_path = Mp.add src dst s.sb_path }
-
-let add_tydef (s : subst) p (ids, ty) =
-  assert (Mp.find_opt p s.sb_tydef = None);
-  { s with sb_tydef = Mp.add p (ids, ty) s.sb_tydef }
-
-let add_opdef (s : subst) p (ids, f) =
-  assert (Mp.find_opt p s.sb_def = None);
-  { s with sb_def = Mp.add p (ids, (`Op f)) s.sb_def }
-
-let add_pddef (s : subst) p (ids, f) =
-  assert (Mp.find_opt p s.sb_def = None);
-  { s with sb_def = Mp.add p (ids, `Pred f) s.sb_def }
-
-let add_moddef (s : subst) ~(src : EcPath.path) ~(dst : EcPath.path) =
-  assert (Mp.find_opt src s.sb_moddef = None);
-  { s with sb_moddef = Mp.add src dst s.sb_moddef }
-
-(* -------------------------------------------------------------------- *)
-let subst_flocal (s : subst) (f : form) =
-  match f.f_node with
-  | Flocal id -> begin
-      match Mid.find id s.sb_flocal with
-      | f -> f
-      | exception Not_found -> f
-      end
-  | _ -> assert false
-
-(* -------------------------------------------------------------------- *)
-let subst_progvar (s : subst) (pv : prog_var) =
-  match pv with
-  | PVloc _ -> pv
-  | PVglob xp -> pv_glob (subst_xpath s xp)
-
-(* -------------------------------------------------------------------- *)
-let subst_expr_lpattern (s : subst) (lp : lpattern) =
+and subst_expr_lpattern (s : subst) (lp : lpattern) =
   match lp with
   | LSymbol x ->
      let s, x = fresh_elocal s x in
@@ -302,7 +360,295 @@ let subst_expr_lpattern (s : subst) (lp : lpattern) =
       (s, LRecord (subst_path s p, xs))
 
 (* -------------------------------------------------------------------- *)
-let rec subst_expr (s : subst) (e : expr) =
+and fresh_flocal (s : subst) ((x, ty) : EcIdent.t * ty) =
+  let xfresh = EcIdent.fresh x in
+  let ty = subst_ty s ty in
+  let s = add_flocal s x (EcCoreFol.f_local xfresh ty) in
+  (s, (xfresh, ty))
+
+and fresh_flocals (s : subst) (locals : (EcIdent.t * ty) list) =
+  List.fold_left_map fresh_flocal s locals
+
+and fresh_flocal_opt (s : subst) ((x, ty) : EcIdent.t option * ty) =
+  match x with
+  | None -> (s, (None, subst_ty s ty))
+  | Some x ->
+     let s, (x, ty) = fresh_flocal s (x, ty) in (s, (Some x, ty))
+
+and fresh_flocals_opt (s : subst) (locals : (EcIdent.t option * ty) list) =
+  List.fold_left_map fresh_flocal_opt s locals
+
+and subst_form_lpattern (s : subst) (lp : lpattern) =
+  match lp with
+  | LSymbol x ->
+     let s, x = fresh_flocal s x in
+     (s, LSymbol x)
+
+  | LTuple xs ->
+      let (s, xs) = fresh_flocals s xs in
+      (s, LTuple xs)
+
+  | LRecord (p, xs) ->
+      let (s, xs) = fresh_flocals_opt s xs in
+      (s, LRecord (subst_path s p, xs))
+
+(* -------------------------------------------------------------------- *)
+and fresh_memtype (s : subst) ((m, mt) : EcMemory.memenv) =
+  let mfresh = EcIdent.fresh m in
+  let mt = subst_memtype s mt in
+  let me = mfresh, mt in
+  let s = add_flocal s m (EcCoreFol.f_mem me) in
+  (s, me)
+
+
+(* -------------------------------------------------------------------- *)
+and subst_form (s : subst) (f : form) =
+  match f.f_node with
+  | Fquant (q, b, f1) ->
+      let s, b = fresh_glocals s b in
+      let e1 = subst_form s f1 in
+      f_quant q b e1
+
+  | Fmatch (f, bs, ty) ->
+     let f = subst_form s f in
+     let bs = List.map (subst_form s) bs in
+     let ty = subst_ty s ty in
+     f_match f bs ty
+
+  | Flet (lp, f, body) ->
+      let f = subst_form s f in
+      let s, lp = subst_form_lpattern s lp in
+      let body = subst_form s body in
+      f_let lp f body
+
+  | Flocal x -> begin
+      match Mid.find x s.sb_flocal with
+      | aout -> aout
+      | exception Not_found -> f_local x (subst_ty s f.f_ty)
+    end
+
+  | Fpvar (pv, m) ->
+     let pv = subst_progvar s pv in
+     let ty = subst_ty s f.f_ty in
+     let m = subst_form s m in
+     f_pvar pv ty m
+
+  | Fmrestr (m, mt) ->
+    let m' = subst_form s m in
+    let mt' = subst_memtype s mt in
+    f_mrestr m' mt'
+
+  | Fupdvar(m, x, v) ->
+    let m' = subst_form s m in
+    let x' = subst_progvar s x in
+    let v' = subst_form s v in
+    f_updvar m' x' v'
+
+  | Fupdmem(m1, on, m2) ->
+    let m1' = subst_form s m1 in
+    let on' = subst_var_set s on in
+    let m2' = subst_form s m2 in
+    f_updmem m1' on' m2'
+
+  | Fapp ({ f_node = Fop (p, tys) }, args) when has_def s p ->
+      let tys  = subst_tys s tys in
+      let ty   = subst_ty  s f.f_ty in
+      let body = oget (get_def s p) in
+      let args = List.map (subst_form s) args in
+      subst_fop ty tys args body
+
+  | Fop (p, tys) when has_def s p ->
+      let tys  = subst_tys s tys in
+      let ty   = subst_ty  s f.f_ty in
+      let body = oget (get_def s p) in
+      subst_fop ty tys [] body
+
+  | Fop (p, tys) ->
+      let p   = subst_path s p in
+      let tys = subst_tys s tys in
+      let ty  = subst_ty s f.f_ty in
+      f_op p tys ty
+
+  | FhoareF { hf_pr; hf_f; hf_po } ->
+     let hf_pr, hf_po =
+       let s = remove_flocal s mhr in
+       let hf_pr = subst_form s hf_pr in
+       let hf_po = subst_form s hf_po in
+       (hf_pr, hf_po) in
+     let hf_f  = subst_xpath s hf_f in
+     f_hoareF hf_pr hf_f hf_po
+
+  | FhoareS { hs_m; hs_pr; hs_s; hs_po } ->
+     let hs_m, (hs_pr, hs_po) =
+       let s, hs_m = fresh_memtype s hs_m in
+       let hs_pr = subst_form s hs_pr in
+       let hs_po = subst_form s hs_po in
+       hs_m, (hs_pr, hs_po) in
+     let hs_s = subst_stmt s hs_s in
+     f_hoareS hs_m hs_pr hs_s hs_po
+
+  | FcHoareF { chf_pr; chf_f; chf_po; chf_co } ->
+     let chf_pr, chf_po =
+       let s = remove_flocal s mhr in
+       let chf_pr = subst_form s chf_pr in
+       let chf_po = subst_form s chf_po in
+       (chf_pr, chf_po) in
+     let chf_f  = subst_xpath s chf_f in
+     let chf_co = subst_cost s chf_co in
+     f_cHoareF chf_pr chf_f chf_po chf_co
+
+  | FcHoareS { chs_m; chs_pr; chs_s; chs_po; chs_co } ->
+     let chs_m, (chs_pr, chs_po) =
+       let s, chs_m = fresh_memtype s chs_m in
+       let chs_pr = subst_form s chs_pr in
+       let chs_po = subst_form s chs_po in
+       chs_m, (chs_pr, chs_po) in
+     let chs_s = subst_stmt s chs_s in
+     let chs_co = subst_cost s chs_co in (* FIXME: mem? *)
+     f_cHoareS chs_m chs_pr chs_s chs_po chs_co
+
+  | FbdHoareF { bhf_pr; bhf_f; bhf_po; bhf_cmp; bhf_bd } ->
+     let bhf_pr, bhf_po =
+       let s = remove_flocal s mhr in
+       let bhf_pr = subst_form s bhf_pr in
+       let bhf_po = subst_form s bhf_po in
+       (bhf_pr, bhf_po) in
+     let bhf_f  = subst_xpath s bhf_f in
+     let bhf_bd  = subst_form s bhf_bd in
+     f_bdHoareF bhf_pr bhf_f bhf_po bhf_cmp bhf_bd
+
+  | FbdHoareS { bhs_m; bhs_pr; bhs_s; bhs_po; bhs_cmp; bhs_bd } ->
+     let bhs_m, (bhs_pr, bhs_po, bhs_bd) =
+       let s, bhs_m = fresh_memtype s bhs_m in
+       let bhs_pr = subst_form s bhs_pr in
+       let bhs_po = subst_form s bhs_po in
+       let bhs_bd = subst_form s bhs_bd in
+       bhs_m, (bhs_pr, bhs_po, bhs_bd) in
+     let bhs_s = subst_stmt s bhs_s in
+     f_bdHoareS bhs_m bhs_pr bhs_s bhs_po bhs_cmp bhs_bd
+
+   | FeHoareF { ehf_pr; ehf_f; ehf_po } ->
+     let ehf_pr, ehf_po =
+       let s = remove_flocal s mhr in
+       let ehf_pr = subst_form s ehf_pr in
+       let ehf_po = subst_form s ehf_po in
+       (ehf_pr, ehf_po) in
+     let ehf_f  = subst_xpath s ehf_f in
+     f_eHoareF ehf_pr ehf_f ehf_po
+
+  | FeHoareS { ehs_m; ehs_pr; ehs_s; ehs_po } ->
+     let ehs_m, (ehs_pr, ehs_po) =
+       let s, ehs_m = fresh_memtype s ehs_m in
+       let ehs_pr = subst_form s ehs_pr in
+       let ehs_po = subst_form s ehs_po in
+       ehs_m, (ehs_pr, ehs_po) in
+     let ehs_s = subst_stmt s ehs_s in
+     f_eHoareS ehs_m ehs_pr ehs_s ehs_po
+
+  | FequivF { ef_pr; ef_fl; ef_fr; ef_po } ->
+     let ef_pr, ef_po =
+       let s = remove_flocal s mleft  in
+       let s = remove_flocal s mright in
+       let ef_pr = subst_form s ef_pr in
+       let ef_po = subst_form s ef_po in
+       (ef_pr, ef_po) in
+     let ef_fl = subst_xpath s ef_fl in
+     let ef_fr = subst_xpath s ef_fr in
+     f_equivF ef_pr ef_fl ef_fr ef_po
+
+  | FequivS { es_ml; es_mr; es_pr; es_sl; es_sr; es_po } ->
+     let (es_ml, es_mr), (es_pr, es_po) =
+       let s, es_ml = fresh_memtype s es_ml in
+       let s, es_mr = fresh_memtype s es_mr in
+       let es_pr = subst_form s es_pr in
+       let es_po = subst_form s es_po in
+       (es_ml, es_mr), (es_pr, es_po) in
+     let es_sl = subst_stmt s es_sl in
+     let es_sr = subst_stmt s es_sr in
+     f_equivS es_ml es_mr es_pr es_sl es_sr es_po
+
+  | FeagerF { eg_pr; eg_sl; eg_fl; eg_fr; eg_sr; eg_po } ->
+     let eg_pr, eg_po =
+       let s = remove_flocal s mleft  in
+       let s = remove_flocal s mright in
+       let eg_pr = subst_form s eg_pr in
+       let eg_po = subst_form s eg_po in
+       (eg_pr, eg_po) in
+     let eg_sl = subst_stmt s eg_sl in
+     let eg_sr = subst_stmt s eg_sr in
+     let eg_fl = subst_xpath s eg_fl in
+     let eg_fr = subst_xpath s eg_fr in
+     f_eagerF eg_pr eg_sl eg_fl eg_fr eg_sr eg_po
+
+  | Fcoe { coe_pre; coe_mem; coe_e } ->
+     (* FIXME: check where coe_mem is bound *)
+     let s, coe_mem = fresh_memtype s coe_mem in
+     let coe_pre = subst_form s coe_pre in
+     let coe_e = subst_expr s coe_e in
+     f_coe coe_pre coe_mem coe_e
+
+  | Fpr { pr_mem; pr_fun; pr_args; pr_event } ->
+     let pr_mem = subst_form s pr_mem in
+     let pr_fun = subst_xpath s pr_fun in
+     let pr_args = subst_form s pr_args in
+     let pr_event =
+       let s = remove_flocal s mhr in
+       subst_form s pr_event in
+     f_pr pr_mem pr_fun pr_args pr_event
+
+  | Fif _ | Fint _ | Ftuple _ | Fproj _ | Fapp _ ->
+     f_map (subst_ty s) (subst_form s) f
+
+(* -------------------------------------------------------------------- *)
+and subst_fop fty tys args (tyids, f) =
+  let s = add_tyvars empty tyids tys in
+
+  let (s, args, f) =
+    match f.f_node with
+    | Fquant (Llambda, largs, lbody) when args <> [] ->
+        let largs1, largs2 = List.takedrop (List.length args  ) largs in
+        let  args1,  args2 = List.takedrop (List.length largs1)  args in
+        (add_flocals s (List.fst largs1) args1, args2, f_lambda largs2 lbody)
+
+    | _ -> (s, args, f)
+  in
+
+  f_app (subst_form s f) args fty
+
+(* -------------------------------------------------------------------- *)
+and subst_cost (s : subst) (c : cost) =
+  (* FIXME: refactor with the EcCoreFol version *)
+
+  let for_call xp { cb_cost; cb_called } (self, calls) =
+    let xp        = subst_xpath s xp in
+    let cb_cost   = subst_form s cb_cost in
+    let cb_called = subst_form s cb_called in
+
+    match xp.EcPath.x_top.m_top with
+    | `Local _ ->
+      let cb = call_bound_r cb_cost cb_called in
+      let calls =
+        EcPath.Mx.change
+          (fun old -> assert (old  = None); Some cb)
+          xp calls in
+      (self, calls)
+
+    | `Concrete _ ->
+       (f_xadd_simpl self (f_xmuli_simpl cb_called cb_cost), calls)
+  in
+
+  let c_self =
+    subst_form s c.c_self in
+
+  let self, c_calls =
+    EcPath.Mx.fold for_call c.c_calls (f_x0, EcPath.Mx.empty) in
+
+  let c_self = f_xadd_simpl c_self self in
+
+  cost_r c_self c_calls
+
+(* -------------------------------------------------------------------- *)
+and subst_expr (s : subst) (e : expr) =
   match e.e_node with
   | Elocal id -> begin
       match Mid.find id s.sb_elocal with
@@ -362,7 +708,7 @@ and subst_eop ety tys args (tyids, e) =
   e_app (subst_expr s e) args ety
 
 (* -------------------------------------------------------------------- *)
-let subst_lv (s : subst) (lv : lvalue) =
+and subst_lv (s : subst) (lv : lvalue) =
   let for1 (pv, ty) = (subst_progvar s pv, subst_ty s ty) in
 
   match lv with
@@ -373,7 +719,7 @@ let subst_lv (s : subst) (lv : lvalue) =
      LvTuple (List.map for1 pvtys)
 
 (* -------------------------------------------------------------------- *)
-let rec subst_stmt (s : subst) (st : stmt) : stmt =
+and subst_stmt (s : subst) (st : stmt) : stmt =
   stmt (List.map (subst_instr s) st.s_node)
 
 (* -------------------------------------------------------------------- *)
@@ -418,6 +764,7 @@ and subst_instr (s : subst) (i : instr) : instr =
   | Sabstract _ ->
      i
 
+
 (* -------------------------------------------------------------------- *)
 let subst_ovariable (s : subst) (x : ovariable) =
   { x with ov_type = subst_ty s x.ov_type; }
@@ -445,288 +792,7 @@ let subst_funsig (s : subst) (funsig : funsig) =
     fs_ret    = fs_ret; }
 
 (* -------------------------------------------------------------------- *)
-let subst_form_lpattern (s : subst) (lp : lpattern) =
-  match lp with
-  | LSymbol x ->
-     let s, x = fresh_flocal s x in
-     (s, LSymbol x)
-
-  | LTuple xs ->
-      let (s, xs) = fresh_flocals s xs in
-      (s, LTuple xs)
-
-  | LRecord (p, xs) ->
-      let (s, xs) = fresh_flocals_opt s xs in
-      (s, LRecord (subst_path s p, xs))
-
-(* -------------------------------------------------------------------- *)
-let rec subst_form (s : subst) (f : form) =
-  match f.f_node with
-  | Fquant (q, b, f1) ->
-      let s, b = fresh_glocals s b in
-      let e1 = subst_form s f1 in
-      f_quant q b e1
-
-  | Fmatch (f, bs, ty) ->
-     let f = subst_form s f in
-     let bs = List.map (subst_form s) bs in
-     let ty = subst_ty s ty in
-     f_match f bs ty
-
-  | Flet (lp, f, body) ->
-      let f = subst_form s f in
-      let s, lp = subst_form_lpattern s lp in
-      let body = subst_form s body in
-      f_let lp f body
-
-  | Flocal x -> begin
-      match Mid.find x s.sb_flocal with
-      | aout -> aout
-      | exception Not_found -> f_local x (subst_ty s f.f_ty)
-    end
-
-  | Fpvar (pv, m) ->
-     let pv = subst_progvar s pv in
-     let ty = subst_ty s f.f_ty in
-     let m = subst_mem s m in
-     f_pvar pv ty m
-
-  | Fglob (mp, m) ->
-     let mp = EcPath.mget_ident (subst_mpath s (EcPath.mident mp)) in
-     let m = subst_mem s m in
-     f_glob mp m
-
-  | Fapp ({ f_node = Fop (p, tys) }, args) when has_def s p ->
-      let tys  = subst_tys s tys in
-      let ty   = subst_ty  s f.f_ty in
-      let body = oget (get_def s p) in
-      let args = List.map (subst_form s) args in
-      subst_fop ty tys args body
-
-  | Fop (p, tys) when has_def s p ->
-      let tys  = subst_tys s tys in
-      let ty   = subst_ty  s f.f_ty in
-      let body = oget (get_def s p) in
-      subst_fop ty tys [] body
-
-  | Fop (p, tys) ->
-      let p   = subst_path s p in
-      let tys = subst_tys s tys in
-      let ty  = subst_ty s f.f_ty in
-      f_op p tys ty
-
-  | FhoareF { hf_pr; hf_f; hf_po } ->
-     let hf_pr, hf_po =
-       let s = add_memory s mhr mhr in
-       let hf_pr = subst_form s hf_pr in
-       let hf_po = subst_form s hf_po in
-       (hf_pr, hf_po) in
-     let hf_f  = subst_xpath s hf_f in
-     f_hoareF hf_pr hf_f hf_po
-
-  | FhoareS { hs_m; hs_pr; hs_s; hs_po } ->
-     let hs_m, (hs_pr, hs_po) =
-       let s, hs_m = subst_memtype s hs_m in
-       let hs_pr = subst_form s hs_pr in
-       let hs_po = subst_form s hs_po in
-       hs_m, (hs_pr, hs_po) in
-     let hs_s = subst_stmt s hs_s in
-     f_hoareS hs_m hs_pr hs_s hs_po
-
-  | FcHoareF { chf_pr; chf_f; chf_po; chf_co } ->
-     let chf_pr, chf_po =
-       let s = add_memory s mhr mhr in
-       let chf_pr = subst_form s chf_pr in
-       let chf_po = subst_form s chf_po in
-       (chf_pr, chf_po) in
-     let chf_f  = subst_xpath s chf_f in
-     let chf_co = subst_cost s chf_co in
-     f_cHoareF chf_pr chf_f chf_po chf_co
-
-  | FcHoareS { chs_m; chs_pr; chs_s; chs_po; chs_co } ->
-     let chs_m, (chs_pr, chs_po) =
-       let s, chs_m = subst_memtype s chs_m in
-       let chs_pr = subst_form s chs_pr in
-       let chs_po = subst_form s chs_po in
-       chs_m, (chs_pr, chs_po) in
-     let chs_s = subst_stmt s chs_s in
-     let chs_co = subst_cost s chs_co in (* FIXME: mem? *)
-     f_cHoareS chs_m chs_pr chs_s chs_po chs_co
-
-  | FbdHoareF { bhf_pr; bhf_f; bhf_po; bhf_cmp; bhf_bd } ->
-     let bhf_pr, bhf_po =
-       let s = add_memory s mhr mhr in
-       let bhf_pr = subst_form s bhf_pr in
-       let bhf_po = subst_form s bhf_po in
-       (bhf_pr, bhf_po) in
-     let bhf_f  = subst_xpath s bhf_f in
-     let bhf_bd  = subst_form s bhf_bd in
-     f_bdHoareF bhf_pr bhf_f bhf_po bhf_cmp bhf_bd
-
-  | FbdHoareS { bhs_m; bhs_pr; bhs_s; bhs_po; bhs_cmp; bhs_bd } ->
-     let bhs_m, (bhs_pr, bhs_po, bhs_bd) =
-       let s, bhs_m = subst_memtype s bhs_m in
-       let bhs_pr = subst_form s bhs_pr in
-       let bhs_po = subst_form s bhs_po in
-       let bhs_bd = subst_form s bhs_bd in
-       bhs_m, (bhs_pr, bhs_po, bhs_bd) in
-     let bhs_s = subst_stmt s bhs_s in
-     f_bdHoareS bhs_m bhs_pr bhs_s bhs_po bhs_cmp bhs_bd
-
-   | FeHoareF { ehf_pr; ehf_f; ehf_po } ->
-     let ehf_pr, ehf_po =
-       let s = add_memory s mhr mhr in
-       let ehf_pr = subst_form s ehf_pr in
-       let ehf_po = subst_form s ehf_po in
-       (ehf_pr, ehf_po) in
-     let ehf_f  = subst_xpath s ehf_f in
-     f_eHoareF ehf_pr ehf_f ehf_po
-
-  | FeHoareS { ehs_m; ehs_pr; ehs_s; ehs_po } ->
-     let ehs_m, (ehs_pr, ehs_po) =
-       let s, ehs_m = subst_memtype s ehs_m in
-       let ehs_pr = subst_form s ehs_pr in
-       let ehs_po = subst_form s ehs_po in
-       ehs_m, (ehs_pr, ehs_po) in
-     let ehs_s = subst_stmt s ehs_s in
-     f_eHoareS ehs_m ehs_pr ehs_s ehs_po
-
-  | FequivF { ef_pr; ef_fl; ef_fr; ef_po } ->
-     let ef_pr, ef_po =
-       let s = add_memory s mleft mleft in
-       let s = add_memory s mright mright in
-       let ef_pr = subst_form s ef_pr in
-       let ef_po = subst_form s ef_po in
-       (ef_pr, ef_po) in
-     let ef_fl = subst_xpath s ef_fl in
-     let ef_fr = subst_xpath s ef_fr in
-     f_equivF ef_pr ef_fl ef_fr ef_po
-
-  | FequivS { es_ml; es_mr; es_pr; es_sl; es_sr; es_po } ->
-     let (es_ml, es_mr), (es_pr, es_po) =
-       let s, es_ml = subst_memtype s es_ml in
-       let s, es_mr = subst_memtype s es_mr in
-       let es_pr = subst_form s es_pr in
-       let es_po = subst_form s es_po in
-       (es_ml, es_mr), (es_pr, es_po) in
-     let es_sl = subst_stmt s es_sl in
-     let es_sr = subst_stmt s es_sr in
-     f_equivS es_ml es_mr es_pr es_sl es_sr es_po
-
-  | FeagerF { eg_pr; eg_sl; eg_fl; eg_fr; eg_sr; eg_po } ->
-     let eg_pr, eg_po =
-       let s = add_memory s mleft  mleft  in
-       let s = add_memory s mright mright in
-       let eg_pr = subst_form s eg_pr in
-       let eg_po = subst_form s eg_po in
-       (eg_pr, eg_po) in
-     let eg_sl = subst_stmt s eg_sl in
-     let eg_sr = subst_stmt s eg_sr in
-     let eg_fl = subst_xpath s eg_fl in
-     let eg_fr = subst_xpath s eg_fr in
-     f_eagerF eg_pr eg_sl eg_fl eg_fr eg_sr eg_po
-
-  | Fcoe { coe_pre; coe_mem; coe_e } ->
-     (* FIXME: check where coe_mem is bound *)
-     let s, coe_mem = subst_memtype s coe_mem in
-     let coe_pre = subst_form s coe_pre in
-     let coe_e = subst_expr s coe_e in
-     f_coe coe_pre coe_mem coe_e
-
-  | Fpr { pr_mem; pr_fun; pr_args; pr_event } ->
-     let pr_mem = subst_mem s pr_mem in
-     let pr_fun = subst_xpath s pr_fun in
-     let pr_args = subst_form s pr_args in
-     let pr_event =
-       let s = add_memory s mhr mhr in
-       subst_form s pr_event in
-     f_pr pr_mem pr_fun pr_args pr_event
-
-  | Fif _ | Fint _ | Ftuple _ | Fproj _ | Fapp _ ->
-     f_map (subst_ty s) (subst_form s) f
-
-(* -------------------------------------------------------------------- *)
-and subst_fop fty tys args (tyids, f) =
-  let s = add_tyvars empty tyids tys in
-
-  let (s, args, f) =
-    match f.f_node with
-    | Fquant (Llambda, largs, lbody) when args <> [] ->
-        let largs1, largs2 = List.takedrop (List.length args  ) largs in
-        let  args1,  args2 = List.takedrop (List.length largs1)  args in
-        (add_flocals s (List.fst largs1) args1, args2, f_lambda largs2 lbody)
-
-    | _ -> (s, args, f)
-  in
-
-  f_app (subst_form s f) args fty
-
-(* -------------------------------------------------------------------- *)
-and subst_cost (s : subst) (c : cost) =
-  (* FIXME: refactor with the EcCoreFol version *)
-
-  let for_call xp { cb_cost; cb_called } (self, calls) =
-    let xp        = subst_xpath s xp in
-    let cb_cost   = subst_form s cb_cost in
-    let cb_called = subst_form s cb_called in
-
-    match xp.EcPath.x_top.m_top with
-    | `Local _ ->
-      let cb = call_bound_r cb_cost cb_called in
-      let calls =
-        EcPath.Mx.change
-          (fun old -> assert (old  = None); Some cb)
-          xp calls in
-      (self, calls)
-
-    | `Concrete _ ->
-       (f_xadd_simpl self (f_xmuli_simpl cb_called cb_cost), calls)
-  in
-
-  let c_self =
-    subst_form s c.c_self in
-
-  let self, c_calls =
-    EcPath.Mx.fold for_call c.c_calls (f_x0, EcPath.Mx.empty) in
-
-  let c_self = f_xadd_simpl c_self self in
-
-  cost_r c_self c_calls
-
-(* -------------------------------------------------------------------- *)
-and subst_oracle_info (s : subst) (oi : OI.t) =
-  let costs =
-    match PreOI.costs oi with
-    | `Unbounded -> `Unbounded
-    | `Bounded (self, calls) ->
-       let for_call x a calls =
-         EcPath.Mx.change
-           (fun old -> assert (old = None); Some (subst_form s a))
-           (subst_xpath s x)
-           calls in
-
-       let calls = EcPath.Mx.fold for_call calls EcPath.Mx.empty in
-       let self = subst_form s self in
-      `Bounded (self, calls)
-  in
-  OI.mk
-    (List.map (subst_xpath s) (PreOI.allowed oi))
-    costs
-
-(* -------------------------------------------------------------------- *)
-and subst_mod_restr (s : subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (subst_xpath s x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (subst_mpath s x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
-  let ois = EcSymbols.Msym.map (fun oi ->
-      subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
-
-(* -------------------------------------------------------------------- *)
-and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
+let rec subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
   match item with
   | Tys_function funsig -> Tys_function (subst_funsig s funsig)
 
@@ -759,54 +825,13 @@ and subst_modsig ?params (s : subst) (comps : module_sig) =
   in
 
   let comps =
-    { mis_params = newparams;
+    { mis_restr  = subst_gvar_set s comps.mis_restr;
+      mis_params = newparams;
       mis_body   = subst_modsig_body sbody comps.mis_body;
-      mis_restr  = subst_mod_restr sbody comps.mis_restr;
+      mis_oi     = EcSymbols.Msym.map (subst_oracle_info sbody) comps.mis_oi;
     }
   in
     (sbody, comps)
-
-(* -------------------------------------------------------------------- *)
-and subst_modtype (s : subst) (modty : module_type) =
-  let mt_name =
-    ofdfl
-      (fun () -> subst_path s modty.mt_name)
-      (Mp.find_opt modty.mt_name s.sb_path) in
-
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
-    mt_name   = mt_name;
-    mt_args   = List.map (subst_mpath s) modty.mt_args;
-    mt_restr = subst_mod_restr s modty.mt_restr; }
-
-(* -------------------------------------------------------------------- *)
-and subst_gty (s : subst) (ty : gty) =
-  match ty with
-  | GTty ty ->
-     GTty (subst_ty s ty)
-
-  | GTmodty mty ->
-     GTmodty (subst_modtype s mty)
-
-  | GTmem m ->
-     GTmem (EcMemory.mt_subst (subst_ty s) m)
-
-(* -------------------------------------------------------------------- *)
-and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
-  let xfresh = EcIdent.fresh x in
-  let gty = subst_gty s ty in
-  match gty with
-  | GTty ty ->
-     let s = add_flocal s x (f_local xfresh ty) in
-     s, (xfresh, gty)
-  | GTmem _ ->
-     s, (x, gty)
-  | GTmodty _ ->
-     let s = add_module s x (EcPath.mident xfresh) in
-     s, (xfresh, gty)
-
-(* -------------------------------------------------------------------- *)
-and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
-  List.fold_left_map fresh_glocal s locals
 
 (* -------------------------------------------------------------------- *)
 and subst_top_modsig (s : subst) (ms : top_module_sig) =

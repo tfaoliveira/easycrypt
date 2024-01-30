@@ -3,6 +3,7 @@ open EcBigInt
 open EcMaps
 open EcSymbols
 open EcIdent
+open EcAst
 
 (* -------------------------------------------------------------------- *)
 (* FIXME: section: move me *)
@@ -22,8 +23,6 @@ module Hty : EcMaps.EHashtbl.S with type key = ty
 
 type dom = ty list
 
-val dump_ty : ty -> string
-
 val ty_equal : ty -> ty -> bool
 val ty_hash  : ty -> int
 
@@ -32,7 +31,7 @@ val tvar    : EcIdent.t -> ty
 val ttuple  : ty list -> ty
 val tconstr : EcPath.path -> ty list -> ty
 val tfun    : ty -> ty -> ty
-val tglob   : EcIdent.t -> ty
+val tmem    : EcAst.memtype -> ty
 val tpred   : ty -> ty
 
 val ty_fv_and_tvar : ty -> int Mid.t
@@ -58,6 +57,7 @@ val tyfun_flat   : ty -> (dom * ty)
 val is_tdistr : ty -> bool
 val as_tdistr : ty -> ty option
 
+val destr_tmem : ty -> memtype
 (* -------------------------------------------------------------------- *)
 exception FoundUnivar
 
@@ -70,8 +70,11 @@ module Tvar : sig
 end
 
 (* -------------------------------------------------------------------- *)
+
 (* [map f t] applies [f] on strict subterms of [t] (not recursive) *)
 val ty_map : (ty -> ty) -> ty -> ty
+val lmt_map_ty : (ty -> ty) -> local_memtype -> local_memtype
+val mt_map_ty : (ty -> ty) -> memtype -> memtype
 
 (* [sub_exists f t] true if one of the strict-subterm of [t] valid [f] *)
 val ty_sub_exists : (ty -> bool) -> ty -> bool
@@ -82,6 +85,15 @@ val ty_iter : (ty -> unit) -> ty -> unit
 (* -------------------------------------------------------------------- *)
 val symbol_of_ty   : ty -> string
 val fresh_id_of_ty : ty -> EcIdent.t
+
+(* -------------------------------------------------------------------- *)
+val gvs_empty   : gvar_set
+val gvs_all     : gvar_set
+val gvs_set     : EcPath.Sx.t -> gvar_set
+val gvs_globfun : functor_fun -> gvar_set
+val gvs_union   : gvar_set -> gvar_set -> gvar_set
+val gvs_diff    : gvar_set -> gvar_set -> gvar_set
+val gvs_inter   : gvar_set -> gvar_set -> gvar_set
 
 (* -------------------------------------------------------------------- *)
 type lpattern = EcAst.lpattern

@@ -28,14 +28,15 @@ end
 
 (* -------------------------------------------------------------------- *)
 
+(*
 (* Careful, the available oracles are empty in both [mr_empty] and [mr_full]. *)
 val mr_empty : mod_restr
 val mr_full  : mod_restr
 
-
+(*
 val mr_add_restr :
   mod_restr -> EcPath.Sx.t use_restr -> EcPath.Sm.t use_restr -> mod_restr
-
+*)
 val add_oinfo : mod_restr -> string -> OI.t -> mod_restr
 val change_oicalls : mod_restr -> string -> xpath list -> mod_restr
 val oicalls_filter :
@@ -43,5 +44,5 @@ val oicalls_filter :
   EcSymbols.Msym.key ->
   (EcPath.xpath -> bool) ->
   mod_restr
-
+*)
 (* -------------------------------------------------------------------- *)

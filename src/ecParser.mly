@@ -804,16 +804,6 @@ mod_ident1:
 | nm=mod_qident DOT x=lident { (nm, x) }
 | x=lident { ([], x) }
 
-f_or_mod_ident:
-| nm=mod_qident DOT x=lident
-    { let fv = mk_loc (EcLocation.make $startpos(nm) $endpos(x)) (nm, x) in
-      FM_FunOrVar fv }
-| x=lident
-    { let fv = mk_loc (EcLocation.make $startpos(x) $endpos(x)) ([], x) in
-      FM_FunOrVar fv}
-| m=loc(mod_qident) { FM_Mod m }
-
-
 inlinesubpat:
 | m=rlist1(uident, DOT) { m, None }
 | m=rlist1(uident, DOT) DOT f=lident { m, Some f}
@@ -1451,7 +1441,7 @@ simpl_type_exp:
 | x=qident                    { PTnamed x      }
 | x=tident                    { PTvar x        }
 | tya=type_args x=qident      { PTapp (x, tya) }
-| GLOB m=loc(mod_qident)      { PTglob m       }
+| GLOB mr=mem_restr_el0       { PTglob mr      }
 | LPAREN ty=type_exp RPAREN   { ty             }
 
 type_args:
@@ -1685,13 +1675,23 @@ mod_params:
 (* -------------------------------------------------------------------- *)
 (* Memory restrictions *)
 
-mem_restr_el:
-  | PLUS  el=f_or_mod_ident { PMPlus el }
-  | MINUS el=f_or_mod_ident { PMMinus el }
-  |       el=f_or_mod_ident { PMDefault el }
+mem_restr_el0:
+ | el=mem_restr          { el }
+ | nm=mod_qident DOT x=lident
+    { let fv = mk_loc (EcLocation.make $startpos(nm) $endpos(x)) (nm, x) in
+      PMfunOrVar fv }
+ | x=lident
+    { let fv = mk_loc (EcLocation.make $startpos(x) $endpos(x)) ([], x) in
+      PMfunOrVar fv}
+ | m=loc(mod_qident) { PMmod m }
 
-mem_restr:
-  | ol=rlist0(mem_restr_el,COMMA) { ol }
+mem_restr_el:
+ | PLUS  el=mem_restr_el0 { PMplus el }
+ | MINUS el=mem_restr_el0 { PMminus el }
+ | el=mem_restr_el0 { el }
+
+%inline mem_restr:
+  | LBRACE ol=rlist0(mem_restr_el,COMMA) RBRACE { PMlist ol }
 
 (* -------------------------------------------------------------------- *)
 (* qident optionally taken in a (implicit) module parameters. *)
@@ -1740,20 +1740,11 @@ mod_restr_el:
 	pmre_orcls = orcl;
 	pmre_compl = cmpl; } }
 
-mod_restr:
-  | LBRACE mr=mem_restr RBRACE
-    { { pmr_mem = mr;
-	pmr_procs = [] } }
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
-    { { pmr_mem = [];
-	pmr_procs = l } }
-  | LBRACE mr=mem_restr RBRACE LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
-    { { pmr_mem = mr;
-	pmr_procs = l } }
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET LBRACE mr=mem_restr RBRACE
-    { { pmr_mem = mr;
-	pmr_procs = l } }
+mod_restr_procs:
+  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET { l }
 
+mod_restr:
+  | mr=mem_restr? mrp=mod_restr_procs? { { pmr_mem = mr; pmr_procs = mrp } }
 
 (* -------------------------------------------------------------------- *)
 (* Modules interfaces                                                   *)
@@ -1762,11 +1753,8 @@ mod_restr:
 | x = qident { x }
 
 %inline mod_type_with_restr:
-| x = qident
-    { { pmty_pq = x; pmty_mem = None; } }
-
 | x = qident mr=mod_restr
-    { { pmty_pq = x; pmty_mem = Some mr; } }
+    { { pmty_pq = x; pmty_mem = mr; } }
 
 sig_def:
 | pi_locality=loc(locality) MODULE TYPE pi_name=uident args=sig_params* mr=mod_restr? EQ i=sig_body

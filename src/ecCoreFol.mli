@@ -3,6 +3,7 @@ open EcBigInt
 open EcPath
 open EcMaps
 open EcIdent
+open EcAst
 open EcTypes
 open EcCoreModules
 open EcMemory
@@ -45,17 +46,13 @@ type call_bound  = EcAst.call_bound
 
 type module_type = EcAst.module_type
 
-type mod_restr = EcAst.mod_restr
-
 (* -------------------------------------------------------------------- *)
 val gtty    : EcTypes.ty -> gty
 val gtmodty : module_type -> gty
-val gtmem   : EcMemory.memtype -> gty
 
 (* -------------------------------------------------------------------- *)
 val as_gtty  : gty -> EcTypes.ty
 val as_modty : gty -> module_type
-val as_mem   : gty -> EcMemory.memtype
 
 (* -------------------------------------------------------------------- *)
 val gty_equal : gty -> gty -> bool
@@ -64,9 +61,6 @@ val gty_fv    : gty -> int Mid.t
 (* -------------------------------------------------------------------- *)
 val mty_equal : module_type -> module_type -> bool
 val mty_hash  : module_type -> int
-
-val mr_equal : mod_restr -> mod_restr -> bool
-val mr_hash  : mod_restr -> int
 
 (* -------------------------------------------------------------------- *)
 val f_equal   : form -> form -> bool
@@ -93,16 +87,21 @@ val form_forall: (form -> bool) -> form -> bool
 
 (* -------------------------------------------------------------------- *)
 val gty_as_ty  : gty -> EcTypes.ty
-val gty_as_mem : gty -> EcMemory.memtype
 val gty_as_mod : gty -> module_type
 val kind_of_gty: gty -> [`Form | `Mem | `Mod]
 
 (* soft-constructors - common leaves *)
 val f_local : EcIdent.t -> EcTypes.ty -> form
-val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> memory -> form
-val f_pvarg : EcTypes.ty -> memory -> form
-val f_pvloc : variable -> memory -> form
-val f_glob  : EcIdent.t -> memory -> form
+val f_mem   : memenv -> form
+
+val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> form -> form
+val f_pvarg : EcTypes.ty -> form -> form
+val f_pvloc : variable -> form -> form
+
+val f_mrestr : form -> memtype -> form
+val f_updvar : form -> EcTypes.prog_var -> form -> form
+val f_updmem : form -> var_set  -> form -> form
+
 
 (* soft-constructors - common formulas constructors *)
 val f_op     : path -> EcTypes.ty list -> EcTypes.ty -> form
@@ -170,7 +169,7 @@ val f_coe   : form -> memenv -> expr -> form
 
 (* soft-constructors - Pr *)
 val f_pr_r : pr -> form
-val f_pr   : memory -> xpath -> form -> form -> form
+val f_pr   : form -> xpath -> form -> form -> form
 
 (* soft-constructors - unit *)
 val f_tt : form
@@ -261,7 +260,10 @@ val destr_app2_eq : name:string -> path -> form -> form * form
 
 val destr_op        : form -> EcPath.path * ty list
 val destr_local     : form -> EcIdent.t
-val destr_pvar      : form -> prog_var * memory
+val destr_pvar      : form -> prog_var * form
+val destr_mrestr    : form -> form * memtype
+val destr_updvar    : form -> form * prog_var * form
+val destr_updmem    : form -> form * var_set * form
 val destr_proj      : form -> form * int
 val destr_tuple     : form -> form list
 val destr_app       : form -> form * form list
@@ -303,8 +305,7 @@ val destr_pr        : form -> pr
 val destr_programS  : [`Left | `Right] option -> form -> memenv * stmt
 val destr_int       : form -> zint
 
-val destr_glob      : form -> EcIdent.t        * memory
-val destr_pvar      : form -> EcTypes.prog_var * memory
+
 
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool
@@ -344,12 +345,12 @@ val split_fun  : form -> bindings * form
 val split_args : form -> form * form list
 
 (* -------------------------------------------------------------------- *)
-val form_of_expr : EcMemory.memory -> EcTypes.expr -> form
+val form_of_expr : ?mem:form -> EcTypes.expr -> form
 
 (* -------------------------------------------------------------------- *)
 exception CannotTranslate
 
-val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
+val expr_of_form : mem:form -> form -> EcTypes.expr
 
 (* -------------------------------------------------------------------- *)
 (* A predicate on memory: λ mem. -> pred *)

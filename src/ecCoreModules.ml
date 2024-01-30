@@ -221,52 +221,12 @@ let get_uninit_read (s : stmt) =
   snd (s_get_uninit_read Ssym.empty s)
 
 (* -------------------------------------------------------------------- *)
-type 'a use_restr = 'a EcAst.use_restr
-
-let ur_app f a =
-  { ur_pos = (omap f) a.ur_pos;
-    ur_neg = f a.ur_neg; }
-
-(* Noting is restricted. *)
-let ur_empty emp = { ur_pos = None; ur_neg = emp; }
-
-(* Everything is restricted. *)
-let ur_full emp = { ur_pos = Some emp; ur_neg = emp; }
-
-let ur_pos_subset subset ur1 ur2 = match ur1,ur2 with
-  | _, None -> true             (* Indeed, [None] means everybody. *)
-  | None, Some _ -> false
-  | Some s1, Some s2 -> subset s1 s2
-
-let ur_equal = EcAst.ur_equal
-
-(* Union for negative restrictions, intersection for positive ones.
-   [None] stands for everybody. *)
-let ur_union union inter ur1 ur2 =
-  let ur_pos = match ur1.ur_pos, ur2.ur_pos with
-    | None, None -> None
-    | None, Some s | Some s, None -> Some s
-    | Some s1, Some s2 -> some @@ inter s1 s2 in
-
-  { ur_pos = ur_pos;
-    ur_neg = union ur1.ur_neg ur2.ur_neg; }
-
-(* Converse of ur_union. *)
-let ur_inter union inter ur1 ur2 =
-  let ur_pos = match ur1.ur_pos, ur2.ur_pos with
-    | None, _ | _, None -> None
-    | Some s1, Some s2 -> some @@ union s1 s2 in
-
-  { ur_pos = ur_pos;
-    ur_neg = inter ur1.ur_neg ur2.ur_neg; }
-
-(* -------------------------------------------------------------------- *)
 (* Oracle information of a procedure [M.f]. *)
+
 module PreOI : sig
   type t = EcAst.oracle_info
 
   val hash : t -> int
-  val equal : (form -> form -> bool) -> t -> t -> bool
 
   val cost_self : t -> [`Bounded of form | `Unbounded]
   val cost : t -> xpath -> [`Bounded of form| `Zero | `Unbounded]
@@ -307,11 +267,14 @@ end = struct
 
   let costs oi = omap_dfl (fun x -> `Bounded x) `Unbounded oi.oi_costs
 
-  let mk oi_calls oi_costs = match oi_costs with
-    | `Bounded oi_costs ->
-      { oi_calls; oi_costs = Some (oi_costs) ; }
-    | `Unbounded ->
-      { oi_calls; oi_costs = None; }
+
+  let mk oi_calls oi_costs =
+    let oi_costs =
+      match oi_costs with
+      | `Bounded oi_costs -> Some (oi_costs)
+      | `Unbounded -> None
+    in
+    EcAst.mk_oi oi_calls oi_costs
 
   (* let change_calls oi calls =
    *   mk calls oi.oi_in
@@ -330,37 +293,14 @@ end = struct
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcAst.mr_xpaths
 
-type mr_mpaths = EcAst.mr_mpaths
-
-type mod_restr = EcAst.mod_restr
-
-let mr_equal = EcAst.mr_equal
-let mr_hash  = EcAst.mr_hash
 
 let has_compl_restriction mr =
-  Msym.exists (fun _ oi -> (PreOI.costs oi) <> `Unbounded) mr.mr_oinfos
+  Msym.exists (fun _ oi -> (PreOI.costs oi) <> `Unbounded) mr
 
 let mr_is_empty mr =
      not (has_compl_restriction mr)
-  && Msym.for_all (fun _ oi -> [] = PreOI.allowed oi) mr.mr_oinfos
-
-let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
-  EcPath.Sx.fold
-    (fun xp fv -> EcPath.x_fv fv xp)
-    (Sx.union
-       m.ur_neg
-       (EcUtils.odfl Sx.empty m.ur_pos))
-    EcIdent.Mid.empty
-
-let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
-  EcPath.Sm.fold
-    (fun mp fv -> EcPath.m_fv fv mp)
-    (Sm.union
-       m.ur_neg
-       (EcUtils.odfl Sm.empty m.ur_pos))
-    EcIdent.Mid.empty
+  && Msym.for_all (fun _ oi -> [] = PreOI.allowed oi) mr
 
 (* -------------------------------------------------------------------- *)
 type funsig = {
@@ -384,9 +324,10 @@ type module_sig_body_item = Tys_function of funsig
 type module_sig_body = module_sig_body_item list
 
 type module_sig = {
+  mis_restr  : gvar_set;
   mis_params : (EcIdent.t * module_type) list;
   mis_body   : module_sig_body;
-  mis_restr  : mod_restr;
+  mis_oi     : oracle_info Msym.t;
 }
 
 type top_module_sig = {
@@ -508,7 +449,6 @@ type top_module_expr = {
 }
 
 (* -------------------------------------------------------------------- *)
-let ur_hash = EcAst.ur_hash
 
 let mty_hash = EcAst.mty_hash
 let mty_equal = EcAst.mty_equal

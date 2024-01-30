@@ -91,7 +91,7 @@ let indsc_of_datatype ?normty (mode : indmode) (dt : datatype) =
 
   let rec scheme1 p (pred, fac) ty =
     match (normty ty).ty_node with
-    | Tglob   _ -> assert false
+    | Tmem    _ -> assert false
     | Tunivar _ -> assert false
     | Tvar    _ -> None
 

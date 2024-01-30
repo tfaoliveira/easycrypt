@@ -13,11 +13,12 @@ include EcCoreModules
 (* Instantiation of EcCoreModules.PreOI on EcCoreFol.form. *)
 module OI = struct
   include PreOI
-  let equal = PreOI.equal f_equal
+  let equal = EcAst.oi_equal
 end
 
 (* -------------------------------------------------------------------- *)
 
+(*
 let mr_empty = {
   mr_xpaths = ur_empty EcPath.Sx.empty;
   mr_mpaths = ur_empty EcPath.Sm.empty;
@@ -59,3 +60,4 @@ let mty_equal = EcCoreFol.mty_equal
 
 let mr_equal  = EcCoreFol.mr_equal
 let mr_hash   = EcCoreFol.mr_hash
+*)
