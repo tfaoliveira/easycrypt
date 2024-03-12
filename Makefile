@@ -6,7 +6,7 @@ ECARGS    ?=
 ECTOUT    ?= 10
 ECJOBS    ?= 0
 ECEXTRA   ?= --report=report.log
-ECPROVERS ?= Alt-Ergo@2.4 Z3@4.8 CVC4@1.8
+ECPROVERS ?= Alt-Ergo@2.4 Z3@4.12 CVC5@1.0
 CHECKPY   ?=
 CHECK     := $(CHECKPY) scripts/testing/runtest
 CHECK     += --bin=./ec.native --bin-args="$(ECARGS)"
@@ -27,7 +27,7 @@ default: build
 
 build:
 	rm -f src/ec.exe ec.native
-	dune build -p easycrypt
+	dune build
 	ln -sf src/ec.exe ec.native
 ifeq ($(UNAME_P)-$(UNAME_S),arm-Darwin)
 	-codesign -f -s - src/ec.exe
@@ -39,7 +39,8 @@ install: build
 uninstall:
 	$(DUNE) uninstall
 
-check: stdlib examples
+unit: build
+	$(CHECK) unit
 
 stdlib: build
 	$(CHECK) prelude stdlib
@@ -47,7 +48,7 @@ stdlib: build
 examples: build
 	$(CHECK) examples mee-cbc
 
-check: stdlib examples
+check: unit stdlib examples
 	@true
 
 clean:

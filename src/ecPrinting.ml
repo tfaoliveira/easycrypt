@@ -541,7 +541,7 @@ type opprec = int * fixity
 (* -------------------------------------------------------------------- *)
 (* precondition: fst inner_left <= fst inner *)
 let maybe_paren_gen (onm, (outer, side)) (inm, inner, inner_left) pp =
-  let noparens ((pi : int), fi) (pil, fil) (po, fo) side =
+  let noparens ((pi : int), fi) (pil, _fil) (po, fo) side =
     pil > po ||  (* pi > po is too strong *)
       match fi, side with
       | `Postfix     , `Left     -> true
@@ -571,7 +571,7 @@ let maybe_paren_nosc outer inner pp =
 (* when a construct is bracketed with words, e.g., `match ... end`,
    only introduce explicit parentheses in an application *)
 let maybe_paren_bracketed_with_words (_, (_, side)) pp =
-  let parens outer =
+  let parens _outer =
     (match side with
      | `ILeft | `IRight -> true
      | _                -> false)
@@ -1348,7 +1348,7 @@ let lower_left (ppe : PPEnv.t) (t_ty : form -> EcTypes.ty) (f : form)
     | Fquant _ -> Some (fst e_bin_prio_lambda)
     | Fif _    -> Some (fst e_bin_prio_if)
     | Flet _   -> Some (fst e_bin_prio_letin)
-    | Fapp ({f_node = Fop (op, _)}, [f1; f2])
+    | Fapp ({f_node = Fop (op, _)}, [_; f2])
         when EcPath.basename op = EcCoreLib.s_cons ->
         if fst e_bin_prio_rop4 < fst opprec
         then None
@@ -1591,7 +1591,7 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
       let hy   = EcEnv.LDecl.init ppe.PPEnv.ppe_env [] in
       let mr   = odfl mhr (EcEnv.Memory.get_active ppe.PPEnv.ppe_env) in
       let bd   = form_of_expr mr nt.ont_body in
-      let bd   = Fsubst.subst_tvar ov bd in
+      let bd   = Fsubst.f_subst_tvar ~freshen:true ov bd in
 
       try
         let (ue, ev) =
@@ -1618,7 +1618,13 @@ and try_pp_notations (ppe : PPEnv.t) outer fmt f =
      not nt.ont_ponly && try_notation args
   in
 
-  let nts = EcEnv.Op.get_notations ppe.PPEnv.ppe_env in
+  let head =
+    try
+      Some (fst (destr_op (fst (destr_app f))))
+    with DestrError _ -> None
+  in
+
+  let nts = EcEnv.Op.get_notations ~head ppe.PPEnv.ppe_env in
 
   List.exists try_notation nts
 
