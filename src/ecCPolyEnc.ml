@@ -1,12 +1,14 @@
-open ECAst
-open ECEnv
-open ECLowPhlGoal
-open ECTypes
+open EcAst
+open EcEnv
+open EcLowPhlGoal
+open EcTypes
 open EcCoreFol
+open EcSymbols
+open EcIdent
 
 type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
 
-let find (m : MMsym.t) (x : symbol) : 'a =
+let find (m : 'a MMsym.t) (x : symbol) : 'a =
   match MMsym.all x m with
   | [res] -> res
   | _ -> assert false
@@ -14,34 +16,34 @@ let find (m : MMsym.t) (x : symbol) : 'a =
 (* ------------------------------------------------------------- *)
 let rec poly_of_expr (env: env) (e: expr) : form =
   let trans_args (e: expr) =
-    match e.expr_node with
-    | Eint i -> mk_form (Fint i) e.ty
-    | Elocal v -> mk_form (Flocal (find env.env_ssa v)) e.ty
-    | Evar v -> mk_form (Fpvar (PVloc (find env.env_ssa v))) e.ty
+    match e.e_node with
+    | Eint i -> mk_form (Fint i) e.e_ty
+    | Evar (PVloc v) -> mk_form (Flocal (find env.env_ssa v)) e.e_ty
+    | Elocal v -> mk_form (Flocal (find env.env_ssa (name v))) e.e_ty
     | _ -> assert false
   in
 
   let decode_op (q: qsymbol) : (form list -> form) =
     match q with
-    | (["Top"; "JWord"; "W8"], "+") -> (fun args -> mk_form (Eapp fop_int_add args) tint) 
-    | (["Top"; "JWord"; "W8"], "*") -> (fun args -> mk_form (Eapp fop_int_mul args) tint)
+    | (["Top"; "JWord"; "W8"], "+") -> (fun [a;b] -> f_int_add a b) 
+    | (["Top"; "JWord"; "W8"], "*") -> (fun [a;b] -> f_int_mul a b)
     | (qs, q) -> Format.eprintf "Unknown qpath at dec_op_poly_of_cond: ";
     List.iter (Format.eprintf "%s.") qs;
     Format.eprintf "%s@." q;
     assert false
   in
 
-  match e.expr_node with
-  | Eint i -> mk_form (Fint f) e.ty 
-  | Elocal idn -> mk_form (Flocal (find env.env_ssa idn)) e.ty 
-  | Evar v -> mk_form (FPvar (PVloc find env.env_ssa idn)) e.ty 
+  match e.e_node with
+  | Eint i -> mk_form (Fint i) e.e_ty 
+  | Elocal v -> mk_form (Flocal (find env.env_ssa (name v))) e.e_ty 
+  | Evar (PVloc v) -> mk_form (Flocal (find env.env_ssa v)) e.e_ty 
   | Eop _  -> assert false 
-  | Eapp (Eop (p, _), args) -> 
+  | Eapp ({e_node = Eop (p, _); _}, args) -> 
     let args = List.map trans_args args in
     let op = decode_op (EcPath.toqsymbol p) in
     op args
   | Eapp  _ -> assert false 
-  | Equant () -> assert false 
+  | Equant _ -> assert false 
   | Elet  _  -> assert false 
   | Etuple _ -> assert false 
   | Eif   _  -> assert false 
@@ -50,40 +52,39 @@ let rec poly_of_expr (env: env) (e: expr) : form =
 
 (* ------------------------------------------------------------- *)
 let poly_of_instr (env: env) (inst: instr) : env * form = 
-  let trans_lvar (env: env) (lvar) (ty: ty) : env * form =
+  let trans_lvar (env: env) (lv: lvalue) (ty: ty) : env * form =
     begin
       match lv with
-      | LvVar (PVLoc pv, _) -> 
-        let id = fresh pv in
-        let env = {env with env.env_ssa = MMsym.add pv id env.env_ssa} in
+      | LvVar (PVloc pv, _) -> 
+        let id = create pv in
+        let env = { env with env_ssa = MMsym.add pv id env.env_ssa } in
         (env, mk_form (Flocal id) ty)
       | _ -> assert false (* TODO *)
     end
   in
 
-  match inst.instr_node with
+  match inst.i_node with
   | Sasgn (lv, e) -> 
-    let id = fresh idn.id_symb in
     let f = poly_of_expr env e in
     let (env, fl) = trans_lvar env lv f.f_ty in
-    (env, mk_form (Fapp (fop_eq fint) f fl))
+    (env, f_eq f fl)
     (* FIXME ^ find actual equality *)
   | _ -> assert false
 
 (* ------------------------------------------------------------- *)
-let rec poly_of_cond (env: env) (f: form) : env * form =
-  let trans_args (f: form) =
+let rec poly_of_cond (env: env) (f: form) : form =
+  let trans_args (f: form) : form =
     match f.f_node with
-    | Fint i as f -> f 
-    | Flocal idn -> mk_form (Flocal (find env.env_ssa idn)) f.f_ty 
-    | Fpvar pv -> assert false
+    | Fint i -> f
+    | Flocal idn -> mk_form (Flocal (find env.env_ssa (name idn))) f.f_ty 
+    | Fpvar _ -> assert false
     | _ -> assert false
   in
 
   let decode_op (q: qsymbol) : (form list -> form) =
     match q with
-    | ["Top"; "JWord"; "W8"], "+" -> (fun [a;b] as args -> mk_form (Eapp fop_int_add args)) 
-    | ["Top"; "JWord"; "W8"], "*" -> (fun [a;b] as args -> mk_form (Eapp fop_int_mul args)) 
+    | ["Top"; "JWord"; "W8"], "+" -> (fun [a;b] -> f_int_add a b) 
+    | ["Top"; "JWord"; "W8"], "*" -> (fun [a;b] -> f_int_mul a b) 
     | (qs, q) -> Format.eprintf "Unknown qpath at dec_op_poly_of_cond: ";
     List.iter (Format.eprintf "%s.") qs;
     Format.eprintf "%s@." q;
@@ -91,12 +92,12 @@ let rec poly_of_cond (env: env) (f: form) : env * form =
   in
 
   match f.f_node with
-  | Fint   i as f -> f
-  | Flocal idn -> mk_form (Flocal (find env.env_ssa idn)) f.f_ty 
-  | Fpvar  pvar, mem_ -> assert false 
-  | Fglob  idn, mem -> assert false
+  | Fint   i -> f
+  | Flocal idn -> mk_form (Flocal (find env.env_ssa (name idn))) f.f_ty
+  | Fpvar  (pvar, mem_) -> assert false 
+  | Fglob  (idn, mem) -> assert false
   | Fop    (p, tys) -> assert false
-  | Fapp   (Fop (p, _), args) -> (decode_op (EcPath.to_qsymbol p)) (trans_args args)
+  | Fapp   ({f_node = Fop (p, _); _ }, args) -> (decode_op (EcPath.toqsymbol p)) (List.map trans_args args) 
   | Fquant (qtf, bndgs, f) -> assert false
   | Fif    (fcnd, ft, ff) -> assert false
   | Fmatch (fv, fpats, ty) ->assert false
