@@ -635,8 +635,8 @@ and process_dump scope (source, tc) =
   scope
 
 (* -------------------------------------------------------------------- *)
-and process_bdep (scope : EcScope.scope) ((p, f, n, m, vs, b) : pgamepath * psymbol * int * int * (string list) * int) =
-  EcBDep.bdep (EcScope.env scope) p f n m vs b
+and process_bdep (scope : EcScope.scope) ((p, f, n, m, vs, pc) : pgamepath * psymbol * int * int * (string list) * psymbol) =
+  EcBDep.bdep (EcScope.env scope) p f n m vs pc
 
 (* -------------------------------------------------------------------- *)
 and process (ld : Loader.loader) (scope : EcScope.scope) g =
@@ -680,7 +680,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Greduction   red  -> `Fct   (fun scope -> process_reduction  scope red)
       | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
       | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
-      | Gbdep        (proc, f, n, m, vs, b) -> `State (fun scope -> process_bdep scope (proc, f, n, m, vs, b))
+      | Gbdep        (proc, f, n, m, vs, pc) -> `State (fun scope -> process_bdep scope (proc, f, n, m, vs, pc))
     with
     | `Fct   f -> Some (f scope)
     | `State f -> f scope; None

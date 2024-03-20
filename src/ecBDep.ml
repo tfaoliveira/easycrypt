@@ -305,13 +305,23 @@ let inputs_of_reg (r : C.reg) : C.var Set.t =
   List.fold_left (fun acc x -> Set.union acc (inputs_of_node x)) Set.empty r
 
 (* ------------------------------------------------------------------------------- *)
-let circ_equiv_bitwuzla (inps: (C.var * C.var) list) (r1 : C.reg) (r2 : C.reg) (bound : int) : bool =
+let circ_equiv_bitwuzla (inps: (C.var * C.var) list) (r1 : C.reg) (r2 : C.reg) (pcond : C.reg) : bool =
   let module B = Bitwuzla.Once () in
   let open B in
   let bvvars : B.bv B.term Map.String.t ref = ref Map.String.empty in
   let inps = Map.of_seq (List.to_seq inps) in
   let env_ (v : C.var) = Option.map C.input (Map.find_opt v inps) in
   let r1 = C.maps env_ r1 in
+
+  let inp_pc = (inputs_of_reg pcond |> Set.to_list) in
+  let inp_tg = (inputs_of_reg r2    |> Set.to_list) in
+  let inps_pc = List.combine (List.take (List.length inp_tg) inp_pc) (List.take (List.length inp_pc) inp_tg) in
+  let inps_pc = Map.of_seq (List.to_seq inps_pc) in
+  let env_pc (v : C.var) = Option.map C.input (Map.find_opt v inps_pc) in
+  let pcond = C.maps env_pc pcond in
+  let pcond = match pcond with
+  | [n] -> n
+  | _   -> failwith "precondition must output only 1 bit (bool)" in
 
   let rec bvterm_of_node : C.node -> _ =
     let cache = Hashtbl.create 0 in
@@ -351,38 +361,24 @@ let circ_equiv_bitwuzla (inps: (C.var * C.var) list) (r1 : C.reg) (r2 : C.reg) (
   in 
   let bvinpt1 = (bvterm_of_reg r1) in
   let bvinpt2 = (bvterm_of_reg r2) in
-  let formula = Term.equal bvinpt1 bvinpt2 
-  in 
+  let formula = Term.equal bvinpt1 bvinpt2 in
+  let pcond = (bvterm_of_node pcond) in
  
-  (* FIXME: Mega hardcoding for shift test *)
-  let inputs = Map.String.keys !bvvars |> List.of_enum |> List.drop 256 |> Array.of_list in 
-  let inputs = Array.rev inputs in 
-  (* DEBUG PRINT:
-  let () = Array.iter (fun v -> Format.eprintf "key: %s@." v) inputs in *)
-  (*let lsB, msB = Array.take 8 inputs, Array.drop 8 inputs in*)
-  let inp_bv = Term.Bv.concat (Array.map (fun v -> Map.String.find v !bvvars) inputs)  
-  in
-
   begin
-          if bound > 0 then
-             let precond = Term.Bv.ult inp_bv (Term.Bv.of_int (Sort.bv (Array.length inputs)) bound) 
-             in assert' @@ Term.Bv.logand precond (Term.Bv.lognot formula);
-          else 
-             assert' @@ Term.Bv.lognot formula;
+    assert' @@ Term.Bv.logand pcond (Term.Bv.lognot formula);
     let result = check_sat () in
     if result = Unsat then
     true else
       begin
         Format.eprintf "fc: %a@."     Term.pp (get_value bvinpt1 :> B.bv B.term);
         Format.eprintf "block: %a@."  Term.pp (get_value bvinpt2 :> B.bv B.term);
-        Format.eprintf "inp: %a@."    Term.pp (get_value inp_bv :> B.bv B.term);
         false
       end
   end
 
 
 (* ------------------------------------------------------------------------------- *)
-let circ_equiv (r1 : C.reg) (r2 : C.reg) ~(bitwuzla: int) : bool = 
+let circ_equiv ?(bitwuzla: C.reg option) (r1 : C.reg) (r2 : C.reg) : bool = 
   let (r1, r2) = if List.compare_lengths r1 r2 < 0 then
     (zpad (List.length r2) r1, r2) else
     (r1, zpad (List.length r1) r2)
@@ -396,9 +392,9 @@ let circ_equiv (r1 : C.reg) (r2 : C.reg) ~(bitwuzla: int) : bool =
     let inp1 = (inputs_of_reg r1 |> Set.to_list) in
     let inp2 = (inputs_of_reg r2 |> Set.to_list) in
     let inps = List.combine (List.take (List.length inp2) inp1) (List.take (List.length inp1) inp2) in
-    if bitwuzla >= 0 then 
-      circ_equiv_bitwuzla inps r1 r2 bitwuzla
-    else C.equivs inps r1 r2
+    match bitwuzla with
+    | Some bz -> circ_equiv_bitwuzla inps r1 r2 bz
+    | None    -> C.equivs            inps r1 r2
 
 let bruteforce (r : C.reg) (vars : C.var list) : unit = 
   let rec doit (acc : bool list) (n : int) : unit =
@@ -569,6 +565,18 @@ let rec circuit_of_form (env: env) (f : EcAst.form) : C.reg =
           | [a; b] -> C.land_ a b 
           | _      -> raise BDepError
         end
+    | (["Top"; "JWord"; "W2u16"], "zeroextu32") ->
+        fun rs -> begin
+          match rs with
+          | [a] -> zpad 32 a
+          | _   -> raise BDepError
+        end
+    | (["Top"; "CoreInt"], "lt") ->
+        fun rs -> begin
+          match rs with
+          | [a; b] -> [C.ugt b a]
+          | _      -> raise BDepError
+        end
     | _ -> List.iter (Format.eprintf "%s ") (fst pth);
         Format.eprintf "%s@.Not implemented yet@." (snd pth);
         raise BDepError
@@ -659,19 +667,30 @@ and int_of_form (env: env) (f: EcAst.form) : int =
   | _ -> failwith "Form cannot be converted to int"
 
 (* -------------------------------------------------------------------- *)
-let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : string list) (b_bound: int) : unit =
+let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : string list) (pcond: psymbol) : unit =
   let proc = EcTyping.trans_gamepath env p in
   let proc = EcEnv.Fun.by_xpath proc env in
   let pdef = match proc.f_def with FBdef def -> def | _ -> assert false in
+
   let f = EcEnv.Op.lookup ([], f.pl_desc) env |> snd in
   let f = match f.op_kind with
   | OB_oper (Some (OP_Plain (f, _))) -> f
   | _ -> failwith "Invalid operator type" in
   let fc = circuit_of_form env f in
   (* DEBUG PRINTS FOR OP CIRCUIT *)
-  let () = Format.eprintf "len %d @." (List.length fc) in
-  let () = inputs_of_reg fc |> Set.to_list |> List.iter (fun x -> Format.eprintf "%d %d@." (fst x) (snd x)) in
+  Format.eprintf "len %d @." (List.length fc);
+  inputs_of_reg fc |> Set.to_list |> List.iter (fun x -> Format.eprintf "%d %d@." (fst x) (snd x));
   print_deps_alt ~name:"test_out" fc;
+
+  let pcond = EcEnv.Op.lookup ([], pcond.pl_desc) env |> snd in
+  let pcond = match pcond.op_kind with
+  | OB_oper (Some (OP_Plain (pcond, _))) -> pcond
+  | _ -> failwith "Invalid pcond op type" in
+  let pc = circuit_of_form env pcond in
+  assert (List.length pc = 1);
+  Format.eprintf "len %d @." (List.length pc);
+  inputs_of_reg pc |> Set.to_list |> List.iter (fun x -> Format.eprintf "%d %d@." (fst x) (snd x));
+  print_deps_alt ~name:"test_out" pc;
  
   (* Working with:
     abbrev q = 3329.
@@ -792,7 +811,7 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
   begin 
     let circ = List.map (fun v -> Option.get (CircEnv.get_s cenv v)) vs |> List.flatten in
     if (n = m) &&  (n = 0) then
-      let () = assert (circ_equiv fc circ ~bitwuzla:b_bound) in
+      let () = assert (circ_equiv fc circ ~bitwuzla:pc) in
       Format.eprintf "Success@."
     else
       let () = assert (List.length circ <> 0) in
@@ -818,8 +837,8 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
           (C.VarRange.contents deps)
         ) d) 
       circs) in
-      let () = assert (List.for_all (circ_equiv (List.hd circs) ~bitwuzla:(-1)) (List.tl circs)) in 
-      let () = assert (circ_equiv fc (List.hd circs) ~bitwuzla:b_bound) in
+      let () = assert (List.for_all (circ_equiv (List.hd circs)) (List.tl circs)) in 
+      let () = assert (circ_equiv fc (List.hd circs) ~bitwuzla:pc) in
       Format.eprintf "Success@."
   end 
 
