@@ -13,184 +13,41 @@ val mleft  : memory
 val mright : memory
 
 (* -------------------------------------------------------------------- *)
-type quantum_equality = {
-   qeg : bool;
-   qel : quantum_ref;
-   qer : quantum_ref;
-}
+type quantif = EcAst.quantif
 
-val qe_equal : quantum_equality -> quantum_equality -> bool
-val qe_hash  : quantum_equality -> int
-val qe_fv    : quantum_equality -> int Mid.t
+type hoarecmp = EcAst.hoarecmp
 
-val qe_empty : quantum_equality
-val is_qe_empty : quantum_equality -> bool
+type gty = EcAst.gty
 
-val qe_iter : (prog_var_ty -> unit) -> quantum_equality -> unit
-val qe_map : (prog_var_ty -> prog_var_ty) -> quantum_equality -> quantum_equality
-val qe_all : (prog_var_ty -> bool) -> quantum_equality -> bool
-val qe_all2 :
-  (prog_var_ty -> prog_var_ty -> bool) ->
-  quantum_equality -> quantum_equality -> bool
+type binding  = EcAst.binding
+type bindings = EcAst.bindings
 
-(* -------------------------------------------------------------------- *)
-type quantif =
-  | Lforall
-  | Lexists
-  | Llambda
+type equiv_cond = EcAst.equiv_cond
 
-type hoarecmp = FHle | FHeq | FHge
-
-type gty =
-  | GTty    of EcTypes.ty
-  | GTmodty of module_type
-  | GTmem   of EcMemory.memtype
-
-and binding  = (EcIdent.t * gty)
-and bindings = binding list
-
-and form = private {
-  f_node : f_node;
-  f_ty   : ty;
-  f_fv   : int Mid.t;
-  f_tag  : int;
-}
-
-and f_node =
-  | Fquant  of quantif * bindings * form
-  | Fif     of form * form * form
-  | Fmatch  of form * form list * ty
-  | Flet    of lpattern * form * form
-  | Fint    of zint
-  | Flocal  of EcIdent.t
-  | Fpvar   of EcTypes.prog_var * memory
-  | Fglob   of EcIdent.t * memory
-  | Fop     of path * ty list
-  | Fapp    of form * form list
-  | Ftuple  of form list
-  | Fproj   of form * int
-
-  | FhoareF of sHoareF (* $hr / $hr *)
-  | FhoareS of sHoareS
-
-  | FcHoareF of cHoareF (* $hr / $hr *)
-  | FcHoareS of cHoareS
-
-  | FbdHoareF of bdHoareF (* $hr / $hr *)
-  | FbdHoareS of bdHoareS (* $hr  / $hr   *)
-
-  | FequivF of qequivF (* $left,$right / $left,$right *)
-  | FequivS of qequivS (* $left,$right / $left,$right *)
-
-  | FeagerF of eagerF
-
-  | Fcoe of coe
-
-  | Fpr of pr (* hr *)
-
-and eagerF = {
-  eg_pr : form;
-  eg_sl : stmt;  (* No local program variables *)
-  eg_fl : xpath;
-  eg_fr : xpath;
-  eg_sr : stmt;  (* No local program variables *)
-  eg_po : form
-}
-
-and equiv_cond = {
-  ec_f : form;
-  ec_e : quantum_equality;
-}
-
-and qequivF = {
-  ef_pr : equiv_cond;
-  ef_fl : xpath;
-  ef_fr : xpath;
-  ef_po : equiv_cond;
-}
-
-and qequivS = {
-  es_ml : EcMemory.memenv;
-  es_mr : EcMemory.memenv;
-  es_pr : equiv_cond;
-  es_sl : stmt;
-  es_sr : stmt;
-  es_po : equiv_cond;
-}
-
-and sHoareF = {
-  hf_pr : form;
-  hf_f  : EcPath.xpath;
-  hf_po : form;
-}
-
-and sHoareS = {
-  hs_m  : EcMemory.memenv;
-  hs_pr : form;
-  hs_s  : stmt;
-  hs_po : form; }
-
-and cHoareF = {
-  chf_pr : form;
-  chf_f  : EcPath.xpath;
-  chf_po : form;
-  chf_co : cost;
-}
-
-and cHoareS = {
-  chs_m  : EcMemory.memenv;
-  chs_pr : form;
-  chs_s  : stmt;
-  chs_po : form;
-  chs_co : cost; }
-
-and bdHoareF = {
-  bhf_pr  : form;
-  bhf_f   : xpath;
-  bhf_po  : form;
-  bhf_cmp : hoarecmp;
-  bhf_bd  : form;
-}
-
-and bdHoareS = {
-  bhs_m   : EcMemory.memenv;
-  bhs_pr  : form;
-  bhs_s   : stmt;
-  bhs_po  : form;
-  bhs_cmp : hoarecmp;
-  bhs_bd  : form;
-}
-
-and coe = {
-  coe_pre : form;
-  coe_mem : EcMemory.memenv;
-  coe_e   : expr;
-}
-
-and pr = {
-  pr_mem   : memory;
-  pr_fun   : xpath;
-  pr_args  : form;
-  pr_event : form;
-}
-
-
-(* Invariant: keys of c_calls are functions of local modules,
-   with no arguments. *)
-and cost = private {
-  c_self  : form;
-  c_calls : call_bound EcPath.Mx.t;
-}
-
+type form     = EcAst.form
+type f_node   = EcAst.f_node
+type eagerF   = EcAst.eagerF
+type qequivF  = EcAst.qequivF
+type qequivS  = EcAst.qequivS
+type sHoareF  = EcAst.sHoareF
+type sHoareS  = EcAst.sHoareS
+type eHoareF  = EcAst.eHoareF
+type eHoareS  = EcAst.eHoareS
+type cHoareF  = EcAst.cHoareF
+type cHoareS  = EcAst.cHoareS
+type bdHoareF = EcAst.bdHoareF
+type bdHoareS = EcAst.bdHoareS
+type pr       = EcAst.pr
+type coe      = EcAst.coe
+type cost     = EcAst.cost
 (* Call with cost at most [cb_cost], called at mist [cb_called].
    [cb_cost] is here to properly handle substsitution when instantiating an
    abstract module by a concrete one. *)
-and call_bound = private {
-  cb_cost  : form;
-  cb_called : form;
-}
+type call_bound  = EcAst.call_bound
 
-and module_type = form p_module_type
+type module_type = EcAst.module_type
+
+type mod_restr = EcAst.mod_restr
 
 type equivF = {
   ef_pr : form;
@@ -205,9 +62,8 @@ type equivS = {
   es_pr  : form;
   es_sl  : stmt;
   es_sr  : stmt;
-  es_po  : form; }
-
-type mod_restr = form p_mod_restr
+  es_po  : form;
+}
 
 val is_classical_ec : equiv_cond -> bool
 val classical_ec : form -> equiv_cond
@@ -303,6 +159,13 @@ val f_cHoareS_r : cHoareS -> form
 val f_cHoareF : form -> xpath -> form -> cost -> form
 val f_cHoareS : memenv -> form -> stmt -> form -> cost -> form
 
+(* soft-constructors - expected hoare *)
+val f_eHoareF_r : eHoareF -> form
+val f_eHoareS_r : eHoareS -> form
+
+val f_eHoareF : form -> xpath -> form -> form
+val f_eHoareS : memenv -> form -> EcCoreModules.stmt -> form -> form
+
 (* soft-constructors - bd hoare *)
 val hoarecmp_opp : hoarecmp -> hoarecmp
 
@@ -313,11 +176,14 @@ val f_bdHoareF : form -> xpath -> form -> hoarecmp -> form -> form
 val f_bdHoareS : memenv -> form -> stmt -> form -> hoarecmp -> form -> form
 
 (* soft-constructors - equiv *)
+val f_equivS_r : equivS -> form
+val f_equivF_r : equivF -> form
+
 val f_equivS : memenv -> memenv -> form -> stmt -> stmt -> form -> form
 val f_equivF : form -> xpath -> xpath -> form -> form
 
-val f_equivS_r : equivS -> form
-val f_equivF_r : equivF -> form
+val f_qequivS_r : qequivS -> form
+val f_qequivF_r : qequivF -> form
 
 val f_qequivS : memenv -> memenv -> equiv_cond -> stmt -> stmt -> equiv_cond -> form
 val f_qequivF : equiv_cond -> xpath -> xpath -> equiv_cond -> form
@@ -468,6 +334,8 @@ val destr_hoareF    : form -> sHoareF
 val destr_hoareS    : form -> sHoareS
 val destr_cHoareF   : form -> cHoareF
 val destr_cHoareS   : form -> cHoareS
+val destr_eHoareF   : form -> eHoareF
+val destr_eHoareS   : form -> eHoareS
 val destr_bdHoareF  : form -> bdHoareF
 val destr_bdHoareS  : form -> bdHoareS
 val destr_coe       : form -> coe
@@ -503,6 +371,8 @@ val is_equivS    : form -> bool
 val is_eagerF    : form -> bool
 val is_hoareF    : form -> bool
 val is_hoareS    : form -> bool
+val is_eHoareF   : form -> bool
+val is_eHoareS   : form -> bool
 val is_cHoareF   : form -> bool
 val is_cHoareS   : form -> bool
 val is_bdHoareF  : form -> bool
@@ -526,67 +396,6 @@ val expr_of_form : EcMemory.memory -> form -> EcTypes.expr
 (* -------------------------------------------------------------------- *)
 (* A predicate on memory: λ mem. -> pred *)
 type mem_pr = EcMemory.memory * form
-
-(* -------------------------------------------------------------------- *)
-type f_subst = private {
-  fs_freshen  : bool; (* true means realloc local *)
-  fs_loc      : form Mid.t;
-  fs_esloc    : expr Mid.t;
-  fs_ty       : ty_subst;
-  fs_mem      : EcIdent.t Mid.t;
-  fs_modglob  : (EcIdent.t -> form) Mid.t;
-  fs_memtype  : EcMemory.memtype option; (* Only substituted in Fcoe *)
-  fs_mempred  : mem_pr Mid.t;  (* For predicates over memories,
-                                 only substituted in Fcoe *)
-}
-
-(* -------------------------------------------------------------------- *)
-module Fsubst : sig
-  val f_subst_id  : f_subst
-  val is_subst_id : f_subst -> bool
-
-  val f_subst_init :
-       ?freshen:bool
-    -> ?sty:ty_subst
-    -> ?esloc:expr Mid.t
-    -> ?mt:EcMemory.memtype
-    -> ?mempred:(mem_pr Mid.t)
-    -> unit -> f_subst
-
-  val f_bind_local  : f_subst -> EcIdent.t -> form -> f_subst
-  val f_bind_mem    : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_absmod : f_subst -> EcIdent.t -> EcIdent.t -> f_subst
-  val f_bind_mod    : f_subst -> EcIdent.t -> EcPath.mpath -> (EcIdent.t -> form) -> f_subst
-  val f_bind_rename : f_subst -> EcIdent.t -> EcIdent.t -> ty -> f_subst
-
-  val f_subst   : ?tx:(form -> form -> form) -> f_subst -> form -> form
-
-  val f_subst_local : EcIdent.t -> form -> form -> form
-  val f_subst_mem   : EcIdent.t -> EcIdent.t -> form -> form
-
-  (* val uni_subst : (EcUid.uid -> ty option) -> f_subst *)
-  (* val uni : (EcUid.uid -> ty option) -> form -> form *)
-  val subst_tvar :
-    ?es_loc:(EcTypes.expr EcIdent.Mid.t) ->
-    EcTypes.ty EcIdent.Mid.t ->
-    form -> form
-
-  val add_binding  : f_subst -> binding  -> f_subst * binding
-  val add_bindings : f_subst -> bindings -> f_subst * bindings
-
-  val subst_lpattern : f_subst -> lpattern -> f_subst * lpattern
-  val subst_xpath    : f_subst -> xpath -> xpath
-  val subst_stmt     : f_subst -> stmt  -> stmt
-  val subst_e        : f_subst -> expr  -> expr
-  val subst_me       : f_subst -> EcMemory.memenv -> EcMemory.memenv
-  val subst_m        : f_subst -> EcIdent.t -> EcIdent.t
-  val subst_ty       : f_subst -> ty -> ty
-  val subst_mty      : f_subst -> module_type -> module_type
-  val subst_oi       : f_subst -> form PreOI.t -> form PreOI.t
-  val subst_gty      : f_subst -> gty -> gty
-  val subst_qe       : f_subst -> quantum_equality -> quantum_equality
-
-end
 
 (* -------------------------------------------------------------------- *)
 val can_subst : form -> bool

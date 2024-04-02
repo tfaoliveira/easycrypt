@@ -270,6 +270,13 @@ module OSmart = struct
 end
 
 (* -------------------------------------------------------------------- *)
+type ('a, 'b) doption_ =
+  | Single of 'a
+  | Double of ('b * 'b)
+
+type 'a doption = ('a, 'a) doption_
+
+(* -------------------------------------------------------------------- *)
 type ('a, 'b) tagged = Tagged of ('a * 'b option)
 
 let tg_val (Tagged (x, _)) = x

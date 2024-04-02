@@ -217,7 +217,7 @@ module HiPrinting = struct
       let pv = EcTypes.pv_glob xp in
       let q, ty = EcEnv.Var.by_xpath xp env in
       Format.fprintf fmt "  @[%s%a : %a@]@."
-        (EcTypes.pp_quantum q)
+        (EcAst.pp_quantum q)
         (EcPrinting.pp_pv ppe) pv
         (EcPrinting.pp_type ppe) ty)
       (List.rev (Mx.bindings us.EcEnv.us_pv))

@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcIdent
 open EcUtils
+open EcAst
 open EcTypes
 open EcMemory
 open EcBigInt.Notations
@@ -10,9 +11,11 @@ module CI = EcCoreLib
 
 (* -------------------------------------------------------------------- *)
 include EcCoreFol
+include EcCoreSubst
 
 (* -------------------------------------------------------------------- *)
-let f_bind_mod s x mp env = Fsubst.f_bind_mod s x mp (fun mem -> EcEnv.NormMp.norm_glob env mem mp)
+let f_bind_mod s x mp env =
+  Fsubst.f_bind_mod s x mp (fun mem -> EcEnv.NormMp.norm_glob env mem mp)
 
 (* -------------------------------------------------------------------- *)
 let f_eqparams ty1 vs1 m1 ty2 vs2 m2 =
@@ -102,6 +105,36 @@ let f_decimal (n, (l, f)) =
   if   EcBigInt.equal n EcBigInt.zero
   then fct
   else f_real_add (f_real_of_int (f_int n)) fct
+
+(* soft-constructor - xreal *)
+let fop_xreal_le = f_op CI.CI_Xreal.p_xle [] (toarrow [txreal; txreal] tbool)
+let fop_interp_ehoare_form =
+  f_op CI.CI_Xreal.p_interp_form [] (toarrow [tbool; txreal] txreal)
+
+let is_interp_ehoare_form_op (p, tys) = EcPath.p_equal p CI.CI_Xreal.p_interp_form && tys = []
+
+let fop_Ep ty =
+  f_op CI.CI_Xreal.p_Ep [ty] (toarrow [tdistr ty; toarrow [ty] txreal] txreal)
+
+let f_xreal_le f1 f2 = f_app fop_xreal_le [f1; f2] tbool
+let f_interp_ehoare_form f1 f2 = f_app fop_interp_ehoare_form [f1; f2] txreal
+let f_Ep ty d f = f_app (fop_Ep ty) [d; f] txreal
+
+
+let fop_concave_incr = f_op CI.CI_Xreal.p_concave_incr [] (tfun (tfun txreal txreal) tbool)
+let f_concave_incr f = f_app fop_concave_incr [f] tbool
+
+let f_op_rp2xr = f_op CI.CI_Xreal.p_rp [] (tfun trealp txreal)
+let f_op_of_real  = f_op CI.CI_Xreal.p_of_real [] (tfun treal trealp)
+
+let f_rp2xr f = f_app f_op_rp2xr [f] txreal
+let f_r2rp  f = f_app f_op_of_real [f] trealp
+let f_r2xr  f = f_rp2xr (f_r2rp f)
+let f_b2r   b = f_if b f_r1 f_r0
+let f_b2xr  b = f_r2xr (f_b2r b)
+
+
+let f_xreal_inf = f_op CI.CI_Xreal.p_inf [] txreal
 
 (* -------------------------------------------------------------------- *)
 let tmap aty bty =
@@ -559,7 +592,8 @@ let rec f_app_simpl f args ty =
   f_betared (f_app f args ty)
 
 and f_betared f =
-  let tx fo fp = if f_equal fo fp || can_betared fo then fp else f_betared fp in
+  let tx ~before:fo ~after:fp =
+    if f_equal fo fp || can_betared fo then fp else f_betared fp in
 
   match f.f_node with
   | Fapp ({ f_node = Fquant (Llambda, bds, body)}, args) ->
@@ -957,9 +991,7 @@ let destr_ands ~deep =
 
   in fun f -> doit f
 
-
-(*---------------------------------------------*)
-
+(* -------------------------------------------------------------------- *)
 let rec one_sided mem fp =
   match fp.f_node with
   | Fint   _      -> true
@@ -1045,6 +1077,8 @@ let rec dump_f f =
      ^ "; PR = " ^ dump_f pr
      ^ "; PO = " ^ dump_f po
      ^ "; BD = " ^ dump_f bd ^ "]"
+  | FeHoareS _ -> "eHoareS"
+  | FeHoareF _ -> "eHoareF"
   | FequivF _ -> "equivF"
   | FequivS {es_ml = (ml, _); es_mr = (mr, _); es_po = po; es_pr = pr } ->
      "equivS [ ML = " ^ EcIdent.tostring ml
@@ -1061,8 +1095,6 @@ let rec dump_f f =
 (* --------------------------------------------------------------------------------- *)
 
 (* Compute the type of a quantum reference *)
-
-open EcCoreModules
 
 let f_proj_ty env ty i =
   match (EcEnv.Ty.hnorm ty env).ty_node with

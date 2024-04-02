@@ -2,8 +2,10 @@
 open EcUtils
 open EcSymbols
 open EcPath
+open EcAst
 open EcTypes
 open EcCoreFol
+open EcCoreSubst
 open EcMemory
 open EcDecl
 open EcModules
@@ -171,9 +173,7 @@ end = struct
     }
 end
 
-
 (* -------------------------------------------------------------------- *)
-
 type preenv = {
   env_top      : EcPath.path option;
   env_gstate   : EcGState.gstate;
@@ -189,7 +189,7 @@ type preenv = {
   env_rwbase   : Sp.t Mip.t;
   env_atbase   : (path list Mint.t) Msym.t;
   env_redbase  : mredinfo;
-  env_ntbase   : (path * env_notation) list;
+  env_ntbase   : ntbase Mop.t;
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
@@ -219,6 +219,8 @@ and redinfo =
 and mredinfo = redinfo Mrd.t
 
 and env_notation = ty_params * EcDecl.notation
+
+and ntbase = (path * env_notation) list
 
 (* -------------------------------------------------------------------- *)
 type env = preenv
@@ -307,7 +309,7 @@ let empty gstate =
     env_rwbase   = Mip.empty;
     env_atbase   = Msym.empty;
     env_redbase  = Mrd.empty;
-    env_ntbase   = [];
+    env_ntbase   = Mop.empty;
     env_modlcs   = Sid.empty;
     env_item     = [];
     env_norm     = ref empty_norm_cache; }
@@ -2658,9 +2660,6 @@ module ModTy = struct
     if List.length mty1.mt_args <> List.length mty2.mt_args then
       raise ModTypeNotEquiv;
 
-    if not (NormMp.equal_restr f_equiv env mty1.mt_restr mty2.mt_restr) then
-      raise ModTypeNotEquiv;
-
     let subst =
       List.fold_left2
         (fun subst (x1, p1) (x2, p2) ->
@@ -2671,12 +2670,19 @@ module ModTy = struct
         EcSubst.empty mty1.mt_params mty2.mt_params
     in
 
+    let mr1 = EcSubst.subst_mod_restr subst mty1.mt_restr in
+    let mr2 = EcSubst.subst_mod_restr subst mty2.mt_restr in
+
+    if not (NormMp.equal_restr f_equiv env mr1 mr2) then begin
+      raise ModTypeNotEquiv
+    end;
+
     if not (
          List.all2
            (fun m1 m2 ->
-             let m1 = NormMp.norm_mpath env (EcSubst.subst_mpath subst m1) in
-             let m2 = NormMp.norm_mpath env (EcSubst.subst_mpath subst m2) in
-               EcPath.m_equal m1 m2)
+              let m1 = NormMp.norm_mpath env (EcSubst.subst_mpath subst m1) in
+              let m2 = NormMp.norm_mpath env (EcSubst.subst_mpath subst m2) in
+              EcPath.m_equal m1 m2)
             mty1.mt_args mty2.mt_args) then
       raise ModTypeNotEquiv
 
@@ -2745,8 +2751,8 @@ module Ty = struct
   let unfold (name : EcPath.path) (args : EcTypes.ty list) (env : env) =
     match by_path_opt name env with
     | Some ({ tyd_type = `Concrete body } as tyd) ->
-        EcTypes.Tvar.subst
-          (EcTypes.Tvar.init (List.map fst tyd.tyd_params) args)
+        Tvar.subst
+          (Tvar.init (List.map fst tyd.tyd_params) args)
           body
     | _ -> raise (LookupFailure (`Path name))
 
@@ -2861,19 +2867,33 @@ module Op = struct
   let lookup_path name env =
     fst (lookup name env)
 
-  let bind ?(import = import0) name op env =
-    let env = if import.im_immediate then MC.bind_operator name op env else env in
-    let op  = NormMp.norm_op env op in
+  let update_ntbase path (name, op) base =
     let nt  =
       match op.op_kind with
-      | OB_nott nt ->
-         Some (EcPath.pqname (root env) name, (op.op_tparams, nt))
+      | OB_nott nt -> begin
+        let head =
+          match nt.ont_body.e_node with
+          | Eapp ({ e_node = Eop (p, _)}, _) | Eop (p, _) -> Some p
+          | _ -> None
+        in
+        Some (head, (EcPath.pqname path name, (op.op_tparams, nt)))
+      end
       | _ -> None
     in
 
+    ofold
+      (fun (hd, nt) nts ->
+        Mop.change (fun nts -> Some (nt :: odfl [] nts)) hd nts)
+      base nt
+
+  let bind ?(import = import0) name op env =
+    let env = if import.im_immediate then MC.bind_operator name op env else env in
+    let op  = NormMp.norm_op env op in
+    let env_ntbase = update_ntbase (root env) (name, op) env.env_ntbase in
+
     { env with
-        env_ntbase = ofold List.cons env.env_ntbase nt;
-        env_item   = mkitem import (Th_operator (name, op)) :: env.env_item; }
+        env_ntbase;
+        env_item = mkitem import (Th_operator (name, op)) :: env.env_item; }
 
   let rebind name op env =
     MC.bind_operator name op env
@@ -2909,8 +2929,7 @@ module Op = struct
 
   let reduce ?mode ?nargs env p tys =
     let op, f = core_reduce ?mode ?nargs env p in
-    EcCoreFol.Fsubst.subst_tvar
-      (EcTypes.Tvar.init (List.map fst op.op_tparams) tys) f
+    Tvar.f_subst ~freshen:true (List.map fst op.op_tparams) tys f
 
   let is_projection env p =
     try  EcDecl.is_proj (by_path p env)
@@ -2956,8 +2975,8 @@ module Op = struct
 
   type notation = env_notation
 
-  let get_notations env =
-    env.env_ntbase
+  let get_notations ~(head : path option) (env : env) =
+    Mop.find_def [] head env.env_ntbase
 
   let iter ?name f (env : env) =
     gen_iter (fun mc -> mc.mc_operators) MC.lookup_operators ?name f env
@@ -3004,8 +3023,7 @@ module Ax = struct
   let instanciate p tys env =
     match by_path_opt p env with
     | Some ({ ax_spec = f } as ax) ->
-        Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst ax.ax_tparams) tys) f
+        Tvar.f_subst ~freshen:true (List.map fst ax.ax_tparams) tys f
     | _ -> raise (LookupFailure (`Path p))
 
   let iter ?name f (env : env) =
@@ -3240,8 +3258,8 @@ module Theory = struct
   (* ------------------------------------------------------------------ *)
   let bind_nt_th =
     let for1 path base = function
-      | Th_operator (x, ({ op_kind = OB_nott nt } as op)) ->
-         Some ((EcPath.pqname path x, (op.op_tparams, nt)) :: base)
+      | Th_operator (x, ({ op_kind = OB_nott _ } as op)) ->
+        Some (Op.update_ntbase path (x, op) base)
       | _ -> None
 
     in bind_base_th for1
@@ -3540,14 +3558,14 @@ module LDecl = struct
   let ld_subst s ld =
     match ld with
     | LD_var (ty, body) ->
-        LD_var (ty_subst s.fs_ty ty, body |> omap (Fsubst.f_subst s))
+        LD_var (ty_subst s ty, body |> omap (Fsubst.f_subst s))
 
     | LD_mem mt ->
-        let mt = EcMemory.mt_subst (ty_subst s.fs_ty) mt
+        let mt = EcMemory.mt_subst (ty_subst s) mt
         in LD_mem mt
 
     | LD_modty p ->
-        let p = gty_as_mod (Fsubst.subst_gty s (GTmodty p))
+        let p = gty_as_mod (Fsubst.gty_subst s (GTmodty p))
         in LD_modty p
 
     | LD_hyp f ->

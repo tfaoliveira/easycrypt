@@ -5,6 +5,7 @@ open EcMaps
 open EcSymbols
 open EcLocation
 open EcParsetree
+open EcAst
 open EcTypes
 open EcDecl
 open EcMemory
@@ -1593,9 +1594,8 @@ let expr_of_opselect
              let xs = List.map (fst_map EcIdent.fresh) xs in
              ((args @ List.map (curry e_local) xs, []), xs) in
          let lcmap = List.map2 (fun (x, _) y -> (x, y)) bds tosub in
-         let subst = { EcTypes.e_subst_id with es_freshen = true; } in
-         let subst = { subst with es_loc = Mid.of_list lcmap; } in
-         let body  = EcTypes.e_subst subst body in
+         let subst = f_subst_init ~freshen:true ~esloc:(Mid.of_list lcmap) () in
+         let body  = e_subst subst body in
          (e_lam elam body, args)
 
     | (`Op _ | `Lc _ | `Pv _) as sel -> let op = match sel with
@@ -2362,6 +2362,7 @@ let top_is_mem_binding pf = match pf with
   | PFprob     _
   | PFBDhoareF _
   | PFChoareF  _
+  | PFehoareF  _
   | PFCoe      _ -> true
 
   | PFhole -> true
@@ -2520,8 +2521,7 @@ let rec trans_restr_compl env env_in (params : Sm.t) (r_compl : pcompl option) =
     let subs = try EcUnify.UniEnv.close ue with
       | EcUnify.UninstanciateUni ->
         tyerror (loc form) env FreeTypeVariables in
-    let sty = { ty_subst_id with ts_u = subs } in
-    let fs = EcFol.Fsubst.f_subst_init ~sty:sty () in
+    let fs = f_subst_init ~tu:subs () in
     EcFol.Fsubst.f_subst fs tform in
 
   match r_compl with
@@ -2944,7 +2944,7 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
       if not (UE.closed ue) then
         tyerror st.pl_loc env (OnlyMonoTypeAllowed None);
 
-      let clsubst = { EcTypes.e_subst_id with es_ty = ts } in
+      let clsubst = ts in
       let stmt    = s_subst clsubst stmt
       and result  = omap (e_subst clsubst) result in
       let stmt    = EcModules.stmt (List.flatten prelude @ stmt.s_node) in
@@ -3148,7 +3148,7 @@ and fundef_check_iasgn subst_uni env ((mode, pl), init, loc) =
     | false, false -> `Classical
     | true , true  -> assert false (* FIXME QUANTUM *) in
 
-  let clsubst = { EcTypes.e_subst_id with es_ty = subst_uni } in
+  let clsubst = subst_uni in
   let init    = e_subst clsubst init in
 
   match q with
@@ -4022,6 +4022,14 @@ and trans_form_or_pattern
           unify_or_fail penv ue pre.pl_loc  ~expct:tbool pre' .f_ty;
           unify_or_fail qenv ue post.pl_loc ~expct:tbool post'.f_ty;
           f_hoareF pre' fpath post'
+    | PFehoareF (pre, gp, post) ->
+        let fpath = trans_gamepath env gp in
+        let penv, qenv = EcEnv.Fun.hoareF fpath env in
+        let pre'  = transf penv pre in
+        let post' = transf qenv post in
+          unify_or_fail penv ue pre.pl_loc  ~expct:txreal pre'.f_ty;
+          unify_or_fail qenv ue post.pl_loc ~expct:txreal post'.f_ty;
+          f_eHoareF pre' fpath post'
 
     | PFBDhoareF (pre, gp, post, hcmp, bd) ->
         let fpath = trans_gamepath env gp in

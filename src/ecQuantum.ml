@@ -1,3 +1,4 @@
+open EcAst
 open EcMaps
 open EcUtils
 open EcIdent
@@ -101,7 +102,7 @@ let test_classical_form env ~(on:EcIdent.t list) f =
       check_on (removes on (EcLowPhlGoal.get_mem f)) pr.pr_event
 
     | FhoareF _ | FhoareS _ | FcHoareF _ | FcHoareS _  | FbdHoareF _ | FbdHoareS _
-    | FequivF _ | FequivS _ | FeagerF _ | Fcoe _ ->
+    | FeHoareF _ | FeHoareS _ | FequivF _ | FequivS _ | FeagerF _ | Fcoe _ ->
         f_iter (check_on (removes on  (EcLowPhlGoal.get_mem f))) f
 
 

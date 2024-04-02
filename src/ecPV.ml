@@ -2,6 +2,7 @@
 open EcUtils
 open EcIdent
 open EcPath
+open EcAst
 open EcTypes
 open EcModules
 open EcFol
@@ -337,6 +338,12 @@ module PV = struct
       | FhoareS hs ->
           in_mem_scope env fv [fst hs.hs_m] [hs.hs_pr; hs.hs_po]
 
+      | FeHoareF hf ->
+          in_mem_scope env fv [mhr] [hf.ehf_pr; hf.ehf_po]
+
+      | FeHoareS hs ->
+          in_mem_scope env fv [fst hs.ehs_m] [hs.ehs_pr; hs.ehs_po]
+
       | FcHoareF chf ->
           let fv = in_mem_scope env fv [mhr] [chf.chf_pr; chf.chf_po] in
           fv_cost env fv chf.chf_co
@@ -630,6 +637,9 @@ and i_read_r env r i =
 
 (* -------------------------------------------------------------------- *)
 type 'a pvaccess0 = env -> 'a -> PV.t
+
+let lp_write env lp =
+  lp_write_r env PV.empty lp
 
 let i_write  ?(except=Sx.empty) env i  = i_write_r  ~except env PV.empty i
 let is_write ?(except=Sx.empty) env is = is_write_r ~except env PV.empty is
@@ -965,7 +975,7 @@ module Mpv2 = struct
    equality of e1 and e2 *)
   let rec add_eqs_loc env local eqs e1 e2 =
     match e1.e_node, e2.e_node with
-    | Equant(qt1,bds1,e1), Equant(qt2,bds2,e2) when qt_equal qt1 qt2 ->
+    | Equant(qt1,bds1,e1), Equant(qt2,bds2,e2) when eqt_equal qt1 qt2 ->
       let local = enter_local env local bds1 bds2 in
       add_eqs_loc env local eqs e1 e2
     | Eint i1, Eint i2 when EcBigInt.equal i1 i2 -> eqs

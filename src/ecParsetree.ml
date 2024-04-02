@@ -213,6 +213,7 @@ and pformula_r =
   | PFscope   of pqsymbol * pformula
 
   | PFhoareF   of pformula * pgamepath * pformula
+  | PFehoareF  of pformula * pgamepath * pformula
   | PFequivF   of pequiv_cond * (pgamepath * pgamepath) * pequiv_cond
   | PFeagerF   of pformula * (pstmt * pgamepath * pgamepath * pstmt) * pformula
   | PFprob     of pgamepath * (pformula list) * pmemory * pformula
@@ -533,19 +534,11 @@ type preduction = {
 }
 
 (* -------------------------------------------------------------------- *)
-type ('a,'b) doption_ =
-  | Single of 'a
-  | Double of ('b * 'b)
-
-type 'a doption = ('a, 'a) doption_
-
-(* -------------------------------------------------------------------- *)
 type cp_match = [ `If | `While | `Assign | `Sample | `Call ]
 type cp_base  = [ `ByPos of int | `ByMatch of int option * cp_match ]
 
 type codepos1 = int * cp_base
 type codepos  = (codepos1 * int) list * codepos1
-
 type docodepos1 = codepos1 doption option
 
 (* -------------------------------------------------------------------- *)
@@ -704,6 +697,18 @@ type inline_info = [
 ]
 
 (* -------------------------------------------------------------------- *)
+type outline_kind =
+  | OKstmt of pstmt
+  | OKproc of pgamepath * pexpr option
+
+type outline_info = {
+    outline_side: side;
+    outline_start: codepos1;
+    outline_end: codepos1;
+    outline_kind: outline_kind;
+}
+
+(* -------------------------------------------------------------------- *)
 type fel_info = {
   pfel_cntr  : pformula;
   pfel_asg   : pformula;
@@ -728,6 +733,15 @@ type sim_info = {
   sim_pos  : codepos1 pair option;
   sim_hint : (pgamepath option pair * pformula) list * pformula option;
   sim_eqs  : pformula option
+}
+
+(* -------------------------------------------------------------------- *)
+type rw_eqv_info = {
+  rw_eqv_side  : side;
+  rw_eqv_dir   : [`LtoR | `RtoL];
+  rw_eqv_pos   : codepos1;
+  rw_eqv_lemma : ppterm;
+  rw_eqv_proc  : (pexpr list located * pexpr option) option;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -758,6 +772,7 @@ type phltactic =
   | Punroll        of (oside * codepos * bool)
   | Psplitwhile    of (pexpr * oside * codepos)
   | Pcall          of oside * call_info gppterm
+  | Pcallconcave   of (pformula * call_info gppterm)
   | Prcond         of (oside * bool * codepos1 * pformula option)
   | Prmatch        of (oside * symbol * codepos1)
   | Pcond          of pcond_info
@@ -765,22 +780,26 @@ type phltactic =
   | Pswap          of ((oside * swap_kind) located list)
   | Pcfold         of (oside * codepos * int option)
   | Pinline        of inline_info
+  | Poutline       of outline_info
   | Pinterleave    of interleave_info located
   | Pkill          of (oside * codepos * int option)
+  | Pasgncase      of (oside * codepos)
   | Prnd           of oside * semrndpos option * rnd_tac_info_f
-  | Prndsem        of oside * codepos1
+  | Prndsem        of bool * oside * codepos1
   | Punitary       of oside
   | Pqinit         of oside
   | Pmeasure       of oside
   | Palias         of (oside * codepos * osymbol_r)
+  | Pweakmem       of (oside * psymbol * (osymbol * pty) list)
   | Pset           of (oside * codepos * bool * psymbol * pexpr)
   | Pconseq        of (pcqoptions * (conseq_ppterm option tuple3))
   | Pconseqauto    of crushmode
+  | Pconcave       of (pformula option tuple2 gppterm * pformula)
   | Phrex_elim
   | Phrex_intro    of (pformula list * bool)
   | Phecall        of (oside * (pqsymbol * ptyannot option * pformula list))
   | Pexfalso
-  | Pbydeno        of ([`PHoare | `Equiv ] * (deno_ppterm * bool * pformula option))
+  | Pbydeno        of ([`PHoare | `Equiv | `EHoare ] * (deno_ppterm * bool * pformula option))
   | PPr            of (pformula * pformula) option
   | Pbyupto
   | Pfel           of (codepos1 * fel_info)
@@ -788,6 +807,7 @@ type phltactic =
   | Pprbounded
   | Psim           of crushmode option* sim_info
   | Ptrans_stmt    of trans_info
+  | Prw_equiv      of rw_eqv_info
   | Psymmetry
   | Pbdhoare_split of bdh_split
 
@@ -880,7 +900,6 @@ and rwarg1 =
   | RWSmt    of (bool * pprover_infos)
   | RWApp    of ppterm
   | RWTactic of rwtactic
-  | RWEquiv  of (side * pqsymbol * (pexpr list located * pexpr) * (pexpr list located * pexpr))
 
 and rwoptions = rwside * trepeat option * rwocc * pformula option
 and rwside    = [`LtoR | `RtoL]
@@ -1203,7 +1222,6 @@ and theory_override =
 | PTHO_Op     of op_override
 | PTHO_Pred   of pr_override
 | PTHO_Axiom  of ax_override
-| PTHO_Module of me_override
 | PTHO_ModTyp of mt_override
 | PTHO_Theory of th_override
 
@@ -1315,6 +1333,7 @@ type global_action =
 
 type global = {
   gl_action : global_action located;
+  gl_fail   : bool;
   gl_debug  : [`Timed | `Break] option;
 }
 

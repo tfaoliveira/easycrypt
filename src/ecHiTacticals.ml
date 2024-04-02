@@ -2,7 +2,6 @@
 open EcUtils
 open EcLocation
 open EcParsetree
-open EcFol
 
 open EcCoreGoal
 open EcCoreGoal.FApi
@@ -80,8 +79,8 @@ and process1_case (_ : ttenv) (doeq, opts, gp) (tc : tcenv1) =
     | _ -> tc_error !!tc "must give exactly one boolean formula"
   in
     match (FApi.tc1_goal tc).f_node with
-    | FbdHoareS _ | FcHoareS _ | FhoareS _ when not opts.cod_ambient ->
-        let fp = TTC.tc1_process_Xhl_formula tc (form_of_gp ()) in
+    | FbdHoareS _ | FcHoareS _ | FhoareS _ | FeHoareS _ when not opts.cod_ambient ->
+        let _, fp = TTC.tc1_process_Xhl_formula tc (form_of_gp ()) in
         EcPhlCase.t_hl_case fp tc
 
     | FequivS _ when not opts.cod_ambient ->
@@ -187,20 +186,25 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Punroll info              -> EcPhlLoopTx.process_unroll info
     | Psplitwhile info          -> EcPhlLoopTx.process_splitwhile info
     | Pcall (side, info)        -> EcPhlCall.process_call side info
+    | Pcallconcave info         -> EcPhlCall.process_call_concave info
     | Pswap sw                  -> EcPhlSwap.process_swap sw
     | Pinline info              -> EcPhlInline.process_inline info
+    | Poutline info             -> EcPhlOutline.process_outline info
     | Pinterleave info          -> EcPhlSwap.process_interleave info
     | Pcfold info               -> EcPhlCodeTx.process_cfold info
     | Pkill info                -> EcPhlCodeTx.process_kill info
+    | Pasgncase info            -> EcPhlCodeTx.process_case info
     | Palias info               -> EcPhlCodeTx.process_alias info
     | Pset info                 -> EcPhlCodeTx.process_set info
+    | Pweakmem info             -> EcPhlCodeTx.process_weakmem info
     | Prnd (side, pos, info)    -> EcPhlRnd.process_rnd side pos info
-    | Prndsem (side, pos)       -> EcPhlRnd.process_rndsem side pos
+    | Prndsem (red, side, pos)  -> EcPhlRnd.process_rndsem ~reduce:red side pos
     | Punitary side             -> EcPhlQuantum.process_unitary side
     | Pqinit side               -> EcPhlQuantum.process_init side
     | Pmeasure side             -> EcPhlQuantum.process_measure side
     | Pconseq (opt, info)       -> EcPhlConseq.process_conseq_opt opt info
     | Pconseqauto cm            -> process_conseqauto cm
+    | Pconcave info             -> EcPhlConseq.process_concave info
     | Phrex_elim                -> EcPhlExists.t_hr_exists_elim
     | Phrex_intro (fs, b)       -> EcPhlExists.process_exists_intro ~elim:b fs
     | Phecall (oside, x)        -> EcPhlExists.process_ecall oside x
@@ -214,6 +218,7 @@ and process1_phl (_ : ttenv) (t : phltactic located) (tc : tcenv1) =
     | Pprbounded                -> EcPhlPr.t_prbounded true
     | Psim (cm, info)           -> EcPhlEqobs.process_eqobs_in cm info
     | Ptrans_stmt info          -> EcPhlTrans.process_equiv_trans info
+    | Prw_equiv info            -> EcPhlRwEquiv.process_rewrite_equiv info
     | Psymmetry                 -> EcPhlSym.t_equiv_sym
     | Peager_seq infos          -> curry3 EcPhlEager.process_seq infos
     | Peager_if                 -> EcPhlEager.process_if

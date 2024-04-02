@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcIdent
+open EcAst
 open EcTypes
 open EcEnv
 open EcFol
@@ -41,13 +42,13 @@ end = struct
 
   let subst_id       = Fsubst.f_subst_id
   let subst          = Fsubst.f_subst ?tx:None
-  let subst_ty       = Fsubst.subst_ty
-  let subst_xpath    = Fsubst.subst_xpath
-  let subst_m        = Fsubst.subst_m
-  let subst_me       = Fsubst.subst_me
-  let subst_lpattern = Fsubst.subst_lpattern
-  let subst_stmt     = Fsubst.subst_stmt
-  let subst_e        = Fsubst.subst_e
+  let subst_ty       = ty_subst
+  let subst_xpath    = Fsubst.x_subst
+  let subst_m        = Fsubst.m_subst
+  let subst_me       = Fsubst.me_subst
+  let subst_lpattern = Fsubst.lp_subst
+  let subst_stmt     = Fsubst.s_subst
+  let subst_e        = Fsubst.e_subst
   let bind_local     = Fsubst.f_bind_local
   let add_binding    = Fsubst.add_binding
   let add_bindings   = Fsubst.add_bindings
@@ -55,8 +56,8 @@ end = struct
   let bind_locals (s : subst) xs =
     List.fold_left (fun s (x, e) -> bind_local s x e) s xs
 
-  let has_mem (s : subst) (x : ident) =
-    Mid.mem x s.fs_mem
+  let has_mem = Fsubst.has_mem
+
 end
 
 type subst = Subst.subst
@@ -216,9 +217,11 @@ and norm_lambda (st : state) (f : form) =
 
   | Fquant  _ | Fif     _ | Fmatch    _ | Flet _ | Fint _ | Flocal _
   | Fglob   _ | Fpvar   _ | Fop       _
+
   | FhoareF _   | FhoareS _
   | FcHoareF _  | FcHoareS _
   | FbdHoareF _ | FbdHoareS _
+  | FeHoareF _ | FeHoareS _
   | FequivF _   | FequivS _
   | FeagerF   _ | Fpr _ | Fcoe _
 
@@ -319,8 +322,7 @@ and app_red st f1 args =
 
       let body = EcFol.form_of_expr EcFol.mhr body in
       let body =
-        EcFol.Fsubst.subst_tvar
-          (EcTypes.Tvar.init (List.map fst op.EcDecl.op_tparams) tys) body in
+        Tvar.f_subst ~freshen:true (List.map fst op.EcDecl.op_tparams) tys body in
 
       cbv st subst body (Args.create ty eargs)
     with E.NoCtor ->
@@ -499,6 +501,23 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
     let hs_s  = norm_stmt s hs.hs_s in
     let hs_m  = norm_me s hs.hs_m in
     f_hoareS_r { hs_pr; hs_po; hs_s; hs_m }
+
+  | FeHoareF hf ->
+    assert (Args.isempty args);
+    assert (not (Subst.has_mem s mhr));
+    let ehf_pr  = norm st s hf.ehf_pr  in
+    let ehf_po  = norm st s hf.ehf_po  in
+    let ehf_f   = norm_xfun st s hf.ehf_f in
+    f_eHoareF_r { ehf_pr; ehf_f; ehf_po; }
+
+  | FeHoareS hs ->
+    assert (Args.isempty args);
+    assert (not (Subst.has_mem s (fst hs.ehs_m)));
+    let ehs_pr  = norm st s hs.ehs_pr in
+    let ehs_po  = norm st s hs.ehs_po in
+    let ehs_s   = norm_stmt s hs.ehs_s in
+    let ehs_m   = norm_me s hs.ehs_m in
+    f_eHoareS_r { ehs_pr; ehs_po; ehs_s; ehs_m }
 
   | FcHoareF chf ->
     assert (Args.isempty args);

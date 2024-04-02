@@ -7,6 +7,8 @@ open EcMemory
 (* -------------------------------------------------------------------- *)
 include module type of struct include EcCoreFol end
 
+include module type of struct include EcCoreSubst end
+
 (* -------------------------------------------------------------------- *)
 val f_bind_mod : f_subst -> EcIdent.t -> EcPath.mpath -> EcEnv.env -> f_subst
 
@@ -51,6 +53,20 @@ val f_real_inv : form -> form
 val f_real_div : form -> form -> form
 val f_real_abs : form -> form
 val f_decimal  : zint * (int * zint) -> form
+
+(* soft-constructor - xreal *)
+val f_xreal_le : form -> form -> form
+val fop_interp_ehoare_form : form
+val f_interp_ehoare_form : form -> form -> form
+val f_Ep : EcTypes.ty -> form -> form -> form
+val f_concave_incr : form -> form
+
+val f_rp2xr : form -> form
+val f_r2rp  : form -> form
+val f_r2xr  : form -> form
+val f_b2r   : form -> form
+val f_b2xr  : form -> form
+val f_xreal_inf : form
 
 (* soft-constructor - map *)
 val f_map_cst : EcTypes.ty -> form -> form

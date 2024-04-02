@@ -402,6 +402,7 @@
 %token BY
 %token BYEQUIV
 %token BYPHOARE
+%token BYEHOARE
 %token BYPR
 %token BYUPTO
 %token CALL
@@ -434,6 +435,7 @@
 %token DUMP
 %token EAGER
 %token ECALL
+%token EHOARE
 %token ELIF
 %token ELIM
 %token ELSE
@@ -449,6 +451,7 @@
 %token EXLIM
 %token EXPECT
 %token EXPORT
+%token FAIL
 %token FEL
 %token FIRST
 %token FISSION
@@ -512,6 +515,7 @@
 %token NOTATION
 %token OF
 %token OP
+%token OUTLINE
 %token PCENT
 %token PHOARE
 %token PIPE
@@ -604,6 +608,7 @@
 %token UNITARY
 %token UNROLL
 %token VAR
+%token WEAKMEM
 %token WHILE
 %token WHY3
 %token WITH
@@ -1278,6 +1283,8 @@ sform_u(P):
 
 | HOARE LBRACKET hb=hoare_body(P) RBRACKET { hb }
 
+| EHOARE LBRACKET hb=ehoare_body(P) RBRACKET { hb }
+
 | EQUIV LBRACKET eb=equiv_body(P) RBRACKET { eb }
 
 | EAGER LBRACKET eb=eager_body(P) RBRACKET { eb }
@@ -1380,13 +1387,18 @@ form_chained_orderings(P):
          f2) }
 
 hoare_bd_cmp :
-| LE { EcFol.FHle }
-| EQ { EcFol.FHeq }
-| GE { EcFol.FHge }
+| LE { EcAst.FHle }
+| EQ { EcAst.FHeq }
+| GE { EcAst.FHge }
 
 hoare_body(P):
   mp=loc(fident) COLON pre=form_r(P) LONGARROW post=form_r(P)
     { PFhoareF (pre, mp, post) }
+
+ehoare_body(P):
+  mp=loc(fident) COLON pre=form_r(P) LONGARROW
+                       post=form_r(P)
+    { PFehoareF (pre, mp, post) }
 
 phoare_body(P):
   LBRACKET mp=loc(fident) COLON
@@ -2254,6 +2266,7 @@ axiom:
 
 | l=locality  EQUIV x=ident pd=pgtybindings? COLON p=loc( equiv_body(none)) ao=axiom_tc
 | l=locality  HOARE x=ident pd=pgtybindings? COLON p=loc( hoare_body(none)) ao=axiom_tc
+| l=locality EHOARE x=ident pd=pgtybindings? COLON p=loc( ehoare_body(none)) ao=axiom_tc
 | l=locality PHOARE x=ident pd=pgtybindings? COLON p=loc(phoare_body(none)) ao=axiom_tc
 | l=locality CHOARE x=ident pd=pgtybindings? COLON p=loc(choare_body(none)) ao=axiom_tc
     { mk_axiom ~locality:l (x, None, None, None, pd, p) ao }
@@ -2718,14 +2731,6 @@ rwarg1:
         parse_error (loc x) (Some msg)
   }
 
-| EQUIV aout=bracket(
-    s=side x=qident
-    argsl=paren(loc(plist0(expr, COMMA))) resl=sexpr
-    argsr=paren(loc(plist0(expr, COMMA))) resr=sexpr {
-      RWEquiv (s, x, (argsl, resl), (argsr, resr))
-    }
-  ) { aout }
-
 rwpterms:
 | f=pterm
     { [(`LtoR, f)] }
@@ -2789,8 +2794,11 @@ conseq_form:
 | f=form     { Some f }
 
 conseq:
-| f1=option(conseq_form) LONGARROW f2=option(conseq_form) { odfl None f1, odfl None f2 }
-| f2=option(conseq_form)                  { None, odfl None f2 }
+| f1=option(conseq_form) LONGARROW f2=option(conseq_form)
+    { odfl None f1, odfl None f2 }
+
+| f2=option(conseq_form)
+    { None, odfl None f2 }
 
 conseq_fqeq:
 | empty { None, None }
@@ -2806,7 +2814,7 @@ conseq_opt:
 | COLON TIME co=costs(none)         { CQI_c co }
 
 conseq_xt:
-| c=conseq_fqe o=conseq_opt?            { c, o }
+| c=conseq_fqe o=conseq_opt? { c, o }
 
 ci_cost_el:
 | o=loc(fident) x=ident? COLON co=costs(none) {o, x, co}
@@ -3207,12 +3215,16 @@ interleave_info:
 form_or_double_form:
 | f=sform
    { Single(f, None) }
-(* FIXME QUANTUM : this is durty but else we have a problem clone proof bla with tactic, *)
+(* FIXME QUANTUM : this is dirty but else we have a problem clone proof bla with tactic, *)
 | LPAREN COLON f=form qeq=quantum_eq RPAREN
     { Single (f, Some qeq) }
 
 | LPAREN UNDERSCORE COLON f1=form LONGARROW f2=form RPAREN
     { Double (f1, f2) }
+
+%inline outline_kind:
+| s=brace(stmt) { OKstmt(s) }
+| r=sexpr? LEAT f=loc(fident) { OKproc(f, r) }
 
 phltactic:
 | PROC
@@ -3254,6 +3266,9 @@ phltactic:
 | CALL s=side? info=gpterm(call_info)
     { Pcall (s, info) }
 
+| CALL SLASH fc=sform info=gpterm(call_info)
+    { Pcallconcave (fc,info) }
+
 | RCONDT s=side? i=codepos1 cost=option(if_cost_option)
     { Prcond (s, true, i, cost) }
 
@@ -3289,8 +3304,8 @@ phltactic:
 | RND s=side? info=rnd_info c=prefix(COLON, semrndpos)?
     { Prnd (s, c, info) }
 
-| RNDSEM s=side? c=codepos1
-    { Prndsem (s, c) }
+| RNDSEM red=boption(STAR) s=side? c=codepos1
+    { Prndsem (red, s, c) }
 
 | UNITARY s=side?
     { Punitary s }
@@ -3310,6 +3325,14 @@ phltactic:
 | INLINE s=side? u=inlineopt? p=codepos
     { Pinline (`CodePos (s, u, p)) }
 
+| OUTLINE s=side LBRACKET st=codepos1 e=option(MINUS e=codepos1 {e}) RBRACKET k=outline_kind
+    { Poutline {
+	  outline_side  = s;
+	  outline_start = st;
+	  outline_end   = odfl st e;
+	  outline_kind  = k }
+    }
+
 | KILL s=side? o=codepos
     { Pkill (s, o, Some 1) }
 
@@ -3319,6 +3342,9 @@ phltactic:
 | KILL s=side? o=codepos NOT STAR
     { Pkill (s, o, None) }
 
+| CASE LARROW s=side? o=codepos
+    { Pasgncase (s, o) }
+
 | ALIAS s=side? o=codepos
     { Palias (s, o, None) }
 
@@ -3327,6 +3353,9 @@ phltactic:
 
 | ALIAS s=side? o=codepos x=lident EQ e=expr
     { Pset (s, o, false, x,e) }
+
+| WEAKMEM s=side? h=loc(ipcore_name) p=param_decl
+    { Pweakmem(s, h, p) }
 
 | FISSION s=side? o=codepos AT d1=word COMMA d2=word
     { Pfission (s, o, (1, (d1, d2))) }
@@ -3349,6 +3378,9 @@ phltactic:
 | BYPHOARE info=gpterm(conseq)?
     { Pbydeno (`PHoare, (mk_rel_pterm info, true, None)) }
 
+| BYEHOARE info=gpterm(conseq)?
+    { Pbydeno (`EHoare, (mk_rel_pterm info, true, None)) }
+
 | BYEQUIV eq=bracket(byequivopt)? info=gpterm(conseq)?
     { Pbydeno (`Equiv, (mk_rel_pterm info, odfl true eq, None)) }
 
@@ -3357,6 +3389,9 @@ phltactic:
 
 | BYUPTO
     { Pbyupto }
+
+| CONSEQ SLASH fc=sform info=gpterm(conseq)
+    { Pconcave (info, fc) }
 
 | CONSEQ cq=cqoptions?
     { Pconseq (odfl [] cq, (None, None, None)) }
@@ -3430,6 +3465,21 @@ phltactic:
 | TRANSITIVITY STAR tk=trans_kind
     { Ptrans_stmt (tk, TFeq) }
 
+| REWRITE EQUIV LBRACKET
+    s=side cp=codepos1 rws=rwside x=pterm proc=rweqv_proc?
+  RBRACKET
+    {
+      let info = {
+          rw_eqv_side  = s;
+          rw_eqv_dir   = rws;
+          rw_eqv_pos   = cp;
+          rw_eqv_lemma = x;
+          rw_eqv_proc = proc;
+        }
+      in
+      Prw_equiv info
+    }
+
 | SYMMETRY
     { Psymmetry }
 
@@ -3473,6 +3523,12 @@ bdhoare_split:
 
 %inline trans_hyp:
 | LPAREN p=form LONGARROW q=form RPAREN { (p,q) }
+
+%inline rweqv_res:
+| COLON AT res=sexpr { res }
+
+%inline rweqv_proc:
+| p=paren(args=loc(plist0(expr, COMMA)) res=rweqv_res? {args, res}) {p}
 
 %inline repl_kind:
 | s=side p=im_block BY c=brace(stmt)
@@ -3925,8 +3981,11 @@ clone_override:
 | LEMMA x=qoident mode=loc(opclmode) y=qoident
   { x, PTHO_Axiom (y, unloc mode) }
 
-| MODULE x=uqident mode=loc(opclmode) y=uqident
-   { (x, PTHO_Module (y, unloc mode)) }
+| MODULE uqident loc(opclmode) uqident
+   { parse_error
+       (EcLocation.make $startpos $endpos)
+       (Some "Module overriding is no longer supported.")
+   }
 
 | MODULE TYPE x=uqident mode=loc(opclmode) y=uqident
    { (x, PTHO_ModTyp (y, unloc mode)) }
@@ -4107,9 +4166,11 @@ stop:
 | DROP DOT { }
 
 global:
-| db=debug_global? g=global_action ep=FINAL
+| db=debug_global? fail=boption(FAIL) g=global_action ep=FINAL
   { let lc = EcLocation.make $startpos ep in
-    { gl_action = EcLocation.mk_loc lc g; gl_debug = db; } }
+    { gl_action = EcLocation.mk_loc lc g;
+      gl_fail   = fail;
+      gl_debug  = db; } }
 
 debug_global:
 | TIME  { `Timed }

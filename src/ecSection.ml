@@ -2,6 +2,7 @@
 open EcUtils
 open EcSymbols
 open EcPath
+open EcAst
 open EcTypes
 open EcDecl
 open EcModules
@@ -193,7 +194,7 @@ and on_stmt (cb : cb) (s : stmt) =
   List.iter (on_instr cb) s.s_node
 
 let on_memtype cb mt =
-  EcMemory.mt_iter_ty (on_ty cb) mt
+  EcAst.mt_iter_ty (on_ty cb) mt
 
 let on_memenv cb (m : EcMemory.memenv) =
   on_memtype cb (snd m)
@@ -202,41 +203,43 @@ let rec on_form (cb : cb) (f : EcFol.form) =
   let cbrec = on_form cb in
 
   let rec fornode () =
-    match f.EcFol.f_node with
-    | EcFol.Fint      _            -> ()
-    | EcFol.Flocal    _            -> ()
-    | EcFol.Fquant    (_, b, f)    -> on_gbindings cb b; cbrec f
-    | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
-    | EcFol.Fmatch    (b, fs, ty)  -> on_ty cb ty; List.iter cbrec (b :: fs)
-    | EcFol.Flet      (lp, f1, f2) -> on_lp cb lp; List.iter cbrec [f1; f2]
-    | EcFol.Fop       (p, tys)     -> cb (`Op p); List.iter (on_ty cb) tys
-    | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
-    | EcFol.Ftuple    fs           -> List.iter cbrec fs
-    | EcFol.Fproj     (f, _)       -> cbrec f
-    | EcFol.Fpvar     (pv, _)      -> on_pv  cb pv
-    | EcFol.Fglob     _            -> ()
-    | EcFol.FhoareF   hf           -> on_hf  cb hf
-    | EcFol.FhoareS   hs           -> on_hs  cb hs
-    | EcFol.FcHoareF  chf          -> on_chf cb chf
-    | EcFol.FcHoareS  chs          -> on_chs cb chs
-    | EcFol.FequivF   ef           -> on_ef  cb ef
-    | EcFol.FequivS   es           -> on_es  cb es
-    | EcFol.FeagerF   eg           -> on_eg  cb eg
-    | EcFol.FbdHoareS bhs          -> on_bhs cb bhs
-    | EcFol.FbdHoareF bhf          -> on_bhf cb bhf
-    | EcFol.Fcoe      coe          -> on_coe cb coe
-    | EcFol.Fpr       pr           -> on_pr  cb pr
+    match f.EcAst.f_node with
+    | EcAst.Fint      _            -> ()
+    | EcAst.Flocal    _            -> ()
+    | EcAst.Fquant    (_, b, f)    -> on_gbindings cb b; cbrec f
+    | EcAst.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
+    | EcAst.Fmatch    (b, fs, ty)  -> on_ty cb ty; List.iter cbrec (b :: fs)
+    | EcAst.Flet      (lp, f1, f2) -> on_lp cb lp; List.iter cbrec [f1; f2]
+    | EcAst.Fop       (p, tys)     -> cb (`Op p); List.iter (on_ty cb) tys
+    | EcAst.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
+    | EcAst.Ftuple    fs           -> List.iter cbrec fs
+    | EcAst.Fproj     (f, _)       -> cbrec f
+    | EcAst.Fpvar     (pv, _)      -> on_pv  cb pv
+    | EcAst.Fglob     _            -> ()
+    | EcAst.FhoareF   hf           -> on_hf  cb hf
+    | EcAst.FhoareS   hs           -> on_hs  cb hs
+    | EcAst.FcHoareF  chf          -> on_chf cb chf
+    | EcAst.FcHoareS  chs          -> on_chs cb chs
+    | EcAst.FeHoareF  hf           -> on_ehf  cb hf
+    | EcAst.FeHoareS  hs           -> on_ehs  cb hs
+    | EcAst.FequivF   ef           -> on_ef  cb ef
+    | EcAst.FequivS   es           -> on_es  cb es
+    | EcAst.FeagerF   eg           -> on_eg  cb eg
+    | EcAst.FbdHoareS bhs          -> on_bhs cb bhs
+    | EcAst.FbdHoareF bhf          -> on_bhf cb bhf
+    | EcAst.Fcoe      coe          -> on_coe cb coe
+    | EcAst.Fpr       pr           -> on_pr  cb pr
 
   and on_hf cb hf =
-    on_form cb hf.EcFol.hf_pr;
-    on_form cb hf.EcFol.hf_po;
-    on_xp cb hf.EcFol.hf_f
+    on_form cb hf.EcAst.hf_pr;
+    on_form cb hf.EcAst.hf_po;
+    on_xp cb hf.EcAst.hf_f
 
   and on_hs cb hs =
-    on_form cb hs.EcFol.hs_pr;
-    on_form cb hs.EcFol.hs_po;
-    on_stmt cb hs.EcFol.hs_s;
-    on_memenv cb hs.EcFol.hs_m
+    on_form cb hs.EcAst.hs_pr;
+    on_form cb hs.EcAst.hs_po;
+    on_stmt cb hs.EcAst.hs_s;
+    on_memenv cb hs.EcAst.hs_m
 
   and on_qe cb qe =
     qr_iter (on_pvt cb) qe.qel;
@@ -247,71 +250,82 @@ let rec on_form (cb : cb) (f : EcFol.form) =
     on_qe cb ec.ec_e
 
   and on_ef cb ef =
-    on_ce cb ef.EcFol.ef_pr;
-    on_ce cb ef.EcFol.ef_po;
-    on_xp cb ef.EcFol.ef_fl;
-    on_xp cb ef.EcFol.ef_fr
+    on_ce cb ef.EcAst.ef_pr;
+    on_ce cb ef.EcAst.ef_po;
+    on_xp cb ef.EcAst.ef_fl;
+    on_xp cb ef.EcAst.ef_fr
 
   and on_es cb es =
-    on_ce cb es.EcFol.es_pr;
-    on_ce cb es.EcFol.es_po;
-    on_stmt cb es.EcFol.es_sl;
-    on_stmt cb es.EcFol.es_sr;
-    on_memenv cb es.EcFol.es_ml;
-    on_memenv cb es.EcFol.es_mr
+    on_ce cb es.EcAst.es_pr;
+    on_ce cb es.EcAst.es_po;
+    on_stmt cb es.EcAst.es_sl;
+    on_stmt cb es.EcAst.es_sr;
+    on_memenv cb es.EcAst.es_ml;
+    on_memenv cb es.EcAst.es_mr
 
   and on_eg cb eg =
-    on_form cb eg.EcFol.eg_pr;
-    on_form cb eg.EcFol.eg_po;
-    on_xp cb eg.EcFol.eg_fl;
-    on_xp cb eg.EcFol.eg_fr;
-    on_stmt cb eg.EcFol.eg_sl;
-    on_stmt cb eg.EcFol.eg_sr;
+    on_form cb eg.EcAst.eg_pr;
+    on_form cb eg.EcAst.eg_po;
+    on_xp cb eg.EcAst.eg_fl;
+    on_xp cb eg.EcAst.eg_fr;
+    on_stmt cb eg.EcAst.eg_sl;
+    on_stmt cb eg.EcAst.eg_sr;
 
   and on_chf cb chf =
-    on_form cb chf.EcFol.chf_pr;
-    on_form cb chf.EcFol.chf_po;
-    on_cost cb chf.EcFol.chf_co;
-    on_xp cb chf.EcFol.chf_f
+    on_form cb chf.EcAst.chf_pr;
+    on_form cb chf.EcAst.chf_po;
+    on_cost cb chf.EcAst.chf_co;
+    on_xp cb chf.EcAst.chf_f
 
   and on_chs cb chs =
-    on_form cb chs.EcFol.chs_pr;
-    on_form cb chs.EcFol.chs_po;
-    on_cost cb chs.EcFol.chs_co;
-    on_stmt cb chs.EcFol.chs_s;
-    on_memenv cb chs.EcFol.chs_m
+    on_form cb chs.EcAst.chs_pr;
+    on_form cb chs.EcAst.chs_po;
+    on_cost cb chs.EcAst.chs_co;
+    on_stmt cb chs.EcAst.chs_s;
+    on_memenv cb chs.EcAst.chs_m
+
+  and on_ehf cb hf =
+    on_form cb hf.EcAst.ehf_pr;
+    on_form cb hf.EcAst.ehf_po;
+    on_xp cb hf.EcAst.ehf_f
+
+  and on_ehs cb hs =
+    on_form cb hs.EcAst.ehs_pr;
+    on_form cb hs.EcAst.ehs_po;
+    on_stmt cb hs.EcAst.ehs_s;
+    on_memenv cb hs.EcAst.ehs_m
 
   and on_bhf cb bhf =
-    on_form cb bhf.EcFol.bhf_pr;
-    on_form cb bhf.EcFol.bhf_po;
-    on_form cb bhf.EcFol.bhf_bd;
-    on_xp cb bhf.EcFol.bhf_f
+    on_form cb bhf.EcAst.bhf_pr;
+    on_form cb bhf.EcAst.bhf_po;
+    on_form cb bhf.EcAst.bhf_bd;
+    on_xp cb bhf.EcAst.bhf_f
 
   and on_bhs cb bhs =
-    on_form cb bhs.EcFol.bhs_pr;
-    on_form cb bhs.EcFol.bhs_po;
-    on_form cb bhs.EcFol.bhs_bd;
-    on_stmt cb bhs.EcFol.bhs_s;
-    on_memenv cb bhs.EcFol.bhs_m
+    on_form cb bhs.EcAst.bhs_pr;
+    on_form cb bhs.EcAst.bhs_po;
+    on_form cb bhs.EcAst.bhs_bd;
+    on_stmt cb bhs.EcAst.bhs_s;
+    on_memenv cb bhs.EcAst.bhs_m
 
   and on_coe cb coe =
-    on_form cb coe.EcFol.coe_pre;
-    on_expr cb coe.EcFol.coe_e;
-    on_memenv cb coe.EcFol.coe_mem;
+    on_form cb coe.EcAst.coe_pre;
+    on_expr cb coe.EcAst.coe_e;
+    on_memenv cb coe.EcAst.coe_mem;
 
   and on_pr cb pr =
-    on_xp cb pr.EcFol.pr_fun;
-    List.iter (on_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
+    on_xp cb pr.EcAst.pr_fun;
+    List.iter (on_form cb) [pr.EcAst.pr_event; pr.EcAst.pr_args]
 
   and on_cost cb (cost : cost) =
-    on_form cb cost.EcFol.c_self;
+    on_form cb cost.EcAst.c_self;
     Mx.iter (fun f c ->
         on_xp cb f;
-        on_form cb c.EcFol.cb_called;
-        on_form cb c.EcFol.cb_cost) cost.EcFol.c_calls
+        on_form cb c.EcAst.cb_called;
+        on_form cb c.EcAst.cb_cost) cost.EcAst.c_calls
 
   in
-    on_ty cb f.EcFol.f_ty; fornode ()
+    on_ty cb f.EcAst.f_ty; fornode ()
 
 and on_restr (cb : cb) (restr : mod_restr) =
   Sx.iter (on_xp cb) restr.mr_xpaths.ur_neg;
@@ -331,11 +345,11 @@ and on_mdecl (cb : cb) (mty : module_type) =
 
 and on_gbinding (cb : cb) (b : gty) =
   match b with
-  | EcFol.GTty ty ->
+  | EcAst.GTty ty ->
       on_ty cb ty
-  | EcFol.GTmodty mty ->
+  | EcAst.GTmodty mty ->
       on_mdecl cb mty
-  | EcFol.GTmem m ->
+  | EcAst.GTmem m ->
       on_memtype cb m
 
 and on_gbindings (cb : cb) (b : (EcIdent.t * gty) list) =
@@ -663,7 +677,7 @@ let add_declared_op to_gen path opdecl =
       | OB_pred _ ->  EcSubst.add_pddef to_gen.tg_subst path ([], f_local id ty)
       | _ -> assert false }
 
-  let tvar_fv ty = Mid.map (fun () -> 1) (Tvar.fv ty)
+  let tvar_fv ty = Mid.map (fun () -> 1) (EcTypes.Tvar.fv ty)
   let fv_and_tvar_e e =
     let rec aux fv e =
       let fv = EcIdent.fv_union fv (tvar_fv e.e_ty) in

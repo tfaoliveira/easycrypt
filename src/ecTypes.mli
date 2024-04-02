@@ -2,7 +2,6 @@
 open EcBigInt
 open EcMaps
 open EcSymbols
-open EcUid
 open EcIdent
 
 (* -------------------------------------------------------------------- *)
@@ -14,19 +13,8 @@ type is_local  =           [ `Local | `Global ]
 val local_of_locality : locality -> is_local
 
 (* -------------------------------------------------------------------- *)
-type ty = private {
-  ty_node : ty_node;
-  ty_fv   : int Mid.t;
-  ty_tag  : int;
-}
-
-and ty_node =
-  | Tglob   of EcIdent.t (* The tuple of global variable of the module *)
-  | Tunivar of EcUid.uid
-  | Tvar    of EcIdent.t
-  | Ttuple  of ty list
-  | Tconstr of EcPath.path * ty list
-  | Tfun    of ty * ty
+type ty = EcAst.ty
+type ty_node = EcAst.ty_node
 
 module Mty : Map.S with type key = ty
 module Sty : Set.S with module M = Map.MakeBase(Mty)
@@ -60,6 +48,9 @@ val toption : ty -> ty
 val tcpred  : ty -> ty
 val toarrow : ty list -> ty -> ty
 
+val trealp : ty
+val txreal : ty
+
 val tytuple_flat : ty -> ty list
 val tyfun_flat   : ty -> (dom * ty)
 
@@ -73,33 +64,8 @@ exception FoundUnivar
 val ty_check_uni : ty -> unit
 
 (* -------------------------------------------------------------------- *)
-type ty_subst = {
-  ts_absmod    : EcIdent.t Mid.t;
-  ts_cmod      : EcPath.mpath Mid.t;
-  ts_modtglob  : ty Mid.t;
-  ts_u  : ty Muid.t;
-  ts_v  : ty Mid.t;
-}
-
-val ty_subst_id    : ty_subst
-val is_ty_subst_id : ty_subst -> bool
-
-val ty_subst : ty_subst -> ty -> ty
-
-module Tuni : sig
-  val univars : ty -> Suid.t
-
-  val subst1    : (uid * ty) -> ty_subst
-  val subst     : ty Muid.t -> ty_subst
-  val subst_dom : ty Muid.t -> dom -> dom
-  val occurs    : uid -> ty -> bool
-  val fv        : ty -> Suid.t
-end
 
 module Tvar : sig
-  val subst1  : (EcIdent.t * ty) -> ty -> ty
-  val subst   : ty Mid.t -> ty -> ty
-  val init    : EcIdent.t list -> ty list -> ty Mid.t
   val fv      : ty -> Sid.t
 end
 
@@ -118,10 +84,7 @@ val symbol_of_ty   : ty -> string
 val fresh_id_of_ty : ty -> EcIdent.t
 
 (* -------------------------------------------------------------------- *)
-type lpattern =
-  | LSymbol of (EcIdent.t * ty)
-  | LTuple  of (EcIdent.t * ty) list
-  | LRecord of EcPath.path * (EcIdent.t option * ty) list
+type lpattern = EcAst.lpattern
 
 val lp_equal : lpattern -> lpattern -> bool
 val lp_hash  : lpattern -> int
@@ -130,44 +93,21 @@ val lp_ids   : lpattern -> EcIdent.t list
 val lp_fv    : lpattern -> EcIdent.Sid.t
 
 (* -------------------------------------------------------------------- *)
-type quantum = [`Quantum | `Classical]
-val pp_quantum : quantum -> string
+type quantum = EcAst.quantum
 
 (* -------------------------------------------------------------------- *)
-type ovariable = {
-  ov_quantum : quantum;
-  ov_name : symbol option;
-  ov_type : ty;
-}
+type ovariable = EcAst.ovariable
+type variable = EcAst.variable
 
-val ov_quantum : ovariable -> quantum
-val ov_name  : ovariable -> symbol option
-val ov_type  : ovariable -> ty
-val ov_hash  : ovariable -> int
 val ov_equal : ovariable -> ovariable -> bool
+val ov_hash  : ovariable -> int
 
-type variable = {
-    v_quantum : quantum;
-    v_name : symbol;   (* can be "_" *)
-    v_type : ty;
-  }
-
-val v_quantum : variable -> quantum
-val v_name  : variable -> symbol
-val v_type  : variable -> ty
-val v_hash  : variable -> int
 val v_equal : variable -> variable -> bool
-
-val ovar_of_var: variable -> ovariable
+val v_hash  : variable -> int
 
 (* -------------------------------------------------------------------- *)
-type pvar_kind =
-  | PVKglob
-  | PVKloc of quantum
-
-type prog_var = private
-  | PVglob of EcPath.xpath
-  | PVloc of (quantum * EcSymbols.symbol)
+type pvar_kind = EcAst.pvar_kind
+type prog_var = EcAst.prog_var
 
 val pv_equal       : prog_var -> prog_var -> bool
 val pv_compare     : prog_var -> prog_var -> int
@@ -214,34 +154,17 @@ module Mnpv : Map.S with type key = prog_var
 module Snpv : Set.S with module M = Map.MakeBase(Mnpv)
 
 (* -------------------------------------------------------------------- *)
-type expr = private {
-  e_node : expr_node;
-  e_ty   : ty;
-  e_fv   : int Mid.t;    (* module idents, locals *)
-  e_tag  : int;
-}
+type expr = EcAst.expr
+type expr_node = EcAst.expr_node
 
-and expr_node =
-  | Eint   of zint                         (* int. literal          *)
-  | Elocal of EcIdent.t                    (* let-variables         *)
-  | Evar   of prog_var                     (* module variable       *)
-  | Eop    of EcPath.path * ty list        (* op apply to type args *)
-  | Eapp   of expr * expr list             (* op. application       *)
-  | Equant of equantif * ebindings * expr  (* fun/forall/exists     *)
-  | Elet   of lpattern * expr * expr       (* let binding           *)
-  | Etuple of expr list                    (* tuple constructor     *)
-  | Eif    of expr * expr * expr           (* _ ? _ : _             *)
-  | Ematch of expr * expr list * ty        (* match _ with _        *)
-  | Eproj  of expr * int                   (* projection of a tuple *)
-
-and equantif  = [ `ELambda | `EForall | `EExists ]
-and ebinding  = EcIdent.t * ty
-and ebindings = ebinding list
+type equantif  = EcAst.equantif
+type ebinding  = EcAst.ebinding
+type ebindings = EcAst.ebindings
 
 type closure = (EcIdent.t * ty) list * expr
 
 (* -------------------------------------------------------------------- *)
-val qt_equal : equantif -> equantif -> bool
+val eqt_equal : equantif -> equantif -> bool
 
 (* -------------------------------------------------------------------- *)
 val e_equal   : expr -> expr -> bool
@@ -274,6 +197,11 @@ val e_oget     : expr -> ty -> expr
 val e_proj_simpl : expr -> int -> ty -> expr
 
 (* -------------------------------------------------------------------- *)
+module Me : Map.S with type key = expr
+module Se : Set.S with module M = Map.MakeBase(Me)
+module He : EcMaps.EHashtbl.S with type key = expr
+
+(* -------------------------------------------------------------------- *)
 val is_local     : expr -> bool
 val is_var       : expr -> bool
 val is_tuple_var : expr -> bool
@@ -299,28 +227,3 @@ val e_fold :
 val e_iter : (expr -> unit) -> expr -> unit
 
 (* -------------------------------------------------------------------- *)
-type e_subst = {
-  es_freshen : bool; (* true means realloc local *)
-  es_ty      : ty_subst;
-  es_loc     : expr Mid.t;
-}
-
-val e_subst_id : e_subst
-
-val is_e_subst_id : e_subst -> bool
-
-val e_subst_init :
-     bool
-  -> ty_subst
-  -> expr Mid.t
-  -> e_subst
-
-val add_local  : e_subst -> EcIdent.t * ty -> e_subst * (EcIdent.t * ty)
-val add_locals : e_subst -> (EcIdent.t * ty) list -> e_subst * (EcIdent.t * ty) list
-
-val e_subst_closure : e_subst -> closure -> closure
-val e_subst : e_subst -> expr -> expr
-
-(* val e_mapty : (ty -> ty) -> expr -> expr *)
-
-(* val e_uni   : (uid -> ty option) -> expr -> expr *)

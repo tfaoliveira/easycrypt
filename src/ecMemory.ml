@@ -2,173 +2,46 @@
 open EcIdent
 open EcSymbols
 open EcUtils
+open EcAst
 open EcTypes
 
 module Msym = EcSymbols.Msym
 
 (* -------------------------------------------------------------------- *)
-type memory = EcIdent.t
+type memory = EcAst.memory
 
-let mem_equal = EcIdent.id_equal
-
-(* -------------------------------------------------------------------- *)
-type proj_arg = {
-  arg_quantum : quantum;    (* classical/quantum *)
-  arg_ty      : ty;         (* type of the procedure argument "arg" *)
-  arg_pos     : int;        (* projection *)
-}
-
-type local_memtype_ = {
-  mt_name : symbol option;      (* provides access to the full local memory *)
-  mt_decl : ovariable list;
-  mt_proj : (int * ty) Msym.t;  (* where to find the symbol in mt_decl and its type *)
-  mt_ty   : ty;                 (* ttuple (List.map v_type mt_decl) *)
-  mt_n    : int;                (* List.length mt_decl *)
-}
-
-let mk_lmt
-      (mt_name : symbol option)
-      (mt_decl : ovariable list)
-      (mt_proj : (int * ty) Msym.t)
-  =
-
-  let mt_ty = ttuple (List.map ov_type mt_decl) in
-  let mt_n  = List.length mt_decl in
-
-  { mt_name; mt_decl; mt_proj; mt_ty; mt_n; }
-
-let lmem_hash_ (lmem : local_memtype_) : int =
-  let mt_name_hash = Why3.Hashcons.combine_option Hashtbl.hash lmem.mt_name in
-  let mt_decl_hash = Why3.Hashcons.combine_list EcTypes.ov_hash 0 lmem.mt_decl in
-
-  let mt_proj_hash =
-    let el_hash (s, (i, ty)) =
-      Why3.Hashcons.combine2 (Hashtbl.hash s) i (EcTypes.ty_hash ty) in
-    Why3.Hashcons.combine_list el_hash 0 (Msym.bindings lmem.mt_proj) in
-
-  Why3.Hashcons.combine_list
-    (fun i -> i)
-    (EcTypes.ty_hash lmem.mt_ty)
-    [lmem.mt_n; mt_name_hash; mt_decl_hash; mt_proj_hash]
-
-let lmt_equal_
-    (ty_equal : ty -> ty -> bool)
-    (lmt1     : local_memtype_)
-    (lmt2     : local_memtype_)
-  =
-
-  match lmt1.mt_name, lmt2.mt_name with
-  | None, None ->
-      Msym.equal (fun (_, ty1) (_, ty2) ->
-        ty_equal ty1 ty2
-      ) lmt1.mt_proj lmt2.mt_proj
-
-  | Some name1, Some name2 when name1 = name2->
-      List.all2 ov_equal lmt1.mt_decl lmt2.mt_decl
-
-  | _, _ ->
-     false
-
-let lmt_fv_ (lmt : local_memtype_) (fv : int Mid.t) =
-  List.fold_left (fun fv v ->
-    EcIdent.fv_union fv v.ov_type.ty_fv
-  ) fv lmt.mt_decl
-
-let lmt_iter_ty_ (f : ty -> unit) (lmt : local_memtype_) =
-  List.iter (fun v -> f v.ov_type) lmt.mt_decl
+let mem_equal = EcAst.mem_equal
 
 (* -------------------------------------------------------------------- *)
-type local_memtype = {
-  classical_lmt : local_memtype_;
-  quantum_lmt   : local_memtype_;
-}
+type proj_arg = EcAst.proj_arg
 
-let lmt_hash (lmem : local_memtype) =
-  Why3.Hashcons.combine (lmem_hash_ lmem.classical_lmt) (lmem_hash_ lmem.quantum_lmt)
+let mk_lmt lmt_name lmt_decl lmt_proj =
+  { lmt_name;
+    lmt_decl;
+    lmt_proj;
+    lmt_ty = ttuple (List.map ov_type lmt_decl);
+    lmt_n  = List.length lmt_decl;
+  }
 
-let lmt_fv (lmem : local_memtype) =
-  EcIdent.Mid.empty
-  |> lmt_fv_ lmem.classical_lmt
-  |> lmt_fv_ lmem.quantum_lmt
+(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
+   memory type when the axiom schema is.  *)
+type memtype = EcAst.memtype
 
-let lmt_equal
-    (ty_equal : ty -> ty -> bool)
-    (mt1      : local_memtype)
-    (mt2      : local_memtype)
-  =
-     lmt_equal_ ty_equal mt1.classical_lmt mt2.classical_lmt
-  && lmt_equal_ ty_equal mt1.quantum_lmt mt2.quantum_lmt
+let lmt_hash = EcAst.lmt_hash
 
-let lmt_iter_ty (f : ty -> unit) (lmem : local_memtype) =
-  lmt_iter_ty_ f lmem.classical_lmt;
-  lmt_iter_ty_ f lmem.quantum_lmt
+let mt_fv = EcAst.mt_fv
 
-(* -------------------------------------------------------------------- *)
+let lmt_equal = EcAst.lmt_equal
 
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a        *
- * concrete memory type when the axiom schema is.                       *)
-type memtype =
-  | Lmt_concrete of local_memtype option
-  | Lmt_schema
+let mt_equal_gen = EcAst.mt_equal_gen
 
-let is_schema = function Lmt_schema -> true | _ -> false
-
-let mt_fv (mt : memtype) =
-  match mt with
-  | Lmt_schema
-  | Lmt_concrete None -> EcIdent.Mid.empty
-  | Lmt_concrete (Some lmem) -> lmt_fv lmem
-
-let mt_equal_gen
-    (ty_equal : ty -> ty -> bool)
-    (mt1      : memtype)
-    (mt2      : memtype)
-  =
-  match mt1, mt2 with
-  | Lmt_schema, Lmt_schema ->
-     true
-
-  | Lmt_concrete mt1, Lmt_concrete mt2 ->
-     oeq (lmt_equal ty_equal) mt1 mt2
-
-  | Lmt_schema,     Lmt_concrete _
-  | Lmt_concrete _, Lmt_schema -> false
-
-let mt_equal (mt1 : memtype) (mt2 : memtype) =
-  mt_equal_gen ty_equal mt1 mt2
-
-let mt_iter_ty (f : ty -> unit) (mt : memtype) =
-  match mt with
-  | Lmt_schema ->
-     ()
-
-  | Lmt_concrete lmem ->
-     oiter (lmt_iter_ty f) lmem
+let mt_equal = EcAst.mt_equal
 
 (* -------------------------------------------------------------------- *)
-type memenv = memory * memtype
+type memenv = EcAst.memenv
 
-let mem_hash ((mem, mt) : memenv) =
-  let base = EcIdent.id_hash mem in
-
-  match mt with
-  | Lmt_schema ->
-     base
-
-  | Lmt_concrete mt ->
-      Why3.Hashcons.combine
-        base
-        (Why3.Hashcons.combine_option lmt_hash mt)
-
-let me_equal_gen
-    (ty_equal  : ty -> ty -> bool)
-    ((m1, mt1) : memenv)
-    ((m2, mt2) : memenv)
-  =
-    mem_equal m1 m2 && mt_equal_gen ty_equal mt1 mt2
-
-let me_equal : memenv -> memenv -> bool =
-  me_equal_gen ty_equal
+let me_equal_gen = EcAst.me_equal_gen
+let me_equal = EcAst.me_equal
 
 (* -------------------------------------------------------------------- *)
 let memory   ((m, _ ) : memenv) = m
@@ -176,7 +49,6 @@ let memtype  ((_, mt) : memenv) = mt
 
 (* -------------------------------------------------------------------- *)
 exception DuplicatedMemoryBinding of symbol
-exception NoQuantumMemory
 
 (* -------------------------------------------------------------------- *)
 type wa = [`All | `Classical | `Quantum | `None]
@@ -213,7 +85,7 @@ let abstract (me : memory) : memenv =
 
 (* -------------------------------------------------------------------- *)
 let is_bound_lmt_ (lmt : local_memtype_) (x : symbol) =
-  Some x = lmt.mt_name || Msym.mem x lmt.mt_proj
+  Some x = lmt.lmt_name || Msym.mem x lmt.lmt_proj
 
 let is_bound_lmt (lmem : local_memtype) (x : symbol) =
      is_bound_lmt_ lmem.classical_lmt x
@@ -237,18 +109,18 @@ let lmt_lookup_ (lmt : local_memtype_) (q : quantum) (x : symbol) =
   let mk (v_name : symbol) (v_type : ty) =
     { v_quantum = q; v_name; v_type; } in
 
-  if lmt.mt_name = Some x then
-    Some (mk x lmt.mt_ty, None, None)
+  if lmt.lmt_name = Some x then
+    Some (mk x lmt.lmt_ty, None, None)
   else
-    match Msym.find_opt x lmt.mt_proj with
+    match Msym.find_opt x lmt.lmt_proj with
     | Some (i, xty) ->
-      if lmt.mt_n = 1 then
-        Some (mk (odfl x lmt.mt_name) xty, None, None)
+      if lmt.lmt_n = 1 then
+        Some (mk (odfl x lmt.lmt_name) xty, None, None)
       else
         let pa =
-          if   is_none lmt.mt_name
+          if   is_none lmt.lmt_name
           then None
-          else Some { arg_quantum = q; arg_ty = lmt.mt_ty; arg_pos = i; } in
+          else Some { arg_quantum = q; arg_ty = lmt.lmt_ty; arg_pos = i; } in
         Some (mk x xty, pa, Some i)
 
     | None -> None
@@ -273,16 +145,14 @@ let lookup_me (x : symbol) (me : memenv) =
   lookup x (snd me)
 
 (* -------------------------------------------------------------------- *)
-
 let lmt_bind_ (lmt : local_memtype_) (v : ovariable) =
-  let mt_decl = lmt.mt_decl @ [v] in
+  let mt_decl = lmt.lmt_decl @ [v] in
   let mt_proj =
     match v.ov_name with
-    | None -> lmt.mt_proj
-    | Some x -> Msym.add x (lmt.mt_n, v.ov_type) lmt.mt_proj
+    | None -> lmt.lmt_proj
+    | Some x -> Msym.add x (lmt.lmt_n, v.ov_type) lmt.lmt_proj
   in
-  mk_lmt lmt.mt_name mt_decl mt_proj
-
+  mk_lmt lmt.lmt_name mt_decl mt_proj
 
 let lmt_bind (lmt : local_memtype) (v : ovariable) =
   let _ =
@@ -334,17 +204,17 @@ let bindall_fresh (vs : ovariable list) (me : memenv) =
 let lmt_subst_ (st : ty -> ty) (lmt : local_memtype_) =
   let decl =
     if st == identity then
-      lmt.mt_decl
+      lmt.lmt_decl
     else
       List.Smart.map (fun vty ->
         let ty' = st vty.ov_type in
         if ty_equal vty.ov_type ty' then vty else { vty with ov_type = ty'; }
-      ) lmt.mt_decl
+      ) lmt.lmt_decl
   in
 
-  if   decl ==(*phy*) lmt.mt_decl
+  if   decl ==(*phy*) lmt.lmt_decl
   then lmt
-  else mk_lmt lmt.mt_name decl (Msym.map (fun (i, ty) -> i, st ty) lmt.mt_proj)
+  else mk_lmt lmt.lmt_name decl (Msym.map (fun (i, ty) -> i, st ty) lmt.lmt_proj)
 
 (* -------------------------------------------------------------------- *)
 let lmt_subst (st : ty -> ty) (lmem : local_memtype) =
@@ -381,11 +251,11 @@ let lmt_get_name_ (lmt : local_memtype_) (s : symbol) (p : int option) =
   | None ->
      Some s
 
-  | Some i when Some s = lmt.mt_name ->
+  | Some i when Some s = lmt.lmt_name ->
      omap fst
        (List.find_opt
           (fun (_, (i', _)) -> i = i')
-          (Msym.bindings lmt.mt_proj))
+          (Msym.bindings lmt.lmt_proj))
 
   | Some _ ->
       None
@@ -422,7 +292,7 @@ let get_name (s : symbol) (p : int option) ((_, mt) : memenv)  =
 
 (* -------------------------------------------------------------------- *)
 let lmt_local_type_ (lmt : local_memtype_) =
-  ttuple (List.map ov_type lmt.mt_decl)
+  ttuple (List.map ov_type lmt.lmt_decl)
 
 let lmt_local_type (lmem : local_memtype) =
   let cl = lmt_local_type_ lmem.classical_lmt in
@@ -447,7 +317,7 @@ let has_quantum (mt : memtype) =
      false
 
   | Lmt_concrete (Some lmem) ->
-     lmem.quantum_lmt.mt_ty <> tunit
+     lmem.quantum_lmt.lmt_ty <> tunit
 
 (* -------------------------------------------------------------------- *)
 let has_locals mt = match mt with
@@ -467,5 +337,5 @@ let for_printing (mt : memtype) : mt_printing option =
      None
 
   | Lmt_concrete (Some mt) ->
-     let doit mt = mt.mt_name, mt.mt_decl in
+     let doit mt = mt.lmt_name, mt.lmt_decl in
      Some (doit mt.classical_lmt, doit mt.quantum_lmt)

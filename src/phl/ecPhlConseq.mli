@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcUtils
 open EcParsetree
+open EcAst
 open EcFol
 open EcCoreGoal
 
@@ -16,7 +17,6 @@ type qconseq_tac =
 type qconseq_core_tac = equiv_cond -> equiv_cond -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
-
 val t_equivS_conseq_core  : ?witheq:bool -> qconseq_core_tac
 
 val t_equivF_conseq       : qconseq_tac
@@ -33,6 +33,8 @@ val t_cHoareF_conseq_c    : cost -> FApi.backward
 val t_cHoareS_conseq_c    : cost -> FApi.backward
 val t_cHoareF_conseq_full : form -> form -> cost -> FApi.backward
 val t_cHoareS_conseq_full : form -> form -> cost -> FApi.backward
+val t_ehoareF_conseq      : conseq_tac
+val t_ehoareS_conseq      : conseq_tac
 val t_bdHoareS_conseq_bd  : hoarecmp -> form -> FApi.backward
 val t_bdHoareF_conseq_bd  : hoarecmp -> form -> FApi.backward
 
@@ -45,6 +47,11 @@ val t_cHoareF_conseq_nm   : conseq_tac
 val t_cHoareS_conseq_nm   : conseq_tac
 val t_bdHoareF_conseq_nm  : conseq_tac
 val t_bdHoareS_conseq_nm  : conseq_tac
+
+(* -------------------------------------------------------------------- *)
+val t_ehoareS_concave : form -> conseq_tac
+val t_ehoareF_concave : form -> conseq_tac
+val t_concave_incr : FApi.backward
 
 (* -------------------------------------------------------------------- *)
 val t_equivS_conseq_bd : side -> EcFol.form -> EcFol.form ->FApi.backward
@@ -63,3 +70,5 @@ val process_conseq_opt :
 
 (* -------------------------------------------------------------------- *)
 val t_conseqauto : ?delta:bool -> ?tsolve:FApi.backward -> FApi.backward
+
+val process_concave : pformula option tuple2 gppterm * pformula -> FApi.backward

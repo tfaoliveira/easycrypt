@@ -4,6 +4,7 @@ open EcLocation
 open EcIdent
 open EcSymbols
 open EcPath
+open EcAst
 open EcTypes
 open EcFol
 open EcEnv
@@ -153,7 +154,7 @@ module LowApply = struct
 
     and check_arg (sbt, ax) arg =
       let check_binder (x, xty) f =
-        let xty = Fsubst.subst_gty sbt xty in
+        let xty = Fsubst.gty_subst sbt xty in
 
         match xty, arg with
         | GTty xty, PAFormula arg ->
@@ -456,7 +457,7 @@ end
 (* -------------------------------------------------------------------- *)
 let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
   let add_local hyps id sbt x gty =
-    let gty = Fsubst.subst_gty sbt gty in
+    let gty = Fsubst.gty_subst sbt gty in
     let id  = tg_map (function
       | Some id -> id
       | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)) id
@@ -501,7 +502,7 @@ let t_intros_x (ids : (ident  option) mloc list) (tc : tcenv1) =
         let id = tg_map (function
           | None    -> EcEnv.LDecl.fresh_id hyps (EcIdent.name x)
           | Some id -> id) id in
-        let xty  = ty_subst sbt.fs_ty xty in
+        let xty  = ty_subst sbt xty in
         let xe   = Fsubst.f_subst sbt xe in
         let sbt  = Fsubst.f_bind_rename sbt x (tg_val id) xty in
         let hyps = add_ld id (LD_var (xty, Some xe)) hyps in
@@ -626,7 +627,7 @@ let tt_apply (pt : proofterm) (tc : tcenv) =
       (EcPrinting.pp_form ppe) ax
       (EcPrinting.pp_form ppe) concl;
     *)
-    raise InvalidGoalShape;
+    raise InvalidGoalShape
   end;
 
   FApi.close tc (VApply pt)
@@ -1606,13 +1607,16 @@ let t_rewrite
       RApi.close tc (VRewrite (hd, rwpt));
       RApi.tcenv_of_rtcenv tc
 
-  | Some (h : ident) ->
-      let hyps = oget (LDecl.hyp_convert h (fun _ _ -> tgfp) (RApi.tc_hyps tc)) in
-      let hd   = RApi.newgoal tc ~hyps (RApi.tc_goal tc) in
-      let rwpt = { rpt_proof = pt; rpt_occrs = pos; rpt_lc = Some h; } in
+  | Some (h : ident) -> begin
+      match LDecl.hyp_convert h (fun _ _ -> tgfp) (RApi.tc_hyps tc) with
+      | Some hyps ->
+         let hd   = RApi.newgoal tc ~hyps (RApi.tc_goal tc) in
+         let rwpt = { rpt_proof = pt; rpt_occrs = pos; rpt_lc = Some h; } in
+         RApi.close tc (VRewrite (hd, rwpt))
 
-      RApi.close tc (VRewrite (hd, rwpt));
-      RApi.tcenv_of_rtcenv tc
+      | None -> ()
+    end;
+    RApi.tcenv_of_rtcenv tc
 
 (* -------------------------------------------------------------------- *)
 let t_rewrite_hyp ?xconv ?mode ?donot (id : EcIdent.t) pos (tc : tcenv1) =

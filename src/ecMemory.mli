@@ -2,29 +2,21 @@
 open EcSymbols
 open EcTypes
 (* -------------------------------------------------------------------- *)
-type memory = EcIdent.t
+type memory = EcAst.memory
 
 val mem_equal : memory -> memory -> bool
 
 (* -------------------------------------------------------------------- *)
-type proj_arg = {
-  arg_quantum : quantum;    (* classical/quantum *)
-  arg_ty      : ty;         (* type of the procedure argument "arg" *)
-  arg_pos     : int;        (* projection *)
-}
-
-type memtype
+type proj_arg = EcAst.proj_arg
+type memtype = EcAst.memtype
 
 val mt_equal_gen : (ty -> ty -> bool) -> memtype -> memtype -> bool
 val mt_equal     : memtype -> memtype -> bool
 val mt_fv        : memtype -> int EcIdent.Mid.t
 
-val mt_iter_ty : (ty -> unit) -> memtype -> unit
-
 (* -------------------------------------------------------------------- *)
-type memenv = memory * memtype
+type memenv = EcAst.memenv
 
-val mem_hash : memenv -> int
 val me_equal_gen : (ty -> ty -> bool) -> memenv -> memenv -> bool
 val me_equal : memenv -> memenv -> bool
 
@@ -45,8 +37,6 @@ val schema_mt : memtype
 
 val abstract    : memory -> memenv
 val abstract_mt : memtype
-
-val is_schema : memtype -> bool
 
 exception DuplicatedMemoryBinding of symbol
 

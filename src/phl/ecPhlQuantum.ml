@@ -1,4 +1,5 @@
 (* -------------------------------------------------------------------- *)
+open EcAst
 open EcParsetree
 open EcModules
 open EcFol
