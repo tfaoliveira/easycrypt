@@ -75,9 +75,7 @@ let t_kill_r side cpos olen tc =
   in
 
   let tr = fun side -> `Kill (side, cpos, olen) in
-  t_code_transform side
-    ~bdhoare:true ~choare:None
-    cpos tr (t_zip kill_stmt) tc
+  t_code_transform side ~bdhoare:true cpos tr (t_zip kill_stmt) tc
 
 (* -------------------------------------------------------------------- *)
 let alias_stmt env id (pf, _) me i =
@@ -109,9 +107,7 @@ let alias_stmt env id (pf, _) me i =
 let t_alias_r side cpos id g =
   let env = FApi.tc1_env g in
   let tr = fun side -> `Alias (side, cpos) in
-  t_code_transform side
-    ~bdhoare:true ~choare:None
-    cpos tr (t_fold (alias_stmt env id)) g
+  t_code_transform side ~bdhoare:true cpos tr (t_fold (alias_stmt env id)) g
 
 (* -------------------------------------------------------------------- *)
 let set_stmt (fresh, id) e =
@@ -138,9 +134,7 @@ let set_stmt (fresh, id) e =
 
 let t_set_r side cpos (fresh, id) e tc =
   let tr = fun side -> `Set (side, cpos) in
-  t_code_transform side
-    ~bdhoare:true ~choare:None
-    cpos tr (t_zip (set_stmt (fresh, id) e)) tc
+  t_code_transform side ~bdhoare:true cpos tr (t_zip (set_stmt (fresh, id) e)) tc
 
 (* -------------------------------------------------------------------- *)
 let cfold_stmt (pf, hyps) me olen zpr =
@@ -211,9 +205,7 @@ let cfold_stmt (pf, hyps) me olen zpr =
 let t_cfold_r side cpos olen g =
   let tr = fun side -> `Fold (side, cpos, olen) in
   let cb = fun cenv _ me zpr -> cfold_stmt cenv me olen zpr in
-  t_code_transform side
-    ~bdhoare:true ~choare:None
-    cpos tr (t_zip cb) g
+  t_code_transform side ~bdhoare:true cpos tr (t_zip cb) g
 
 (* -------------------------------------------------------------------- *)
 let t_kill  = FApi.t_low3 "code-tx-kill"  t_kill_r
@@ -276,10 +268,6 @@ let process_weakmem (side, id, params) tc =
       let me = bind hs.bhs_m in
       f_bdHoareS_r { hs with bhs_m = me }
 
-    | FcHoareS hs ->
-      let me = bind hs.chs_m in
-      f_cHoareS_r { hs with chs_m = me }
-
     | FequivS es ->
       let es = equivS es in
 
@@ -294,7 +282,8 @@ let process_weakmem (side, id, params) tc =
       f_equivS_r es
 
     | _ ->
-      tc_error ~loc:id.pl_loc !!tc "the hypothesis need to be a hoare/choare/phoare/ehoare/equiv on statement"
+      tc_error ~loc:id.pl_loc !!tc
+        "the hypothesis need to be a hoare/phoare/ehoare/equiv on statement"
   in
   let concl = f_imp h (FApi.tc1_goal tc) in
   FApi.xmutate1 tc `WeakenMem [concl]

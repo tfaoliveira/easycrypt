@@ -109,7 +109,7 @@ let process_simplify_info ri (tc : tcenv1) =
   let delta_p, delta_h =
     ri.pdelta
       |> omap (List.fold_left do1 (Sp.empty, Sid.empty))
-      |> omap (fun (x, y) -> (fun p -> if Sp.mem p x then `Force else `No), (Sid.mem^~ y))
+      |> omap (fun (x, y) -> (fun p -> if Sp.mem p x then `Force else `IfApplied), (Sid.mem^~ y))
       |> odfl ((fun _ -> `IfTransparent), predT)
   in
 
@@ -123,7 +123,6 @@ let process_simplify_info ri (tc : tcenv1) =
     EcReduction.logic   = if ri.plogic then Some `Full else None;
     EcReduction.modpath = ri.pmodpath;
     EcReduction.user    = ri.puser;
-    EcReduction.cost    = ri.pcost;
   }
 
 (*-------------------------------------------------------------------- *)
@@ -1920,16 +1919,6 @@ let process_cutdef ttenv (ip, pt) (tc : tcenv1) =
   FApi.t_sub
     [EcLowGoal.t_apply pt; process_intros_1 ttenv ip]
     (t_cut ax tc)
-
-(* -------------------------------------------------------------------- *)
-type cutdef_sc_t = intropattern * pcutdef_schema
-
-let process_cutdef_sc ttenv (ip, inst) (tc : tcenv1) =
-  let pt,sc_i = PT.tc1_process_sc_instantiation tc inst in
-
-  FApi.t_sub
-    [EcLowGoal.t_apply pt; process_intros_1 ttenv ip]
-    (t_cut sc_i tc)
 
 (* -------------------------------------------------------------------- *)
 let process_left (tc : tcenv1) =

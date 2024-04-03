@@ -24,17 +24,11 @@ val t_equivS_conseq       : qconseq_tac
 val t_eagerF_conseq       : conseq_tac
 val t_hoareF_conseq       : conseq_tac
 val t_hoareS_conseq       : conseq_tac
-val t_cHoareF_conseq      : conseq_tac
-val t_cHoareS_conseq      : conseq_tac
 val t_bdHoareF_conseq     : conseq_tac
 val t_bdHoareS_conseq     : conseq_tac
-
-val t_cHoareF_conseq_c    : cost -> FApi.backward
-val t_cHoareS_conseq_c    : cost -> FApi.backward
-val t_cHoareF_conseq_full : form -> form -> cost -> FApi.backward
-val t_cHoareS_conseq_full : form -> form -> cost -> FApi.backward
 val t_ehoareF_conseq      : conseq_tac
 val t_ehoareS_conseq      : conseq_tac
+
 val t_bdHoareS_conseq_bd  : hoarecmp -> form -> FApi.backward
 val t_bdHoareF_conseq_bd  : hoarecmp -> form -> FApi.backward
 
@@ -43,8 +37,6 @@ val t_equivF_conseq_nm    : qconseq_tac
 val t_equivS_conseq_nm    : qconseq_tac
 val t_hoareF_conseq_nm    : conseq_tac
 val t_hoareS_conseq_nm    : conseq_tac
-val t_cHoareF_conseq_nm   : conseq_tac
-val t_cHoareS_conseq_nm   : conseq_tac
 val t_bdHoareF_conseq_nm  : conseq_tac
 val t_bdHoareS_conseq_nm  : conseq_tac
 

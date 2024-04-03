@@ -166,7 +166,6 @@ and stmt = {
 (* -------------------------------------------------------------------- *)
 and oracle_info = {
   oi_calls : xpath list;
-  oi_costs : (form * form Mx.t) option;
 }
 
 and mod_restr = {
@@ -202,11 +201,8 @@ and local_memtype = {
   quantum_lmt   : local_memtype_;
 }
 
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
-   memory type when the axiom schema is.  *)
 and memtype =
   | Lmt_concrete of local_memtype option
-  | Lmt_schema
 
 and memenv = memory * memtype
 
@@ -243,9 +239,6 @@ and f_node =
   | FhoareF of sHoareF (* $hr / $hr *)
   | FhoareS of sHoareS
 
-  | FcHoareF of cHoareF (* $hr / $hr *)
-  | FcHoareS of cHoareS
-
   | FbdHoareF of bdHoareF (* $hr / $hr *)
   | FbdHoareS of bdHoareS
 
@@ -256,8 +249,6 @@ and f_node =
   | FequivS of qequivS
 
   | FeagerF of eagerF
-
-  | Fcoe of coe
 
   | Fpr of pr (* hr *)
 
@@ -328,20 +319,6 @@ and eHoareS = {
   ehs_po  : form;
 }
 
-and cHoareF = {
-  chf_pr : form;
-  chf_f  : EcPath.xpath;
-  chf_po : form;
-  chf_co : cost;
-}
-
-and cHoareS = {
-  chs_m  : memenv;
-  chs_pr : form;
-  chs_s  : stmt;
-  chs_po : form;
-  chs_co : cost; }
-
 and bdHoareF = {
   bhf_pr  : form;
   bhf_f   : EcPath.xpath;
@@ -366,32 +343,9 @@ and pr = {
   pr_event : form;
 }
 
-and coe = {
-  coe_pre : form;
-  coe_mem : memenv;
-  coe_e   : expr;
-}
-
-(* Invariant: keys of c_calls are functions of local modules,
-   with no arguments. *)
-and cost = {
-  c_self  : form;    (* of type xint *)
-  c_calls : call_bound EcPath.Mx.t;
-}
-
-(* Call with cost at most [cb_cost], called at mist [cb_called].
-   [cb_cost] is here to properly handle substsitution when instantiating an
-   abstract module by a concrete one. *)
-and call_bound = {
-  cb_cost  : form;   (* of type xint *)
-  cb_called : form;  (* of type int  *)
-}
-
 (* ----------------------------------------------------------------- *)
 (* Equality, hash, and fv                                            *)
 (* ----------------------------------------------------------------- *)
-
-
 let ty_equal : ty -> ty -> bool = (==)
 let ty_hash ty = ty.ty_tag
 let ty_fv ty = ty.ty_fv
@@ -615,41 +569,18 @@ let f_hash f = f.f_tag
 let f_fv f = f.f_fv
 
 (* -------------------------------------------------------------------- *)
-
-let oi_equal f_equal oi1 oi2 =
-  let check_costs_eq c1 c2 =
-    match c1,c2 with
-    | None, None -> true
-    | Some _, None | None, Some _ -> false
-    | Some (s1,c1), Some (s2,c2) ->
-      let exception Not_equal in
-      try Mx.fold2_union (fun _ a b () -> match a, b with
-          | Some _, None | None, Some _ -> raise Not_equal
-          | None, None -> ()
-          | Some a, Some b -> if f_equal a b then () else raise Not_equal
-          ) c1 c2 ();
-          f_equal s1 s2
-      with Not_equal -> false in
-
-  List.all2 EcPath.x_equal oi1.oi_calls oi1.oi_calls
-  && check_costs_eq oi1.oi_costs oi2.oi_costs
+let oi_equal oi1 oi2 =
+  List.all2 EcPath.x_equal oi1.oi_calls oi2.oi_calls
 
 let oi_hash oi =
-  let costs_hash =
-    Why3.Hashcons.combine_option (fun (self,costs) ->
-        (Why3.Hashcons.combine_list
-           (Why3.Hashcons.combine_pair EcPath.x_hash f_hash)
-           (f_hash self) (Mx.bindings costs))) oi.oi_costs in
-
-  Why3.Hashcons.combine
-    (Why3.Hashcons.combine_list EcPath.x_hash 0
-       (List.sort EcPath.x_compare oi.oi_calls))
-    costs_hash
+  Why3.Hashcons.combine_list EcPath.x_hash 0
+    (List.sort EcPath.x_compare oi.oi_calls)
 
 (* -------------------------------------------------------------------- *)
 let hcmp_hash : hoarecmp -> int = Hashtbl.hash
 
 (* -------------------------------------------------------------------- *)
+
 let ov_quantum { ov_quantum = x } = x
 let ov_name { ov_name = x } = x
 let ov_type { ov_type = x } = x
@@ -698,7 +629,7 @@ let ur_hash elems el_hash ur =
 let mr_equal mr1 mr2 =
   ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
   && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
-  && Msym.equal (oi_equal f_equal) mr1.mr_oinfos mr2.mr_oinfos
+  && Msym.equal oi_equal mr1.mr_oinfos mr2.mr_oinfos
 
 let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
   EcPath.Sx.fold
@@ -717,19 +648,10 @@ let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
     EcIdent.Mid.empty
 
 let mr_fv (mr : mod_restr) : int Mid.t =
-  let costs oi = omap_dfl (fun x -> `Bounded x) `Unbounded oi.oi_costs in
-  (* mr_oinfos *)
   let fv =
     EcSymbols.Msym.fold (fun _ oi fv ->
-        let fv = List.fold_left EcPath.x_fv fv oi.oi_calls in
-        match costs oi with
-        | `Unbounded -> fv
-        | `Bounded (self,calls) ->
-          EcPath.Mx.fold (fun xp call fv ->
-              let fv = EcPath.x_fv fv xp in
-              fv_union fv (f_fv call)
-            ) calls (fv_union fv (f_fv self))
-      ) mr.mr_oinfos Mid.empty
+      List.fold_left EcPath.x_fv fv oi.oi_calls
+    ) mr.mr_oinfos Mid.empty
   in
 
   fv_union fv
@@ -765,7 +687,7 @@ let rec mty_equal mty1 mty2 =
 (* -------------------------------------------------------------------- *)
 let oi_tostring (oi : oracle_info) : string =
   let calls = List.map EcPath.x_tostring oi.oi_calls in
-  Format.sprintf "{calls = %s, cost = ?}" (String.concat ", " calls)
+  Format.sprintf "{calls = %s}" (String.concat ", " calls)
 
 (* -------------------------------------------------------------------- *)
 let mr_tostring (mr : mod_restr) : string =
@@ -801,12 +723,12 @@ let lmem_hash_ (lmem : local_memtype_) : int =
     (ty_hash lmem.lmt_ty)
     [lmem.lmt_n; mt_name_hash; mt_decl_hash; mt_proj_hash]
 
+
 let lmt_equal_
     (ty_equal : ty -> ty -> bool)
     (lmt1     : local_memtype_)
     (lmt2     : local_memtype_)
   =
-
   match lmt1.lmt_name, lmt2.lmt_name with
   | None, None ->
       Msym.equal (fun (_, ty1) (_, ty2) ->
@@ -851,60 +773,27 @@ let lmt_iter_ty (f : ty -> unit) (lmem : local_memtype) =
   lmt_iter_ty_ f lmem.quantum_lmt
 
 (* -------------------------------------------------------------------- *)
-let is_schema = function Lmt_schema -> true | _ -> false
 
 let mt_fv (mt : memtype) =
   match mt with
-  | Lmt_schema
   | Lmt_concrete None -> EcIdent.Mid.empty
   | Lmt_concrete (Some lmem) -> lmt_fv lmem
 
-let mt_equal_gen
-    (ty_equal : ty -> ty -> bool)
-    (mt1      : memtype)
-    (mt2      : memtype)
-  =
-  match mt1, mt2 with
-  | Lmt_schema, Lmt_schema ->
-     true
+let mt_equal_gen ty_equal (Lmt_concrete mt1) (Lmt_concrete mt2) =
+  oeq (lmt_equal ty_equal) mt1 mt2
 
-  | Lmt_concrete mt1, Lmt_concrete mt2 ->
-     oeq (lmt_equal ty_equal) mt1 mt2
-
-  | Lmt_schema,     Lmt_concrete _
-  | Lmt_concrete _, Lmt_schema -> false
-
-let mt_equal (mt1 : memtype) (mt2 : memtype) =
-  mt_equal_gen ty_equal mt1 mt2
+let mt_equal = mt_equal_gen ty_equal
 
 let mt_iter_ty (f : ty -> unit) (mt : memtype) =
   match mt with
-  | Lmt_schema ->
-     ()
-
   | Lmt_concrete lmem ->
      oiter (lmt_iter_ty f) lmem
 
-let mem_hash ((mem, mt) : memenv) =
-  let base = EcIdent.id_hash mem in
-
-  match mt with
-  | Lmt_schema ->
-     base
-
-  | Lmt_concrete mt ->
-      Why3.Hashcons.combine
-        base
-        (Why3.Hashcons.combine_option lmt_hash mt)
-
 (* -------------------------------------------------------------------- *)
-let me_hash ((mem, mt) : memenv) =
-  match mt with
-  | Lmt_schema -> 0
-  | Lmt_concrete mt ->
-    Why3.Hashcons.combine
-      (EcIdent.id_hash mem)
-      (Why3.Hashcons.combine_option lmt_hash mt)
+let me_hash (mem, Lmt_concrete mt) =
+  Why3.Hashcons.combine
+    (EcIdent.id_hash mem)
+    (Why3.Hashcons.combine_option lmt_hash mt)
 
 let mem_equal (m1 : memory) (m2 : memory) =
   EcIdent.id_equal m1 m2
@@ -1001,14 +890,6 @@ let qe_all2 f qe1 qe2 =
   qe1.qeg = qe2.qeg && qr_all2 f qe1.qel qe2.qel && qr_all2 f qe1.qer qe2.qer
 
 (*-------------------------------------------------------------------- *)
-let call_bound_equal cb1 cb2 =
-     f_equal cb1.cb_cost cb2.cb_cost
-  && f_equal cb1.cb_called cb2.cb_called
-
-let cost_equal c1 c2 =
-     f_equal c1.c_self c2.c_self
-  && EcPath.Mx.equal call_bound_equal c1.c_calls c2.c_calls
-
 let hf_equal hf1 hf2 =
      f_equal hf1.hf_pr hf2.hf_pr
   && f_equal hf1.hf_po hf2.hf_po
@@ -1031,19 +912,6 @@ let ehs_equal hs1 hs2 =
   && f_equal hs1.ehs_po  hs2.ehs_po
   && s_equal hs1.ehs_s hs2.ehs_s
   && me_equal hs1.ehs_m hs2.ehs_m
-
-let chf_equal chf1 chf2 =
-     f_equal chf1.chf_pr chf2.chf_pr
-  && f_equal chf1.chf_po chf2.chf_po
-  && cost_equal chf1.chf_co chf2.chf_co
-  && EcPath.x_equal chf1.chf_f chf2.chf_f
-
-let chs_equal chs1 chs2 =
-     f_equal chs1.chs_pr chs2.chs_pr
-  && f_equal chs1.chs_po chs2.chs_po
-  && cost_equal chs1.chs_co chs2.chs_co
-  && s_equal chs1.chs_s chs2.chs_s
-  && me_equal chs1.chs_m chs2.chs_m
 
 let bhf_equal bhf1 bhf2 =
      f_equal bhf1.bhf_pr bhf2.bhf_pr
@@ -1086,11 +954,6 @@ let egf_equal eg1 eg2 =
   && EcPath.x_equal eg1.eg_fr eg2.eg_fr
   && s_equal eg1.eg_sr eg2.eg_sr
 
-let coe_equal coe1 coe2 =
-     e_equal   coe1.coe_e coe2.coe_e
-  && f_equal           coe1.coe_pre coe2.coe_pre
-  && me_equal coe1.coe_mem coe2.coe_mem
-
 let pr_equal pr1 pr2 =
      EcIdent.id_equal pr1.pr_mem pr2.pr_mem
   && EcPath.x_equal   pr1.pr_fun pr2.pr_fun
@@ -1108,43 +971,6 @@ let hs_hash hs =
     (s_hash hs.hs_s)
     (me_hash hs.hs_m)
 
-let coe_hash coe =
-  Why3.Hashcons.combine2
-    (f_hash coe.coe_pre)
-    (e_hash coe.coe_e)
-    (me_hash coe.coe_mem)
-
-let call_bound_hash cb =
-  Why3.Hashcons.combine
-    (f_hash cb.cb_cost)
-    (f_hash cb.cb_called)
-
-let cost_hash cost =
-  Why3.Hashcons.combine
-    (f_hash cost.c_self)
-    (Why3.Hashcons.combine_list
-       (fun (f,c) ->
-          Why3.Hashcons.combine
-            (EcPath.x_hash f)
-            (call_bound_hash c))
-       0 (EcPath.Mx.bindings cost.c_calls))
-
-let chf_hash chf =
-  Why3.Hashcons.combine3
-    (f_hash chf.chf_pr)
-    (f_hash chf.chf_po)
-    (cost_hash chf.chf_co)
-    (EcPath.x_hash chf.chf_f)
-
-let chs_hash chs =
-  Why3.Hashcons.combine3
-    (f_hash chs.chs_pr)
-    (f_hash chs.chs_po)
-    (cost_hash chs.chs_co)
-    (Why3.Hashcons.combine
-       (s_hash chs.chs_s)
-       (me_hash chs.chs_m))
-
 let ec_hash ec =
   Why3.Hashcons.combine (f_hash ec.ec_f) (qe_hash ec.ec_e)
 
@@ -1158,8 +984,8 @@ let es_hash (es : qequivS) =
     (ec_hash es.es_pr) (ec_hash es.es_po)
     (s_hash es.es_sl)
     (Why3.Hashcons.combine2
-       (mem_hash es.es_mr)
-       (mem_hash es.es_ml)
+       (me_hash es.es_mr)
+       (me_hash es.es_ml)
        (s_hash es.es_sr))
 
 let ehf_hash hf =
@@ -1439,8 +1265,6 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | FhoareF  hf1 , FhoareF  hf2  -> hf_equal hf1 hf2
     | FhoareS  hs1 , FhoareS  hs2  -> hs_equal hs1 hs2
-    | FcHoareF hf1 , FcHoareF hf2  -> chf_equal hf1 hf2
-    | FcHoareS hs1 , FcHoareS hs2  -> chs_equal hs1 hs2
     | FeHoareF  hf1 , FeHoareF  hf2  -> ehf_equal hf1 hf2
     | FeHoareS  hs1 , FeHoareS  hs2  -> ehs_equal hs1 hs2
     | FbdHoareF   bhf1, FbdHoareF   bhf2 -> bhf_equal bhf1 bhf2
@@ -1449,7 +1273,6 @@ module Hsform = Why3.Hashcons.Make (struct
     | FequivS     eqs1, FequivS     eqs2 -> eqs_equal eqs1 eqs2
     | FeagerF     eg1 , FeagerF     eg2  -> egf_equal eg1 eg2
     | Fpr         pr1 , Fpr         pr2  -> pr_equal pr1 pr2
-    | Fcoe        coe1, Fcoe        coe2 -> coe_equal coe1 coe2
 
     | _, _ -> false
 
@@ -1496,8 +1319,6 @@ module Hsform = Why3.Hashcons.Make (struct
 
     | FhoareF     hf   -> hf_hash hf
     | FhoareS     hs   -> hs_hash hs
-    | FcHoareF    chf  -> chf_hash chf
-    | FcHoareS    chs  -> chs_hash chs
     | FeHoareF    hf   -> ehf_hash hf
     | FeHoareS    hs   -> ehs_hash hs
     | FbdHoareF   bhf  -> bhf_hash bhf
@@ -1505,20 +1326,9 @@ module Hsform = Why3.Hashcons.Make (struct
     | FequivF     ef   -> ef_hash ef
     | FequivS     es   -> es_hash es
     | FeagerF     eg   -> eg_hash eg
-    | Fcoe        coe  -> coe_hash coe
     | Fpr         pr   -> pr_hash pr
 
   let fv_mlr = Sid.add mleft (Sid.singleton mright)
-
-  let cost_fv cost =
-    let self_fv = f_fv cost.c_self in
-    EcPath.Mx.fold (fun f c fv ->
-        let c_fv =
-          fv_union
-            (fv_union (f_fv c.cb_cost) fv)
-            (f_fv c.cb_called) in
-        EcPath.x_fv c_fv f
-      ) cost.c_calls self_fv
 
   let fv_node f =
     let union ex nodes =
@@ -1553,16 +1363,6 @@ module Hsform = Why3.Hashcons.Make (struct
     | FhoareS hs ->
       let fv = fv_union (f_fv hs.hs_pr) (f_fv hs.hs_po) in
       fv_union (s_fv hs.hs_s) (Mid.remove (fst hs.hs_m) fv)
-
-    | FcHoareF chf ->
-      let fv = fv_union (f_fv chf.chf_pr)
-          (fv_union (f_fv chf.chf_po) (cost_fv chf.chf_co)) in
-      EcPath.x_fv (Mid.remove mhr fv) chf.chf_f
-
-    | FcHoareS chs ->
-      let fv = fv_union (f_fv chs.chs_pr)
-          (fv_union (f_fv chs.chs_po) (cost_fv chs.chs_co)) in
-      fv_union (s_fv chs.chs_s) (Mid.remove (fst chs.chs_m) fv)
 
     | FeHoareF hf ->
       let fv = fv_union (f_fv hf.ehf_pr) (f_fv hf.ehf_po) in
@@ -1602,11 +1402,6 @@ module Hsform = Why3.Hashcons.Make (struct
         let fv = EcPath.x_fv (EcPath.x_fv fv eg.eg_fl) eg.eg_fr in
         fv_union fv
           (fv_union (s_fv eg.eg_sl) (s_fv eg.eg_sr))
-
-    | Fcoe coe ->
-      fv_union
-        (Mid.remove (fst coe.coe_mem) (f_fv coe.coe_pre))
-        (e_fv coe.coe_e)
 
     | Fpr pr ->
         let fve = Mid.remove mhr (f_fv pr.pr_event) in

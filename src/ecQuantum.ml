@@ -101,8 +101,8 @@ let test_classical_form env ~(on:EcIdent.t list) f =
       check on pr.pr_args;
       check_on (removes on (EcLowPhlGoal.get_mem f)) pr.pr_event
 
-    | FhoareF _ | FhoareS _ | FcHoareF _ | FcHoareS _  | FbdHoareF _ | FbdHoareS _
-    | FeHoareF _ | FeHoareS _ | FequivF _ | FequivS _ | FeagerF _ | Fcoe _ ->
+    | FhoareF _ | FhoareS _ | FbdHoareF _ | FbdHoareS _
+    | FeHoareF _ | FeHoareS _ | FequivF _ | FequivS _ | FeagerF _ ->
         f_iter (check_on (removes on  (EcLowPhlGoal.get_mem f))) f
 
 

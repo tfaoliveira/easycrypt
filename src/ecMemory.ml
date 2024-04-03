@@ -23,8 +23,6 @@ let mk_lmt lmt_name lmt_decl lmt_proj =
     lmt_n  = List.length lmt_decl;
   }
 
-(* [Lmt_schema] if for an axiom schema, and is instantiated to a concrete
-   memory type when the axiom schema is.  *)
 type memtype = EcAst.memtype
 
 let lmt_hash = EcAst.lmt_hash
@@ -70,18 +68,9 @@ let empty_local ~(witharg : wa) (me : memory) =
   me, empty_local_mt ~witharg
 
 (* -------------------------------------------------------------------- *)
-let schema_mt =
-  Lmt_schema
+let abstract_mt = Lmt_concrete None
 
-let schema (me : memory) : memenv =
-  (me, schema_mt)
-
-(* -------------------------------------------------------------------- *)
-let abstract_mt =
-  Lmt_concrete None
-
-let abstract (me : memory) : memenv =
-  (me, abstract_mt)
+let abstract (me : memory) : memenv = (me, abstract_mt)
 
 (* -------------------------------------------------------------------- *)
 let is_bound_lmt_ (lmt : local_memtype_) (x : symbol) =
@@ -93,7 +82,6 @@ let is_bound_lmt (lmem : local_memtype) (x : symbol) =
 
 let is_bound (x : symbol) (mt : memtype) =
   match mt with
-  | Lmt_schema -> false
   | Lmt_concrete None -> false
   | Lmt_concrete (Some lmem) -> is_bound_lmt lmem x
 
@@ -132,9 +120,6 @@ let lmt_lookup (lmem : local_memtype) (x : symbol) : lookup =
 
 let lookup (x : symbol) (mt : memtype) : lookup =
   match mt with
-  | Lmt_schema ->
-     None
-
   | Lmt_concrete None ->
      None
 
@@ -170,7 +155,7 @@ let lmt_bindall (vs : ovariable list) (lmt : local_memtype) =
 (* -------------------------------------------------------------------- *)
 let mt_bindall (vs : ovariable list) (mt : memtype) : memtype =
   match mt with
-  | Lmt_schema | Lmt_concrete None -> assert false
+  | Lmt_concrete None -> assert false
   | Lmt_concrete (Some lmt) -> Lmt_concrete (Some (lmt_bindall vs lmt))
 
 let bindall_mt = mt_bindall      (* FIXME *)
@@ -228,9 +213,6 @@ let lmt_subst (st : ty -> ty) (lmem : local_memtype) =
 (* -------------------------------------------------------------------- *)
 let mt_subst (st : ty -> ty) (mt : memtype) =
   match mt with
-  | Lmt_schema ->
-     mt
-
   | Lmt_concrete None ->
      mt
 
@@ -259,7 +241,6 @@ let lmt_get_name_ (lmt : local_memtype_) (s : symbol) (p : int option) =
 
   | Some _ ->
       None
-
 (* -------------------------------------------------------------------- *)
 let lmt_get_name
     (lmem : local_memtype)
@@ -277,9 +258,6 @@ let mt_get_name
     (p  : int option)
   =
   match mt with
-  | Lmt_schema ->
-     None
-
   | Lmt_concrete None ->
      None
 
@@ -299,20 +277,14 @@ let lmt_local_type (lmem : local_memtype) =
   let ql = lmt_local_type_ lmem.quantum_lmt in
   (cl, ql)
 
-let mt_local_type (mt : memtype) =
-  match mt with
-  | Lmt_schema ->
-     assert false
-
-  | Lmt_concrete lmem ->
-     omap lmt_local_type lmem
+let mt_local_type ( Lmt_concrete lmem : memtype) =
+   omap lmt_local_type lmem
 
 let local_type = mt_local_type  (* FIXME *)
 
 (* -------------------------------------------------------------------- *)
 let has_quantum (mt : memtype) =
   match mt with
-  | Lmt_schema
   | Lmt_concrete None ->
      false
 
@@ -320,9 +292,8 @@ let has_quantum (mt : memtype) =
      lmem.quantum_lmt.lmt_ty <> tunit
 
 (* -------------------------------------------------------------------- *)
-let has_locals mt = match mt with
-  | Lmt_schema -> assert false
-  | Lmt_concrete lmem -> Option.is_some lmem
+let has_locals (Lmt_concrete mt) =
+  Option.is_some mt
 
 (* -------------------------------------------------------------------- *)
 type lmt_printing = symbol option * ovariable list
@@ -330,9 +301,6 @@ type mt_printing  = lmt_printing * lmt_printing
 
 let for_printing (mt : memtype) : mt_printing option =
   match mt with
-  | Lmt_schema ->
-     None
-
   | Lmt_concrete None ->
      None
 

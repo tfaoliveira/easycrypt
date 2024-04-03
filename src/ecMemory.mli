@@ -32,9 +32,6 @@ type wa = [`All | `Classical | `Quantum | `None]
 val empty_local    : witharg:wa -> memory -> memenv
 val empty_local_mt : witharg:wa -> memtype
 
-val schema    : memory -> memenv
-val schema_mt : memtype
-
 val abstract    : memory -> memenv
 val abstract_mt : memtype
 
