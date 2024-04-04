@@ -134,6 +134,14 @@ let process_simplify ri (tc : tcenv1) =
 let process_cbv ri (tc : tcenv1) =
   t_cbv_with_info (process_simplify_info ri tc) tc
 
+let process_shoare_to_z (tc : tcenv1) : tcenv =
+  let _env, hyps, concl = FApi.tc1_eflat tc in
+  match concl.f_node with
+  | FhoareS {hs_m;hs_pr;hs_s;hs_po} ->
+
+    assert false
+  | _ -> assert false
+
 (* -------------------------------------------------------------------- *)
 let process_smt ?loc (ttenv : ttenv) pi (tc : tcenv1) =
   let pi = ttenv.tt_provers pi in
