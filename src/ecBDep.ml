@@ -29,6 +29,7 @@ type ident = Ident.ident
 type deps = ((int * int) * int C.VarRange.t) list
 
 (* -------------------------------------------------------------------- *)
+(* FIXME: refactor to use EC types *) 
 module CircEnv : sig
   type env
 
