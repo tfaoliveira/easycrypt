@@ -2410,6 +2410,48 @@ let t_congr (f1, f2) (args, ty) tc =
   doit (List.rev args) ty tc
 
 (* -------------------------------------------------------------------- *)
+let t_shoare_to_z tc =
+  let action (lazy hyps) fp =
+    let env = (LDecl.toenv hyps) in
+    match fp.f_node with
+    | FhoareF a  ->
+      let body = EcEnv.Fun.by_xpath a.hf_f env in
+      let smt,rexpr =
+        match body.f_def with
+        | FBdef d -> d.f_body,d.f_ret
+        | _ -> assert false
+      in
+      begin
+        match rexpr with
+        | None -> Some fp
+        | Some e ->
+          let fmt = EcPrinting.pp_stmt (EcPrinting.PPEnv.ofenv env) in
+          Format.printf "%a\n" fmt smt;
+
+          let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env) in
+          Format.printf "%a\n" fmt e;
+
+          let pre = f_true (* EcCPolyEnc.trans_form a.hf_po *) in
+          let post = f_true (* EcCPolyEnc.trans_form a.hf_pr *) in
+          let instr = f_true (* EcCPolyEnc.trans_instr smt.s_node*) in
+          let return =  f_true (* EcCPolyEnc.trans_expr e *) in
+
+          let f = f_imp pre (f_imp instr (f_imp return post)) in
+          Some f
+      end
+
+    | FhoareS a  ->
+      let fmt = EcPrinting.pp_stmt (EcPrinting.PPEnv.ofenv env) in
+      Format.printf "%a" fmt a.hs_s;
+      let pre,post,instr = f_true,f_true,f_true (*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*) in
+      let f = f_imp pre (f_imp instr post) in
+      Some f
+
+    | _ ->  Some fp
+  in
+  FApi.tcenv_of_tcenv1 (t_change_r action tc)
+
+(* -------------------------------------------------------------------- *)
 type smtmode = [`Standard | `Strict | `Report of EcLocation.t option]
 
 (* -------------------------------------------------------------------- *)

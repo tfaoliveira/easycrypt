@@ -967,6 +967,7 @@ type pgenhave = psymbol * intropattern option * psymbol list * pformula
 type logtactic =
   | Preflexivity
   | Passumption
+  | Pzify
   | Psmt        of pprover_infos
   | Psplit
   | Pfield      of psymbol list
