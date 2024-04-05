@@ -6,42 +6,76 @@ open EcCoreFol
 open EcSymbols
 open EcIdent
 
-type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
+type env = { (* env_ec : EcEnv.env;*) env_ssa : EcIdent.t MMsym.t }
 
-let find (m : 'a MMsym.t) (x : symbol) : 'a =
+let find (m : 'a MMsym.t) (x : symbol) : 'a option =
   match MMsym.all x m with
-  | [res] -> res
-  | _ -> assert false
+  | [res] -> Some res
+  | _ -> None 
+
+let decode_op (q: qsymbol) : form list -> form =
+  match q with
+    | ["Top"; "JWord"; "W8"], "+" 
+    | ["Top"; "CoreInt"], "add"
+    -> fun fs -> 
+      begin match fs with 
+      | [a;b] -> f_int_add a b 
+      | _ -> assert false
+    end
+    | ["Top"; "JWord"; "W8"], "*" -> fun fs -> 
+      begin match fs with
+        | [a;b] -> f_int_mul a b
+        | _ -> assert false
+      end
+    | ["Top"; "Pervasive"], "=" -> fun fs ->
+        begin match fs with
+        | [a;b] -> f_int_sub a b
+        | _ -> assert false
+        end
+    | (qs, q) -> begin 
+      Format.eprintf "Unknown qpath at dec_op_trans_expr: ";
+      List.iter (Format.eprintf "%s.") qs;
+      Format.eprintf "%s@." q;
+      assert false
+    end
   
 (* ------------------------------------------------------------- *)
-let rec poly_of_expr (env: env) (e: expr) : form =
-  let trans_args (e: expr) =
+let rec trans_expr (env: env) (e: expr) : env * form =
+  let trans_args (env: env) (e: expr) =
     match e.e_node with
-    | Eint i -> mk_form (Fint i) e.e_ty
-    | Evar (PVloc v) -> mk_form (Flocal (find env.env_ssa v)) e.e_ty
-    | Elocal v -> mk_form (Flocal (find env.env_ssa (name v))) e.e_ty
+    | Eint i -> (env, mk_form (Fint i) e.e_ty)
+    | Evar (PVloc v) -> begin match (find env.env_ssa v) with
+      | Some x -> (env, mk_form (Flocal x) e.e_ty)
+      | None -> let x = create v in 
+        ({env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
+    end
+    | Elocal v -> begin match (find env.env_ssa (name v)) with
+      | Some v_ when v_ = v -> (env, mk_form (Flocal v) e.e_ty)
+      | Some _ -> (Format.eprintf "Inconsistent bindings for local"; assert false)
+      | None -> ({env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
+    end
+
     | _ -> assert false
   in
 
-  let decode_op (q: qsymbol) : (form list -> form) =
-    match q with
-    | (["Top"; "JWord"; "W8"], "+") -> (fun [a;b] -> f_int_add a b) 
-    | (["Top"; "JWord"; "W8"], "*") -> (fun [a;b] -> f_int_mul a b)
-    | (qs, q) -> Format.eprintf "Unknown qpath at dec_op_poly_of_cond: ";
-    List.iter (Format.eprintf "%s.") qs;
-    Format.eprintf "%s@." q;
-    assert false
-  in
-
   match e.e_node with
-  | Eint i -> mk_form (Fint i) e.e_ty 
-  | Elocal v -> mk_form (Flocal (find env.env_ssa (name v))) e.e_ty 
-  | Evar (PVloc v) -> mk_form (Flocal (find env.env_ssa v)) e.e_ty 
+  | Eint i -> (env, mk_form (Fint i) e.e_ty )
+  | Elocal v -> begin match (find env.env_ssa (name v)) with
+    | Some v_ when v_ = v -> (env, mk_form (Flocal v) e.e_ty)
+    | Some _ -> (Format.eprintf "Inconsistent binding of local variable"; assert false)
+    | None -> ({env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
+  end
+  | Evar (PVloc v) -> begin match (find env.env_ssa v) with
+    | Some x -> (env, mk_form (Flocal x) e.e_ty)
+    | None -> let x = create v in
+      ({env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
+    end
+  | Evar (_) -> assert false
   | Eop _  -> assert false 
   | Eapp ({e_node = Eop (p, _); _}, args) -> 
-    let args = List.map trans_args args in
+    let (env, args) = List.fold_left_map (fun env arg -> trans_args env arg) env args in
     let op = decode_op (EcPath.toqsymbol p) in
-    op args
+    (env, op args)
   | Eapp  _ -> assert false 
   | Equant _ -> assert false 
   | Elet  _  -> assert false 
@@ -51,7 +85,7 @@ let rec poly_of_expr (env: env) (e: expr) : form =
   | Eproj  _ -> assert false 
 
 (* ------------------------------------------------------------- *)
-let poly_of_instr (env: env) (inst: instr) : env * form = 
+let trans_instr (env: env) (inst: instr) : env * form = 
   let trans_lvar (env: env) (lv: lvalue) (ty: ty) : env * form =
     begin
       match lv with
@@ -65,65 +99,65 @@ let poly_of_instr (env: env) (inst: instr) : env * form =
 
   match inst.i_node with
   | Sasgn (lv, e) -> 
-    let f = poly_of_expr env e in
+    let (env, f) = trans_expr env e in
     let (env, fl) = trans_lvar env lv f.f_ty in
     (env, f_eq f fl)
     (* FIXME ^ find actual equality *)
   | _ -> assert false
 
 (* ------------------------------------------------------------- *)
-let rec poly_of_cond (env: env) (f: form) : form =
-  let trans_args (f: form) : form =
+let rec trans_form (env: env) (f: form) : env * form =
+  let trans_args (env: env) (f: form) : env * form =
     match f.f_node with
-    | Fint i -> f
-    | Flocal idn -> mk_form (Flocal (find env.env_ssa (name idn))) f.f_ty 
+    | Fint _i -> (env, f)
+    | Flocal idn -> begin match (find env.env_ssa (name idn)) with
+      | Some idn_ when idn = idn_ -> (env, mk_form (Flocal idn) f.f_ty)
+      | Some _ -> (Format.eprintf "Inconsistent local bindings"; assert false)
+      | None -> ({env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
+    end
     | Fpvar _ -> assert false
     | _ -> assert false
   in
 
-  let decode_op (q: qsymbol) : (form list -> form) =
-    match q with
-    | ["Top"; "JWord"; "W8"], "+" -> (fun [a;b] -> f_int_add a b) 
-    | ["Top"; "JWord"; "W8"], "*" -> (fun [a;b] -> f_int_mul a b) 
-    | (qs, q) -> Format.eprintf "Unknown qpath at dec_op_poly_of_cond: ";
-    List.iter (Format.eprintf "%s.") qs;
-    Format.eprintf "%s@." q;
-    assert false
-  in
-
   match f.f_node with
-  | Fint   i -> f
-  | Flocal idn -> mk_form (Flocal (find env.env_ssa (name idn))) f.f_ty
-  | Fpvar  (pvar, mem_) -> assert false 
-  | Fglob  (idn, mem) -> assert false
-  | Fop    (p, tys) -> assert false
-  | Fapp   ({f_node = Fop (p, _); _ }, args) -> (decode_op (EcPath.toqsymbol p)) (List.map trans_args args) 
-  | Fquant (qtf, bndgs, f) -> assert false
-  | Fif    (fcnd, ft, ff) -> assert false
-  | Fmatch (fv, fpats, ty) ->assert false
-  | Flet   (lpat, flet, flval) -> assert false
-  | Fapp   (f, args) -> assert false
-  | Ftuple (fs) -> assert false
-  | Fproj  (f, i) -> assert false
+  | Fint   _i -> (env, f)
+  | Flocal idn -> begin match (find env.env_ssa (name idn)) with
+    | Some idn_ when idn = idn_ -> (env, mk_form (Flocal idn) f.f_ty)
+    | Some _ -> (Format.eprintf "Inconsistent local bindings"; assert false)
+    | None -> ({env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
+  end
+  | Fpvar  (_pvar, _mem_) -> assert false 
+  | Fglob  (_idn, _mem) -> assert false
+  | Fop    (_p, _tys) -> assert false
+  | Fapp   ({f_node = Fop (p, _); _ }, args) -> 
+      let env, args = List.fold_left_map trans_args env args in
+      (env, (decode_op (EcPath.toqsymbol p)) args)
+  | Fquant (_qtf, _bndgs, _f) -> assert false
+  | Fif    (_fcnd, _ft, _ff) -> assert false
+  | Fmatch (_fv, _fpats, _ty) ->assert false
+  | Flet   (_lpat, _flet, _flval) -> assert false
+  | Fapp   (_f, _args) -> assert false
+  | Ftuple (_fs) -> assert false
+  | Fproj  (_f, _i) -> assert false
 
-  | FhoareF sHF  -> assert false
-  | FhoareS sHS-> assert false
+  | FhoareF _sHF  -> assert false
+  | FhoareS _sHS -> assert false
 
-  | FcHoareF cHF  -> assert false
-  | FcHoareS cHS-> assert false
+  | FcHoareF _cHF  -> assert false
+  | FcHoareS _cHS -> assert false
 
-  | FbdHoareF bdHF  -> assert false
-  | FbdHoareS bdHS-> assert false
+  | FbdHoareF _bdHF  -> assert false
+  | FbdHoareS _bdHS -> assert false
 
-  | FeHoareF eHF -> assert false
-  | FeHoareS eHS-> assert false
+  | FeHoareF _eHF -> assert false
+  | FeHoareS _eHS -> assert false
 
-  | FequivF equivF -> assert false
-  | FequivS equivS-> assert false
+  | FequivF _equivF -> assert false
+  | FequivS _equivS -> assert false
 
-  | FeagerF eagerF-> assert false
+  | FeagerF _eagerF -> assert false
 
-  | Fcoe coe-> assert false
+  | Fcoe _coe -> assert false
 
-  | Fpr pr -> assert false
+  | Fpr _pr -> assert false
 

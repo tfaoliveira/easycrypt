@@ -2431,20 +2431,22 @@ let t_shoare_to_z tc =
           let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env) in
           Format.printf "%a\n" fmt e;
 
-          let pre = f_true (* EcCPolyEnc.trans_form a.hf_po *) in
-          let post = f_true (* EcCPolyEnc.trans_form a.hf_pr *) in
-          let instr = f_true (* EcCPolyEnc.trans_instr smt.s_node*) in
-          let return =  f_true (* EcCPolyEnc.trans_expr e *) in
+          let env, pre = EcCPolyEnc.trans_form {env_ssa = MMsym.empty} a.hf_pr in
+          let env, instr = List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) env smt.s_node in
+          let env, post = EcCPolyEnc.trans_form env a.hf_po in
+          let _env, return =  EcCPolyEnc.trans_expr env e in
 
-          let f = f_imp pre (f_imp instr (f_imp return post)) in
+          let f = f_imp pre (f_imps instr (f_imp return post)) in
           Some f
       end
 
     | FhoareS a  ->
       let fmt = EcPrinting.pp_stmt (EcPrinting.PPEnv.ofenv env) in
       Format.printf "%a" fmt a.hs_s;
-      let pre,post,instr = f_true,f_true,f_true (*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*) in
-      let f = f_imp pre (f_imp instr post) in
+      let pre,post,(_, instr) = f_true,f_true, 
+      List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) {env_ssa = MMsym.empty} a.hs_s.s_node
+      (*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*) in
+      let f = f_imp pre (f_imps instr post) in
       Some f
 
     | _ ->  Some fp
