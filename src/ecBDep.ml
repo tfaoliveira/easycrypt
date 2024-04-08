@@ -22,93 +22,14 @@ module C = struct
 end
 
 (* -------------------------------------------------------------------- *)
-module IdentMap = Lospecs.Ast.IdentMap
-module Ident = Lospecs.Ast.Ident
-
-type ident = Ident.ident
+type ident = EcIdent.ident
 type deps = ((int * int) * int C.VarRange.t) list
-
-(* -------------------------------------------------------------------- *)
-(* FIXME: refactor to use EC types *) 
-module CircEnv : sig
-  type env
-
-  val empty : env
-  val lookup : env -> symbol -> ident option
-  val lookup_id : env -> int -> ident option
-  val push : env -> symbol -> env * ident
-  val bind : env -> ident -> C.reg -> env
-  val get : env -> ident -> C.reg option
-  val bind_s : env -> symbol -> C.reg -> env
-  val get_s : env -> symbol -> C.reg option
-end = struct
-  type env = { vars : (symbol, ident) Map.t;
-               bindings : C.reg IdentMap.t;
-               ids : (int, ident) Map.t }
-
-(* -------------------------------------------------------------------- *)
-  let empty : env = { vars = Map.empty;
-                      bindings = IdentMap.empty;
-                      ids = Map.empty }
-
-(* -------------------------------------------------------------------- *)
-  let lookup (env : env) (x: symbol) = Map.find_opt x env.vars
-
-(* -------------------------------------------------------------------- *)
-  let lookup_id (env: env) (i: int) = Map.find_opt i env.ids
-
-(* -------------------------------------------------------------------- *)
-  let push (env : env) (x : symbol) =
-    let idx = Ident.create x in
-    let env = { vars = Map.add x idx env.vars ;
-                bindings = env.bindings;
-                ids  = Map.add (Ident.id idx) idx env.ids } in
-    (env, idx)
-
-(* -------------------------------------------------------------------- *)
-  let push_ident (env: env) (idx: ident) : env =
-    let (name, id) = (Ident.name idx, Ident.id idx) in
-    let env = { vars = Map.add name idx env.vars ;
-                bindings = env.bindings;
-                ids  = Map.add id idx env.ids } in
-    env
-
-(* -------------------------------------------------------------------- *)
-  let bind (env: env) (x : ident) (r : C.reg) =
-    let env =
-      match Map.find_opt (Ident.name x) env.vars with
-              | Some _ -> env
-              | None -> push_ident env x
-    in let env = {
-      vars = env.vars;
-      ids  = env.ids;
-      bindings = IdentMap.add x r env.bindings; }
-    in env
-
-(* -------------------------------------------------------------------- *)
-  let get (env: env) (x: ident) =
-    IdentMap.find_opt x env.bindings
-
-(* -------------------------------------------------------------------- *)
-  let bind_s (env: env) (x : symbol) (r : C.reg) =
-    match lookup env x with
-    | Some idx -> bind env idx r
-    | None -> bind env (Ident.create x) r
-
-(* -------------------------------------------------------------------- *)
-  let get_s (env: env) (x : symbol) =
-    match lookup env x with
-    | Some idx -> get env idx
-    | None -> None
-end
-
 
 (* -------------------------------------------------------------------- *)
 let zpad (n: int) (r: C.reg)  = 
   if List.length r < n then
     List.append r (List.init (n - (List.length r)) (fun _ -> C.false_))
   else r
-
 
 (* -------------------------------------------------------------------- *)
 type width = int
@@ -132,8 +53,6 @@ and barg =
   | Var   of vsymbol
 
 and bargs = barg list
-
-type cp_env = CircEnv.env
 
 (* -------------------------------------------------------------------- *)
 let pp_barg (fmt : Format.formatter) (b : barg) =
@@ -169,28 +88,26 @@ let pp_bprgm (fmt : Format.formatter) (bprgm : bprgm) =
   List.iter (Format.fprintf fmt "%a;@." pp_bstmt) bprgm
 
 (* -------------------------------------------------------------------- *)
-let register_of_barg (env : cp_env) (arg : barg) : C.reg =
+let register_of_barg (env : env) (arg : barg) : C.reg =
   match arg with
   | Const (w, i) ->
     C.of_bigint ~size:w (EcBigInt.to_zt i)
 
   | Var (x, i) ->
-    Option.get (CircEnv.get_s env x)
+    Circ.lookup_circ x env
 
 (* -------------------------------------------------------------------- *)
-let registers_of_bargs (env : cp_env) (args : bargs) : C.reg list =
+let registers_of_bargs (env : env) (args : bargs) : C.reg list =
   List.map (register_of_barg env) args
 
 (* -------------------------------------------------------------------- *)
-let circuit_of_bstmt (env : cp_env) (((v, s), rhs) : bstmt) : cp_env * C.reg =
-  let (env, idx) = CircEnv.push env v in
-
+let circuit_of_bstmt (env : env) (((v, s), rhs) : bstmt) : env * C.reg =
   let r =
     match rhs with
     | Const (w, i) ->
       C.of_bigint ~size:w (EcBigInt.to_zt i)
 
-    | Copy (x, w) -> Option.get (CircEnv.get_s env x)
+    | Copy (x, w) -> Circ.lookup_circ x env
 
     | Op (op, args) -> try 
             begin
@@ -202,16 +119,18 @@ let circuit_of_bstmt (env : cp_env) (((v, s), rhs) : bstmt) : cp_env * C.reg =
     with Not_found -> Format.eprintf "op %s not found@." op; assert false
   in
 
-  let env = CircEnv.bind env idx r in
+  let env = Circ.bind_circ v r env in
 
   (env, r)
 
 (* -------------------------------------------------------------------- *)
-let circuit_from_bprgm (env: cp_env) (prg : bprgm) =
+let circuit_from_bprgm (env: env) (prg : bprgm) =
   List.fold_left_map circuit_of_bstmt env prg
 
 (* -------------------------------------------------------------------- *)
-let print_deps ~name (env : cp_env) (r : C.reg)  =
+(* FIXME : Fix printing later *)
+
+let print_deps ~name (env : env) (r : C.reg)  =
   let deps = C.deps r in
 
   List.iter (fun ((lo, hi), deps) ->
@@ -226,7 +145,6 @@ let print_deps ~name (env : cp_env) (r : C.reg)  =
       (C.VarRange.pp Format.pp_print_string) vs
       (C.VarRange.pp
          (fun fmt i ->
-            let name = Ident.name (Option.get (CircEnv.lookup_id env i)) in
             Format.fprintf fmt "%s" name))
       deps
   ) deps
@@ -255,8 +173,8 @@ let print_deps_alt ~name (r : C.reg)  =
 
 
 (* -------------------------------------------------------------------- *)
-let print_deps_ric (env : cp_env) (r : string) =
-  let circ = Option.get (CircEnv.get_s env r) in
+let print_deps_ric (env : env) (r : symbol) =
+  let circ = Circ.lookup_circ r env in
   print_deps env circ ~name:r
 
 (* -------------------------------------------------------------------- *)
@@ -789,7 +707,7 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
     (x.v_name, trans_wtype x.v_type) in
 
   let arguments = List.map trans_arg_ proc.f_sig.fs_anames in
-  let ret_vars = Option.map trans_ret pdef.f_ret |> Option.map List.rev in 
+  let _ret_vars = Option.map trans_ret pdef.f_ret |> Option.map List.rev in 
   let _locals = List.map trans_local pdef.f_locals in
 
   let body : bprgm = List.map trans_instr pdef.f_body.s_node in
@@ -797,12 +715,11 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
   if not (List.is_unique (List.fst body)) then
     raise BDepError; 
 
-  let cenv = List.fold_left 
-    (fun env (s,w) -> 
-      let (env, idn) = CircEnv.push env s in
-      CircEnv.bind env idn (C.reg ~size:w ~name:(Ident.id idn)))
-    CircEnv.empty arguments in
-  let (cenv, circs) = circuit_from_bprgm cenv body in
+  if not (List.is_unique (List.fst arguments)) then
+    raise BDepError;
+
+  let env = Circ.bind_circs (List.mapi (fun i (s,w) -> (s, C.reg ~size:w ~name:i)) arguments) env in
+  let (env, circs) = circuit_from_bprgm env body in
 
 (* PRINT PROC PROGRAM BODY *)
   Format.eprintf "%a@." pp_bprgm body; 
@@ -810,7 +727,7 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
 (* COMPRESS CIRCUIT FROM SPEC LANGUAGE 
   let comp_circ = C.func_from_spec "COMPRESS" [C.reg ~size:16 ~name:0] in *)
   begin 
-    let circ = List.map (fun v -> Option.get (CircEnv.get_s cenv v)) vs |> List.flatten in
+    let circ = List.map (fun v -> Circ.lookup_circ v env) vs |> List.flatten in
     if (n = m) &&  (n = 0) then
       let () = assert (circ_equiv fc circ ~bitwuzla:pc) in
       Format.eprintf "Success@."
@@ -826,7 +743,7 @@ let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : stri
       let () = 
       List.iteri (fun i c ->
         Format.eprintf "@.%d: " i;
-        print_deps ~name:"TEST_" cenv c) circs
+        print_deps ~name:"TEST_" env c) circs
       in 
       (* TODO: refactor this? V*)
         let () = assert (List.for_all (fun c ->

@@ -21,6 +21,12 @@ module TC   = EcTypeClass
 module Mint = EcMaps.Mint
 
 (* -------------------------------------------------------------------- *)
+module C = struct
+  include Lospecs.Aig
+  include Lospecs.Circuit
+end
+
+(* -------------------------------------------------------------------- *)
 type 'a suspension = {
   sp_target : 'a;
   sp_params : int * (EcIdent.t * module_type) list;
@@ -194,6 +200,7 @@ type preenv = {
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
+  env_circs    : C.reg MMsym.t;
 }
 
 and escope = {
@@ -311,7 +318,8 @@ let empty gstate =
     env_ntbase   = [];
     env_modlcs   = Sid.empty;
     env_item     = [];
-    env_norm     = ref empty_norm_cache; }
+    env_norm     = ref empty_norm_cache; 
+    env_circs    = MMsym.empty; }
 
 (* -------------------------------------------------------------------- *)
 let copy (env : env) =
@@ -3776,6 +3784,42 @@ module LDecl = struct
 
   let inv_memenv1 lenv =
     { lenv with le_env = Fun.inv_memenv1 lenv.le_env }
+end
+
+module Circ = struct
+  type t = C.reg
+
+  (* Circuit lookups *)
+  let lookup_circ (c: symbol) (env: env) : t =
+    MMsym.last c env.env_circs |> Option.get
+
+  let lookup_circ_opt (c: symbol) (env: env) : t option =
+    MMsym.last c env.env_circs
+
+  let lookup_circ_id (c: EcIdent.t) (env: env) : t =
+    lookup_circ (EcIdent.name c) env
+
+  let lookup_circ_id_opt (c: EcIdent.t) (env: env) : t option =
+    lookup_circ_opt (EcIdent.name c) env
+
+  let lookup_circs (c: symbol) (env: env) : t list =
+    MMsym.all c env.env_circs
+
+  (* Circuit bindings *)
+  let bind_circ (c: symbol) (r: C.reg) (env: env) : env =
+    {env with 
+    env_circs = MMsym.add c r env.env_circs}
+
+  let bind_circs (crs: (symbol * C.reg) list) (env: env) : env =
+    List.fold_left (fun env (c, r) -> bind_circ c r env) env crs
+    
+  let push_circ (c: EcIdent.t) (r: C.reg) (env: env) : env =
+    bind_circ (EcIdent.name c) r env
+
+  let push_circs (crs: (EcIdent.t * C.reg) list) (env: env) : env =
+    bind_circs (List.map (fun (c,r) -> (EcIdent.name c, r)) crs) env
+    (* List.fold_left (fun env (c, r) -> push_circ c r env) env crs *)
+
 end
 
 

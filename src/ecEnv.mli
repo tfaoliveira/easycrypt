@@ -8,6 +8,11 @@ open EcCoreFol
 open EcModules
 open EcTheory
 
+module C : sig
+  include module type of Lospecs.Aig
+  include module type of Lospecs.Circuit
+end
+
 (* -------------------------------------------------------------------- *)
 type 'a suspension = {
   sp_target : 'a;
@@ -522,4 +527,18 @@ module LDecl : sig
   val inv_memenv1 : hyps -> hyps
 end
 
+module Circ : sig
+  type t = C.reg
+
+  val lookup_circ : symbol -> env -> t
+  val lookup_circ_opt : symbol -> env -> t option
+  val lookup_circ_id : EcIdent.t -> env -> t
+  val lookup_circ_id_opt : EcIdent.t -> env -> t option
+  val lookup_circs : symbol -> env -> t list
+
+  val bind_circ  : symbol -> C.reg -> env -> env
+  val bind_circs : (symbol * C.reg) list -> env -> env
+  val push_circ  : EcIdent.t -> C.reg -> env -> env
+  val push_circs : (EcIdent.t * C.reg) list -> env -> env
+end
 val pp_debug_form : (env -> Format.formatter -> form -> unit) ref
