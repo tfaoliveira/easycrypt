@@ -1,0 +1,8 @@
+[
+  { "name"       : "jasmin-eclib"
+  , "repository" : "jasmin-lang/jasmin"
+  , "subdir"     : "eclib"
+  , "config"     : "tests.config"
+  , "scenario"   : "jasmin"
+  }
+]
