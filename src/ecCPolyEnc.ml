@@ -6,6 +6,9 @@ open EcCoreFol
 open EcSymbols
 open EcIdent
 
+let retname = "__zzz" 
+
+
 type env = { (* env_ec : EcEnv.env;*) env_ssa : EcIdent.t MMsym.t }
 
 let find (m : 'a MMsym.t) (x : symbol) : 'a option =
@@ -29,7 +32,7 @@ let decode_op (q: qsymbol) : form list -> form =
       end
     | ["Top"; "Pervasive"], "=" -> fun fs ->
         begin match fs with
-        | [a;b] -> f_int_sub a b
+        | [a;b] -> f_eq a b
         | _ -> assert false
         end
     | (qs, q) -> begin 
@@ -84,8 +87,17 @@ let rec trans_expr (env: env) (e: expr) : env * form =
   | Ematch _ -> assert false 
   | Eproj  _ -> assert false 
 
+  (* FIXME: Get unique identifier for ret variable *)
+let trans_ret (env: env) (rete: expr) : env * form =
+  let retv = create retname in
+  let env = {env_ssa = MMsym.add retname retv env.env_ssa} in
+  let env, e = trans_expr env rete in
+  (env, f_eq (mk_form (Flocal retv) rete.e_ty) e)
+
 (* ------------------------------------------------------------- *)
 let trans_instr (env: env) (inst: instr) : env * form = 
+
+
   let trans_lvar (env: env) (lv: lvalue) (ty: ty) : env * form =
     begin
       match lv with
@@ -114,6 +126,11 @@ let rec trans_form (env: env) (f: form) : env * form =
       | Some idn_ when idn = idn_ -> (env, mk_form (Flocal idn) f.f_ty)
       | Some _ -> (Format.eprintf "Inconsistent local bindings"; assert false)
       | None -> ({env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
+    end
+    | Fpvar (PVloc (s), _) when s = "res" -> begin
+      match (find env.env_ssa retname) with
+      | Some ret -> (env, mk_form (Flocal ret) f.f_ty)
+      | None -> failwith "Should have return binding at postcondition"
     end
     | Fpvar _ -> assert false
     | _ -> assert false

@@ -2433,8 +2433,8 @@ let t_shoare_to_z tc =
 
           let env, pre = EcCPolyEnc.trans_form {env_ssa = MMsym.empty} a.hf_pr in
           let env, instr = List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) env smt.s_node in
-          let env, post = EcCPolyEnc.trans_form env a.hf_po in
-          let _env, return =  EcCPolyEnc.trans_expr env e in
+          let env, return =  EcCPolyEnc.trans_ret env e in
+          let _env, post = EcCPolyEnc.trans_form env a.hf_po in
 
           let f = f_imp pre (f_imps instr (f_imp return post)) in
           Some f
