@@ -585,6 +585,24 @@ and int_of_form (env: env) (f: EcAst.form) : int =
 
   | _ -> failwith "Form cannot be converted to int"
 
+
+(* EXPORTED FUNCTIONS *)
+(* -------------------------------------------------------------------- *)
+let bind_circuit (env: env) (op: psymbol) (c: string) : env = 
+  (* check input types *)
+  (* check output types *)
+  (* match widths *)
+  let c = C.func_from_spec c in
+  assert false (* bind op to c *)
+  (* update and return scope *)
+  
+
+let bind_bitstring (env: env) (tq: pqsymbol) (w: width) : env = 
+  assert false
+  (* add binding to env *)
+  (* update scope *)
+  (* return scope *)
+
 (* -------------------------------------------------------------------- *)
 let bdep (env : env) (p : pgamepath) (f: psymbol) (n : int) (m : int) (vs : string list) (pcond: psymbol) : unit =
   let proc = EcTyping.trans_gamepath env p in

@@ -400,6 +400,8 @@
 %token BACKSLASH
 %token BDEP
 %token BETA
+%token BIND
+%token BITSTRING
 %token BY
 %token BYEQUIV
 %token BYPHOARE
@@ -413,6 +415,7 @@
 %token CFOLD
 %token CHANGE
 %token CHOARE
+%token CIRCUIT
 %token CLASS
 %token CLEAR
 %token CLONE
@@ -4036,7 +4039,13 @@ global_action:
 | WHY3 x=STRING    { GdumpWhy3    x  }
 
 | BDEP p=loc(fident) f=oident n=uint m=uint LBRACKET vl=plist0(STRING, SEMICOLON) RBRACKET pc=oident
-    { Gbdep (p, f, (BI.to_int n), (BI.to_int m), vl, pc) }
+  { Gbdep (p, f, (BI.to_int n), (BI.to_int m), vl, pc) }
+
+| BIND BITSTRING t=qident w=uint 
+  { Gbindb (t, (BI.to_int w)) } (* FIXME: Check if int conversions should be here *)
+
+| BIND CIRCUIT f=oident c=STRING
+  { Gbindc (f, c) }
 
 | PRAGMA       x=pragma { Gpragma x }
 | PRAGMA PLUS  x=pragma { Goption (x, `Bool true ) }

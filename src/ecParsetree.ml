@@ -1309,6 +1309,8 @@ type global_action =
   | Goption      of (psymbol * [`Bool of bool | `Int of int])
   | GdumpWhy3    of string
   | Gbdep        of pgamepath * psymbol * int * int * (string list) * psymbol
+  | Gbindb       of pqsymbol * int
+  | Gbindc       of psymbol * string
 
 type global = {
   gl_action : global_action located;

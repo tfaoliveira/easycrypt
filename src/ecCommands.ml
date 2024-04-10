@@ -638,6 +638,13 @@ and process_dump scope (source, tc) =
 and process_bdep (scope : EcScope.scope) ((p, f, n, m, vs, pc) : pgamepath * psymbol * int * int * (string list) * psymbol) =
   EcBDep.bdep (EcScope.env scope) p f n m vs pc
 
+and process_bind_bitstring (scope : EcScope.scope) (tq: pqsymbol) (w: int) =
+  let env = EcBDep.bind_bitstring (EcScope.env scope) tq w 
+  in assert false (* update and return scope *)
+
+and process_bind_circuit (scope: EcScope.scope) (op: psymbol) (c: string) = 
+  let env = EcBDep.bind_circuit (EcScope.env scope) op c in
+  {scope with sc_env=EcScope.initial env} (* update and return scope, how? *)
 (* -------------------------------------------------------------------- *)
 and process (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in
@@ -681,6 +688,9 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Ghint        hint -> `Fct   (fun scope -> process_hint       scope hint)
       | GdumpWhy3    file -> `Fct   (fun scope -> process_dump_why3  scope file)
       | Gbdep        (proc, f, n, m, vs, pc) -> `State (fun scope -> process_bdep scope (proc, f, n, m, vs, pc))
+      (* FIXME : refactor args into record *)
+      | Gbindb       (tq, w) -> `Fct (fun scope -> process_bind_bitstring scope tq w)
+      | Gbindc       (f, c) -> `Fct (fun scope -> process_bind_circuit scope f c)
     with
     | `Fct   f -> Some (f scope)
     | `State f -> f scope; None
