@@ -12,11 +12,12 @@ type idents = ident list
 
 type t = ident
 
-val create   : symbol -> t
-val fresh    : t -> t
-val name     : t -> symbol
-val tag      : t -> int
-val tostring : t -> string
+val create        : symbol -> t
+val create_tagged : symbol -> t 
+val fresh         : t -> t
+val name          : t -> symbol
+val tag           : t -> int
+val tostring      : t -> string
 
 (* -------------------------------------------------------------------- *)
 val id_equal : t -> t -> bool
