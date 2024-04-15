@@ -8,8 +8,7 @@ open EcIdent
 
 let retname = "__zzz" 
 
-
-type env = { (* env_ec : EcEnv.env;*) env_ssa : EcIdent.t MMsym.t }
+type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
 
 let find (m : 'a MMsym.t) (x : symbol) : 'a option =
   match MMsym.all x m with
@@ -50,12 +49,12 @@ let rec trans_expr (env: env) (e: expr) : env * form =
     | Evar (PVloc v) -> begin match (find env.env_ssa v) with
       | Some x -> (env, mk_form (Flocal x) e.e_ty)
       | None -> let x = create v in 
-        ({env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
+        ({env with env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
     end
     | Elocal v -> begin match (find env.env_ssa (name v)) with
       | Some v_ when v_ = v -> (env, mk_form (Flocal v) e.e_ty)
       | Some _ -> (Format.eprintf "Inconsistent bindings for local"; assert false)
-      | None -> ({env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
+      | None -> ({env with env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
     end
 
     | _ -> assert false
@@ -66,12 +65,12 @@ let rec trans_expr (env: env) (e: expr) : env * form =
   | Elocal v -> begin match (find env.env_ssa (name v)) with
     | Some v_ when v_ = v -> (env, mk_form (Flocal v) e.e_ty)
     | Some _ -> (Format.eprintf "Inconsistent binding of local variable"; assert false)
-    | None -> ({env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
+    | None -> ({env with env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
   end
   | Evar (PVloc v) -> begin match (find env.env_ssa v) with
     | Some x -> (env, mk_form (Flocal x) e.e_ty)
     | None -> let x = create v in
-      ({env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
+      ({env with env_ssa = MMsym.add v x env.env_ssa}, mk_form (Flocal x) e.e_ty)
     end
   | Evar (_) -> assert false
   | Eop _  -> assert false 
@@ -90,14 +89,13 @@ let rec trans_expr (env: env) (e: expr) : env * form =
   (* FIXME: Get unique identifier for ret variable *)
 let trans_ret (env: env) (rete: expr) : env * form =
   let retv = create retname in
-  let env = {env_ssa = MMsym.add retname retv env.env_ssa} in
+  let env = {env with env_ec = EcEnv.Var.bind_local retv rete.e_ty env.env_ec; 
+    env_ssa = MMsym.add retname retv env.env_ssa} in
   let env, e = trans_expr env rete in
   (env, f_eq (mk_form (Flocal retv) rete.e_ty) e)
 
 (* ------------------------------------------------------------- *)
 let trans_instr (env: env) (inst: instr) : env * form = 
-
-
   let trans_lvar (env: env) (lv: lvalue) (ty: ty) : env * form =
     begin
       match lv with
@@ -125,7 +123,7 @@ let rec trans_form (env: env) (f: form) : env * form =
     | Flocal idn -> begin match (find env.env_ssa (name idn)) with
       | Some idn_ when idn = idn_ -> (env, mk_form (Flocal idn) f.f_ty)
       | Some _ -> (Format.eprintf "Inconsistent local bindings"; assert false)
-      | None -> ({env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
+      | None -> ({env with env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
     end
     | Fpvar (PVloc (s), _) when s = "res" -> begin
       match (find env.env_ssa retname) with
@@ -141,7 +139,7 @@ let rec trans_form (env: env) (f: form) : env * form =
   | Flocal idn -> begin match (find env.env_ssa (name idn)) with
     | Some idn_ when idn = idn_ -> (env, mk_form (Flocal idn) f.f_ty)
     | Some _ -> (Format.eprintf "Inconsistent local bindings"; assert false)
-    | None -> ({env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
+    | None -> ({env with env_ssa = MMsym.add (name idn) idn env.env_ssa}, mk_form (Flocal idn) f.f_ty)
   end
   | Fpvar  (_pvar, _mem_) -> assert false 
   | Fglob  (_idn, _mem) -> assert false

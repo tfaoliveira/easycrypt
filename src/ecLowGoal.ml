@@ -2431,7 +2431,7 @@ let t_shoare_to_z tc =
           let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env) in
           Format.printf "%a\n" fmt e;
 
-          let env, pre = EcCPolyEnc.trans_form {env_ssa = MMsym.empty} a.hf_pr in
+          let env, pre = EcCPolyEnc.trans_form {env_ec = env; env_ssa = MMsym.empty} a.hf_pr in
           let env, instr = List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) env smt.s_node in
           let env, return =  EcCPolyEnc.trans_ret env e in
           let _env, post = EcCPolyEnc.trans_form env a.hf_po in
@@ -2444,7 +2444,7 @@ let t_shoare_to_z tc =
       let fmt = EcPrinting.pp_stmt (EcPrinting.PPEnv.ofenv env) in
       Format.printf "%a" fmt a.hs_s;
       let pre,post,(_, instr) = f_true,f_true, 
-      List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) {env_ssa = MMsym.empty} a.hs_s.s_node
+      List.fold_left_map (fun env inst -> EcCPolyEnc.trans_instr env inst) {env_ec = env; env_ssa = MMsym.empty} a.hs_s.s_node
       (*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*) in
       let f = f_imp pre (f_imps instr post) in
       Some f
