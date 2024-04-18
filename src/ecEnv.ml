@@ -178,9 +178,15 @@ end = struct
     }
 end
 
+(* -------------------------------------------------------------------- *)
+type circ_env = {
+  circs : C.reg MMsym.t;
+  bitstrings: int MMsym.t;
+  ops: (C.reg list -> C.reg) MMsym.t;
+}
+
 
 (* -------------------------------------------------------------------- *)
-
 type preenv = {
   env_top      : EcPath.path option;
   env_gstate   : EcGState.gstate;
@@ -200,7 +206,7 @@ type preenv = {
   env_modlcs   : Sid.t;                 (* declared modules *)
   env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
-  env_circs    : C.reg MMsym.t;
+  env_circs    : circ_env
 }
 
 and escope = {
@@ -319,7 +325,10 @@ let empty gstate =
     env_modlcs   = Sid.empty;
     env_item     = [];
     env_norm     = ref empty_norm_cache; 
-    env_circs    = MMsym.empty; }
+    env_circs    = { circs = MMsym.empty;
+                     bitstrings = MMsym.empty;
+                     ops = MMsym.empty;}
+  }
 
 (* -------------------------------------------------------------------- *)
 let copy (env : env) =
@@ -3791,10 +3800,10 @@ module Circ = struct
 
   (* Circuit lookups *)
   let lookup_circ (c: symbol) (env: env) : t =
-    MMsym.last c env.env_circs |> Option.get
+    MMsym.last c env.env_circs.circs |> Option.get
 
   let lookup_circ_opt (c: symbol) (env: env) : t option =
-    MMsym.last c env.env_circs
+    MMsym.last c env.env_circs.circs
 
   let lookup_circ_id (c: EcIdent.t) (env: env) : t =
     lookup_circ (EcIdent.name c) env
@@ -3803,12 +3812,11 @@ module Circ = struct
     lookup_circ_opt (EcIdent.name c) env
 
   let lookup_circs (c: symbol) (env: env) : t list =
-    MMsym.all c env.env_circs
+    MMsym.all c env.env_circs.circs
 
   (* Circuit bindings *)
   let bind_circ (c: symbol) (r: C.reg) (env: env) : env =
-    {env with 
-    env_circs = MMsym.add c r env.env_circs}
+    {env with env_circs = {env.env_circs with circs = MMsym.add c r env.env_circs.circs}}
 
   let bind_circs (crs: (symbol * C.reg) list) (env: env) : env =
     List.fold_left (fun env (c, r) -> bind_circ c r env) env crs
@@ -3820,7 +3828,30 @@ module Circ = struct
     bind_circs (List.map (fun (c,r) -> (EcIdent.name c, r)) crs) env
     (* List.fold_left (fun env (c, r) -> push_circ c r env) env crs *)
 
-end
+  (* Auxiliary function *)
+  (* FIXME qsymbol serialization might incur collisions 
+      Example: ["Top", "W16"], "t" and ["Top"], "W16.t"
+      maybe not permitted?
+  *)
+  let symbol_of_qsymbol ((h,t): qsymbol) : symbol = 
+    let v = List.fold_left (fun acc v -> Format.sprintf "%s.%s" acc v) (List.hd h) (List.tl h) in
+    Format.sprintf "%s.%s" v t 
 
+
+  let bind_bitstring (q: qsymbol) (w: int) (env: env) : env = 
+    let v = symbol_of_qsymbol q in
+    {env with env_circs = {env.env_circs with bitstrings = MMsym.add v w env.env_circs.bitstrings}}
+
+  let lookup_bitstring (q:qsymbol) (env: env) : int option = 
+    MMsym.last (symbol_of_qsymbol q) env.env_circs.bitstrings
+
+  let bind_op (q: qsymbol) (r: (C.reg list -> C.reg)) (env: env) : env =
+    let v = symbol_of_qsymbol q in
+    {env with env_circs = {env.env_circs with ops = MMsym.add v r env.env_circs.ops}}
+
+  let lookup_op (q:qsymbol) (env: env) : (C.reg list -> C.reg) option = 
+    MMsym.last (symbol_of_qsymbol q) env.env_circs.ops
+  
+end
 
 let pp_debug_form = ref (fun _env _fmt _f -> assert false)

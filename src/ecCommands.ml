@@ -640,11 +640,13 @@ and process_bdep (scope : EcScope.scope) ((p, f, n, m, vs, pc) : pgamepath * psy
 
 and process_bind_bitstring (scope : EcScope.scope) (tq: pqsymbol) (w: int) =
   let env = EcBDep.bind_bitstring (EcScope.env scope) tq w 
-  in assert false (* update and return scope *)
-
+  in EcScope.Circ.update_env env scope
+  
 and process_bind_circuit (scope: EcScope.scope) (op: psymbol) (c: string) = 
   let env = EcBDep.bind_circuit (EcScope.env scope) op c in
-  {scope with sc_env=EcScope.initial env} (* update and return scope, how? *)
+  EcScope.Circ.update_env env scope
+
+
 (* -------------------------------------------------------------------- *)
 and process (ld : Loader.loader) (scope : EcScope.scope) g =
   let loc = g.pl_loc in

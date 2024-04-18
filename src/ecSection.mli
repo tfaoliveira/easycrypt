@@ -40,3 +40,6 @@ val add_th  : import:import -> EcSymbols.symbol -> checked_ctheory -> scenv -> s
 val require : EcSymbols.symbol -> checked_ctheory -> scenv -> scenv
 
 val astop : scenv -> scenv
+
+(* FIXME debug remove later*)
+val debug_update_env_scenv : env -> scenv -> scenv

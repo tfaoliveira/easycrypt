@@ -238,3 +238,8 @@ module Search : sig
   val search : scope -> pformula list -> unit
   val locate : scope -> pqsymbol -> unit
 end
+
+module Circ : sig
+  (* FIXME actually integrate things correctly later *)
+  val update_env : EcEnv.env -> scope -> scope
+end

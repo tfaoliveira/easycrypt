@@ -1656,3 +1656,7 @@ let exit_section (name : symbol option) (scenv:scenv) =
     let items = generalize_lc_items scenv in
     let scenv = oget scenv.sc_top in
     add_items items scenv
+
+(* FIXME remove and actually integrate things correctly later *)
+let debug_update_env_scenv (env: EcEnv.env) (scenv: scenv) = 
+  {scenv with sc_env = env}

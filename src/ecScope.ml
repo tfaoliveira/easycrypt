@@ -2503,3 +2503,9 @@ module Search = struct
 
     notify scope `Info "%s" (Buffer.contents buffer)
 end
+
+(* FIXME refactor later to actually correctly use EcScope/EcSection *)
+module Circ = struct 
+  let update_env (env: EcEnv.env) (scope: scope) : scope = 
+    {scope with sc_env = (EcSection.debug_update_env_scenv env scope.sc_env)}
+end

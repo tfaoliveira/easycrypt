@@ -55,7 +55,8 @@ module FromSpec () : S = struct
     spec
 
   let func_from_spec (f: symbol) : (reg list) -> reg =
-    (fun regs -> Circuit_spec.circuit_of_spec regs (List.assoc f specs))
+    let fname = List.assoc f specs in
+    (fun regs -> Circuit_spec.circuit_of_spec regs fname)
  
   (* ------------------------------------------------------------------ *)
   let vpermd = List.assoc "VPERMD" specs

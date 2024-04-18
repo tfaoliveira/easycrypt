@@ -540,5 +540,12 @@ module Circ : sig
   val bind_circs : (symbol * C.reg) list -> env -> env
   val push_circ  : EcIdent.t -> C.reg -> env -> env
   val push_circs : (EcIdent.t * C.reg) list -> env -> env
+
+  val bind_bitstring : qsymbol -> int -> env -> env
+  val lookup_bitstring : qsymbol -> env -> int option
+  
+  val bind_op : qsymbol -> (C.reg list -> C.reg) -> env -> env
+  val lookup_op : qsymbol -> env -> (C.reg list -> C.reg) option
+  
 end
 val pp_debug_form : (env -> Format.formatter -> form -> unit) ref
