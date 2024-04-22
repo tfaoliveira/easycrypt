@@ -2426,19 +2426,9 @@ let t_shoare_to_z tc =
         match rexpr with
         | None -> tc
         | Some e ->
-          let env, pre =
-            EcCPolyEnc.trans_form {env_ec = env; env_ssa = MMsym.empty} a.hf_pr
-          in
-          let env, instr = List.fold_left_map
-              (fun env inst -> EcCPolyEnc.trans_instr env inst)
-              env smt.s_node
-          in
-          let env, return =  EcCPolyEnc.trans_ret env e in
-          let env, post = EcCPolyEnc.trans_form env a.hf_po in
-          let f = f_imp pre (f_imps instr (f_imp return post)) in
-          let ids =  MMsym.fold (fun _ l acc -> l @ acc ) env.env_ssa [] in
-          let ids = List.map (fun x -> x, GTty tint) ids in
-          let f = f_forall ids f in
+          let env_ssa = MMsym.empty in (* FIXME: need to add proc args as bindings here *)
+          let _, f = EcCPolyEnc.trans_hoare {env_ec = env; env_ssa = env_ssa } 
+            a.hf_pr smt.s_node e a.hf_po in (* maybe convert args to record? *)
           FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f
       end
 
