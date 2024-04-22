@@ -476,16 +476,3 @@ let is_mem env sign x s =
 
 let has_quantum env s =
   not (disjoint env s Quantum)
-
-
-
-
-glob M
-
-
-glob (mp, MT)
-
-
-globfun(ff)
-
-glo

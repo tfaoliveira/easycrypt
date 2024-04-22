@@ -408,6 +408,7 @@
 %token CFOLD
 %token CHANGE
 %token CLASS
+%token CLASSICAL
 %token CLEAR
 %token CLONE
 %token COLON
@@ -1710,13 +1711,23 @@ mod_params:
 (* -------------------------------------------------------------------- *)
 (* Memory restrictions *)
 
-mem_restr_el:
-  | PLUS  el=f_or_mod_ident { PMPlus el }
-  | MINUS el=f_or_mod_ident { PMMinus el }
-  |       el=f_or_mod_ident { PMDefault el }
-
 mem_restr:
-  | ol=rlist0(mem_restr_el,COMMA) { ol }
+| i=loc(UINT) {
+   if BI.equal (unloc i) BI.zero then PMempty
+   else parse_error (loc i) (Some "Only 0 is accepted")
+  }
+
+| QUANTUM                         { PMquantum      }
+| CLASSICAL                       { PMclassical    }
+| el=f_or_mod_ident               { PMvar el       }
+| s1=mem_restr PLUS  s2=mem_restr { PMunion(s1,s2) }
+| s1=mem_restr MINUS s2=mem_restr { PMdiff (s1,s2) }
+| s1=mem_restr HAT   s2=mem_restr { PMinter(s1,s2) }
+| LPAREN s=mem_restr RPAREN       { s              }
+
+| PLUS  el=mem_restr          { PMunion(PMclassical, el) }
+| MINUS el=mem_restr          { PMdiff (PMclassical, el) }
+
 
 (* -------------------------------------------------------------------- *)
 (* qident optionally taken in a (implicit) module parameters. *)
@@ -1741,8 +1752,6 @@ mod_restr_el:
 mod_restr:
   | LBRACE mr=mem_restr RBRACE
     { { pmr_mem = mr; pmr_procs = [] } }
-  | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
-    { { pmr_mem = []; pmr_procs = l } }
   | LBRACE mr=mem_restr RBRACE LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET
     { { pmr_mem = mr;	pmr_procs = l } }
   | LBRACKET l=rlist1(mod_restr_el,COMMA) RBRACKET LBRACE mr=mem_restr RBRACE

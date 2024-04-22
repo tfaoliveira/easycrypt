@@ -166,14 +166,15 @@ type f_or_mod_ident =
   | FM_FunOrVar of pgamepath
   | FM_Mod of pmsymbol located
 
-
-type pmod_restr_mem_el =
-  | PMPlus    of f_or_mod_ident
-  | PMMinus   of f_or_mod_ident
-  | PMDefault of f_or_mod_ident
-
 (* A memory restricition. *)
-type pmod_restr_mem = pmod_restr_mem_el list
+type pmod_restr_mem =
+  | PMempty
+  | PMquantum
+  | PMclassical
+  | PMvar     of f_or_mod_ident
+  | PMunion   of pmod_restr_mem * pmod_restr_mem
+  | PMinter   of pmod_restr_mem * pmod_restr_mem
+  | PMdiff    of pmod_restr_mem * pmod_restr_mem
 
 (* -------------------------------------------------------------------- *)
 type pmemory   = psymbol

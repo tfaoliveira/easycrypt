@@ -200,6 +200,7 @@
     "section"     , SECTION    ;        (* KW: global *)
     "type"        , TYPE       ;        (* KW: global *)
     "class"       , CLASS      ;        (* KW: global *)
+    "classical"   , CLASSICAL  ;        (* KW: global *)
     "instance"    , INSTANCE   ;        (* KW: global *)
     "print"       , PRINT      ;        (* KW: global *)
     "search"      , SEARCH     ;        (* KW: global *)
