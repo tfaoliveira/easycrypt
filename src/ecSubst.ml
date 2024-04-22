@@ -447,10 +447,12 @@ let subst_variable (s : subst) (x : variable) =
 (* -------------------------------------------------------------------- *)
 let subst_fun_uses (s : subst) (u : uses) =
   let x_subst = subst_xpath s in
+
   let calls  = List.map x_subst u.us_calls
-  and reads  = Sx.fold (fun p m -> Sx.add (x_subst p) m) u.us_reads Sx.empty
-  and writes = Sx.fold (fun p m -> Sx.add (x_subst p) m) u.us_writes Sx.empty in
-  EcModules.mk_uses calls reads writes
+  and quants = Sx.map x_subst u.us_quants
+  and reads  = Sx.map  x_subst u.us_reads
+  and writes  = Sx.map x_subst u.us_writes in
+  EcModules.mk_uses calls quants reads writes
 
 (* -------------------------------------------------------------------- *)
 let subst_funsig (s : subst) (funsig : funsig) =
@@ -666,18 +668,6 @@ and subst_oracle_info (s : subst) (oi : OI.t) =
   OI.mk (List.map (subst_xpath s) (PreOI.allowed oi))
 
 (* -------------------------------------------------------------------- *)
-and subst_mod_restr (s : subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (subst_xpath s x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (subst_mpath s x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
-  let ois = EcSymbols.Msym.map (fun oi ->
-      subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
-
-(* -------------------------------------------------------------------- *)
 and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
   match item with
   | Tys_function funsig -> Tys_function (subst_funsig s funsig)
@@ -685,6 +675,33 @@ and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
 (* -------------------------------------------------------------------- *)
 and subst_modsig_body (s : subst) (sbody : module_sig_body) =
   List.map (subst_modsig_body_item s) sbody
+
+(* -------------------------------------------------------------------- *)
+and subst_mod_restr (s : subst) (mr : mod_restr) =
+  { mr_mem = subst_mem_restr s mr.mr_mem;
+    mr_oinfos = EcSymbols.Msym.map (subst_oracle_info s) mr.mr_oinfos; }
+
+(* -------------------------------------------------------------------- *)
+and subst_mem_restr s (mer : mem_restr) =
+  match mer with
+  | Empty | Quantum | Classical -> mer
+  | Var (q, x) -> Var(q, subst_xpath s x)
+  | GlobFun ff -> GlobFun (subst_functor_fun s ff)
+  | Union(s1,s2) -> Union(subst_mem_restr s s1, subst_mem_restr s s2)
+  | Inter(s1,s2) -> Inter(subst_mem_restr s s1, subst_mem_restr s s2)
+  | Diff(s1,s2)  -> Diff(subst_mem_restr s s1, subst_mem_restr s s2)
+
+(* -------------------------------------------------------------------- *)
+and subst_functor_fun s ff =
+  let s, ff_params = subst_mod_params s ff.ff_params in
+  let ff_xp = subst_xpath s ff.ff_xp in
+  { ff_xp; ff_params }
+
+(* -------------------------------------------------------------------- *)
+and subst_mod_params s params =
+  let s, b = fresh_glocals s (List.map (fun (x, mty) -> (x, GTmodty mty)) params) in
+  let b = List.map (fun (x, gty) -> x, as_modty gty) b in
+  s, b
 
 (* -------------------------------------------------------------------- *)
 and subst_modsig ?params (s : subst) (comps : module_sig) =
@@ -724,8 +741,8 @@ and subst_modtype (s : subst) (modty : module_type) =
     ofdfl
       (fun () -> subst_path s modty.mt_name)
       (Mp.find_opt modty.mt_name s.sb_path) in
-
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
+  let s, mt_params = subst_mod_params s modty.mt_params in
+  { mt_params;
     mt_name   = mt_name;
     mt_args   = List.map (subst_mpath s) modty.mt_args;
     mt_restr = subst_mod_restr s modty.mt_restr; }

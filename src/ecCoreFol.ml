@@ -82,7 +82,6 @@ let mty_equal = EcAst.mty_equal
 let mty_hash  = EcAst.mty_hash
 
 let mr_equal = EcAst.mr_equal
-let mr_hash  = EcAst.mr_hash
 
 (*-------------------------------------------------------------------- *)
 let gty_equal = EcAst.gty_equal
@@ -576,7 +575,7 @@ let f_map gt g fp =
       f_pr_r { pr with pr_args = args'; pr_event = ev'; }
 
 (* -------------------------------------------------------------------- *)
-let ec_iter g { ec_f; ec_e } = g ec_f
+let ec_iter g { ec_f; ec_e = _} = g ec_f
 
 let f_iter g f =
   match f.f_node with
@@ -608,7 +607,7 @@ let f_iter g f =
 
 (* -------------------------------------------------------------------- *)
 
-let ec_exists g { ec_f; ec_e } = g ec_f
+let ec_exists g { ec_f; ec_e = _ } = g ec_f
 
 let form_exists g f =
   match f.f_node with
@@ -638,7 +637,7 @@ let form_exists g f =
   | Fpr       pr  -> g pr.pr_args  || g pr.pr_event
 
 (* -------------------------------------------------------------------- *)
-let ec_forall g { ec_f; ec_e } = g ec_f
+let ec_forall g { ec_f; ec_e = _ } = g ec_f
 
 let form_forall g f =
   match f.f_node with

@@ -79,7 +79,6 @@ val mty_equal : module_type -> module_type -> bool
 val mty_hash  : module_type -> int
 
 val mr_equal : mod_restr -> mod_restr -> bool
-val mr_hash  : mod_restr -> int
 
 (* -------------------------------------------------------------------- *)
 val f_equal   : form -> form -> bool

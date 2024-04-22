@@ -108,21 +108,6 @@ type funsig = {
 val fs_equal : funsig -> funsig -> bool
 
 (* -------------------------------------------------------------------- *)
-type 'a use_restr = 'a EcAst.use_restr
-
-val ur_empty : 'a -> 'a use_restr
-val ur_full  : 'a -> 'a use_restr
-val ur_app   : ('a -> 'b) -> 'a use_restr -> 'b use_restr
-val ur_equal : ('a -> 'a -> bool) -> 'a use_restr -> 'a use_restr -> bool
-
-(* Correctly handles the [None] cases for subset comparison. *)
-val ur_pos_subset : ('a -> 'a -> bool) -> 'a option -> 'a option -> bool
-val ur_union :
-  ('a -> 'a -> 'a) ->
-  ('a -> 'a -> 'a) ->
-  'a use_restr -> 'a use_restr -> 'a use_restr
-
-(* -------------------------------------------------------------------- *)
 module PreOI : sig
   type t = EcAst.oracle_info
 
@@ -140,9 +125,6 @@ module PreOI : sig
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcAst.mr_xpaths
-
-type mr_mpaths = EcAst.mr_mpaths
 
 type mod_restr = EcAst.mod_restr
 
@@ -151,12 +133,7 @@ val mr_equal :
   mod_restr ->
   bool
 
-val mr_hash : mod_restr -> int
-
 val mr_is_empty : mod_restr -> bool
-
-val mr_xpaths_fv : mr_xpaths -> int EcIdent.Mid.t
-val mr_mpaths_fv : mr_mpaths -> int EcIdent.Mid.t
 
 (* -------------------------------------------------------------------- *)
 (* An oracle in a function provided by a module parameter of a functor *)
@@ -188,12 +165,13 @@ val sig_smpl_sig_coincide : module_sig -> module_smpl_sig -> bool
 
 (* -------------------------------------------------------------------- *)
 type uses = {
-  us_calls  : xpath list;
-  us_reads  : Sx.t;
-  us_writes : Sx.t;
+  us_calls  : Sx.t;    (* The set of proc used in the statement *)
+  us_quants : Sx.t;    (* The set of global quantum used        *)
+  us_reads  : Sx.t;    (* The set of global read  variables     *)
+  us_writes : Sx.t;    (* The set of global write variables     *)
 }
 
-val mk_uses : xpath list -> Sx.t -> Sx.t -> uses
+val mk_uses : c:Sx.t -> q:Sx.t -> r:Sx.t -> w:Sx.t -> uses
 
 type function_def = {
   f_locals : variable list;
@@ -277,3 +255,7 @@ val is_quantum_valid :
   norm:(EcTypes.prog_var -> EcTypes.prog_var) -> quantum_ref -> bool
 
 val qr_is_loc : quantum_ref -> bool
+
+(* --------------------------------------------------------------------- *)
+val s_inuse  : stmt -> uses
+val se_inuse : uses -> expr -> uses

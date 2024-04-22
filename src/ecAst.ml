@@ -46,22 +46,15 @@ type quantif =
 type hoarecmp = FHle | FHeq | FHge
 
 (* -------------------------------------------------------------------- *)
+type global = quantum * EcPath.xpath
 
-type 'a use_restr = {
-  ur_pos : 'a option;   (* If not None, can use only element in this set. *)
-  ur_neg : 'a;          (* Cannot use element in this set. *)
-}
+module Oglobal = struct
+  type t = global
+  let compare (_, x1) (_, x2) = x_compare x1 x2
+end
 
-type mr_xpaths = EcPath.Sx.t use_restr
-
-type mr_mpaths = EcPath.Sm.t use_restr
-
-(* -------------------------------------------------------------------- *)
-let ur_tostring (type a) (pp : a -> string) (mu : a use_restr) : string =
-  let pos = Option.value ~default:"<none>" (Option.map pp mu.ur_pos) in
-  let neg = pp mu.ur_neg in
-
-  Format.sprintf "{%s, %s}" pos neg
+module Mglob = EcMaps.Map.Make(Oglobal)
+module Sglob = EcMaps.Set.MakeOfMap(Mglob)
 
 (* -------------------------------------------------------------------- *)
 type ty = {
@@ -168,14 +161,30 @@ and oracle_info = {
   oi_calls : xpath list;
 }
 
+and functor_params = (EcIdent.t * module_type) list
+
+and functor_fun = {
+  ff_params : functor_params;
+  ff_xp     : xpath;                (* The xpath is fully applied *)
+}
+
+and mem_restr =
+  | Empty
+  | Quantum                   (* All quantum global references *)
+  | Classical                 (* All classical global variables *)
+  | Var     of global         (* The global variable or quantum ref *)
+  | GlobFun of functor_fun    (* Global of a function *)
+  | Union   of mem_restr * mem_restr
+  | Inter   of mem_restr * mem_restr
+  | Diff    of mem_restr * mem_restr
+
 and mod_restr = {
-  mr_xpaths : mr_xpaths;
-  mr_mpaths : mr_mpaths;
+  mr_mem    : mem_restr;
   mr_oinfos : oracle_info Msym.t;
 }
 
 and module_type = {
-  mt_params : (EcIdent.t * module_type) list;
+  mt_params : functor_params;
   mt_name   : EcPath.path;
   mt_args   : EcPath.mpath list;
   mt_restr  : mod_restr;
@@ -230,7 +239,7 @@ and f_node =
   | Fint    of BI.zint
   | Flocal  of EcIdent.t
   | Fpvar   of prog_var * memory
-  | Fglob   of EcIdent.t * memory
+  | Fglob   of EcIdent.t * memory     (* FIXME replace by functor_fun *)
   | Fop     of EcPath.path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
@@ -614,100 +623,86 @@ let ovar_of_var { v_quantum = q; v_name = n; v_type = t } =
   { ov_quantum = q; ov_name = Some n; ov_type = t }
 
 (* -------------------------------------------------------------------- *)
-let ur_equal (equal : 'a -> 'a -> bool) ur1 ur2 =
-  equal ur1.ur_neg ur2.ur_neg
-  && (opt_equal equal) ur1.ur_pos ur2.ur_pos
 
-let ur_hash elems el_hash ur =
-  Why3.Hashcons.combine
-    (Why3.Hashcons.combine_option
-       (fun l -> Why3.Hashcons.combine_list el_hash 0 (elems l))
-       ur.ur_pos)
-    (Why3.Hashcons.combine_list el_hash 0
-       (elems ur.ur_neg))
+(* Check for "physical" equality *)
+let rec ff_equal ff1 ff2 =
+  ff1 == ff2 ||
+  x_equal ff1.ff_xp ff2.ff_xp &&
+  mod_params_equal ff1.ff_params ff2.ff_params
 
-let mr_equal mr1 mr2 =
-  ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
-  && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
-  && Msym.equal oi_equal mr1.mr_oinfos mr2.mr_oinfos
+and mod_params_equal mp1 mp2 =
+  mp1 == mp2 ||
+  List.equal (fun (x1,mt1) (x2,mt2) ->
+     id_equal x1 x2 &&
+     mty_equal mt1 mt2) mp1 mp2
 
-let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
-  EcPath.Sx.fold
-    (fun xp fv -> EcPath.x_fv fv xp)
-    (Sx.union
-       m.ur_neg
-       (EcUtils.odfl Sx.empty m.ur_pos))
-    EcIdent.Mid.empty
+and mty_equal mt1 mt2 =
+  mt1 == mt2 ||
+  p_equal mt1.mt_name mt2.mt_name &&
+  List.equal m_equal mt1.mt_args mt2.mt_args &&
+  mod_params_equal mt1.mt_params mt2.mt_params &&
+  mr_equal mt1.mt_restr mt2.mt_restr
 
-let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
-  EcPath.Sm.fold
-    (fun mp fv -> EcPath.m_fv fv mp)
-    (Sm.union
-       m.ur_neg
-       (EcUtils.odfl Sm.empty m.ur_pos))
-    EcIdent.Mid.empty
+and mr_equal mr1 mr2 =
+  mr1 == mr2 ||
+  Msym.equal oi_equal mr1.mr_oinfos mr2.mr_oinfos &&
+  mer_equal mr1.mr_mem mr2.mr_mem
 
-let mr_fv (mr : mod_restr) : int Mid.t =
-  let fv =
-    EcSymbols.Msym.fold (fun _ oi fv ->
+and g_equal (q1, x1) (q2, x2) =
+   q1 = q2 && x_equal x1 x2
+
+and mer_equal mer1 mer2 =
+  mer1 == mer2 ||
+  match mer1, mer2 with
+  | Empty, Empty | Quantum, Quantum | Classical, Classical -> true
+  | Var v1, Var v2 -> g_equal v1 v2
+  | GlobFun ff1, GlobFun ff2 -> ff_equal ff1 ff2
+  | Union(s11, s12), Union(s21, s22)
+  | Inter(s11, s12), Inter(s21, s22)
+  | Diff (s11, s12), Diff (s21, s22) -> mer_equal s11 s21 && mer_equal s12 s22
+  | _, _ -> false
+
+
+let rec ff_fv ff =
+  mod_params_fv ff.ff_params (x_fv Mid.empty ff.ff_xp)
+
+and mod_params_fv mp fv =
+  List.fold_right (fun (x,mt) fv ->
+     fv_union (Mid.remove x fv) (mty_fv mt)) mp fv
+
+and mty_fv mty =
+  (* FIXME in mem_restr can depend on params ? *)
+  let fv = mr_fv mty.mt_restr in
+  let fv = List.fold_left m_fv fv mty.mt_args in
+  mod_params_fv mty.mt_params fv
+
+and mr_fv mr =
+  fv_union (mer_fv mr.mr_mem) (oinfos_fv mr.mr_oinfos)
+
+and oinfos_fv oi =
+  EcSymbols.Msym.fold (fun _ oi fv ->
       List.fold_left EcPath.x_fv fv oi.oi_calls
-    ) mr.mr_oinfos Mid.empty
-  in
+    ) oi Mid.empty
 
-  fv_union fv
-    (fv_union
-       (mr_xpaths_fv mr.mr_xpaths)
-       (mr_mpaths_fv mr.mr_mpaths))
+and mer_fv mer =
+  match mer with
+  | Empty | Quantum | Classical -> Mid.empty
+  | Var (_, x) -> x_fv Mid.empty x
+  | GlobFun ff -> ff_fv ff
+  | Union(s1, s2)
+  | Inter(s1, s2)
+  | Diff (s1, s2) -> fv_union (mer_fv s1)( mer_fv s2)
 
-let mr_hash mr =
-  Why3.Hashcons.combine2
-    (ur_hash EcPath.Sx.ntr_elements EcPath.x_hash mr.mr_xpaths)
-    (ur_hash EcPath.Sm.ntr_elements EcPath.m_hash mr.mr_mpaths)
-    (Why3.Hashcons.combine_list
-       (Why3.Hashcons.combine_pair Hashtbl.hash oi_hash) 0
-       (EcSymbols.Msym.bindings mr.mr_oinfos
-        |> List.sort (fun (s,_) (s',_) -> EcSymbols.sym_compare s s')))
 
 let mty_hash mty =
-  Why3.Hashcons.combine3
+  Why3.Hashcons.combine2
     (EcPath.p_hash mty.mt_name)
     (Why3.Hashcons.combine_list
        (fun (x, _) -> EcIdent.id_hash x)
        0 mty.mt_params)
     (Why3.Hashcons.combine_list EcPath.m_hash 0 mty.mt_args)
-    (mr_hash mty.mt_restr)
-
-let rec mty_equal mty1 mty2 =
-     (EcPath.p_equal mty1.mt_name mty2.mt_name)
-  && (List.all2 EcPath.m_equal mty1.mt_args mty2.mt_args)
-  && (List.all2 (pair_equal EcIdent.id_equal mty_equal)
-        mty1.mt_params mty2.mt_params)
-  && (mr_equal mty1.mt_restr mty2.mt_restr)
 
 (* -------------------------------------------------------------------- *)
-let oi_tostring (oi : oracle_info) : string =
-  let calls = List.map EcPath.x_tostring oi.oi_calls in
-  Format.sprintf "{calls = %s}" (String.concat ", " calls)
-
-(* -------------------------------------------------------------------- *)
-let mr_tostring (mr : mod_restr) : string =
-  let xp =
-    let pp (xps : Sx.t) =
-      String.concat ", " (List.map EcPath.x_tostring (Sx.elements xps))
-    in ur_tostring pp mr.mr_xpaths
-  in
-
-  let mp =
-    let pp (mps : Sm.t) =
-      String.concat ", " (List.map EcPath.m_tostring (Sm.elements mps))
-    in ur_tostring pp mr.mr_mpaths
-  in
-
-  let oi =
-    let do1 (x, oi) = Format.sprintf "%s -> %s" x (oi_tostring oi) in
-    String.concat ", " (List.map do1 (Msym.bindings mr.mr_oinfos)) in
-
-  Format.sprintf "{%s, %s, %s}" xp mp oi
 
 let lmem_hash_ (lmem : local_memtype_) : int =
   let mt_name_hash = Why3.Hashcons.combine_option Hashtbl.hash lmem.lmt_name in

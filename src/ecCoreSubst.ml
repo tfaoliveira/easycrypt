@@ -562,13 +562,34 @@ module Fsubst = struct
     PreOI.mk (List.map (x_subst s) (PreOI.allowed oi))
 
   (* ------------------------------------------------------------------ *)
-  and mr_subst (s : f_subst) (mr : mod_restr) : mod_restr =
-    let sx = x_subst s in
-    let sm = EcPath.m_subst_abs s.fs_mod in
-    { mr_xpaths = ur_app (fun s -> Sx.fold (fun m rx ->
-          Sx.add (sx m) rx) s Sx.empty) mr.mr_xpaths;
-      mr_mpaths = ur_app (fun s -> Sm.fold (fun m r ->
-          Sm.add (sm m) r) s Sm.empty) mr.mr_mpaths;
+  and mod_params_subst ~(tx : tx) (s : f_subst) mt_params =
+    let s, b =
+      add_bindings
+        ~tx s
+        (List.map (fun (x, mty) -> (x, GTmodty mty)) mt_params) in
+    let b = List.map (fun (x, gty) -> x, as_modty gty) b in
+    s, b
+
+  (* ------------------------------------------------------------------ *)
+  and ff_subst ~(tx : tx) (s : f_subst) ff =
+    let s, ff_params = mod_params_subst ~tx s ff.ff_params in
+    let ff_xp = x_subst s ff.ff_xp in
+    { ff_params; ff_xp }
+
+  (* ------------------------------------------------------------------ *)
+  and mer_subst ~(tx : tx) (s : f_subst) mer =
+    match mer with
+    | Empty | Quantum | Classical -> mer
+    | Var (q, x) -> Var(q, x_subst s x)
+    | GlobFun ff -> GlobFun (ff_subst ~tx s ff)
+    | Union(s1,s2) -> Union(mer_subst ~tx s s1, mer_subst ~tx s s2)
+    | Inter(s1,s2) -> Inter(mer_subst ~tx s s1, mer_subst ~tx s s2)
+    | Diff(s1,s2)  -> Diff(mer_subst ~tx s s1, mer_subst ~tx s s2)
+
+
+  (* ------------------------------------------------------------------ *)
+  and mr_subst ~(tx : tx) (s : f_subst) (mr : mod_restr) : mod_restr =
+    { mr_mem = mer_subst ~tx s mr.mr_mem;
       mr_oinfos = EcSymbols.Msym.map (oi_subst s) mr.mr_oinfos; }
 
   (* ------------------------------------------------------------------ *)
@@ -577,17 +598,10 @@ module Fsubst = struct
 
   (* ------------------------------------------------------------------ *)
   and mty_subst ~(tx : tx) (s : f_subst) (mty : module_type) : module_type =
-    let s, mt_params =
-      let s, b =
-        add_bindings
-          ~tx s
-          (List.map (fun (x, mty) -> (x, GTmodty mty)) mty.mt_params) in
-      let b = List.map (fun (x, gty) -> x, as_modty gty) b in
-      s, b
-    in
+    let s, mt_params = mod_params_subst ~tx s mty.mt_params in
     let mt_name   = mty.mt_name in
     let mt_args   = List.map (mp_subst s) mty.mt_args in
-    let mt_restr  = mr_subst s mty.mt_restr in
+    let mt_restr  = mr_subst ~tx s mty.mt_restr in
     { mt_params; mt_name; mt_args; mt_restr; }
 
   (* ------------------------------------------------------------------ *)
@@ -668,7 +682,7 @@ module Fsubst = struct
   let s_subst = s_subst
 
   let gty_subst = gty_subst ~tx:(fun ~before:_ ~after:f -> f)
-  let mr_subst = mr_subst
+  let mr_subst  = mr_subst  ~tx:(fun ~before:_ ~after:f -> f)
   let mty_subst = mty_subst ~tx:(fun ~before:_ ~after:f -> f)
   let oi_subst  = oi_subst
 

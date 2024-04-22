@@ -282,7 +282,7 @@ and s_get_uninit_read (w : Ssym.t) (s : stmt) =
 
 and i_get_uninit_read (w : Ssym.t) (i : instr) =
   match i.i_node with
-  | Squantum (qr, o, e) ->
+  | Squantum (_qr, _o, e) ->
       let r1 = Ssym.diff (Uninit.e_pv e) w in
       (w, r1)
 
@@ -328,46 +328,6 @@ let get_uninit_read (s : stmt) =
   snd (s_get_uninit_read Ssym.empty s)
 
 (* -------------------------------------------------------------------- *)
-type 'a use_restr = 'a EcAst.use_restr
-
-let ur_app f a =
-  { ur_pos = (omap f) a.ur_pos;
-    ur_neg = f a.ur_neg; }
-
-(* Noting is restricted. *)
-let ur_empty emp = { ur_pos = None; ur_neg = emp; }
-
-(* Everything is restricted. *)
-let ur_full emp = { ur_pos = Some emp; ur_neg = emp; }
-
-let ur_pos_subset subset ur1 ur2 = match ur1,ur2 with
-  | _, None -> true             (* Indeed, [None] means everybody. *)
-  | None, Some _ -> false
-  | Some s1, Some s2 -> subset s1 s2
-
-let ur_equal = EcAst.ur_equal
-
-(* Union for negative restrictions, intersection for positive ones.
-   [None] stands for everybody. *)
-let ur_union union inter ur1 ur2 =
-  let ur_pos = match ur1.ur_pos, ur2.ur_pos with
-    | None, None -> None
-    | None, Some s | Some s, None -> Some s
-    | Some s1, Some s2 -> some @@ inter s1 s2 in
-
-  { ur_pos = ur_pos;
-    ur_neg = union ur1.ur_neg ur2.ur_neg; }
-
-(* Converse of ur_union. *)
-let ur_inter union inter ur1 ur2 =
-  let ur_pos = match ur1.ur_pos, ur2.ur_pos with
-    | None, _ | _, None -> None
-    | Some s1, Some s2 -> some @@ union s1 s2 in
-
-  { ur_pos = ur_pos;
-    ur_neg = inter ur1.ur_neg ur2.ur_neg; }
-
-(* -------------------------------------------------------------------- *)
 (* Oracle information of a procedure [M.f]. *)
 module PreOI : sig
   type t = EcAst.oracle_info
@@ -406,33 +366,13 @@ end = struct
 end
 
 (* -------------------------------------------------------------------- *)
-type mr_xpaths = EcAst.mr_xpaths
-
-type mr_mpaths = EcAst.mr_mpaths
 
 type mod_restr = EcAst.mod_restr
 
 let mr_equal = EcAst.mr_equal
-let mr_hash  = EcAst.mr_hash
 
 let mr_is_empty mr =
   Msym.for_all (fun _ oi -> [] = PreOI.allowed oi) mr.mr_oinfos
-
-let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
-  EcPath.Sx.fold
-    (fun xp fv -> EcPath.x_fv fv xp)
-    (Sx.union
-       m.ur_neg
-       (EcUtils.odfl Sx.empty m.ur_pos))
-    EcIdent.Mid.empty
-
-let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
-  EcPath.Sm.fold
-    (fun mp fv -> EcPath.m_fv fv mp)
-    (Sm.union
-       m.ur_neg
-       (EcUtils.odfl Sm.empty m.ur_pos))
-    EcIdent.Mid.empty
 
 (* -------------------------------------------------------------------- *)
 type funsig = {
@@ -498,17 +438,18 @@ let sig_smpl_sig_coincide msig smpl_sig =
 
 (* -------------------------------------------------------------------- *)
 type uses = {
-  us_calls  : xpath list;
+  us_calls  : Sx.t;
+  us_quants : Sx.t;
   us_reads  : Sx.t;
   us_writes : Sx.t;
 }
 
-let mk_uses c r w =
+let mk_uses ~c ~q ~r ~w =
   let map s = Sx.fold (fun x s ->
       Sx.change
         (fun b -> assert (not b); true)
         (EcTypes.xp_glob x) s) s Sx.empty in
-  {us_calls = c; us_reads = map r; us_writes = map w }
+  {us_calls = c; us_quants = map q; us_reads = map r; us_writes = map w }
 
 (* -------------------------------------------------------------------- *)
 type function_def = {
@@ -584,7 +525,6 @@ type top_module_expr = {
 }
 
 (* -------------------------------------------------------------------- *)
-let ur_hash = EcAst.ur_hash
 
 let mty_hash = EcAst.mty_hash
 let mty_equal = EcAst.mty_equal
@@ -646,3 +586,119 @@ let get_uninit_read_of_module (p : path) (me : module_expr) =
     in EcPath.mpath_crt (EcPath.pqname p me.me_name) margs None
 
   in List.rev (doit_me [] (mp, me))
+
+
+(* ------------------------------------------------------------------ *)
+(* Compute the uses of a statement:                                   *)
+(*   - functions call                                                 *)
+(*   - read and write variables                                       *)
+(*   - quantum                                                        *)
+
+let add_glob (m:Sx.t) (x:prog_var) : Sx.t =
+  if is_glob x then Sx.add (get_glob x) m else m
+
+let e_inuse =
+  let rec inuse (map : Sx.t) (e : expr) =
+    match e.e_node with
+    | Evar x -> add_glob map x
+    | _ -> e_fold inuse map e
+  in
+    fun e -> inuse Sx.empty e
+
+let empty_uses : uses = mk_uses ~c:Sx.empty ~q:Sx.empty ~r:Sx.empty ~w:Sx.empty
+
+let add_call (u : uses) p : uses =
+  mk_uses ~c:(Sx.add p u.us_calls) ~q:u.us_quants ~r:u.us_reads ~w:u.us_writes
+
+let add_read (u : uses) p : uses =
+  if is_glob p then
+    mk_uses ~c:u.us_calls ~q:u.us_quants ~r:(Sx.add (get_glob p) u.us_reads) ~w:u.us_writes
+  else u
+
+let add_write (u : uses) p : uses =
+  if is_glob p then
+    mk_uses ~c:u.us_calls ~q:u.us_quants ~r:u.us_reads ~w:(Sx.add (get_glob p) u.us_writes)
+  else u
+
+let rec add_quantum (u : uses) (q:quantum_ref) =
+  match q with
+  | QRvar (p, _) ->
+    if is_glob p then
+      mk_uses ~c:u.us_calls ~q:(Sx.add (get_glob p) u.us_quants) ~r:u.us_reads ~w:u.us_writes
+    else u
+  | QRtuple qs -> List.fold_left add_quantum u qs
+  | QRproj (q, _) -> add_quantum u q
+
+let (_i_inuse, s_inuse, se_inuse) =
+  let rec lv_inuse (map : uses) (lv : lvalue) =
+    match lv with
+    | LvVar (p,_) ->
+        add_write map p
+
+    | LvTuple ps ->
+        List.fold_left
+          (fun map (p, _) -> add_write map p)
+          map ps
+
+  and i_inuse (map : uses) (i : instr) =
+    match i.i_node with
+    | Squantum (qr, _, e) ->
+      let map = se_inuse map e in
+      let map = add_quantum map qr in
+      map
+
+    | Smeasure (lv, qr, e) ->
+      let map = lv_inuse map lv in
+      let map = se_inuse map e in
+      let map = add_quantum map qr in
+      map
+
+    | Sasgn (lv, e) ->
+      let map = lv_inuse map lv in
+      let map = se_inuse map e in
+      map
+
+    | Srnd (lv, e) ->
+      let map = lv_inuse map lv in
+      let map = se_inuse map e in
+      map
+
+    | Scall (lv, p, es, qr) -> begin
+        (* FIXME: QUANTUM *)
+      let map = List.fold_left se_inuse map es in
+      let map = add_quantum map qr in
+      let map = add_call map p in
+      let map = lv |> ofold ((^~) lv_inuse) map in
+      map
+    end
+
+    | Sif (e, s1, s2) ->
+      let map = se_inuse map e in
+      let map = s_inuse map s1 in
+      let map = s_inuse map s2 in
+      map
+
+    | Swhile (e, s) ->
+      let map = se_inuse map e in
+      let map = s_inuse map s in
+      map
+
+    | Smatch (e, bs) ->
+      let map = se_inuse map e in
+      let map = List.fold_left (fun map -> s_inuse map |- snd) map bs in
+      map
+
+    | Sassert e ->
+      se_inuse map e
+
+    | Sabstract _ ->
+      assert false (* FIXME *)
+
+  and s_inuse (map : uses) (s : stmt) =
+    List.fold_left i_inuse map s.s_node
+
+  and se_inuse (u : uses) (e : expr) =
+    mk_uses ~c:u.us_calls ~q:u.us_quants ~r:(Sx.union u.us_reads (e_inuse e)) ~w:u.us_writes
+
+  in
+    (i_inuse empty_uses, s_inuse empty_uses, se_inuse)

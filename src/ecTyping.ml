@@ -40,15 +40,13 @@ type mismatch_funsig =
 | MF_tres      of ty * ty                               (* expected, got *)
 | MF_restr     of EcEnv.env * Sx.t mismatch_sets
 
-type restr_failure = Sx.t * Sm.t
+type restr_failure = mem_restr
 
-type restr_eq_failure = Sx.t * Sm.t * Sx.t * Sm.t
+type restr_eq_failure = mem_restr * mem_restr
 
 type mismatch_restr = [
   | `Sub    of restr_failure          (* Should not be allowed *)
-  | `RevSub of restr_failure option   (* Should be allowed. None is everybody *)
   | `Eq     of restr_eq_failure       (* Should be equal *)
-  | `FunCanCallUnboundedOracle of symbol * EcPath.xpath
 ]
 
 (* -------------------------------------------------------------------- *)
@@ -210,97 +208,6 @@ let unify_or_fail (env : EcEnv.env) ue loc ~expct:ty1 ty2 =
     | `TcCtt _ ->
         tyerror loc env TypeClassMismatch
 
-(* -------------------------------------------------------------------- *)
-let add_glob (m:Sx.t) (x:prog_var) : Sx.t =
-  if is_glob x then Sx.add (get_glob x) m else m
-
-let e_inuse =
-  let rec inuse (map : Sx.t) (e : expr) =
-    match e.e_node with
-    | Evar x -> add_glob map x
-    | _ -> e_fold inuse map e
-  in
-    fun e -> inuse Sx.empty e
-
-(* -------------------------------------------------------------------- *)
-let empty_uses : uses = mk_uses [] Sx.empty Sx.empty
-
-let add_call (u : uses) p : uses =
-  mk_uses (p::u.us_calls) u.us_reads u.us_writes
-
-let add_read (u : uses) p : uses =
-  if is_glob p then
-    mk_uses u.us_calls (Sx.add (get_glob p) u.us_reads) u.us_writes
-  else u
-
-let add_write (u : uses) p : uses =
-  if is_glob p then
-    mk_uses u.us_calls u.us_reads (Sx.add (get_glob p) u.us_writes)
-  else u
-
-let (_i_inuse, s_inuse, se_inuse) =
-  let rec lv_inuse (map : uses) (lv : lvalue) =
-    match lv with
-    | LvVar (p,_) ->
-        add_write map p
-
-    | LvTuple ps ->
-        List.fold_left
-          (fun map (p, _) -> add_write map p)
-          map ps
-
-  and i_inuse (map : uses) (i : instr) =
-    match i.i_node with
-    | Squantum _ | Smeasure _ -> map (* FIXME: QUANTUM *)
-
-    | Sasgn (lv, e) ->
-      let map = lv_inuse map lv in
-      let map = se_inuse map e in
-        map
-
-    | Srnd (lv, e) ->
-      let map = lv_inuse map lv in
-      let map = se_inuse map e in
-        map
-
-    | Scall (lv, p, es, qr) -> begin
-        (* FIXME: QUANTUM *)
-      let map = List.fold_left se_inuse map es in
-      let map = add_call map p in
-      let map = lv |> ofold ((^~) lv_inuse) map in
-        map
-    end
-
-    | Sif (e, s1, s2) ->
-      let map = se_inuse map e in
-      let map = s_inuse map s1 in
-      let map = s_inuse map s2 in
-        map
-
-    | Swhile (e, s) ->
-      let map = se_inuse map e in
-      let map = s_inuse map s in
-        map
-
-    | Smatch (e, bs) ->
-      let map = se_inuse map e in
-      let map = List.fold_left (fun map -> s_inuse map |- snd) map bs in
-        map
-
-    | Sassert e ->
-      se_inuse map e
-
-    | Sabstract _ ->
-      assert false (* FIXME *)
-
-  and s_inuse (map : uses) (s : stmt) =
-    List.fold_left i_inuse map s.s_node
-
-  and se_inuse (u : uses) (e : expr) =
-    mk_uses u.us_calls (Sx.union u.us_reads (e_inuse e)) u.us_writes
-
-  in
-    (i_inuse empty_uses, s_inuse empty_uses, se_inuse)
 
 (* -------------------------------------------------------------------- *)
 let select_local env (qs,s) =
@@ -535,218 +442,25 @@ let re_perror x = raise @@ RestrErr (`Sub x)
 
 let re_eq_perror x = raise @@ RestrErr (`Eq x)
 
-(* Unify the two restriction errors, if any. *)
-let to_eq_error e e' =
-  match e, e' with
-  | None, None -> ()
-  | Some (sx,sm), None ->
-    re_eq_perror (sx,sm, Sx.empty, Sm.empty)
-  | None, Some (sx,sm) ->
-    re_eq_perror (Sx.empty, Sm.empty, sx, sm)
-  | Some (sx,sm), Some (sx',sm') ->
-    re_eq_perror (sx, sm, sx', sm')
-
 let to_unit_map sx = Mx.map (fun _ -> ()) sx
 
 let to_sm sid =
   EcIdent.Sid.fold (fun m sm -> Sm.add (EcPath.mident m) sm) sid Sm.empty
 
-let support env (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
-  let memo : Sx.t EcIdent.Hid.t = EcIdent.Hid.create 16 in
-
-  let rec ur_support (supp : Sx.t) ur =
-    let supp = EcUtils.omap_dfl (use_support supp) supp ur.ur_pos in
-    use_support supp ur.ur_neg
-
-  and use_support (supp : Sx.t) (use : EcEnv.use) =
-    let supp = Mx.fold (fun x _ supp -> Sx.add x supp) use.EcEnv.us_pv supp in
-    EcIdent.Sid.fold (fun m supp ->
-        mident_support supp m
-      ) use.EcEnv.us_gl supp
-
-  and mident_support (supp : Sx.t) m =
-    try EcIdent.Hid.find memo m with
-    | Not_found ->
-      let mp = EcPath.mident m in
-      let ur  = NormMp.get_restr_use env mp in
-      let supp = ur_support supp ur in
-      EcIdent.Hid.add memo m supp;
-      supp in
-
-  let supp = EcUtils.omap_dfl (use_support Sx.empty) Sx.empty pr in
-  ur_support supp r
-
-(* Is [x] allowed in a positive restriction [pr]. *)
-let rec p_allowed env (x : EcPath.xpath) (pr : EcEnv.use option) =
-  match pr with
-  | None -> true
-  | Some pr ->
-    Mx.mem x pr.EcEnv.us_pv
-    || EcIdent.Sid.exists (allowed_m env x) pr.EcEnv.us_gl
-
-(* Is [x] allowed in an abstract module [m] *)
-and allowed_m env (x : EcPath.xpath) (m : EcIdent.t) =
-  let mp = EcPath.mident m in
-  let r  = NormMp.get_restr_use env mp in
-  allowed env x r
-
-(* Is [x] allowed in a positive and negative restriction [r]. *)
-and allowed env (x : EcPath.xpath) (r : EcEnv.use use_restr) =
-  (* [x] is allowed in [r] iff:
-     - [x] is directly allowed
-     - [x] is allowed in a module allowed in [r] *)
-  (p_allowed env x r.ur_pos && not (p_allowed env x (Some r.ur_neg)))
-
-(* Are all elements of [sx] allowed in the positive and negative
-   restriciton [r]. *)
-let all_allowed env (sx : 'a EcPath.Mx.t) (r : EcEnv.use use_restr) =
-  let allow x = allowed env x r in
-  let not_allowed = Mx.filter (fun x _ -> not @@ allow x) sx
-                    |> to_unit_map in
-  if not @@ Mx.is_empty not_allowed then
-    re_perror (not_allowed, Sm.empty)
-
-(* Are all elements of [sx] allowed in the union of the positive restriction [pr]
-   and the positive and negative restriction [r]. *)
-let all_allowed_gen env (sx : 'a EcPath.Mx.t)
-    (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
-  let allow x = p_allowed env x pr || allowed env x r in
-  let not_allowed = Mx.filter (fun x _ -> not @@ allow x) sx
-                    |> to_unit_map in
-  if not @@ Mx.is_empty not_allowed then
-    re_perror (not_allowed, Sm.empty)
-
-(* Are all elements of [sx] allowed in the positive restriciton [pr]. *)
-let all_allowed_p env (sx : 'a EcPath.Mx.t) (pr : EcEnv.use option) =
-  all_allowed env sx { ur_pos = pr; ur_neg = EcEnv.use_empty }
-
-
-(* Are all variables allowed in the union of the positive restriction [pr]
-   and the positive and negative restriction [r].
-   I.e. is [pr] union [r] forbidding nothing.
-   Remark: we cannot compute directly the union of [pr] and [r], because
-   A union (B \ C) <> (A union B) \ C *)
-let rec everything_allowed env
-    (pr : EcEnv.use option) (r : EcEnv.use use_restr) : unit =
-  match pr, r.ur_pos with
-  | None, _ -> ()
-  | Some pr, Some rup when EcIdent.Sid.is_empty pr.EcEnv.us_gl
-                        && EcIdent.Sid.is_empty rup.EcEnv.us_gl ->
-    raise @@ RestrErr (`RevSub None)
-
-  | Some _, Some _ ->
-    (* We check whether everybody in the support of [pr] and [r] is allowed,
-       and whether a dummy variable (which stands for everybody else) is
-       allowed. *)
-    let supp = support env pr r in
-    let dum =
-      let mdum = EcPath.mpath_abs (EcIdent.create "__dummy_ecTyping__") [] in
-      EcPath.xpath mdum "__dummy_ecTyping_s__" in
-    (* Sanity check: [dum] must be fresh. *)
-    assert (not @@ Sx.mem dum supp);
-    let supp = Sx.add dum supp in
-
-    all_allowed_gen env supp pr r;
-
-  | Some pr, None ->
-    (* In that case, we need [r.ur_neg] to forbid only variables that are
-       allowed in [pr], i.e. we require that:
-       [r.ur_neg] subset [pr] *)
-    try
-      all_allowed_p env r.ur_neg.EcEnv.us_pv (Some pr);
-      all_mod_allowed env
-        r.ur_neg.EcEnv.us_gl (Some pr) (EcModules.ur_full EcEnv.use_empty)
-    with RestrErr (`Sub e) -> raise @@ RestrErr (`RevSub (Some e))
-
-(* Are all elements of [sm] allowed the union of the positive restriction
-   [pr] and the positive and negative restriction [r]. *)
-and all_mod_allowed env (sm : EcIdent.Sid.t)
-    (pr : EcEnv.use option) (r : EcEnv.use use_restr) : unit =
-
-  let allow m = mod_allowed env m pr r in
-  let not_allowed = EcIdent.Sid.filter (fun m -> not @@ allow m) sm
-                    |> to_sm in
-  if not @@ Sm.is_empty not_allowed then
-    re_perror (Sx.empty, not_allowed)
-
-(* Is [m] directly allowed. This is sound but not complete (hence a negative
-   answer does not mean that [m] is forbidden). *)
-and direct_mod_allowed
-    (m : EcIdent.t) (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
-  match pr with
-  | None -> true
-  | Some pr ->
-    if EcIdent.Sid.mem m pr.EcEnv.us_gl
-    then true
-    else if EcIdent.Sid.is_empty r.ur_neg.EcEnv.us_gl
-         && Mx.is_empty r.ur_neg.EcEnv.us_pv
-    then match r.ur_pos with
-      | None -> true
-      | Some rur -> EcIdent.Sid.mem m rur.EcEnv.us_gl
-    else false
-
-(* Is [m] allowed in the union of the positive restriction [pr] and the
-   positive and negative restriction [r]. *)
-and mod_allowed env
-    (m : EcIdent.t) (pr : EcEnv.use option) (r : EcEnv.use use_restr) =
-
-  if direct_mod_allowed m pr r
-  then true
-  else
-    let mp = EcPath.mident m in
-    let rm  = NormMp.get_restr_use env mp in
-
-    try ur_allowed env rm pr r; true with
-      RestrErr _ -> false
-
-(* Is [ur] allowed in the union of the positive restriction [pr] and the
-   positive and negative restriction [r]. *)
-and ur_allowed env
-    (ur : EcEnv.use use_restr)
-    (pr : EcEnv.use option) (r : EcEnv.use use_restr) : unit =
-  let pr' = match pr with
-    | None -> None
-    | Some pr -> some @@ EcEnv.use_union pr ur.ur_neg in
-
-  use_allowed env ur.ur_pos pr' r
-
-(* Is [use] allowed in the union of the positive restriction [pr] and the
-   positive and negative restriction [r]. *)
-and use_allowed env
-    (use : EcEnv.use option)
-    (pr : EcEnv.use option) (r : EcEnv.use use_restr) : unit =
-  (* We have two cases, depending on whether [use] is everybody or not. *)
-  match use with
-  | None -> everything_allowed env pr r
-
-  | Some urm ->
-    all_allowed_gen env urm.EcEnv.us_pv pr r;
-    all_mod_allowed env urm.EcEnv.us_gl pr r
-
 (* This only checks the memory restrictions. *)
-let _check_mem_restr env (use : EcEnv.use) (restr : mod_restr) =
-  let r : EcEnv.use use_restr = NormMp.restr_use env restr in
-  use_allowed env (Some use) (Some EcEnv.use_empty) r
+let _check_mem_restr env (use : mem_restr) (restr : mem_restr) =
+  if not (EcMemRestr.subset env use restr) then
+    raise (RestrErr (`Sub restr))
 
 (* Check if [mr1] is a a subset of [mr2]. *)
-let _check_mem_restr_sub env (mr1 : mod_restr) (mr2 : mod_restr) =
-  let r1 = NormMp.restr_use env mr1 in
-  let r2 = NormMp.restr_use env mr2 in
-  ur_allowed env r1 (Some EcEnv.use_empty) r2
+let _check_mem_restr_sub env (mr1 : mem_restr) (mr2 : mem_restr) =
+  if not (EcMemRestr.subset env mr1 mr2) then
+    raise (RestrErr (`Sub mr2))
 
 (* Check if [mr1] is equal to [mr2]. *)
-let _check_mem_restr_eq env (mr1 : mod_restr) (mr2 : mod_restr) =
-  let r1 = NormMp.restr_use env mr1 in
-  let r2 = NormMp.restr_use env mr2 in
-
-  let e1 = match ur_allowed env r1 (Some EcEnv.use_empty) r2 with
-    | exception (RestrErr (`Sub e1)) -> Some e1
-    | () -> None
-  and e2 = match ur_allowed env r2 (Some EcEnv.use_empty) r1 with
-    | exception (RestrErr (`Sub e2)) -> Some e2
-    | () -> None in
-
-    to_eq_error e1 e2
+let _check_mem_restr_eq env (mr1 : mem_restr) (mr2 : mem_restr) =
+  if not (EcMemRestr.equal env mr1 mr2) then
+    raise (RestrErr (`Eq (mr1, mr2)))
 
 let check_mem_restr_mode mode env sym mr1 mr2 =
   try match mode with
@@ -759,17 +473,17 @@ let recast env who f =
   try f () with
   | RestrErr (`Eq _) -> assert false
   | RestrErr (`Sub e) -> re (`Sub e)
-  | RestrErr (`RevSub e) -> re (`RevSub e)
 
 (* This only checks the memory restrictions. *)
-let check_mem_restr env mp (use : EcEnv.use) (restr : mod_restr) =
+let check_mem_restr env mp (use : mem_restr) (restr : mem_restr) =
   recast env (RW_mod mp) (fun () -> _check_mem_restr env use restr)
 
 (* This only checks the memory restrictions. *)
+(*
 let check_mem_restr_fun env xp restr =
   let use = NormMp.fun_use env xp in
   recast env (RW_fun xp) (fun () ->_check_mem_restr env use restr)
-
+*)
 (* -------------------------------------------------------------------- *)
 let rec check_sig_cnv
     mode env sym_in (sin:module_sig) (sout:module_sig) =
@@ -797,7 +511,7 @@ let rec check_sig_cnv
   and rout = EcSubst.subst_mod_restr bsubst sout.mis_restr in
 
   (* Check for memory restrictions inclusion. *)
-  check_mem_restr_mode mode env sym_in sin.mis_restr sout.mis_restr;
+  check_mem_restr_mode mode env sym_in sin.mis_restr.mr_mem sout.mis_restr.mr_mem;
 
   (* Check for body inclusion:
    * - functions inclusion with equal signatures + included oracles. *)
@@ -854,15 +568,12 @@ let check_sig_mt_cnv env sym_in sin tyout =
 
 (* -------------------------------------------------------------------- *)
 let check_modtype env mp mt i =
-  let restr = i.mt_restr in
-  let use = NormMp.mod_use env mp in
-  check_mem_restr env mp use restr;
-
   let sym = match mp.m_top with
     | `Local id -> id.EcIdent.id_symb
     | `Concrete (p,_) -> EcPath.basename p in
-
-  check_sig_mt_cnv env sym mt i
+  check_sig_mt_cnv env sym mt i;
+  let use = EcMemRestr.module_uses env mp i in
+  check_mem_restr env mp use i.mt_restr.mr_mem
 
 (* -------------------------------------------------------------------- *)
 let split_msymb (env : EcEnv.env) (msymb : pmsymbol located) =

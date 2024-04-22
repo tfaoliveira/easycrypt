@@ -37,15 +37,10 @@ type quantif =
 type hoarecmp = FHle | FHeq | FHge
 
 (* -------------------------------------------------------------------- *)
+type global = quantum * EcPath.xpath
+module Mglob : EcMaps.Map.S with type key = global
 
-type 'a use_restr = {
-  ur_pos : 'a option;   (* If not None, can use only element in this set. *)
-  ur_neg : 'a;          (* Cannot use element in this set. *)
-}
-
-type mr_xpaths = EcPath.Sx.t use_restr
-
-type mr_mpaths = EcPath.Sm.t use_restr
+module Sglob : EcMaps.Set.S with type M.key = global
 
 (* -------------------------------------------------------------------- *)
 type ty = private {
@@ -146,18 +141,37 @@ and stmt = private {
   s_tag  : int;
 }
 
+(* -------------------------------------------------------------------- *)
 and oracle_info = {
   oi_calls : xpath list;
 }
 
+and functor_params = (EcIdent.t * module_type) list
+
+and functor_fun = {
+  ff_params : functor_params;
+  ff_xp     : xpath;                (* The xpath is fully applied *)
+}
+
+and mem_restr =
+  | Empty
+  | Quantum                   (* All quantum global references *)
+  | Classical                 (* All classical global variables *)
+  | Var     of global         (* The global variable or quantum ref *)
+  | GlobFun of functor_fun   (* Global of a function *)
+  | Union   of mem_restr * mem_restr
+  | Inter   of mem_restr * mem_restr
+  | Diff    of mem_restr * mem_restr
+
 and mod_restr = {
-  mr_xpaths : mr_xpaths;
-  mr_mpaths : mr_mpaths;
+  mr_mem    : mem_restr;
   mr_oinfos : oracle_info Msym.t;
 }
 
+(* FIXME this is not clear, does the mem_restr can depend on params.
+   I think not *)
 and module_type = {
-  mt_params : (EcIdent.t * module_type) list;
+  mt_params : functor_params;
   mt_name   : EcPath.path;
   mt_args   : EcPath.mpath list;
   mt_restr  : mod_restr;
@@ -413,20 +427,16 @@ val v_equal : variable equality
 val v_hash : variable hash
 
 (* -------------------------------------------------------------------- *)
-val ur_equal : 'a equality -> 'a use_restr equality
-val ur_hash  : ('a -> 'b list) -> 'b hash -> 'a use_restr hash
+val g_equal : global equality
 
-val mr_xpaths_fv : mr_xpaths fv
-val mr_mpaths_fv : mr_mpaths fv
+(* -------------------------------------------------------------------- *)
 
 val mr_equal : mod_restr equality
-val mr_hash  : mod_restr hash
 val mr_fv    : mod_restr fv
 
 val mty_equal : module_type equality
 val mty_hash  : module_type hash
-
-val mr_tostring : mod_restr -> string
+val mty_fv    : module_type fv
 
 (* -------------------------------------------------------------------- *)
 val lmt_equal : ty equality -> local_memtype equality
