@@ -3,6 +3,7 @@ open EcEnv
 open EcLowPhlGoal
 open EcTypes
 open EcCoreFol
+open EcCoreModules
 open EcSymbols
 open EcIdent
 
@@ -19,6 +20,15 @@ let print_form (env: env) (f: form) : unit =
 let print_expr (env: env) (e: expr) : unit = 
   let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env) in
   Format.eprintf "%a@." fmt e
+
+let print_instr (env: env) (i: instr) : unit =
+  let fmt = EcPrinting.pp_instr (EcPrinting.PPEnv.ofenv env) in
+  Format.eprintf "%a@." fmt i
+
+let print_id (env: env) (id: t) : unit = 
+  let fmt = EcPrinting.pp_local (EcPrinting.PPEnv.ofenv env) in
+  Format.eprintf "%a@." fmt id
+
 
 (* -------------------------------------------------------- *)
 (* AUXILIARY DEBUG FUNCTIONS: *)
@@ -82,6 +92,61 @@ let tempname = "TEMP"
 (* TYPE DEFINITIONS: *)
 type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
 
+(* Reduces arguments to function call to single variables, adding the needed assignments *)
+let rec ssa_of_arg (env: env) (arg: expr) : env * (instr list) * expr =
+  match arg.e_node with
+  | Eint _ | Evar _ | Elocal _ | Eop _ -> (env, [], arg)
+  | Eapp _  ->
+    let env, insts, e = ssa_of_expr env arg in
+    let temp = create_tagged tempname in
+    let inst = i_asgn ((LvVar (PVloc (name temp), e.e_ty)), e) in
+    let env = {env with env_ssa = MMsym.add (name temp) temp env.env_ssa} in
+    (env, insts @ [inst], mk_expr (Elocal temp) e.e_ty)
+  | _ -> assert false
+
+(* Reduces an expression to a correct right hand side of an assignment in SSA
+   Either:
+   - Constant int
+   - Variable (local or global)
+   - Operator application to arguments which are one of the two above cases
+*)
+and ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
+  match e.e_node with
+  | Eint _ | Evar _ | Elocal _ | Eop _ -> (env, [] , e)
+  | Eapp (op, args) -> 
+    let (env, insts), args = List.fold_left_map 
+      (fun (env, insts) arg -> let env, ainsts, arg = ssa_of_arg env arg in ((env, insts @ ainsts), arg))
+      (env, []) args
+    in (env, insts, e_app op args e.e_ty)
+  | _ -> assert false
+
+let ssa_of_instr ?(strict: bool = true) (env: env) (inst: instr) : env * (instr list) =
+  match inst.i_node with
+  | Sasgn (lv, e) -> let env, insts, e = ssa_of_expr env e in
+    begin match lv with
+    | LvVar (PVloc v, ty) -> begin
+      match MMsym.last v env.env_ssa with
+        | None -> let id = create v in
+        ({env with env_ssa = MMsym.add v id env.env_ssa}, insts @ [i_asgn (lv, e)])
+        | Some _ -> let id = create_tagged v in
+        let lv = LvVar (PVloc (name id), ty) in
+        ({env with env_ssa = MMsym.add (name id) id env.env_ssa}, insts @ [i_asgn (lv, e)])
+    end
+    (* (env, insts @ [i_asgn (lv, e)]) *)
+    | _ -> assert false
+  end
+  | _ -> if strict 
+    then 
+    begin 
+      Format.eprintf "Only assignment supported in SSA conversion for now@.";
+      assert false 
+    end
+    else (env, [inst])
+
+let ssa_of_prog ?(strict: bool = true) (env: env) (body: instr list) : env * (instr list) = 
+  let env, body = List.fold_left_map (ssa_of_instr ~strict:strict) env body in
+  (env, List.flatten body)
+
 type poly_op = 
   | Assign of (form -> form list -> form)
   | Eq of (form list -> form)
@@ -105,7 +170,7 @@ let decode_op (env: env) (q: qsymbol) : env * poly_op =
     end))
   | ["Top"; "JWord"; _], "`|>>`" -> 
     let temp = create_tagged tempname in
-  ({env with env_ssa = MMsym.add tempname temp env.env_ssa }, 
+  ({env with env_ssa = MMsym.add (name temp) temp env.env_ssa }, 
   Assign (fun f fs -> 
     begin match fs with 
     | [a; sa] -> (* FIXME: allowing variable shift amounts for now, might change later? *)
@@ -191,7 +256,8 @@ let rec trans_expr (env: env) (f:form) (e: expr) : env * form =
       end
     | Elocal v -> begin match (MMsym.last (name v) env.env_ssa ) with
       | Some v_ when v_ = v -> (env, mk_form (Flocal v) e.e_ty)
-      | Some _ -> (Format.eprintf "Inconsistent bindings for local"; assert false)
+      | Some v_ -> (Format.eprintf "Inconsistent bindings for local %s:@." (name v_); print_id env.env_ec v; 
+        print_id env.env_ec v_; assert false)
       | None -> ({env with env_ssa = MMsym.add (name v) v env.env_ssa}, mk_form (Flocal v) e.e_ty)
     end
     | _ -> let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env.env_ec) in
@@ -230,7 +296,10 @@ let trans_instr (env: env) (inst: instr) : env * form =
     begin
       match lv with
       | LvVar (PVloc pv, _) -> 
-        let id = create_tagged pv in
+        let id = begin match MMsym.last pv env.env_ssa with
+        | Some id -> id 
+        | None -> Format.eprintf "Unregistered lv %s@." pv; assert false 
+        end in
         ((pv, id), mk_form (Flocal id) ty)
       | _ -> assert false (* TODO *)
     end
@@ -238,9 +307,10 @@ let trans_instr (env: env) (inst: instr) : env * form =
 
   match inst.i_node with
   | Sasgn (lv, e) -> 
-    let ((pv, id), fl) = trans_lvar lv tint in (* FIXME: check if hardcoded int type is ok*)
+    let ((_pv, _id), fl) = trans_lvar lv tint in (* FIXME: check if hardcoded int type is ok*)
     let env, f = trans_expr env fl e in
-    ({env with env_ssa = MMsym.add pv id env.env_ssa}, f)
+    (env, f)
+    (* ({env with env_ssa = MMsym.add pv id env.env_ssa}, f) *)
   | _ -> assert false
 
 (* ------------------------------------------------------------- *)
@@ -307,6 +377,8 @@ let rec trans_form (env: env) (f: form) : env * (form list) * form =
 let trans_hoare (env: env) (pre: form) (body: instr list) (ret: expr) (post: form) : env * form = 
   let env, pre_ts, pre = trans_form env pre in
   let pre_f = f_imps pre_ts pre in
+  let env, body = ssa_of_prog env body in (* FIXME: check if ssa should update env or not *)
+  let () = List.iter (print_instr env.env_ec) body in (* DEBUG PRINT, REMOVE LATER *)
   let env, body = List.fold_left_map trans_instr env body in
   let env, ret = trans_ret env ret in
   let prog = f_imps body ret in
