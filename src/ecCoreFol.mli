@@ -115,7 +115,7 @@ val f_pvar  : EcTypes.prog_var -> EcTypes.ty -> memory -> form
 val f_pvarg : EcTypes.ty -> memory -> form
 val f_pvloc : variable -> memory -> form
 val f_pvlocs : variable list -> memory -> form list
-val f_glob  : EcIdent.t -> memory -> form
+val f_glob  : EcAst.functor_fun -> memory -> form
 
 (* soft-constructors - common formulas constructors *)
 val f_op     : path -> EcTypes.ty list -> EcTypes.ty -> form
@@ -315,8 +315,8 @@ val destr_pr        : form -> pr
 val destr_programS  : [`Left | `Right] option -> form -> memenv * stmt
 val destr_int       : form -> zint
 
-val destr_glob      : form -> EcIdent.t        * memory
-val destr_pvar      : form -> EcTypes.prog_var * memory
+val destr_glob      : form -> EcAst.functor_fun * memory
+val destr_pvar      : form -> EcTypes.prog_var  * memory
 
 (* -------------------------------------------------------------------- *)
 val is_true      : form -> bool

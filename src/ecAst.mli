@@ -50,7 +50,7 @@ type ty = private {
 }
 
 and ty_node =
-  | Tglob   of EcIdent.t (* The tuple of global variable of the module *)
+  | Tglob   of functor_fun (* Globals use by f *)
   | Tunivar of EcUid.uid
   | Tvar    of EcIdent.t
   | Ttuple  of ty list
@@ -226,7 +226,7 @@ and f_node =
   | Fint    of BI.zint
   | Flocal  of EcIdent.t
   | Fpvar   of prog_var * memory
-  | Fglob   of EcIdent.t * memory
+  | Fglob   of functor_fun * memory
   | Fop     of EcPath.path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list

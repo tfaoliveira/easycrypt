@@ -64,7 +64,7 @@ type ty = {
 }
 
 and ty_node =
-  | Tglob   of EcIdent.t (* The tuple of global variable of the module *)
+  | Tglob   of functor_fun (* Globals use by f *)
   | Tunivar of EcUid.uid
   | Tvar    of EcIdent.t
   | Ttuple  of ty list
@@ -239,7 +239,7 @@ and f_node =
   | Fint    of BI.zint
   | Flocal  of EcIdent.t
   | Fpvar   of prog_var * memory
-  | Fglob   of EcIdent.t * memory     (* FIXME replace by functor_fun *)
+  | Fglob   of functor_fun * memory
   | Fop     of EcPath.path * ty list
   | Fapp    of form * form list
   | Ftuple  of form list
@@ -693,14 +693,21 @@ and mer_fv mer =
   | Inter(s1, s2)
   | Diff (s1, s2) -> fv_union (mer_fv s1)( mer_fv s2)
 
+let mod_params_hash params =
+  Why3.Hashcons.combine_list
+     (fun (x, _) -> EcIdent.id_hash x)
+     0 params
 
 let mty_hash mty =
   Why3.Hashcons.combine2
     (EcPath.p_hash mty.mt_name)
-    (Why3.Hashcons.combine_list
-       (fun (x, _) -> EcIdent.id_hash x)
-       0 mty.mt_params)
+    (mod_params_hash mty.mt_params)
     (Why3.Hashcons.combine_list EcPath.m_hash 0 mty.mt_args)
+
+let ff_hash ff =
+  Why3.Hashcons.combine
+     (EcPath.x_hash ff.ff_xp)
+     (mod_params_hash ff.ff_params)
 
 (* -------------------------------------------------------------------- *)
 
@@ -1047,8 +1054,8 @@ module Hsty = Why3.Hashcons.Make (struct
 
   let equal ty1 ty2 =
     match ty1.ty_node, ty2.ty_node with
-    | Tglob m1, Tglob m2 ->
-        EcIdent.id_equal m1 m2
+    | Tglob ff1, Tglob ff2 ->
+        ff_equal ff1 ff2
 
     | Tunivar u1, Tunivar u2 ->
         uid_equal u1 u2
@@ -1069,7 +1076,7 @@ module Hsty = Why3.Hashcons.Make (struct
 
   let hash ty =
     match ty.ty_node with
-    | Tglob m          -> EcIdent.id_hash m
+    | Tglob ff         -> ff_hash ff
     | Tunivar u        -> u
     | Tvar    id       -> EcIdent.tag id
     | Ttuple  tl       -> Why3.Hashcons.combine_list ty_hash 0 tl
@@ -1081,7 +1088,7 @@ module Hsty = Why3.Hashcons.Make (struct
       List.fold_left (fun s a -> fv_union s (ex a)) Mid.empty in
 
     match ty with
-    | Tglob m          -> EcIdent.fv_add m Mid.empty
+    | Tglob ff         -> ff_fv ff
     | Tunivar _        -> Mid.empty
     | Tvar    _        -> Mid.empty (* FIXME: section *)
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
@@ -1243,8 +1250,8 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fpvar(pv1,s1), Fpvar(pv2,s2) ->
         EcIdent.id_equal s1 s2 && pv_equal pv1 pv2
 
-    | Fglob(mp1,m1), Fglob(mp2,m2) ->
-      EcIdent.id_equal mp1 mp2 && EcIdent.id_equal m1 m2
+    | Fglob(ff1,m1), Fglob(ff2,m2) ->
+      ff_equal ff1 ff2 && EcIdent.id_equal m1 m2
 
     | Fop(p1,lty1), Fop(p2,lty2) ->
         EcPath.p_equal p1 p2 && List.all2 ty_equal lty1 lty2
@@ -1298,8 +1305,8 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fpvar(pv, m) ->
         Why3.Hashcons.combine (pv_hash pv) (EcIdent.id_hash m)
 
-    | Fglob(mp, m) ->
-        Why3.Hashcons.combine (EcIdent.id_hash mp) (EcIdent.id_hash m)
+    | Fglob(ff, m) ->
+        Why3.Hashcons.combine (ff_hash ff) (EcIdent.id_hash m)
 
     | Fop(p, lty) ->
         Why3.Hashcons.combine_list ty_hash (EcPath.p_hash p) lty
@@ -1335,7 +1342,7 @@ module Hsform = Why3.Hashcons.Make (struct
     | Fop (_, tys)        -> union (fun a -> a.ty_fv) tys
     | Fpvar (PVglob pv,m) -> EcPath.x_fv (fv_add m Mid.empty) pv
     | Fpvar (PVloc _,m)   -> fv_add m Mid.empty
-    | Fglob (mp,m)        -> fv_add mp (fv_add m Mid.empty)
+    | Fglob (ff,m)        -> fv_add m (ff_fv ff)
     | Flocal id           -> fv_singleton id
     | Fapp (f, args)      -> union f_fv (f :: args)
     | Ftuple args         -> union f_fv args

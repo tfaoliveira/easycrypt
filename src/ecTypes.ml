@@ -41,8 +41,8 @@ module Hty = MSHty.H
 (* -------------------------------------------------------------------- *)
 let rec dump_ty ty =
   match ty.ty_node with
-  | Tglob p ->
-      EcIdent.tostring p
+  | Tglob ff ->
+      EcPath.x_tostring ff.ff_xp
 
   | Tunivar i ->
       Printf.sprintf "#%d" i
@@ -65,7 +65,7 @@ let tuni uid     = mk_ty (Tunivar uid)
 let tvar id      = mk_ty (Tvar id)
 let tconstr p lt = mk_ty (Tconstr (p, lt))
 let tfun t1 t2   = mk_ty (Tfun (t1, t2))
-let tglob m      = mk_ty (Tglob m)
+let tglob ff      = mk_ty (Tglob ff)
 
 (* -------------------------------------------------------------------- *)
 let tunit      = tconstr EcCoreLib.CI_Unit .p_unit    []
