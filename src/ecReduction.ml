@@ -37,7 +37,7 @@ module EqTest_base = struct
     | Tfun (t1, t2), Tfun (t1', t2') ->
         for_type env t1 t1' && for_type env t2 t2'
 
-    | Tglob m1, Tglob m2 -> EcIdent.id_equal m1 m2
+    | Tglob ff1, Tglob ff2 -> EcMemRestr.ff_alpha_equal ff1 ff2
 
     | Tconstr (p1, lt1), Tconstr (p2, lt2) when EcPath.p_equal p1 p2 ->
         if

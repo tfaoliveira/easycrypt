@@ -112,11 +112,6 @@ module type PrinterAPI = sig
     val pr_any : Format.formatter -> EcEnv.env -> qsymbol -> unit
   end
 
-  (* ------------------------------------------------------------------ *)
-  val pp_use : PPEnv.t -> Format.formatter -> EcEnv.use -> unit
-  val pp_use_restr :
-    EcEnv.env -> print_abstract:bool ->
-    Format.formatter -> EcEnv.use EcModules.use_restr -> unit
 end
 
 (* ==================================================================== *)

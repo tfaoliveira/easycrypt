@@ -2,6 +2,8 @@ open EcPath
 open EcAst
 open EcEnv
 
+val ff_alpha_equal : functor_fun -> functor_fun -> bool
+
 val module_uses : env -> mpath -> module_type -> mem_restr
 
 val equal    : env -> mem_restr -> mem_restr -> bool

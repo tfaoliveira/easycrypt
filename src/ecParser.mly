@@ -801,12 +801,10 @@ mod_ident1:
 | x=lident { ([], x) }
 
 f_or_mod_ident:
-| nm=mod_qident DOT x=lident
-    { let fv = mk_loc (EcLocation.make $startpos(nm) $endpos(x)) (nm, x) in
-      FM_FunOrVar fv }
-| x=lident
-    { let fv = mk_loc (EcLocation.make $startpos(x) $endpos(x)) ([], x) in
-      FM_FunOrVar fv}
+| LBRACE p=mod_params IMPL f=loc(fident) RBRACKET
+    { FM_ff {pff_params = p; pff_xp = f } }
+| f=loc(fident)
+    { FM_FunOrVar f }
 | m=loc(mod_qident) { FM_Mod m }
 
 
@@ -1118,11 +1116,11 @@ qident_or_res_or_glob:
 | x=loc(RES)
     { GVvar (mk_loc x.pl_loc ([], "res")) }
 
-| GLOB mp=loc(mod_qident)
-    { GVglob (mp, []) }
+| GLOB ff=f_or_mod_ident
+    { GVglob (ff, []) }
 
-| GLOB mp=loc(mod_qident) BACKSLASH ex=brace(plist1(qident, COMMA))
-    { GVglob (mp, ex) }
+| GLOB ff=f_or_mod_ident BACKSLASH ex=brace(plist1(qident, COMMA))
+    { GVglob (ff, ex) }
 
 pfpos:
 | i=sword
@@ -1267,7 +1265,7 @@ sform_u(P):
       PFapp(mk_loc op.pl_loc id, [e1; e2]) }
 
 form_u(P):
-| GLOB mp=loc(mod_qident) { PFglob mp }
+| GLOB mp=f_or_mod_ident { PFglob mp }
 
 | e=sform_u(P) { e }
 
@@ -1413,7 +1411,7 @@ simpl_type_exp:
 | x=qident                    { PTnamed x      }
 | x=tident                    { PTvar x        }
 | tya=type_args x=qident      { PTapp (x, tya) }
-| GLOB m=loc(mod_qident)      { PTglob m       }
+| GLOB m=f_or_mod_ident       { PTglob m       }
 | LPAREN ty=type_exp RPAREN   { ty             }
 
 type_args:
@@ -3866,7 +3864,7 @@ print:
 | LEMMA       qs=qident          { Pr_ax   qs            }
 | MODULE      qs=qident          { Pr_mod  qs            }
 | MODULE TYPE qs=qident          { Pr_mty  qs            }
-| GLOB        qs=loc(mod_qident) { Pr_glob qs            }
+| GLOB        qs=f_or_mod_ident  { Pr_glob qs            }
 | GOAL        n=sword            { Pr_goal n             }
 | REWRITE     qs=qident          { Pr_db   (`Rewrite qs) }
 | SOLVE       qs=ident           { Pr_db   (`Solve   qs) }

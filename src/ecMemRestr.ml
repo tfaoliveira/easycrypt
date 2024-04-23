@@ -206,6 +206,8 @@ module Mset = EcMaps.Map.Make (struct
   let compare = compare_mem_restr
 end)
 
+let ff_alpha_equal ff1 ff2 =
+  compare_ff ff1 ff2 = 0
 
 (* ---------------------------------------------------------------- *)
 type meta = int
