@@ -4044,7 +4044,7 @@ global_action:
 | BIND BITSTRING t=qident w=uint 
   { Gbindb (t, (BI.to_int w)) } (* FIXME: Check if int conversions should be here *)
 
-| BIND CIRCUIT f=oident c=STRING
+| BIND CIRCUIT f=qoident c=STRING
   { Gbindc (f, c) }
 
 | PRAGMA       x=pragma { Gpragma x }

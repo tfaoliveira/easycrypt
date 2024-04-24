@@ -608,13 +608,13 @@ and int_of_form (env: env) (f: EcAst.form) : int =
 
 (* EXPORTED FUNCTIONS *)
 (* -------------------------------------------------------------------- *)
-let bind_circuit (env: env) (op: psymbol) (c: string) : env = 
+let bind_circuit (env: env) (op: pqsymbol) (c: string) : env = 
   let c = begin 
     try C.func_from_spec c 
     with Not_found -> Format.eprintf "Unknown circuit\n"; raise BDepError
   end in
-  let (op, t) = EcEnv.Op.lookup ([], op.pl_desc) env in
-  let fmt = EcPrinting.pp_type (EcPrinting.PPEnv.ofenv env) in
+  let (op, t) = EcEnv.Op.lookup op.pl_desc env in
+  (* let fmt = EcPrinting.pp_type (EcPrinting.PPEnv.ofenv env) in *)
   let rec uncurry_ty (ty: ty) : ty list = 
     match ty.ty_node with
     | Tfun (t1, t2) -> (uncurry_ty t1) @ (uncurry_ty t2)

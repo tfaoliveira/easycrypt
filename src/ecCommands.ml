@@ -642,7 +642,7 @@ and process_bind_bitstring (scope : EcScope.scope) (tq: pqsymbol) (w: int) =
   let env = EcBDep.bind_bitstring (EcScope.env scope) tq w 
   in EcScope.Circ.update_env env scope
   
-and process_bind_circuit (scope: EcScope.scope) (op: psymbol) (c: string) = 
+and process_bind_circuit (scope: EcScope.scope) (op: pqsymbol) (c: string) = 
   let env = EcBDep.bind_circuit (EcScope.env scope) op c in
   EcScope.Circ.update_env env scope
 

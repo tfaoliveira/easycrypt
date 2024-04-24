@@ -6,6 +6,9 @@ AND_u256(a@256, b@256) -> @256 =
 ADD_8(a@8, b@8) -> @8 =
  add<8>(a, b)
 
+OPP_8(a@8) -> @8 =
+ add<8>(xor<8>(a, 255), 1)
+
 # Intel intrinsic: _mm256_permutexvar_epi32
 VPERMD(widx@256, w@256) -> @256 =
   map<32, 8>(
@@ -214,4 +217,6 @@ COMPRESS(w@16) -> @4 =
       sll<16>(w, 4), 
       1665)
   , 80635), 28)[@4|0]
+
+
 
