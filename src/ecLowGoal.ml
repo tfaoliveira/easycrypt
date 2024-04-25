@@ -2417,7 +2417,7 @@ let t_shoare_to_z tc =
     match fp.f_node with
     | FhoareF a  ->
       let body = EcEnv.Fun.by_xpath a.hf_f env in
-      let smt,rexpr =
+      let stmt,rexpr =
         match body.f_def with
         | FBdef d -> d.f_body,d.f_ret
         | _ -> assert false
@@ -2426,23 +2426,21 @@ let t_shoare_to_z tc =
         match rexpr with
         | None -> tc
         | Some e ->
-          let env_ssa = MMsym.empty in (* FIXME: need to add proc args as bindings here *)
-          let _, f = EcCPolyEnc.trans_hoare {env_ec = env; env_ssa = env_ssa } 
-            a.hf_pr smt.s_node e a.hf_po in (* maybe convert args to record? *)
+          let f =
+            EcCPolyEnc.trans_hoare env a.hf_pr stmt.s_node e a.hf_po
+          in (* maybe convert args to record? *)
           FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f
       end
 
-    | FhoareS a  ->
-      let fmt = EcPrinting.pp_stmt (EcPrinting.PPEnv.ofenv env) in
-      Format.printf "%a" fmt a.hs_s;
-      let pre,post,(_, instr) =
-        f_true,f_true,
-        List.fold_left_map
-          (fun env inst -> EcCPolyEnc.trans_instr env inst)
-          {env_ec = env; env_ssa = MMsym.empty} a.hs_s.s_node
-      (*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*) in
-      let f = f_imp pre (f_imps instr post) in
-      FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f
+    | FhoareS _a  -> tc
+      (* let pre,post,(_, instr) = *)
+      (*   f_true,f_true, *)
+      (*   List.fold_left_map *)
+      (*     (fun env inst -> EcCPolyEnc.trans_instr env inst) *)
+      (*     {env_ec = env; env_ssa = MMsym.empty} a.hs_s.s_node *)
+      (* (\*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*\) in *)
+      (* let f = f_imp pre (f_imps instr post) in *)
+      (* FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f *)
 
     | _ ->  tc
   in
