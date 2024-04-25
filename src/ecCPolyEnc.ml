@@ -95,51 +95,44 @@ type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
 let update_env name id env =
   {env with env_ssa = MMsym.add name id env.env_ssa}
 
-let rec ssa_of_expr_aux (env: env) (e: expr) : env * (instr list) * expr =
-  match e.e_node with
-  | Eint _ | Eop _ -> (env, [] , e)
-  | Evar (PVloc v) ->
-    begin
-      match MMsym.last v env.env_ssa with
-      | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
-      | None -> (env, [] , e)
-    end
-  | Elocal v ->
-    begin
-      match MMsym.last (name v) env.env_ssa with
-      | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
-      | None -> (env, [] , e)
-    end
-
-  | Eapp (op, args) ->
-    let env, insts, args =
-      List.fold_left (fun (env,acc1,acc2) x ->
-          let env,instr,a = ssa_of_expr_aux env x in
-          env, acc1 @ instr, acc2 @ [a]
-        )
-        (env,[],[]) args
-    in
-    let e = e_app op args e.e_ty in
-    let temp = create_tagged tempname in
-    let inst = i_asgn ((LvVar (PVloc (name temp), e.e_ty)), e) in
-    update_env (name temp) temp env, insts @ [inst], mk_expr (Elocal temp) e.e_ty
-  | _ -> assert false
-
 let ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
+  let ssa_of_expr_aux2 (env: env) (e: expr) : env * (instr list) * expr =
+    match e.e_node with
+    | Eint _ | Eop _ -> (env, [] , e)
+    | Evar (PVloc v) ->
+      begin
+        match MMsym.last v env.env_ssa with
+        | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
+        | None -> (env, [] , e)
+      end
+    | Elocal v ->
+      begin
+        match MMsym.last (name v) env.env_ssa with
+        | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
+        | None -> (env, [] , e)
+      end
+    | _ ->  assert false
+  in
+
+  let rec ssa_of_expr_aux (env: env) (e: expr) : env * (instr list) * expr =
+    match e.e_node with
+    | Eapp (op, args) ->
+      let env, insts, args =
+        List.fold_left (fun (env,acc1,acc2) x ->
+            let env,instr,a = ssa_of_expr_aux env x in
+            env, acc1 @ instr, acc2 @ [a]
+          )
+          (env,[],[]) args
+      in
+      let e = e_app op args e.e_ty in
+      let temp = create_tagged tempname in
+      let inst = i_asgn ((LvVar (PVloc (name temp), e.e_ty)), e) in
+      update_env (name temp) temp env, insts @ [inst], mk_expr (Elocal temp) e.e_ty
+
+    | _ -> ssa_of_expr_aux2 env e
+  in
+
   match e.e_node with
-  | Eint _ | Eop _ -> (env, [] , e)
-  | Evar (PVloc v) ->
-    begin
-      match MMsym.last v env.env_ssa with
-      | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
-      | None -> (env, [] , e)
-    end
-  | Elocal v ->
-    begin
-      match MMsym.last (name v) env.env_ssa with
-      | Some x -> (env, [], mk_expr (Elocal x) e.e_ty)
-      | None -> (env, [] , e)
-    end
   | Eapp (op, args) ->
     let env, insts, args =
       List.fold_left (fun (env,acc1,acc2) x ->
@@ -150,7 +143,8 @@ let ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
     in
     let e = e_app op args e.e_ty in
     env, insts , e
-  | _ -> assert false
+
+  | _ -> ssa_of_expr_aux2 env e
 
 let ssa_of_instr (env: env) (inst: instr) : env * (instr list) =
   match inst.i_node with
@@ -187,22 +181,20 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
     | Evar (PVloc v) ->
       begin
         match MMsym.last v env.env_ssa with
-        | Some x -> (env, mk_form (Flocal x) e.e_ty)
-        | None -> let x = create v in
+        | Some x ->
+          (env, mk_form (Flocal x) e.e_ty)
+        | None ->
+          let x = create_tagged v in
           update_env v x env, mk_form (Flocal x) tint
       end
     | Elocal v ->
       begin
         match MMsym.last (name v) env.env_ssa with
-        | Some v_ when v_ = v ->
-          env, mk_form (Flocal v) e.e_ty
-        | Some v_ ->
-          Format.eprintf "Inconsistent bindings for local %s:@." (name v_);
-          print_id env.env_ec v;
-          print_id env.env_ec v_;
-          assert false
+        | Some x ->
+          env, mk_form (Flocal x) e.e_ty
         | None ->
-          update_env (name v) v env, mk_form (Flocal v) tint
+          let x = create_tagged (name v) in
+          update_env (name v) x env, mk_form (Flocal v) tint
       end
     | _ ->
       let fmt = EcPrinting.pp_expr (EcPrinting.PPEnv.ofenv env.env_ec) in
@@ -313,24 +305,21 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
   |  _ -> assert false (* FIXME: add error handling code *)
 
 let trans_instr (env: env) (inst: instr) : env * form =
-  let trans_lvar (lv: lvalue) (ty: ty) : form list =
+  let trans_lvar (lv: lvalue) : form list =
     match lv with
     | LvVar (PVloc pv, _) ->
       let id =
         match MMsym.last pv env.env_ssa with
-        | Some id -> id
-        | None ->
-          Format.eprintf "Unregistered lv %s@." pv;
-          assert false
+        | Some id -> assert (pv = name id); id
+        | None -> assert false
       in
-      [mk_form (Flocal id) ty]
+      [mk_form (Flocal id) tint]
     | LvTuple ([(PVloc _p1v, _); (PVloc _pv2, _)]) -> assert false
     | _ -> assert false
   in
   match inst.i_node with
   | Sasgn (lv, e) ->
-    let fl = trans_lvar lv tint in
-    (* FIXME: check if hardcoded int type is ok*)
+    let fl = trans_lvar lv in
     trans_expr env fl e
   | _ -> assert false
 
@@ -345,7 +334,6 @@ let trans_ret (env: env) (rete: expr) : env * form =
   let fr = mk_form (Flocal retv) rete.e_ty in
   trans_expr env [fr] rete
 
-
 (* ------------------------------------------------------------- *)
 (* TODO: Add logical and procesing
 *)
@@ -357,9 +345,7 @@ let rec trans_form (env: env) (f: form) : env * form =
     begin
       match MMsym.last (name idn) env.env_ssa with
       | Some idn -> env, mk_form (Flocal idn) f.f_ty
-      | None ->
-        let env = update_env (name idn) idn env in
-        env, mk_form (Flocal idn) f.f_ty
+      | None -> assert false
     end
   | Fpvar (PVloc s, _) when s = "res" ->
     begin
@@ -406,9 +392,9 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
   let env, intrs, ret =  ssa_of_expr env ret in
   let body = body @ intrs in
   let () = List.iter (print_instr env.env_ec) body in (* DEBUG PRINT, REMOVE LATER *)
-  let env, pre = trans_form env pre in
   let env, body = List.fold_left_map trans_instr env body in
   let env, ret = trans_ret env ret in
+  let env, pre = trans_form env pre in
   let env,  post = trans_form env post in
   let f = f_imp pre (f_imps body (f_imp ret post)) in
   let ids =
