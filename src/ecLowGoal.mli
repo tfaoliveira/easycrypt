@@ -316,6 +316,9 @@ val t_crush_fwd : ?delta:bool -> int -> FApi.backward
 val t_congr : form pair -> form pair list * ty -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
+val t_shoare_to_z : tcenv1 -> tcenv
+
+(* -------------------------------------------------------------------- *)
 type smtmode = [`Standard | `Strict | `Report of EcLocation.t option]
 
 val t_smt: mode:smtmode -> prover_infos -> FApi.backward

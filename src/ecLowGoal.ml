@@ -2407,6 +2407,44 @@ let t_congr (f1, f2) (args, ty) tc =
   doit (List.rev args) ty tc
 
 (* -------------------------------------------------------------------- *)
+let t_shoare_to_z tc =
+  let hyps, fp = FApi.tc1_flat tc in
+  let env = (LDecl.toenv hyps) in
+  let tc =
+    match fp.f_node with
+    | FhoareF a  ->
+      let body = EcEnv.Fun.by_xpath a.hf_f env in
+      let stmt,rexpr =
+        match body.f_def with
+        | FBdef d -> d.f_body,d.f_ret
+        | _ -> assert false
+      in
+      begin
+        match rexpr with
+        | None -> tc
+        | Some e ->
+          let f =
+            EcCPolyEnc.trans_hoare env a.hf_pr stmt.s_node e a.hf_po
+          in (* maybe convert args to record? *)
+          FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f
+      end
+
+    | FhoareS _a  -> tc
+      (* let pre,post,(_, instr) = *)
+      (*   f_true,f_true, *)
+      (*   List.fold_left_map *)
+      (*     (fun env inst -> EcCPolyEnc.trans_instr env inst) *)
+      (*     {env_ec = env; env_ssa = MMsym.empty} a.hs_s.s_node *)
+      (* (\*EcCPolyEnc.translate a.hs_pr a.hs_po a.hs_s*\) in *)
+      (* let f = f_imp pre (f_imps instr post) in *)
+      (* FApi.mutate1 tc (fun hd -> VConv (hd, Sid.empty)) f *)
+
+    | _ ->  tc
+  in
+
+  FApi.tcenv_of_tcenv1 tc
+
+(* -------------------------------------------------------------------- *)
 type smtmode = [`Standard | `Strict | `Report of EcLocation.t option]
 
 (* -------------------------------------------------------------------- *)

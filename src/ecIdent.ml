@@ -50,6 +50,11 @@ let create (x : symbol) =
   { id_symb = x;
     id_tag  = EcUid.unique () }
 
+let create_tagged (x : symbol) = 
+  let tag = EcUid.unique () in
+  { id_symb = x ^ "_" ^ (string_of_int tag);
+    id_tag = tag; }
+
 let fresh (id : t) = create (name id)
 
 let tostring (id : t) =

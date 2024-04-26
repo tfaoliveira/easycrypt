@@ -605,6 +605,7 @@
 %token WLOG
 %token WP
 %token ZETA
+%token ZIFY
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4 NUMOP
 %token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
 %token < Lexing.position> FINAL
@@ -2782,6 +2783,9 @@ logtactic:
 
 | TRIVIAL
    { Ptrivial }
+
+| ZIFY
+    { Pzify }
 
 | SMT pi=smt_info
    { Psmt pi }

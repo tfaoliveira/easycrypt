@@ -129,6 +129,7 @@
     "reflexivity" , REFLEX     ;        (* KW: bytac *)
     "done"        , DONE       ;        (* KW: bytac *)
     "solve"       , SOLVE      ;        (* KW: bytac *)
+    "zify"        , ZIFY       ;        (* KW: bytac *)
 
     (* PHL: tactics *)
     "replace"     , REPLACE    ;        (* KW: tactic *)
