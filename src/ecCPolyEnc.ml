@@ -29,6 +29,20 @@ let print_id (env: env) (id: t) : unit =
   let fmt = EcPrinting.pp_local (EcPrinting.PPEnv.ofenv env) in
   Format.eprintf "%a@." fmt id
 
+let print_qsymbol ((q, s): qsymbol) : unit = 
+  List.iter (Format.eprintf "%s.") q;
+  Format.eprintf "%s@." s
+
+let of_seq1 (xs: 'a list) : 'a =
+  match xs with
+  | [a] -> a
+  | _ -> assert false
+
+let of_seq2 (xs: 'a list) : 'a * 'a =
+  match xs with
+  | [a;b] -> (a,b)
+  | _ -> assert false
+
 
 (* -------------------------------------------------------- *)
 (* AUXILIARY DEBUG FUNCTIONS: *)
@@ -50,10 +64,6 @@ let debug_print_form_variant (f: form) : unit =
 
   | FhoareF   _ -> Format.eprintf "FhoareF\n"
   | FhoareS   _ -> Format.eprintf "FhoareS\n"
-
-  | FcHoareF  _ -> Format.eprintf "FcHoareF\n"
-  | FcHoareS  _ -> Format.eprintf "FcHoareS\n"
-
   | FbdHoareF _ -> Format.eprintf "FbdHoareF\n"
   | FbdHoareS _ -> Format.eprintf "FbdHoareS\n"
 
@@ -64,10 +74,8 @@ let debug_print_form_variant (f: form) : unit =
   | FequivS   _ -> Format.eprintf "FequivS\n"
 
   | FeagerF   _ -> Format.eprintf "FeagerF\n"
-
-  | Fcoe      _ -> Format.eprintf "Fcoe\n"
-
   | Fpr       _ -> Format.eprintf "Fpr\n"
+  | _ -> assert false
 
 (* DEBUG function*)
 let debug_print_exp_variant (e: expr) : unit =
@@ -94,6 +102,28 @@ type env = { env_ec : EcEnv.env; env_ssa : EcIdent.t MMsym.t }
 
 let update_env name id env =
   {env with env_ssa = MMsym.add name id env.env_ssa}
+
+let mk_temp_form (env: env) (ty: ty) : env * form =
+  let temp = create_tagged tempname in
+  let env = update_env (name temp) temp env in
+  let temp = mk_form (Flocal temp) ty in
+  (env, temp)
+
+let int_form i = f_int @@ BI.of_int i
+let lshift_form f f_sa = f_int_mul f @@ f_int_pow (int_form 2) f_sa
+
+let join_int_form (f_h: form) (f_l: form) (n: form) : form =
+  (* assert (n.f_ty = tint); *)
+  f_int_add (lshift_form f_h n) f_l
+
+  (* split f n => f = join hb lb n, (hb, lb)*)
+let split_int_form (env: env) (f: form) (n: form) : env * form * (form * form) = 
+  (* assert (n.f_ty = tint); *)
+  let env, hb = mk_temp_form env tint in
+  let env, lb = mk_temp_form env tint in
+  let f_c = join_int_form hb lb n in
+  let f_c = f_eq f f_c in
+  (env, f_c, (hb, lb))
 
 let ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
   let ssa_of_expr_aux2 (env: env) (e: expr) : env * (instr list) * expr =
@@ -202,65 +232,57 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
       assert false
   in
 
-  let int_form i = f_int @@ BI.of_int i in
+  (* AUXILIARY: *)
 
   match e.e_node with
   | Eint _ | Evar (PVloc _) | Elocal _ ->
     let env, fv = trans_arg env e in
-    begin
-      match lv with
-      | [lv] -> env, f_eq lv fv
-      | _ -> assert false
-    end
+    let lv = of_seq1 lv in
+    env, f_eq lv fv
+
   | Eapp ({e_node = Eop (p, _); _}, args) ->
     let env, args = List.fold_left_map trans_arg env args in
     begin
       match EcPath.toqsymbol p with
       | ["Top"; "CoreInt"], "add" ->
         let f_r = app_two_list args f_int_add in
-        begin
-          match lv with
-          | [lv]-> env, f_eq lv f_r
-          | _ -> assert false
-        end
+        let lv = of_seq1 lv in
+        env, f_eq lv f_r
+
       | ["Top"; "CoreInt"], "mul" ->
         let f_r = app_two_list args f_int_mul in
-        begin
-          match lv with
-          | [lv]-> env, f_eq lv f_r
-          | _ -> assert false
-        end
-      | ["Top"; "JWord"; "W2u16"], "+" ->
-        let env,lv,temp =
-          match lv with
-          | [lv] ->
-            let temp = create_tagged tempname in
-            let env = update_env (name temp) temp env in
-            let temp = mk_form (Flocal temp) tint in
-            env,lv,temp
-          | _ -> assert false
-        in
+        let lv = of_seq1 lv in
+        env, f_eq lv f_r
+
+      (* FIXME: should add temp = temp*temp here? *)
+      | ["Top"; "JWord"; "W16"], "+" -> (* FIXME: what is the correct path? *)
+        let lv = of_seq1 lv in
+        let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_add in
-        let f_2 = f_int_pow (int_form 2) (int_form 16) in
-        let f_2 = f_int_mul temp f_2 in
-        let f_l = f_int_add f_2 lv in
+        let f_l = join_int_form temp lv (int_form 16) in
+        env, f_eq f_l f_r
+
+      | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
+        let lv = of_seq1 lv in
+        let env, temp = mk_temp_form env tint in
+        let f_r = app_two_list args f_int_mul in
+        let f_l = join_int_form temp lv (int_form 16) in
         env, f_eq f_r f_l
 
-      | ["Top"; "JWord"; "W2u16"], "*" ->
-        let env,lv,temp =
-          match lv with
-          | [lv] ->
-            let temp = create_tagged tempname in
-            let env = update_env (name temp) temp env in
-            let temp = mk_form (Flocal temp) tint in
-            env,lv,temp
-          | _ -> assert false
-        in
-        let f_r = app_two_list args f_int_mul in
-        let f_2 = f_int_pow (int_form 2) (int_form 16) in
-        let f_2 = f_int_mul temp f_2 in
-        let f_l = f_int_add f_2 lv in
-        env, f_eq f_r f_l
+      (* s, t' = split t 31 
+         hb, lb = split t' sa 
+         mask = 2^32 - 2^(31 - sa)
+         res = s * mask + hb *)
+      | ["Top"; "JWord"; "W32"], "`|>>`" ->
+        let lv = of_seq1 lv in
+        let t, sa = of_seq2 args in
+        let env, fs1, (s, t') = split_int_form env t (int_form 31) in
+        let env, fs2, (hb, _lb) = split_int_form env t' sa in
+        let fmask = f_int_pow (int_form 2) (int_form 32) in
+        let fmask = f_int_sub fmask @@ f_int_pow (int_form 2) (f_int_sub (int_form 31) sa) in
+        let f_res = f_eq (f_int_add hb @@ f_int_mul s fmask) lv in
+        env, f_imps [fs1; fs2] f_res
+      (* FIXME: check return forms*)        
 
       | ["Top"; "JWord"; _], "of_int" ->
         begin
@@ -268,6 +290,30 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
           | [lv], [a]-> env, f_eq lv a
           | _ -> assert false
         end
+
+      | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        let env, fs, (s, t') = split_int_form env t (int_form 15) in
+        let fmask = f_int_sub 
+          (f_int_pow (int_form 2) (int_form 32)) 
+          (f_int_pow (int_form 2) (int_form 15))
+        in 
+        let f_res = f_eq lv @@ f_int_add t' @@ f_int_mul fmask s in
+        env, f_imp fs f_res (* FIXME: figure out what form to return *)
+
+      | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        let env, temp = mk_temp_form env tint in
+        env, f_eq t (join_int_form temp lv (int_form 16))
+
+      (* FIXME: Check semantics and soundness *)
+      | ["Top"; "JWord"; "W16"], "[-]" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        env, f_eq lv @@ f_int_opp t
+        
 
   (* | ["Top"; "JWord"; _], "`|>>`" -> *)
   (*   let temp = create_tagged tempname in *)
@@ -300,7 +346,8 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
   (*          | _ -> assert false *)
   (*        end)) *)
 
-      | _ -> assert false
+      | qs, q -> Format.eprintf "Unregistered op: "; List.iter (Format.eprintf "%s.") qs;
+        Format.eprintf "%s@." q; assert false
     end
   |  _ -> assert false (* FIXME: add error handling code *)
 
@@ -368,10 +415,16 @@ let rec trans_form (env: env) (f: form) : env * form =
       | ["Top"; "CoreInt"], "mul"
       | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
       | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
+      | ["Top"; "JWord"; "W16"], "of_int" ->
+        let env, tmp = mk_temp_form env tint in
+        let env, res = mk_temp_form env tint in
+        let w = of_seq1 args in
+        env, f_imp (f_eq w @@ join_int_form tmp res (int_form 16)) res
+      (* FIXME: fix output form *)
+      | ["Top"; "JWord"; "W16"], "to_uint" ->
+        env, of_seq1 args (* Conversion to int is identity? *)
       | ["Top"], "eq_mod" ->
-        let temp = create_tagged tempname in
-        let env = update_env (name temp) temp env in
-        let temp = mk_form (Flocal temp) tint in
+        let env, temp = mk_temp_form env tint in
         begin
           match args with
           | [a; b; c] ->
@@ -380,7 +433,7 @@ let rec trans_form (env: env) (f: form) : env * form =
             env, f_eq a f_r
           | _ -> assert false
         end
-      | _ -> assert false
+      | q -> print_qsymbol q; assert false
     in
     env, f
   | _ -> assert false (* equality of unknow variables : x1 = x2 *)
