@@ -204,7 +204,7 @@ let app_two_list l f =
   | [a;b] -> f a b
   | _ -> assert false
 
-let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
+let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
   let rec trans_arg (env: env) (e: expr) =
     match e.e_node with
     | Eint i -> env, mk_form (Fint i) e.e_ty
@@ -238,7 +238,7 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
   | Eint _ | Evar (PVloc _) | Elocal _ ->
     let env, fv = trans_arg env e in
     let lv = of_seq1 lv in
-    env, f_eq lv fv
+    env, [f_eq lv fv]
 
   | Eapp ({e_node = Eop (p, _); _}, args) ->
     let env, args = List.fold_left_map trans_arg env args in
@@ -247,12 +247,12 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
       | ["Top"; "CoreInt"], "add" ->
         let f_r = app_two_list args f_int_add in
         let lv = of_seq1 lv in
-        env, f_eq lv f_r
+        env, [f_eq lv f_r]
 
       | ["Top"; "CoreInt"], "mul" ->
         let f_r = app_two_list args f_int_mul in
         let lv = of_seq1 lv in
-        env, f_eq lv f_r
+        env, [f_eq lv f_r]
 
       (* FIXME: should add temp = temp*temp here? *)
       | ["Top"; "JWord"; "W16"], "+" -> (* FIXME: what is the correct path? *)
@@ -260,14 +260,14 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_add in
         let f_l = join_int_form temp lv (int_form 16) in
-        env, f_eq f_l f_r
+        env, [f_eq f_l f_r]
 
       | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
         let lv = of_seq1 lv in
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_mul in
         let f_l = join_int_form temp lv (int_form 16) in
-        env, f_eq f_r f_l
+        env, [f_eq f_r f_l]
 
       (* s, t' = split t 31 
          hb, lb = split t' sa 
@@ -281,13 +281,13 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
         let fmask = f_int_pow (int_form 2) (int_form 32) in
         let fmask = f_int_sub fmask @@ f_int_pow (int_form 2) (f_int_sub (int_form 31) sa) in
         let f_res = f_eq (f_int_add hb @@ f_int_mul s fmask) lv in
-        env, f_imps [fs1; fs2] f_res
+        env, [fs1; fs2; f_res]
       (* FIXME: check return forms*)        
 
       | ["Top"; "JWord"; _], "of_int" ->
         begin
           match lv, args with
-          | [lv], [a]-> env, f_eq lv a
+          | [lv], [a]-> env, [f_eq lv a]
           | _ -> assert false
         end
 
@@ -300,19 +300,19 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
           (f_int_pow (int_form 2) (int_form 15))
         in 
         let f_res = f_eq lv @@ f_int_add t' @@ f_int_mul fmask s in
-        env, f_imp fs f_res (* FIXME: figure out what form to return *)
+        env, [fs; f_res] (* FIXME: figure out what form to return *)
 
       | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
         let lv = of_seq1 lv in
         let t = of_seq1 args in
         let env, temp = mk_temp_form env tint in
-        env, f_eq t (join_int_form temp lv (int_form 16))
+        env, [f_eq t (join_int_form temp lv (int_form 16))]
 
       (* FIXME: Check semantics and soundness *)
       | ["Top"; "JWord"; "W16"], "[-]" ->
         let lv = of_seq1 lv in
         let t = of_seq1 args in
-        env, f_eq lv @@ f_int_opp t
+        env, [f_eq lv @@ f_int_opp t]
         
 
   (* | ["Top"; "JWord"; _], "`|>>`" -> *)
@@ -351,7 +351,7 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form =
     end
   |  _ -> assert false (* FIXME: add error handling code *)
 
-let trans_instr (env: env) (inst: instr) : env * form =
+let trans_instr (env: env) (inst: instr) : env * form list =
   let trans_lvar (lv: lvalue) : form list =
     match lv with
     | LvVar (PVloc pv, _) ->
@@ -372,7 +372,7 @@ let trans_instr (env: env) (inst: instr) : env * form =
 
 (* ------------------------------------------------------------- *)
 (* FIXME: Get unique identifier for ret variable *)
-let trans_ret (env: env) (rete: expr) : env * form =
+let trans_ret (env: env) (rete: expr) : env * form list =
   let retv = create_tagged retname in
   let env = update_env retname retv env in
   let env =
@@ -449,7 +449,7 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
   let env, ret = trans_ret env ret in
   let env, pre = trans_form env pre in
   let env,  post = trans_form env post in
-  let f = f_imp pre (f_imps body (f_imp ret post)) in
+  let f = f_imp pre (f_imps (List.flatten body) (f_imps ret post)) in
   let ids =
     MMsym.fold (fun _ l acc -> l @ acc) env.env_ssa [] |> List.map (fun x -> x, GTty tint)
   in
