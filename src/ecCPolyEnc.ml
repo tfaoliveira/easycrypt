@@ -75,7 +75,6 @@ let debug_print_form_variant (f: form) : unit =
 
   | FeagerF   _ -> Format.eprintf "FeagerF\n"
   | Fpr       _ -> Format.eprintf "Fpr\n"
-  | _ -> assert false
 
 (* DEBUG function*)
 let debug_print_exp_variant (e: expr) : unit =
@@ -110,7 +109,14 @@ let mk_temp_form (env: env) (ty: ty) : env * form =
   (env, temp)
 
 let int_form i = f_int @@ BI.of_int i
-let lshift_form f f_sa = f_int_mul f @@ f_int_pow (int_form 2) f_sa
+let lshift_const_form f n = f_int_mul f @@ f_int @@ BI.(lshift one n)
+let lshift_form f f_sa = match f_sa.f_node with
+  | Fint n -> lshift_const_form f (BI.to_int n)
+  | _ -> f_int_mul f @@ f_int_pow (int_form 2) f_sa
+
+let bitmask_form (n:int) : form =
+  let n = n+1 in
+  f_int @@ BI.(sub (lshift one n) one)
 
 let join_int_form (f_h: form) (f_l: form) (n: form) : form =
   (* assert (n.f_ty = tint); *)
@@ -124,6 +130,11 @@ let split_int_form (env: env) (f: form) (n: form) : env * form * (form * form) =
   let f_c = join_int_form hb lb n in
   let f_c = f_eq f f_c in
   (env, f_c, (hb, lb))
+
+
+(* f*f = f <=> f*(f-1) = 0*)
+let is_bit_form (f: form) : form =
+  f_eq f (f_int_mul f f)
 
 let ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
   let ssa_of_expr_aux2 (env: env) (e: expr) : env * (instr list) * expr =
@@ -260,7 +271,9 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_add in
         let f_l = join_int_form temp lv (int_form 16) in
-        env, [f_eq f_l f_r]
+        let f_t = is_bit_form temp in
+        env, [f_t; f_eq f_l f_r]
+      (* a + b = res + c, c = 0 *)
 
       | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
         let lv = of_seq1 lv in
@@ -271,18 +284,57 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
 
       (* s, t' = split t 31 
          hb, lb = split t' sa 
-         mask = 2^32 - 2^(31 - sa)
+         mask = 2^32 - 2^(32 - (sa + 1))
+         1|11111111|0000000000
+         1|1111111111 <- sa bits
+         2^32 - 2^sa = 2^31 + 2^30 + ... + 2^sa
+         s*(s-1) = 0
          res = s * mask + hb *)
       | ["Top"; "JWord"; "W32"], "`|>>`" ->
+        let int_of_form (f:form) : BI.zint =
+          match f.f_node with
+          | Fint i -> i
+          (* Need to check if variable value is constant *)
+          | _ -> assert false (* FIXME: hardcoded to barret example until lookup is implemented *)
+        in
         let lv = of_seq1 lv in
         let t, sa = of_seq2 args in
-        let env, fs1, (s, t') = split_int_form env t (int_form 31) in
-        let env, fs2, (hb, _lb) = split_int_form env t' sa in
-        let fmask = f_int_pow (int_form 2) (int_form 32) in
-        let fmask = f_int_sub fmask @@ f_int_pow (int_form 2) (f_int_sub (int_form 31) sa) in
-        let f_res = f_eq (f_int_add hb @@ f_int_mul s fmask) lv in
+        let sa = int_of_form sa |> BI.to_int in
+        let env, fs1, (s, t') = split_int_form env t (int_form 31) in       
+        let fmask = bitmask_form sa in
+        let fmask = f_int_mul fmask s in
+        let fr = join_int_form fmask t' (int_form 27) in (* fmask << 27 + t'*)
+        let env, fs2, (hb, _lb) = split_int_form env fr (int_form 26) in
+        let f_res = f_eq hb lv in
         env, [fs1; fs2; f_res]
+        (* let lv = of_seq1 lv in *)
+        (* let t, sa = of_seq2 args in *)
+        (* let env, fs1, (s, t') = split_int_form env t (int_form 31) in *)
+        (* let env, fs2, (hb, _lb) = split_int_form env t' sa in *)
+        (* let fmask = f_int_pow (int_form 2) (int_form 32) in *)
+        (* let fmask = f_int_sub fmask @@ f_int_pow (int_form 2) (f_int_sub (int_form 31) sa) in *)
+        (* let f_res = f_eq (f_int_add hb @@ f_int_mul s fmask) lv in *)
+        (* env, [fs1; fs2; f_res] *)
       (* FIXME: check return forms*)        
+
+      | ["Top"], "rshift_w32_int" ->
+        let int_of_form (f:form) : BI.zint =
+          match f.f_node with
+          | Fint i -> i
+          (* Need to check if variable value is constant *)
+          | _ -> assert false (* FIXME: hardcoded to barret example until lookup is implemented *)
+        in
+        let lv = of_seq1 lv in
+        let t, sa = of_seq2 args in
+        let sa = int_of_form sa |> BI.to_int in
+        let sa = sa + 1 in
+        let env, fs1, (s, t') = split_int_form env t (int_form 31) in       
+        let fmask = bitmask_form sa in
+        let fmask = f_int_mul fmask s in
+        let fr = join_int_form fmask t' (int_form 27) in (* fmask << 27 + t'*)
+        let env, fs2, (hb, _lb) = split_int_form env fr (int_form 26) in
+        let f_res = f_eq hb lv in
+        env, [fs1; fs2; f_res]
 
       | ["Top"; "JWord"; _], "of_int" ->
         begin
@@ -291,15 +343,16 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
           | _ -> assert false
         end
 
+      (* 16bit word b = s|lb,
+      s = sign bit
+      (2^32 - 2^15)*s + lb *)
       | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
         let lv = of_seq1 lv in
         let t = of_seq1 args in
         let env, fs, (s, t') = split_int_form env t (int_form 15) in
-        let fmask = f_int_sub 
-          (f_int_pow (int_form 2) (int_form 32)) 
-          (f_int_pow (int_form 2) (int_form 15))
-        in 
-        let f_res = f_eq lv @@ f_int_add t' @@ f_int_mul fmask s in
+        let fmask = bitmask_form 17 in 
+        let res = join_int_form (f_int_mul fmask s) t' (int_form 15) in
+        let f_res = f_eq lv res in
         env, [fs; f_res] (* FIXME: figure out what form to return *)
 
       | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
@@ -386,6 +439,16 @@ let trans_ret (env: env) (rete: expr) : env * form list =
 *)
 
 let rec trans_form (env: env) (f: form) : env * form =
+  let rec list_of_eclist (f: form) : form list = 
+    match f.f_node with
+    | Fapp ({f_node = Fop (p, _); _ }, args) 
+      when (EcPath.toqsymbol p = (["Top"; "List"], "::")) ->
+      List.map list_of_eclist args |> List.flatten
+    | Fop (p, _) when (EcPath.toqsymbol p = (["Top"; "List"], "[]")) ->
+      []
+    | _ -> [f]
+  in
+  
   match f.f_node with
   | Fint _i -> env, f
   | Flocal idn ->
@@ -404,8 +467,26 @@ let rec trans_form (env: env) (f: form) : env * form =
     begin
       match EcPath.toqsymbol p with
       | ["Top"; "Pervasive"], "true" -> env, f_true
-      | _ -> assert false
+      | q -> print_qsymbol q; assert false
     end
+  | Fapp ({f_node = Fop (p, _); _ }, args) 
+    when ((EcPath.toqsymbol p) = (["Top"], "eq_mod")) ->
+        begin
+          match args with
+          | [a; b; c] ->
+            let env, a = trans_form env a in
+            let env, b = trans_form env b in
+            let c = list_of_eclist c in
+            let env, c = List.fold_left_map trans_form env c in
+            let env, f_mod = List.fold_left 
+              (fun (env, facc) f -> 
+              let env, temp = mk_temp_form env tint in
+                (env, f_int_add facc @@ f_int_mul temp f)) (env, int_form 0) c
+            in
+            let f_r = f_int_add b f_mod in
+            env, f_eq a f_r
+          | _ -> assert false
+        end
   | Fapp ({f_node = Fop (p, _); _ }, args) ->
     let env, args = List.fold_left_map trans_form env args in
     let env, f =
@@ -415,6 +496,7 @@ let rec trans_form (env: env) (f: form) : env * form =
       | ["Top"; "CoreInt"], "mul"
       | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
       | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
+      | ["Top"; "Ring"; "IntID"], "exp" -> env, app_two_list args f_int_pow
       | ["Top"; "JWord"; "W16"], "of_int" ->
         let env, tmp = mk_temp_form env tint in
         let env, res = mk_temp_form env tint in
@@ -423,16 +505,6 @@ let rec trans_form (env: env) (f: form) : env * form =
       (* FIXME: fix output form *)
       | ["Top"; "JWord"; "W16"], "to_uint" ->
         env, of_seq1 args (* Conversion to int is identity? *)
-      | ["Top"], "eq_mod" ->
-        let env, temp = mk_temp_form env tint in
-        begin
-          match args with
-          | [a; b; c] ->
-            let f_mod = f_int_mul temp c in
-            let f_r = f_int_add b f_mod in
-            env, f_eq a f_r
-          | _ -> assert false
-        end
       | q -> print_qsymbol q; assert false
     in
     env, f
