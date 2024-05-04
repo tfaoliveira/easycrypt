@@ -29,20 +29,9 @@ let print_id (env: env) (id: t) : unit =
   let fmt = EcPrinting.pp_local (EcPrinting.PPEnv.ofenv env) in
   Format.eprintf "%a@." fmt id
 
-let print_qsymbol ((q, s): qsymbol) : unit = 
+let print_qsymbol ((q, s): qsymbol) : unit =
   List.iter (Format.eprintf "%s.") q;
   Format.eprintf "%s@." s
-
-let of_seq1 (xs: 'a list) : 'a =
-  match xs with
-  | [a] -> a
-  | _ -> assert false
-
-let of_seq2 (xs: 'a list) : 'a * 'a =
-  match xs with
-  | [a;b] -> (a,b)
-  | _ -> assert false
-
 
 (* -------------------------------------------------------- *)
 (* AUXILIARY DEBUG FUNCTIONS: *)
@@ -106,35 +95,7 @@ let mk_temp_form (env: env) (ty: ty) : env * form =
   let temp = create_tagged tempname in
   let env = update_env (name temp) temp env in
   let temp = mk_form (Flocal temp) ty in
-  (env, temp)
-
-let int_form i = f_int @@ BI.of_int i
-let lshift_const_form f n = f_int_mul f @@ f_int @@ BI.(lshift one n)
-let lshift_form f f_sa = match f_sa.f_node with
-  | Fint n -> lshift_const_form f (BI.to_int n)
-  | _ -> f_int_mul f @@ f_int_pow (int_form 2) f_sa
-
-let bitmask_form (n:int) : form =
-  let n = n+1 in
-  f_int @@ BI.(sub (lshift one n) one)
-
-let join_int_form (f_h: form) (f_l: form) (n: form) : form =
-  (* assert (n.f_ty = tint); *)
-  f_int_add (lshift_form f_h n) f_l
-
-  (* split f n => f = join hb lb n, (hb, lb)*)
-let split_int_form (env: env) (f: form) (n: form) : env * form * (form * form) = 
-  (* assert (n.f_ty = tint); *)
-  let env, hb = mk_temp_form env tint in
-  let env, lb = mk_temp_form env tint in
-  let f_c = join_int_form hb lb n in
-  let f_c = f_eq f f_c in
-  (env, f_c, (hb, lb))
-
-
-(* f*f = f <=> f*(f-1) = 0*)
-let is_bit_form (f: form) : form =
-  f_eq f (f_int_mul f f)
+  env, temp
 
 let ssa_of_expr (env: env) (e: expr) : env * (instr list) * expr =
   let ssa_of_expr_aux2 (env: env) (e: expr) : env * (instr list) * expr =
@@ -210,9 +171,47 @@ let ssa_of_prog (env: env) (body: instr list) : env * (instr list) =
 
 (* ------------------------------------------------------------- *)
 
+
+let int_form i = f_int @@ BI.of_int i
+
+let lshift_const_form f n = f_int_mul f @@ f_int @@ BI.(lshift one n)
+
+let lshift_form f f_sa =
+  match f_sa.f_node with
+  | Fint n -> lshift_const_form f (BI.to_int n)
+  | _ -> f_int_mul f @@ f_int_pow (int_form 2) f_sa
+
+let bitmask_form (n:int) : form =
+  f_int @@ BI.(sub (lshift one n) one)
+
+let join_int_form (f_h: form) (f_l: form) (n: form) : form =
+  f_int_add (lshift_form f_h n) f_l
+
+  (* split f n => f = join hb lb n, (hb, lb)*)
+let split_int_form (env: env) (f: form) (n: form) : env * form * (form * form) =
+  let env, hb = mk_temp_form env tint in
+  let env, lb = mk_temp_form env tint in
+  let f_c = join_int_form hb lb n in
+  let f_c = f_eq f f_c in
+  (env, f_c, (hb, lb))
+
+(* f*f = f*)
+let is_bit_form (f: form) : form =
+  f_eq f (f_int_mul f f)
+
 let app_two_list l f =
   match l with
   | [a;b] -> f a b
+  | _ -> assert false
+
+let of_seq1 (xs: 'a list) : 'a =
+  match xs with
+  | [a] -> a
+  | _ -> assert false
+
+let of_seq2 (xs: 'a list) : 'a * 'a =
+  match xs with
+  | [a;b] -> (a,b)
   | _ -> assert false
 
 let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
@@ -223,7 +222,7 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
       begin
         match MMsym.last v env.env_ssa with
         | Some x ->
-          (env, mk_form (Flocal x) e.e_ty)
+          (env, mk_form (Flocal x) tint)
         | None ->
           let x = create_tagged v in
           update_env v x env, mk_form (Flocal x) tint
@@ -232,7 +231,7 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
       begin
         match MMsym.last (name v) env.env_ssa with
         | Some x ->
-          env, mk_form (Flocal x) e.e_ty
+          env, mk_form (Flocal x) tint
         | None ->
           let x = create_tagged (name v) in
           update_env (name v) x env, mk_form (Flocal v) tint
@@ -242,8 +241,6 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
       Format.eprintf "Problem expresion: %a\n" fmt e;
       assert false
   in
-
-  (* AUXILIARY: *)
 
   match e.e_node with
   | Eint _ | Evar (PVloc _) | Elocal _ ->
@@ -265,7 +262,6 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let lv = of_seq1 lv in
         env, [f_eq lv f_r]
 
-      (* FIXME: should add temp = temp*temp here? *)
       | ["Top"; "JWord"; "W16"], "+" -> (* FIXME: what is the correct path? *)
         let lv = of_seq1 lv in
         let env, temp = mk_temp_form env tint in
@@ -273,49 +269,20 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let f_l = join_int_form temp lv (int_form 16) in
         let f_t = is_bit_form temp in
         env, [f_t; f_eq f_l f_r]
-      (* a + b = res + c, c = 0 *)
 
-      | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
+      | ["Top"; "JWord"; "W16"], "*" ->(* FIXME: what is the correct path? *)
         let lv = of_seq1 lv in
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_mul in
         let f_l = join_int_form temp lv (int_form 16) in
         env, [f_eq f_r f_l]
 
-      (* s, t' = split t 31 
-         hb, lb = split t' sa 
-         mask = 2^32 - 2^(32 - (sa + 1))
-         1|11111111|0000000000
-         1|1111111111 <- sa bits
-         2^32 - 2^sa = 2^31 + 2^30 + ... + 2^sa
-         s*(s-1) = 0
-         res = s * mask + hb *)
-      | ["Top"; "JWord"; "W32"], "`|>>`" ->
-        let int_of_form (f:form) : BI.zint =
-          match f.f_node with
-          | Fint i -> i
-          (* Need to check if variable value is constant *)
-          | _ -> assert false (* FIXME: hardcoded to barret example until lookup is implemented *)
-        in
+      | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
         let lv = of_seq1 lv in
-        let t, sa = of_seq2 args in
-        let sa = int_of_form sa |> BI.to_int in
-        let env, fs1, (s, t') = split_int_form env t (int_form 31) in       
-        let fmask = bitmask_form sa in
-        let fmask = f_int_mul fmask s in
-        let fr = join_int_form fmask t' (int_form 27) in (* fmask << 27 + t'*)
-        let env, fs2, (hb, _lb) = split_int_form env fr (int_form 26) in
-        let f_res = f_eq hb lv in
-        env, [is_bit_form s; fs1; fs2; f_res]
-        (* let lv = of_seq1 lv in *)
-        (* let t, sa = of_seq2 args in *)
-        (* let env, fs1, (s, t') = split_int_form env t (int_form 31) in *)
-        (* let env, fs2, (hb, _lb) = split_int_form env t' sa in *)
-        (* let fmask = f_int_pow (int_form 2) (int_form 32) in *)
-        (* let fmask = f_int_sub fmask @@ f_int_pow (int_form 2) (f_int_sub (int_form 31) sa) in *)
-        (* let f_res = f_eq (f_int_add hb @@ f_int_mul s fmask) lv in *)
-        (* env, [fs1; fs2; f_res] *)
-      (* FIXME: check return forms*)        
+        let env, temp = mk_temp_form env tint in
+        let f_r = app_two_list args f_int_mul in
+        let f_l = join_int_form temp lv (int_form 32) in
+        env, [f_eq f_r f_l]
 
       | ["Top"], "rshift_w32_int" ->
         let int_of_form (f:form) : BI.zint =
@@ -327,11 +294,10 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let lv = of_seq1 lv in
         let t, sa = of_seq2 args in
         let sa = int_of_form sa |> BI.to_int in
-        let sa = sa + 1 in
-        let env, fs1, (s, t') = split_int_form env t (int_form 31) in       
+        let env, fs1, (s, t') = split_int_form env t (int_form 31) in
         let fmask = bitmask_form sa in
         let fmask = f_int_mul fmask s in
-        let fr = join_int_form fmask t' (int_form 27) in (* fmask << 27 + t'*)
+        let fr = join_int_form fmask t' (int_form 27) in
         let env, fs2, (hb, _lb) = split_int_form env fr (int_form 26) in
         let f_res = f_eq hb lv in
         env, [is_bit_form s; fs1; fs2; f_res]
@@ -348,17 +314,14 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let env, f_a, (_tmp, res) = split_int_form env a (int_form s) in
         env, [f_a; f_eq lv res]
 
-      (* 16bit word b = s|lb,
-      s = sign bit
-      (2^32 - 2^15)*s + lb *)
       | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
         let lv = of_seq1 lv in
         let t = of_seq1 args in
-        let env, fs, (s, t') = split_int_form env t (int_form 15) in
-        let fmask = bitmask_form 17 in 
-        let res = join_int_form (f_int_mul fmask s) t' (int_form 15) in
+        let env, fs, (s, _) = split_int_form env t (int_form 15) in
+        let fmask = bitmask_form 16 in
+        let res = join_int_form (f_int_mul fmask s) t (int_form 15) in
         let f_res = f_eq lv res in
-        env, [is_bit_form s; fs; f_res] 
+        env, [is_bit_form s; fs; f_res]
 
       | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
         let lv = of_seq1 lv in
@@ -371,38 +334,6 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let lv = of_seq1 lv in
         let t = of_seq1 args in
         env, [f_eq lv @@ f_int_opp t]
-        
-
-  (* | ["Top"; "JWord"; _], "`|>>`" -> *)
-  (*   let temp = create_tagged tempname in *)
-  (*   ({env with env_ssa = MMsym.add (name temp) temp env.env_ssa }, *)
-  (*    Assign (fun f fs -> *)
-  (*        begin match fs with *)
-  (*          | [a; sa] -> (\* FIXME: allowing variable shift amounts for now, might change later? *\) *)
-  (*            f_eq a @@ *)
-  (*            f_int_add *)
-  (*              (f_int_mul *)
-  (*                 (f_int_pow (f_int @@ BI.of_int 2) sa) *)
-  (*                 f) *)
-  (*              (mk_form (Flocal temp) f.f_ty) *)
-  (*          | _ -> assert false *)
-  (*        end)) *)
-
-  (* | ["Top"; "JWord"; _], "[-]" -> *)
-  (*   (env, *)
-  (*    Assign (fun f fs -> *)
-  (*        begin match fs with *)
-  (*          | [a] -> f_eq f (f_int_opp a) *)
-  (*          | _ -> assert false *)
-  (*        end)) *)
-  (* (\* FIXME: add typecast stuff *\) *)
-  (* | ["Top"; "JWord"; _], "to_uint" -> *)
-  (*   (env, *)
-  (*    Assign (fun f fs -> *)
-  (*        begin match fs with *)
-  (*          | [a] -> f_eq f a *)
-  (*          | _ -> assert false *)
-  (*        end)) *)
 
       | qs, q -> Format.eprintf "Unregistered op: "; List.iter (Format.eprintf "%s.") qs;
         Format.eprintf "%s@." q; assert false
@@ -434,19 +365,19 @@ let trans_ret (env: env) (rete: expr) : env * form list =
   let retv = create_tagged retname in
   let env = update_env retname retv env in
   let env =
-    {env with env_ec = EcEnv.Var.bind_local retv rete.e_ty env.env_ec}
+    {env with env_ec = EcEnv.Var.bind_local retv tint env.env_ec}
   in
-  let fr = mk_form (Flocal retv) rete.e_ty in
+  let fr = mk_form (Flocal retv) tint in
   trans_expr env [fr] rete
 
 (* ------------------------------------------------------------- *)
 (* TODO: Add logical and procesing
 *)
 
-let rec trans_form (env: env) (f: form) : env * form list * form =
-  let rec list_of_eclist (f: form) : form list = 
+let rec trans_form (env: env) (f: form) : env * form =
+  let rec list_of_eclist (f: form) : form list =
     match f.f_node with
-    | Fapp ({f_node = Fop (p, _); _ }, args) 
+    | Fapp ({f_node = Fop (p, _); _ }, args)
       when (EcPath.toqsymbol p = (["Top"; "List"], "::")) ->
       List.map list_of_eclist args |> List.flatten
     | Fop (p, _) when (EcPath.toqsymbol p = (["Top"; "List"], "[]")) ->
@@ -454,71 +385,73 @@ let rec trans_form (env: env) (f: form) : env * form list * form =
     | _ -> [f]
   in
 
-  let trans_form_list (env: env) (fs: form list) : env * form list * form list =
-    let (env, dfs), fs = List.fold_left_map 
-      (fun (env, dfs) f -> let env, new_dfs, fr = trans_form env f in
-        (env, dfs @ new_dfs), fr) (env, []) fs in
-    env, dfs, fs
-  in
-  
   match f.f_node with
-  | Fint _i -> env, [], f
+  | Fint _i -> env, f
   | Flocal idn ->
     begin
       match MMsym.last (name idn) env.env_ssa with
-      | Some idn -> env, [], mk_form (Flocal idn) f.f_ty
+      | Some idn -> env, mk_form (Flocal idn) tint
       | None -> assert false
     end
   | Fpvar (PVloc s, _) when s = "res" ->
     begin
       match MMsym.last retname env.env_ssa with
-      | Some ret -> env, [], mk_form (Flocal ret) f.f_ty
+      | Some ret -> env, mk_form (Flocal ret) tint
       | None -> assert false
     end
   | Fop (p, _tys) ->
     begin
       match EcPath.toqsymbol p with
-      | ["Top"; "Pervasive"], "true" -> env, [], f_true
+      | ["Top"; "Pervasive"], "true" -> env, f_true
       | q -> print_qsymbol q; assert false
     end
-  | Fapp ({f_node = Fop (p, _); _ }, args) 
+  | Fapp ({f_node = Fop (p, _); _ }, args)
     when ((EcPath.toqsymbol p) = (["Top"], "eq_mod")) ->
         begin
           match args with
           | [a; b; c] ->
-            let env, a_dfs, a = trans_form env a in
-            let env, b_dfs, b = trans_form env b in
+            let env, a = trans_form env a in
+            let env, b = trans_form env b in
             let c = list_of_eclist c in
-            let env, c_dfs, c = trans_form_list env c in
-            let env, f_mod = List.fold_left 
-              (fun (env, facc) f -> 
-              let env, temp = mk_temp_form env tint in
-                (env, f_int_add facc @@ f_int_mul temp f)) (env, int_form 0) c
+            let env,c = List.fold_left_map trans_form env c in
+            let f =
+              match c with
+              |[] -> f_eq b a
+              | h :: q ->
+                let _, temp = mk_temp_form env tint in
+                let f = f_int_mul temp h in
+                let temps, f = List.fold_left
+                    (fun (acc, f) modulo ->
+                       let _, temp = mk_temp_form env tint in
+                       (temp :: acc, f_int_add f @@ f_int_mul temp modulo))
+                    ([temp], f) q
+                in
+                let f = f_int_add a f in
+                let ids = List.map
+                    (fun x ->
+                       match x.f_node with
+                       | Flocal id -> id, GTty tint
+                       | _ -> assert false)
+                    temps
+                in
+                f_exists ids (f_eq b f)
             in
-            let f_r = f_int_add b f_mod in
-            env, a_dfs @ b_dfs @ c_dfs , f_eq a f_r
+            env, f
           | _ -> assert false
         end
   | Fapp ({f_node = Fop (p, _); _ }, args) ->
-    let env, f_defs, args = trans_form_list env args in
-    let env, new_defs, f =
+    let env, args = List.fold_left_map trans_form env args in
+    begin
       match EcPath.toqsymbol p with
       | ["Top"; "JWord"; _], "+"
-      | ["Top"; "CoreInt"], "add" -> env, [], app_two_list args f_int_add
+      | ["Top"; "CoreInt"], "add" -> env, app_two_list args f_int_add
       | ["Top"; "CoreInt"], "mul"
-      | ["Top"; "JWord"; _], "*" -> env, [], app_two_list args f_int_mul
-      | ["Top"; "Pervasive"], "=" -> env, [], app_two_list args f_eq
-      | ["Top"; "Ring"; "IntID"], "exp" -> env, [], app_two_list args f_int_pow
-      | ["Top"; "JWord"; "W16"], "of_int" ->
-        let w = of_seq1 args in
-        let env, f_t, (_tmp, res) = split_int_form env w (int_form 16) in
-        env, [f_t], res
-      (* FIXME: fix output form *)
-      | ["Top"; "JWord"; "W16"], "to_uint" ->
-        env, [], of_seq1 args (* Conversion to int is identity? *)
+      | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
+      | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
+      | ["Top"; "Ring"; "IntID"], "exp" -> env, app_two_list args f_int_pow
+      | ["Top"; "JWord"; "W16"], "to_uint" -> env, of_seq1 args
       | q -> print_qsymbol q; assert false
-    in
-    env, f_defs @ new_defs, f
+    end
   | _ -> assert false (* equality of unknow variables : x1 = x2 *)
 
 let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : form =
@@ -530,10 +463,8 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
   let () = List.iter (print_instr env.env_ec) body in (* DEBUG PRINT, REMOVE LATER *)
   let env, body = List.fold_left_map trans_instr env body in
   let env, ret = trans_ret env ret in
-  let env, pre_dfs, pre = trans_form env pre in
-  let pre = f_imps pre_dfs pre in
-  let env, post_dfs, post = trans_form env post in
-  let post = f_imps post_dfs post in
+  let env, pre = trans_form env pre in
+  let env, post = trans_form env post in
   let f = f_imp pre (f_imps (List.flatten body) (f_imps ret post)) in
   let ids =
     MMsym.fold (fun _ l acc -> l @ acc) env.env_ssa [] |> List.map (fun x -> x, GTty tint)
