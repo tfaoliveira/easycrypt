@@ -26,6 +26,11 @@ type prpo_display = { prpo_pr : bool; prpo_po : bool; }
 type 'a pp = Format.formatter -> 'a -> unit
 
 (* -------------------------------------------------------------------- *)
+type pp_options = {
+  expand_abbrevs : bool
+}
+
+(* -------------------------------------------------------------------- *)
 module PPEnv = struct
   type t = {
     ppe_env     : EcEnv.env;
@@ -34,9 +39,10 @@ module PPEnv = struct
     ppe_univar  : (symbol Mint.t * Ssym.t) ref;
     ppe_fb      : Sp.t;
     ppe_width   : int;
+    ppe_options : pp_options;
   }
 
-  let ofenv (env : EcEnv.env) =
+  let ofenv ?(expand_abbrevs : bool = true) (env : EcEnv.env) =
     let width =
       EcGState.asint ~default:0
         (EcGState.getvalue "PP:width" (EcEnv.gstate env)) in
@@ -46,7 +52,8 @@ module PPEnv = struct
       ppe_inuse  = Ssym.empty;
       ppe_univar = ref (Mint.empty, Ssym.empty);
       ppe_fb     = Sp.empty;
-      ppe_width  = max 20 width; }
+      ppe_width  = max 20 width;
+      ppe_options = { expand_abbrevs } }
 
   let enter_by_memid ppe id =
     match EcEnv.Memory.byid id ppe.ppe_env with
@@ -1833,8 +1840,10 @@ and pp_form_core_r (ppe : PPEnv.t) outer fmt f =
 
 and pp_form_r (ppe : PPEnv.t) outer fmt f =
   let printers =
-    [try_pp_notations;
-     try_pp_form_eqveq;
+    (if not ppe.ppe_options.expand_abbrevs then 
+      [try_pp_notations] 
+      else []) @
+    [try_pp_form_eqveq;
      try_pp_chained_orderings;
      try_pp_lossless]
   in
@@ -3376,7 +3385,7 @@ module ObjectInfo = struct
 
   (* -------------------------------------------------------------------- *)
   let pr_gen_r ?(prcat = false) dumper = fun fmt env qs ->
-    let ppe = PPEnv.ofenv env in
+    let ppe = PPEnv.ofenv ~expand_abbrevs:true env in
     let obj =
       try dumper.od_lookup qs env
       with EcEnv.LookupFailure _ -> raise NoObject in

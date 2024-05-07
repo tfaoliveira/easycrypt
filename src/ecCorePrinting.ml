@@ -14,7 +14,7 @@ module type PrinterAPI = sig
   module PPEnv : sig
     type t
 
-    val ofenv : EcEnv.env -> t
+    val ofenv : ?expand_abbrevs: bool -> EcEnv.env -> t
     val add_locals : ?force:bool -> t -> EcIdent.t list -> t
   end
 
