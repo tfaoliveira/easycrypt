@@ -183,6 +183,7 @@ let lshift_form f f_sa =
 
 let bitmask_form (n:int) : form =
   f_int @@ BI.(sub (lshift one n) one)
+(* bitmask n = 11111...111 length n*)
 
 let join_int_form (f_h: form) (f_l: form) (n: form) : form =
   f_int_add (lshift_form f_h n) f_l
@@ -295,12 +296,15 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let t, sa = of_seq2 args in
         let sa = int_of_form sa |> BI.to_int in
         let env, fs1, (s, t') = split_int_form env t (int_form 31) in
-        let fmask = bitmask_form sa in
+        let fmask = bitmask_form 27 in
         let fmask = f_int_mul fmask s in
-        let fr = join_int_form fmask t' (int_form 27) in
-        let env, fs2, (hb, _lb) = split_int_form env fr (int_form 26) in
+        let fr = join_int_form fmask t' (int_form sa) in
+        let env, temp = mk_temp_form env tint in
+        let fr = f_eq temp fr in
+        let env, fs2, (hb, _lb) = split_int_form env temp (int_form 26) in
         let f_res = f_eq hb lv in
-        env, [is_bit_form s; fs1; fs2; f_res]
+        let () = print_form env.env_ec fs2 in
+        env, [is_bit_form s; fs1; fr; fs2; f_res]
 
       | ["Top"; "JWord"; s], "of_int" ->
         let s = match s with
@@ -311,8 +315,14 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         in
         let lv = of_seq1 lv in
         let a = of_seq1 args in
-        let env, f_a, (_tmp, res) = split_int_form env a (int_form s) in
-        env, [f_a; f_eq lv res]
+        begin
+        match a.f_node with
+        | Fint i -> assert (BI.(i < (lshift one s)));
+          env, [f_eq lv a] 
+        | _ ->
+          let env, f_a, (_tmp, res) = split_int_form env a (int_form s) in
+          env, [f_a; f_eq lv res]
+        end
 
       | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
         let lv = of_seq1 lv in
@@ -467,6 +477,7 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
   let env, post = trans_form env post in
   let f = f_imp pre (f_imps (List.flatten body) (f_imps ret post)) in
   let ids =
-    MMsym.fold (fun _ l acc -> l @ acc) env.env_ssa [] |> List.map (fun x -> x, GTty tint)
+    MMsym.fold (fun _ l acc -> l @ acc) env.env_ssa []
+    |> List.sort_uniq (fun a b -> Int.compare (tag a) (tag b)) |> List.map (fun x -> x, GTty tint) 
   in
   f_forall ids f
