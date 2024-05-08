@@ -7,8 +7,8 @@ open EcCoreModules
 open EcSymbols
 open EcIdent
 
-let sage_file = "PATH_TO_STORE_SAGE_FILE"
-let sage_path = "PATH_TO_SAGE_BINARY"
+let sage_file = "/home/gustavo/Thesis/bdep/easycrypt/mapreduce/zify_poly_sage.sage"
+let sage_path = "/usr/bin/sage"
 
 let f_int_mod (f: form) (q: form) =
   f_proj (f_int_edivz f q) 1 tint
@@ -20,15 +20,21 @@ let print_form (env: env) (f: form) : symbol =
   let fmt = EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env) in
   Format.asprintf "%a@." fmt f
 
-let print_poly ?(pname: symbol option) (env: env) (f:form) : symbol = 
+let size_of_jword (s: symbol) : int =
+  match s with
+  | "W8" -> 8
+  | "W16" -> 16
+  | "W32" -> 32
+  | "W64" -> 64
+  | _ -> Format.eprintf "Unknown size for %s@." s; assert false
+
+let print_poly (env: env) (f:form) : symbol = 
   let fmt = EcPrinting.pp_form (EcPrinting.PPEnv.ofenv env) in
   let p = Format.asprintf "%a@." fmt f in
   let p = Str.split (Str.regexp "\n") p in
   let p = String.concat " " p in 
   let p = Str.global_replace (Str.regexp "= \(.*\)") "-(\1)" p in
-  match pname with
-  | Some pname -> Format.asprintf "%s = %s" pname p
-  | None -> Format.asprintf "%s" p
+  Format.asprintf "%s" p
 
 let print_ring (env: env) (ids: t list) : symbol =
   let fmt = EcPrinting.pp_local (EcPrinting.PPEnv.ofenv env) in
@@ -168,13 +174,17 @@ let ideal_contains (env: env) (vs: t list) (ideal: form list) (target: form) : b
   (* PREPROCESSING *)
   let evs, eps, target = process_exists target in
   let () = Format.eprintf "Exists bindings: " in
-  let () = List.iter (print_id env.env_ec) evs in
+  let () = if List.is_empty evs 
+    then Format.eprintf "None" 
+    else List.iter (print_id env.env_ec) evs in
+  let () = Format.eprintf "@." in
   let vs = vs @ evs |> List.sort_uniq (fun a b -> Int.compare (tag a) (tag b)) in
 
   (* CODE GENERATION *)
   let ring_def = print_ring env.env_ec vs in
   let target_poly_name = "target" in
-  let target_poly = print_poly ~pname:target_poly_name env.env_ec target in
+  let target_poly = print_poly env.env_ec target in
+  let target_poly = Format.sprintf "%s = BR(%s)" target_poly_name target_poly in
   let ideal_def = "pideal = ideal(" ^
   ((List.map (fun p -> Format.asprintf "%s" (print_poly env.env_ec p)) ideal) 
   |> ((@) eps)
@@ -193,12 +203,11 @@ let ideal_contains (env: env) (vs: t list) (ideal: form list) (target: form) : b
   flush sage_oc;
   close_out sage_oc;
 
-  (* TODO: Add call to sage and get output *)
   let sage_ic = Unix.open_process_in (sage_path ^ " " ^ sage_file) in
   let res = In_channel.input_char sage_ic in
   match res with
   | None -> Format.eprintf "Failed to get output from sage@."; In_channel.close sage_ic; assert false
-  | Some '0' -> Format.eprintf "Polynomial is in the ideal@,"; In_channel.close sage_ic; true
+  | Some '0' -> Format.eprintf "Polynomial is in the ideal@."; In_channel.close sage_ic; true
   | Some c -> let rest = In_channel.input_all sage_ic in
     In_channel.close sage_ic;
     Format.eprintf 
@@ -380,26 +389,37 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let lv = of_seq1 lv in
         env, [f_eq lv f_r]
 
-      | ["Top"; "JWord"; "W16"], "+" -> (* FIXME: what is the correct path? *)
+      | ["Top"; "CoreInt"], "opp" ->
+        let a = of_seq1 args in
+        let a = f_int_opp a in
+        let lv = of_seq1 lv in
+        env, [f_eq lv a]
+
+      | ["Top"; "JUtils"], "`<<`" ->
+        let r = match args with
+        | [{f_node = Fint i; _}; {f_node = Fint j; _}] ->
+          BI.(lshift i (to_int j))
+        | _ -> assert false
+        in 
+        let r = f_int r in
+        let lv = of_seq1 lv in
+        env, [f_eq lv r]
+
+      | ["Top"; "JWord"; s], "+" -> (* FIXME: what is the correct path? *)
+        let s = size_of_jword s in
         let lv = of_seq1 lv in
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_add in
-        let f_l = join_int_form temp lv (int_form 16) in
+        let f_l = join_int_form temp lv (int_form s) in
         let f_t = is_bit_form temp in
         env, [f_t; f_eq f_l f_r]
 
-      | ["Top"; "JWord"; "W16"], "*" ->(* FIXME: what is the correct path? *)
+      | ["Top"; "JWord"; s], "*" ->(* FIXME: what is the correct path? *)
+        let s = size_of_jword s in
         let lv = of_seq1 lv in
         let env, temp = mk_temp_form env tint in
         let f_r = app_two_list args f_int_mul in
-        let f_l = join_int_form temp lv (int_form 16) in
-        env, [f_eq f_r f_l]
-
-      | ["Top"; "JWord"; "W32"], "*" ->(* FIXME: what is the correct path? *)
-        let lv = of_seq1 lv in
-        let env, temp = mk_temp_form env tint in
-        let f_r = app_two_list args f_int_mul in
-        let f_l = join_int_form temp lv (int_form 32) in
+        let f_l = join_int_form temp lv (int_form s) in
         env, [f_eq f_r f_l]
 
       | ["Top"], "rshift_w32_int" ->
@@ -423,12 +443,7 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         env, [is_bit_form s; fs1; fr; fs2; f_res]
 
       | ["Top"; "JWord"; s], "of_int" ->
-        let s = match s with
-        | "W8" -> 8
-        | "W16" -> 16
-        | "W32" -> 32
-        | _ -> assert false
-        in
+        let s = size_of_jword s in
         let lv = of_seq1 lv in
         let a = of_seq1 args in
         begin
@@ -529,7 +544,7 @@ let rec trans_form (env: env) (f: form) : env * form =
   | Fop (p, _tys) ->
     begin
       match EcPath.toqsymbol p with
-      | ["Top"; "Pervasive"], "true" -> env, f_true
+      | ["Top"; "Pervasive"], "true" -> env, f_eq (int_form 0) (int_form 0)
       | q -> print_qsymbol q; assert false
     end
   | Fapp ({f_node = Fop (p, _); _ }, args)
