@@ -422,6 +422,50 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let f_l = join_int_form temp lv (int_form s) in
         env, [f_eq f_r f_l]
 
+      | ["Top"; "JWord"; s], "of_int" ->
+        let s = size_of_jword s in
+        let lv = of_seq1 lv in
+        let a = of_seq1 args in
+        begin
+        match a.f_node with
+        | Fint i  -> assert (BI.(i < (lshift one s)));
+          env, [f_eq lv a] 
+        | _ -> (* FIXME: restore actualy translation later *)
+          env, [f_eq lv a]
+          (* let env, f_a, (_tmp, res) = split_int_form env a (int_form s) in *)
+          (* env, [f_a; f_eq lv res] *)
+        end
+
+      (* should be:
+         split t 15 = (s, l)
+         res = s*mask + l *)
+      | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        let env, fs, (s, l) = split_int_form env t (int_form 15) in
+        let fmask = bitmask_form 16 in
+        let res = join_int_form (f_int_mul fmask s) l (int_form 15) in
+        let f_res = f_eq lv res in
+        env, [is_bit_form s; fs; f_res]
+
+      | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        let env, temp = mk_temp_form env tint in
+        env, [f_eq t (join_int_form temp lv (int_form 16))]
+
+      (* FIXME: Check semantics and soundness *)
+      | ["Top"; "JWord"; "W16"], "[-]" ->
+        let lv = of_seq1 lv in
+        let t = of_seq1 args in
+        env, [f_eq lv @@ f_int_opp t]
+
+      (* CASE SPECIFIC OPERATORS: *)
+      (* Operators that are implemented 
+        with respect to other EC operators
+        for the sake of ease of translation
+        during development,
+        possibly to be factored out later *)
       | ["Top"], "rshift_w32_int" ->
         let int_of_form (f:form) : BI.zint =
           match f.f_node with
@@ -442,40 +486,10 @@ let rec trans_expr (env: env) (lv :form list) (e: expr) : env * form list =
         let f_res = f_eq hb lv in
         env, [is_bit_form s; fs1; fr; fs2; f_res]
 
-      | ["Top"; "JWord"; s], "of_int" ->
-        let s = size_of_jword s in
+      | ["Top"], "smull" ->
         let lv = of_seq1 lv in
-        let a = of_seq1 args in
-        begin
-        match a.f_node with
-        | Fint i  -> assert (BI.(i < (lshift one s)));
-          env, [f_eq lv a] 
-        | _ -> (* FIXME: restore actualy translation later *)
-          env, [f_eq lv a]
-          (* let env, f_a, (_tmp, res) = split_int_form env a (int_form s) in *)
-          (* env, [f_a; f_eq lv res] *)
-        end
-
-      | ["Top"; "JWord"; "W2u16"], "sigextu32" ->
-        let lv = of_seq1 lv in
-        let t = of_seq1 args in
-        let env, fs, (s, _) = split_int_form env t (int_form 15) in
-        let fmask = bitmask_form 16 in
-        let res = join_int_form (f_int_mul fmask s) t (int_form 15) in
-        let f_res = f_eq lv res in
-        env, [is_bit_form s; fs; f_res]
-
-      | ["Top"; "JWord"; "W2u16"], "truncateu16" ->
-        let lv = of_seq1 lv in
-        let t = of_seq1 args in
-        let env, temp = mk_temp_form env tint in
-        env, [f_eq t (join_int_form temp lv (int_form 16))]
-
-      (* FIXME: Check semantics and soundness *)
-      | ["Top"; "JWord"; "W16"], "[-]" ->
-        let lv = of_seq1 lv in
-        let t = of_seq1 args in
-        env, [f_eq lv @@ f_int_opp t]
+        let res = app_two_list args f_int_mul in
+        env, [f_eq lv res]
 
       | qs, q -> Format.eprintf "Unregistered op: "; List.iter (Format.eprintf "%s.") qs;
         Format.eprintf "%s@." q; assert false
@@ -591,7 +605,8 @@ let rec trans_form (env: env) (f: form) : env * form =
       | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
       | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
       | ["Top"; "Ring"; "IntID"], "exp" -> env, app_two_list args f_int_pow
-      | ["Top"; "JWord"; "W16"], "to_uint" -> env, of_seq1 args
+      | ["Top"; "JWord"; _], "to_uint" -> env, of_seq1 args
+      (* FIXME: check conversion later *)
       | q -> print_qsymbol q; assert false
     end
   | _ -> assert false (* equality of unknow variables : x1 = x2 *)
