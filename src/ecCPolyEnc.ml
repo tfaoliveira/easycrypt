@@ -118,102 +118,6 @@ let update_env name id env =
   {env with env_ssa = MMsym.add name id env.env_ssa}
 
 
-(* SAGE OUTPUT *)
-let ideal_contains (env: env) (vs: t list) (ideal: form list) (target: form) : bool =
-  let reduce (f : 'a -> 'a -> 'a) (ls: 'a list) : 'a =
-    assert (List.length ls > 0);
-    List.fold_left f (List.hd ls) (List.tl ls)
-  in
-  
-  (* f is either:
-    exists (\vs) => poly
-      -> remove quantif, extract vs into the ideal and preprocess poly (substitute ocurrences with 0)
-      ( preprocessing can be removed)
-    anything else
-      -> identity*)
-  let process_exists (f: form) : t list * symbol list * form = 
-    let rec remove_vars (vs: t list) (f: form) : t list * symbol list * form =
-    match f.f_node with 
-    | Flocal l when List.mem l vs -> [], [], f_int @@ BI.of_int 0
-    | Fapp ({f_node = Fop (p, _); _} as op, args) 
-      when (EcPath.toqsymbol p) = (["Top"; "CoreInt"], "mul") -> 
-      begin match args with
-      | [{f_node = Flocal v; _}; k] when List.mem v vs -> 
-        begin match k.f_node with
-        | Fint i -> [], [BI.to_string i], f_int @@ BI.of_int 0
-        | Flocal k_id -> [k_id], [name k_id], f_int @@ BI.of_int 0 
-        | _ -> [], [], f
-        end
-      | [k; {f_node = Flocal v; _}] when List.mem v vs ->
-        begin match k.f_node with
-        | Fint i -> [], [BI.to_string i], f_int @@ BI.of_int 0
-        | Flocal k_id -> [k_id], [name k_id], f_int @@ BI.of_int 0 
-        | _ -> [], [], f
-        end
-      (* Code for first two patterns above should be the same *)
-      | _ -> let (ids, ps), args = List.fold_left_map 
-          (fun (ids, ps) arg -> let nids, nps, res = remove_vars vs arg in
-          (ids @ nids, ps @ nps), res) ([],[]) args in
-        ids, ps, f_app op args f.f_ty
-      end
-    | Fapp (op, args) -> let (ids, ps), args = 
-      List.fold_left_map 
-        (fun (ids, ps) arg -> 
-          let nids, nps, res = remove_vars vs arg in
-          (ids @ nids, ps @ nps), res) 
-        ([],[]) args in
-        ids, ps, f_app op args f.f_ty
-    | _ -> [], [], f
-    in 
-    match f.f_node with 
-    | Fquant (Lexists, binds, f) ->
-      let vars = List.map fst binds in
-      remove_vars vars f
-    | _ -> ([], [], f)
-  in
-  (* PREPROCESSING *)
-  let evs, eps, target = process_exists target in
-  let () = Format.eprintf "Exists bindings: " in
-  let () = if List.is_empty evs 
-    then Format.eprintf "None" 
-    else List.iter (print_id env.env_ec) evs in
-  let () = Format.eprintf "@." in
-  let vs = vs @ evs |> List.sort_uniq (fun a b -> Int.compare (tag a) (tag b)) in
-
-  (* CODE GENERATION *)
-  let ring_def = print_ring env.env_ec vs in
-  let target_poly_name = "target" in
-  let target_poly = print_poly env.env_ec target in
-  let target_poly = Format.sprintf "%s = BR(%s)" target_poly_name target_poly in
-  let ideal_def = "pideal = ideal(" ^
-  ((List.map (fun p -> Format.asprintf "%s" (print_poly env.env_ec p)) ideal) 
-  |> ((@) eps)
-  |> reduce (fun acc n -> acc ^ ", \\\n" ^ n)) ^ ")"
-  in
-  let grobb_def = Format.asprintf "gb = pideal.groebner_basis()@." in
-  let ideal_mem_test = Format.asprintf "print(%s.reduce(gb))@." target_poly_name in
-  
-  (* FILE MANIPULATION *)
-  let sage_oc = open_out sage_file in
-  Printf.fprintf sage_oc "%s\n" ring_def;
-  Printf.fprintf sage_oc "%s\n" ideal_def;
-  Printf.fprintf sage_oc "%s\n" target_poly;
-  Printf.fprintf sage_oc "%s\n" grobb_def;
-  Printf.fprintf sage_oc "%s\n" ideal_mem_test;
-  flush sage_oc;
-  close_out sage_oc;
-
-  let sage_ic = Unix.open_process_in (sage_path ^ " " ^ sage_file) in
-  let res = In_channel.input_char sage_ic in
-  match res with
-  | None -> Format.eprintf "Failed to get output from sage@."; In_channel.close sage_ic; assert false
-  | Some '0' -> Format.eprintf "Polynomial is in the ideal@."; In_channel.close sage_ic; true
-  | Some c -> let rest = In_channel.input_all sage_ic in
-    In_channel.close sage_ic;
-    Format.eprintf 
-    "Polynomial is not in the ideal or something else happened:@.Sage output: %s@." ((String.make 1 c) ^ rest);
-  false
-
 
 (* TACTIC *)
 
@@ -530,17 +434,9 @@ let trans_ret (env: env) (rete: expr) : env * form list =
 (* TODO: Add logical and procesing
 *)
 
-let rec trans_form (env: env) (f: form) : env * form =
-  let rec list_of_eclist (f: form) : form list =
-    match f.f_node with
-    | Fapp ({f_node = Fop (p, _); _ }, args)
-      when (EcPath.toqsymbol p = (["Top"; "List"], "::")) ->
-      List.map list_of_eclist args |> List.flatten
-    | Fop (p, _) when (EcPath.toqsymbol p = (["Top"; "List"], "[]")) ->
-      []
-    | _ -> [f]
-  in
 
+
+let rec trans_form (env: env) (f: form) : env * form =
   match f.f_node with
   | Fint _i -> env, f
   | Flocal idn ->
@@ -561,8 +457,79 @@ let rec trans_form (env: env) (f: form) : env * form =
       | ["Top"; "Pervasive"], "true" -> env, f_eq (int_form 0) (int_form 0)
       | q -> print_qsymbol q; assert false
     end
-  | Fapp ({f_node = Fop (p, _); _ }, args)
-    when ((EcPath.toqsymbol p) = (["Top"], "eq_mod")) ->
+  | Fapp ({f_node = Fop (p, _); _ }, args) ->
+    let env, args = List.fold_left_map trans_form env args in
+    begin
+      match EcPath.toqsymbol p with
+      | ["Top"; "JWord"; _], "+"
+      | ["Top"; "CoreInt"], "add" -> env, app_two_list args f_int_add
+      | ["Top"; "CoreInt"], "mul"
+      | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
+      | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
+      | ["Top"; "Ring"; "IntID"], "exp" -> env, app_two_list args f_int_pow
+      | ["Top"; "JWord"; _], "to_uint" -> env, of_seq1 args
+      (* FIXME: check conversion later *)
+      | q -> print_qsymbol q; assert false
+    end
+  | _ -> assert false (* equality of unknow variables : x1 = x2 *)
+
+
+let rec list_of_eclist (f: form) : form list =
+    match f.f_node with
+    | Fapp ({f_node = Fop (p, _); _ }, args)
+      when (EcPath.toqsymbol p = (["Top"; "List"], "::")) ->
+      List.map list_of_eclist args |> List.flatten
+    | Fop (p, _) when (EcPath.toqsymbol p = (["Top"; "List"], "[]")) ->
+      []
+    | _ -> [f]
+
+let rec trans_pre (env: env) (f: form) : env * (form list) = 
+  match f.f_node with
+  | Fapp ({f_node = Fop (p, _); _ }, args) -> begin
+    match (EcPath.toqsymbol p) with
+    | ["Top"], "eq_mod" ->
+        begin
+          match args with
+          | [a; b; c] ->
+            let env, a = trans_form env a in
+            let env, b = trans_form env b in
+            let c = list_of_eclist c in
+            let env,c = List.fold_left_map trans_form env c in
+            let env, f =
+              match c with
+              | [] -> env, f_eq b a
+              | h :: q ->
+                let env, temp = mk_temp_form env tint in
+                let f = f_int_mul temp h in
+                let env, f = List.fold_left
+                    (fun (env, f) modulo ->
+                       let env, temp = mk_temp_form env tint in
+                       (env, f_int_add f @@ f_int_mul temp modulo))
+                    (env, f) q
+                in
+                let f = f_int_add a f in
+                env, f_eq b f
+            in
+            env, [f]
+          | _ -> assert false
+        end
+
+      | ["Top"; "Pervasive"], "/\\" ->
+        let fa1, fa2 = of_seq2 args in
+        let env, fs1 = trans_pre env fa1 in
+        let env, fs2 = trans_pre env fa2 in
+        env, fs1 @ fs2
+      
+      | _-> let env, f = trans_form env f in env, [f]
+    end
+
+    | _ -> let env, f = trans_form env f in env, [f]
+
+let rec trans_post (env: env) (f: form) : env * (form list) = 
+  match f.f_node with
+  | Fapp ({f_node = Fop (p, _); _ }, args) -> begin
+    match (EcPath.toqsymbol p) with
+    | ["Top"], "eq_mod" ->
         begin
           match args with
           | [a; b; c] ->
@@ -592,25 +559,116 @@ let rec trans_form (env: env) (f: form) : env * form =
                 in
                 f_exists ids (f_eq b f)
             in
-            env, f
-          | _ -> assert false
+            env, [f]
+          | _ -> let env, f = trans_form env f in env, [f]
         end
-  | Fapp ({f_node = Fop (p, _); _ }, args) ->
-    let env, args = List.fold_left_map trans_form env args in
-    begin
-      match EcPath.toqsymbol p with
-      | ["Top"; "JWord"; _], "+"
-      | ["Top"; "CoreInt"], "add" -> env, app_two_list args f_int_add
-      | ["Top"; "CoreInt"], "mul"
-      | ["Top"; "JWord"; _], "*" -> env, app_two_list args f_int_mul
-      | ["Top"; "Pervasive"], "=" -> env, app_two_list args f_eq
-      | ["Top"; "Ring"; "IntID"], "exp" -> env, app_two_list args f_int_pow
-      | ["Top"; "JWord"; _], "to_uint" -> env, of_seq1 args
-      (* FIXME: check conversion later *)
-      | q -> print_qsymbol q; assert false
-    end
-  | _ -> assert false (* equality of unknow variables : x1 = x2 *)
 
+      | ["Top"; "Pervasive"], "/\\" ->
+        let fa1, fa2 = of_seq2 args in
+        let env, fs1 = trans_post env fa1 in
+        let env, fs2 = trans_post env fa2 in
+        env, fs1 @ fs2
+      
+      | _-> assert false
+    end
+
+    | _ -> let env, f = trans_form env f in env, [f]
+
+
+(* SAGE OUTPUT *)
+let ideal_contains (env: env) (vs: t list) (ideal: form list) (target: form) : bool =
+  let reduce (f : 'a -> 'a -> 'a) (ls: 'a list) : 'a =
+    assert (List.length ls > 0);
+    List.fold_left f (List.hd ls) (List.tl ls)
+  in
+  
+  (* f is either:
+    exists (\vs) => poly
+      -> remove quantif, extract vs into the ideal and preprocess poly (substitute ocurrences with 0)
+      ( preprocessing can be removed)
+    anything else
+      -> identity*)
+  let process_exists (f: form) : form * form list = 
+    (* removes occurrences of v*f and returns the fs *)
+    let rec remove_var (v: t) (f: form) : form * form list =
+      match f.f_node with
+      | Flocal l when l = v -> int_form 0, []
+      | Flocal _ -> f, []
+      | Fint _ -> f, []
+      | Fapp ({f_node = Fop (p, _); _} as op, args) 
+        when (EcPath.toqsymbol p) = (["Top"; "CoreInt"], "mul") -> 
+        begin match args with
+        | [{f_node = Flocal v_; _}; h] when v_ = v -> int_form 0, [h]
+        | [h; {f_node = Flocal v_; _}] when v_ = v -> int_form 0, [h]
+        | _ -> let fid, args =
+          List.fold_left_map (fun acc a -> 
+          let a, fid = remove_var v a in
+          acc @ fid, a) [] args in     
+          f_app op args f.f_ty, fid
+        end
+      | Fapp (op, args) -> let fid, args =
+        List.fold_left_map (fun acc a -> 
+        let a, fid = remove_var v a in
+        acc @ fid, a) [] args in     
+        f_app op args f.f_ty, fid
+      | _ -> Format.eprintf "%s" @@ print_form env.env_ec f; assert false
+    in
+    
+    match f.f_node with 
+    | Fquant (Lexists, binds, f) ->
+      let vars = List.map fst binds in
+      List.fold_left (fun (f, fid) v ->
+      let f, fidn = remove_var v f in
+      (f, fid @ fidn)) (f, []) vars
+      (* remove_vars vars f *)
+    | _ -> f, []
+  in
+  
+  (* PREPROCESSING *)
+  let target, fids = process_exists target in
+  (* let () = Format.eprintf "Exists bindings: " in *)
+  (* let () = if List.is_empty evs *) 
+    (* then Format.eprintf "None" *) 
+    (* else List.iter (print_id env.env_ec) evs in *)
+  (* let () = Format.eprintf "@." in *)
+  (* let vs = vs @ evs |> List.sort_uniq (fun a b -> Int.compare (tag a) (tag b)) in *)
+
+  (* CODE GENERATION *)
+  let ring_def = print_ring env.env_ec vs in
+  let target_poly_name = "target" in
+  let target_poly = print_poly env.env_ec target in
+  let target_poly = Format.sprintf "%s = BR(%s)" target_poly_name target_poly in
+  let ideal_def = "pideal = ideal(" ^
+  ((List.map (fun p -> Format.asprintf "%s" (print_poly env.env_ec p)) ideal) 
+  |> ((@) (List.map (fun p -> Format.asprintf "%s" (print_poly env.env_ec p)) fids))
+  (* |> ((@) eps) *)
+  |> reduce (fun acc n -> acc ^ ", \\\n" ^ n)) ^ ")"
+  in
+  let grobb_def = Format.asprintf "gb = pideal.groebner_basis()@." in
+  let ideal_mem_test = Format.asprintf "print(%s.reduce(gb))@." target_poly_name in
+  
+  (* FILE MANIPULATION *)
+  let sage_oc = open_out sage_file in
+  Printf.fprintf sage_oc "%s\n" ring_def;
+  Printf.fprintf sage_oc "%s\n" ideal_def;
+  Printf.fprintf sage_oc "%s\n" target_poly;
+  Printf.fprintf sage_oc "%s\n" grobb_def;
+  Printf.fprintf sage_oc "%s\n" ideal_mem_test;
+  flush sage_oc;
+  close_out sage_oc;
+
+  Format.eprintf "Calling sagemath...@.";
+  let sage_ic = Unix.open_process_in (sage_path ^ " " ^ sage_file) in
+  let res = In_channel.input_char sage_ic in
+  match res with
+  | None -> Format.eprintf "Failed to get output from sage@."; In_channel.close sage_ic; assert false
+  | Some '0' -> Format.eprintf "Polynomial is in the ideal@."; In_channel.close sage_ic; true
+  | Some c -> let rest = In_channel.input_all sage_ic in
+    In_channel.close sage_ic;
+    Format.eprintf 
+    "Polynomial is not in the ideal or something else happened:@.Sage output: %s@." ((String.make 1 c) ^ rest);
+  false
+    
 let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : form =
   let env_ssa = MMsym.empty in (* FIXME: need to add proc args as bindings here *)
   let env = {env_ec = env; env_ssa = env_ssa } in
@@ -620,9 +678,9 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
   let () = List.iter (print_instr env.env_ec) body in (* DEBUG PRINT, REMOVE LATER *)
   let env, body = List.fold_left_map trans_instr env body in
   let env, ret = trans_ret env ret in
-  let env, pre = trans_form env pre in
-  let env, post = trans_form env post in
-  let f = f_imp pre (f_imps (List.flatten body) (f_imps ret post)) in
+  let env, pre = trans_pre env pre in
+  let env, post = trans_post env post in
+  let f = f_imps pre (f_imps (List.flatten body) (f_imps ret (f_ands post))) in
   let ids =
     MMsym.fold (fun _ l acc -> l @ acc) env.env_ssa []
     |> List.sort_uniq (fun a b -> Int.compare (tag a) (tag b)) |> List.map (fun x -> x, GTty tint) 
@@ -630,6 +688,6 @@ let trans_hoare env (pre: form) (body: instr list) (ret: expr) (post: form) : fo
 
 
   (* EXPERIMENTAL *)
-  let _ = ideal_contains env (List.map fst ids) ((List.flatten body) @ ret) post in
+  let _ = List.map (ideal_contains env (List.map fst ids) (pre @ (List.flatten body) @ ret)) post in
   
   f_forall ids f
