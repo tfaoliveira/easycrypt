@@ -103,7 +103,7 @@ module Fsubst : sig
   val me_subst  : memenv      substitute
   val m_subst   : EcIdent.t   substitute
   val mr_subst  : mod_restr   substitute
-  val mty_subst : module_type substitute
   val oi_subst  : PreOI.t     substitute
+  val mty_mr_subst : mty_mr   substitute
   val gty_subst : gty         substitute
 end

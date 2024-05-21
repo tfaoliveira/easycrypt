@@ -1,6 +1,7 @@
 (* -------------------------------------------------------------------- *)
 open EcSymbols
 open EcPath
+open EcAst
 open EcTypes
 open EcDecl
 open EcModules
@@ -75,4 +76,4 @@ val mkitem : import -> theory_item_r -> theory_item
 
 (* -------------------------------------------------------------------- *)
 val module_expr_of_module_sig:
-  EcIdent.t -> module_type -> module_sig -> module_expr
+  EcIdent.t -> mty_mr -> module_sig -> module_expr

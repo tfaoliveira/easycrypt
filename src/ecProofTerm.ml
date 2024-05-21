@@ -5,6 +5,7 @@ open EcParsetree
 open EcIdent
 open EcAst
 open EcTypes
+open EcModules
 open EcFol
 open EcEnv
 open EcMatching
@@ -35,7 +36,7 @@ type pt_ev_arg = {
 and pt_ev_arg_r =
 | PVAFormula of EcFol.form
 | PVAMemory  of EcMemory.memory
-| PVAModule  of (EcPath.mpath * EcModules.module_sig)
+| PVAModule  of (EcPath.mpath * (module_sig * mod_restr))
 | PVASub     of pt_ev
 
 (* -------------------------------------------------------------------- *)
@@ -607,11 +608,10 @@ and trans_pterm_arg_mod pe { pl_desc = arg; pl_loc = loc; } =
     let msig = NormMp.sig_of_mp env mp in
     (mp, msig) in
 
-  let mod_ = (fun () -> EcTyping.trans_msymbol env mp
-                        |> comp_sig) in
+  let mod_ = (fun () -> comp_sig (EcTyping.trans_msymbol env mp)) in
   let mod_ = Exn.recast_pe pe.pte_pe pe.pte_hy mod_ in
 
-    { ptea_env = pe; ptea_arg = PVAModule mod_; }
+  { ptea_env = pe; ptea_arg = PVAModule mod_; }
 
 (* ------------------------------------------------------------------ *)
 and trans_pterm_arg_mem pe ?name { pl_desc = arg; pl_loc = loc; } =

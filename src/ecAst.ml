@@ -138,18 +138,16 @@ and oracle_info = {
   oi_calls : xpath list;
 }
 
+and oracle_infos = oracle_info Msym.t
+
 and mod_restr = {
   mr_xpaths : mr_xpaths;
   mr_mpaths : mr_mpaths;
-  mr_oinfos : oracle_info Msym.t;
 }
 
-and module_type = {
-  mt_params : (EcIdent.t * module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : mod_restr;
-}
+and module_type = EcPath.path
+
+and mty_mr = module_type * mod_restr
 
 (* -------------------------------------------------------------------- *)
 and proj_arg =
@@ -173,7 +171,7 @@ and memenv = memory * memtype
 (* -------------------------------------------------------------------- *)
 and gty =
   | GTty    of ty
-  | GTmodty of module_type
+  | GTmodty of mty_mr
   | GTmem   of memtype
 
 and binding  = (EcIdent.t * gty)
@@ -474,7 +472,6 @@ let ur_hash elems el_hash ur =
 let mr_equal mr1 mr2 =
   ur_equal EcPath.Sx.equal mr1.mr_xpaths mr2.mr_xpaths
   && ur_equal EcPath.Sm.equal mr1.mr_mpaths mr2.mr_mpaths
-  && Msym.equal oi_equal mr1.mr_oinfos mr2.mr_oinfos
 
 let mr_xpaths_fv (m : mr_xpaths) : int Mid.t =
   EcPath.Sx.fold
@@ -493,66 +490,23 @@ let mr_mpaths_fv (m : mr_mpaths) : int Mid.t =
     EcIdent.Mid.empty
 
 let mr_fv (mr : mod_restr) : int Mid.t =
-  let fv =
-    EcSymbols.Msym.fold (fun _ oi fv ->
-      List.fold_left EcPath.x_fv fv oi.oi_calls
-    ) mr.mr_oinfos Mid.empty
-  in
-
-  fv_union fv
-    (fv_union
-       (mr_xpaths_fv mr.mr_xpaths)
-       (mr_mpaths_fv mr.mr_mpaths))
+  fv_union
+    (mr_xpaths_fv mr.mr_xpaths)
+    (mr_mpaths_fv mr.mr_mpaths)
 
 let mr_hash mr =
-  Why3.Hashcons.combine2
+  Why3.Hashcons.combine
     (ur_hash EcPath.Sx.ntr_elements EcPath.x_hash mr.mr_xpaths)
     (ur_hash EcPath.Sm.ntr_elements EcPath.m_hash mr.mr_mpaths)
-    (Why3.Hashcons.combine_list
-       (Why3.Hashcons.combine_pair Hashtbl.hash oi_hash) 0
-       (EcSymbols.Msym.bindings mr.mr_oinfos
-        |> List.sort (fun (s,_) (s',_) -> EcSymbols.sym_compare s s')))
 
-let mty_hash mty =
-  Why3.Hashcons.combine3
-    (EcPath.p_hash mty.mt_name)
-    (Why3.Hashcons.combine_list
-       (fun (x, _) -> EcIdent.id_hash x)
-       0 mty.mt_params)
-    (Why3.Hashcons.combine_list EcPath.m_hash 0 mty.mt_args)
-    (mr_hash mty.mt_restr)
+let mty_hash (mty : module_type) = EcPath.p_hash mty
 
-let rec mty_equal mty1 mty2 =
-     (EcPath.p_equal mty1.mt_name mty2.mt_name)
-  && (List.all2 EcPath.m_equal mty1.mt_args mty2.mt_args)
-  && (List.all2 (pair_equal EcIdent.id_equal mty_equal)
-        mty1.mt_params mty2.mt_params)
-  && (mr_equal mty1.mt_restr mty2.mt_restr)
+let mty_equal (mty1 : module_type) (mty2 : module_type) = EcPath.p_equal mty1 mty2
 
 (* -------------------------------------------------------------------- *)
 let oi_tostring (oi : oracle_info) : string =
   let calls = List.map EcPath.x_tostring oi.oi_calls in
   Format.sprintf "{calls = %s}" (String.concat ", " calls)
-
-(* -------------------------------------------------------------------- *)
-let mr_tostring (mr : mod_restr) : string =
-  let xp =
-    let pp (xps : Sx.t) =
-      String.concat ", " (List.map EcPath.x_tostring (Sx.elements xps))
-    in ur_tostring pp mr.mr_xpaths
-  in
-
-  let mp =
-    let pp (mps : Sm.t) =
-      String.concat ", " (List.map EcPath.m_tostring (Sm.elements mps))
-    in ur_tostring pp mr.mr_mpaths
-  in
-
-  let oi =
-    let do1 (x, oi) = Format.sprintf "%s -> %s" x (oi_tostring oi) in
-    String.concat ", " (List.map do1 (Msym.bindings mr.mr_oinfos)) in
-
-  Format.sprintf "{%s, %s, %s}" xp mp oi
 
 (* -------------------------------------------------------------------- *)
 let lmt_hash lmem =
@@ -613,8 +567,8 @@ let gty_equal ty1 ty2 =
   | GTty ty1, GTty ty2 ->
       ty_equal ty1 ty2
 
-  | GTmodty p1, GTmodty p2  ->
-    mty_equal p1 p2
+  | GTmodty (p1, mr1), GTmodty (p2, mr2)  ->
+    mty_equal p1 p2 && mr_equal mr1 mr2
 
   | GTmem mt1, GTmem mt2 ->
       mt_equal mt1 mt2
@@ -623,13 +577,13 @@ let gty_equal ty1 ty2 =
 
 let gty_hash = function
   | GTty ty -> ty_hash ty
-  | GTmodty p  ->  mty_hash p
+  | GTmodty (p, mr)  -> Why3.Hashcons.combine (mty_hash p) (mr_hash mr)
   | GTmem _ -> 1
 
 (* -------------------------------------------------------------------- *)
 let gty_fv = function
   | GTty ty -> ty.ty_fv
-  | GTmodty mty -> mr_fv mty.mt_restr
+  | GTmodty (_, mr) -> mr_fv mr
   | GTmem mt -> mt_fv mt
 
 (*-------------------------------------------------------------------- *)

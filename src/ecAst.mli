@@ -124,18 +124,16 @@ and oracle_info = {
   oi_calls : xpath list;
 }
 
+and oracle_infos = oracle_info Msym.t
+
 and mod_restr = {
   mr_xpaths : mr_xpaths;
   mr_mpaths : mr_mpaths;
-  mr_oinfos : oracle_info Msym.t;
 }
 
-and module_type = {
-  mt_params : (EcIdent.t * module_type) list;
-  mt_name   : EcPath.path;
-  mt_args   : EcPath.mpath list;
-  mt_restr  : mod_restr;
-}
+and module_type = EcPath.path
+
+and mty_mr = module_type * mod_restr
 
 (* -------------------------------------------------------------------- *)
 and proj_arg =
@@ -159,7 +157,7 @@ and memenv = memory * memtype
 (* -------------------------------------------------------------------- *)
 and gty =
   | GTty    of ty
-  | GTmodty of module_type
+  | GTmodty of mty_mr
   | GTmem   of memtype
 
 and binding  = (EcIdent.t * gty)
@@ -361,8 +359,6 @@ val mr_fv    : mod_restr fv
 
 val mty_equal : module_type equality
 val mty_hash  : module_type hash
-
-val mr_tostring : mod_restr -> string
 
 (* -------------------------------------------------------------------- *)
 val lmt_equal : ty equality -> local_memtype equality

@@ -3,6 +3,7 @@ open EcLocation
 open EcUtils
 open EcIdent
 open EcTypes
+open EcModules
 open EcFol
 open EcEnv
 
@@ -57,7 +58,7 @@ and pt_head =
 and pt_arg =
 | PAFormula of EcFol.form
 | PAMemory  of EcMemory.memory
-| PAModule  of (EcPath.mpath * EcModules.module_sig)
+| PAModule  of (EcPath.mpath * (module_sig * mod_restr))
 | PASub     of proofterm option
 
 (* -------------------------------------------------------------------- *)

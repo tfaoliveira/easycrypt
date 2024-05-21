@@ -279,7 +279,7 @@ module PPEnv = struct
     let exists sm =
       match EcEnv.ModTy.lookup_opt sm ppe.ppe_env with
       | None -> false
-      | Some (p, _) -> P.p_equal p mty.mt_name
+      | Some (p, _) -> P.p_equal p mty
     in
 
     let rec shorten prefix (nm, x) =
@@ -292,23 +292,10 @@ module PPEnv = struct
       end
     in
 
-    let (nm, x) = P.toqsymbol mty.mt_name in
+    let (nm, x) = P.toqsymbol mty in
     let (nm, x) = shorten (List.rev nm) ([], x) in
 
-    let isfunctor =
-      List.all2 EcPath.m_equal
-	      (List.map (fun (x, _) -> EcPath.mident x) mty.mt_params)
-	      mty.mt_args
-    in
-
-    let msymb =
-      match isfunctor with
-      | true  -> (List.map (fun x -> (x, [])) nm) @ [(x, [])]
-      | false ->
-           (List.map (fun x -> (x, [])) nm)
-         @ [(x, List.map (mod_symb ppe) mty.mt_args)]
-    in
-      msymb
+    (List.map (fun x -> (x, [])) nm) @ [(x, [])]
 
   let local_symb ppe x =
     match Mid.find_opt x ppe.ppe_locals with
@@ -1871,10 +1858,10 @@ and pp_orclinfo ppe fmt (sym, oi) =
     pp_symbol sym
     (pp_orclinfo_bare ppe) oi
 
-and pp_orclinfos ppe fmt mr =
-  if not (EcModules.mr_is_empty mr) then
+and pp_orclinfos ppe fmt ois =
+  if not (EcModules.oracle_infos_is_empty ois) then
     Format.fprintf fmt "[@[<hv>%a@]]"
-      (pp_list ",@ " (pp_orclinfo ppe)) (Msym.bindings mr.mr_oinfos)
+      (pp_list ",@ " (pp_orclinfo ppe)) (Msym.bindings ois)
 
 (* -------------------------------------------------------------------- *)
 and pp_mem_restr ppe fmt mr =
@@ -1918,16 +1905,14 @@ and pp_mem_restr ppe fmt mr =
       (pp_r false) mr.mr_mpaths.ur_neg
 
 (* -------------------------------------------------------------------- *)
-(* Use in an hv box. *)
-and pp_restr ppe fmt mr =
-  Format.fprintf fmt "%a%a"
-    (pp_mem_restr ppe) mr
-    (pp_orclinfos ppe) mr
+and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
+  Format.fprintf fmt "@[<hv 2>%a@]" (pp_modtype1 ppe) mty
 
 (* -------------------------------------------------------------------- *)
-and pp_modtype (ppe : PPEnv.t) fmt (mty : module_type) =
+and pp_mty_mr (ppe : PPEnv.t) fmt ((mty, mr) : mty_mr) =
   Format.fprintf fmt "@[<hv 2>%a%a@]"
-    (pp_modtype1 ppe) mty (pp_restr ppe) mty.mt_restr
+    (pp_modtype1 ppe) mty
+    (pp_mem_restr ppe) mr
 
 (* -------------------------------------------------------------------- *)
 and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
@@ -1956,14 +1941,10 @@ and pp_binding ?(break = true) ?fv (ppe : PPEnv.t) (xs, ty) =
       in
         (tenv1, pp)
 
-  | GTmodty mt ->
-      let tenv1  = PPEnv.add_mods ppe xs mt in
+  | GTmodty mty ->
+      let tenv1  = PPEnv.add_mods ppe xs mty in
       let pp fmt =
-        let (ppe, pp_params) = pp_mod_params ppe mt.mt_params in
-        Format.fprintf fmt "@[<hv>(%a%t <:@;<1 2>%a)@]"
-          (pp_list pp_sep (pp_local tenv1)) xs
-          pp_params
-          (pp_modtype ppe) mt
+        Format.fprintf fmt "@[<hv>%a@]" (pp_mty_mr ppe) mty
       in
         (tenv1, pp)
 
@@ -2918,9 +2899,8 @@ module PPGoal = struct
         | EcBaseLogic.LD_mem m ->
             (None, fun fmt -> pp_memtype ppe fmt m)
 
-        | EcBaseLogic.LD_modty p ->
-          let (ppe, pp) = pp_mod_params ppe p.mt_params in
-          (Some pp, fun fmt -> pp_modtype ppe fmt p)
+        | EcBaseLogic.LD_modty mty ->
+            (None, fun fmt -> pp_mty_mr ppe fmt mty)
 
         | EcBaseLogic.LD_hyp f ->
             (None, fun fmt -> pp_form ppe fmt f)
@@ -3057,12 +3037,11 @@ let pp_modsig ?(long=false) ppe fmt (p,ms) =
       if fst qs <> [] then
         Format.fprintf fmt "(* %a *)@ " EcSymbols.pp_qsymbol qs in
 
-  Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t @,%a@;<0 -2>@] = \
+  Format.fprintf fmt "@[<v>@[<hv 2>%amodule type %s%t@;<0 -2>@] = \
                       {@,  @[<v>%a@]@,}@]"
     pp_long p
     (EcPath.basename p) pp
-    (pp_mem_restr ppe) ms.mis_restr
-    (pp_list "@,@," (pp_sigitem (Some ms.mis_restr.mr_oinfos) ppe)) ms.mis_body
+    (pp_list "@,@," (pp_sigitem (Some ms.mis_oinfos) ppe)) ms.mis_body
 
 (* Printing of a module signature with no restrictions. *)
 let pp_modsig_smpl ppe fmt (p,ms) =
@@ -3173,8 +3152,8 @@ and pp_modbody ppe fmt (p, body) =
       Format.fprintf fmt "{@,  @[<v>%a@]@,}"
         (pp_list "@,@," (fun fmt i -> pp_moditem ppe fmt (p, i))) ms.ms_body
 
-  | ME_Decl mt ->
-      Format.fprintf fmt "[Abstract :@;<1 2> %a@,]" (pp_modtype ppe) mt
+  | ME_Decl mty ->
+      Format.fprintf fmt "[Abstract :@;<1 2> %a@,]" (pp_mty_mr ppe) mty
 
 and pp_moditem ppe fmt (p, i) =
   match i with
@@ -3528,10 +3507,11 @@ let pp_m ~sign ppe fmt m =
 let pp_m_xt ~print_abstract ~sign env fmt m =
   let ppe = PPEnv.ofenv env in
   if print_abstract then
-    let r = EcEnv.NormMp.get_restr env m in
-    Format.fprintf fmt "@[<hv>%a{@;<0 2>%a@,}@]"
+    let (mr, ois) = EcEnv.NormMp.get_restr env m in
+    Format.fprintf fmt "@[<hv>%a{@;<0 2>%a%a@,}@]"
       (pp_m ~sign ppe) m
-      (pp_restr ppe) r
+      (pp_mem_restr ppe) mr
+      (pp_orclinfos ppe) ois
   else pp_m ~sign ppe fmt m
 
 let sm_of_mid mid =

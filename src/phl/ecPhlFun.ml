@@ -50,8 +50,8 @@ let lossless_hyps env top sub =
   let sig_ = EcEnv.NormMp.sig_of_mp env top in
   let bd =
     List.map
-      (fun (id, mt) ->
-         (id, GTmodty { mt with mt_restr = clear_to_top mt.mt_restr } )
+      (fun (id, (mty, mr)) ->
+         (id, GTmodty (mty, clear_to_top mr))
       ) sig_.mis_params
   in
   (* WARN: this implies that the oracle do not have access to top *)

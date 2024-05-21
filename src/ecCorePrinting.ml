@@ -68,8 +68,6 @@ module type PrinterAPI = sig
   val pp_added_op    : PPEnv.t -> operator pp
   val pp_axiom       : ?long:bool -> PPEnv.t -> (path * axiom     ) pp
   val pp_theory      : PPEnv.t -> (path * ctheory                 ) pp
-  val pp_restr_s     :            (bool                           ) pp
-  val pp_restr       : PPEnv.t -> (mod_restr                      ) pp
   val pp_modtype1    : PPEnv.t -> (module_type                    ) pp
   val pp_modtype     : PPEnv.t -> (module_type                    ) pp
   val pp_modexp      : PPEnv.t -> (mpath * module_expr            ) pp

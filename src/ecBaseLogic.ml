@@ -6,7 +6,7 @@ open EcCoreFol
 type local_kind =
 | LD_var    of ty * form option
 | LD_mem    of EcMemory.memtype
-| LD_modty  of EcModules.module_type
+| LD_modty  of EcAst.mty_mr
 | LD_hyp    of form
 | LD_abs_st of EcModules.abs_uses
 

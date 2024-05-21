@@ -74,15 +74,15 @@ let gty_fv = EcAst.gty_fv
 let gtty (ty : EcTypes.ty) =
   GTty ty
 
-let gtmodty (mt : module_type) =
-  GTmodty mt
+let gtmodty (mtymr : mty_mr) =
+  GTmodty mtymr
 
 let gtmem (mt : EcMemory.memtype) =
   GTmem mt
 
 (* -------------------------------------------------------------------- *)
 let as_gtty  = function GTty ty  -> ty  | _ -> assert false
-let as_modty = function GTmodty mty -> mty | _ -> assert false
+let as_modty = function GTmodty (mty,mr) -> (mty,mr) | _ -> assert false
 let as_mem   = function GTmem m -> m | _ -> assert false
 
 (*-------------------------------------------------------------------- *)
@@ -133,7 +133,7 @@ let gty_as_ty =
 let gty_as_mem =
   function GTmem m -> m  | _ -> assert false
 
-let gty_as_mod = function GTmodty mt -> mt | _ -> assert false
+let gty_as_mod = function GTmodty (mt, mr) -> (mt, mr) | _ -> assert false
 
 let kind_of_gty = function
   | GTty    _ -> `Form

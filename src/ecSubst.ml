@@ -639,6 +639,10 @@ and subst_oracle_info (s : subst) (oi : OI.t) =
   OI.mk (List.map (subst_xpath s) (PreOI.allowed oi))
 
 (* -------------------------------------------------------------------- *)
+and subst_oracle_infos (s : subst) (oi : OI.t EcSymbols.Msym.t) =
+  EcSymbols.Msym.map (fun oi -> subst_oracle_info s oi) oi
+
+(* -------------------------------------------------------------------- *)
 and subst_mod_restr (s : subst) (mr : mod_restr) =
   let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
       EcPath.Sx.add (subst_xpath s x) r
@@ -646,9 +650,7 @@ and subst_mod_restr (s : subst) (mr : mod_restr) =
   let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
       EcPath.Sm.add (subst_mpath s x) r
     ) set EcPath.Sm.empty) mr.mr_mpaths in
-  let ois = EcSymbols.Msym.map (fun oi ->
-      subst_oracle_info s oi) mr.mr_oinfos in
-  { mr_xpaths = rx; mr_mpaths = r; mr_oinfos = ois }
+  { mr_xpaths = rx; mr_mpaths = r }
 
 (* -------------------------------------------------------------------- *)
 and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
@@ -686,31 +688,29 @@ and subst_modsig ?params (s : subst) (comps : module_sig) =
   let comps =
     { mis_params = newparams;
       mis_body   = subst_modsig_body sbody comps.mis_body;
-      mis_restr  = subst_mod_restr sbody comps.mis_restr;
+      mis_oinfos = subst_oracle_infos sbody comps.mis_oinfos;
     }
   in
     (sbody, comps)
 
 (* -------------------------------------------------------------------- *)
 and subst_modtype (s : subst) (modty : module_type) =
-  let mt_name =
-    ofdfl
-      (fun () -> subst_path s modty.mt_name)
-      (Mp.find_opt modty.mt_name s.sb_path) in
-
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
-    mt_name   = mt_name;
-    mt_args   = List.map (subst_mpath s) modty.mt_args;
-    mt_restr = subst_mod_restr s modty.mt_restr; }
+  ofdfl
+    (fun () -> subst_path s modty)
+    (Mp.find_opt modty s.sb_path)
 
 (* -------------------------------------------------------------------- *)
+
+and subst_mty_mr (s : subst) ((mty, mr) : mty_mr) =
+   (subst_modtype s mty, subst_mod_restr s mr)
+
 and subst_gty (s : subst) (ty : gty) =
   match ty with
   | GTty ty ->
      GTty (subst_ty s ty)
 
-  | GTmodty mty ->
-     GTmodty (subst_modtype s mty)
+  | GTmodty mt ->
+     GTmodty (subst_mty_mr s mt)
 
   | GTmem m ->
      GTmem (EcMemory.mt_subst (subst_ty s) m)
@@ -789,7 +789,7 @@ and subst_module_body (s : subst) (body : module_body) =
   | ME_Structure bstruct ->
       ME_Structure (subst_module_struct s bstruct)
 
-  | ME_Decl p -> ME_Decl (subst_modtype s p)
+  | ME_Decl p -> ME_Decl (subst_mty_mr s p)
 
 (* -------------------------------------------------------------------- *)
 and subst_module_comps (s : subst) (comps : module_comps) =

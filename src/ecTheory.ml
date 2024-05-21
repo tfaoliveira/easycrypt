@@ -2,7 +2,6 @@
 open EcUtils
 open EcSymbols
 open EcPath
-open EcAst
 open EcTypes
 open EcDecl
 open EcModules
@@ -79,10 +78,10 @@ let mkitem (import : import) (item : theory_item_r) =
   { ti_import = import; ti_item = item; }
 
 (* -------------------------------------------------------------------- *)
-let module_comps_of_module_sig_comps (comps : module_sig_body) restr =
+let module_comps_of_module_sig_comps (comps : module_sig_body) oi =
   let onitem = function
     | Tys_function funsig ->
-      let oi = Msym.find funsig.fs_name restr.mr_oinfos in
+      let oi = Msym.find funsig.fs_name oi in
         MI_Function {
           f_name = funsig.fs_name;
           f_sig  = funsig;
@@ -93,12 +92,9 @@ let module_comps_of_module_sig_comps (comps : module_sig_body) restr =
 
 (* -------------------------------------------------------------------- *)
 let module_expr_of_module_sig name mp tymod =
-  (* Abstract modules must be fully applied. *)
-  assert (List.length mp.mt_params = List.length mp.mt_args);
-
-  let tycomps = module_comps_of_module_sig_comps tymod.mis_body mp.mt_restr in
+  let tycomps = module_comps_of_module_sig_comps tymod.mis_body tymod.mis_oinfos in
     { me_name     = EcIdent.name name;
       me_body     = ME_Decl mp;
       me_comps    = tycomps;
       me_sig_body = tymod.mis_body;
-      me_params   = tymod.mis_params ; }
+      me_params   = tymod.mis_params; }

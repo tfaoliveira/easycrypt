@@ -3,6 +3,7 @@ open EcUtils
 open EcIdent
 open EcSymbols
 open EcTypes
+open EcModules
 open EcFol
 open EcEnv
 
@@ -59,7 +60,7 @@ and pt_head =
 and pt_arg =
 | PAFormula of EcFol.form
 | PAMemory  of EcMemory.memory
-| PAModule  of (EcPath.mpath * EcModules.module_sig)
+| PAModule  of (EcPath.mpath * (module_sig * mod_restr))
 | PASub     of proofterm option
 
 (* -------------------------------------------------------------------- *)
@@ -77,7 +78,7 @@ val is_pasub     : pt_arg -> bool
 (* -------------------------------------------------------------------- *)
 val paformula : EcFol.form -> pt_arg
 val pamemory  : EcMemory.memory -> pt_arg
-val pamodule  : EcPath.mpath * EcModules.module_sig -> pt_arg
+val pamodule  : EcPath.mpath * (module_sig * mod_restr) -> pt_arg
 
 (* -------------------------------------------------------------------- *)
 val paglobal  : ?args:pt_arg list -> tys:ty list -> EcPath.path -> pt_arg
