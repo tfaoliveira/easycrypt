@@ -2527,7 +2527,7 @@ gpoterm(F):
    { mk_pterm (fst hd) (snd hd) args }
 
 %inline pterm:
-| pt=gpoterm(form) { pt }
+| pt=gpoterm(form_h) { pt }
 
 (* ------------------------------------------------------------------ *)
 pcutdef1:
@@ -3351,6 +3351,12 @@ phltactic:
 
 | LOSSLESS
     { Plossless }
+
+| PROC CHANGE side=side? pos=codepos COLON f=sexpr
+    { Pprocchange (side, pos, f) }
+
+| PROC REWRITE side=side? pos=codepos f=pterm
+    { Pprocrewrite (side, pos, f) }
 
 bdhoare_split:
 | b1=sform b2=sform b3=sform?

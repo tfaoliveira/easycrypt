@@ -2992,7 +2992,7 @@ and trans_form_or_pattern env ?mv ?ps ue pf tt =
 
                   let test (_ : int) f =
                     try
-                      ignore (EcMatching.f_match mode hyps (ue, ev) ~ptn:pt f);
+                      ignore (EcMatching.f_match mode hyps (ue, ev) pt f);
                       true
                     with EcMatching.MatchFailure -> false in
 
@@ -3058,7 +3058,7 @@ and trans_form_or_pattern env ?mv ?ps ue pf tt =
                   let hyps = EcEnv.LDecl.init lenv [] in
 
                   let (ue, _, ev) =
-                    try  EcMatching.f_match mode hyps (ue, ev) ~ptn:pt f
+                    try  EcMatching.f_match mode hyps (ue, ev) pt f
                     with EcMatching.MatchFailure ->
                       tyerror ppt.pl_loc env FilterMatchFailure in
 
@@ -3079,7 +3079,7 @@ and trans_form_or_pattern env ?mv ?ps ue pf tt =
                   let hyps = EcEnv.LDecl.init lenv [] in
 
                   let (ue, _, ev) =
-                    try  EcMatching.f_match mode hyps (ue, ev) ~ptn:pt f
+                    try  EcMatching.f_match mode hyps (ue, ev) pt f
                     with EcMatching.MatchFailure ->
                       tyerror ppt.pl_loc env FilterMatchFailure in
 
@@ -3103,7 +3103,7 @@ and trans_form_or_pattern env ?mv ?ps ue pf tt =
 
                          let test target =
                            try
-                             ignore (EcMatching.f_match mode hyps (ue, ev) ~ptn:pt target);
+                             ignore (EcMatching.f_match mode hyps (ue, ev) pt target);
                              raise E.MatchFound
                            with EcMatching.MatchFailure -> `Continue in
 
@@ -3111,7 +3111,7 @@ and trans_form_or_pattern env ?mv ?ps ue pf tt =
                            if rooted then test target else
 
                            try
-                             ignore (EcMatching.f_match mode hyps (ue, ev) ~ptn:pt target);
+                             ignore (EcMatching.f_match mode hyps (ue, ev) pt target);
                              raise E.MatchFound
                            with EcMatching.MatchFailure ->
                              `Continue
