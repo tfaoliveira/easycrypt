@@ -236,7 +236,7 @@ val trans_memtype :
 
 (* -------------------------------------------------------------------- *)
 val trans_restr_for_modty :
-  env -> module_type -> pmod_restr option -> mty_mr
+  env -> module_type -> pmem_restr option -> mty_mr
 
 val transmodsig  : env -> pinterface -> top_module_sig
 val transmodtype : env -> pmodule_type -> module_type * module_sig
@@ -246,7 +246,7 @@ val trans_topmsymbol : env -> pmsymbol located -> mpath
 val trans_msymbol    : env -> pmsymbol located -> mpath * module_smpl_sig
 val trans_gamepath   : env -> pgamepath -> xpath
 val trans_oracle     : env -> psymbol * psymbol -> xpath
-val trans_restr_mem  : env -> pmod_restr_mem -> Sx.t use_restr * Sm.t use_restr
+val trans_mem_restr  : env -> pmem_restr -> mem_restr
 
 val trans_args :
      EcEnv.env
@@ -258,9 +258,8 @@ val trans_args :
 
 (* -------------------------------------------------------------------- *)
 
-(* This only checks the memory restrictions. *)
 val check_mem_restr_fun :
-  env -> xpath -> mod_restr -> unit
+  env -> xpath -> mem_restr -> unit
 
 val check_modtype :
   env -> mpath -> module_sig -> mty_mr -> unit

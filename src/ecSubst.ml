@@ -136,11 +136,21 @@ let add_tyvar (s : subst) (x : EcIdent.t) (ty : ty) =
 let add_tyvars (s : subst) (xs : EcIdent.t list) (tys : ty list) =
   List.fold_left2 add_tyvar s xs tys
 
+let add_flocal (s : subst) (x : EcIdent.t) (f : EcCoreFol.form) =
+  { s with sb_flocal = Mid.add x f s.sb_flocal }
+
+let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
+  let merger = function
+    | None   -> Some m
+    | Some _ -> raise (SubstNameClash (`Ident x))
+  in
+    { s with sb_module = Mid.change merger x s.sb_module }
+
 (* -------------------------------------------------------------------- *)
 let rec subst_ty (s : subst) (ty : ty) =
   match ty.ty_node with
-  | Tglob mp ->
-     tglob (EcPath.mget_ident (subst_mpath s (EcPath.mident mp)))
+  | Tglob ff ->
+      tglob (subst_functor_fun s ff)
 
   | Tunivar _ ->
      ty                         (* FIXME *)
@@ -171,13 +181,74 @@ and subst_tys (s : subst) (tys : ty list) =
   List.map (subst_ty s) tys
 
 (* -------------------------------------------------------------------- *)
-let add_module (s : subst) (x : EcIdent.t) (m : EcPath.mpath) =
-  let merger = function
-    | None   -> Some m
-    | Some _ -> raise (SubstNameClash (`Ident x))
-  in
-    { s with sb_module = Mid.change merger x s.sb_module }
+and subst_functor_fun (s : subst) (ff : functor_fun) =
+  let s, ff_params = subst_mod_params s ff.ff_params in
+  let ff_xp = subst_xpath s ff.ff_xp in
+  { ff_xp; ff_params }
 
+(* -------------------------------------------------------------------- *)
+and subst_mod_params (s : subst) (params : functor_params) =
+  let s, b = fresh_glocals s (List.map (fun (x, mty) -> (x, GTmodty (mty, Empty))) params) in
+  let b = List.map (fun (x, gty) -> x, fst (as_modty gty)) b in
+  s, b
+
+(* -------------------------------------------------------------------- *)
+and subst_modtype (s : subst) (modty : module_type) =
+  let mt_name =
+    ofdfl
+      (fun () -> subst_path s modty.mt_name)
+      (Mp.find_opt modty.mt_name s.sb_path) in
+  let s, mt_params = subst_mod_params s modty.mt_params in
+  { mt_params;
+    mt_name   = mt_name;
+    mt_args   = List.map (subst_mpath s) modty.mt_args; }
+
+
+(* -------------------------------------------------------------------- *)
+and subst_mty_mr (s : subst) ((mty, mr) : mty_mr) =
+  subst_modtype s mty, subst_mem_restr s mr
+
+(* -------------------------------------------------------------------- *)
+and subst_mem_restr (s : subst) (mr : mem_restr) =
+  match mr with
+  | Empty | All -> mr
+  | Var x -> Var(subst_xpath s x)
+  | GlobFun ff -> GlobFun (subst_functor_fun s ff)
+  | Union(s1,s2) -> Union(subst_mem_restr s s1, subst_mem_restr s s2)
+  | Inter(s1,s2) -> Inter(subst_mem_restr s s1, subst_mem_restr s s2)
+  | Diff(s1,s2)  -> Diff(subst_mem_restr s s1, subst_mem_restr s s2)
+
+(* -------------------------------------------------------------------- *)
+and subst_gty (s : subst) (ty : gty) =
+  match ty with
+  | GTty ty ->
+     GTty (subst_ty s ty)
+
+  | GTmodty mty ->
+     GTmodty (subst_mty_mr s mty)
+
+  | GTmem m ->
+     GTmem (EcMemory.mt_subst (subst_ty s) m)
+
+(* -------------------------------------------------------------------- *)
+and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
+  let xfresh = EcIdent.fresh x in
+  let gty = subst_gty s ty in
+  match gty with
+  | GTty ty ->
+     let s = add_flocal s x (f_local xfresh ty) in
+     s, (xfresh, gty)
+  | GTmem _ ->
+     s, (x, gty)
+  | GTmodty _ ->
+     let s = add_module s x (EcPath.mident xfresh) in
+     s, (xfresh, gty)
+
+(* -------------------------------------------------------------------- *)
+and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
+  List.fold_left_map fresh_glocal s locals
+
+(* -------------------------------------------------------------------- *)
 let add_elocal (s : subst) (x : EcIdent.t) (e : expr) =
   { s with sb_elocal = Mid.add x e s.sb_elocal }
 
@@ -202,8 +273,6 @@ let fresh_elocal_opt (s : subst) ((x, ty) : EcIdent.t option * ty) =
 let fresh_elocals_opt (s : subst) (locals : (EcIdent.t option * ty) list) =
   List.fold_left_map fresh_elocal_opt s locals
 
-let add_flocal (s : subst) (x : EcIdent.t) (f : EcCoreFol.form) =
-  { s with sb_flocal = Mid.add x f s.sb_flocal }
 
 let add_flocals (s : subst) (xs : EcIdent.t list) (fs : EcCoreFol.form list) =
   List.fold_left2 add_flocal s xs fs
@@ -491,10 +560,10 @@ let rec subst_form (s : subst) (f : form) =
      let m = subst_mem s m in
      f_pvar pv ty m
 
-  | Fglob (mp, m) ->
-     let mp = EcPath.mget_ident (subst_mpath s (EcPath.mident mp)) in
+  | Fglob (ff, m) ->
+     let ff = subst_functor_fun s ff in
      let m = subst_mem s m in
-     f_glob mp m
+     f_glob ff m
 
   | Fapp ({ f_node = Fop (p, tys) }, args) when has_def s p ->
       let tys  = subst_tys s tys in
@@ -642,16 +711,6 @@ and subst_oracle_info (s : subst) (oi : OI.t) =
 and subst_oracle_infos (s : subst) (ois : oracle_infos) =
   EcSymbols.Msym.map (fun oi -> subst_oracle_info s oi) ois
 
-    (* -------------------------------------------------------------------- *)
-and subst_mod_restr (s : subst) (mr : mod_restr) =
-  let rx = ur_app (fun set -> EcPath.Sx.fold (fun x r ->
-      EcPath.Sx.add (subst_xpath s x) r
-    ) set EcPath.Sx.empty) mr.mr_xpaths in
-  let r = ur_app (fun set -> EcPath.Sm.fold (fun x r ->
-      EcPath.Sm.add (subst_mpath s x) r
-    ) set EcPath.Sm.empty) mr.mr_mpaths in
-  { mr_xpaths = rx; mr_mpaths = r; }
-
 (* -------------------------------------------------------------------- *)
 and subst_modsig_body_item (s : subst) (item : module_sig_body_item) =
   match item with
@@ -692,51 +751,6 @@ and subst_modsig ?params (s : subst) (comps : module_sig) =
   in
     (sbody, comps)
 
-(* -------------------------------------------------------------------- *)
-and subst_modtype (s : subst) (modty : module_type) =
-  let mt_name =
-    ofdfl
-      (fun () -> subst_path s modty.mt_name)
-      (Mp.find_opt modty.mt_name s.sb_path) in
-
-  { mt_params = List.map (snd_map (subst_modtype s)) modty.mt_params;
-    mt_name   = mt_name;
-    mt_args   = List.map (subst_mpath s) modty.mt_args; }
-
-
-(* -------------------------------------------------------------------- *)
-and subst_mty_mr (s : subst) ((mty, mr) : mty_mr) =
-  subst_modtype s mty, subst_mod_restr s mr
-
-(* -------------------------------------------------------------------- *)
-and subst_gty (s : subst) (ty : gty) =
-  match ty with
-  | GTty ty ->
-     GTty (subst_ty s ty)
-
-  | GTmodty mty ->
-     GTmodty (subst_mty_mr s mty)
-
-  | GTmem m ->
-     GTmem (EcMemory.mt_subst (subst_ty s) m)
-
-(* -------------------------------------------------------------------- *)
-and fresh_glocal (s : subst) ((x, ty) : EcIdent.t * gty) =
-  let xfresh = EcIdent.fresh x in
-  let gty = subst_gty s ty in
-  match gty with
-  | GTty ty ->
-     let s = add_flocal s x (f_local xfresh ty) in
-     s, (xfresh, gty)
-  | GTmem _ ->
-     s, (x, gty)
-  | GTmodty _ ->
-     let s = add_module s x (EcPath.mident xfresh) in
-     s, (xfresh, gty)
-
-(* -------------------------------------------------------------------- *)
-and fresh_glocals (s : subst) (locals : (EcIdent.t * gty) list) : subst * _ =
-  List.fold_left_map fresh_glocal s locals
 
 (* -------------------------------------------------------------------- *)
 and subst_top_modsig (s : subst) (ms : top_module_sig) =

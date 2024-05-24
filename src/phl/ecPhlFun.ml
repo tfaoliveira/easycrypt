@@ -25,7 +25,7 @@ module TTC = EcProofTyping
 
 (* -------------------------------------------------------------------- *)
 let check_oracle_use (_pf : proofenv) env adv o =
-  let restr = { mr_empty with
+  let restr = mr_diff mr_full { mr_empty with
                 mr_mpaths = { mr_empty.mr_mpaths with
                               ur_neg = Sm.singleton adv; }} in
 
