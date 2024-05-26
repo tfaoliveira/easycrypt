@@ -146,7 +146,7 @@ jobs:
     - name: Compile project
       working-directory: project/${{ matrix.target.name }}/${{ matrix.target.subdir }}
       run: |
-        opam exec -- easycrypt runtest  \
+        free; opam exec -- easycrypt runtest  \
           -report report.log            \
           -raw-args -gcstats            \
           -raw-args -compact            \
