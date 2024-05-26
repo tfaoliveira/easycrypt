@@ -148,6 +148,9 @@ jobs:
       run: |
         opam exec -- easycrypt runtest  \
           -report report.log            \
+          -raw-args -gcstats            \
+          -raw-args -compact            \
+          -raw-args 20                  \
           ${{ matrix.target.options  }} \
           ${{ matrix.target.config   }} \
           ${{ matrix.target.scenario }}
