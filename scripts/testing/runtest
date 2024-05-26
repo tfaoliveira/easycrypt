@@ -107,6 +107,12 @@ def _options():
         help    = 'add timing statistics')
 
     parser.add_option(
+        '', '--memory',
+        action  = 'store_true',
+        default = False,
+        help    = 'display memory usage')
+
+    parser.add_option(
         '', '--report',
         action  = 'store',
         default = None,
@@ -124,6 +130,7 @@ def _options():
 
     options = Object(scenarios = dict())
     options.timing   = cmdopt.timing
+    options.memory   = cmdopt.memory
     options.jobs     = cmdopt.jobs
     options.report   = cmdopt.report
 
@@ -192,7 +199,7 @@ class Listener(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def file_check_progress(self, handle, status):
+    def file_check_progress(self, handle, state):
         pass
 
     @abc.abstractmethod
@@ -394,6 +401,14 @@ def format_delta(delta, hprec=2, prec=0, subprec=0):
     return '{1:{0}d}:{2:02d}'.format(hprec, int(delta) // 60, int(delta) % 60)
 
 # ---------------------------------------------------------------------
+def format_size(size, decimal_places=2):
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']:
+        if size < 1024.0 or unit == 'PiB':
+            break
+        size /= 1024.0
+    return f"{size:.{decimal_places}f} {unit}"
+
+# ---------------------------------------------------------------------
 class MBar:
     def __init__(self, ntasks):
         self.bars      = []
@@ -500,24 +515,29 @@ class MBarLine:
     WIDTH = 50
 
     def __init__(self, mbar, name):
-        self.mbar  = mbar
-        self.value = 0.0
-        self.name  = name
-        self.now   = time.time()
-        self.last  = time.time()
+        self.mbar     = mbar
+        self.value    = 0.0
+        self.memory   = 0.0
+        self.position = 0
+        self.name     = name
+        self.now      = time.time()
+        self.last     = time.time()
 
-    def update(self, value):
-        self.value = max(min(float(value), 1.0), 0.0)
-        self.last  = time.time()
+    def update(self, state):
+        self.value    = state['progress']
+        self.position = state['position']
+        self.memory   = state['memory']
+        self.last     = time.time()
         self.mbar.write_for(self)
 
     def render(self):
         wtg = time.time() - self.last
         wtg = ' ' * 7 if wtg < 1.0 else ('+' + format_delta(wtg, hprec=0, prec=1))
+        mem = '????.?? B' if self.memory < 0 else format_size(self.memory)
         bar = round(self.WIDTH * self.value)
         bar = (self.BLACK * bar) + (self.BLANK * (self.WIDTH - bar))
-        bar = '[{:6.2f}%] {} [{} {}] [{}]'.format(
-            100 * self.value, bar,
+        bar = '[{:6.2f}% - {:4d}] [{:>11s}] {} [{} {}] [{}]'.format(
+            100 * self.value, self.position, mem, bar,
             format_delta(self.last - self.now), wtg, self.name)
 
         return bar.encode('utf-8')
@@ -567,9 +587,9 @@ class TermListener(Listener):
         self._handles[id(handle)] = handle
         return id(handle)
 
-    def file_check_progress(self, handle, progress):
+    def file_check_progress(self, handle, state):
         handle = self._handles[handle]
-        handle.bar.update(progress)
+        handle.bar.update(state)
 
     def file_check_done(self, handle, status, success):
         handle = self._handles[handle]
@@ -611,16 +631,29 @@ class RawListener(Listener):
         sys.stdout.flush()
 
     def file_check_start(self, filename):
+        timestamp = time.time()
         handle = Object(
-            filename  = filename,
-            timestamp = time.time(),
+            filename   = filename,
+            timestamp  = timestamp,
+            lastupdate = timestamp,
         )
-
         self._handles[id(handle)] = handle
+        self.log(f'[ ] starting: {handle.filename}')
         return id(handle)
 
-    def file_check_progress(self, handle, progress):
-        pass
+    def file_check_progress(self, handle, state, force = False):
+        handle = self._handles[handle]
+        timestamp = time.time()
+        if timestamp - handle.lastupdate >= 60:
+            delta = \
+                0.0 if handle.lastupdate is None \
+                else time.time() - handle.timestamp
+            delta = format_delta(delta, prec=1)
+            ratio = 100 * state['progress']
+            mem = state['memory']
+            mem = '????.?? B' if mem < 0 else format_size(mem)
+            self.log(f'[ ] [{ratio:6.2f}%] [{mem:>11s}] {handle.filename}')
+            handle.lastupdate = timestamp
 
     def file_check_done(self, handle, status, success):
         handle = self._handles[handle]
@@ -669,6 +702,10 @@ async def _run_all(options, allscripts, listener : Listener):
                 os.makedirs(os.path.dirname(tfilename), exist_ok = True)
                 command.extend(['-tstats', tfilename])
 
+
+            if options.memory:
+                command.extend(['-gcstats'])
+
             handle = listener.file_check_start(config.filename)
 
             command.extend(['-script', '-no-eco', config.filename])
@@ -686,7 +723,13 @@ async def _run_all(options, allscripts, listener : Listener):
                 async with clib.awaitable(proc) as proc:
                     async for line in proc.stderr:
                         if re.match(rb'P\b', line):
-                            listener.file_check_progress(handle, float(line.split()[3]))
+                            line = line.split()
+                            pstate = dict(
+                                position = int(line[1]),
+                                progress = float(line[3]),
+                                memory   = float(line[4]),
+                            )
+                            listener.file_check_progress(handle, pstate)
                         elif re.match(rb'E\b', line):
                             error = line[1:].decode('utf-8').strip()
                             if not error:

@@ -178,18 +178,16 @@ class from_channel
           | _ when sz = 0 -> Some 1.0
           | _ -> Some ((float_of_int position) /. (float_of_int sz)) in
 
-        let mem, unu =
-          if not gcstats then -1., -1. else
+        let mem =
+          if not gcstats then -1. else
           match gc with
-          | Some (mem, unu, btick) when btick > tick-20 ->
-             (mem, unu)
+          | Some (mem, btick) when btick > tick-20 ->
+             mem
           | _ ->
-             let stats = Gc.stat () in
-             let mem = stats.Gc.live_words in
+             let stats = Gc.quick_stat () in
+             let mem = stats.Gc.heap_words in
              let mem = (float_of_int mem) *. (float_of_int (Sys.word_size / 8)) in
-             let unu = stats.Gc.fragments in
-             let unu = (float_of_int unu) *. (float_of_int (Sys.word_size / 8)) in
-             gc <- Some (mem, unu, tick); (mem, unu)
+             gc <- Some (mem, tick); mem
         in
 
         tick <- tick + 1;
@@ -203,15 +201,14 @@ class from_channel
               | st' :: all -> human (x /. 1024.) st' all in
 
             let mem, memst = human mem "B" ["kB"; "MB"; "GB"] in
-            let unu, unust = human unu "B" ["kB"; "MB"; "GB"] in
             let ratio = ratio
                |> omap (( *. ) 100.)
                |> omap (Format.sprintf "%.1f")
                |> odfl "?.?" in
 
-            Format.eprintf "[%c] [%.4d] %s%% (%.1f%s / [frag %.1f%s])\r%!"
+            Format.eprintf "[%c] [%.4d] %s%% (%.1f%s)\r%!"
               ticks.[tick mod (String.length ticks)] lineno
-              ratio mem memst unu unust
+              ratio mem memst
           end
 
         | `Script -> begin
@@ -223,8 +220,8 @@ class from_channel
               |> odfl "-" in
 
             Format.eprintf
-              "P %d %d %s %.2f %.2f@."
-              lineno position ratio mem unu
+              "P %d %d %s %.2f@."
+              lineno position ratio mem
           end
       end
 

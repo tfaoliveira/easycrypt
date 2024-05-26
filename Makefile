@@ -11,6 +11,7 @@ CHECKPY   ?=
 CHECK     := $(CHECKPY) scripts/testing/runtest
 CHECK     += --bin=./ec.native
 CHECK     += --jobs="$(ECJOBS)"
+CHECK     += --memory
 CHECK     += $(foreach prover,$(ECPROVERS),--bin-args=-p --bin-args="$(prover)")
 CHECK     += --bin-args=-timeout --bin-args="$(ECTOUT)"
 CHECK     += $(foreach arg,$(ECARGS),--bin-args="$(arg)")
