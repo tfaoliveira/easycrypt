@@ -1,16 +1,20 @@
 name: EasyCrypt compilation & check
 
-on: [push,pull_request,merge_group]
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - memory-ci
 
 env:
   HOME: /home/charlie
   OPAMYES: true
-  OPAMJOBS: 2
+  OPAMJOBS: 4
 
 jobs:
   pre_job:
     name: Check for Duplicates Jobs
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
@@ -24,7 +28,7 @@ jobs:
     name: EasyCrypt compilation (opam)
     needs: pre_job
     if: needs.pre_job.outputs.should_skip != 'true'
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     container:
       image: ghcr.io/easycrypt/ec-build-box
     steps:
@@ -43,7 +47,7 @@ jobs:
     if: needs.pre_job.outputs.should_skip != 'true'
     env:
       HOME: /home/runner
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     steps:
     - uses: actions/checkout@v4
     - name: Setup Nix
@@ -63,7 +67,7 @@ jobs:
     name: Check EasyCrypt Libraries
     needs: [pre_job, compile-opam]
     if: needs.pre_job.outputs.should_skip != 'true'
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     container:
       image: ghcr.io/easycrypt/ec-build-box
     strategy:
@@ -99,7 +103,7 @@ jobs:
     name: Fetch EasyCrypt External Projects Matrix
     needs: [pre_job, compile-opam]
     if: needs.pre_job.outputs.should_skip != 'true'
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -115,7 +119,7 @@ jobs:
     name: Check EasyCrypt External Projects
     needs: [fetch-external-matrix]
     if: needs.pre_job.outputs.should_skip != 'true'
-    runs-on: ubuntu-20.04
+    runs-on: [self-hosted, linux, X64]
     container:
       image: ghcr.io/easycrypt/ec-build-box
     strategy:
@@ -166,37 +170,4 @@ jobs:
         path: ${{ env.report }}
         if-no-files-found: ignore
 
-  external-status:
-    name: Check EasyCrypt External Projects (set-status)
-    if: always()
-    needs: [external]
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: re-actors/alls-green@release/v1
-      with:
-        jobs: ${{ toJSON(needs) }}
-        allowed-skips: external
 
-  notification:
-    name: Notification
-    needs: [compile-opam, compile-nix, check, external, external-status]
-    if: |
-      (github.event_name == 'push') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: technote-space/workflow-conclusion-action@v3
-    - uses: zulip/github-actions-zulip/send-message@v1
-      with:
-        api-key: ${{ secrets.ZULIP_APIKEY }}
-        email: ${{ secrets.ZULIP_EMAIL }}
-        organization-url: 'https://formosa-crypto.zulipchat.com'
-        type: 'stream'
-        to: 'GitHub notifications'
-        topic: 'EasyCrypt / CI'
-        content: |
-          **Build status**: ${{ env.WORKFLOW_CONCLUSION }} ${{ env.WORKFLOW_CONCLUSION == 'success' && ':check_mark:' || ':cross_mark:' }}
-          **Author**: [${{ github.actor }}](${{ github.server_url }}/${{ github.actor }})
-          **Event**: ${{ github.event_name }} on ${{ github.ref }}
-          **Commit**: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          **Details**: [Build log](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}/checks)
