@@ -72,19 +72,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build base image
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.repository != 'EasyCrypt/easycrypt'
       run: make -C scripts/docker build VARIANT=base TAG=$IMAGE_TAG
     - name: Build base-build image
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.repository != 'EasyCrypt/easycrypt'
       run: make -C scripts/docker build VARIANT=base-build TAG=$IMAGE_TAG
     - uses: docker/login-action@v3
-      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+      if: github.event_name != 'push' && github.repository == 'EasyCrypt/easycrypt'
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    # ec-base-build-box is private: forks build it instead (see above)
     - name: Retrieve base-build image
-      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+      if: github.event_name != 'push' && github.repository == 'EasyCrypt/easycrypt'
       run: |
         docker pull ghcr.io/easycrypt/ec-base-build-box:main
         docker tag ghcr.io/easycrypt/ec-base-build-box:main ghcr.io/easycrypt/ec-base-build-box:$IMAGE_TAG
@@ -297,7 +298,7 @@ jobs:
 
   publish:
     name: Publish Docker images
-    if: github.event_name == 'push'
+    if: github.repository == 'EasyCrypt/easycrypt' && github.event_name == 'push'
     needs: [compile-opam, compile-nix, check, external, external-status, docker]
     runs-on: ubuntu-24.04
     permissions:
@@ -347,8 +348,9 @@ jobs:
     name: Notification
     needs: [compile-opam, compile-nix, check, external, external-status]
     if: |
+      github.repository == 'EasyCrypt/easycrypt' && (
       (github.event_name == 'push') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-24.04
     steps:
     - uses: technote-space/workflow-conclusion-action@v3
