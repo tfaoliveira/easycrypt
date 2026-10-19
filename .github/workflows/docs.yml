@@ -80,7 +80,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'EasyCrypt/easycrypt' && github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
     - name: Download documentation (artifact)
