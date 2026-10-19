@@ -1482,6 +1482,11 @@ type pcrbinding_r =
 type pcrbinding = { locality : is_local; binding : pcrbinding_r }
 
 (* -------------------------------------------------------------------- *)
+type peval_target =
+  | PEVform of pformula
+  | PEVproc of pgamepath * pexpr list located
+
+(* -------------------------------------------------------------------- *)
 type global_action =
   | Gmodule      of pmodule_def_or_decl
   | Ginterface   of pinterface
@@ -1502,6 +1507,7 @@ type global_action =
   | Gexpect      of (string located * pprint)
   | Gsearch      of pformula list
   | Glocate      of pqsymbol
+  | Geval        of ([`Eval | `Check] * peval_target * pformula option)
   | GthOpen      of (is_local * bool * psymbol)
   | GthClose     of (theory_clear * psymbol)
   | GthClear     of theory_clear

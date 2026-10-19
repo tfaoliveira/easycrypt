@@ -237,6 +237,80 @@ let process_locate scope x =
   EcScope.Search.locate scope x
 
 (* -------------------------------------------------------------------- *)
+let process_eval scope (mode, target, expected) =
+  let env = EcScope.env scope in
+  let ue  = EcUnify.UniEnv.create None in
+
+  let failure ~loc msg =
+    EcScope.hierror ~loc "evaluation failed: %s" msg in
+
+  let run ~loc f =
+    try f () with
+    | EcEval.EvalError msg -> failure ~loc msg
+    | Stack_overflow -> failure ~loc "stack overflow" in
+
+  (* The equality used by the evaluator depends on the types: apply the *)
+  (* types inferred so far (uninferred ones fall back to structural     *)
+  (* equality).                                                         *)
+  let tsubst () = EcCoreSubst.Tuni.subst (EcUnify.UniEnv.assubst ue) in
+
+  let check_eq ~loc ty v1 v2 =
+    let ok = run ~loc (fun () -> EcEval.check_eq env ty v1 v2) in
+    if not ok then
+      EcScope.hierror ~loc
+        "check failed:@\n  @[<hov>%a@]@\nis not equal to@\n  @[<hov>%a@]"
+        EcEval.pp_value v1 EcEval.pp_value v2 in
+
+  match target, expected with
+  | PEVform pf, None -> begin
+      let loc = pf.pl_loc in
+      let f   = EcTyping.trans_form_opt env ue pf None in
+      let f   = EcCoreSubst.Fsubst.f_subst (tsubst ()) f in
+      match mode with
+      | `Eval ->
+          let v = run ~loc (fun () -> EcEval.eval_form env f) in
+          Format.fprintf Format.std_formatter "@[<hov 2>%a@]@." EcEval.pp_value v
+
+      | `Check -> begin
+          match EcFol.sform_of_form f with
+          | EcFol.SFeq (f1, f2) ->
+              let v1 = run ~loc (fun () -> EcEval.eval_form env f1) in
+              let v2 = run ~loc (fun () -> EcEval.eval_form env f2) in
+              check_eq ~loc f1.f_ty v1 v2
+          | _ ->
+              let v = run ~loc (fun () -> EcEval.eval_form env f) in
+              if not (run ~loc (fun () -> EcEval.as_bool v)) then
+                EcScope.hierror ~loc "check failed"
+        end
+    end
+
+  | PEVproc (fp, args), _ ->
+      let loc = EcLocation.loc fp in
+      let xp  = EcTyping.trans_gamepath env fp in
+      let fn  = EcEnv.Fun.by_xpath xp env in
+      let es, rty = EcTyping.trans_args env ue (EcLocation.loc args) fn.f_sig (unloc args) in
+      let fs = tsubst () in
+      let fs_args = List.map (fun e -> EcCoreSubst.Fsubst.f_subst fs (EcFol.form_of_expr e)) es in
+      let v = run ~loc (fun () -> EcEval.run_proc env xp fs_args) in
+      begin match mode, expected with
+      | `Eval, _ ->
+          Format.fprintf Format.std_formatter "@[<hov 2>%a@]@." EcEval.pp_value v
+      | `Check, None ->
+          if not (run ~loc (fun () -> EcEval.as_bool v)) then
+            EcScope.hierror ~loc "check failed"
+      | `Check, Some pe ->
+          let loc = pe.pl_loc in
+          let e = EcTyping.trans_form env ue pe rty in
+          let fs = tsubst () in
+          let e = EcCoreSubst.Fsubst.f_subst fs e in
+          let ve = run ~loc (fun () -> EcEval.eval_form env e) in
+          check_eq ~loc (EcCoreSubst.ty_subst fs rty) v ve
+      end
+
+  | PEVform _, Some _ ->
+      assert false
+
+(* -------------------------------------------------------------------- *)
 module HiPrinting = struct
   (* ------------------------------------------------------------------ *)
   let pr_glob fmt env pm =
@@ -879,6 +953,7 @@ and process ?(src : string option) (ld : Loader.loader) (scope : EcScope.scope) 
       | Gexpect      x    -> `Fct   (fun scope -> process_expect     scope  x; scope)
       | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
       | Glocate      x    -> `Fct   (fun scope -> process_locate     scope  x; scope)
+      | Geval        x    -> `Fct   (fun scope -> process_eval       scope  x; scope)
       | Gtactics     t    -> `Fct   (fun scope -> process_tactics    ?src scope  t)
       | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
       | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
