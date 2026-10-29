@@ -450,6 +450,7 @@
 %token EXCEPTION
 %token EXFALSO
 %token EXIST
+%token EVAL
 %token EXIT
 %token EXLIM
 %token EXPECT
@@ -686,6 +687,7 @@ _lident:
 | ECALL      { "ecall"      }
 | FROM       { "from"       }
 | EXIT       { "exit"       }
+| EVAL       { "eval"       }
 | CHECK      { "check"      }
 | EDIT       { "edit"       }
 | FIX        { "fix"        }
@@ -1991,6 +1993,16 @@ abbreviation:
 (* -------------------------------------------------------------------- *)
 mempred_binding:
   | TICKBRACE u=uident+ RBRACE { PT_MemPred u }
+
+(* -------------------------------------------------------------------- *)
+(* Evaluation                                                           *)
+eval_proc:
+| PROC f=loc(fident) LPAREN es=loc(plist0(expr, COMMA)) RPAREN
+    { PEVproc (f, es) }
+
+eval_target:
+| x=eval_proc { x }
+| f=form      { PEVform f }
 
 (* -------------------------------------------------------------------- *)
 (* Global entries                                                       *)
@@ -4172,6 +4184,9 @@ global_action:
     { Gexpect (s, p) }
 | SEARCH x=search+ { Gsearch      x  }
 | LOCATE x=qident  { Glocate      x  }
+| EVAL x=eval_target  { Geval (`Eval , x, None) }
+| CHECK x=eval_target { Geval (`Check, x, None) }
+| CHECK x=eval_proc EQ e=form { Geval (`Check, x, Some e) }
 | WHY3 x=STRING    { GdumpWhy3    x  }
 
 | PRAGMA       x=pragma { Gpragma x }

@@ -50,6 +50,14 @@ val process_internal :
 val process : ?src:string -> ?timed:bool -> ?break:bool ->
   EcParsetree.global_action located -> float option
 
+(* [check] commands in child processes, [jobs] at a time (see the .ml) *)
+module CheckJobs : sig
+  val set_jobs : int -> unit
+  val forkable : EcParsetree.global_action located -> bool
+  val spawn    : ?src:string -> EcParsetree.global_action located -> unit
+  val drain    : unit -> unit
+end
+
 val undo  : int  -> unit
 val reset : unit -> unit
 val uuid  : unit -> int

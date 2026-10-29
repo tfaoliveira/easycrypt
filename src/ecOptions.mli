@@ -23,6 +23,7 @@ and cmp_option = {
   cmpo_noeco   : bool;
   cmpo_script  : bool;
   cmpo_trace   : bool;
+  cmpo_checkjobs : int option;
 }
 
 and cli_option = {

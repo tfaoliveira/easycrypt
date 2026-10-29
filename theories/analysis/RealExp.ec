@@ -416,6 +416,17 @@ have []:= (ilogP b (x %/ b) _ _) => //; first by rewrite lez_divRL //= /#.
 by rewrite lez_divRL 1:/# ltz_divLR 1:/# -!exprSr //; smt(ilog_ge0).
 qed.
 
+(* used by [eval] to compute [ilog] on integers *)
+lemma ilog_eval (b x : int) : 1 < b => 0 < x =>
+  ilog b x = if x < b then 0 else ilog b (x %/ b) + 1.
+proof.
+move=> gt1_b gt0_x; case: (x < b) => [lt_xb|ge_xb].
+- by rewrite ilog_small.
+- by rewrite ilog_dvd // /#.
+qed.
+
+hint simplify in eval : ilog_eval.
+
 hint simplify ilog_small, ilog_dvd.
 
 (* -------------------------------------------------------------------- *)

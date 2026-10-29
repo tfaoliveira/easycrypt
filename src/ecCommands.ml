@@ -101,6 +101,9 @@ let gstate_bool_flags = [
   EcGState.circuit_debug_smt;
   EcGState.warn_uninit;
   EcGState.warn_unused_unfold;
+  "Eval:native_words";
+  "Eval:native_zmod";
+  "Eval:native_arrays";
 ]
 
 exception InvalidPragma of string
@@ -235,6 +238,82 @@ let process_search scope qs =
 (* -------------------------------------------------------------------- *)
 let process_locate scope x =
   EcScope.Search.locate scope x
+
+(* -------------------------------------------------------------------- *)
+let process_eval scope (mode, target, expected) =
+  let env = EcScope.env scope in
+  let ue  = EcUnify.UniEnv.create None in
+
+  let failure ~loc msg =
+    EcScope.hierror ~loc "evaluation failed: %s" msg in
+
+  let run ~loc f =
+    try f () with
+    | EcEval.EvalError msg -> failure ~loc msg
+    | EcEval.StepLimit n ->
+        failure ~loc (Printf.sprintf "step limit reached (pragma Eval:steps = %d)" n)
+    | Stack_overflow -> failure ~loc "stack overflow" in
+
+  (* The equality used by the evaluator depends on the types: apply the *)
+  (* types inferred so far (uninferred ones fall back to structural     *)
+  (* equality).                                                         *)
+  let tsubst () = EcCoreSubst.Tuni.subst (EcUnify.UniEnv.assubst ue) in
+
+  let check_eq ~loc ty v1 v2 =
+    let ok = run ~loc (fun () -> EcEval.check_eq env ty v1 v2) in
+    if not ok then
+      EcScope.hierror ~loc
+        "check failed:@\n  @[<hov>%a@]@\nis not equal to@\n  @[<hov>%a@]"
+        EcEval.pp_value v1 EcEval.pp_value v2 in
+
+  match target, expected with
+  | PEVform pf, None -> begin
+      let loc = pf.pl_loc in
+      let f   = EcTyping.trans_form_opt env ue pf None in
+      let f   = EcCoreSubst.Fsubst.f_subst (tsubst ()) f in
+      match mode with
+      | `Eval ->
+          let v = run ~loc (fun () -> EcEval.eval_form env f) in
+          Format.fprintf Format.std_formatter "@[<hov 2>%a@]@." EcEval.pp_value v
+
+      | `Check -> begin
+          match EcFol.sform_of_form f with
+          | EcFol.SFeq (f1, f2) ->
+              let v1 = run ~loc (fun () -> EcEval.eval_form env f1) in
+              let v2 = run ~loc (fun () -> EcEval.eval_form env f2) in
+              check_eq ~loc f1.f_ty v1 v2
+          | _ ->
+              let v = run ~loc (fun () -> EcEval.eval_form env f) in
+              if not (run ~loc (fun () -> EcEval.as_bool v)) then
+                EcScope.hierror ~loc "check failed"
+        end
+    end
+
+  | PEVproc (fp, args), _ ->
+      let loc = EcLocation.loc fp in
+      let xp  = EcTyping.trans_gamepath env fp in
+      let fn  = EcEnv.Fun.by_xpath xp env in
+      let es, rty = EcTyping.trans_args env ue (EcLocation.loc args) fn.f_sig (unloc args) in
+      let fs = tsubst () in
+      let fs_args = List.map (fun e -> EcCoreSubst.Fsubst.f_subst fs (EcFol.form_of_expr e)) es in
+      let v = run ~loc (fun () -> EcEval.run_proc env xp fs_args) in
+      begin match mode, expected with
+      | `Eval, _ ->
+          Format.fprintf Format.std_formatter "@[<hov 2>%a@]@." EcEval.pp_value v
+      | `Check, None ->
+          if not (run ~loc (fun () -> EcEval.as_bool v)) then
+            EcScope.hierror ~loc "check failed"
+      | `Check, Some pe ->
+          let loc = pe.pl_loc in
+          let e = EcTyping.trans_form env ue pe rty in
+          let fs = tsubst () in
+          let e = EcCoreSubst.Fsubst.f_subst fs e in
+          let ve = run ~loc (fun () -> EcEval.eval_form env e) in
+          check_eq ~loc (EcCoreSubst.ty_subst fs rty) v ve
+      end
+
+  | PEVform _, Some _ ->
+      assert false
 
 (* -------------------------------------------------------------------- *)
 module HiPrinting = struct
@@ -879,6 +958,7 @@ and process ?(src : string option) (ld : Loader.loader) (scope : EcScope.scope) 
       | Gexpect      x    -> `Fct   (fun scope -> process_expect     scope  x; scope)
       | Gsearch      qs   -> `Fct   (fun scope -> process_search     scope  qs; scope)
       | Glocate      x    -> `Fct   (fun scope -> process_locate     scope  x; scope)
+      | Geval        x    -> `Fct   (fun scope -> process_eval       scope  x; scope)
       | Gtactics     t    -> `Fct   (fun scope -> process_tactics    ?src scope  t)
       | Gtcdump      info -> `Fct   (fun scope -> process_dump       scope  info)
       | Grealize     p    -> `Fct   (fun scope -> process_realize    scope  p)
@@ -1086,6 +1166,166 @@ let process
   with
   | Pragma `Reset   -> reset (); None
   | Pragma `Restart -> raise Restart
+
+(* -------------------------------------------------------------------- *)
+(* [check] commands in child processes ([compile -check-jobs N], N > 1).  *)
+(* A check is run in a forked child, which inherits the environment of   *)
+(* the parent (copy-on-write) and processes the command exactly as the   *)
+(* parent would; the parent goes on with the next command, at most N     *)
+(* children at a time. Before any other command, and at the end of the   *)
+(* file, the parent waits for all the children ([drain]). The children   *)
+(* are collected in the order of the file: the output of each one is     *)
+(* copied to the output of the parent, and the first check that failed,  *)
+(* in that order, is reported as in sequential mode (the later children  *)
+(* are then killed). A check passes only if its child exited with code 0 *)
+(* after processing the command without error; a child stopped by a      *)
+(* signal (e.g. out of memory) makes its check fail.                     *)
+module CheckJobs = struct
+  type child = {
+    pid    : int;
+    loc    : EcLocation.t;
+    out    : Unix.file_descr;         (* stdout of the child *)
+    err    : Unix.file_descr;         (* stderr of the child *)
+    res    : Unix.file_descr;         (* its error, if any (marshalled) *)
+    mutable status : Unix.process_status option;
+  }
+
+  let jobs = ref 1
+  let pending : child Queue.t = Queue.create ()
+  let registered = ref false
+
+  let set_jobs (n : int) = jobs := max 1 n
+
+  let forkable (g : global_action located) =
+    !jobs > 1 &&
+    match g.pl_desc with Geval (`Check, _, _) -> true | _ -> false
+
+  (* an anonymous temporary file: nothing is left if the process is killed *)
+  let tmpfile () =
+    let name = Filename.temp_file "ec-check-" "" in
+    let fd = Unix.openfile name [Unix.O_RDWR; Unix.O_CLOEXEC] 0o600 in
+    Sys.remove name; fd
+
+  let close (c : child) =
+    List.iter (fun fd -> try Unix.close fd with Unix.Unix_error _ -> ()) [c.out; c.err; c.res]
+
+  let kill_all () =
+    Queue.iter (fun c ->
+      if c.status = None then begin
+        (try Unix.kill c.pid Sys.sigkill with Unix.Unix_error _ -> ());
+        (try ignore (Unix.waitpid [] c.pid) with Unix.Unix_error _ -> ())
+      end;
+      close c) pending;
+    Queue.clear pending
+
+  let flush_all () =
+    Format.pp_print_flush Format.std_formatter ();
+    Format.pp_print_flush Format.err_formatter ();
+    flush stdout; flush stderr
+
+  (* what the child wrote to [fd], from the start *)
+  let contents (fd : Unix.file_descr) =
+    ignore (Unix.lseek fd 0 Unix.SEEK_SET);
+    let buf = Buffer.create 4096 and b = Bytes.create 65536 in
+    let rec loop () =
+      let n = Unix.read fd b 0 (Bytes.length b) in
+      if n > 0 then (Buffer.add_subbytes buf b 0 n; loop ()) in
+    loop (); Buffer.contents buf
+
+  let signame (n : int) =
+    let names = Sys.[sigabrt, "SIGABRT"; sigbus, "SIGBUS"; sigfpe, "SIGFPE";
+                     sighup, "SIGHUP"; sigint, "SIGINT"; sigkill, "SIGKILL";
+                     sigsegv, "SIGSEGV"; sigterm, "SIGTERM"; sigxcpu, "SIGXCPU";
+                     sigstop, "SIGSTOP"; sigtstp, "SIGTSTP"] in
+    odfl (string_of_int n) (List.assoc_opt n names)
+
+  (* the error of a failed child, as the terminal of the parent prints it *)
+  let error_of (c : child) (st : Unix.process_status) : exn option =
+    let fail msg = Some (EcScope.TopError (c.loc, EcScope.HiScopeError (None, msg))) in
+    match st with
+    | Unix.WEXITED 0 -> None
+    | Unix.WEXITED n -> begin
+        match
+          (try
+             let s = contents c.res in
+             Some (Marshal.from_string s 0 : EcLocation.t * string)
+           with _ -> None)
+        with
+        | Some (loc, msg) -> Some (EcScope.TopError (loc, EcScope.HiScopeError (None, msg)))
+        | None -> fail (Printf.sprintf "check failed: its process exited with code %d" n)
+      end
+    | Unix.WSIGNALED n ->
+        fail (Printf.sprintf "check failed: its process was killed by %s" (signame n))
+    | Unix.WSTOPPED n ->
+        fail (Printf.sprintf "check failed: its process was stopped by %s" (signame n))
+
+  (* collect the finished children at the head of the queue, in order *)
+  let collect () =
+    let rec loop () =
+      match Queue.peek_opt pending with
+      | Some ({ status = Some st } as c) ->
+          ignore (Queue.pop pending);
+          flush_all ();
+          output_string stdout (contents c.out); flush stdout;
+          output_string stderr (contents c.err); flush stderr;
+          let e = error_of c st in
+          close c;
+          begin match e with
+          | None -> loop ()
+          | Some e -> kill_all (); raise e
+          end
+      | _ -> () in
+    loop ()
+
+  (* wait until at least one running child has finished *)
+  let wait_one () =
+    let rec loop () =
+      let any = ref false in
+      Queue.iter (fun c ->
+        if c.status = None then
+          match Unix.waitpid [Unix.WNOHANG] c.pid with
+          | (0, _) -> ()
+          | (_, st) -> c.status <- Some st; any := true
+          | exception Unix.Unix_error (Unix.EINTR, _, _) -> ()) pending;
+      if not !any then (Unix.sleepf 0.02; loop ()) in
+    loop ()
+
+  let drain () =
+    while not (Queue.is_empty pending) do
+      collect ();
+      if not (Queue.is_empty pending) then (wait_one (); collect ())
+    done
+
+  let spawn ?(src : string option) (g : global_action located) =
+    if not !registered then (registered := true; at_exit kill_all);
+    (* keep at most [jobs] children running *)
+    let running () = Queue.fold (fun n c -> if c.status = None then n + 1 else n) 0 pending in
+    while running () >= !jobs do wait_one (); collect () done;
+    collect ();
+    let out = tmpfile () and err = tmpfile () and res = tmpfile () in
+    flush_all ();
+    match Unix.fork () with
+    | 0 ->
+        let code =
+          try
+            Unix.dup2 out Unix.stdout; Unix.dup2 err Unix.stderr;
+            begin
+              try ignore (process ?src g : float option); 0
+              with e ->
+                let (loc, e) =
+                  match EcScope.toperror_of_exn ~gloc:g.pl_loc e with
+                  | EcScope.TopError (loc, e) -> (loc, e)
+                  | e -> (g.pl_loc, e) in
+                let msg = EcPException.tostring e in
+                let s = Marshal.to_string (loc, msg) [] in
+                ignore (Unix.write_substring res s 0 (String.length s)); 1
+            end
+          with _ -> 2 in
+        (try flush_all () with _ -> ());
+        Unix._exit code
+    | pid ->
+        Queue.push { pid; loc = g.pl_loc; out; err; res; status = None } pending
+end
 
 (* -------------------------------------------------------------------- *)
 let check_eco =
