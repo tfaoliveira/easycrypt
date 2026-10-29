@@ -1469,3 +1469,7 @@ case: (y = 0) => [->|nz_y] /=; first by rewrite divz0.
 case/dvdzP => [q ->]; rewrite mulzK //.
 by rewrite fromintM RField.mulrK // eq_fromint.
 qed.
+
+(* -------------------------------------------------------------------- *)
+(* Modular exponentiation. [eval] computes it by square-and-multiply.   *)
+op modexp (b e m : int) = (b ^ e) %% m.
