@@ -200,6 +200,23 @@ lemma inzmodM (a b : int):
   inzmod (a * b) = inzmod a * inzmod b.
 proof. by apply/asint_inj; rewrite mulE !inzmodK modzMmr modzMml. qed.
 
+(* used by [eval] to compute [exp] by square-and-multiply *)
+lemma exp_modexp (x : zmod) n : 0 <= n =>
+  ZModpRing.exp x n = inzmod (modexp (asint x) n p).
+proof.
+rewrite /modexp -inzmod_mod; elim: n => [|n ge0_n ih].
++ by rewrite ZModpRing.expr0 expr0 -oneE asintK.
+by rewrite ZModpRing.exprS // exprS // inzmodM asintK ih.
+qed.
+
+(* used by [eval] for negative exponents: [inv] is then computed by    *)
+(* [inv_eval] in fields, instead of [exp] by iterated multiplication   *)
+lemma exp_neg_eval (x : zmod) n : n < 0 =>
+  ZModpRing.exp x n = inv (ZModpRing.exp x (-n)).
+proof. by move=> _; rewrite -ZModpRing.exprN opprK. qed.
+
+hint simplify in eval : exp_modexp, exp_neg_eval.
+
 lemma inzmodN (n : int):
   inzmod (- n) = -(inzmod n).
 proof. by apply/asint_inj; rewrite oppE !inzmodK modzNm. qed.
@@ -465,5 +482,14 @@ proof.
   + by rewrite subr_ge0 ge2_p.
   by rewrite exp_sub_p_1.
 qed.
+
+(* used by [eval] to compute [inv] *)
+lemma inv_eval (x : zmod) : inv x = if x = zero then zero else exp x (p - 2).
+proof.
+case: (x = zero) => [->|nz_x]; first by rewrite unitout // unitE.
+by rewrite inv_exp_sub_p_2 // unitE.
+qed.
+
+hint simplify in eval : inv_eval.
 
 end ZModField.

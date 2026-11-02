@@ -545,6 +545,7 @@ let main () =
         end;
 
 
+        oiter EcCommands.CheckJobs.set_jobs cmpopts.cmpo_checkjobs;
         let gcstats  = cmpopts.cmpo_gcstats in
         let progress = if cmpopts.cmpo_script then `Script else `Human in
         let terminal =
@@ -861,8 +862,19 @@ let main () =
                       { State.Trace.trace0 with position = loc.loc_echar } :: trace
                      );
 
+                     (* -check-jobs: a check runs in a child process; any other *)
+                     (* command first waits for the checks before it          *)
+                     let forked =
+                       EcCommands.CheckJobs.forkable p.EP.gl_action
+                       && not (p.EP.gl_fail || timed || break) in
+                     if not forked then EcCommands.CheckJobs.drain ();
+
                      try
-                       let tdelta = EcCommands.process ~src ~timed ~break p.EP.gl_action in
+                       let tdelta =
+                         if forked then begin
+                           EcCommands.CheckJobs.spawn ~src p.EP.gl_action; Some 0.
+                         end else
+                           EcCommands.process ~src ~timed ~break p.EP.gl_action in
 
                        state.trace <- state.trace |> Option.map (fun trace ->
                         match trace with
@@ -932,6 +944,7 @@ let main () =
         );
 
         if !terminate then begin
+            EcCommands.CheckJobs.drain ();
             T.finalize terminal;
             if not state.eco then
               finalize_input state.input (EcCommands.current ());

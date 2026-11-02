@@ -27,6 +27,7 @@ and cmp_option = {
   cmpo_noeco   : bool;
   cmpo_script  : bool;
   cmpo_trace   : bool;
+  cmpo_checkjobs : int option;
 }
 
 and cli_option = {
@@ -379,7 +380,8 @@ let specs = {
       `Spec  ("script" , `Flag  , "Computer-friendly output");
       `Spec  ("no-eco" , `Flag  , "Do not cache verification results");
       `Spec  ("trace"  , `Flag  , "Save all goals & messages in .eco");
-      `Spec  ("compact", `Int   , "<internal>")]);
+      `Spec  ("compact", `Int   , "<internal>");
+      `Spec  ("check-jobs", `Int, "Run the check commands in <n> child processes at a time")]);
 
     ("llm", "LLM-friendly batch compilation", [
       `Group "loader";
@@ -560,7 +562,8 @@ let cmp_options_of_values ini values input =
     cmpo_tstats  = get_string "tstats" values;
     cmpo_noeco   = get_flag "no-eco" values;
     cmpo_script  = get_flag "script" values;
-    cmpo_trace   = get_flag "trace" values; }
+    cmpo_trace   = get_flag "trace" values;
+    cmpo_checkjobs = get_int "check-jobs" values; }
 
 let runtest_options_of_values ini values (input, scenarios) =
   { runo_input     = input;

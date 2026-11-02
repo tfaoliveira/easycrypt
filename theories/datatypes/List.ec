@@ -2460,6 +2460,15 @@ theory Iota.
   axiom iota0 i n : n <= 0 => iota_ i n = [].
   axiom iotaS i n : 0 <= n => iota_ i (n+1) = i :: iota_ (i+1) n.
 
+  (* used by [eval] to compute [iota_] *)
+  lemma iota_E i n : iota_ i n = if n <= 0 then [] else i :: iota_ (i+1) (n-1).
+  proof.
+    case: (n <= 0) => [/(iota0 i)|/ltzNge gt0_n] //.
+    by rewrite -(iotaS i (n-1)) 1:/#.
+  qed.
+
+  hint simplify in eval : iota_E.
+
   lemma iota1 i : iota_ i 1 = [i].
   proof. by rewrite (iotaS i 0) // iota0. qed.
 
